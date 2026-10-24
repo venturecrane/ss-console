@@ -99,13 +99,6 @@ class Stage:
     # answered for free instead of at the price of reaching them.
     external: bool = False
     rehearse: Callable[..., list[str]] | None = None
-    # Exit code -> stages to reopen; the run then resumes at the earliest of
-    # them, in the same process, instead of ending (2026-10-23). The one user
-    # is the coverage gate: a file the composer drew entries from that the
-    # document does not cite earns one rebuild from build_doc (the rebuild SMD
-    # used to run by hand, redo_doc.REDO) before it can hold. The stage itself
-    # bounds it to once; the driver bounds it again.
-    rewind: dict[int, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _slug(ctx: Ctx) -> list[str]:
@@ -120,9 +113,17 @@ def _slug_unit_date(ctx: Ctx) -> list[str]:
     return [ctx.slug, ctx.unit.unit, ctx.job.incident_date]
 
 
-#: The stages a document rebuild reopens: exactly redo_doc.REDO (pinned by a
-#: test; not imported, because redo_doc reaches the proof package at import).
-REBUILD_FROM_BUILD_DOC = ("build_doc", "strip_falsify", "strip_dry", "strip_apply", "render", "manifest", "review")
+#: The strip's refusals shared by its three modes, one code per cause
+#: (stages/strip.EXIT_*): before 2026-10-24 three causes shared exit 1 and the
+#: reason printed was true of one of them.
+_STRIP_COMMON: dict[int, tuple[str, str]] = {
+    _strip.EXIT_CITED_DROP: (REFUSED, "strip: an authored drop removes every page a citation rests on"),
+    _strip.EXIT_EDIT_NOT_FOUND: (
+        REFUSED,
+        "strip: an authored citation edit's text is not in the chronology (drops.json citation_edits)",
+    ),
+    _strip.EXIT_NO_CLASSIFIER: (REFUSED, "strip: nonrecord.json is missing; classify_nonrecord has not run"),
+}
 
 
 STAGES: tuple[Stage, ...] = (
@@ -354,7 +355,15 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("decide_control",),
         runner=_classify.run_scanned,
-        exit_map={1: (REFUSED, "classify_scanned: the controls are not authored, or the classifier failed them")},
+        # Since 2026-10-24 failed or skipped controls are not a stop: the labels
+        # are recorded as untrusted and the strip keeps every scanned page.
+        exit_map={
+            1: (
+                REFUSED,
+                "classify_scanned: the install's classifier controls are not authored, or classify_nonrecord "
+                "has not run",
+            )
+        },
     ),
     Stage(
         "strip_falsify",
@@ -363,8 +372,8 @@ STAGES: tuple[Stage, ...] = (
         requires=("classify_scanned",),
         runner=_strip.run_falsify,
         exit_map={
-            1: (REFUSED, "strip falsifier: the content check cannot fail, so it proves nothing"),
-            2: (REFUSED, "strip: an authored drop removes every page a citation rests on"),
+            _strip.EXIT_BLIND: (REFUSED, "strip falsifier: the content check cannot fail, so it proves nothing"),
+            **_STRIP_COMMON,
         },
     ),
     Stage(
@@ -373,9 +382,7 @@ STAGES: tuple[Stage, ...] = (
         _slug_unit,
         requires=("strip_falsify",),
         runner=_strip.run_dry,
-        exit_map={
-            1: (REFUSED, "strip dry run refused: a citation would lose its page, or the classifier's controls failed")
-        },
+        exit_map=dict(_STRIP_COMMON),
     ),
     Stage(
         "strip_apply",
@@ -383,7 +390,10 @@ STAGES: tuple[Stage, ...] = (
         lambda c: [*_slug_unit(c), "--apply"],
         requires=("strip_dry",),
         runner=_strip.run_apply,
-        exit_map={1: (REFUSED, "strip apply refused (a prior strip exists, or citations moved)")},
+        exit_map={
+            _strip.EXIT_BLIND: (REFUSED, "strip apply refused: the exhibits were already stripped once"),
+            **_STRIP_COMMON,
+        },
     ),
     Stage(
         "coverage_gate",
@@ -395,11 +405,10 @@ STAGES: tuple[Stage, ...] = (
         exit_map={
             1: (
                 HELD,
-                "coverage gate: a file the composer drew entries from is not cited after one rebuild "
-                "of the document (integrity stop)",
+                "coverage gate: a file the composer drew entries from is not cited and no rule removed it "
+                "(integrity stop)",
             )
         },
-        rewind={_coverage.REWIND: REBUILD_FROM_BUILD_DOC},
     ),
     Stage(
         "dos_check",
@@ -552,14 +561,6 @@ def _validate(seq: tuple[Stage, ...]) -> list[str]:
                 problems.append(f"{s.name}: invalidates unknown stage {inv!r}")
             elif pos[inv] <= pos[s.name]:
                 problems.append(f"{s.name}: invalidates {inv!r} which comes earlier")
-        for code, names in s.rewind.items():
-            if code == 0 or code in s.exit_map:
-                problems.append(f"{s.name}: rewind code {code} is also success or an exit_map outcome")
-            known = [n for n in names if n in pos]
-            if len(known) != len(names):
-                problems.append(f"{s.name}: rewind names unknown stage(s) {sorted(set(names) - set(known))}")
-            elif not any(pos[n] < pos[s.name] for n in known):
-                problems.append(f"{s.name}: rewind {code} reopens nothing before it, so nothing would re-run")
     for s in seq:
         if s.paid and s.external:
             problems.append(f"{s.name}: paid and external (a rehearsal must know which it is)")

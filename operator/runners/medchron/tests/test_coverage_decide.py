@@ -73,9 +73,7 @@ def test_the_recorded_decision_explains_the_file_and_the_gate_passes(
 ) -> None:
     sd = _scene(data_root)
     rc, log = _gate(job_dir, firm_config_path, data_root)
-    assert rc == coverage_stage.REWIND  # since 2026-10-23: one rebuild of the document first
-    rc, log = _gate(job_dir, firm_config_path, data_root)
-    assert rc == 1 and any("UNEXPLAINED 1" in line for line in log)  # the control: it holds after the rebuild
+    assert rc == 1 and any("UNEXPLAINED 1" in line for line in log)  # the control: it holds
     d = _seat(tmp_path, job_dir)
     p = coverage_decide.plan(
         d, JOB, file_id=IMG, reason="email signature image, no clinical content", by="smd", source="ops-ap"
@@ -105,3 +103,98 @@ def test_the_command_refuses_what_it_cannot_record(
     with pytest.raises(coverage_decide.Refused, match=needle):
         coverage_decide.plan(d, JOB, file_id=file_id, reason="r", by="smd", source="s")
     assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+
+
+# ---- a "not read" account never explains a file the composer drew entries from --
+NOT_READ = (
+    "| nothing extractable: not read (declined by the reader on every attempt); named as unread in the limitations"
+)
+
+
+def test_a_not_read_account_of_some_pages_never_explains_a_file_with_entries(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-10-24 (#3464): compose splits a declined file to single pages and
+    writes `nothing extractable: not read (...)` for the pages no reader took.
+    A file whose OTHER pages gave entries is a source; if the document cites
+    none of it, that is loss, and the unread pages' account must not hide it.
+    A file every page of which was unread is still explained by that account."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f7", "name": "big record", "ext": ".pdf", "ok": True, "chars": 9000},
+        {"id": "f8", "name": "sane exam", "ext": ".pdf", "ok": True, "chars": 900},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "map-01-1.md").write_text(
+        "## FILES-SEEN\n=== FILE: clinic note.pdf (fileId f1) === entries: 1\n"
+        "=== FILE: big record.pdf [part 1/2] === entries: 3\n"
+    )
+    # the shape compose.record_unread writes, one line per unread piece
+    (rd / "map-01-2.md").write_text(f"## FILES-SEEN\n=== FILE: big record.pdf [part 2/2] === {NOT_READ}\n")
+    (rd / "map-02.md").write_text(f"## FILES-SEEN\n=== FILE: sane exam.pdf (fileId f8) === {NOT_READ}\n")
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1, log
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["big record.pdf"]
+    assert any("sane exam.pdf" in line and "not read" in line for line in log), log
+
+
+# ---- row 1 (2026-10-24): a file whose every entry a filter rule removed --------
+INTAKE_FORM = "joint intake form.pdf"
+
+
+def _omitted_scene(data_root: Path, kind: str, *, kept_elsewhere: bool = False) -> Path:
+    """The shape that holds legitimate joint matters: the composer drew one
+    entry from a shared intake form, filter removed that block (the
+    co-plaintiff's, or a pre-incident visit not itemized), and the final
+    document therefore cites nothing of the file."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f9", "name": "joint intake form", "ext": ".pdf", "ok": True, "chars": 900},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, INTAKE_FORM: 2}))
+    (rd / "map-001.md").write_text(
+        "=== FILE: clinic note.pdf (fileId f1) === entries: 1\n"
+        "=== FILE: joint intake form.pdf (fileId f9) === entries: 1\n"
+    )
+    # filter's count of every citation in the full assembly: Exhibit 2 once (the
+    # removed block), or twice when a kept block cites it too.
+    (rd / "full_cites.json").write_text(json.dumps({"1": 1, "2": 2 if kept_elsewhere else 1}))
+    row = {"date": "2026-01-08", "cites": [{"exhibit": 2, "file": INTAKE_FORM, "n": 1}]}
+    target = "omitted_coclient.json" if kind == "coclient" else "omitted_preincident.json"
+    (rd / target).write_text(json.dumps([{**row, "patient": "Beta Example", "reason": "unrelated", "head": "x"}]))
+    return sd
+
+
+@pytest.mark.parametrize(
+    ("kind", "needle"),
+    [("coclient", "another patient's care"), ("preincident", "pre-incident care that was reviewed and not itemized")],
+)
+def test_a_file_whose_every_entry_a_filter_rule_removed_is_explained_by_rule_not_held(
+    job_dir: Path, firm_config_path: Path, data_root: Path, kind: str, needle: str
+) -> None:
+    sd = _omitted_scene(data_root, kind)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 0, log
+    rows = {r["name"]: r for r in coverage_decide.rows(sd, "alpha")}
+    assert rows[INTAKE_FORM]["by"] == "rule" and needle in rows[INTAKE_FORM]["reason"]
+    # The same reader names it in the Records Reviewed and Limitations section.
+    rule = coverage_stage.rule_rows(sd, "alpha", config_mod.load(str(firm_config_path)))
+    assert [(r["name"], needle in r["reason"]) for r in rule] == [(INTAKE_FORM, True)]
+
+
+def test_a_file_with_a_kept_citation_that_is_not_cited_is_still_an_integrity_stop(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The falsifier for the rule above: one citation of the file sat in a block
+    nobody removed, so its absence from the document is loss, and it holds at
+    once (no rebuild, which could not change the answer)."""
+    _omitted_scene(data_root, "coclient", kept_elsewhere=True)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1 and any("COVERAGE GATE HOLD (integrity)" in line for line in log), log

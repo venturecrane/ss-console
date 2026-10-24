@@ -229,6 +229,19 @@ def _classify_batch(
     sr.log(f"  batch of {len(labels)} -> {r.usage.input_tokens} in / {r.usage.output_tokens} out")
 
 
+def _skipped(sr: StageRun, labels_path: Path, rc: dict[str, Any]) -> int:
+    """decide_control found no record page (an all-fax matter, 2026-10-24):
+    nothing to falsify the classifier against, so it is not paid for, the
+    labels say why, and the strip keeps every scanned page."""
+    why = str((rc.get("_decided") or {}).get("reason") or "no record control")
+    labels_path.write_text(
+        json.dumps({"labels": {}, "nonrecord": {}, "controls_ok": False, "skipped": why}, indent=1),
+        encoding="utf-8",
+    )
+    sr.log(f"scanned classifier skipped ({why}); every scanned page stays in the exhibits")
+    return 0
+
+
 def run_scanned(sr: StageRun) -> int:
     import pymupdf
 
@@ -253,11 +266,14 @@ def run_scanned(sr: StageRun) -> int:
             f"controls not authored: need {ctl_path} and {rec_path}; a classifier without its falsifier measures nothing"
         )
         return 1
+    labels_path = d / f"scanned_labels{sfx}.json"
+    rc = json.loads(rec_path.read_text(encoding="utf-8"))
+    if rc.get("skip"):
+        return _skipped(sr, labels_path, rc)
     controls = [
         (sr.job.install_root / c["pdf"], int(c["page"]), str(c["label"]))
         for c in json.loads(ctl_path.read_text(encoding="utf-8"))
     ]
-    rc = json.loads(rec_path.read_text(encoding="utf-8"))
     controls.append((paths[int(rc["exhibit"])], int(rc["page"]), "RECORD"))
     sr.log(f"{len(targets)} scanned page(s) to classify, +{len(controls)} control(s)")
     docs: dict[Path, Any] = {}
@@ -282,15 +298,18 @@ def run_scanned(sr: StageRun) -> int:
         if got != want:
             ok = False
         sr.log(f"  control {path.name[:22]} p.{p}: expected {want}, got {got}  [{'OK' if got == want else 'FAILED'}]")
-    if not ok:
-        sr.log("!! controls failed; these labels are not trusted")
     nonrec: dict[str, list[tuple[int, str]]] = {}
     for e, p in targets:
         lab = results.get(f"Ex{e}p{p}", "?")
-        if lab in NONRECORD_LABELS:
+        if ok and lab in NONRECORD_LABELS:
             nonrec.setdefault(str(e), []).append((p, lab))
-    (d / f"scanned_labels{sfx}.json").write_text(
+    if not ok:
+        # Since 2026-10-24 not a stop (a weak record control can be called
+        # something else on a legitimate matter): the labels are recorded as
+        # untrusted, nothing is marked for removal, every scanned page stays.
+        sr.log("!! controls failed; these labels are not trusted, so every scanned page stays in the exhibits")
+    labels_path.write_text(
         json.dumps({"labels": results, "nonrecord": nonrec, "controls_ok": ok}, indent=1), encoding="utf-8"
     )
     sr.log(f"scanned pages that are NOT records: {sum(len(v) for v in nonrec.values())}")
-    return 0 if ok else 1
+    return 0

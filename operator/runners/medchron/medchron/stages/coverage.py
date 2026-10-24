@@ -28,14 +28,22 @@ opposites and only one of them is a question:
   with ``by: "rule"``, and named to the firm in the Records Reviewed and
   Limitations section. Curtis held seven times on SMD-only questions; this
   was one shape of them.
-* ``entries: N`` above zero, or no FILES-SEEN line at all: the composer drew
-  entries from it (or never accounted for it) and the document cites none.
-  That is pipeline LOSS, never a disclosure (the 08-27 rule: no record the map
-  read is dropped into a sentence about what was not cited). The gate asks the
-  driver once to rebuild the document from ``build_doc`` (the same rebuild SMD
-  runs by hand, ``redo_doc``: exhibits restored, strip re-run), exit
-  ``REWIND``; if the file is still lost after that, it holds as an integrity
-  stop (exit 1).
+* ``entries: N`` above zero, where every citation of the file in the full
+  assembly (``full_cites.json``) left with a block the ``filter`` stage
+  removed by rule: a block naming another patient (``omitted_coclient.json``)
+  or a pre-incident encounter reviewed and not itemized
+  (``omitted_preincident.json``). Each removed block records the citations it
+  carried, so the file is explained by rule with that factual reason and
+  named in Limitations, never held (2026-10-24: a joint matter's shared intake
+  form, stripped as the co-plaintiff's, held a finished chronology).
+* ``entries: N`` above zero otherwise, or no FILES-SEEN line at all: the
+  composer drew entries from it (or never accounted for it) and the document
+  cites none. That is pipeline LOSS, never a disclosure (the 08-27 rule: no
+  record the map read is dropped into a sentence about what was not cited),
+  and it holds as an integrity stop (exit 1). Until 2026-10-24 the gate first
+  asked for a rebuild from ``build_doc``; that rebuild could not change the
+  answer (this gate reads ``entries_scoped_final.md`` and ``page_map.json``,
+  both written before ``build_doc``), so it was removed.
 """
 
 from __future__ import annotations
@@ -107,18 +115,57 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
                     name,
                     f"evidenced billing dates only ({bills.group(1)}); the billing chart carries them",
                 )
-    return out
+    # A file split across pieces has one line per piece. When any piece gave
+    # entries the file is a source, so another piece's "nothing extractable"
+    # (since 2026-10-24 also compose's "not read (...)" for pages no reader
+    # took) never explains it: uncited, it is loss (the 08-27 rule).
+    sources = {n for n, c in entry_counts(run_dir, unit_files).items() if c > 0}
+    return {n: why for n, why in out.items() if n not in sources}
 
 
-#: Exit code: the gate found lost files on its first look and asks the driver
-#: to rebuild the document from build_doc once (dag.Stage.rewind).
-REWIND = 3
-#: The once-only marker: the rebuild already happened for this unit, so a file
-#: still lost is an integrity stop, never a second rebuild.
-REDO_MARKER = "coverage_redo.json"
 #: Who wrote a rule row in coverage_decisions.json (coverage_decide's shape).
 RULE_BY = "rule"
 NO_ENCOUNTER = "read in full; it contains no dated medical encounter"
+#: The factual reasons for a file every entry of which a ``filter`` rule removed.
+COCLIENT_REASON = "its entries record another patient's care, and were left out of this chronology by rule"
+PREINCIDENT_REASON = (
+    "its entries record pre-incident care that was reviewed and not itemized (routine or unrelated care with "
+    "no bearing on the claimed injuries); it remains available on request"
+)
+OMITTED = (("coclient", "omitted_coclient.json"), ("preincident", "omitted_preincident.json"))
+
+
+def omitted_by_rule(run_dir: Path) -> dict[str, str]:
+    """``{file_key: reason}`` for each file whose EVERY citation in the full
+    assembly left with a block the ``filter`` stage removed by rule. The
+    removed blocks record their citations (``cites``: per-file exhibit, file,
+    count); the full assembly's counts are ``full_cites.json``, written by the
+    same ``filter`` run from the assembly before any removal. A file with even
+    one citation outside a removed block is not explained here: that citation
+    was kept, and its absence is loss."""
+    counts = read_json(run_dir / "full_cites.json", None)
+    if not isinstance(counts, dict):
+        return {}
+    total = {int(k): int(v) for k, v in counts.items()}
+    gone: dict[int, dict[str, int]] = {}
+    names: dict[int, str] = {}
+    for kind, fname in OMITTED:
+        for row in read_json(run_dir / fname, []) or []:
+            for c in (row.get("cites") if isinstance(row, dict) else None) or []:
+                n = int(c.get("exhibit") or 0)
+                if c.get("file"):
+                    names[n] = str(c["file"])
+                gone.setdefault(n, {})[kind] = gone.get(n, {}).get(kind, 0) + int(c.get("n") or 1)
+    out: dict[str, str] = {}
+    for n, kinds in gone.items():
+        if n in names and total.get(n) and sum(kinds.values()) >= total[n]:
+            if set(kinds) == {"coclient"}:
+                out[names[n]] = COCLIENT_REASON
+            elif set(kinds) == {"preincident"}:
+                out[names[n]] = PREINCIDENT_REASON
+            else:
+                out[names[n]] = f"{COCLIENT_REASON}; the rest {PREINCIDENT_REASON[len('its entries ') :]}"
+    return out
 
 
 def entry_counts(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, int]:
@@ -164,19 +211,25 @@ def _billing_names(d: Path) -> set[str]:
 
 def rule_rows(slug_dir: Path, unit: str, cfg: Any) -> list[dict[str, str]]:
     """The unit files explained by rule: the composer read each and wrote
-    `entries: 0` for it, and nothing else accounts for it. One reader for the
-    gate (which records them) and the Records Reviewed and Limitations section
-    (which names them to the firm), so the two can never disagree."""
+    `entries: 0` for it, or every entry it drew from the file was removed by a
+    ``filter`` rule (``omitted_by_rule``), and nothing else accounts for it.
+    One reader for the gate (which records them) and the Records Reviewed and
+    Limitations section (which names them to the firm), so the two can never
+    disagree."""
     unit_files = read_json(slug_dir / "units" / f"{unit}.json", [])
     rd = slug_dir / "runs" / unit
     counts = entry_counts(rd, unit_files)
+    omitted = omitted_by_rule(rd)
     said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(slug_dir, unit, by_rule=False)}
     rules, billing = exclusions(cfg), _billing_names(slug_dir)
     out = []
     for f in unit_files:
         name = file_key(f)
-        if counts.get(name) == 0 and not _settled(name, f, billing, rules, said):
-            out.append({"id": str(f.get("id") or ""), "name": name, "reason": NO_ENCOUNTER})
+        if _settled(name, f, billing, rules, said):
+            continue
+        why = NO_ENCOUNTER if counts.get(name) == 0 else omitted.get(name)
+        if why:
+            out.append({"id": str(f.get("id") or ""), "name": name, "reason": why})
     return out
 
 
@@ -191,24 +244,10 @@ def _record_rules(sr: StageRun, rows: list[dict[str, str]]) -> None:
                 "name": r["name"],
                 "reason": r["reason"],
                 "by": RULE_BY,
-                "source": "coverage_gate: the composer's FILES-SEEN line reads entries: 0",
+                "source": r.get("source") or "coverage_gate: the composer's FILES-SEEN line reads entries: 0",
                 "at": at,
             },
         )
-
-
-def _rewind_once(sr: StageRun, lost: list[str]) -> bool:
-    """True when this is the first look: restore the stripped exhibits (the
-    rebuild SMD runs by hand, redo_doc) and mark it, so the driver rebuilds
-    the document from build_doc. False when the rebuild already happened."""
-    marker = sr.slug_dir / "runs" / sr.unit.unit / REDO_MARKER
-    if marker.is_file():
-        return False
-    from .. import redo_doc
-
-    restored = redo_doc.restore_unit(sr.slug_dir, sr.unit.unit, joint=sr.job.joint)
-    marker.write_text(json.dumps({"lost": lost, "exhibits_restored": restored}, indent=1), encoding="utf-8")
-    return True
 
 
 def cited_exhibits(body: str) -> tuple[set[int], set[int]]:
@@ -247,6 +286,7 @@ def rehearse(sr: StageRun) -> list[str]:
     billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
     said = composer_dispositions(d / "runs" / sr.unit.unit, unit_files)
     counts = entry_counts(d / "runs" / sr.unit.unit, unit_files)
+    omitted = omitted_by_rule(d / "runs" / sr.unit.unit)
     explained = 0
     needs: list[str] = []
     for name in sorted(in_unit):
@@ -255,7 +295,8 @@ def rehearse(sr: StageRun) -> list[str]:
         elif billing_stem(name) in billing_names or name in billing_names:
             reason = "in the authored billing-chart set"
         else:
-            reason = classify_name(name, rules) or said.get(name) or (NO_ENCOUNTER if counts.get(name) == 0 else None)
+            reason = classify_name(name, rules) or said.get(name) or omitted.get(name)
+            reason = reason or (NO_ENCOUNTER if counts.get(name) == 0 else None)
         if reason:
             explained += 1
         else:
@@ -349,6 +390,7 @@ def _account(
     rules, billing_names, said = known
     in_unit = {file_key(f): f for f in unit_files}
     counts = entry_counts(sr.slug_dir / "runs" / sr.unit.unit, unit_files)
+    omitted = omitted_by_rule(sr.slug_dir / "runs" / sr.unit.unit)
     unexplained: list[str] = []
     explained: list[tuple[str, str]] = []
     by_rule: list[dict[str, str]] = []
@@ -359,10 +401,22 @@ def _account(
             # The composer read it and drew no entry: the record's own account.
             reason = NO_ENCOUNTER
             by_rule.append({"id": str(f.get("id") or ""), "name": name, "reason": reason})
+        elif reason is None and name in omitted:
+            # Every entry drawn from it left with a block a filter rule removed.
+            reason = omitted[name]
+            by_rule.append(
+                {
+                    "id": str(f.get("id") or ""),
+                    "name": name,
+                    "reason": reason,
+                    "source": "coverage_gate: every citation of the file left with a block the filter stage "
+                    "removed by rule (omitted_coclient.json / omitted_preincident.json)",
+                }
+            )
         (explained.append((name, reason)) if reason else unexplained.append(name))
     if by_rule:
         _record_rules(sr, by_rule)
-        sr.log(f"  explained by rule (entries: 0), recorded in {coverage_decide.FILE}: {len(by_rule)}")
+        sr.log(f"  explained by rule, recorded in {coverage_decide.FILE}: {len(by_rule)}")
     sr.log(
         f"{sr.unit.unit}: {len(in_unit)} file(s); cited {len(cited_files & set(in_unit))}; excluded with reason "
         f"{len(explained)}; UNEXPLAINED {len(unexplained)}"
@@ -377,22 +431,16 @@ def _account(
 
 def _lost(sr: StageRun, unexplained: list[str], counts: dict[str, int], in_unit: dict[str, dict]) -> int:
     """Every file left is LOSS: entries above zero that the document does not
-    cite, or a file the composer never accounted for. Never a disclosure; one
-    rebuild from build_doc, then an integrity stop."""
+    cite and no rule removed, or a file the composer never accounted for.
+    Never a disclosure; an integrity stop."""
     for name in unexplained[:25]:
         n = counts.get(name)
         seen = "no FILES-SEEN line" if n is None else f"entries: {n}"
         sr.log(f"  - {name[:56]:56s} {f'{seen}, uncited':>26} {in_unit[name].get('chars') or 0:>8} chars")
     rd = sr.slug_dir / "runs" / sr.unit.unit
     (rd / "coverage_unexplained.json").write_text(json.dumps(unexplained, indent=1), encoding="utf-8")
-    if _rewind_once(sr, unexplained):
-        sr.log(
-            f"COVERAGE GATE: {len(unexplained)} file(s) the composer drew from are not cited; rebuilding the "
-            f"document once from build_doc"
-        )
-        return REWIND
     sr.log(
         f"COVERAGE GATE HOLD (integrity): {len(unexplained)} file(s) the composer drew entries from, or never "
-        f"accounted for, are still not cited after one rebuild of the document"
+        f"accounted for, are not cited and no rule removed them"
     )
     return 1

@@ -22,12 +22,16 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 from .. import llm, prompts
 from .base import StageRun
 
 ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
 DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
+CITED = re.compile(r"\(Exhibit (\d+)\b")
+#: Per-exhibit citation counts in the full assembly, read by the coverage gate.
+FULL_CITES = "full_cites.json"
 VERDICT = re.compile(r"\s*(\d+)\s*\|\s*(MATERIAL|OMIT)\s*\|\s*(.*)")
 GRAB_HEADINGS = ("Medical Diagnoses", "Patient Complaints & Limitations", "HPI & Prior Medical History")
 NOTE = (
@@ -59,6 +63,13 @@ def is_coclient(header: str, client_name: str, surname: str) -> str | None:
 
 
 def strip_coclient(entry_text: str, client_name: str, surname: str) -> tuple[str, list[str]]:
+    """(entry without the co-plaintiff's blocks, names removed); see
+    ``strip_coclient_blocks``, which also returns each removed block's text."""
+    text, blocks = strip_coclient_blocks(entry_text, client_name, surname)
+    return text, [who for who, _ in blocks]
+
+
+def strip_coclient_blocks(entry_text: str, client_name: str, surname: str) -> tuple[str, list[tuple[str, str]]]:
     """(entry without the co-plaintiff's blocks, names removed).
 
     An entry is a date line followed by one or more `provider (patient) |
@@ -68,17 +79,21 @@ def strip_coclient(entry_text: str, client_name: str, surname: str) -> tuple[str
     second line left them in the delivered document. Every provider header is
     tested, wherever it sits.
 
-    Returns ("", names) when nothing but the date line survives, so the caller
-    drops the entry whole.
+    Returns ("", blocks) when nothing but the date line survives, so the caller
+    drops the entry whole. Each removed block is ``(patient, block text)``: the
+    text carries the block's citations, which the coverage gate reads to
+    explain a file whose only entries were another person's (2026-10-24).
     """
     lines = entry_text.splitlines()
     if not lines:
         return entry_text, []
-    out, removed, dropping, kept_block = [lines[0]], [], False, False
+    out, dropping, kept_block = [lines[0]], False, False
+    removed: list[tuple[str, list[str]]] = []
     for ln in lines[1:]:
         who = is_coclient(ln, client_name, surname) if ("|" in ln and "(" in ln) else None
         if who:
-            dropping, _ = True, removed.append(who)
+            dropping = True
+            removed.append((who, [ln]))
             continue
         if "|" in ln and _looks_like_header(ln):
             # Any new block header ends the co-client's block. The map prompt
@@ -87,13 +102,16 @@ def strip_coclient(entry_text: str, client_name: str, surname: str) -> tuple[str
             # deleted every unlabelled client block after a co-client's (N10-12
             # review 2026-10-06, N11).
             dropping = False
-        if not dropping:
-            out.append(ln)
-            if ln.strip():
-                kept_block = True
+        if dropping:
+            removed[-1][1].append(ln)
+            continue
+        out.append(ln)
+        if ln.strip():
+            kept_block = True
+    blocks = [(who, "\n".join(body)) for who, body in removed]
     if not kept_block:
-        return "", removed
-    return "\n".join(out).rstrip() + "\n", removed
+        return "", blocks
+    return "\n".join(out).rstrip() + "\n", blocks
 
 
 def _looks_like_header(line: str) -> bool:
@@ -111,15 +129,26 @@ def drop_coclient(sr: StageRun, d: Path, entries: list[dict[str, str]]) -> list[
     the pre/post-incident split, before the materiality call. An entry whose
     co-plaintiff block is one of several keeps its other blocks; an entry that
     is nothing but the co-plaintiff's goes entirely. What left is recorded in
-    `omitted_coclient.json` so the firm can audit the removal.
+    `omitted_coclient.json` so the firm can audit the removal, each row with
+    the citations its block carried (``cites``), so the coverage gate can
+    explain a file whose only entries were another person's instead of holding
+    on it (2026-10-24: a joint matter's shared intake form).
     """
     kept: list[dict[str, str]] = []
-    log: list[dict[str, str]] = []
+    log: list[dict[str, Any]] = []
     whole = 0
+    exmap = exhibit_names(d)
     for e in entries:
-        text, removed = strip_coclient(e["text"], sr.unit.client_name, sr.unit.surname)
-        for who in removed:
-            log.append({"date": e["iso"], "patient": who, "head": e["text"].splitlines()[0][:40]})
+        text, removed = strip_coclient_blocks(e["text"], sr.unit.client_name, sr.unit.surname)
+        for who, block in removed:
+            log.append(
+                {
+                    "date": e["iso"],
+                    "patient": who,
+                    "head": e["text"].splitlines()[0][:40],
+                    "cites": block_cites(block, exmap),
+                }
+            )
         if not removed:
             kept.append(e)
             continue
@@ -128,11 +157,46 @@ def drop_coclient(sr: StageRun, d: Path, entries: list[dict[str, str]]) -> list[
         else:
             whole += 1
     if not log:
+        # A list left by an earlier run would explain files at the coverage gate.
+        (d / "omitted_coclient.json").unlink(missing_ok=True)
         return entries
     names = sorted({x["patient"] for x in log})
     sr.log(f"  co-client blocks removed: {len(log)} ({whole} whole entries) ({', '.join(names)[:70]})")
     (d / "omitted_coclient.json").write_text(json.dumps(log, indent=1), encoding="utf-8")
     return kept
+
+
+def exhibit_names(d: Path) -> dict[int, str]:
+    """Per-file exhibit number -> file key, from assemble's ``exhibit_map.json``
+    (the numbers every citation carries until ``exhibits`` remaps them)."""
+    p = d / "exhibit_map.json"
+    body = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    return {int(num): str(name) for name, num in body.items()}
+
+
+def block_cites(text: str, exmap: dict[int, str]) -> list[dict[str, Any]]:
+    """Each exhibit a removed block cites, with its file and how many times:
+    the record of what left with the block, read by the coverage gate."""
+    counts: dict[int, int] = {}
+    for m in CITED.finditer(text):
+        counts[int(m.group(1))] = counts.get(int(m.group(1)), 0) + 1
+    return [{"exhibit": n, "file": exmap.get(n), "n": c} for n, c in sorted(counts.items())]
+
+
+def _write_omitted(d: Path, omit_pre: list[tuple[dict[str, str], str]]) -> None:
+    """``omitted_preincident.json``: each pre-incident entry the triage left
+    out, with its reason, heading and the citations it carried (``cites``)."""
+    exmap = exhibit_names(d)
+    rows = [
+        {
+            "date": e["iso"],
+            "reason": why,
+            "head": e["text"].splitlines()[1] if len(e["text"].splitlines()) > 1 else "",
+            "cites": block_cites(e["text"], exmap),
+        }
+        for e, why in omit_pre
+    ]
+    (d / "omitted_preincident.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
 
 
 def split_entries(text: str) -> list[dict[str, str]]:
@@ -203,6 +267,11 @@ def run(sr: StageRun) -> int:
     full = (text + "\n\n" + merged).strip()
     if not (d / "entries_full.md").is_file():
         (d / "entries_full.md").write_text(full, encoding="utf-8")
+    # Every citation in this run's full assembly, per exhibit: what the coverage
+    # gate weighs the removed blocks' citations against. Rewritten every run.
+    (d / FULL_CITES).write_text(
+        json.dumps({str(c["exhibit"]): c["n"] for c in block_cites(full, {})}, indent=1), encoding="utf-8"
+    )
     entries = drop_coclient(sr, d, split_entries(full))
     pre = [e for e in entries if e["iso"] < incident]
     post = [e for e in entries if e["iso"] >= incident]
@@ -239,20 +308,7 @@ def run(sr: StageRun) -> int:
         sr.log(f"  {len(unclassified)} unclassified, kept by default")
     kept = sorted(keep_pre + post, key=lambda x: x["iso"])
     (d / "entries_scoped.md").write_text("\n\n".join(e["text"] for e in kept), encoding="utf-8")
-    (d / "omitted_preincident.json").write_text(
-        json.dumps(
-            [
-                {
-                    "date": e["iso"],
-                    "reason": why,
-                    "head": e["text"].splitlines()[1] if len(e["text"].splitlines()) > 1 else "",
-                }
-                for e, why in omit_pre
-            ],
-            indent=1,
-        ),
-        encoding="utf-8",
-    )
+    _write_omitted(d, omit_pre)
     if omit_pre:
         span = f"{omit_pre[0][0]['iso']} to {omit_pre[-1][0]['iso']}"
         (d / "preincident_note.txt").write_text(NOTE.format(n=len(omit_pre), span=span), encoding="utf-8")

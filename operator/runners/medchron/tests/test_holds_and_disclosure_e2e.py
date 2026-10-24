@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from medchron import coverage_decide, dag, decisions, redo_doc
+from medchron import coverage_decide, dag, decisions
 from medchron.gates import foreign_identity as FI
 from medchron.proof import holds
 from medchron.state import RunState, state_path
@@ -136,12 +136,13 @@ def test_the_clean_path_delivers_with_no_orphan_or_coverage_hold_and_names_every
     assert "—" not in doc[doc.index("## Records Reviewed and Limitations") :]
 
 
-def test_a_file_the_composer_drew_entries_from_is_rebuilt_once_then_held_never_disclosed(
+def test_a_file_the_composer_drew_entries_from_is_held_at_once_never_disclosed(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
 ) -> None:
-    # LOSS: the composer says it drew two entries from f3 and the document
-    # cites none. Never a disclosure (the 08-27 rule); one rebuild from
-    # build_doc, the same rebuild SMD ran by hand, then an integrity stop.
+    # LOSS: the composer says it drew two entries from f3, no filter rule
+    # removed them, and the document cites none. Never a disclosure (the 08-27
+    # rule); an integrity stop. Since 2026-10-24 there is no rebuild first: it
+    # rebuilt from build_doc, which could not change what the gate reads.
     f3 = make_pdf([PROSE, PROSE])
     model = _Model(
         _map(f"=== FILE: {INTAKE} (fileId f5) === entries: 0", "=== FILE: f3.pdf (fileId f3) === entries: 2")
@@ -153,12 +154,10 @@ def test_a_file_the_composer_drew_entries_from_is_rebuilt_once_then_held_never_d
     assert holds.classify("medchron", o.reason)[0] == holds.SMD_FINISHING  # ours, never asked of the firm
     sd = data_root / "example-matter"
     st = _state(data_root)
-    assert st.stage("build_doc").attempts == 2 and st.stage("strip_apply").attempts == 2
-    assert st.stage("classify_scanned").attempts == 1  # the rebuild re-paid nothing
-    assert json.loads((sd / "runs" / "alpha" / "coverage_redo.json").read_text())["lost"] == ["f3.pdf"]
+    assert st.stage("build_doc").attempts == 1 and st.stage("strip_apply").attempts == 1
+    assert json.loads((sd / "runs" / "alpha" / "coverage_unexplained.json").read_text()) == ["f3.pdf"]
     doc = (sd / "runs" / "alpha" / "final-chronology.md").read_text()
     assert '"f3.pdf"' not in doc  # the lost file is not named as a file nothing was drawn from
-    assert "rebuilding from build_doc once" in " ".join(o.notes)
 
 
 def _fake_extract_msg(attachment: bytes) -> types.ModuleType:
@@ -337,8 +336,11 @@ def test_a_joint_matters_file_no_client_owns_is_left_out_by_rule_and_the_job_del
         assert f'* "Example Health Records 6.22.26.pdf" - {words}' in lim, lim
 
 
-def test_the_in_run_rebuild_reopens_exactly_what_smd_reopens_by_hand() -> None:
-    assert list(dag.REBUILD_FROM_BUILD_DOC) == redo_doc.REDO
-    assert dag.BY_NAME["coverage_gate"].rewind == {3: dag.REBUILD_FROM_BUILD_DOC}
+def test_the_coverage_gate_holds_at_once_and_never_asks_for_a_no_op_rebuild() -> None:
+    # 2026-10-24: the rebuild from build_doc could not change the gate's answer
+    # (it reads entries_scoped_final.md and page_map.json, both written before
+    # build_doc), so it was removed rather than left to look like a remedy, and
+    # the in-run rewind it was the only user of went with it.
+    assert not hasattr(dag.BY_NAME["coverage_gate"], "rewind")
     assert dag.ORDER.index("decide_orphans") < dag.ORDER.index("map") < dag.ORDER.index("build_doc")
     assert dag.validate_dag() == []

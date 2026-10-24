@@ -14,62 +14,24 @@ matters before it ships.
 
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from . import unopened
 from .config import FirmConfig
+from .decision_rules import (  # the shared parts, and the control hook (split out 2026-10-24)
+    Decision,
+    _compile,
+    _read_json,
+    _read_jsonl,
+    _tops,
+    _write,
+    control,
+    resolve_prefix,
+)
 from .gates import foreign_identity as FI
 from .job import Job, Unit
-
-
-@dataclass
-class Decision:
-    hook: str
-    artifact: Path | None
-    payload: Any
-    holds: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-
-    @property
-    def held(self) -> bool:
-        return bool(self.holds)
-
-
-def _read_json(path: Path, default: Any) -> Any:
-    if not path.is_file():
-        return default
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line:
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return out
-
-
-def _write(path: Path, payload: Any, *, dry_run: bool) -> None:
-    if dry_run:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=1), encoding="utf-8")
-    tmp.replace(path)
-
-
-def _compile(patterns: list[str]) -> list[re.Pattern[str]]:
-    return [re.compile(p, re.I) for p in patterns]
 
 
 # ---- selection ---------------------------------------------------------------
@@ -100,18 +62,21 @@ def selection(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> De
     normalisation this branch would match nothing and the run would look
     correctly scoped while reading only shared classes and root PDFs.
     """
-    folders = _read_json(slug_dir / "folders.json", [])
-    tops = sorted({f["path"].split("/")[1] for f in folders if f.get("path", "").count("/") >= 1})
+    tops = _tops(slug_dir)
     exclude = _compile(cfg.get("selection", "exclude_folder_classes") or [])
     shared = _compile(cfg.get("selection", "shared_folder_classes") or [])
     holds: list[str] = []
     notes: list[str] = []
     excluded = [t for t in tops if any(rx.search(t) for rx in exclude)]
-    prefixes = [f"/{u.folder_prefix.strip('/')}" for u in job.units if u.folder_prefix]
-    if prefixes:
-        missing = [p for p in prefixes if p.lstrip("/") not in tops]
+    asked = [f"/{u.folder_prefix.strip('/')}" for u in job.units if u.folder_prefix]
+    if asked:
+        missing = [p for p in asked if resolve_prefix(p, tops) is None]
         if missing:
             holds.append(f"unit folder(s) not found at top level: {missing}")
+        prefixes = [resolve_prefix(p, tops) or p for p in asked]
+        for a, r in zip(asked, prefixes):
+            if a != r:
+                notes.append(f"unit folder {a!r} is the top-level folder {r!r} (matched ignoring case and punctuation)")
         include = prefixes + [f"/{t}" for t in tops if any(rx.search(t) for rx in shared) and t not in excluded]
         others = [t for t in tops if f"/{t}" not in include and t not in excluded]
         if others:
@@ -145,10 +110,12 @@ def units(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisi
     folder_prefix, name_token, surname, dob per unit; single-client matters
     get one unit keyed by the slug with no prefix."""
     payload: dict[str, Any] = {}
+    tops = _tops(slug_dir)
     for u in job.units:
         entry: dict[str, Any] = {"name_token": u.name_token, "surname": u.surname, "dob": u.dob}
         if u.folder_prefix:
-            entry["folder_prefix"] = u.folder_prefix
+            # The folder selection resolved, so routing matches what was pulled.
+            entry["folder_prefix"] = resolve_prefix(u.folder_prefix, tops) or u.folder_prefix
         payload[u.unit] = entry
     d = Decision("units", slug_dir / "units.json", payload)
     _write(d.artifact, payload, dry_run=dry_run)
@@ -407,66 +374,6 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         )
     else:
         _write(d.artifact, payload, dry_run=dry_run)
-    return d
-
-
-# ---- control page ------------------------------------------------------------
-def control(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: bool) -> Decision:
-    """`record_control[-unit].json`: a page that is a record by construction,
-    the planted control the scanned-page classifier is falsified against.
-
-    `page_map.json` is the exhibit list with each source file's page range;
-    `extracted.jsonl` carries native-text chars and pages per file. The control
-    is the second page of the exhibited file with the densest native text (at
-    least 800 chars a page across two or more pages): dense native text is a
-    record, and the second page skips a cover sheet."""
-    page_map = _read_json(slug_dir / "out" / unit.unit / "page_map.json", [])
-    density: dict[str, float] = {}
-    for row in _read_jsonl(slug_dir / "extracted.jsonl"):
-        pages, chars = int(row.get("pages") or 0), int(row.get("chars") or 0)
-        if pages >= 1 and chars:
-            density[str(row.get("name") or "")] = chars / pages
-    # (dense, chars per page, exhibit, page): the dense rule first, then the
-    # best text page anywhere in the exhibits.
-    best: tuple[bool, float, int, int] | None = None
-    for ex in page_map if isinstance(page_map, list) else []:
-        for f in ex.get("files") or []:
-            name = str(f.get("file") or "")
-            dens = density.get(name.rsplit(".", 1)[0]) or density.get(name)
-            pages = int(f.get("pages") or 0)
-            if not dens or pages < 1:
-                continue
-            start = int(f.get("start_page") or 1)
-            cand = (pages >= 2 and dens >= 800, dens, int(ex.get("exhibit") or 0), start + 1 if pages >= 2 else start)
-            if best is None or cand[:2] > best[:2]:
-                best = cand
-    d = Decision(
-        "control", slug_dir / (f"record_control-{unit.unit}.json" if job.joint else "record_control.json"), None
-    )
-    if best is None:
-        # 2026-10-23: the one control hold left, and an integrity stop. With
-        # no native text anywhere in the exhibits there is no page that is a
-        # record by construction, so the scanned-page classifier would have
-        # nothing to be falsified against.
-        d.holds.append(
-            "record control (integrity stop): no exhibited file carries native text, so the scanned-page "
-            "classifier has no record page to be checked against"
-        )
-        return d
-    if not best[0]:
-        # Before 2026-10-23 a matter with no file of 800+ chars a page over
-        # two pages held here for SMD; the best text page is still a record
-        # page the classifier must call a record, so it serves.
-        d.notes.append(
-            f"no exhibited file has dense native text; the record control is the best text page "
-            f"({round(best[1])} chars a page)"
-        )
-    d.payload = {
-        "exhibit": best[2],
-        "page": best[3],
-        "_decided": {"by": "medchron.decisions.control", "chars_per_page": round(best[1]), "dense": best[0]},
-    }
-    _write(d.artifact, d.payload, dry_run=dry_run)
     return d
 
 

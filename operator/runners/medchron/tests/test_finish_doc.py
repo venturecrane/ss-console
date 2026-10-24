@@ -311,6 +311,38 @@ def test_classify_scanned_labels_head_pages_and_needs_its_controls(job_dir: Path
     assert sent == ["page Ex1p1:", "page CTL0:", "page CTL1:", "page CTL2:"]  # p.4 is outside the file head
 
 
+def test_classify_scanned_with_no_record_control_or_failed_controls_keeps_every_scanned_page(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Rows 3 and 15 (2026-10-24). An all-fax matter has no record control
+    (decide_control writes ``skip``), and a weak record control can be called
+    something else by the classifier; both stopped the run. Now the stage
+    calls nothing for a skipped control, records untrusted labels with no
+    drops for failed ones, and exits 0: the strip keeps every scanned page."""
+    client = Scripted(_label_reply)
+    sr = _sr(job_dir, firm, data_root, client)
+    _scanned_setup(sr, unknown=[1, 2, 3])
+    (sr.slug_dir / "record_control.json").write_text(json.dumps({"skip": True, "_decided": {"reason": "no text"}}))
+    assert classify.run_scanned(sr) == 0
+    assert client.calls == []  # nothing to falsify the classifier against, so it is not paid for
+    labels = json.loads((sr.slug_dir / "scanned_labels.json").read_text())
+    assert labels["controls_ok"] is False and labels["nonrecord"] == {} and "no text" in labels["skipped"]
+
+    def wrong_record(p, n):  # the classifier calls the record control a fax cover
+        r = _label_reply(p, n)
+        r.content[0].text = (
+            r.content[0].text.replace("CTL2 = RECORD", "CTL2 = FAX").replace("Ex1p1 = RECORD", "Ex1p1 = AUTH")
+        )
+        return r
+
+    client2 = Scripted(wrong_record)
+    sr2 = _sr(job_dir, firm, data_root, client2)
+    (sr2.slug_dir / "record_control.json").write_text(json.dumps({"exhibit": 1, "page": 2}))
+    assert classify.run_scanned(sr2) == 0
+    labels = json.loads((sr2.slug_dir / "scanned_labels.json").read_text())
+    assert labels["controls_ok"] is False and labels["nonrecord"] == {}
+
+
 def test_strip_falsifies_dry_runs_and_applies_with_a_verified_remap(job_dir: Path, firm: Path, data_root: Path) -> None:
     sr = _sr(job_dir, firm, data_root)
     pdf = _exhibit(sr, [ORDER_PAGE, INDEX_PAGE, PROSE, PROSE + " second"])
@@ -347,7 +379,7 @@ def test_strip_keeps_a_cited_page_the_classifier_calls_non_record(job_dir: Path,
     assert json.loads((sr.slug_dir / "nonrecord.json").read_text())["1"]["cited_collision"] == [1]
     authored = sr.slug_dir / "drops.json"
     authored.write_text(json.dumps({"manual_drops": {"1": [[1, "authored"]]}, "citation_edits": []}))
-    assert strip.run_dry(sr) == 1
+    assert strip.run_dry(sr) == strip.EXIT_CITED_DROP  # 2 in every mode since 2026-10-24
     assert strip.run_falsify(sr) == 2
     authored.unlink()
     assert strip.run_dry(sr) == 0
@@ -355,6 +387,123 @@ def test_strip_keeps_a_cited_page_the_classifier_calls_non_record(job_dir: Path,
     [path] = classify.resolve_exhibit_files(sr.slug_dir / "out" / sr.unit.unit).values()
     with pymupdf.open(str(path)) as doc:
         assert len(doc) == 2
+
+
+def _cite(n: str) -> str:
+    """DOC_3 with its body citation and table cell on the given page spec."""
+    return DOC_3.replace("(Exhibit 1 - p. 3)", f"(Exhibit 1 - p. {n})").replace(
+        "| Exhibit 1 - p. 3 |", f"| Exhibit 1 - p. {n} |"
+    )
+
+
+def test_strip_passes_an_out_of_range_citation_through_unchanged(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """Row 2 (2026-10-24): a citation to a page beyond the exhibit (or p. 0)
+    crashed the strip with a KeyError, and a crash is `failed`, terminal. The
+    composer's page is not the strip's to judge: it passes through unchanged,
+    logged, and the audit grades it PAGE_OUT_OF_RANGE."""
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, log=log)
+    _exhibit(sr, [ORDER_PAGE, PROSE, "second " + PROSE])
+    _doc(sr, _cite("2, 9").replace("Cervical strain noted.", "Cervical strain noted (Exhibit 1 - p. 0)."))
+    assert classify.run_nonrecord(sr) == 0
+    assert strip.run_falsify(sr) == 0
+    assert strip.run_dry(sr) == 0
+    assert strip.run_apply(sr) == 0
+    doc = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "(Exhibit 1 - p. 1, 9)" in doc and "| Exhibit 1 - p. 1, 9 |" in doc and "(Exhibit 1 - p. 0)" in doc
+    assert any("outside the exhibit" in line and "9" in line for line in log), log
+
+
+def test_strip_leaves_an_exhibit_unstripped_when_a_moved_cited_page_fails_the_content_check(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row 23 (2026-10-24): on a form or annotated PDF the page delete_pages
+    rewrites can differ from the original in pixels though it is the same
+    paper. That refused the run. Leaving the exhibit as it was, with its
+    citations unchanged, is always true to the paper: the strip only removes
+    non-record pages, so keeping them costs nothing and needs no disclosure."""
+    import pymupdf
+
+    real = strip.page_match
+
+    def form_page(a, b, dpi=60):  # the form page renders differently once its neighbours are gone
+        return (False, 0.4) if "FORM PAGE" in a.get_text() else real(a, b, dpi)
+
+    monkeypatch.setattr(strip, "page_match", form_page)
+    sr = _sr(job_dir, firm, data_root)
+    pdf = _exhibit(sr, [ORDER_PAGE, INDEX_PAGE, "FORM PAGE " + PROSE])
+    _doc(sr, DOC_3)
+    assert classify.run_nonrecord(sr) == 0
+    assert strip.run_dry(sr) == 0
+    assert strip.run_apply(sr) == 0
+    doc = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "(Exhibit 1 - p. 3)" in doc and "| Exhibit 1 - p. 3 |" in doc  # citations unchanged
+    with pymupdf.open(str(pdf)) as d:
+        assert len(d) == 3  # nothing removed
+    result = json.loads((sr.slug_dir / "strip_result.json").read_text())
+    assert result["drops"] == {"1": []} and result["unstripped"][0]["exhibit"] == 1
+
+
+def test_strip_falsifier_ignores_a_byte_identical_neighbour_and_still_fires_on_a_blind_check(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row 24 (2026-10-24): a fax that repeats a page gives the cited page a
+    byte-identical neighbour, so the one-page offset lands on the same paper
+    and the falsifier called the check blind. An identical neighbour cannot
+    tell the check anything; it is skipped. A check that really cannot fail
+    still stops the run (exit 1)."""
+    sr = _sr(job_dir, firm, data_root)
+    _exhibit(sr, [ORDER_PAGE, PROSE, PROSE])
+    _doc(sr, _cite("2"))
+    assert classify.run_nonrecord(sr) == 0
+    assert strip.run_falsify(sr) == 0
+    # the control: distinct neighbours, and an instrument that cannot fail
+    _exhibit(sr, [ORDER_PAGE, PROSE, "second " + PROSE])
+    assert classify.run_nonrecord(sr) == 0
+    monkeypatch.setattr(strip, "page_match", lambda a, b, dpi=60: (True, 0.0))
+    assert strip.run_falsify(sr) == 1
+
+
+def test_strip_gives_each_refusal_its_own_exit_code(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """Other (2026-10-24): strip_falsify's exit 1 meant three things, so the
+    reason the driver printed ("the content check cannot fail") was wrong for
+    two of them. Each cause has its own code and reason in dag.py."""
+    from medchron import dag
+
+    sr = _sr(job_dir, firm, data_root)
+    _exhibit(sr, [ORDER_PAGE, PROSE, "second " + PROSE])
+    _doc(sr, _cite("2"))
+    assert strip.run_falsify(sr) == strip.EXIT_NO_CLASSIFIER  # classify_nonrecord has not run
+    assert classify.run_nonrecord(sr) == 0
+    (sr.slug_dir / "drops.json").write_text(
+        json.dumps({"manual_drops": {}, "citation_edits": [{"find": "no such text", "replace": "x"}]})
+    )
+    assert strip.run_falsify(sr) == strip.EXIT_EDIT_NOT_FOUND
+    codes = {strip.EXIT_BLIND, strip.EXIT_CITED_DROP, strip.EXIT_EDIT_NOT_FOUND, strip.EXIT_NO_CLASSIFIER}
+    assert len(codes) == 4
+    for name in ("strip_falsify", "strip_dry", "strip_apply"):
+        reasons = {c: dag.BY_NAME[name].exit_map[c][1] for c in codes - {strip.EXIT_BLIND}}
+        assert "citation edit" in reasons[strip.EXIT_EDIT_NOT_FOUND]
+        assert "classify_nonrecord" in reasons[strip.EXIT_NO_CLASSIFIER]
+    assert "cannot fail" in dag.BY_NAME["strip_falsify"].exit_map[strip.EXIT_BLIND][1]
+
+
+def test_strip_keeps_scanned_pages_when_the_classifiers_controls_failed(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Rows 3 and 15 (2026-10-24): failed scanned-classifier controls refused
+    the strip. Its labels are simply not used: the scanned pages stay, the text
+    classifier's drops still apply, the run goes on."""
+    sr = _sr(job_dir, firm, data_root)
+    _exhibit(sr, [ORDER_PAGE, PROSE, ""])
+    _doc(sr, _cite("2"))
+    assert classify.run_nonrecord(sr) == 0
+    (sr.slug_dir / "scanned_labels.json").write_text(
+        json.dumps({"labels": {"Ex1p3": "AUTH"}, "nonrecord": {"1": [[3, "AUTH"]]}, "controls_ok": False})
+    )
+    assert strip.run_dry(sr) == 0
+    assert strip.run_apply(sr) == 0
+    assert json.loads((sr.slug_dir / "strip_result.json").read_text())["drops"] == {"1": [1]}
 
 
 # ---- coverage gate --------------------------------------------------------------------------
@@ -399,8 +548,7 @@ def test_coverage_gate_accounts_for_every_pulled_file(job_dir: Path, firm: Path,
         json.dumps({"orphans": [{"name": "stray photo.png", "reason": "email signature graphic"}]})
     )
     log.clear()
-    assert coverage.run(sr) == coverage.REWIND  # mystery scan is in the unit, uncited, unaccounted: rebuild once
-    assert coverage.run(sr) == 1  # and hold when it is still lost
+    assert coverage.run(sr) == 1  # mystery scan is in the unit, uncited, unaccounted: hold
     assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["mystery scan.pdf"]
     (d / "billing_docs.json").write_text(json.dumps({"docs": [{"name": "mystery scan", "path": "x", "pages": 1}]}))
     log.clear()
@@ -452,9 +600,9 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
     )
     log: list[str] = []
     sr = _sr(job_dir, firm, data_root, log=log)
-    assert coverage.run(sr) == coverage.REWIND
-    # "has entries.pdf" has citable content and is not cited: LOSS, so the
-    # document is rebuilt once, never disclosed. The pure ledger is explained
+    assert coverage.run(sr) == 1
+    # "has entries.pdf" has citable content and is not cited: LOSS, an
+    # integrity stop, never disclosed. The pure ledger is explained
     # by its own billing account. Since 2026-10-23 `entries: 0` IS an account:
     # the composer read the silent scan and drew nothing, so it is explained
     # by rule and recorded for the firm-facing disclosure.
@@ -464,7 +612,6 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
 
     rule = coverage_decide.rows(d, "alpha")
     assert [(r["name"], r["by"]) for r in rule] == [("silent scan.pdf", "rule")]
-    assert coverage.run(sr) == 1  # still lost after the rebuild: the integrity stop
     assert any("COMPLAINT.pdf" in line and "composer: pleading" in line for line in log), log
     assert any("EXHIBIT B.pdf" in line and "billing dates only" in line for line in log), log
     # the COMBINED form the composer actually writes: `entries: 0, billing-dates: N`.

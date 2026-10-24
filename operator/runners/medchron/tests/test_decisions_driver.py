@@ -131,6 +131,28 @@ def test_selection_holds_when_the_named_unit_folder_is_absent(
     assert any("not found at top level" in h for h in d.holds)
 
 
+def test_selection_takes_the_one_folder_a_renamed_prefix_matches_ignoring_case_and_punctuation(
+    tmp_path: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """Row 22 (2026-10-24): the firm renamed the client's folder ("Alpha_Example"
+    became "ALPHA EXAMPLE") and the run held at selection. One top-level folder
+    matching with case and punctuation ignored is that folder: selection and
+    the unit routing both use its real name, and the note says so. Two such
+    folders, or none, still hold."""
+    jd = _one_unit_job(tmp_path / "job", data_root, folder_prefix="Alpha_Example")
+    seed_folders(data_root, ["ALPHA EXAMPLE", "Beta_Example", "EMAILS ALL"])
+    job, sd = job_mod.load(jd), data_root / "example-matter"
+    d = decisions.selection(job, _cfg(firm_config_path), sd, dry_run=True)
+    assert not d.held, d.holds
+    assert d.payload["include_prefixes"] == ["/ALPHA EXAMPLE", "/EMAILS ALL"]
+    assert any("ALPHA EXAMPLE" in n and "Alpha_Example" in n for n in d.notes), d.notes
+    u = decisions.units(job, _cfg(firm_config_path), sd, dry_run=True)
+    assert next(iter(u.payload.values()))["folder_prefix"] == "/ALPHA EXAMPLE"
+    seed_folders(data_root, ["ALPHA EXAMPLE", "alpha-example", "EMAILS ALL"])
+    d = decisions.selection(job, _cfg(firm_config_path), sd, dry_run=True)
+    assert d.held and "not found at top level" in d.holds[0]
+
+
 def test_selection_holds_when_a_unit_folder_is_missing(tmp_path: Path, data_root: Path, firm_config_path: Path) -> None:
     jd = tmp_path / "job"
     jd.mkdir()
@@ -256,12 +278,17 @@ def test_control_picks_the_page_with_most_native_text(job_dir: Path, data_root: 
     assert (sd / "record_control.json").is_file()
 
 
-def test_control_falls_back_to_the_best_text_page_and_holds_only_with_no_text_at_all(
+def test_control_falls_back_to_the_best_text_page_and_skips_the_classifier_with_no_text_at_all(
     job_dir: Path, data_root: Path, firm_config_path: Path
 ) -> None:
     """2026-10-23: a matter with no file of 800+ chars a page over two pages
-    held here for SMD. The best text page anywhere in the exhibits serves; only
-    a matter with no native text in any exhibit holds, as an integrity stop."""
+    held here for SMD. The best text page anywhere in the exhibits serves.
+
+    Row 3 (2026-10-24): a matter with no native text in any exhibit (every
+    record a fax scan) held as an "integrity stop", though it is a legitimate
+    record set. No page is a record by construction, so the scanned-page
+    classifier is skipped (``skip: true``) and every scanned page stays in the
+    exhibits; keeping a page is harmless and needs no disclosure."""
     sd = data_root / "example-matter"
     (sd / "out" / "alpha").mkdir(parents=True)
     (sd / "out" / "alpha" / "page_map.json").write_text(
@@ -280,7 +307,9 @@ def test_control_falls_back_to_the_best_text_page_and_holds_only_with_no_text_at
     assert d.payload["_decided"]["dense"] is False and "best text page" in d.notes[0]
     (sd / "extracted.jsonl").write_text(json.dumps({"name": "sparse scan", "pages": 10}) + "\n")
     d = decisions.control(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
-    assert d.held and d.holds[0].startswith("record control (integrity stop)")
+    assert not d.held, d.holds
+    written = json.loads((sd / "record_control.json").read_text())
+    assert written["skip"] is True and "native text" in written["_decided"]["reason"]
 
 
 def test_orphans_disclose_the_name_rule_and_unreadable_files_and_hold_only_on_integrity(
@@ -623,9 +652,10 @@ def test_dry_run_authors_nothing_and_runs_nothing(
     seed_folders(data_root, ["MEDICAL"])
     outs = _driver(job_dir, firm_config_path, pricing_path, dry_run=True).run()
     assert outs[0].outcome == "dry_run"
-    # Every hook still reports; a would-hold is a note, so the hold rate of a
-    # rule can be read off delivered matters without a run.
-    assert any(n.startswith("WOULD HOLD at decide_control") for n in outs[0].notes)
+    # Every hook still reports, so a rule's effect can be read off delivered
+    # matters without a run. (Before 2026-10-24 decide_control held here on a
+    # matter with no native text; it now skips the scanned classifier.)
+    assert any(n.startswith("control: record control: no exhibited file") for n in outs[0].notes), outs[0].notes
     assert not (data_root / "example-matter" / "include.json").exists()
     assert calls(data_root) == []
 
