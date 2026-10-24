@@ -374,15 +374,8 @@ class LitigationRun(RunBase):
             files[m["id"]] = {str(f["id"]) for f in fs}
             saved[m["id"]] = {str(f["id"]): {str(f.get(k) or "")[:10] for k in ("created", "modified")} for f in fs}
             hits[m["id"]] = list((self._mjson(m["id"], "read3.json") or {}).get("hits_asked") or [])
-        g = gates.run(
-            ms,
-            today=self.today,
-            files=files,
-            saved=saved,
-            text_of=self._text_of,
-            hits=hits,
-            discovery=not self._court_only(),
-        )
+        disc = not self._court_only()  # a court-only list is not judged on discovery it did not read
+        g = gates.run(ms, today=self.today, files=files, saved=saved, text_of=self._text_of, hits=hits, discovery=disc)
         unread = passes.unread_matters(self)
         if unread:  # every other matter was read; the list holds until these are
             g["issues"]["matter could not be read"] = [(u["number"], u["stage"], u["reason"][:120]) for u in unread]
