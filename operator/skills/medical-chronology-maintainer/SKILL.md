@@ -458,7 +458,14 @@ When the outcome is `failed` or `held` (and the job row agrees), the stop is
 SMD's, not the firm's: SMD was paged when it stopped and finishes it. Send
 NOTHING to anyone: no reply, no bind, no message to anyone at the firm, no task,
 no memo. The broker refuses a held chronology its reply exactly as it refuses a
-failed one. Call `medchron_job_status` with the `job_id` once and end the turn,
+failed one. Every stop is SMD's, whatever the job's reason names: a gate or
+check, the final citation check `audit coverage:`, the independent review
+`review_held:`, a refused stage, a filing or read-back that did not finish, the
+job's cost cap `per_job_cap_usd`, the cycle's page allowance
+`chronology_package_page_allowance_per_month` or its cost budget
+`monthly_budget_usd`. None is explained to the firm, and none is ever an
+attorney determination: never ask anyone to review, confirm or determine
+anything about a stopped chronology. Call `medchron_job_status` with the `job_id` once and end the turn,
 with one exception: a held job whose hold class is `rerouted_to_update` is work
 to do on this turn, and still sends nothing. Skip steps 1 to 4 for it, bind
 nothing, and do only what step 4's **held** entry says (resubmit as the UPDATE,

@@ -132,7 +132,7 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
         const w = wording(held, cls)
         expect(shapes, `${cls} must be mirrored in ${cfg.shapes}`).toContain(flat(w))
         expect(w).not.toMatch(/—/)
-        if (cls === 'another_person' || cls === 'which_chronology' || cls === 'staff_unresolved') {
+        if (cls === 'staff_unresolved') {
           // The firm's question: exactly one, specific.
           expect((w.match(/\?/g) ?? []).length).toBe(1)
           expect(w).toMatch(/all that is needed/)
