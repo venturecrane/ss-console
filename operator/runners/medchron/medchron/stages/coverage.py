@@ -17,12 +17,32 @@ print in full every run, because a silent explanation is how an omission
 class enters. A citation counts only where prose carries it: a bare
 citation on a line of its own once let two exhibits pass this gate while
 appearing nowhere in the chronology.
+
+Since 2026-10-23 an uncited unit file with no other account is split by what
+the composer said it found (``entry_counts``), because the two cases are
+opposites and only one of them is a question:
+
+* ``entries: 0`` on every FILES-SEEN line for the file: the composer read it
+  and drew no entry from it. That is the record's own statement, so it is
+  explained by rule (``rule_rows``), written to ``coverage_decisions.json``
+  with ``by: "rule"``, and named to the firm in the Records Reviewed and
+  Limitations section. Curtis held seven times on SMD-only questions; this
+  was one shape of them.
+* ``entries: N`` above zero, or no FILES-SEEN line at all: the composer drew
+  entries from it (or never accounted for it) and the document cites none.
+  That is pipeline LOSS, never a disclosure (the 08-27 rule: no record the map
+  read is dropped into a sentence about what was not cited). The gate asks the
+  driver once to rebuild the document from ``build_doc`` (the same rebuild SMD
+  runs by hand, ``redo_doc``: exhibits restored, strip re-run), exit
+  ``REWIND``; if the file is still lost after that, it holds as an integrity
+  stop (exit 1).
 """
 
 from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +110,107 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
     return out
 
 
+#: Exit code: the gate found lost files on its first look and asks the driver
+#: to rebuild the document from build_doc once (dag.Stage.rewind).
+REWIND = 3
+#: The once-only marker: the rebuild already happened for this unit, so a file
+#: still lost is an integrity stop, never a second rebuild.
+REDO_MARKER = "coverage_redo.json"
+#: Who wrote a rule row in coverage_decisions.json (coverage_decide's shape).
+RULE_BY = "rule"
+NO_ENCOUNTER = "read in full; it contains no dated medical encounter"
+
+
+def entry_counts(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, int]:
+    """Per unit file, the entries the composer said it drew from the file,
+    summed over every FILES-SEEN line that carries a count (a file split
+    across chunks has one line per part, and a part with entries makes the
+    file a source even when another part had none). A file the maps never
+    name, or name only with another account, is absent."""
+    id_to_name = {f["id"]: file_key(f) for f in unit_files}
+    out: dict[str, int] = {}
+    for p in sorted(run_dir.glob("map-*.md")):
+        for m in SEEN_LINE.finditer(p.read_text(encoding="utf-8")):
+            entries = re.search(r"entries:\s*(\d+)", m.group("what"))
+            if entries:
+                name = id_to_name.get(m.group("id") or "", m.group("name").strip())
+                out[name] = out.get(name, 0) + int(entries.group(1))
+    return out
+
+
+def _tiny_image(raw_by_id: dict[str, dict[str, Any]], f: dict[str, Any]) -> str | None:
+    """The orphans decision's measured-size rule, applied to a unit file: an
+    image under 8 KB is an email signature or spacer graphic. Curtis held at
+    this gate on one such emailed image (2026-10-22) whose seven siblings the
+    composer had accounted for and it had not."""
+    from ..decisions import _tiny_image_reason
+
+    return _tiny_image_reason(raw_by_id.get(str(f.get("id"))) or f)
+
+
+def _settled(name: str, f: dict[str, Any], billing_names: set[str], rules: list, said: dict[str, str]) -> str | None:
+    """Every account of an uncited file that is not the composer's entry count."""
+    if f.get("compose_skip"):
+        return f"compose skipped: {f['compose_skip']}"
+    if billing_stem(name) in billing_names or name in billing_names:
+        return "in the authored billing-chart set (billing chart carries it)"
+    return classify_name(name, rules) or said.get(name)
+
+
+def _billing_names(d: Path) -> set[str]:
+    spec = read_json(d / "billing_docs.json", [])
+    return {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
+
+
+def rule_rows(slug_dir: Path, unit: str, cfg: Any) -> list[dict[str, str]]:
+    """The unit files explained by rule: the composer read each and wrote
+    `entries: 0` for it, and nothing else accounts for it. One reader for the
+    gate (which records them) and the Records Reviewed and Limitations section
+    (which names them to the firm), so the two can never disagree."""
+    unit_files = read_json(slug_dir / "units" / f"{unit}.json", [])
+    rd = slug_dir / "runs" / unit
+    counts = entry_counts(rd, unit_files)
+    said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(slug_dir, unit, by_rule=False)}
+    rules, billing = exclusions(cfg), _billing_names(slug_dir)
+    out = []
+    for f in unit_files:
+        name = file_key(f)
+        if counts.get(name) == 0 and not _settled(name, f, billing, rules, said):
+            out.append({"id": str(f.get("id") or ""), "name": name, "reason": NO_ENCOUNTER})
+    return out
+
+
+def _record_rules(sr: StageRun, rows: list[dict[str, str]]) -> None:
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for r in rows:
+        coverage_decide.record(
+            sr.slug_dir,
+            {
+                "unit": sr.unit.unit,
+                "id": r["id"],
+                "name": r["name"],
+                "reason": r["reason"],
+                "by": RULE_BY,
+                "source": "coverage_gate: the composer's FILES-SEEN line reads entries: 0",
+                "at": at,
+            },
+        )
+
+
+def _rewind_once(sr: StageRun, lost: list[str]) -> bool:
+    """True when this is the first look: restore the stripped exhibits (the
+    rebuild SMD runs by hand, redo_doc) and mark it, so the driver rebuilds
+    the document from build_doc. False when the rebuild already happened."""
+    marker = sr.slug_dir / "runs" / sr.unit.unit / REDO_MARKER
+    if marker.is_file():
+        return False
+    from .. import redo_doc
+
+    restored = redo_doc.restore_unit(sr.slug_dir, sr.unit.unit, joint=sr.job.joint)
+    marker.write_text(json.dumps({"lost": lost, "exhibits_restored": restored}, indent=1), encoding="utf-8")
+    return True
+
+
 def cited_exhibits(body: str) -> tuple[set[int], set[int]]:
     """(cited, hollow): exhibits with prose in front of a citation, and
     exhibits referenced only by a bare citation line."""
@@ -125,6 +246,7 @@ def rehearse(sr: StageRun) -> list[str]:
     spec = read_json(d / "billing_docs.json", []) or []
     billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
     said = composer_dispositions(d / "runs" / sr.unit.unit, unit_files)
+    counts = entry_counts(d / "runs" / sr.unit.unit, unit_files)
     explained = 0
     needs: list[str] = []
     for name in sorted(in_unit):
@@ -133,7 +255,7 @@ def rehearse(sr: StageRun) -> list[str]:
         elif billing_stem(name) in billing_names or name in billing_names:
             reason = "in the authored billing-chart set"
         else:
-            reason = classify_name(name, rules) or said.get(name)
+            reason = classify_name(name, rules) or said.get(name) or (NO_ENCOUNTER if counts.get(name) == 0 else None)
         if reason:
             explained += 1
         else:
@@ -153,7 +275,9 @@ def run(sr: StageRun) -> int:
 
     pulled: dict[str, dict[str, Any]] = {}
     dupes: set[str] = set()
+    raw_by_id: dict[str, dict[str, Any]] = {}
     for r in (x for x in read_jsonl(d / "raw_manifest.jsonl") if x.get("ok")):
+        raw_by_id[str(r.get("id"))] = r
         (dupes.add(file_key(r)) if r.get("duplicate_of") else pulled.__setitem__(file_key(r), r))
     owners: dict[str, set[str]] = {}
     udir = d / "units"
@@ -196,8 +320,7 @@ def run(sr: StageRun) -> int:
     for name in sorted(orphans):
         sr.log(f"    ~ {name[:62]:62s} {orphans[name][:48]}")
 
-    spec = read_json(d / "billing_docs.json", [])
-    billing_names = {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
+    billing_names = _billing_names(d)
     said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(d, unit)}
     body = ""
     for cand in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md"):
@@ -215,18 +338,23 @@ def run(sr: StageRun) -> int:
         cited_files = {f["file"] for e in pm if e["exhibit"] in cited_ex for f in e["files"]}
     else:
         cited_files = {n for n, num in read_json(rd / "exhibit_map.json", {}).items() if num in cited_ex}
+    counts = entry_counts(rd, unit_files)
     unexplained: list[str] = []
     explained: list[tuple[str, str]] = []
+    by_rule: list[dict[str, str]] = []
     for name in sorted(in_unit):
         if name in cited_files:
             continue
-        if in_unit[name].get("compose_skip"):
-            reason: str | None = f"compose skipped: {in_unit[name]['compose_skip']}"
-        elif billing_stem(name) in billing_names or name in billing_names:
-            reason = "in the authored billing-chart set (billing chart carries it)"
-        else:
-            reason = classify_name(name, rules) or said.get(name)
+        f = in_unit[name]
+        reason = _settled(name, f, billing_names, rules, said) or _tiny_image(raw_by_id, f)
+        if reason is None and counts.get(name) == 0:
+            # The composer read it and drew no entry: the record's own account.
+            reason = NO_ENCOUNTER
+            by_rule.append({"id": str(f.get("id") or ""), "name": name, "reason": reason})
         (explained.append((name, reason)) if reason else unexplained.append(name))
+    if by_rule:
+        _record_rules(sr, by_rule)
+        sr.log(f"  explained by rule (entries: 0), recorded in {coverage_decide.FILE}: {len(by_rule)}")
     cited_n = len(cited_files & set(in_unit))
     sr.log(
         f"{unit}: {len(in_unit)} file(s); cited {cited_n}; excluded with reason {len(explained)}; UNEXPLAINED {len(unexplained)}"
@@ -234,9 +362,24 @@ def run(sr: StageRun) -> int:
     for name, reason in explained:
         sr.log(f"    ~ {name[:62]:62s} {reason[:48]}")
     if unexplained:
+        # Every file left here is LOSS: entries above zero that the document
+        # does not cite, or a file the composer never accounted for. Never a
+        # disclosure; one rebuild from build_doc, then an integrity stop.
         for name in unexplained[:25]:
-            sr.log(f"  - {name[:66]:66s} {in_unit[name].get('chars') or 0:>8} chars")
+            n = counts.get(name)
+            seen = "no FILES-SEEN line" if n is None else f"entries: {n}"
+            sr.log(f"  - {name[:56]:56s} {f'{seen}, uncited':>26} {in_unit[name].get('chars') or 0:>8} chars")
         (rd / "coverage_unexplained.json").write_text(json.dumps(unexplained, indent=1), encoding="utf-8")
+        if _rewind_once(sr, unexplained):
+            sr.log(
+                f"COVERAGE GATE: {len(unexplained)} file(s) the composer drew from are not cited; rebuilding the "
+                f"document once from build_doc"
+            )
+            return REWIND
+        sr.log(
+            f"COVERAGE GATE HOLD (integrity): {len(unexplained)} file(s) the composer drew entries from, or never "
+            f"accounted for, are still not cited after one rebuild of the document"
+        )
         return 1
     sr.log("COVERAGE GATE PASS: every source file is cited or explained")
     return 0

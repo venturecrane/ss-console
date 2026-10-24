@@ -42,17 +42,33 @@ class Refused(RuntimeError):
     """The decision cannot be recorded; the message says why."""
 
 
-def reasons(slug_dir: Path, unit: str) -> dict[str, str]:
-    """``{file_key: reason}`` SMD recorded for this unit."""
+def rows(slug_dir: Path, unit: str | None = None) -> list[dict[str, Any]]:
+    """Every recorded decision (for one unit, when named), SMD's and the
+    gate's own rule rows (``by: "rule"``, since 2026-10-23) alike."""
     p = slug_dir / FILE
     if not p.is_file():
-        return {}
+        return []
     body = json.loads(p.read_text(encoding="utf-8"))
-    return {
-        str(r["name"]): "SMD: " + str(r["reason"])
+    return [
+        r
         for r in body.get("decisions") or []
-        if r.get("unit") == unit and r.get("name") and r.get("reason")
+        if (unit is None or r.get("unit") == unit) and r.get("name") and r.get("reason")
+    ]
+
+
+def reasons(slug_dir: Path, unit: str, *, by_rule: bool = True) -> dict[str, str]:
+    """``{file_key: reason}`` recorded for this unit: SMD's (prefixed "SMD:")
+    and, unless ``by_rule`` is False, the gate's rule rows (prefixed "rule:")."""
+    return {
+        str(r["name"]): ("rule: " if r.get("by") == "rule" else "SMD: ") + str(r["reason"])
+        for r in rows(slug_dir, unit)
+        if by_rule or r.get("by") != "rule"
     }
+
+
+def record(slug_dir: Path, row: dict[str, Any]) -> None:
+    """Add one decision, replacing any earlier one for the same unit and id."""
+    _record(slug_dir, row)
 
 
 def _record(slug_dir: Path, row: dict[str, Any]) -> None:

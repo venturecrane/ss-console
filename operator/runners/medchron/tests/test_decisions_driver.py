@@ -256,6 +256,179 @@ def test_control_picks_the_page_with_most_native_text(job_dir: Path, data_root: 
     assert (sd / "record_control.json").is_file()
 
 
+def test_control_falls_back_to_the_best_text_page_and_holds_only_with_no_text_at_all(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """2026-10-23: a matter with no file of 800+ chars a page over two pages
+    held here for SMD. The best text page anywhere in the exhibits serves; only
+    a matter with no native text in any exhibit holds, as an integrity stop."""
+    sd = data_root / "example-matter"
+    (sd / "out" / "alpha").mkdir(parents=True)
+    (sd / "out" / "alpha" / "page_map.json").write_text(
+        json.dumps(
+            [
+                {"exhibit": 1, "files": [{"file": "sparse scan.pdf", "start_page": 1, "pages": 10}]},
+                {"exhibit": 2, "files": [{"file": "one page note.pdf", "start_page": 4, "pages": 1}]},
+            ]
+        )
+    )
+    rows = [{"name": "sparse scan", "pages": 10, "chars": 400}, {"name": "one page note", "pages": 1, "chars": 600}]
+    (sd / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    job = job_mod.load(job_dir)
+    d = decisions.control(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
+    assert not d.held and (d.payload["exhibit"], d.payload["page"]) == (2, 4)  # a one-page file: its own page
+    assert d.payload["_decided"]["dense"] is False and "best text page" in d.notes[0]
+    (sd / "extracted.jsonl").write_text(json.dumps({"name": "sparse scan", "pages": 10}) + "\n")
+    d = decisions.control(job, _cfg(firm_config_path), sd, job.units[0], dry_run=False)
+    assert d.held and d.holds[0].startswith("record control (integrity stop)")
+
+
+def test_orphans_disclose_the_name_rule_and_unreadable_files_and_hold_only_on_integrity(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """2026-10-23: no SMD-only residue hold. A file the routing excluded by
+    name, a type extract does not read, and a file that would not open are
+    each disclosed by what was measured; a file that never reached extraction
+    is an earlier stage's failure and still holds."""
+    sd = data_root / "example-matter"
+    (sd / "units").mkdir()
+    (sd / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": "clinic note"}]))
+    cfg_body = {**FIRM_CONFIG, "units": {"exclude_name_patterns": [r"(?i)retainer", r"(?i)^deposition"]}}
+    firm = data_root / "firm-names.yaml"
+    firm.write_text(yaml.safe_dump(cfg_body))
+    raw = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True},
+        {"id": "f2", "name": "Deposition of the driver", "ext": ".pdf", "ok": True},
+        {"id": "f3", "name": "expenses", "ext": ".xlsx", "ok": True},
+        {"id": "f4", "name": "broken scan", "ext": ".pdf", "ok": True},
+    ]
+    seed_raw_manifest(data_root, raw)
+    ext = [
+        {"id": "f1", "name": "clinic note", "text_path": "x"},
+        {"id": "f2", "name": "Deposition of the driver", "text_path": "y"},
+        {"id": "f3", "name": "expenses", "ext": ".xlsx", "error": "unhandled ext"},
+        {"id": "f4", "name": "broken scan", "ext": ".pdf", "error": "EOF marker not found"},
+    ]
+    (sd / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ext))
+    job = job_mod.load(job_dir)
+    d = decisions.orphans(job, config_mod.load(str(firm)), sd, job.units[0], dry_run=False)
+    assert not d.held, d.holds
+    got = {o["name"]: o["reason"] for o in json.loads((sd / "orphans.json").read_text())["orphans"]}
+    assert got == {
+        "Deposition of the driver.pdf": decisions.NAME_RULE_REASON,
+        "expenses.xlsx": "a .xlsx file, a type this review does not read",
+        "broken scan.pdf": "the file could not be opened, or no text could be read from it",
+    }
+    # The control: a pulled file extract never saw is an integrity stop.
+    seed_raw_manifest(data_root, [*raw, {"id": "f5", "name": "never extracted", "ext": ".pdf", "ok": True}])
+    d = decisions.orphans(job, config_mod.load(str(firm)), sd, job.units[0], dry_run=False)
+    assert d.held and d.holds[0].startswith("orphans (integrity stop)") and "never extracted" in d.holds[0]
+
+
+def test_a_single_client_orphan_joins_the_unit_unless_its_text_names_someone_else(
+    job_dir: Path, data_root: Path, firm_config_path: Path
+) -> None:
+    """build_units decides a file no folder rule owns (2026-10-23): on one
+    client's job it is the client's unless its own text names someone else,
+    which is asked of the firm. No synthetic unit, nothing dropped."""
+    from medchron.stages import units as units_stage
+    from medchron.stages.base import StageRun
+
+    sd = data_root / "example-matter"
+    (sd / "units").mkdir()
+    (sd / "text").mkdir()
+    ok, other = sd / "text" / "o1.txt", sd / "text" / "o2.txt"
+    ok.write_text("[p.1] (machine transcription)\nPatient: Alpha Example\nOffice visit.")
+    other.write_text("[p.1] (machine transcription)\nPatient Name: Gamma Other\nDOB: 05/05/1990\n")
+    job = job_mod.load(job_dir)
+    log: list[str] = []
+    sr = StageRun(
+        job=job,
+        cfg=_cfg(firm_config_path),
+        unit=job.units[0],
+        slug_dir=sd,
+        decided={},
+        log=log.append,
+        seat_factory=lambda: None,
+    )
+    units: dict[str, list] = {"alpha": []}
+    o1 = {"id": "o1", "name": "scan", "ext": ".pdf", "folder": "/MISC", "text_path": str(ok)}
+    assert units_stage._resolve_orphans(sr, units, [o1]) == [] and units["alpha"] == [o1]
+    o2 = {"id": "o2", "name": "other scan", "ext": ".pdf", "folder": "/MISC", "text_path": str(other)}
+    held = units_stage._resolve_orphans(sr, {"alpha": []}, [o2])
+    assert [h["id"] for h in held] == ["o2"] and "1990" not in log[-1]
+    assert log[-1].startswith("IDENTITY HOLD: 1 pulled file(s) name a different person than the client")
+    FI_release = sd / "identity_release.json"
+    FI_release.write_text(json.dumps({"release": ["o2"]}))
+    units = {"alpha": []}
+    assert units_stage._resolve_orphans(sr, units, [o2]) == [] and units["alpha"] == [o2]  # a person released it
+
+
+def test_limitations_names_every_withheld_excluded_and_rule_explained_file(data_root: Path) -> None:
+    """2026-10-23: the reasons were decided and printed by the gates, which
+    only SMD reads. The firm is told each one, factually: a withheld email
+    attachment (never folded, so named from the email index), an orphan with
+    its reason, and the coverage record's rule and SMD rows. A password file
+    is already in the unreadable list and is not repeated."""
+    from medchron import unopened
+    from medchron.stages import limitations
+
+    sd = data_root / "example-matter"
+    seed_raw_manifest(data_root, [{"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True}])
+    (sd / "identity_release.json").write_text(json.dumps({"withhold": ["abcdef123456"]}))
+    (sd / "msg_attachments.json").write_text(
+        json.dumps({"attachments": [{"sha256": "abcdef123456" + "0" * 52, "names": ["other person.pdf"]}]})
+    )
+    (sd / "orphans.json").write_text(
+        json.dumps(
+            {
+                "orphans": [
+                    {"name": "Retainer signed.pdf", "reason": "engagement document, not a chronology source"},
+                    {"name": "locked.pdf", "reason": unopened.REASON},
+                ]
+            }
+        )
+    )
+    (sd / "coverage_decisions.json").write_text(
+        json.dumps(
+            {
+                "decisions": [
+                    {
+                        "unit": "alpha",
+                        "id": "a",
+                        "name": "intake.pdf",
+                        "reason": "read in full; it contains no dated medical encounter",
+                        "by": "rule",
+                    },
+                    {"unit": "beta", "id": "b", "name": "not this unit.pdf", "reason": "x", "by": "rule"},
+                ]
+            }
+        )
+    )
+    text = "\n".join(limitations.section(sd, "alpha", lambda _m: None))
+    assert '* "Retainer signed.pdf" - engagement document, not a chronology source' in text
+    assert '* "other person.pdf" - left out at the firm\'s direction' in text
+    assert '* "intake.pdf" - read in full; it contains no dated medical encounter' in text
+    assert "not this unit" not in text and '"locked.pdf"' not in text
+    assert "—" not in text
+
+
+def test_an_identity_hold_leads_a_decisions_joined_reason(
+    job_dir: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """proof/holds.py reads the reason's prefix: an identity question behind
+    another hold would never be asked of the firm (2026-10-23)."""
+    from medchron.proof import holds
+
+    held = decisions.Decision("fold", None, None, holds=["something of ours", "identity: 1 emailed attachment(s) x"])
+    monkeypatch.setitem(decisions.HOOKS, "fold", lambda *a, **k: held)
+    drv = _driver(job_dir, firm_config_path, pricing_path)
+    st = RunState.load_or_new(Path(drv.slug_dir) / "state-test.json", slug="x", unit="alpha")
+    out = drv._decide(dag.BY_NAME["decide_fold"], drv.job.units[0], st, [])
+    assert out is not None and out.reason.startswith("identity:")
+    assert holds.classify("medchron", out.reason)[0] == holds.ANOTHER_PERSON
+
+
 # ---- driver ------------------------------------------------------------------
 def _seat() -> FakeSeat:
     """One MEDICAL folder with a dense seven-page record whose FIRST page is a
