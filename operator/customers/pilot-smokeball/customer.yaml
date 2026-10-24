@@ -263,6 +263,15 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # How to work with me (#3423): answers "how do we work together?" from
+      # the seat's own facts and the SMD-authored guide. Read-only, one reply.
+      - name: operator-help
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: operator-self-test
         version: pending
         initiation:
