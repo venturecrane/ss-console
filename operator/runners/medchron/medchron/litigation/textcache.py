@@ -50,6 +50,13 @@ DEFAULT_DATA_DIR = "/opt/data/medchron"
 REHEARSAL_MARK = "[rehearsal OCR stub:"
 
 
+def storage_error_text(text: str) -> bool:
+    """The storage service's ``NoSuchKey`` XML (a file Smokeball lists but
+    does not hold, ``fetch.MISSING``): never text worth keeping."""
+    head = text.lstrip()[:600]
+    return head.startswith("<?xml") and "NoSuchKey" in head
+
+
 def cache_dir(explicit: str | Path | None = None) -> Path:
     if explicit:
         return Path(explicit)
@@ -60,9 +67,11 @@ def cache_dir(explicit: str | Path | None = None) -> Path:
 
 def method_version(model: str) -> str:
     """How text is made, as a short hash: the extract constants that decide
-    which pages are transcribed and how, the OCR prompt, and the model."""
+    which pages are transcribed and how, ``extract.EXTRACT_VERSION`` (bumped by
+    hand with any reader change: a new decoding, a new file kind, a fixed
+    email body), the OCR prompt, and the model."""
     e = extract_mod
-    parts = [e.HEAD, e.TAIL, e.SCAN_FLOOR, e.RENDER_LONG_SIDE, e.DEFERRED, e.OCR_PROMPT, model]
+    parts = [e.EXTRACT_VERSION, e.HEAD, e.TAIL, e.SCAN_FLOOR, e.RENDER_LONG_SIDE, e.DEFERRED, e.OCR_PROMPT, model]
     return hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:12]
 
 
@@ -97,6 +106,8 @@ class TextCache:
         log: Callable[[str], None] = print,
     ) -> None:
         self.root = cache_dir(root)
+        #: Why writes stopped on this run (a real run records it in its job state).
+        self.quiet_reason = ""
         self.method_version = method_version
         self.job_id = job_id
         self.read_only = read_only
@@ -115,6 +126,10 @@ class TextCache:
             return (self.root / f"{sha}.txt").read_text(encoding="utf-8")
         except OSError:
             return None
+
+    def meta(self, sha: str | None) -> dict[str, Any]:
+        m = _read(self.root / f"{sha}.json") if sha else None
+        return m if isinstance(m, dict) and m.get("method_version") == self.method_version else {}
 
     def lookup_file(self, file_id: str, modified: Any, size: Any) -> str | None:
         """The sha a file had when its listing showed this ``(modified, size)``."""
@@ -145,11 +160,15 @@ class TextCache:
         return True
 
     def _quiet(self, exc: BaseException) -> None:
+        if not self.quiet:
+            self.quiet_reason = f"{type(exc).__name__}: {str(exc)[:160]}"
+            self.log(
+                f"[textcache] WARN: writes stopped for this run ({self.quiet_reason}); the job reads on without it"
+            )
         self.quiet = True
-        self.log(f"[textcache] writes stopped for this run ({type(exc).__name__}); the job reads on without it")
 
     def put_text(self, sha: str | None, text: str, *, scanned_pages: int, matter_id: str) -> bool:
-        if not sha or REHEARSAL_MARK in text or not self._writable():
+        if not sha or REHEARSAL_MARK in text or storage_error_text(text) or not self._writable():
             return False
         with self._lock:
             try:
@@ -167,8 +186,30 @@ class TextCache:
                 return False
         return True
 
-    def put_file(self, file_id: str, modified: Any, size: Any, sha: str, matter_id: str) -> bool:
-        if not (modified and sha) or not self._writable():
+    def add_matter(self, sha: str | None, matter_id: str) -> None:
+        """A hit on another matter adds its id, so a purge of either matter
+        removes only its own claim and never text the other still uses."""
+        if not sha or not matter_id or not self._writable():
+            return
+        with self._lock:
+            try:
+                meta = _read(self.root / f"{sha}.json")
+                if isinstance(meta, dict) and matter_id not in (meta.get("matter_ids") or []):
+                    meta["matter_ids"] = sorted({*(meta.get("matter_ids") or []), matter_id})
+                    _write(self.root / f"{sha}.json", json.dumps(meta, indent=1))
+            except OSError as exc:
+                self._quiet(exc)
+
+    def put_file(self, file_id: str, f: dict[str, Any], row: dict[str, Any], matter_id: str) -> bool:
+        """Index a listed file (``f``) against the content its pulled ``row``
+        fetched. Refused here, so no caller can forget: a row not ``ok``, one
+        with no sha, one whose file changed after the listing (``size_changed``:
+        the listing no longer describes those bytes), and one whose bytes are
+        the storage service's ``NoSuchKey`` XML (``fetch.MISSING``)."""
+        sha, modified, size = row.get("sha256"), f.get("modified"), f.get("size")
+        if not (row.get("ok") and sha and modified) or row.get("size_changed") or _missing(row):
+            return False
+        if not self._writable():
             return False
         rec = {"modified": str(modified), "size": size, "sha256": sha, "matter_id": matter_id}
         try:
@@ -177,6 +218,12 @@ class TextCache:
             self._quiet(exc)
             return False
         return True
+
+
+def _missing(row: dict[str, Any]) -> bool:
+    from .fetch import _nosuchkey
+
+    return bool(row.get("path")) and _nosuchkey(Path(row["path"]))
 
 
 # ---- purge ("gone means gone") ------------------------------------------------------------
@@ -195,7 +242,11 @@ def purge_matter(root: str | Path | None, matter_id: str, dry_run: bool = False)
         if left:
             out["entries_kept_for_other_matters"] += 1
             if not dry_run:
-                _write(meta_p, json.dumps({**meta, "matter_ids": left}, indent=1))
+                try:
+                    _write(meta_p, json.dumps({**meta, "matter_ids": left}, indent=1))
+                except OSError as exc:
+                    out["errors"] = out.get("errors", 0) + 1
+                    print(f"[textcache] purge could not rewrite {meta_p.name}: {type(exc).__name__}", file=sys.stderr)
             continue
         out["entries_deleted"] += 1
         gone.add(meta_p.stem)
@@ -223,6 +274,8 @@ def _seed_row(cache: TextCache, mdir: Path, mid: str, r: dict[str, Any], listing
         return "skipped_no_text"
     if text is not None and REHEARSAL_MARK in text:
         return "skipped_rehearsal_text"
+    if text is not None and storage_error_text(text):
+        return "skipped_missing_in_smokeball"
     had = cache.get_text(sha) is not None
     if not had and text is None:
         return "skipped_no_text"  # a duplicate whose original's text is not cached either
@@ -230,8 +283,7 @@ def _seed_row(cache: TextCache, mdir: Path, mid: str, r: dict[str, Any], listing
     if not cache.read_only:
         if text is not None:
             cache.put_text(sha, text, scanned_pages=_scanned(mdir, str(r["id"])), matter_id=mid)
-        if not r.get("size_changed"):
-            cache.put_file(str(r["id"]), f.get("modified"), f.get("size"), sha, mid)
+        cache.put_file(str(r["id"]), f, r, mid)
     return "already" if had else "seeded"
 
 

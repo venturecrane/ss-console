@@ -7,7 +7,10 @@ Every stage records itself in ``data/state.json``; a resume skips finished
 stages, and the per-matter reads resume per matter (``data/m/<id>/readN.json``).
 The run's "today" is frozen on the first attempt, so a resume judges dates the
 way the first attempt did. The lane's state on the volume (``manifest.py``) is
-written only by ``report``, after the workbook is read back. ``review``
+written by ``report``, after the workbook is read back, and by one other
+writer: ``baseline final`` (``finalload.py``), the last step of a hand finish,
+which loads a delivered job's ``final.json`` per field group (cited groups
+only, newer state wins, a dry run first, counts read back). ``review``
 (2026-10-13, proven delivery) re-reads the built file's bytes against the data
 it was built from before anything is filed (``review.py``).
 """
@@ -230,8 +233,9 @@ class LitigationRun(RunBase):
 
     def _extract(self) -> None:
         summary = {}
+        self._heal_cached()
         rows_by = {mid: list(fetch_mod.pulled(self.data, mid).values()) for mid in self._active()}
-        total = sum(1 for rows in rows_by.values() for r in rows if r.get("ok") and (r.get("path") or r.get("cached")))
+        total = sum(1 for rows in rows_by.values() for r in rows if extract_mod._extractable(r))
         self._progress = Progress(self.log, "extract", total, "docs", every=20)
         for mid, rows in rows_by.items():
             recs = extract_mod.extract_matter(

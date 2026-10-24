@@ -24,6 +24,8 @@ class RunBase:
     doorway: Any
     firm: Any
     cache: Any = None
+    #: The run's seat, opened on first use (``LitigationRun.seat``).
+    seat: Any
     _progress: Progress | None = None
     #: Set while a read stage runs matters at once (``workers.in_parallel``).
     _halt: Any = None
@@ -50,6 +52,19 @@ class RunBase:
         if sum(filled.values()):
             self.log(f"[fetch] {sum(filled.values())} files filled from the text cache, not downloaded")
         return filled
+
+    def _heal_cached(self) -> None:
+        """Cache-filled rows whose text copy is gone are filled again or
+        downloaded before extract; any still without text stop the run
+        (retryable), never become an unreadable-file finding."""
+        lost = []
+        for mid in self._active():
+            files = inventory.files_of(self.data, mid)
+            lost += fetch_mod.heal_cached(lambda: self.seat, self.cache, self.data, mid, files, self.log)
+        if lost:
+            raise LitigationFailed(
+                f"fetch_unfinished: {len(lost)} cached files lost their text and could not be fetched"
+            )
 
     def _disk_preflight(self) -> None:
         pending = count = 0
@@ -123,9 +138,17 @@ class RunBase:
         t0 = time.time()
         self.log(f"[{name}] start")
         fn()
+        self._note_cache()
         self._put(
             name, {"status": "done", "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "seconds": round(time.time() - t0, 1)}
         )
+
+    def _note_cache(self) -> None:
+        """A text cache that stopped writing is recorded in the job's state,
+        never silent: the job reads on, and the next one pays again."""
+        c = self.cache
+        if c is not None and c.quiet and not self._state().get("cache_disabled"):
+            self._put("cache_disabled", c.quiet_reason or "writes failed")
 
     def _json(self, name: str) -> Any:
         return json.loads((self.data / name).read_text(encoding="utf-8"))

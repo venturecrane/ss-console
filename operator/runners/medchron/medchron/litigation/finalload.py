@@ -1,11 +1,13 @@
 """`baseline final`: a delivered job's values into the lane's state, per group.
 
-WHY (2026-10-24). ``report`` is the only writer of lane state (``run.py``), so
-a list a person finished by hand (a held job corrected and filed) left the
-next run's baseline where the last automatic delivery put it: the corrected
-values were bought, delivered, and then read again at full price. This loader
-is the last step of a hand finish (the litigation runbook): the finished job's
-``data/final.json`` goes into ``matters/`` ("last delivered"), the same day.
+WHY (2026-10-24). Until this loader, ``report`` was the only writer of lane
+state (``run.py``), so a list a person finished by hand (a held job corrected
+and filed) left the next run's baseline where the last automatic delivery put
+it: the corrected values were bought, delivered, and then read again at full
+price. This loader is the second writer and the last step of a hand finish
+(``docs/handbook/incident-response.md``): the finished job's
+``data/final.json`` goes into ``matters/`` ("last delivered"), the same day,
+dry run first.
 
 The rules, each pinned by a test:
 
@@ -14,15 +16,19 @@ The rules, each pinned by a test:
   group; a group it does not carry is kept. Within defendants, a stored
   ``sent_for_service`` survives when the source's defendant (``identity.
   same_person``) has no such key. ``fields_read`` is the union of the stored
-  groups and the groups replaced.
+  groups and the groups replaced, less the groups refused (read again next run).
+  Provenance advances and the manifest is committed only when a group was
+  actually replaced.
 * **Refused, not guessed.** A group with a dated value that cites no file id,
-  a status with no source, or a date not ``YYYY-MM-DD`` is refused: the stored
-  group stands and the refusal is counted by reason. Only the ``final.json``
+  a status with no source, a date not ``YYYY-MM-DD``, or a defendant that is
+  not a record is refused: the stored values stand, the group leaves
+  ``fields_read`` so the next run reads it, and the refusal is counted. Only the ``final.json``
   shape is read; any other file is refused whole.
 * **Em dashes are normalized** (U+2014 to ", ", in every text value outside a
   source) and counted; the gates refuse them in a workbook.
 * **Newer state wins.** A matter whose stored ``provenance.read_at`` is after
-  the source's is not touched.
+  the source's is not touched, nor one read the same day by a different job
+  (a later same-day delivery is never overwritten).
 * **The dry run writes nothing** and reports the counts, plus the
   ``seedcheck.gaps`` the would-be state still has against the job's listing.
 """
@@ -95,6 +101,8 @@ def refusal(m: dict[str, Any], g: str) -> str | None:
             return "uncited"
     if g == vocab.GROUP_DEFENDANTS and not isinstance(m.get("defendants"), list):
         return "incomplete"
+    if g == vocab.GROUP_DEFENDANTS and not all(isinstance(d, dict) for d in m["defendants"]):
+        return "malformed"
     return next((r for r in map(_cited, _values(m, g)) if r), None)
 
 
@@ -120,14 +128,10 @@ def _keep_sent(stored: list[Any], fresh: list[Any]) -> int:
     return n
 
 
-def merge(stored: dict[str, Any] | None, src: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
-    """The would-be stored matter; ``out`` gathers the counts."""
+def merge(stored: dict[str, Any] | None, src: dict[str, Any], out: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """(the would-be stored matter, the groups replaced); ``out`` gathers the counts."""
     base = copy.deepcopy(stored) if stored else {}
-    group_keys = {k for ks in vocab.GROUP_FIELDS.values() for k in ks}
-    for k, v in src.items():
-        if k not in group_keys and k not in DROP and k != "fields_read":
-            base[k] = copy.deepcopy(v)
-    replaced = []
+    replaced, refused = [], []
     for g in vocab.GROUPS:
         why = refusal(src, g) if g in _carried(src) else "not_carried"
         if why == "not_carried":
@@ -136,15 +140,21 @@ def merge(stored: dict[str, Any] | None, src: dict[str, Any], out: dict[str, Any
         if why:
             out["refused"][why] = out["refused"].get(why, 0) + 1
             out["kept"] += 1
+            refused.append(g)
             continue
         fresh = {k: copy.deepcopy(src[k]) for k in vocab.GROUP_FIELDS[g]}
         if g == vocab.GROUP_DEFENDANTS:
             out["sent_for_service_kept"] += _keep_sent(base.get("defendants") or [], fresh["defendants"])
         base.update(fresh)
         replaced.append(g)
+    if replaced:  # the matter's own notes and flags come with a delivered read, never alone
+        group_keys = {k for ks in vocab.GROUP_FIELDS.values() for k in ks}
+        for k, v in src.items():
+            if k not in group_keys and k not in DROP and k != "fields_read":
+                base[k] = copy.deepcopy(v)
     out["groups_replaced"] += len(replaced)
-    base["fields_read"] = sorted(set(base.get("fields_read") or []) | set(replaced))
-    return base
+    base["fields_read"] = sorted((set(base.get("fields_read") or []) | set(replaced)) - set(refused))
+    return base, replaced
 
 
 def _read_at(final_json: Path) -> str | None:
@@ -189,6 +199,7 @@ def load_final(
     out: dict[str, Any] = {
         "loaded": 0,
         "unchanged": 0,
+        "refused_only": 0,
         "skipped_newer": 0,
         "skipped_no_listing": 0,
         "groups_replaced": 0,
@@ -209,7 +220,9 @@ def _one(
 ) -> None:
     mid = str(raw["matter_id"])
     stored = manifest.load_prior(state, mid)
-    if str(((stored or {}).get("provenance") or {}).get("read_at") or "") > src_at:
+    prov = (stored or {}).get("provenance") or {}
+    at, by = str(prov.get("read_at") or ""), str(prov.get("job_id") or "")
+    if at > src_at or (at == src_at and by and by != job):
         out["skipped_newer"] += 1
         return
     files = manifest._read(files_dir / f"{mid}.json")
@@ -219,7 +232,15 @@ def _one(
     n = [0]
     src = _norm({k: v for k, v in raw.items() if k not in DROP}, n)
     out["normalized"] += n[0]
-    new = merge(stored, src, out)
+    new, replaced = merge(stored, src, out)
+    if not replaced:  # nothing delivered here is fit to store: only a refused group's mark changes
+        if stored:
+            _gaps(out, new, files, today)
+        marked = stored is not None and new != stored
+        out["refused_only" if marked else "unchanged"] += 1
+        if marked and not dry:
+            manifest._atomic(state / "matters" / f"{mid}.json", new)
+        return
     new["provenance"] = {"job_id": job, "read_at": src_at, "loaded_from": "final"}
     _gaps(out, new, files, today)
     unchanged = new == stored and manifest.load_manifest(state, mid) == manifest.current_manifest(files)

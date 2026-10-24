@@ -99,9 +99,12 @@ class MatterContext:
             return f"This file could not be read ({why}); do not treat it as absent."
         path = fetch_mod.local_path(self.data, self.matter_id, fid)
         if path is None and fetch_mod.fill_one(self.cache, self.data, self.matter_id, f):
-            rec = extract_mod.extract_cached(self.mdir, {"id": fid, "cached": True}, None)
-            self._record(fid, f, rec)
-            return self._text_path(fid).read_text(encoding="utf-8", errors="replace")
+            text = self.cached_text(fid)  # a duplicate_of fill resolves to the original's text
+            if text is not None:
+                self._record(
+                    fid, f, {"ok": True, "chars": len(text), "text_path": str(self._text_path(fid)), "cached": True}
+                )
+                return text
         if path is None and self.seat is not None:
             row = fetch_mod.fetch_one(self.seat, self.matter_id, f, self.data, self.log)
             missing, _retry = fetch_mod.classify([row])
@@ -122,8 +125,8 @@ class MatterContext:
                 self.cache,
             )
             self._record(orig, f, rec)
-            if self.cache is not None and row.get("sha256") and not row.get("size_changed") and orig == fid:
-                self.cache.put_file(fid, f.get("modified"), f.get("size"), row["sha256"], self.matter_id)
+            if self.cache is not None and orig == fid:
+                self.cache.put_file(fid, f, row, self.matter_id)
             if not rec.get("ok"):
                 return f"This file could not be read ({rec['problem'].split(':')[0]}); do not treat it as absent."
         return tp.read_text(encoding="utf-8", errors="replace")

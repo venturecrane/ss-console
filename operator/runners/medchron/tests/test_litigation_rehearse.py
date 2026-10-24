@@ -231,3 +231,33 @@ def test_read_limit_zero_counts_ocr_pages_pays_nothing_and_writes_no_cache_or_st
     assert client.calls == [] and rep["cents"]["total"] == 0
     assert textcache.REHEARSAL_MARK in (r.data / "m" / M1 / "txt" / "f-s1.txt").read_text()
     assert (_tree(cache), _tree(manifest.state_dir())) == before
+    rows = [json.loads(x) for x in (r.data / "ocr-needed.jsonl").read_text().splitlines()]
+    assert sorted((x["file_id"], x["page"]) for x in rows) == [("f-s1", 1), ("f-s1", 2)]
+    p = rep["projection"]
+    assert p["ocr_cents_needed"] == round(2 * p["ocr_cents_per_page"], 2) > 0 and "ocr_cents_needed" in p["method"]
+    assert "_ocr" not in rep["matters"]  # one OCR figure, from the counting stub
+
+
+def test_a_fetch_that_would_not_fit_is_recorded_not_raised(tmp_path, monkeypatch):
+    from medchron.litigation import fetch as fetch_mod
+
+    monkeypatch.setattr(fetch_mod, "free_bytes", lambda _p: 0)
+    r = _rehearsal(tmp_path, ScriptedLit(), _seat(), read_limit=0)
+    assert r.run().verdict == "held"
+    assert r._state()["fetch_refusal"].startswith("disk_short")
+    assert json.loads((tmp_path / "report.json").read_text())["counts"]["fetch_refusal"].startswith("disk_short")
+
+
+def test_a_court_only_rehearsal_never_fetches_for_discovery(tmp_path, monkeypatch):
+    r = _rehearsal(tmp_path, ScriptedLit(), _seat(), read_limit=0)
+    out = {
+        "read_groups": [],
+        "audit": "none",
+        "candidates": ["x"],
+        "limited_out": {"read_groups": ["discovery"], "audit": "none"},
+    }
+    (r.data / "plan.json").write_text(json.dumps({M1: out}))
+    monkeypatch.setattr(r, "_court_only", lambda: True)
+    assert r._active() == []
+    monkeypatch.setattr(r, "_court_only", lambda: False)
+    assert r._active() == [M1]

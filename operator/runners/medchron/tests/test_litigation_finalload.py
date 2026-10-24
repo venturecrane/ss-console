@@ -117,6 +117,40 @@ def test_an_uncited_date_refuses_its_group_and_the_stored_one_stands(tmp_path):
     m = manifest.load_prior(state, M1)
     assert out["refused"] == {"uncited": 1}
     assert m["defendants"] == STORED["defendants"] and m["case_status"]["value"] == vocab.SETTLED_OWED
+    assert m["fields_read"] == ["case", "discovery"]  # the refused group is read again next run
+
+
+def test_nothing_replaced_advances_no_provenance_and_commits_no_manifest(tmp_path):
+    f = _final()
+    f["complaint_filed"] = {"date": "2026-03-02", "source": None}  # case refused
+    f["fields_read"] = ["case"]
+    state, fj, files = _setup(tmp_path, [f])
+    man = (state / "manifest" / f"{M1}.json").read_bytes()
+    out = finalload.load_final(state, fj, files)
+    m = manifest.load_prior(state, M1)
+    assert out["groups_replaced"] == 0 and out["refused_only"] == 1 and out["loaded"] == 0
+    assert m["provenance"] == STORED["provenance"] and (state / "manifest" / f"{M1}.json").read_bytes() == man
+    assert m["fields_read"] == ["defendants", "discovery"] and m["case_status"] == STORED["case_status"]
+    assert "number" not in m  # a matter's own fields ride only with a delivered group
+
+
+def test_a_same_day_delivery_by_another_job_is_never_overwritten(tmp_path):
+    other = {**STORED, "provenance": {"job_id": "01OTHER", "read_at": "2026-10-23"}}
+    state, fj, files = _setup(tmp_path, stored=other)
+    before = _hash(state)
+    assert finalload.load_final(state, fj, files)["skipped_newer"] == 1 and _hash(state) == before
+    same = {**STORED, "provenance": {"job_id": "01NEWJOB", "read_at": "2026-10-23"}}
+    state2, fj2, files2 = _setup(tmp_path / "b", stored=same)
+    assert finalload.load_final(state2, fj2, files2)["loaded"] == 1  # the same job loads again
+
+
+def test_a_defendant_that_is_not_a_record_is_refused_not_a_crash(tmp_path):
+    f = _final()
+    f["defendants"].append("Epsilon Example")
+    state, fj, files = _setup(tmp_path, [f])
+    out = finalload.load_final(state, fj, files)
+    assert out["refused"] == {"malformed": 1}
+    assert manifest.load_prior(state, M1)["defendants"] == STORED["defendants"]
 
 
 def test_a_date_not_iso_is_refused(tmp_path):

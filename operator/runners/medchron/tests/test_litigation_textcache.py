@@ -133,7 +133,7 @@ def test_owner_only_files_and_a_method_mismatch_is_a_miss(tmp_path):
     assert stat.S_IMODE(os.stat(tmp_path / "tc").st_mode) == 0o700
     assert stat.S_IMODE(os.stat(tmp_path / "tc" / f"{'a' * 64}.txt").st_mode) == 0o600
     assert c.get_text("a" * 64) == "text one" and _cache(tmp_path / "tc", "v2").get_text("a" * 64) is None
-    assert c.put_file("f1", "2026-01-01T00:00:00", 10, "a" * 64, M1)
+    assert c.put_file("f1", {"modified": "2026-01-01T00:00:00", "size": 10}, {"ok": True, "sha256": "a" * 64}, M1)
     assert c.lookup_file("f1", "2026-01-01T00:00:00", 10) == "a" * 64
     assert (
         c.lookup_file("f1", "2026-01-02T00:00:00", 10) is None
@@ -160,8 +160,8 @@ def test_purge_removes_one_matter_and_keeps_a_shared_entry_for_the_other(tmp_pat
     c.put_text("b" * 64, "shared", scanned_pages=0, matter_id=M1)
     c.put_text("b" * 64, "shared", scanned_pages=0, matter_id=M2)
     c.put_text("d" * 64, "only m2", scanned_pages=0, matter_id=M2)
-    c.put_file("f1", "2026-01-01", 1, "a" * 64, M1)
-    c.put_file("f2", "2026-01-01", 1, "d" * 64, M2)
+    c.put_file("f1", {"modified": "2026-01-01", "size": 1}, {"ok": True, "sha256": "a" * 64}, M1)
+    c.put_file("f2", {"modified": "2026-01-01", "size": 1}, {"ok": True, "sha256": "d" * 64}, M2)
     assert textcache.main(["purge", "--matter", M1, "--dir", str(tmp_path / "tc"), "--dry-run"]) == 0
     assert c.get_text("a" * 64) == "only m1"  # a dry run removes nothing
     out = textcache.purge_matter(tmp_path / "tc", M1)
