@@ -193,10 +193,14 @@ describe('operator-help: the skill', () => {
     expect(body).toContain('could not check every kind of request just now')
   })
 
-  it('creates only its one reply, so the Never list does not forbid the reply it sends', () => {
+  it('creates only its one reply and the help_given mark, so the Never list does not forbid either', () => {
     const body = flat(read(`${HELP}/SKILL.md`))
     expect(body).toContain('Never submit, queue or file work, and never change anything.')
-    expect(body).toContain('The only thing this skill creates is its one reply.')
+    expect(body).toContain(
+      'The only things this skill creates are its one reply and the `help_given` mark.'
+    )
+    // ss-console#3423 increment 2: answering the question stops the quiet pointer.
+    expect(body).toContain('`operator_help_note` with `kind: "help_given"`')
     expect(body).not.toMatch(/Never submit, queue, file, draft/)
   })
 })

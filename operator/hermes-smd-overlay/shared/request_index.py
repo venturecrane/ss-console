@@ -37,6 +37,7 @@ import os
 import re
 import sqlite3
 import time
+from email.utils import parseaddr
 
 logger = logging.getLogger(__name__)
 
@@ -281,12 +282,56 @@ def record_reply_opening(in_reply_to: object, body: object, *, path: str | None 
         conn.close()
 
 
+def bare_sender(value: object) -> str | None:
+    """A sender as its bare, lower-cased address, or ``None``.
+
+    ``"Chris Price <Chris@Example.com>"`` and ``"chris@example.com"`` are the
+    same person. The intake writers store ``InboundMessage.from_addr``, which
+    ``shared.inbound_message`` already reduces to this form for both msgraph and
+    AgentMail; the help pointer (ss-console#3423) normalizes again on both sides
+    of every comparison so a writer that ever stored a display-name form could
+    not split one person into two."""
+    if not isinstance(value, str):
+        return None
+    return parseaddr(value)[1].strip().lower() or None
+
+
+def _read_rows(target: str, columns: tuple[str, ...], where: str, params: tuple) -> list[dict]:
+    """The shared read-only probe-and-project: SELECT the ``columns`` the file
+    HAS (one read snapshot with the probe), return every name in ``columns``
+    per row, None for one the file does not have yet. ``[]`` when the table
+    does not exist. Raises on a file that cannot be read."""
+    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5)
+    try:
+        conn.execute("PRAGMA busy_timeout=2000")
+        conn.execute("BEGIN")
+        present = {row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+        if not present:
+            return []
+        selected = [c for c in columns if c in present]
+        rows = conn.execute(
+            f"SELECT {', '.join(selected)} FROM requests WHERE {where} ORDER BY received_at",
+            params,
+        ).fetchall()
+        out = []
+        for row in rows:
+            record = dict.fromkeys(columns)
+            record.update(zip(selected, row, strict=True))
+            out.append(record)
+        return out
+    finally:
+        conn.close()
+
+
 def read_requests(since: float, *, path: str | None = None) -> list[dict]:
-    """Every indexed request received at or after ``since``, READ-ONLY (the
-    gate's side). ``[]`` when the file does not exist yet, or exists without
-    the table (nothing has been indexed); raises on a file that exists and
-    cannot be read, so the caller can tell "none" from "could not look" and
-    skip the tick rather than decide on an empty list.
+    """Every indexed request received at or after ``since``, READ-ONLY. Two
+    readers, both in other code paths than the writer: the gate's heartbeat
+    (request cards, another process), and since ss-console#3423 the agent-side
+    initiation plugin's help pointer, through :func:`read_sender_requests`.
+    ``[]`` when the file does not exist yet, or exists without the table
+    (nothing has been indexed); raises on a file that exists and cannot be
+    read, so the caller can tell "none" from "could not look" and skip the tick
+    rather than decide on an empty list.
 
     The reader never assumes the writer has caught up: it selects the columns
     the file HAS (one read snapshot with the probe) and returns every column
@@ -296,32 +341,49 @@ def read_requests(since: float, *, path: str | None = None) -> list[dict]:
     target = path or db_path()
     if not os.path.exists(target):
         return []
-    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5)
-    try:
-        conn.execute("PRAGMA busy_timeout=2000")
-        conn.execute("BEGIN")
-        present = {row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
-        if not present:
-            return []
-        selected = [c for c in _READ_COLUMNS if c in present]
-        rows = conn.execute(
-            f"SELECT {', '.join(selected)} FROM requests WHERE received_at >= ? "
-            "ORDER BY received_at",
-            (since,),
-        ).fetchall()
-        out = []
-        for row in rows:
-            record = dict.fromkeys(_READ_COLUMNS)
-            record.update(zip(selected, row, strict=True))
-            out.append(record)
-        return out
-    finally:
-        conn.close()
+    return _read_rows(target, _READ_COLUMNS, "received_at >= ?", (since,))
+
+
+#: What :func:`read_sender_requests` returns: ids, time and thread, no text.
+_SENDER_READ_COLUMNS = tuple(
+    c for c in _READ_COLUMNS if c in ("vendor_message_id", "received_at", "thread_ref")
+)
+
+
+def read_sender_requests(sender: str, since: float, *, path: str | None = None) -> list[dict]:
+    """One sender's indexed requests since ``since``: ids, times and thread only.
+
+    The narrow read the help pointer uses (ss-console#3423): no subject, no
+    opening, no address leaves this function. Matched on the bare lower-cased
+    address (:func:`bare_sender`, both sides), so it sees only rows whose
+    sender text custody has not yet nulled (:data:`TEXT_RETENTION_DAYS`); an
+    older request from this person is invisible here, by design of that
+    custody. READ-ONLY, and the same contract as :func:`read_requests`: ``[]``
+    when the file or table does not exist yet, a column the writer has not
+    added reads as None, and a file that exists but cannot be read RAISES so
+    the caller can tell "none" from "could not look"."""
+    target = path or db_path()
+    want = bare_sender(sender)
+    if want is None:
+        return []
+    if not os.path.exists(target):
+        return []
+    rows = _read_rows(
+        target,
+        (*_SENDER_READ_COLUMNS, "sender"),
+        "received_at >= ? AND sender IS NOT NULL",
+        (since,),
+    )
+    return [
+        {c: r[c] for c in _SENDER_READ_COLUMNS} for r in rows if bare_sender(r["sender"]) == want
+    ]
 
 
 __all__ = [
     "DEFAULT_DB_PATH",
+    "bare_sender",
     "converge",
+    "read_sender_requests",
     "ROW_RETENTION_DAYS",
     "TEXT_RETENTION_DAYS",
     "db_path",

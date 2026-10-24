@@ -275,7 +275,7 @@ def _offer_expected_tools(toolsets_state, config):
     return config
 
 
-def test_expected_tier_is_exactly_the_three_email_channel_tools():
+def test_expected_tier_is_exactly_the_four_email_channel_tools():
     """The warn tier is deliberately small. Widening it silently converts a
     "this class of answer degrades" signal into noise.
 
@@ -288,13 +288,19 @@ def test_expected_tier_is_exactly_the_three_email_channel_tools():
     so they are the entries in this tier that CAN be dropped by a failing check
     -- silently, because gateway callers pass ``quiet_mode=True``.
 
-    A fourth entry needs the same two sentences: which single class of answer
+    A further entry needs the same two sentences: which single class of answer
     dies without it, and why its absence would otherwise be invisible.
+
+    ``operator_help_signals`` (ss-console#3423) carries them: without it the
+    quiet help pointer dies and nothing else does, and because the email prompt
+    instructs the call on every seat that binds operator-help, a silently absent
+    tool would read exactly like a seat with no first-time correspondents.
     """
     assert WEBHOOK_EXPECTED_TOOLS == (
         "operator_seat_facts",
         "medchron_allowance",
         "medchron_job_submit",
+        "operator_help_signals",
     )
     assert set(WEBHOOK_EXPECTED_TOOLS).isdisjoint(WEBHOOK_READ_TOOLS)
 

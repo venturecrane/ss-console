@@ -131,6 +131,11 @@ Compose the reply by creating a draft (`create_draft`) addressed **only** to
 the sender, in the same thread, the way the Operator answers any colleague. The
 reply channel delivers it. One reply, nobody copied.
 
+Then call `operator_help_note` with `kind: "help_given"`. It records, against the
+person the platform resolved for this turn, that they have been helped, so the
+quiet pointer to this help never appears in their replies again. A reply to
+this question never carries that pointer itself.
+
 ## Never
 
 - Never name a mode, a tool, a skill, a store, a queue, a lane, a job, a
@@ -145,8 +150,8 @@ reply channel delivers it. One reply, nobody copied.
 - Never use an em dash.
 - Never put a real matter number, client name or party name into an example.
   Matter numbers stay XXXXXX.
-- Never submit, queue or file work, and never change anything. The only thing
-  this skill creates is its one reply.
+- Never submit, queue or file work, and never change anything. The only things
+  this skill creates are its one reply and the `help_given` mark.
 - Never reply to anyone but the person who asked.
 
 ## Pitfalls
@@ -162,6 +167,7 @@ claiming a learned voice the seat facts do not report.
 - The reply's offered requests are exactly the `help` entries with
   `sender_may_ask: true`, worded like their examples, with XXXXXX for matters.
 - No request, job or file was created this turn.
+- `operator_help_note` was called with `help_given` after the reply.
 - The reply names no internal mechanic, carries no em dash, and promises no
   time.
 - The reply went only to the sender, in the thread.

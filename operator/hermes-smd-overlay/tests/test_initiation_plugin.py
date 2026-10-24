@@ -93,8 +93,19 @@ def test_register_wires_pre_llm_call_and_the_seat_facts_tool(initiation):
     # The omitted-skill read fence (skill_fence.py) is the one blocking gate.
     assert hooks.keys() == {"pre_llm_call", "pre_tool_call"}
     assert callable(hooks["pre_llm_call"])
-    assert [t["name"] for t in tools] == [initiation.TOOL_SEAT_FACTS]
-    assert initiation.TOOLS == (initiation.TOOL_SEAT_FACTS,)
+    # ss-console#3423 adds the quiet help pointer's two tools beside it.
+    assert [t["name"] for t in tools] == [
+        initiation.TOOL_SEAT_FACTS,
+        initiation.TOOL_HELP_SIGNALS,
+        initiation.TOOL_HELP_NOTE,
+    ]
+    assert initiation.TOOLS == (
+        initiation.TOOL_SEAT_FACTS,
+        initiation.TOOL_HELP_SIGNALS,
+        initiation.TOOL_HELP_NOTE,
+    )
+    # Same posture as the facts tool: no check_fn, so none can be dropped silently.
+    assert all(t.get("check_fn") is None for t in tools)
 
 
 def test_rostered_admin_gets_full_authority(initiation):
