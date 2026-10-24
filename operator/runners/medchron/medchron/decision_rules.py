@@ -51,9 +51,14 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def _write(path: Path, payload: Any, *, dry_run: bool) -> None:
+def _write(path: Path | None, payload: Any, *, dry_run: bool) -> None:
+    """Write a hook's authored artifact atomically. Every hook that writes names
+    its artifact; a hook without one (``Decision.artifact`` is None) reaching
+    here is a programming error, raised rather than silently skipped."""
     if dry_run:
         return
+    if path is None:
+        raise ValueError("decision hook wrote with no artifact path")
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=1), encoding="utf-8")

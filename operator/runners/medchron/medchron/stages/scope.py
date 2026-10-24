@@ -183,6 +183,22 @@ def block_cites(text: str, exmap: dict[int, str]) -> list[dict[str, Any]]:
     return [{"exhibit": n, "file": exmap.get(n), "n": c} for n, c in sorted(counts.items())]
 
 
+def _write_omitted(d: Path, omit_pre: list[tuple[dict[str, str], str]]) -> None:
+    """``omitted_preincident.json``: each pre-incident entry the triage left
+    out, with its reason, heading and the citations it carried (``cites``)."""
+    exmap = exhibit_names(d)
+    rows = [
+        {
+            "date": e["iso"],
+            "reason": why,
+            "head": e["text"].splitlines()[1] if len(e["text"].splitlines()) > 1 else "",
+            "cites": block_cites(e["text"], exmap),
+        }
+        for e, why in omit_pre
+    ]
+    (d / "omitted_preincident.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
+
+
 def split_entries(text: str) -> list[dict[str, str]]:
     entries = []
     for e in ENTRY.split(text):
@@ -292,22 +308,7 @@ def run(sr: StageRun) -> int:
         sr.log(f"  {len(unclassified)} unclassified, kept by default")
     kept = sorted(keep_pre + post, key=lambda x: x["iso"])
     (d / "entries_scoped.md").write_text("\n\n".join(e["text"] for e in kept), encoding="utf-8")
-    exmap = exhibit_names(d)
-    (d / "omitted_preincident.json").write_text(
-        json.dumps(
-            [
-                {
-                    "date": e["iso"],
-                    "reason": why,
-                    "head": e["text"].splitlines()[1] if len(e["text"].splitlines()) > 1 else "",
-                    "cites": block_cites(e["text"], exmap),
-                }
-                for e, why in omit_pre
-            ],
-            indent=1,
-        ),
-        encoding="utf-8",
-    )
+    _write_omitted(d, omit_pre)
     if omit_pre:
         span = f"{omit_pre[0][0]['iso']} to {omit_pre[-1][0]['iso']}"
         (d / "preincident_note.txt").write_text(NOTE.format(n=len(omit_pre), span=span), encoding="utf-8")
