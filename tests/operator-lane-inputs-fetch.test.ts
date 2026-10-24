@@ -50,7 +50,16 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
     expect(h).toMatch(/_fetch_lane_inputs\(\)\s*\{/)
     expect(h).toMatch(/for attempt in 1 2 3; do/)
     // The marker file must have ARRIVED; a copy that exits 0 with nothing in it is a failure.
-    expect(h).toMatch(/&& \[ -f "\$\{dest\}\.r2\.tmp\/\$\{marker\}" \]; then\n\s*return 0/)
+    expect(h).toMatch(
+      /&& \[ -f "\$\{dest\}\.r2\.tmp\/\$\{marker\}" \]; then\n\s*_record_lane_inputs_state "\$\{prefix\}" fetched [^\n]*\n\s*return 0/
+    )
+    // The verdict the in-image self-test narrows on (selftest.sh lane_authored;
+    // behavior pinned in operator/templates/tests/test_fetch_inputs_state.py):
+    // the old file goes first, so a failed write never leaves a stale "absent".
+    expect(h).toMatch(
+      /rm -f "\$\{SMD_LANE_INPUTS_STATE_DIR:-\/run\/smd-lanes\}\/\$\{prefix\}\.inputs"/
+    )
+    expect(h).toMatch(/_record_lane_inputs_state "\$\{prefix\}" "\$\{state\}"/)
     // stderr is kept and logged, never thrown away.
     expect(h).toMatch(/err=\$\(/)
     expect(h).not.toMatch(/2>\/dev\/null\s*\\?\n?\s*&& \[ -f/)
