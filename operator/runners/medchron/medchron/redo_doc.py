@@ -67,12 +67,11 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
     slug_dir = job.data_root / job.slug
     units = []
     for u in job.units:
-        sfx = f"-{u.unit}" if job.joint else ""
         units.append(
             {
                 "unit": u.unit,
                 "restore": _restores(slug_dir / "out" / u.unit),
-                "strip_result": str(slug_dir / f"strip_result{sfx}.json"),
+                "strip_result": str(_strip_result(slug_dir, u.unit, job.joint)),
             }
         )
     return {
@@ -86,13 +85,35 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
     }
 
 
+def _strip_result(slug_dir: Path, unit: str, joint: bool) -> Path:
+    return slug_dir / f"strip_result{f'-{unit}' if joint else ''}.json"
+
+
+def _restore(restore: list[tuple[str, str]], strip_result: Path) -> None:
+    for stripped, orig in restore:
+        # The original was hard-linked beside the exhibit before the strip
+        # replaced it, so the rename restores the very bytes exhibits wrote.
+        Path(orig).replace(stripped)
+    strip_result.unlink(missing_ok=True)
+
+
+def restore_unit(slug_dir: Path, unit: str, *, joint: bool) -> int:
+    """The rebuild's file half for one unit, in-process: put the unstripped
+    exhibits back and remove the strip result, so the strip stages can run
+    again over a rebuilt document. Returns how many exhibits were restored.
+
+    The coverage gate calls this itself (2026-10-23) when a file the composer
+    drew entries from is not cited: the run rebuilds its document once from
+    build_doc (``REDO``, through dag.Stage.rewind) before it holds, rather
+    than holding for SMD to run this module by hand."""
+    restore = _restores(slug_dir / "out" / unit)
+    _restore(restore, _strip_result(slug_dir, unit, joint))
+    return len(restore)
+
+
 def apply(d: Any, p: dict[str, Any]) -> None:
     for u in p["units"]:
-        for stripped, orig in u["restore"]:
-            # The original was hard-linked beside the exhibit before the strip
-            # replaced it, so the rename restores the very bytes exhibits wrote.
-            Path(orig).replace(stripped)
-        Path(u["strip_result"]).unlink(missing_ok=True)
+        _restore(u["restore"], Path(u["strip_result"]))
     d.queue.mkdir(parents=True, exist_ok=True)
     (d.queue / f"{MARKER_PREFIX}{p['job_id']}.json").write_text(
         json.dumps(p["marker"], sort_keys=True), encoding="utf-8"

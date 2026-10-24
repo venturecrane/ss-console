@@ -73,7 +73,9 @@ def test_the_recorded_decision_explains_the_file_and_the_gate_passes(
 ) -> None:
     sd = _scene(data_root)
     rc, log = _gate(job_dir, firm_config_path, data_root)
-    assert rc == 1 and any("UNEXPLAINED 1" in line for line in log)  # the control: it holds first
+    assert rc == coverage_stage.REWIND  # since 2026-10-23: one rebuild of the document first
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1 and any("UNEXPLAINED 1" in line for line in log)  # the control: it holds after the rebuild
     d = _seat(tmp_path, job_dir)
     p = coverage_decide.plan(
         d, JOB, file_id=IMG, reason="email signature image, no clinical content", by="smd", source="ops-ap"

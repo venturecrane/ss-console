@@ -68,13 +68,20 @@ def test_a_password_protected_file_is_explained_and_the_run_moves(
     assert entry in json.loads((sd / "orphans.json").read_text())["orphans"]
 
 
-def test_control_any_other_unreadable_file_still_holds(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
-    """The control: the same file with a broken-file error still holds, so the
-    explanation is the password class and nothing wider."""
+def test_control_any_other_unreadable_file_is_disclosed_as_unreadable_not_as_locked(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The control: the same file with a broken-file error is not given the
+    password reason. Since 2026-10-23 it no longer holds either (an SMD-only
+    stop with nothing for SMD to decide); it is disclosed by what extract
+    measured: the file would not open."""
     sd = _scene(data_root, "EOF marker not found")
     job, cfg = job_mod.load(job_dir), config_mod.load(str(firm_config_path))
     d = decisions.orphans(job, cfg, sd, job.units[0], dry_run=False)
-    assert d.held and "Hospital Encounters" in d.holds[0]
+    assert not d.held, d.holds
+    reasons = {o["name"]: o["reason"] for o in json.loads((sd / "orphans.json").read_text())["orphans"]}
+    assert reasons["Hospital Encounters.pdf"] == "the file could not be opened, or no text could be read from it"
+    assert reasons["Hospital Encounters.pdf"] != unopened.REASON
 
 
 def test_the_reader_is_told_the_file_was_not_opened(data_root: Path) -> None:

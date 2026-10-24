@@ -24,6 +24,7 @@ import yaml
 
 from . import config as config_mod, job as job_mod
 from .gates import claim_audit, cross_client, extractive, provenance
+from .stages import coverage
 from .stages.base import StageRun
 
 SYNTHETIC_FIRM: dict[str, Any] = {
@@ -157,7 +158,13 @@ def probe_provenance(tmp: Path) -> tuple[bool, str]:
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "page_map.json").write_text("[]")
     code = provenance.check(sr)
-    return code == 1, f"exit {code}; " + " | ".join(log)[-300:]
+    # Since 2026-10-23 a lost file earns the document ONE rebuild before the
+    # hold (stages/coverage.REWIND); the probe takes the rebuild and requires
+    # the second look to hold, which also proves the rebuild is once only.
+    first = code
+    if code == coverage.REWIND:
+        code = provenance.check(sr)
+    return first == coverage.REWIND and code == 1, f"exit {first} then {code}; " + " | ".join(log)[-300:]
 
 
 def probe_claim_audit(tmp: Path) -> tuple[bool, str]:

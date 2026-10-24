@@ -239,6 +239,73 @@ def _leave_out_withheld(d: Path, usable: list[dict[str, Any]], log) -> list[dict
     return keep
 
 
+#: Exit code: a pulled file no unit owns is a question for the firm (whose is
+#: it?), held here with an "identity:" reason (dag.py) before anything paid.
+IDENTITY_HELD = 3
+ORPHAN_HOLDS_FILE = "orphan_holds.json"
+
+
+def _orphan_named(r: dict[str, Any]) -> str:
+    """How the hold line names one file: its id, its name as the firm sees it,
+    and its folder. Never what its text says about anyone."""
+    out = f'{r.get("id")} "{r.get("name")}{r.get("ext") or ""}"'
+    return out + (f" in {r['folder']}" if r.get("folder") else "")
+
+
+def _resolve_orphans(sr: StageRun, units: dict[str, list], unassigned: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Decide every readable file the routing left without a unit; return the
+    ones held for the firm (empty when every one was placed).
+
+    WHY (2026-10-23). These files used to reach ``decisions.orphans`` after the
+    strip -- every paid stage already spent -- and hold there as residue for
+    SMD to sort out by hand. They are decided here instead, after vision, so a
+    scanned file's transcription is on disk and its own text can be read:
+
+    * one client on the job: a file whose text names no one else (or that a
+      person released) is the client's and joins the unit; one whose text
+      names someone else is the firm's question, with an "identity:" reason;
+    * more than one client: the routing already tried every folder and name
+      token, and a release does not say which client, so whose it is is the
+      firm's to say: held, unless the firm said to leave it out (withheld
+      files never reach this point, ``_leave_out_withheld``).
+
+    No synthetic unit is made, and nothing is dropped: a file is placed or
+    held. The detail of what was found stays in ``orphan_holds.json``."""
+    if not unassigned:
+        return []
+    released = FI.released(sr.slug_dir)
+    held: list[dict[str, Any]] = []
+    if len(units) == 1:
+        only = next(iter(units))
+        surnames, dobs = FI.identities(sr.job.units)
+        firsts = FI.first_names(sr.job.units)
+        for r in unassigned:
+            tp = Path(str(r.get("text_path") or ""))
+            text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
+            found = FI.findings(text, surnames, dobs, firsts)
+            if found and not FI.matches(str(r.get("id") or ""), released):
+                held.append({**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": found})
+            else:
+                units[only].append(r)
+                sr.log(
+                    f"  + {r['name'][:66]} | {r.get('folder')}: owned by no folder rule; names no one else, joins {only}"
+                )
+    else:
+        held = [{**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": []} for r in unassigned]
+    if not held:
+        return []
+    (sr.slug_dir / ORPHAN_HOLDS_FILE).write_text(json.dumps(held, indent=1), encoding="utf-8")
+    (sr.slug_dir / "units" / "_unassigned.json").write_text(
+        json.dumps([{k: h.get(k) for k in ("id", "name", "folder")} for h in held], indent=1), encoding="utf-8"
+    )
+    why = "name a different person than the client" if len(units) == 1 else "belong to no client's folder"
+    sr.log(
+        f"IDENTITY HOLD: {len(held)} pulled file(s) {why}: {'; '.join(_orphan_named(h) for h in held[:5])}; "
+        f"the firm says whose each is, or to leave it out (medchron.identity_decide)"
+    )
+    return held
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "units").mkdir(parents=True, exist_ok=True)
@@ -261,14 +328,9 @@ def run(sr: StageRun) -> int:
     spec = read_json(d / "units.json", None)
     units, excluded, unassigned = _route(usable, spec, sr.slug, is_excluded)
 
-    if unassigned:
-        (d / "units" / "_unassigned.json").write_text(
-            json.dumps([{k: r.get(k) for k in ("id", "name", "folder")} for r in unassigned], indent=1),
-            encoding="utf-8",
-        )
-        sr.log(f"UNASSIGNED files: {len(unassigned)}; every one must be assigned or excluded before composition")
-        for r in unassigned:
-            sr.log(f"  ? {r['name'][:70]} | {r.get('folder')}")
+    held = _resolve_orphans(sr, units, unassigned)
+    if held:
+        return IDENTITY_HELD
     if spec and len(units) > 1:
         # Outcome cross-check: a routed file whose NAME matches another unit's
         # token and not its own. Sees only filename-visible misrouting.
