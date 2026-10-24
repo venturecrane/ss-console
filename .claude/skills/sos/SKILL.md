@@ -31,6 +31,18 @@ description: Start of session for SMD Services — briefing, cadence, worktree b
 5. Display briefing. Prepend the worktree status line from Step 3 and the `[owed]` line from Step 4 (omit either when it has nothing to say). Highlight any Resume block or P0 issues.
 6. If cadence items overdue, ask: "Execute any now, or skip?"
 7. **STOP.** If Resume block: "Previous session was working on [summary]. Resume or focus elsewhere?" Otherwise: "What would you like to focus on?"
+8. **Once the Captain names the focus, take the stance** (see below). Draft the winning line, set it, and move.
+
+## The stance (skunkworks, folded 2026-10-24)
+
+> Folded from crane-console's `/skunkworks` (`.agents/skills/skunkworks/SKILL.md`); the fork point is commit `6e2af4c8`. The Captain typed it to reset agents into an owner's stance; a stance that has to be invoked is the Captain doing the agent's job (Law 11). Crane's `/skunkworks` still works as a mid-session re-anchor.
+
+The stance does not live in this file, because this file is read once and `/clear` drops it. It lives on the two surfaces that fire with or without `/sos`: the SessionStart prompt (`.claude/hooks/session-peers.sh`) and the `[mission]` line the primer re-injects every turn, whose suffix is the stance itself (`.claude/hooks/lib/board.mjs`, `STANCE`). The laws it rests on (1, 8, 9, 12, 14, 16) arrive every turn in the primer. This section only says what to do at the moment of focus:
+
+1. **Winning line.** Draft it yourself: `<outcome>, via <task>`, where the outcome is what the business or a client experiences. Set it with `.claude/bin/mission set "<line>" --focus <issue#|branch>`. Product work never names a client. Ask the Captain only when the focus is genuinely ambiguous; otherwise state the line and proceed.
+2. **Risk class.** Reversible repo work (code, PRs, tests): name the risk and mitigation in one line, then move. Client deliverables, paid runs, seat restarts or releases: Law 16 path proof before the first long run. That split is settled; speed never means guessing.
+3. **Subagent briefs carry it.** A spawned agent never ran `/sos` and does not see the primer as you do. Its brief states the winning line, the risk class, and any holds.
+4. **Before saying done,** check the deliverable against the request line by line, and run `/wired` when the effect is observable outside this repo.
 
 ## Step 3 — Orphan Worktree Backstop
 

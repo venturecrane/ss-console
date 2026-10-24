@@ -100,12 +100,20 @@ function cmdSet(own, root, rest) {
   })
 }
 
+export const STANCE =
+  "that is winning; if the next action does not serve it, stop. Own it: decide your calls, recommend with a default on the Captain's. " +
+  'Reversible repo work: name the risk and mitigation, then move. Client, paid or seat work: Law 16 path first. ' +
+  'Side work off this line goes to another session.'
+
 function cmdRefresh(own) {
   const rec = readRecord(own)
   if (!rec) return
   writeRecord(own, { ...rec, updated: new Date().toISOString() })
   if (rec.mission) {
-    process.stdout.write(`[mission] ${rec.mission}${focusSuffix(rec)} -- if the next action does not serve this, stop.\n`)
+    // The suffix is the skunkworks stance, folded 2026-10-24. It rides this
+    // line because this is the one surface that reaches every turn of every
+    // session, with or without /sos, after /clear and after /compact.
+    process.stdout.write(`[mission] ${rec.mission}${focusSuffix(rec)} -- ${STANCE}\n`)
   }
 }
 

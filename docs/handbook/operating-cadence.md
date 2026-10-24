@@ -59,9 +59,14 @@ agent to remember:
    `DID:` / `NEXT:`, where STATUS is one of `OK`, `BLOCKED`, `DECISION-NEEDED`
    or `DEFECT-FOUND`.
 2. **Mission and board.** Once the session's focus is set, the agent records it
-   with `.claude/bin/mission set "<one line>" --focus <issue or branch>`. The
-   per-turn primer re-injects it and shows every live peer session's mission, so
-   two sessions do not build the same thing.
+   as a winning line, the outcome the business or a client experiences and the
+   task that gets there, with
+   `.claude/bin/mission set "<outcome>, via <task>" --focus <issue or branch>`.
+   The per-turn primer re-injects it with the working stance attached (own your
+   calls; reversible work moves after one stated risk; client, paid or seat work
+   proves the whole path first; side work off the line goes to another session)
+   and shows every live peer session's mission, so two sessions do not build the
+   same thing.
 3. **Premise gate.** A hook (`.claude/hooks/plan-premise-gate.mjs`) refuses to
    let a plan leave plan mode without a `## Premises` table whose every row
    carries evidence.
