@@ -50,6 +50,7 @@ import re
 from datetime import date
 from typing import Any
 
+from .. import wording
 from . import body as B
 from .values import lost
 
@@ -58,7 +59,7 @@ MARK_OPEN = "(handwritten date)"
 #: The marker an earlier version wrote; words about our process, never kept.
 LEGACY_OPEN = "(handwritten date, unconfirmed)"
 #: A date line whose year the record does not state (``with_years``).
-NO_YEAR = "(year not stated in the record)"
+NO_YEAR = wording.YEAR_NOT_STATED
 WINDOW_DAYS = 7
 #: What the audit is told about a claim cited to a handwritten page.
 REREAD = (

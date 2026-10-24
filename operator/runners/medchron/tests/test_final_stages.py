@@ -199,7 +199,8 @@ def test_gate_modules_delegate_to_the_stages(job_dir: Path, firm_config_path: Pa
     )
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "page_map.json").write_text("[]")
-    assert provenance.check(sr) == 1  # uncited, unexplained: holds
+    assert provenance.check(sr) == 3  # uncited, unaccounted: one rebuild of the document (2026-10-23)
+    assert provenance.check(sr) == 1  # still lost after it: holds
     (d / "runs" / "alpha" / "final-chronology.md").write_text(
         "## Medical Chronology\n\nA claim long enough to audit here. (Exhibit 1 - p. 1)\n## Exhibit List\n"
     )

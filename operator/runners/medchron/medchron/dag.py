@@ -99,6 +99,13 @@ class Stage:
     # answered for free instead of at the price of reaching them.
     external: bool = False
     rehearse: Callable[..., list[str]] | None = None
+    # Exit code -> stages to reopen; the run then resumes at the earliest of
+    # them, in the same process, instead of ending (2026-10-23). The one user
+    # is the coverage gate: a file the composer drew entries from that the
+    # document does not cite earns one rebuild from build_doc (the rebuild SMD
+    # used to run by hand, redo_doc.REDO) before it can hold. The stage itself
+    # bounds it to once; the driver bounds it again.
+    rewind: dict[int, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _slug(ctx: Ctx) -> list[str]:
@@ -111,6 +118,11 @@ def _slug_unit(ctx: Ctx) -> list[str]:
 
 def _slug_unit_date(ctx: Ctx) -> list[str]:
     return [ctx.slug, ctx.unit.unit, ctx.job.incident_date]
+
+
+#: The stages a document rebuild reopens: exactly redo_doc.REDO (pinned by a
+#: test; not imported, because redo_doc reaches the proof package at import).
+REBUILD_FROM_BUILD_DOC = ("build_doc", "strip_falsify", "strip_dry", "strip_apply", "render", "manifest", "review")
 
 
 STAGES: tuple[Stage, ...] = (
@@ -203,7 +215,17 @@ STAGES: tuple[Stage, ...] = (
         scope="slug",
         requires=("decide_units",),
         runner=_units.run,
-        exit_map={2: (REFUSED, "build_units refused: a scanned file is untranscribed or billing_extract is missing")},
+        exit_map={
+            2: (REFUSED, "build_units refused: a scanned file is untranscribed or billing_extract is missing"),
+            # 2026-10-23: a pulled file no client's folder or name owns is
+            # decided here, after vision, not at decide_orphans after every
+            # paid stage. The firm is asked only when the file's own text names
+            # someone else or the matter has more than one client.
+            _units.IDENTITY_HELD: (
+                HELD,
+                "identity: a pulled file belongs to no client's folder and its owner is the firm's to say",
+            ),
+        },
     ),
     Stage(
         "identity",
@@ -214,13 +236,19 @@ STAGES: tuple[Stage, ...] = (
         runner=_identity.run,
         exit_map={2: (HELD, "identity: an emailed attachment names a different person than the client")},
     ),
+    # Moved here from after strip_apply (2026-10-23). Ownership is settled at
+    # build_units and nothing after it changes it, so the explanations exist
+    # before build_doc writes the Records Reviewed and Limitations section,
+    # which names every excluded file to the firm; decided after the document
+    # they could only be disclosed by rebuilding it (Curtis, redo_doc).
+    Stage("decide_orphans", "", _slug_unit, requires=("identity",), decision="orphans"),
     # ---- paid: composition ------------------------------------------------
     Stage(
         "map",
         "",
         lambda c: [c.slug, c.unit.unit, f"units/{c.unit.unit}.json"],
         paid=True,
-        requires=("identity",),
+        requires=("decide_orphans",),
         runner=_compose.run,
         exit_map={
             1: (
@@ -363,15 +391,21 @@ STAGES: tuple[Stage, ...] = (
         runner=_strip.run_apply,
         exit_map={1: (REFUSED, "strip apply refused (a prior strip exists, or citations moved)")},
     ),
-    Stage("decide_orphans", "", _slug_unit, requires=("strip_apply",), decision="orphans"),
     Stage(
         "coverage_gate",
         "",
         _slug_unit,
-        requires=("decide_orphans",),
+        requires=("strip_apply",),
         runner=_coverage.run,
         rehearse=_coverage.rehearse,
-        exit_map={1: (HELD, "coverage gate: a pulled file is neither cited nor explained")},
+        exit_map={
+            1: (
+                HELD,
+                "coverage gate: a file the composer drew entries from is not cited after one rebuild "
+                "of the document (integrity stop)",
+            )
+        },
+        rewind={_coverage.REWIND: REBUILD_FROM_BUILD_DOC},
     ),
     Stage(
         "dos_check",
@@ -524,6 +558,14 @@ def _validate(seq: tuple[Stage, ...]) -> list[str]:
                 problems.append(f"{s.name}: invalidates unknown stage {inv!r}")
             elif pos[inv] <= pos[s.name]:
                 problems.append(f"{s.name}: invalidates {inv!r} which comes earlier")
+        for code, names in s.rewind.items():
+            if code == 0 or code in s.exit_map:
+                problems.append(f"{s.name}: rewind code {code} is also success or an exit_map outcome")
+            known = [n for n in names if n in pos]
+            if len(known) != len(names):
+                problems.append(f"{s.name}: rewind names unknown stage(s) {sorted(set(names) - set(known))}")
+            elif not any(pos[n] < pos[s.name] for n in known):
+                problems.append(f"{s.name}: rewind {code} reopens nothing before it, so nothing would re-run")
     for s in seq:
         if s.paid and s.external:
             problems.append(f"{s.name}: paid and external (a rehearsal must know which it is)")

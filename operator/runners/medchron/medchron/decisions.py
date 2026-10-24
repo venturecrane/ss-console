@@ -241,30 +241,68 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
         # person. An attachment has no folder to say whose it is; its text is
         # the only evidence, and a co-plaintiff's records inside a client's
         # chronology is the defect this lane must not repeat (ss#2893).
+        #
+        # The reason starts "identity:" (2026-10-23). The driver copies a
+        # decision's hold as the job's reason, and proof/holds.py classes a
+        # medchron hold as a question for the firm (another_person) only on
+        # that prefix. Without it this hold read as ours (smd_finishing): the
+        # firm was never asked whose the record was, and identity_decide
+        # refused to record the answer because the hold did not class as an
+        # identity hold. The line names each attachment the way the identity
+        # stage does (its file name and the email it came from), never what it
+        # says about the other person; that detail is SMD's and stays in
+        # identity_holds.json on the seat. The screen itself is unchanged.
+        _write(slug_dir / IDENTITY_HOLDS_FILE, foreign, dry_run=dry_run)
         d.holds.append(
-            f"{len(foreign)} emailed attachment(s) name a different person than the client: {foreign[:5]}; "
-            f"a person reads them and releases any that are the client's, or the firm says to leave them out "
-            f"(medchron.identity_decide)"
+            f"identity: {len(foreign)} emailed attachment(s) name a different person than the client: "
+            f"{'; '.join(_named(h) for h in foreign[:5])}; a person reads them and releases any that are the "
+            f"client's, or the firm says to leave them out (medchron.identity_decide)"
         )
         return d
     _write(d.artifact, payload, dry_run=dry_run)
     return d
 
 
-def _foreign_attachments(job: Job, slug_dir: Path, items: list[dict[str, Any]], keep: list[str]) -> list[str]:
-    """sha12 + what was found, for each attachment to fold whose text names
-    someone else. Text that names no one (an image, a scan) passes here and
-    is checked again after vision by the `identity` stage."""
+#: SMD's detail of an identity hold (what was found), kept on the seat beside
+#: the job; the same file the identity stage writes (stages/identity.HOLDS_FILE).
+IDENTITY_HOLDS_FILE = "identity_holds.json"
+
+
+def _named(hold: dict[str, Any]) -> str:
+    """One held document as a hold line names it: its id, its file name, and
+    the email it came from, as far as the index knows them. Never the finding."""
+    out = str(hold["id"])
+    if hold.get("name"):
+        out += f' "{hold["name"]}"'
+    if hold.get("container"):
+        out += f' attached to the email "{hold["container"]}"'
+    return out
+
+
+def _foreign_attachments(
+    job: Job, slug_dir: Path, items: list[dict[str, Any]], keep: list[str]
+) -> list[dict[str, Any]]:
+    """Each attachment to fold whose text names someone else: its sha12, its
+    file name and email, and what was found (SMD's detail). Text that names
+    no one (an image, a scan) passes here and is checked again after vision
+    by the `identity` stage."""
     surnames, dobs = FI.identities(job.units)
     free = FI.released(slug_dir) | FI.withheld(slug_dir)
     by12 = {str(a.get("sha256") or "")[:12]: a for a in items}
-    out = []
+    out: list[dict[str, Any]] = []
     for sha in keep:
         a = by12.get(sha) or {}
         text = FI.pdf_text(slug_dir / "msg_pdfs" / str(a.get("local") or ""))
         found = FI.findings(text, surnames, dobs, FI.first_names(job.units))
         if found and not FI.matches(sha, free):
-            out.append(f"{sha}: {'; '.join(found)}")
+            out.append(
+                {
+                    "id": sha,
+                    "name": str((a.get("names") or [""])[0] or "") or None,
+                    "container": str((a.get("containers") or [""])[0] or "") or None,
+                    "found": found,
+                }
+            )
     return out
 
 
@@ -284,13 +322,38 @@ def _tiny_image_reason(row: dict[str, Any]) -> str | None:
     return None
 
 
+#: A file the routing left out because its name matches the firm config's
+#: ``units.exclude_name_patterns`` and no coverage exclusion class names why.
+NAME_RULE_REASON = "excluded by the file-name rule for documents that are not chronology sources"
+
+
+def _unreadable_reason(row: dict[str, Any]) -> str:
+    """What the extract stage measured about a file it could not read: the
+    type it does not read, or that the file would not open. A fact about the
+    file, never a guess at its content."""
+    if str(row.get("error") or "") == "unhandled ext":
+        return f"a {row.get('ext') or 'file'} file, a type this review does not read"
+    return "the file could not be opened, or no text could be read from it"
+
+
 def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: bool) -> Decision:
-    """`orphans.json`: a pulled file no unit owns gets a machine-written reason
-    when its name matches a coverage exclusion class; any other residue is a
-    HOLD listing the files. The reason text is the config's, never invented,
-    with one exception: a document the firm said to leave out is disclosed as
-    exactly that (``WITHHELD_REASON``)."""
+    """`orphans.json`: every pulled file no unit owns, with the factual reason
+    it is not a source, for the coverage gate and the Records Reviewed and
+    Limitations section. The reason is the config's exclusion class, the
+    firm's own leave-it-out (``WITHHELD_REASON``), a measured fact about the
+    file (password, size, a type or file that would not read), or the
+    firm config's name rule; never invented.
+
+    Since 2026-10-23 this decision does not hold for a readable file: a file
+    with text that no unit owns is decided at build_units, after vision, where
+    it joins the client's unit or is asked of the firm (stages/units
+    ``_resolve_orphans``). Curtis held here, after every paid stage, on the
+    residue class. What still holds is an integrity stop: a file the pull
+    received that never reached extraction, or that has text and still no
+    owner, which means an earlier stage did not do its job."""
     exclusions = cfg.compiled("coverage", "exclusions")
+    name_rule = [re.compile(str(p)) for p in (cfg.get("units", "exclude_name_patterns") or [])]
+    extracted = {str(r.get("id")): r for r in _read_jsonl(slug_dir / "extracted.jsonl") if r.get("id")}
     rows = _read_jsonl(slug_dir / "raw_manifest.jsonl")
     owned: set[str] = set()
     for f in (slug_dir / "units").glob("*.json"):
@@ -324,6 +387,11 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         reason = next((why for rx, why in exclusions if rx.search(name)), None)
         if reason is None:
             reason = _tiny_image_reason(r)
+        ex = extracted.get(str(r.get("id") or ""))
+        if reason is None and any(rx.search(name) for rx in name_rule):
+            reason = NAME_RULE_REASON
+        if reason is None and ex is not None and ex.get("error") and not ex.get("text_path") and not ex.get("scan"):
+            reason = _unreadable_reason({**r, **ex})
         if reason:
             explained.append({"name": key, "reason": reason})
         else:
@@ -332,7 +400,8 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     d = Decision("orphans", slug_dir / "orphans.json", payload)
     if residue:
         d.holds.append(
-            f"{len(residue)} pulled file(s) owned by no unit and matching no exclusion class: {residue[:12]}"
+            f"orphans (integrity stop): {len(residue)} pulled file(s) were never extracted, or have text and no "
+            f"owner after build_units: {residue[:12]}"
         )
     else:
         _write(d.artifact, payload, dry_run=dry_run)
@@ -350,31 +419,50 @@ def control(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     least 800 chars a page across two or more pages): dense native text is a
     record, and the second page skips a cover sheet."""
     page_map = _read_json(slug_dir / "out" / unit.unit / "page_map.json", [])
-    density: dict[str, tuple[float, int]] = {}
+    density: dict[str, float] = {}
     for row in _read_jsonl(slug_dir / "extracted.jsonl"):
         pages, chars = int(row.get("pages") or 0), int(row.get("chars") or 0)
-        if pages >= 2 and chars:
-            density[str(row.get("name") or "")] = (chars / pages, pages)
-    best: tuple[float, int, int] | None = None  # (chars per page, exhibit, page)
+        if pages >= 1 and chars:
+            density[str(row.get("name") or "")] = chars / pages
+    # (dense, chars per page, exhibit, page): the dense rule first, then the
+    # best text page anywhere in the exhibits.
+    best: tuple[bool, float, int, int] | None = None
     for ex in page_map if isinstance(page_map, list) else []:
         for f in ex.get("files") or []:
             name = str(f.get("file") or "")
-            stem = name.rsplit(".", 1)[0]
-            dens = density.get(stem) or density.get(name)
-            if not dens or int(f.get("pages") or 0) < 2:
+            dens = density.get(name.rsplit(".", 1)[0]) or density.get(name)
+            pages = int(f.get("pages") or 0)
+            if not dens or pages < 1:
                 continue
-            if best is None or dens[0] > best[0]:
-                best = (dens[0], int(ex.get("exhibit") or 0), int(f.get("start_page") or 1) + 1)
+            start = int(f.get("start_page") or 1)
+            cand = (pages >= 2 and dens >= 800, dens, int(ex.get("exhibit") or 0), start + 1 if pages >= 2 else start)
+            if best is None or cand[:2] > best[:2]:
+                best = cand
     d = Decision(
         "control", slug_dir / (f"record_control-{unit.unit}.json" if job.joint else "record_control.json"), None
     )
-    if best is None or best[0] < 800:
-        d.holds.append("no exhibited file with dense native text to serve as the record control")
+    if best is None:
+        # 2026-10-23: the one control hold left, and an integrity stop. With
+        # no native text anywhere in the exhibits there is no page that is a
+        # record by construction, so the scanned-page classifier would have
+        # nothing to be falsified against.
+        d.holds.append(
+            "record control (integrity stop): no exhibited file carries native text, so the scanned-page "
+            "classifier has no record page to be checked against"
+        )
         return d
+    if not best[0]:
+        # Before 2026-10-23 a matter with no file of 800+ chars a page over
+        # two pages held here for SMD; the best text page is still a record
+        # page the classifier must call a record, so it serves.
+        d.notes.append(
+            f"no exhibited file has dense native text; the record control is the best text page "
+            f"({round(best[1])} chars a page)"
+        )
     d.payload = {
-        "exhibit": best[1],
-        "page": best[2],
-        "_decided": {"by": "medchron.decisions.control", "chars_per_page": round(best[0])},
+        "exhibit": best[2],
+        "page": best[3],
+        "_decided": {"by": "medchron.decisions.control", "chars_per_page": round(best[1]), "dense": best[0]},
     }
     _write(d.artifact, d.payload, dry_run=dry_run)
     return d

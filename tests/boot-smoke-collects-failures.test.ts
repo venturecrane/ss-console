@@ -171,11 +171,18 @@ for a in "$@"; do
   # reason unrelated to what it asserts.
   case "$a" in
     */customer.yaml) file="$a" ;;
-    *machine*) prog="$a" ;;
+    *machine*|*personas*) prog="$a" ;;
   esac
 done
 [ -n "$file" ] || exit 1
 case "$prog" in
+  # lane_skill_enabled (2026-10-23): is <skill> enabled in the seat file? Read
+  # from the authored file like the two machine answers: the skill's own
+  # "enabled:" line decides, and an absent skill is "not enabled" (exit 1).
+  *personas*)
+    skill="\${@: -1}"
+    awk -v s="$skill" '$0 ~ "name: "s"( |$)" {f=1; next} f && /enabled:/ {exit ($2=="false")} f && /- name:/ {exit 1} END {if (!f) exit 1}' "$file"
+    exit $? ;;
   *memory_mb*)  awk '/^machine:/{m=1;next} m&&/memory_mb:/{print $2;exit} m&&/^[^ ]/{exit}' "$file" ;;
   *size*)       awk '/^machine:/{m=1;next} m&&/size:/{print $2;exit} m&&/^[^ ]/{exit}' "$file" ;;
   *)            exit 1 ;;
@@ -300,8 +307,28 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
     expect(out).toContain('FAIL: litigation-firm-inputs-present')
     expect(out).not.toContain('litigation-firm-inputs-absent')
     expect(code).not.toBe(0)
-    // The control: the other lanes are authored nowhere, so they still skip.
-    expect(out).toContain('demand-firm-inputs-absent')
+    // The control: drafting is authored nowhere (no engagements file, and the
+    // pilot does not enable document-drafter), so it still skips.
+    expect(out).toContain('drafting-firm-inputs-absent')
+  }, 90_000)
+
+  // 2026-10-23: the in-image self-test failed demand-firm-inputs-present on the
+  // pilot while this smoke pass-skipped it, because this smoke asked only the
+  // engagements checkout. A lane is now authored when engagements authors it OR
+  // the seat's customer.yaml enables the lane's skill. The stub dir holds no
+  // engagements files at all, so the pilot's enabled chronology skill alone must
+  // make medchron and demand authored, and drafting, whose skill it does not
+  // enable, must stay absent. FALSIFIER: with the customer.yaml branch removed, medchron reads
+  // absent here.
+  it("a lane whose skill the seat's customer.yaml enables is checked with no engagements file", () => {
+    const { out } = run([])
+    expect(out).not.toContain('medchron-firm-config-absent')
+    expect(out).toMatch(/(PASS|FAIL): medchron-controls-present/)
+    // The pilot enables demand-letter-drafter, so demand is checked too...
+    expect(out).not.toContain('demand-firm-inputs-absent')
+    expect(out).toMatch(/(PASS|FAIL): demand-firm-inputs-present/)
+    // ...and drafting, whose skill it does not enable, still skips.
+    expect(out).toContain('drafting-firm-inputs-absent')
   }, 90_000)
 
   it('a clean run still exits zero', () => {

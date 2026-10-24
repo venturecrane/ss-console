@@ -30,6 +30,18 @@ grading lands. The gate can then fail only on what
 the loop cannot resolve: a claim it could not find in the document, a
 wrongly SUPPORTED control, or a claim with no verdict at all.
 
+THE GATE DROPS, IT DOES NOT HOLD (2026-10-23). A live claim still not
+SUPPORTED at the final gate (no verdict, or a last verdict that is not
+SUPPORTED) used to hold the job for SMD, who could only remove it by hand:
+the extractive invariant already says removal is the safe answer. The gate
+now removes each such claim in code (no model: the claim span out of the
+document, as the round-cap drop does), records it in the dropped-claims file
+as ``dropped at the audit gate``, and the review stage lists every one in the
+Review Notes file for the attorney (``stages/review_policy.gate_drops``):
+nothing leaves silently. What still holds is what removal cannot answer: a
+control wrongly SUPPORTED, or a failing claim the gate cannot find in the
+document to remove.
+
 Exit 0 only when the final audit reports zero problems AND the coverage gate
 passes; 1 when the gate fails (the driver holds); 2 on an INVALID audit
 (control failure, no exhibit bytes) or a reconciliation mismatch; 3 at the
@@ -39,6 +51,7 @@ double-sweep guard.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable
 
 from .. import llm
@@ -63,6 +76,10 @@ ROUNDS = 5
 # pass widened (a new span, a new key); the last pass drops those too.
 DROP_PASSES = 3
 DROPPED_RECORD = "audit-dropped-claims.json"
+#: The edit-log action and the dropped-record ``how`` of a claim removed at
+#: the final gate (``stages/review_policy.GATE_DROP`` reads the latter).
+GATE_ACTION = "drop-gate"
+GATE_HOW = "dropped at the audit gate"
 
 
 def _rekey(sr: StageRun, paths: AuditPaths) -> None:
@@ -159,10 +176,71 @@ def run(sr: StageRun) -> int:
         rc = _converge(sr, paths, repair_model, audit_round)
         if rc is not None:
             return rc
-    _record_drops(sr, paths)
     sr.log("===== final gate =====")
-    ok, _summary = coverage.check(paths, sr.log)
+    ok, summary = coverage.check(paths, sr.log)
+    if not ok and not summary.get("controls_bad"):
+        if _drop_at_gate(sr, paths):
+            sr.log("===== final gate, after the gate drop =====")
+            ok, summary = coverage.check(paths, sr.log)
+    _record_drops(sr, paths)
     return 0 if ok else 1
+
+
+def _drop_at_gate(sr: StageRun, paths: AuditPaths) -> bool:
+    """Every live claim the gate would fail on (no verdict, or a last verdict
+    not SUPPORTED) removed from the document in code, each logged to the edit
+    log for the dropped-claims record. False, removing nothing, when one of
+    them cannot be found in the document (the gate then holds as before) or
+    the claim count does not reconcile."""
+    full = paths.doc.read_text(encoding="utf-8")
+    head, rest = full.split(CL.BODY_START, 1)
+    body, tail = rest.split(CL.BODY_END, 1)
+    pdfs = set(exhibit_paths(paths.out))
+    every = CL.extract_claims(body, pdfs)
+    live = {c["key"]: c for c in every}
+    latest = CL.latest_real(CL.read_rows(paths.results), set(live))
+    failing = [c for k, c in live.items() if (latest.get(k) or {}).get("verdict") != "SUPPORTED"]
+    if not failing:
+        return False
+    spans = CL.claim_spans(body, pdfs)
+    found: list[tuple[dict, str]] = []
+    for c in failing:
+        at = next((s for s in (spans.get(c["key"]), c["claim"] + " " + c["cite"]) if s and s in body), None)
+        if at is None:
+            sr.log(f"gate drop: a failing claim on Exhibit {c['exhibit']} p.{c['page_spec']} is not in the document")
+            return False
+        found.append((c, at))
+    removed = [0]
+    new = body
+    for c, at in found:
+        new = repair._edit(new, at, "", pdfs, removed)
+    if len(CL.extract_claims(new, pdfs)) != len(every) - removed[0]:
+        sr.log("gate drop: the claim count does not reconcile; nothing removed")
+        return False
+    paths.doc.write_text(head + CL.BODY_START + re.sub(r"\n{3,}", "\n\n", new) + CL.BODY_END + tail, encoding="utf-8")
+    entries = paths.slug_dir / "runs" / paths.unit / "entries_scoped_final.md"
+    if entries.is_file():
+        text = entries.read_text(encoding="utf-8")
+        for _c, at in found:
+            text, _ = repair.replace_in(text, at, "")
+        entries.write_text(re.sub(r"\n{3,}", "\n\n", text), encoding="utf-8")
+    log = paths.out / "repair-edits.jsonl"
+    for c, _at in found:
+        r = latest.get(c["key"]) or {}
+        CL.append_row(
+            log,
+            {
+                "key": c["key"],
+                "action": GATE_ACTION,
+                "verdict": r.get("verdict") or "NOT AUDITED",
+                "exhibit": c["exhibit"],
+                "page_spec": c["page_spec"],
+                "note": str(r.get("note") or "")[:300],
+                "old": c["claim"],
+            },
+        )
+    sr.log(f"gate drop: {len(found)} claim(s) not finally SUPPORTED removed; each is listed in the review notes")
+    return True
 
 
 def _converge(sr: StageRun, paths: AuditPaths, repair_model: str, audit_round: Callable[[], int]) -> int | None:
@@ -195,7 +273,9 @@ def _record_drops(sr: StageRun, paths: AuditPaths) -> None:
     drops = [
         {
             "key": r.get("key"),
-            "how": "dropped at the round cap" if r.get("action") == "drop-residual" else "removed by repair",
+            "how": {"drop-residual": "dropped at the round cap", GATE_ACTION: GATE_HOW}.get(
+                str(r.get("action")), "removed by repair"
+            ),
             "verdict": r.get("verdict"),
             "exhibit": r.get("exhibit"),
             "page_spec": r.get("page_spec"),
@@ -205,7 +285,7 @@ def _record_drops(sr: StageRun, paths: AuditPaths) -> None:
             "claim": r.get("old"),
         }
         for r in rows
-        if (r.get("action") == "drop-residual" and "old" in r) or r.get("result") == "DROP"
+        if (r.get("action") in ("drop-residual", GATE_ACTION) and "old" in r) or r.get("result") == "DROP"
     ]
     paths.out.mkdir(parents=True, exist_ok=True)
     (paths.out / DROPPED_RECORD).write_text(

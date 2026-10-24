@@ -194,7 +194,7 @@ def run(sr: StageRun) -> int:
     o += [e["text"] + "\n" for e in entries]
     o += ["## Exhibit List\n", "| Exhibit No. | Description |"]
     o += [f"| {e['exhibit']} | {e['title'].split(' - ', 1)[1]} |" for e in pm]
-    o += limitations_section(d, unit, sr.log)
+    o += limitations_section(d, unit, sr.log, sr.cfg)
     out = "\n".join(o)
     (rd / "final-chronology.md").write_text(out, encoding="utf-8")
     pre = sum(1 for e in entries if e["iso"] < sr.job.incident_date)

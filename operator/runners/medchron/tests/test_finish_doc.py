@@ -385,7 +385,8 @@ def test_coverage_gate_accounts_for_every_pulled_file(job_dir: Path, firm: Path,
         json.dumps({"orphans": [{"name": "stray photo.png", "reason": "email signature graphic"}]})
     )
     log.clear()
-    assert coverage.run(sr) == 1  # mystery scan is in the unit, uncited, unexplained
+    assert coverage.run(sr) == coverage.REWIND  # mystery scan is in the unit, uncited, unaccounted: rebuild once
+    assert coverage.run(sr) == 1  # and hold when it is still lost
     assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["mystery scan.pdf"]
     (d / "billing_docs.json").write_text(json.dumps({"docs": [{"name": "mystery scan", "path": "x", "pages": 1}]}))
     log.clear()
@@ -437,13 +438,19 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
     )
     log: list[str] = []
     sr = _sr(job_dir, firm, data_root, log=log)
-    assert coverage.run(sr) == 1
-    # "has entries.pdf" has citable content and is not cited, so it stays a
-    # real question; the pure ledger is explained by its own billing account.
-    assert json.loads((rd / "coverage_unexplained.json").read_text()) == [
-        "has entries.pdf",
-        "silent scan.pdf",
-    ], log
+    assert coverage.run(sr) == coverage.REWIND
+    # "has entries.pdf" has citable content and is not cited: LOSS, so the
+    # document is rebuilt once, never disclosed. The pure ledger is explained
+    # by its own billing account. Since 2026-10-23 `entries: 0` IS an account:
+    # the composer read the silent scan and drew nothing, so it is explained
+    # by rule and recorded for the firm-facing disclosure.
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["has entries.pdf"], log
+    assert any("silent scan.pdf" in line and "no dated medical" in line for line in log), log
+    from medchron import coverage_decide
+
+    rule = coverage_decide.rows(d, "alpha")
+    assert [(r["name"], r["by"]) for r in rule] == [("silent scan.pdf", "rule")]
+    assert coverage.run(sr) == 1  # still lost after the rebuild: the integrity stop
     assert any("COMPLAINT.pdf" in line and "composer: pleading" in line for line in log), log
     assert any("EXHIBIT B.pdf" in line and "billing dates only" in line for line in log), log
     # the COMBINED form the composer actually writes: `entries: 0, billing-dates: N`.
@@ -453,10 +460,10 @@ def test_coverage_gate_takes_the_composers_own_account_of_an_uncited_file(
     assert any("image001 (2).jpg" in line and "composer: photo" in line for line in log), "found by id after the rename"
     # the rehearsal answers from the same source
     lines = coverage.rehearse(sr)
-    # "with nothing cited": the clinic note, the file with entries, and the
-    # silent scan. Never the explained four -- and the pure ledger is now one
-    # of those four, by its own billing account rather than by its name.
-    assert lines[0].endswith("3 would need a citation") and any("silent scan" in ln for ln in lines), lines
+    # "with nothing cited": the clinic note and the file with entries. Never
+    # the explained five -- the pure ledger by its own billing account rather
+    # than by its name, and the silent scan by its entries: 0 (2026-10-23).
+    assert lines[0].endswith("2 would need a citation") and not any("silent scan" in ln for ln in lines), lines
     assert not any("COMPLAINT" in ln or "EXHIBIT B" in ln or "image001" in ln or "ledger scan" in ln for ln in lines), (
         lines
     )

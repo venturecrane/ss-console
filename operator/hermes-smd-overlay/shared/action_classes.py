@@ -979,6 +979,14 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # never executes, which would leave the introduce ask improvising exactly as
     # it does today while every unit test stayed green.
     "operator_seat_facts": ActionClass.READ,
+    # The quiet help pointer (hermes-smd-initiation, ss-console#3423). The
+    # signals tool is READ: it opens requests.db read-only and the seat-local
+    # help_state.db read-only and returns booleans and counts. The note tool is
+    # INTERNAL_WRITE: it writes a hashed "offered"/"helped" mark into the seat's
+    # own help_state.db, reaches no tenant surface and sends nothing, and its
+    # only argument is an enum. Unmapped, both would fail closed to REFUSED.
+    "operator_help_signals": ActionClass.READ,
+    "operator_help_note": ActionClass.INTERNAL_WRITE,
     # Durable-job tools (hermes-smd-jobs, ss #1916 — these were unmapped, so the
     # fail-closed REFUSED default made durable jobs inert at runtime).
     # start_background_job launches a budgeted background agent turn with tools:

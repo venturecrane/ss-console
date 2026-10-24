@@ -70,6 +70,9 @@ class Inputs:
     #: the collect stage's handwritten re-dates, [(from, to, exhibits)] in final
     #: numbers (``handwritten.moves_of``); their removed readings are in review_named
     redate_moves: list[tuple[str, str, set[int]]] = field(default_factory=list)
+    #: control keys retired as badly chosen (``audit/retired.py``, by SMD or by
+    #: rule): proof 5 leaves them out, as the round report and the gate do
+    retired_controls: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -182,7 +185,7 @@ def _audit(x: Inputs, r: Result) -> None:
     unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
     r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
     ctl = [row for row in x.audit_rows if str(row.get("kind", "")).startswith("control")]
-    bad = [row for row in ctl if row.get("verdict") == "SUPPORTED"]
+    bad = [row for row in ctl if row.get("verdict") == "SUPPORTED" and row.get("key") not in x.retired_controls]
     need = len(new) >= CONTROL_EVERY
     r.check("5", not bad and (bool(ctl) or not need), f"controls planted {len(ctl)}; wrongly SUPPORTED {len(bad)}")
 

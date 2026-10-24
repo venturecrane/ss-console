@@ -27,7 +27,14 @@ would before it was filed. This stage does, in two halves:
   findings hold only on checks 1 to 4 (``HOLD_CHECKS``, the closed list in
   ``proof/review.py``).
 
-A MUST-FIX exits 2 (held, resumable in the chronology's ledger) with a reason
+BEFORE IT DECIDES (2026-10-23) the findings go through ``review_policy``: a
+check 3 hit on the firm's required wording is dropped, a check 2 on the
+records-differ sentence is a note, a check 4 summary line no entry supports
+is deleted when its quote names exactly one line, and the check 2/4 MUST-FIX
+left get ONE repair round with the update lane's finisher; the chronology is
+then re-rendered and re-manifested so what is filed is what was settled.
+
+A MUST-FIX left after that exits 2 (held, resumable in the chronology's ledger) with a reason
 starting ``review_held:``, which the daemon pages SMD on. ``review.json`` is
 the record, so a resume holds again without paying again; it is forgotten when
 the rendered package changes (``review-input.sha``) or SMD asks for a redo.
@@ -53,6 +60,7 @@ from typing import Any
 from .. import llm, prompts
 from ..audit.claims import CITE
 from ..proof import checks, review
+from . import review_policy
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
@@ -337,7 +345,7 @@ def _notes(sr: StageRun, out: Path, rec: dict[str, Any] | None, rows: list[dict[
     the manifest after the chronology; removed again when there are none."""
     for old in out.glob(f"*{_NOTES_TAG}*.docx"):
         old.unlink()
-    lines = review.notes_section(rec)
+    lines = review.notes_section(rec) + review_policy.gate_drops(out)
     if not lines:
         return rows
     from docx import Document
@@ -361,7 +369,7 @@ def _notes(sr: StageRun, out: Path, rec: dict[str, Any] | None, rows: list[dict[
         "sha256": hashlib.sha256(data).hexdigest(),
         "bytes": len(data),
     }
-    sr.log(f"review notes: {len(lines) - 3} finding(s) for the attorney in {name}")
+    sr.log(f"review notes: {sum(ln.startswith('- ') for ln in lines)} item(s) for the attorney in {name}")
     return [rows[0], row, *rows[1:]]
 
 
@@ -420,7 +428,16 @@ def _review_part(
         return out
 
 
-def run(sr: StageRun, *, today: date | None = None) -> int:
+def run(
+    sr: StageRun,
+    *,
+    today: date | None = None,
+    verify: Any = None,
+    images: Any = None,
+    audit: review_policy.Audit | None = None,
+) -> int:
+    """``verify`` / ``images`` / ``audit``: the repair round's grader, page
+    images and audit loop (``review_policy.repair_round``), for tests."""
     out = sr.slug_dir / "out" / sr.unit.unit
     rd = sr.slug_dir / "runs" / sr.unit.unit
     rd.mkdir(parents=True, exist_ok=True)
@@ -453,6 +470,14 @@ def run(sr: StageRun, *, today: date | None = None) -> int:
         except review.ReviewIncomplete as exc:
             sr.log(f"review: {exc}; nothing was filed, a rerun reviews again")
             return 1
+        material = update_material(rd) is not None
+        found, settled = review_policy.package(
+            sr, rd, found, rows, update=material, notes_tag=_NOTES_TAG, verify=verify, images=images, audit=audit
+        )
+        if settled is None:
+            return 1
+        rows = settled
+        sha = _input_sha(rows)
         review.save(rd, found, model=model, lane="chronology")
         (rd / INPUT_SHA).write_text(sha, encoding="utf-8")
         status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)

@@ -710,6 +710,59 @@ def test_a_held_then_resumed_then_delivered_chronology_replies_for_each_outcome(
     assert len(box.replies()) == 2
 
 
+def test_a_chronology_held_again_for_a_new_reason_is_told_again(tmp_path: Path) -> None:
+    """FALSIFIER (job 3CH59XBY, 2026-10-22/23): the held key had no reason in it,
+    so the six holds after the first, each for a different reason, were all
+    refused as already answered and the firm heard nothing for 21 hours."""
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = _chronology_job(tmp_path, ["running"])
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "held", {"reason": "identity: an attachment names another person"})
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    ledger.record(job, "running", {})
+    ledger.record(job, "held", {"reason": "review_held: the pre-delivery review found 2 must-fix finding(s)"})
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert len(box.replies()) == 2
+
+
+def test_a_chronology_held_again_for_the_same_reason_is_not_told_twice(tmp_path: Path) -> None:
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    reason = "per_job_cap_usd: this run's projected cost would exceed the job's cost cap"
+    job = _chronology_job(tmp_path, ["running"])
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "held", {"reason": reason})
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    ledger.record(job, "running", {})
+    ledger.record(job, "held", {"reason": reason})
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    # a re-recorded hold that names no reason keeps the old one: still the same outcome
+    ledger.record(job, "held", {})
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert len(box.replies()) == 1
+
+
+def test_a_chronology_re_held_in_place_with_a_new_reason_is_told(tmp_path: Path) -> None:
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = _chronology_job(tmp_path, ["running"])
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "held", {"reason": "identity: an attachment names another person"})
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    ledger.record(job, "held", {"reason": "seat paused (sticky stop HARD_STOP)"})
+    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    assert len(box.replies()) == 2
+
+
 def test_a_failed_chronology_job_never_replies_to_the_client(tmp_path: Path) -> None:
     job = _chronology_job(tmp_path, ["failed"])
     box = FakeMailbox()

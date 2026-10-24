@@ -1305,7 +1305,18 @@ def test_help_never_raises_and_degrades_to_an_unread_section(sf, tmp_path):
         raise OSError("customer.yaml unreadable")
 
     facts = _help(sf, tmp_path, sender=_ADMIN, loader=_boom)
-    assert facts["help"] == {"read": False, "sender": None, "requests": [], "note": None}
+    degraded = facts["help"]
+    assert {k: degraded[k] for k in ("read", "sender", "requests", "note", "guide", "tips")} == {
+        "read": False,
+        "sender": None,
+        "requests": [],
+        "note": None,
+        "guide": None,
+        "tips": [],
+    }
+    # The shape and rules are authored in code, so even a degraded section
+    # carries them: the model can still answer in the guide's order.
+    assert degraded["answer_shape"] and degraded["answer_rules"]
 
     raw = _help_raw()
     raw["personas"] = "not a list"

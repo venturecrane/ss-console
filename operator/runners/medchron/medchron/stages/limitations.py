@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import unopened
+from ..gates import foreign_identity as FI
 from .base import read_json, read_jsonl
 
 
@@ -207,7 +208,75 @@ def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Ca
     return o
 
 
-def section(slug_dir: Path, unit: str | None, log: Callable[[str], None]) -> list[str]:
+def _withheld_names(d: Path, byid: dict, listed: set[str]) -> list[str]:
+    """Documents the firm said to leave out that orphans.json does not already
+    name: a withheld email attachment is never folded, so it has no pulled row
+    and only the email index knows its file name."""
+    out: list[str] = []
+    m = read_json(d / "msg_attachments.json", {}) or {}
+    by12 = {str(a.get("sha256") or "")[:12]: a for a in (m.get("attachments") or []) if isinstance(a, dict)}
+    for wid in sorted(FI.withheld(d)):
+        row = byid.get(wid) or byid.get(f"msgatt-{wid}")
+        if row is not None:
+            name = str(row.get("name") or "") + str(row.get("ext") or "")
+        else:
+            a = by12.get(wid.removeprefix("msgatt-")) or {}
+            name = str((a.get("names") or [""])[0] or "")
+        if name and name not in listed:
+            out.append(name)
+    return out
+
+
+def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str]:
+    """Every pulled document that is not a source of this chronology, with the
+    factual reason (2026-10-23). The reasons were already decided by rule and
+    printed by the coverage gate, but only SMD read that log: a document the
+    firm said to leave out, one the composer read and drew no entry from, or
+    one excluded by name or size was named to the firm nowhere.
+
+    Sources, each written by the stage that decided it: ``orphans.json`` (files
+    no unit owns: withheld, excluded by class, name or size, or unreadable),
+    the withheld list (``identity_release.json``), and
+    ``coverage_decisions.json`` with the coverage gate's own rule
+    (``coverage.rule_rows``, computed here from the same reader the gate
+    records with, because this section is written before the gate runs).
+    Password-protected files are named in the unreadable list above, so they
+    are not repeated here."""
+    from .. import coverage_decide
+    from . import coverage
+
+    o: list[str] = []
+    rows = [
+        (str(x.get("name") or ""), str(x.get("reason") or ""))
+        for x in (read_json(d / "orphans.json", {}) or {}).get("orphans") or []
+        if isinstance(x, dict) and x.get("name") and x.get("reason") and x.get("reason") != unopened.REASON
+    ]
+    listed = {n for n, _ in rows}
+    rows += [(n, FI.WITHHELD_REASON) for n in _withheld_names(d, byid, listed)]
+    if rows:
+        o += [
+            "",
+            "The following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n",
+        ]
+        o += [f'* "{name}" - {why}' for name, why in sorted(rows)]
+    read: dict[str, str] = {}
+    if unit is not None:
+        for r in coverage_decide.rows(d, unit):
+            read[str(r["name"])] = str(r["reason"])
+        if cfg is not None:
+            for r in coverage.rule_rows(d, unit, cfg):
+                read.setdefault(r["name"], r["reason"])
+    if read:
+        o += [
+            "",
+            "The following documents were read in full and no entry in this chronology is drawn from them, "
+            "each for the reason stated:\n",
+        ]
+        o += [f'* "{name}" - {why}' for name, why in sorted(read.items())]
+    return o
+
+
+def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: Any = None) -> list[str]:
     o = ["", "## Records Reviewed and Limitations\n"]
     raw = read_jsonl(slug_dir / "raw_manifest.jsonl")
     byid: dict[Any, dict] = {r.get("id"): r for r in raw}
@@ -217,6 +286,7 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None]) -> lis
     folded = [r for r in ok if str(r.get("id", "")).startswith("msgatt-")]
     o += _scope_lines(slug_dir, byid, ok, folded, failed)
     o += _unread_lines(slug_dir, failed, log)
+    o += _not_used_lines(slug_dir, byid, unit, cfg)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
     if len(o) == 2:
         o.append(

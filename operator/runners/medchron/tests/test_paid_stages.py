@@ -284,14 +284,26 @@ def test_build_units_routes_by_folder_then_token_and_excludes_by_config(
         ],
     )
     (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\n" + PROSE)
+    # 2026-10-23: a joint matter's file no folder or token owns is the firm's
+    # question, held here with an identity reason, never left for
+    # decide_orphans after every paid stage.
+    log: list[str] = []
+    sr.log = log.append
+    assert units_stage.run(sr) == units_stage.IDENTITY_HELD
+    unassigned = json.loads((sr.slug_dir / "units" / "_unassigned.json").read_text())
+    assert [r["id"] for r in unassigned] == ["u1"]
+    assert log[-1].startswith("IDENTITY HOLD: 1 pulled file(s) belong to no client's folder")
+    assert 'u1 "Example Health Records 6.22.26.pdf" in /Shared' in log[-1]
+    # The firm says to leave it out: the rerun routes everything else.
+    from medchron.gates import foreign_identity as FI
+
+    FI.record_decision(sr.slug_dir, action="withhold", ids=["u1"], by="firm", source="msg", at="t")
     assert units_stage.run(sr) == 0
     alpha = json.loads((sr.slug_dir / "units" / "alpha.json").read_text())
     beta = json.loads((sr.slug_dir / "units" / "beta.json").read_text())
     assert [r["id"] for r in alpha] == ["a1"]
     assert sorted(r["id"] for r in beta) == ["b1", "s1"]  # token through underscores; the scan via disk
     assert all(r["text_path"] for r in beta)
-    unassigned = json.loads((sr.slug_dir / "units" / "_unassigned.json").read_text())
-    assert [r["id"] for r in unassigned] == ["u1"]
 
 
 def test_build_units_gives_two_files_with_one_name_two_names(
