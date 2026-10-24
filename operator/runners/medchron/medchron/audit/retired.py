@@ -17,6 +17,14 @@ verifier was right and the control was badly chosen: the round records it
 here (``by: rule``) and every consumer (round report, final gate, update
 proof 5, ``audit_decide``) honours it. A SUPPORTED control whose page does
 not carry those values is a rubber stamp and INVALIDs the round, as before.
+
+A SCAN HAS NO TEXT LAYER (2026-10-24). Read from page 1's text layer, the
+rule could never fire on a fax-scanned control page; such a page's vision
+transcript is read instead (``transcript_text``). A SUPPORTED control the rule
+does not retire is re-tested against another institution, and retired here
+when the re-test comes back unsupported (``control_runs.retest_controls``);
+what still stands counts toward a rate, not a single-row INVALID
+(``controls``).
 """
 
 from __future__ import annotations
@@ -100,15 +108,46 @@ def _first_page_text(pdf: Path) -> str:
         return ""
 
 
+def transcript_text(slug_dir: Path, unit: str, exhibit: int, page: int) -> str:
+    """The transcript (vision or native) behind one current exhibit page,
+    '' when the page cannot be placed or has none. A scanned control page has
+    no text layer, so this is the only text that can show it carries the claim
+    (2026-10-24, the stop audit row 4)."""
+    from .page_text import PageIndex
+
+    try:
+        idx = PageIndex(slug_dir, unit)
+    except Exception:  # noqa: BLE001 - no page map or unit file: no transcript, the control is judged as before
+        return ""
+    try:
+        at = idx.resolve(exhibit, page)
+        seg = idx.segments(at[0]).get(at[1]) if at else None
+        return seg[0] if seg else ""
+    except Exception:  # noqa: BLE001 - an unreadable transcript is no text, the control is judged as before
+        return ""
+    finally:
+        idx.close()
+
+
 def retire_if_carried(
-    out: Path, c: dict[str, Any], other: int, block: str | None, pdf: Path, log: Callable[[str], None]
+    out: Path,
+    c: dict[str, Any],
+    other: int,
+    block: str | None,
+    pdf: Path,
+    log: Callable[[str], None],
+    transcript: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """A SUPPORTED control whose page's own text carries the claim's values
     is badly chosen, not a rubber stamp: retired by rule (``carried``), so the
     round is not INVALID on it. The text is the window the verifier read
-    (text mode) or page 1's text layer (image mode; a scan has none, and
-    stays INVALID as before). Returns the fields for the control's row."""
+    (text mode) or page 1's text layer (image mode); a scan has no text
+    layer, so its vision transcript (``transcript``) is read instead
+    (2026-10-24). Returns the fields for the control's row."""
     text = block if block is not None else _first_page_text(pdf)
+    source = "text"
+    if not (text or "").strip() and transcript is not None:
+        text, source = transcript(), "vision transcript"
     on = carried(c["claim"], text)
     if not on:
         return {}
@@ -117,7 +156,7 @@ def retire_if_carried(
         c["key"] + f"-ctl{other}",
         f"the control page (Exhibit {other} p.1) states the claim's own values ({', '.join(on[:6])}): "
         "a badly chosen control, retired by rule",
-        source=f"Exhibit {other} p.1 text",
+        source=f"Exhibit {other} p.1 {source}",
     )
     log(f"  -- CONTROL vs Ex{other} SUPPORTED, and its page carries the claim ({', '.join(on[:4])}): retired by rule")
     return {"retired": "rule", "anchors_on_control": on}

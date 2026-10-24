@@ -62,9 +62,13 @@ def test_control_the_final_gate_counts_a_supported_control_until_it_is_retired(d
     from medchron.audit import claims as CL
 
     paths.doc.write_text(f"# Chronology\n{CL.BODY_START}\n{CL.BODY_END}\n")
+    # Three SUPPORTED controls reach the INVALID threshold (``audit/controls``,
+    # 2026-10-24: max(3, ceil(1%))); retiring one brings the round under it.
+    for k in ("cccc-ctl2", "dddd-ctl2"):
+        CL.append_row(paths.results, {"key": k, "kind": "control(vs Ex2)", "verdict": "SUPPORTED"})
     log: list[str] = []
     _ok, summary = audit_coverage.check(paths, log.append)
-    assert summary["controls_bad"] == 1
+    assert summary["controls_bad"] == 3
     retired.path(paths.out).write_text(json.dumps({"retired": [{"key": BAD, "reason": "index page"}]}))
     _ok, summary = audit_coverage.check(paths, log.append)
     assert summary["controls_bad"] == 0

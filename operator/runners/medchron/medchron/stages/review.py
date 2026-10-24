@@ -28,6 +28,11 @@ would before it was filed. This stage does, in two halves:
   ``proof/review.py``).
 
 BEFORE IT DECIDES (2026-10-23) the findings go through ``review_policy``: a
+system-language hit printed verbatim on the cited page is the record's wording
+and a NOTE, a check 1 finding is decided on the cited page's patient
+identifiers (the client's: a NOTE; anyone else's: the entry left out by rule
+and disclosed), an entry dated after today goes to the repair round to have
+its date re-read on the page (2026-10-24), a
 check 3 hit on the firm's required wording is dropped, a check 2 on the
 records-differ sentence is a note, a check 4 summary line no entry supports
 is deleted when its quote names exactly one line, and the check 2/4 MUST-FIX
@@ -472,7 +477,16 @@ def run(
             return 1
         material = update_material(rd) is not None
         found, settled = review_policy.package(
-            sr, rd, found, rows, update=material, notes_tag=_NOTES_TAG, verify=verify, images=images, audit=audit
+            sr,
+            rd,
+            found,
+            rows,
+            update=material,
+            notes_tag=_NOTES_TAG,
+            verify=verify,
+            images=images,
+            audit=audit,
+            today=today or date.today(),
         )
         if settled is None:
             return 1

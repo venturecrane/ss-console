@@ -25,7 +25,6 @@ Return codes: 0 clean, 1 problems (repair), 2 invalid, 3 guard.
 from __future__ import annotations
 
 import random
-import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -35,37 +34,15 @@ from typing import Any, Callable
 
 from .. import llm
 from ..limits import LimitHold
-from . import anchors as AN, claims as CL, negation as NG, retired, verify as VF
+from . import anchors as AN, claims as CL, controls, negation as NG, verify as VF
+from .control_runs import ERROR, control_exhibit, institution, retest_exhibit  # noqa: F401 - re-exported
+from . import control_runs as CR
 from .handwritten_evidence import statements_for
 from .page_text import PageIndex, exhibit_paths
 from .render import img_block, render
 
 SEED = 20260820
 REVERSE_EVERY = 8
-EXHIBIT_PROVIDER = re.compile(r"^Exhibit \d+ - (.+?) - \d{2}-\d{2}-\d{4}")
-
-
-def institution(path: Path) -> str:
-    """The first two words of an exhibit's provider, from its file name: the
-    part two exhibits of one institution share ("example va" for the
-    medical center, its dental clinic and its pharmacy)."""
-    m = EXHIBIT_PROVIDER.match(path.name)
-    return " ".join((m.group(1) if m else path.stem).lower().split()[:2])
-
-
-def control_exhibit(claim_exhibit: int, pdfs: dict[int, Path]) -> int | None:
-    """The exhibit a control is verified against. A control is a control only
-    when its page plausibly cannot carry the claim: a VA pharmacy claim shown
-    the VA medical center exhibit's first pages met the same VA medication list
-    and was SUPPORTED, and that one accepted control invalidated a round of
-    1,998 verdicts that had discriminated 278 times (live 2026-09-16). So the
-    other exhibit is the first from a DIFFERENT institution; only a matter
-    with a single institution falls back to any other exhibit."""
-    if claim_exhibit not in pdfs:
-        return next((o for o in sorted(pdfs) if o != claim_exhibit), None)
-    mine = institution(pdfs[claim_exhibit])
-    others = [o for o in sorted(pdfs) if o != claim_exhibit]
-    return next((o for o in others if institution(pdfs[o]) != mine), others[0] if others else None)
 
 
 def run_pool(tasks: list[Callable[[], None]], workers: int) -> None:
@@ -85,7 +62,6 @@ def run_pool(tasks: list[Callable[[], None]], workers: int) -> None:
 
 WINDOW_CAP = 12
 TEXT_MIN_CHARS = 80
-ERROR = {"verdict": "ERROR", "unsupported_assertions": [], "contradictions": []}
 
 
 @dataclass
@@ -175,69 +151,6 @@ class Round:
                     pass
         return v, widened
 
-    def control_for(
-        self, c: dict[str, Any], pdfs: dict[int, Path], index: PageIndex | None, doc_sha: str, ts: str
-    ) -> None:
-        with self._lock:
-            self.counter["n"] += 1
-            do_ctl = self.counter["n"] % self.control_every == 0
-        if not do_ctl or (other := control_exhibit(int(c["exhibit"]), pdfs)) is None:
-            return
-        text_ctl = None
-        if index is not None and c.get("window"):
-            pages = [p for p in (1, 2, 3) if p <= (index.npages(other) or 0) and index.eligible(other, p)]
-            if pages:
-                text_ctl = (pages, index.window_text(other, pages))
-        try:
-            if text_ctl:
-                pages, block = text_ctl
-                cv = VF.verify_text(
-                    self.doorway,
-                    self.model,
-                    c["claim"],
-                    block,
-                    pages,
-                    c.get("anchors", []),
-                    f"Exhibit {other} p.1-3",
-                    custom_id=c["key"] + f"-ctl{other}",
-                )
-                kind, extra = f"control-text(vs Ex{other})", {"mode": "text", "window": pages}
-            else:
-                ci = render(pdfs[other], 1, self.paths.pages, f"ctl{other}")
-                cv = VF.verify_image(
-                    self.doorway,
-                    self.model,
-                    c["claim"],
-                    [img_block(ci)] if ci else [],
-                    f"Exhibit {other} p.1",
-                    custom_id=c["key"] + f"-ctl{other}",
-                )
-                kind, extra = f"control(vs Ex{other})", {"mode": "image"}
-        except LimitHold:
-            raise  # a limit stops the round; an ERROR row here would read as audited (N10)
-        except Exception as exc:  # noqa: BLE001 - a control verification raising is recorded as an ERROR verdict for that claim; the audit continues
-            cv, kind, extra = {**ERROR, "note": str(exc)[:200]}, f"control(vs Ex{other})", {"mode": self.mode}
-        cv.pop("supporting_pages", None)
-        if cv.get("verdict") == "SUPPORTED":
-            block = text_ctl[1] if text_ctl else None
-            extra = {**extra, **retired.retire_if_carried(self.paths.out, c, other, block, pdfs[other], self.log)}
-        CL.append_row(
-            self.paths.results,
-            {
-                "key": c["key"] + f"-ctl{other}",
-                "kind": kind,
-                "exhibit": c["exhibit"],
-                "page_spec": "1",
-                "pages": [1],
-                "claim": c["claim"][:200],
-                **cv,
-                **extra,
-                "doc_sha": doc_sha,
-                "ts": ts,
-            },
-        )
-        self.log(f"  -- CONTROL Ex{c['exhibit']} claim vs Ex{other}: {cv.get('verdict')}")
-
     def report_line(self, c: dict[str, Any], v: dict[str, Any]) -> None:
         mark = {
             "SUPPORTED": "OK",
@@ -273,7 +186,7 @@ class Round:
                 rec["widened"] = widened
             CL.append_row(self.paths.results, rec)
             self.report_line(c, v)
-            self.control_for(c, pdfs, index, doc_sha, ts)
+            CR.control_for(self, c, pdfs, index, doc_sha, ts)
         except LimitHold:
             raise  # a limit stops the round; an ERROR row here would read as audited (N10)
         except Exception as exc:  # noqa: BLE001 - a worker must never kill the pool
@@ -383,7 +296,16 @@ class Round:
                         self.log(
                             f"  -- REVERSE Ex{ex} p.{c['page_spec'] or '1'}: {'agree' if agree else '!! DISAGREE'}"
                         )
-                self.control_for(c, pdfs, index, doc_sha, ts)
+                        if not agree:
+                            # The claim takes the image verdict (2026-10-24):
+                            # the repair rounds correct or drop it, and the
+                            # round is INVALID only at the rate in ``controls``.
+                            override = {**rec, **iv, "mode": "image", "reverse_override": True}
+                            if widened:
+                                override["widened"] = widened
+                            CL.append_row(self.paths.results, override)
+                            self.report_line(c, iv)
+                CR.control_for(self, c, pdfs, index, doc_sha, ts)
             except LimitHold:
                 raise  # a limit stops the round; an ERROR row here would read as audited (N10)
             except Exception as exc:  # noqa: BLE001 - one claim's worker dying is recorded as that claim's ERROR row; the remaining claims still run
@@ -528,6 +450,14 @@ class Round:
                 f"{len(image_claims)} | " + ", ".join(f"{k}={v}" for k, v in sorted(elig.items()))
             )
         self.run_tasks(clusters, image_claims, pdfs, index, doc_sha, ts)
+        rindex = (
+            PageIndex(self.paths.slug_dir, self.paths.unit, min_chars=TEXT_MIN_CHARS) if self.mode == "text" else None
+        )
+        try:
+            CR.retest_controls(self, {c["key"]: c for c in claims}, pdfs, rindex, doc_sha, ts)
+        finally:
+            if rindex is not None:
+                rindex.close()
         return self.report({c["key"] for c in claims})
 
     def run_tasks(
@@ -558,28 +488,22 @@ class Round:
         # one repair no round could ever report clean and the loop always ran to
         # the cap (2026-10-07).
         real = list(CL.latest_real(allr, live_keys).values())
-        ctl = retired.live_controls(allr, self.paths.out)
-        rev = [r for r in allr if r.get("kind") == "reverse-control"]
         tally: dict[str, int] = {}
         for r in real:
             tally[r["verdict"]] = tally.get(r["verdict"], 0) + 1
-        ctl_bad = [r for r in ctl if r["verdict"] == "SUPPORTED"]
-        rev_bad = [r for r in rev if not r.get("agree")]
-        self.log(
-            f"CONTROLS: {len(ctl)} run, {len(ctl_bad)} wrongly SUPPORTED -> "
-            f"{'DISCRIMINATES' if not ctl_bad else '!! RUBBER STAMP'}"
-        )
-        if rev:
-            self.log(f"REVERSE CONTROLS: {len(rev)} re-audited in image mode, {len(rev_bad)} disagree")
+        # INVALID is a rate, not one row (``controls``, 2026-10-24).
+        standing = controls.assess(allr, self.paths.out)
+        controls.describe(standing, self.log)
+        controls.write(standing, self.paths.out)
         self.log("REAL: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items(), key=lambda kv: -kv[1])))
         problems = [r for r in real if r["verdict"] != "SUPPORTED"]
         for r in problems[:40]:
             self.log(f"  --- Ex{r['exhibit']} p.{r['page_spec']} : {r['verdict']}: {str(r.get('note', ''))[:200]}")
-        if ctl_bad:
-            self.log("RESULT: INVALID - verifier accepted a mismatched page")
+        if standing["controls_invalid"]:
+            self.log("RESULT: INVALID - verifier accepted mismatched pages at the rubber-stamp threshold")
             return 2
-        if rev_bad:
-            self.log("RESULT: INVALID - a text-SUPPORTED verdict was not SUPPORTED in image mode")
+        if standing["reverse_invalid"]:
+            self.log("RESULT: INVALID - text-SUPPORTED verdicts not SUPPORTED in image mode at the threshold")
             return 2
         self.log(f"RESULT: {tally.get('SUPPORTED', 0)}/{len(real)} supported, {len(problems)} needing review")
         return 0 if not problems else 1
