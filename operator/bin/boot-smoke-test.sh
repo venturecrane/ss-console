@@ -455,12 +455,30 @@ authored() {
   [ -f "${ENGAGEMENTS_DIR}/$1" ] \
     || git -C "${ENGAGEMENTS_DIR}" cat-file -e "origin/main:$1" 2>/dev/null
 }
+# A lane is ALSO authored when this checkout's customer.yaml enables the skill
+# that drives it, the expectation the in-image self-test uses (selftest.sh
+# lane_skill). Without it this smoke pass-skipped a seat that offered demand
+# letters with no demand inputs (pilot-smokeball, 2026-10-23); the image failed it.
 lane_authored() {
   if [ "$1" = medchron ]; then
-    authored "operator/customers/${SLUG}/medchron/firm.yaml"
+    authored "operator/customers/${SLUG}/medchron/firm.yaml" && return 0
   else
-    authored "operator/customers/${SLUG}/$1/$1-firm.yaml"
+    authored "operator/customers/${SLUG}/$1/$1-firm.yaml" && return 0
   fi
+  lane_skill_enabled "$1"
+}
+lane_skill_enabled() {
+  local skill
+  case "$1" in medchron) skill=medical-chronology-maintainer ;; demand) skill=demand-letter-drafter ;; drafting) skill=document-drafter ;; litigation) skill=litigation-status ;; *) return 1 ;; esac
+  # Cannot evaluate (no file, unparseable, no uv) reads as authored, never as
+  # absent: exit 1 is the only "not enabled" answer.
+  [ -f "${CUSTOMER_YAML}" ] || return 0
+  local rc=0
+  uv run --quiet --with pyyaml python3 -c 'import sys, yaml
+d = yaml.safe_load(open(sys.argv[1])) or {}
+on = {s["name"] for p in d.get("personas") or [] for s in (p or {}).get("skills") or [] if isinstance(s, dict) and s.get("enabled") is not False and isinstance(s.get("name"), str)}
+sys.exit(0 if sys.argv[2] in on else 1)' "${CUSTOMER_YAML}" "${skill}" 2>/dev/null || rc=$?
+  [ "${rc}" -ne 1 ]
 }
 
 # shellcheck source=../templates/seat-checks.sh
