@@ -184,6 +184,37 @@ def remap_citations(text: str, remap: dict[int, tuple[int, int]]) -> tuple[str, 
     return CITE.sub(sub, text), missing
 
 
+def _add_files(
+    sr: StageRun, w: Any, gfiles: list, raw: dict[str, Any], n: int, remap: dict[int, tuple[int, int]]
+) -> tuple[list[dict[str, Any]], int]:
+    """Every file of one provider group onto exhibit `n`'s writer, in order:
+    (page-map rows, the next free page). A file nothing can page is recorded
+    as its error row and the loop continues."""
+    entries: list[dict[str, Any]] = []
+    cursor = 1
+    for _first, name, old, f in gfiles:
+        rec = raw.get(f["id"])
+        ext = (f.get("ext") or "").lower()
+        if not rec or ext not in PAGE_SOURCES | WORD_EXTS:
+            continue
+        try:
+            pages, rendered = _pages_of(rec["path"], ext, f.get("text_path"))
+            for pg in pages:
+                w.add_page(pg)
+        except Exception as exc:  # noqa: BLE001 - an unreadable file is recorded as that file's error in the exhibit list and the loop continues
+            entries.append({"file": name, "error": str(exc)[:200]})
+            sr.log(f"  !! {name}: could not be paged: {str(exc)[:120]}")
+            continue
+        remap[old] = (n, cursor)
+        row: dict[str, Any] = {"file": name, "old_exhibit": old, "start_page": cursor, "pages": len(pages)}
+        if rendered:
+            row["rendered_from_text"] = True
+            sr.log(f"  {name}: exhibit pages rendered from its extracted text ({len(pages)} pp.)")
+        entries.append(row)
+        cursor += len(pages)
+    return entries, cursor
+
+
 def run(sr: StageRun) -> int:
     from pypdf import PdfWriter
 
@@ -240,28 +271,7 @@ def run(sr: StageRun) -> int:
             continue
         n += 1
         w = PdfWriter()
-        entries: list[dict[str, Any]] = []
-        cursor = 1
-        for _first, name, old, f in gfiles:
-            rec = raw.get(f["id"])
-            ext = (f.get("ext") or "").lower()
-            if not rec or ext not in PAGE_SOURCES | WORD_EXTS:
-                continue
-            try:
-                pages, rendered = _pages_of(rec["path"], ext, f.get("text_path"))
-                for pg in pages:
-                    w.add_page(pg)
-            except Exception as exc:  # noqa: BLE001 - an unreadable file is recorded as that file's error in the exhibit list and the loop continues
-                entries.append({"file": name, "error": str(exc)[:200]})
-                sr.log(f"  !! {name}: could not be paged: {str(exc)[:120]}")
-                continue
-            remap[old] = (n, cursor)
-            row: dict[str, Any] = {"file": name, "old_exhibit": old, "start_page": cursor, "pages": len(pages)}
-            if rendered:
-                row["rendered_from_text"] = True
-                sr.log(f"  {name}: exhibit pages rendered from its extracted text ({len(pages)} pp.)")
-            entries.append(row)
-            cursor += len(pages)
+        entries, cursor = _add_files(sr, w, gfiles, raw, n, remap)
         if cursor == 1:
             n -= 1
             continue
