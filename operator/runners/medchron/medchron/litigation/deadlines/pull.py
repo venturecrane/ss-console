@@ -26,7 +26,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ...arrivals import assisting_ids, getter, paged
+from ...arrivals import assisting_ids, getter, originating_listed, paged, staff_roles
+from .. import people
 from ..outcome import LitigationFailed
 from ..progress import Progress
 from ..tools import dump
@@ -50,34 +51,45 @@ def _listing(payload: Any) -> list[Any]:
     return []
 
 
-def in_scope(row: dict[str, Any], scope: Any) -> bool:
-    """The litigation lane's scope rule on a raw matter row: every matter, or
-    one matching EACH side the job names."""
-    if scope.scope_all:
-        return True
-    if not scope.attorney_staff_ids and not scope.paralegal_staff_ids:
-        return False
-    resp = str(row.get("personResponsibleStaffId") or "").lower()
-    if scope.attorney_staff_ids and resp not in scope.attorney_staff_ids:
-        return False
-    return not scope.paralegal_staff_ids or bool(set(assisting_ids(row)) & set(scope.paralegal_staff_ids))
-
-
-def staff_names(get: Callable[..., Any]) -> dict[str, str]:
+def view(row: dict[str, Any]) -> dict[str, Any]:
+    """A raw matter row as ``people.in_scope`` reads it (the status list's shape)."""
     return {
-        s["id"]: ((s.get("firstName") or "").strip() + " " + (s.get("lastName") or "").strip()).strip()
-        for s in paged(get, "/staff")
-        if isinstance(s, dict) and s.get("id")
+        "staff_id": str(row.get("personResponsibleStaffId") or "").lower(),
+        "assisting_ids": assisting_ids(row),
+        "roles": staff_roles(row),
     }
 
 
-def list_in_scope(get: Callable[..., Any], scope: Any) -> tuple[int, list[dict[str, Any]]]:
-    """(rows listed, the in-scope matter stubs), Open first then Pending."""
-    listed, keep = 0, []
+def in_scope(row: dict[str, Any], scope: Any, people_ids: frozenset[str] = frozenset()) -> bool:
+    """The litigation lane's ONE scope rule (``people.in_scope``) on a raw matter row."""
+    return people.in_scope(view(row), scope, people_ids)
+
+
+def staff_rows(get: Callable[..., Any]) -> list[dict[str, Any]]:
+    return [s for s in paged(get, "/staff") if isinstance(s, dict) and s.get("id")]
+
+
+def staff_names(get: Callable[..., Any], rows: list[dict[str, Any]] | None = None) -> dict[str, str]:
+    return {
+        s["id"]: ((s.get("firstName") or "").strip() + " " + (s.get("lastName") or "").strip()).strip()
+        for s in (rows if rows is not None else staff_rows(get))
+    }
+
+
+def list_in_scope(
+    get: Callable[..., Any], scope: Any, people_ids: frozenset[str] = frozenset()
+) -> tuple[int, list[dict[str, Any]]]:
+    """(rows listed, the in-scope matter stubs), Open first then Pending. A
+    people scope over a list with no originating key on any row holds
+    (``people.check_roles_listed``)."""
+    listed, keep, originating = 0, [], []
     for status in STATUSES:
         for r in paged(get, "/matters", Status=status, IsLead=False):
             listed += 1
-            if not isinstance(r, dict) or r.get("isLead") is True or not r.get("id") or not in_scope(r, scope):
+            if not isinstance(r, dict) or r.get("isLead") is True or not r.get("id"):
+                continue
+            originating.append(originating_listed(r))
+            if not in_scope(r, scope, people_ids):
                 continue
             keep.append(
                 {
@@ -90,6 +102,7 @@ def list_in_scope(get: Callable[..., Any], scope: Any) -> tuple[int, list[dict[s
                     "matterType": r.get("matterTypeId"),
                 }
             )
+    people.check_roles_listed(scope, originating, len(originating))
     return listed, keep
 
 
@@ -120,17 +133,31 @@ def read_matter(get: Callable[..., Any], stub: dict[str, Any]) -> dict[str, Any]
     return rec
 
 
-def run(seat: Any, scope: Any, data: Path, log: Callable[[str], None]) -> Path:
+def run(seat: Any, scope: Any, data: Path, log: Callable[[str], None], roster: dict[str, str] | None = None) -> Path:
     """Reads what is not yet on disk and writes ``data/pull.json.gz`` (the
-    kit's output shape: staff, listed, matters, errors). Returns its path."""
+    kit's output shape: staff, listed, matters, errors). Returns its path.
+    ``roster`` (the firm's name -> staff id maps) places a people scope's
+    names the staff list's full names do not (``people.by_name``)."""
     get = getter(seat)
     root = data / "pull"
     mdir = root / "m"
     mdir.mkdir(parents=True, exist_ok=True)
     head = root / "listing.json"
     if not head.is_file():
-        listed, stubs = list_in_scope(get, scope)
-        dump(head, {"started": time.time(), "staff": staff_names(get), "listed": listed, "stubs": stubs})
+        rows = staff_rows(get)
+        spec = getattr(scope, "people", None)
+        who = people.resolve(spec, rows, roster or {}) if spec is not None else ()
+        listed, stubs = list_in_scope(get, scope, people.ids_of(who))
+        dump(
+            head,
+            {
+                "started": time.time(),
+                "staff": staff_names(get, rows),
+                "listed": listed,
+                "stubs": stubs,
+                "people": [p.as_dict() for p in who],
+            },
+        )
     listing = json.loads(head.read_text(encoding="utf-8"))
     stubs = listing["stubs"]
     prog = Progress(log, "pull", len(stubs), "matters read", every=25)

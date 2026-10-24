@@ -5,9 +5,11 @@ and every file on each. $0, read-only.
   leads excluded), paged with Offset until a short page, the way the
   statute-watch pull reads them; a listing that does not parse refuses the job
   rather than passing a partial list for a whole one.
-* Scope is the envelope's: the staff ids responsible, the staff ids assisting
+* Scope is the envelope's, by ``people.in_scope`` (the rule the deadlines
+  report shares): the staff ids responsible, the staff ids assisting
   (Smokeball's Person Assisting: a paralegal's files), both (a matter must
-  match each side named), or every matter.
+  match each side named), the people named or the requester (any staff role
+  they hold, resolved against ``/staff``), or every matter.
 * A matter is a litigation matter when at least ``min_court_hits`` of its file
   names read as court papers (``court_paper_patterns``), or when an earlier run
   already tracked it (it stays on the list until a person closes it).
@@ -24,6 +26,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from . import people
 from .firm import LitigationFirm
 from .progress import Progress
 
@@ -32,38 +35,28 @@ from ..arrivals import getter as _getter
 from ..arrivals import open_matters, paged
 
 
+def staff_rows(seat: Any) -> list[dict[str, Any]]:
+    """Every ``/staff`` record as Smokeball returns it (email, names, enabled)."""
+    return [p for p in paged(_getter(seat), "/staff") if isinstance(p, dict) and p.get("id")]
+
+
+def roster_of(rows: list[dict[str, Any]]) -> dict[str, str]:
+    """``{staff id: "First Last"}`` from the staff records."""
+    return {
+        str(p["id"]).lower(): " ".join(str(p.get(k) or "").strip() for k in ("firstName", "lastName")).strip()
+        for p in rows
+    }
+
+
 def staff_roster(seat: Any) -> dict[str, str]:
     """``{staff id: "First Last"}``. A roster that cannot be read raises: the
     workbook's responsible column is never left to a guess."""
-    roster: dict[str, str] = {}
-    for p in paged(_getter(seat), "/staff"):
-        if isinstance(p, dict) and p.get("id"):
-            name = " ".join(str(p.get(k) or "").strip() for k in ("firstName", "lastName")).strip()
-            roster[str(p["id"]).lower()] = name
-    return roster
+    return roster_of(staff_rows(seat))
 
 
 def court_hits(files: list[dict[str, Any]], firm: LitigationFirm) -> int:
     rx = firm.court_rx
     return sum(1 for f in files if not f.get("deleted") and any(p.search(str(f.get("name") or "")) for p in rx))
-
-
-def in_scope(
-    matter: dict[str, Any],
-    staff_ids: tuple[str, ...],
-    everything: bool,
-    paralegal_ids: tuple[str, ...] = (),
-) -> bool:
-    """Every matter, or one matching EACH side the job names: its responsible
-    attorney among ``staff_ids`` when any are named, AND one of its Person
-    Assisting among ``paralegal_ids`` when any are named."""
-    if everything:
-        return True
-    if not staff_ids and not paralegal_ids:
-        return False
-    if staff_ids and matter["staff_id"] not in staff_ids:
-        return False
-    return not paralegal_ids or bool(set(matter.get("assisting_ids") or ()) & set(paralegal_ids))
 
 
 def build(
@@ -74,12 +67,14 @@ def build(
     data: Path,
     log: Callable[[str], None],
 ) -> dict[str, Any]:
-    roster = staff_roster(seat)
-    listed = [
-        m
-        for m in open_matters(seat, list(firm.get("matter_statuses")))
-        if in_scope(m, job.attorney_staff_ids, job.scope_all, job.paralegal_staff_ids)
-    ]
+    rows = staff_rows(seat)
+    roster = roster_of(rows)
+    scope = getattr(job, "people", None)
+    who = people.resolve(scope, rows, people.firm_roster(firm)) if scope is not None else ()
+    ids = people.ids_of(who)
+    every = open_matters(seat, list(firm.get("matter_statuses")))
+    people.check_roles_listed(job, (bool(m.get("originating_listed")) for m in every), len(every))
+    listed = [m for m in every if people.in_scope(m, job, ids)]
     log(f"{len(listed)} open matters in scope")
     files_dir = data / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
@@ -97,7 +92,7 @@ def build(
         kept.append({**m, "court_hits": hits, "files": len(files), "responsible": roster.get(m["staff_id"], "")})
         prog.counts["kept"] = len(kept)
     log(f"{len(kept)} litigation matters kept")
-    return {"matters": kept, "staff": roster, "listed": len(listed)}
+    return {"matters": kept, "staff": roster, "listed": len(listed), "people": [p.as_dict() for p in who]}
 
 
 def files_of(data: Path, matter_id: str) -> list[dict[str, Any]]:

@@ -117,8 +117,39 @@ def test_the_schema_has_no_requester_field(lit) -> None:
     schema = mod.TOOLS["litigation_job_submit"][1]
     assert not {"requester", "message_ref", "request_text", "trigger"} & set(schema["properties"])
     assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"attorneys", "paralegals", "all"}
+    assert set(schema["properties"]) == {"attorneys", "paralegals", "mine", "all"}
     assert mod.TOOLS["litigation_job_status"][1]["required"] == ["job_id"]
+
+
+@pytest.mark.parametrize(
+    "args,scope",
+    [
+        ({"mine": True}, {"mine": True}),
+        (
+            {"mine": True, "attorneys": ["Pat Example"]},
+            {"mine": True, "attorneys": ["Pat Example"]},
+        ),
+        ({"mine": False}, {"all": True}),
+    ],
+)
+def test_my_cases_is_mine_never_the_whole_firm(lit, args, scope) -> None:
+    """2026-10-23: "my cases" ran firm-wide. ``mine`` reaches the broker, which
+    fills the verified sender; the model never names who "me" is."""
+    mod, client = lit
+    _email()
+    assert json.loads(mod.litigation_job_submit(args))["accepted"] is True
+    assert client.envelopes[0]["scope"] == scope
+    assert "requester" not in client.envelopes[0]["scope"]
+
+
+@pytest.mark.parametrize(
+    "args", [{"mine": True, "all": True}, {"mine": True, "paralegals": ["Dana"], "all": True}]
+)
+def test_mine_with_all_submits_nothing(lit, args) -> None:
+    mod, client = lit
+    _email()
+    assert json.loads(mod.litigation_job_submit(args))["accepted"] is False
+    assert client.envelopes == []
 
 
 @pytest.mark.parametrize(

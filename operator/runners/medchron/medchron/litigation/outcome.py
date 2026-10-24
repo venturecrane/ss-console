@@ -49,6 +49,13 @@ REASON_CODES = (
     # 2026-10-15, the staff reassignment: a name the staff list cannot settle
     # (unknown, more than one person, or the person to move to is inactive).
     "staff_unresolved",
+    # 2026-10-24, a people scope (``people.py``): "my cases" from an address no
+    # staff record carries (the firm's answer); a roster name the staff list
+    # cannot place (ours); a matter list that carries no originating staff on
+    # any row, so a person's files would be under-counted (ours).
+    "requester_unresolved",
+    "people_unresolved",
+    "roles_unlisted",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}

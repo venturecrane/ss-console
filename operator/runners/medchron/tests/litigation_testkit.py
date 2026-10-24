@@ -100,13 +100,16 @@ class Client:
             off = int(params.get("Offset") or 0)
             return {"value": rows[off : off + 500]}
         if path == "/staff":
-            return {
-                "value": [
-                    {"id": STAFF_A, "firstName": "Alpha", "lastName": "Example"},
-                    {"id": STAFF_B, "firstName": "Beta", "lastName": "Example"},
-                ]
-            }
+            return {"value": [dict(s) for s in self.seat.staff]}
         raise AssertionError(path)
+
+
+def staff_records() -> list[dict[str, Any]]:
+    """The fake tenant's staff list, the shape ``GET /staff`` returns."""
+    return [
+        {"id": STAFF_A, "firstName": "Alpha", "lastName": "Example", "email": "alpha@firm.example", "enabled": True},
+        {"id": STAFF_B, "firstName": "Beta", "lastName": "Example", "email": "beta@firm.example", "enabled": True},
+    ]
 
 
 class LitSeat(FakeSeat):
@@ -140,6 +143,7 @@ class LitSeat(FakeSeat):
             {"id": M1, "number": "100001", "title": "Gamma v. Delta", "personResponsibleStaffId": STAFF_A},
             {"id": M2, "number": "100002", "title": "Epsilon intake", "personResponsibleStaffId": STAFF_B},
         ]
+        self.staff = staff_records()
         self.client = Client(self)
         self.library_rows: list[dict] = []
 

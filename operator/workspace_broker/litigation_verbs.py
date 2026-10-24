@@ -45,8 +45,11 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
 6. the firm's litigation config is staged and its monthly budget authored and
    not yet spent this Pacific month;
 7. any attorneys named resolve, one each, against the firm's authored roster,
-   and any paralegals named against its ``paralegals`` list (both named: a
-   matter must match each);
+   and any paralegals named against its ``paralegals`` list. Both named: their
+   staff ids, and a matter must match each. One side only, or "my cases"
+   (``mine``): a people scope, every matter those people (the requester found
+   by email in Smokeball's staff list) hold any staff role on, resolved by the
+   runner (2026-10-24);
    (A staff reassignment, told apart by the email's own words in
    ``litigation_reassign``, skips 7: its people are read from those words,
    never the turn's scope, and resolved by the runner against the practice
@@ -84,8 +87,8 @@ from .litigation_intake import (
     operator_library_number,
     paralegal_roster,
     requested_report,
-    resolve_attorneys,
-    resolve_paralegals,
+    named_attorneys,
+    named_paralegals,
     scheduled_recipients,
     settings_of,
     skill_entry,
@@ -146,12 +149,13 @@ VERBS = (
 )
 
 _REQUEST_KEYS = {"trigger", "requester", "message_ref", "request_text", "scope"}
-#: Scope keys only root may set (resolved ids); a turn names people.
-_STAFF_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids")
+#: Scope keys only root may set (resolved ids, and the people scope, whose
+#: requester is the verified sender the broker fills); a turn names people.
+_STAFF_ID_KEYS = ("attorney_staff_ids", "paralegal_staff_ids", "people")
 #: A turn's named scope: each key -> (roster reader, resolver, envelope key).
 _NAMED_SCOPE = {
-    "attorneys": (attorney_roster, resolve_attorneys, "attorney_staff_ids"),
-    "paralegals": (paralegal_roster, resolve_paralegals, "paralegal_staff_ids"),
+    "attorneys": (attorney_roster, named_attorneys, "attorney_staff_ids"),
+    "paralegals": (paralegal_roster, named_paralegals, "paralegal_staff_ids"),
 }
 
 
@@ -310,7 +314,7 @@ class LitigationVerbs:
                 "request_text": request_text,
                 # A reassignment's people come from the email's words (``extra``),
                 # never the turn's scope; one runs at a time on the seat.
-                "scope": {"all": True} if report == "reassign" else self._resolve_scope(scope_in, firm),
+                "scope": {"all": True} if report == "reassign" else self._resolve_scope(scope_in, firm, requester),
                 "file_to_matter_id": file_to,
                 "file_to_matter_number": library,
                 "folder_name": folder,
@@ -426,40 +430,71 @@ class LitigationVerbs:
         return firm, cents
 
     @staticmethod
-    def _resolve_scope(scope_in: Any, firm: dict[str, Any] | None) -> Any:
-        """Named attorneys and paralegals become staff ids from the firm's
-        rosters (both named: the envelope carries both, and a matter must
-        match each); any other scope passes through for the envelope check.
+    def _place(scope_in: dict[str, Any], firm: dict[str, Any] | None) -> dict[str, dict[str, str]]:
+        """``{envelope id key: {roster name: staff id}}`` for every name the turn
+        passed, each checked against the firm's rosters.
 
         A name passed on one side that is on NO roster of that side but
         names exactly one person on the other side's roster is that person,
         on that side: the rosters are authored lists of different people, so
         "Irma's files" passed as an attorney is still Irma's files. Unknown on
         both sides, or ambiguous, refuses with the passed side's sentence."""
-        if not (isinstance(scope_in, dict) and scope_in and set(scope_in) <= set(_NAMED_SCOPE)):
-            return scope_in
-        found: dict[str, set[str]] = {}
-        for key in sorted(scope_in):
+        found: dict[str, dict[str, str]] = {}
+        for key in sorted(k for k in scope_in if k in _NAMED_SCOPE):
             names = scope_in[key]
             if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
                 raise _Refused(f"scope.{key} must be a list of names; nothing was queued")
             other = next(k for k in _NAMED_SCOPE if k != key)
             for name in names:
                 side = key
-                ids, why = _NAMED_SCOPE[key][1]([name], _NAMED_SCOPE[key][0](firm))
+                hits, why = _NAMED_SCOPE[key][1]([name], _NAMED_SCOPE[key][0](firm))
                 if why and " is not a" in why:
                     alt, alt_why = _NAMED_SCOPE[other][1]([name], _NAMED_SCOPE[other][0](firm))
                     if not alt_why:
-                        side, ids, why = other, alt, None
+                        side, hits, why = other, alt, None
                 if why:
                     raise _Refused(why)
-                found.setdefault(_NAMED_SCOPE[side][2], set()).update(ids)
-        if not found:
+                found.setdefault(_NAMED_SCOPE[side][2], {}).update(dict(hits))
+        return found
+
+    @classmethod
+    def _resolve_scope(cls, scope_in: Any, firm: dict[str, Any] | None, requester: str = "") -> Any:
+        """The turn's named scope, checked against the firm's rosters (a typo
+        is refused here, before anything is queued), as the envelope carries it:
+
+        * people on ONE side only, and/or ``mine`` (2026-10-24, the Captain's
+          rule: one person's files are every matter that person holds ANY
+          staff role on): ``{"people": {"names": [roster names], "requester":
+          <the verified sender when mine, else null>}}``. The runner finds every
+          Smokeball record of each person and of the requester by email.
+        * attorneys AND paralegals named: their staff ids, and a matter must
+          match each (``attorney_staff_ids`` + ``paralegal_staff_ids``), as before.
+
+        ``mine`` with ``all``, or with both sides named, is refused. Any other
+        scope passes through for the envelope check."""
+        if not isinstance(scope_in, dict) or not scope_in or not set(scope_in) <= {*_NAMED_SCOPE, "mine"}:
+            if isinstance(scope_in, dict) and "mine" in scope_in:
+                raise _Refused("ask for your own cases or for all of the firm's cases, not both; nothing was queued")
+            return scope_in
+        mine = scope_in.get("mine", False)
+        if not isinstance(mine, bool):
+            raise _Refused("scope.mine must be true or false; nothing was queued")
+        found = cls._place(scope_in, firm)
+        if len(found) == 2:
+            if mine:
+                raise _Refused(
+                    "your own cases cannot be combined with both attorneys and paralegals named; name one side "
+                    "with your own cases, or both sides without them; nothing was queued"
+                )
+            return {k: sorted(set(v.values())) for k, v in sorted(found.items())}
+        names = sorted({n for side in found.values() for n in side})
+        if not names and not mine:
             raise _Refused(f"no {'attorney' if 'attorneys' in scope_in else 'paralegal'} was named; nothing was queued")
-        return {k: sorted(v) for k, v in sorted(found.items())}
+        return {"people": {"names": names, "requester": requester if mine else None}}
 
     def _audit_submitted(self, job_id: str, valid: dict[str, Any], cents: int) -> None:
         scope = valid["scope"]
+        people = scope.get("people") or {}
         self._audit(
             AUDIT_TYPES["queued"],
             {
@@ -467,6 +502,8 @@ class LitigationVerbs:
                 "trigger": valid["trigger"],
                 "scope": "all"
                 if scope.get("all")
+                else "people"
+                if people
                 else "+".join(
                     n
                     for n, k in (("attorneys", "attorney_staff_ids"), ("paralegals", "paralegal_staff_ids"))
@@ -476,6 +513,7 @@ class LitigationVerbs:
                 **({"reassign": valid["reassign"]} if valid.get("reassign") else {}),
                 "attorney_count": len(scope.get("attorney_staff_ids") or []),
                 "paralegal_count": len(scope.get("paralegal_staff_ids") or []),
+                **({"people_count": len(people["names"]), "mine": bool(people["requester"])} if people else {}),
                 "requested_by": valid["requester"],
                 "request_ref": valid["message_ref"],
                 "month_cents_used": cents,

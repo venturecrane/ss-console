@@ -1,8 +1,9 @@
 """`book`: the workbook the firm reads, styled the way the 2026-10-07 hand-run
 workbooks were (bold grey header, wrapped top-aligned cells, frozen header).
 
-Tabs: Summary, Needs action, Settled - dismissal owed, All defendants,
-Discovery, Case notes, Not filed, What changed.
+Tabs: Summary, (a people-scoped list only) Litigated files tagged on, Needs
+action, Settled - dismissal owed, All defendants, Discovery, Case notes, Not
+filed, What changed.
 
 The Responsible column is the Smokeball staff roster's name for the matter's
 responsible staff id (inventory), never a name a model wrote. Every string
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from . import vocab
+from .people import role_labels
 
 HEADER_FILL = "DDDDDD"
 DEF_HEADER = [
@@ -298,6 +300,39 @@ def _changed_rows(ms: list[dict[str, Any]], changes: dict[str, list[dict[str, An
     return changed
 
 
+#: A people-scoped list's own tab (2026-10-24): every litigated file each person
+#: holds a staff role on, whether or not a complaint is filed yet.
+TAGGED = "Litigated files tagged on"
+
+
+def tagged_header(several: bool) -> list[str]:
+    return (["Person"] if several else []) + ["Matter #", "Case", "Role", "Case status", "Complaint filed"]
+
+
+def tagged_rows(ms: list[dict[str, Any]], matters: list[dict[str, Any]], who: list[dict[str, Any]]) -> list[list[Any]]:
+    """One row per (person, litigated matter they hold a role on): the person
+    when several, matter #, case, their role(s), case status, complaint filed.
+    ``matters`` are the inventory's (they carry ``roles``); ``who`` its people."""
+    roles = {str(m.get("id")): m.get("roles") or {} for m in matters}
+    several = len(who) > 1
+    rows: list[list[Any]] = []
+    for p in who:
+        for m in sorted(ms, key=lambda m: str(m.get("number"))):
+            held = role_labels(roles.get(str(m.get("matter_id"))), p.get("ids") or ())
+            if held:
+                rows.append(
+                    ([p.get("name") or ""] if several else [])
+                    + [
+                        m.get("number"),
+                        m.get("case_name") or m.get("title") or "",
+                        ", ".join(held),
+                        _status(m),
+                        _date(m.get("complaint_filed")),
+                    ]
+                )
+    return rows
+
+
 def build(
     ms: list[dict[str, Any]],
     changes: dict[str, list[dict[str, Any]]],
@@ -305,16 +340,21 @@ def build(
     as_of: dt.date,
     *,
     discovery: bool = True,
+    tagged: tuple[list[str], list[list[Any]]] | None = None,
 ) -> dict[str, Any]:
     """``discovery=False`` (a court-only request) leaves the Discovery tab out:
     its values were not read this run, and a list never shows a stale column
-    as current."""
+    as current. ``tagged`` (header, rows), for a people scope, adds the
+    "Litigated files tagged on" tab after the Summary."""
     from openpyxl import Workbook
 
     rows = defendant_rows(ms)
     need = [r for r in rows if needs_action(r)]
     wb = Workbook()
     _summary(wb, ms, need, as_of)
+    if tagged is not None:
+        header, trows = tagged
+        _sheet(wb, TAGGED, header, trows, ([22] if len(header) == 6 else []) + [10, 34, 28, 24, 18])
     _sheet(wb, "Needs action", DEF_HEADER, [r["cells"] for r in need], DEF_WIDTHS)
     _sheet(
         wb,
@@ -355,4 +395,10 @@ def build(
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out)
-    return {"matters": len(ms), "defendant_rows": len(rows), "needs_action": len(need), "changes": len(changed)}
+    return {
+        "matters": len(ms),
+        "defendant_rows": len(rows),
+        "needs_action": len(need),
+        "changes": len(changed),
+        **({"tagged_rows": len(tagged[1])} if tagged is not None else {}),
+    }

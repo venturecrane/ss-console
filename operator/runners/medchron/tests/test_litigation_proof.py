@@ -100,9 +100,9 @@ def test_a_review_hold_fails_resumable_with_review_held_and_files_nothing(tmp_pa
     r = _run(tmp_path, seat)
     real = review.findings
 
-    def drifted(xlsx, finals, in_scope):
+    def drifted(xlsx, finals, in_scope, tagged=None):
         finals = [{**m, "defendants": [{**d, "name": "Someone Else"} for d in m["defendants"]]} for m in finals]
-        return real(xlsx, finals, in_scope)
+        return real(xlsx, finals, in_scope, tagged)
 
     monkeypatch.setattr(review, "findings", drifted)
     v = r.run()

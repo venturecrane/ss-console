@@ -13,9 +13,10 @@ Three sources, all authored, none from the model:
   0640): the monthly budget the broker
   enforces at submit, and the ``attorneys`` map (display name -> Smokeball
   staff id) the broker resolves a requester's "for <attorney>" against, and
-  the ``paralegals`` map the same for "<paralegal>'s files" (the matter's
-  Person Assisting). The broker has no Smokeball access, so the maps are the
-  authored roster.
+  the ``paralegals`` map the same for "<paralegal>'s files". A name on one
+  side alone becomes a people scope (any staff role, by the roster's name);
+  both sides named keep the ids (responsible AND Person Assisting). The
+  broker has no Smokeball access, so the maps are the authored roster.
 
 ``operator_library_number`` is this lane's copy of
 ``drafting_intake.operator_library_number``; ``tests/test_litigation_intake.py``
@@ -173,28 +174,48 @@ def attorney_roster(firm: dict[str, Any] | None) -> dict[str, str]:
 
 
 def paralegal_roster(firm: dict[str, Any] | None) -> dict[str, str]:
-    """The ``paralegals`` map (name -> the staff id a matter carries as its
-    Person Assisting), read the same way as the attorneys'."""
+    """The ``paralegals`` map (name -> staff id; the id a matter carries as its
+    Person Assisting when both sides are named), read the same way as the attorneys'."""
     return _roster(firm, "paralegals")
 
 
-def _resolve(names: list[str], roster: dict[str, str], noun: str, article: str) -> tuple[list[str], str | None]:
-    ids: list[str] = []
+def _resolve_named(
+    names: list[str], roster: dict[str, str], noun: str, article: str
+) -> tuple[list[tuple[str, str]], str | None]:
+    """([(the roster's own name, staff id)], None) or ([], the refusal sentence).
+    The roster's name is what a people scope carries to the runner, which finds
+    every Smokeball record of that person by it (``litigation/people.py``)."""
+    found: list[tuple[str, str]] = []
     for raw in names:
         name = " ".join(str(raw).split()).lower()
         name = re.sub(r"['’]s$", "", name)  # "Irma's" is Irma
         if not name:
             continue
-        exact = [sid for full, sid in roster.items() if " ".join(full.split()).lower() == name]
-        hits = exact or [sid for full, sid in roster.items() if name in full.lower().split()]
-        if len(set(hits)) != 1:
+        exact = [(full, sid) for full, sid in roster.items() if " ".join(full.split()).lower() == name]
+        hits = exact or [(full, sid) for full, sid in roster.items() if name in full.lower().split()]
+        if len({sid for _full, sid in hits}) != 1:
             known = ", ".join(sorted(roster)) or "none authored"
             why = f"matches more than one {noun}" if hits else f"is not {article} {noun} on the firm's list"
             return [], f'"{raw}" {why} (the list: {known}); nothing was queued'
-        ids.append(hits[0])
-    if not ids:
+        found.append((" ".join(hits[0][0].split()), hits[0][1]))
+    if not found:
         return [], f"no {noun} was named; nothing was queued"
-    return sorted(set(ids)), None
+    return sorted(set(found)), None
+
+
+def _resolve(names: list[str], roster: dict[str, str], noun: str, article: str) -> tuple[list[str], str | None]:
+    found, why = _resolve_named(names, roster, noun, article)
+    return sorted({sid for _full, sid in found}), why
+
+
+def named_attorneys(names: list[str], roster: dict[str, str]) -> tuple[list[tuple[str, str]], str | None]:
+    """``resolve_attorneys`` keeping each match's roster name."""
+    return _resolve_named(names, roster, "attorney", "an")
+
+
+def named_paralegals(names: list[str], roster: dict[str, str]) -> tuple[list[tuple[str, str]], str | None]:
+    """``resolve_paralegals`` keeping each match's roster name."""
+    return _resolve_named(names, roster, "paralegal", "a")
 
 
 def resolve_attorneys(names: list[str], roster: dict[str, str]) -> tuple[list[str], str | None]:
@@ -219,6 +240,8 @@ __all__ = [
     "firm_config",
     "initiation_allows",
     "monthly_budget_cents",
+    "named_attorneys",
+    "named_paralegals",
     "operator_library_number",
     "paralegal_roster",
     "requested_report",

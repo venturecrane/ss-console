@@ -26,7 +26,7 @@ The schema::
     # optional
     attorneys:             {display name: staff uuid}   the broker's scope resolver
     paralegals:            {display name: staff uuid}   the same, for a paralegal's
-                                           files (the matter's Person Assisting)
+                                           files (and, runner side, a people scope's names)
     discovery_patterns:    [regex]         file names that read as discovery papers
     email_months:          int >= 1        older emails are not candidates (12)
     min_court_hits:        int >= 1        court-named files a matter needs (1)

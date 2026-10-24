@@ -87,8 +87,19 @@ ASSISTING_KEYS = ("personAssistingStaffIds", "personAssistingStaffId", "personAs
 def assisting_ids(row: dict[str, Any]) -> list[str]:
     """Every Person Assisting staff id on a matter row, lowercased, in order,
     once each: a string, a list of strings, or a list of ``{"id": ...}``."""
+    return _ids_under(row, ASSISTING_KEYS)
+
+
+#: The originating staff on a /matters LIST row: ``originatingStaffId`` and an
+#: ``originatingStaffs`` list of links, read the same tolerant way as assisting.
+ORIGINATING_KEYS = ("originatingStaffIds", "originatingStaffId", "originatingStaffs")
+RESPONSIBLE, ASSISTING, ORIGINATING = "Responsible", "Assisting", "Originating"
+
+
+def _ids_under(row: dict[str, Any], keys: Iterable[str]) -> list[str]:
+    """Every staff id under ``keys``, lowercased, in order, once each."""
     out: list[str] = []
-    for key in ASSISTING_KEYS:
+    for key in keys:
         raw = row.get(key)
         items = [raw] if isinstance(raw, (str, dict)) else raw if isinstance(raw, list) else []
         for item in items:
@@ -96,6 +107,27 @@ def assisting_ids(row: dict[str, Any]) -> list[str]:
             if isinstance(sid, str) and sid.strip():
                 out.append(sid.strip().lower())
     return list(dict.fromkeys(out))
+
+
+def staff_roles(row: dict[str, Any]) -> dict[str, list[str]]:
+    """``{staff id: [Responsible | Assisting | Originating, ...]}``: every staff
+    role a matter row names (2026-10-24: one person's files are every matter
+    that person holds ANY staff role on). There is no supervisor key on the row."""
+    roles: dict[str, list[str]] = {}
+    for label, keys in (
+        (RESPONSIBLE, ("personResponsibleStaffId",)),
+        (ASSISTING, ASSISTING_KEYS),
+        (ORIGINATING, ORIGINATING_KEYS),
+    ):
+        for sid in _ids_under(row, keys):
+            roles.setdefault(sid, []).append(label)
+    return roles
+
+
+def originating_listed(row: dict[str, Any]) -> bool:
+    """True when the row carries an originating key at all (even empty): the
+    list's shape still names who brought a matter in."""
+    return any(k in row for k in ORIGINATING_KEYS)
 
 
 def open_matters(seat: Any, statuses: Iterable[str]) -> list[dict[str, Any]]:
@@ -112,6 +144,8 @@ def open_matters(seat: Any, statuses: Iterable[str]) -> list[dict[str, Any]]:
                 "title": str(row.get("title") or ""),
                 "staff_id": str(row.get("personResponsibleStaffId") or "").lower(),
                 "assisting_ids": assisting_ids(row),
+                "roles": staff_roles(row),
+                "originating_listed": originating_listed(row),
                 "status": status,
             }
     return list(out.values())

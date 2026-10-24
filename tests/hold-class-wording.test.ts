@@ -48,7 +48,9 @@ const SKILLS = {
     // The litigation lane can produce only these (holds._LITIGATION + the default).
     // staff_unresolved: the staff reassignment (2026-10-15) names someone the
     // firm's staff list cannot settle; the firm's one question.
-    classes: ['smd_finishing', 'nothing_in_scope', 'staff_unresolved'],
+    // requester_unresolved (2026-10-24): "my cases" from an address no staff
+    // record in Smokeball carries; the firm's one ask, whose files to list.
+    classes: ['smd_finishing', 'nothing_in_scope', 'staff_unresolved', 'requester_unresolved'],
   },
 } as const
 
@@ -99,6 +101,7 @@ describe('hold classes: the closed set', () => {
         'which_chronology',
         'rerouted_to_update',
         'staff_unresolved',
+        'requester_unresolved',
       ].sort()
     )
   })
@@ -132,7 +135,7 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
         const w = wording(held, cls)
         expect(shapes, `${cls} must be mirrored in ${cfg.shapes}`).toContain(flat(w))
         expect(w).not.toMatch(/—/)
-        if (cls === 'staff_unresolved') {
+        if (cls === 'staff_unresolved' || cls === 'requester_unresolved') {
           // The firm's question: exactly one, specific.
           expect((w.match(/\?/g) ?? []).length).toBe(1)
           expect(w).toMatch(/all that is needed/)
