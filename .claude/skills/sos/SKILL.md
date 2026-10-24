@@ -28,7 +28,8 @@ description: Start of session for SMD Services — briefing, cadence, worktree b
 2. Call `crane_schedule(action: "planned-events", from: "{today}", to: "{today}", type: "planned")`.
 3. **Orphan worktree backstop** — see below. Auto-remove provably-safe orphans from sessions that ended unnaturally; surface the rest. Compute a one-line worktree status line for the briefing.
 4. **What we owe clients** — see below. Compute a one-line `[owed]` status line.
-5. Display briefing. Prepend the worktree status line from Step 3 and the `[owed]` line from Step 4 (omit either when it has nothing to say). Highlight any Resume block or P0 issues.
+4b. **Doctrine reviews past due.** Run `awk -v d="$(date +%F)" '/^  - id:/{id=$3} /^    review:/{if ($2 < d) printf "%s ", id}' docs/doctrine/agent-operating-doctrine.md`. Non-empty output becomes `[review] past due: <ids>. Score each against its success_criterion and write last_review.` Four mechanisms sat four weeks past their 2026-09-30 date before anyone noticed (found 2026-10-24); a review date nobody is shown is ceremony.
+5. Display briefing. Prepend the worktree status line from Step 3, the `[owed]` line from Step 4 and the `[review]` line from Step 4b (omit any that has nothing to say). Highlight any Resume block or P0 issues.
 6. If cadence items overdue, ask: "Execute any now, or skip?"
 7. **STOP.** If Resume block: "Previous session was working on [summary]. Resume or focus elsewhere?" Otherwise: "What would you like to focus on?"
 8. **Once the Captain names the focus, take the stance** (see below). Draft the winning line, set it, and move.
