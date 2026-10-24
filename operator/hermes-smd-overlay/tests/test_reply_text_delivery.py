@@ -371,3 +371,17 @@ def test_a_broker_refusal_answers_nothing(monkeypatch):
             anchor={"kind": "agentmail_message", "message_id": "am-in-6"},
         )
     assert not answered_messages.answered("am-in-6")
+
+
+def test_the_seat_text_reply_carries_a_body_the_real_gate_reads() -> None:
+    """2026-10-24, pilot: the seat's own text reply sends ``html: ""`` beside the
+    real ``text``. The gate's body extraction stopped at the empty ``html`` and
+    refused every text-only reply as bodiless. The tests above stub the gate, so
+    this composes the two real pieces."""
+    trust = load_plugin("hermes-smd-trust")
+    reply = load_plugin("hermes-smd-reply")
+    args = reply.text_delivery.draft_args("scott@smd.services", "Review ran. Nothing changed.")
+    assert trust.outbound._extract_body(args) == "Review ran. Nothing changed."
+    # Still fails closed when every body key is empty, and when none is present.
+    assert trust.outbound._extract_body({"to": ["a@b.c"], "html": "", "text": "  "}) == ""
+    assert trust.outbound._extract_body({"to": ["a@b.c"]}) is None
