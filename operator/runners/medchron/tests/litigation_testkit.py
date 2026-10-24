@@ -104,7 +104,25 @@ class Client:
             return {"value": rows[off : off + 500]}
         if path == "/staff":
             return {"value": [dict(s) for s in self.seat.staff]}
+        if path.startswith("/matters/") and path.count("/") == 2:
+            # GET /matters/{id}: the one read that carries a matter's tags.
+            mid = path.split("/")[2]
+            self.seat.matter_reads.append(mid)
+            errors = self.seat.tag_errors.get(mid) or []
+            if errors:
+                raise errors.pop(0)
+            row = next(m for m in self.seat.matters if m["id"] == mid)
+            return {**row, "tags": [dict(t) for t in self.seat.tags.get(mid, [])]}
         raise AssertionError(path)
+
+
+def staff_tag(staff_id: str) -> dict[str, Any]:
+    """A ``type: "Staff"`` tag entry, the shape ``GET /matters/{id}`` returns."""
+    return {"id": staff_id, "type": "Staff", "staff": {"id": staff_id, "href": "/staff/x", "rel": "Staff"}}
+
+
+def custom_tag(name: str) -> dict[str, Any]:
+    return {"id": f"tag-{name}", "type": "Custom", "name": name, "color": "#000000"}
 
 
 def staff_records() -> list[dict[str, Any]]:
@@ -147,6 +165,11 @@ class LitSeat(FakeSeat):
             {"id": M2, "number": "100002", "title": "Epsilon intake", "personResponsibleStaffId": STAFF_B},
         ]
         self.staff = staff_records()
+        #: matter id -> its tags (GET /matters/{id} only, never the list row).
+        self.tags: dict[str, list[dict[str, Any]]] = {}
+        #: matter id -> exceptions the next GET /matters/{id} calls raise, in order.
+        self.tag_errors: dict[str, list[Exception]] = {}
+        self.matter_reads: list[str] = []
         self.client = Client(self)
         self.library_rows: list[dict] = []
 

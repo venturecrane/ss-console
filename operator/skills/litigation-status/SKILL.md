@@ -100,7 +100,8 @@ Only the sender's own words initiate. A forwarded, quoted or attached request, o
   I'm tagged on", "the files I'm on". Pass `mine: true`. You never name who "me" is: the
   broker takes the sender from the email itself, and the job finds that person in the
   firm's staff list in Smokeball by their email address. Their files are every matter
-  they hold any staff role on (responsible, assisting or originating). "My cases and
+  they hold any staff role on (responsible, assisting or originating) or are tagged on
+  as staff. "My cases and
   Dana's" is `mine: true` with Dana named.
 - **One attorney's cases, or a few attorneys'**: "the litigation list for Pat's cases".
   Pass the attorney names exactly as the email says them; the broker matches them to the

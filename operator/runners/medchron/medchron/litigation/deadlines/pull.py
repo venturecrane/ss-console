@@ -24,7 +24,7 @@ import gzip
 import json
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from ...arrivals import assisting_ids, getter, originating_listed, paged, staff_roles
 from .. import people
@@ -51,18 +51,21 @@ def _listing(payload: Any) -> list[Any]:
     return []
 
 
-def view(row: dict[str, Any]) -> dict[str, Any]:
-    """A raw matter row as ``people.in_scope`` reads it (the status list's shape)."""
+def view(row: dict[str, Any], tagged: Iterable[str] = ()) -> dict[str, Any]:
+    """A raw matter row as ``people.in_scope`` reads it (the status list's
+    shape), with ``tagged`` (its Staff tags, ``people.staff_tags``) as roles."""
     return {
         "staff_id": str(row.get("personResponsibleStaffId") or "").lower(),
         "assisting_ids": assisting_ids(row),
-        "roles": staff_roles(row),
+        "roles": people.with_staff_tags(staff_roles(row), tagged),
     }
 
 
-def in_scope(row: dict[str, Any], scope: Any, people_ids: frozenset[str] = frozenset()) -> bool:
+def in_scope(
+    row: dict[str, Any], scope: Any, people_ids: frozenset[str] = frozenset(), tagged: Iterable[str] = ()
+) -> bool:
     """The litigation lane's ONE scope rule (``people.in_scope``) on a raw matter row."""
-    return people.in_scope(view(row), scope, people_ids)
+    return people.in_scope(view(row, tagged), scope, people_ids)
 
 
 def staff_rows(get: Callable[..., Any]) -> list[dict[str, Any]]:
@@ -77,32 +80,33 @@ def staff_names(get: Callable[..., Any], rows: list[dict[str, Any]] | None = Non
 
 
 def list_in_scope(
-    get: Callable[..., Any], scope: Any, people_ids: frozenset[str] = frozenset()
+    get: Callable[..., Any], scope: Any, people_ids: frozenset[str] = frozenset(), tags_path: Path | None = None
 ) -> tuple[int, list[dict[str, Any]]]:
     """(rows listed, the in-scope matter stubs), Open first then Pending. A
     people scope over a list with no originating key on any row holds
-    (``people.check_roles_listed``)."""
-    listed, keep, originating = 0, [], []
+    (``people.check_roles_listed``); it also counts every listed matter's
+    Staff tags (``people.staff_tags``, kept at ``tags_path``)."""
+    listed, rows = 0, []
     for status in STATUSES:
         for r in paged(get, "/matters", Status=status, IsLead=False):
             listed += 1
-            if not isinstance(r, dict) or r.get("isLead") is True or not r.get("id"):
-                continue
-            originating.append(originating_listed(r))
-            if not in_scope(r, scope, people_ids):
-                continue
-            keep.append(
-                {
-                    "id": r["id"],
-                    "number": r.get("number"),
-                    "title": r.get("title"),
-                    "status": status,
-                    "resp": r.get("personResponsibleStaffId"),
-                    "assist": r.get("personAssistingStaffId"),
-                    "matterType": r.get("matterTypeId"),
-                }
-            )
-    people.check_roles_listed(scope, originating, len(originating))
+            if isinstance(r, dict) and r.get("isLead") is not True and r.get("id"):
+                rows.append((status, r))
+    people.check_roles_listed(scope, [originating_listed(r) for _s, r in rows], len(rows))
+    tags = people.staff_tags(scope, get, [str(r["id"]) for _s, r in rows], tags_path)
+    keep = [
+        {
+            "id": r["id"],
+            "number": r.get("number"),
+            "title": r.get("title"),
+            "status": status,
+            "resp": r.get("personResponsibleStaffId"),
+            "assist": r.get("personAssistingStaffId"),
+            "matterType": r.get("matterTypeId"),
+        }
+        for status, r in rows
+        if in_scope(r, scope, people_ids, tags.get(str(r["id"]), ()))
+    ]
     return listed, keep
 
 
@@ -147,7 +151,7 @@ def run(seat: Any, scope: Any, data: Path, log: Callable[[str], None], roster: d
         rows = staff_rows(get)
         spec = getattr(scope, "people", None)
         who = people.resolve(spec, rows, roster or {}) if spec is not None else ()
-        listed, stubs = list_in_scope(get, scope, people.ids_of(who))
+        listed, stubs = list_in_scope(get, scope, people.ids_of(who), root / people.TAGS_FILE)
         dump(
             head,
             {

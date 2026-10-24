@@ -75,6 +75,7 @@ WORLD: dict[str, Any] = {
 class Client:
     def __init__(self, world: dict[str, Any], pending: tuple[str, ...] = (M3,)) -> None:
         self.world, self.pending, self.calls = world, pending, []
+        self.tags: dict[str, list[dict[str, Any]]] = {}
 
     def get(self, path: str, **params: Any) -> Any:
         self.calls.append((path, params))
@@ -85,6 +86,8 @@ class Client:
             return {"value": [{"id": STAFF_A, "firstName": "Alpha", "lastName": "Example"},
                               {"id": STAFF_B, "firstName": "Beta", "lastName": "Example"},
                               {"id": PARA, "firstName": "Para", "lastName": "Example"}]}  # fmt: skip
+        if path.startswith("/matters/") and path.count("/") == 2:
+            return {**self.world[path.split("/")[2]][0], "tags": list(self.tags.get(path.split("/")[2], []))}
         mid = params.get("MatterId") or path.split("/")[2]
         _row, layout, events, tasks, names = self.world[mid]
         if path.endswith("/layouts"):
