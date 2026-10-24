@@ -73,7 +73,7 @@ def build(
     who = people.resolve(scope, rows, people.firm_roster(firm)) if scope is not None else ()
     ids = people.ids_of(who)
     every = open_matters(seat, list(firm.get("matter_statuses")))
-    people.check_roles_listed(job, (m.get("originating_listed") for m in every), len(every))
+    people.check_roles_listed(job, (bool(m.get("originating_listed")) for m in every), len(every))
     listed = [m for m in every if people.in_scope(m, job, ids)]
     log(f"{len(listed)} open matters in scope")
     files_dir = data / "files"
