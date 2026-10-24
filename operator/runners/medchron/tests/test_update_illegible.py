@@ -29,8 +29,10 @@ def test_the_note_is_the_firms_own_handwritten_wording_verbatim():
 
     import medchron
 
+    from medchron import wording
+
     prompt = (Path(medchron.__file__).parent / "prompts" / "map-system.md").read_text(encoding="utf-8")
-    assert IL.HOUSE_NOTE in prompt
+    assert IL.HOUSE_NOTE in wording.fill(prompt) and "{{WORDING:NTD_ILLEGIBLE}}" in prompt
 
 
 def test_an_emptied_entry_on_a_handwritten_page_keeps_its_visit_with_the_note():

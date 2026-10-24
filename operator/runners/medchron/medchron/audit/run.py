@@ -5,6 +5,7 @@ CONTROL is non-optional: every control_every-th claim is re-run against a
 page from a DIFFERENT exhibit and MUST come back unsupported. A verifier that
 rubber-stamps makes every verdict above it worthless, so a wrongly SUPPORTED
 control makes the round INVALID (2) and nothing repairs on an invalid audit.
+(2026-10-23: one whose page text carries the claim is retired, ``retired.py``.)
 
 TEXT MODE (`levers.audit_mode: text`): a claim whose cited pages all carry a
 native text layer is audited against a cached window of page text; the
@@ -180,10 +181,7 @@ class Round:
         with self._lock:
             self.counter["n"] += 1
             do_ctl = self.counter["n"] % self.control_every == 0
-        if not do_ctl:
-            return
-        other = control_exhibit(int(c["exhibit"]), pdfs)
-        if other is None:
+        if not do_ctl or (other := control_exhibit(int(c["exhibit"]), pdfs)) is None:
             return
         text_ctl = None
         if index is not None and c.get("window"):
@@ -220,6 +218,9 @@ class Round:
         except Exception as exc:  # noqa: BLE001 - a control verification raising is recorded as an ERROR verdict for that claim; the audit continues
             cv, kind, extra = {**ERROR, "note": str(exc)[:200]}, f"control(vs Ex{other})", {"mode": self.mode}
         cv.pop("supporting_pages", None)
+        if cv.get("verdict") == "SUPPORTED":
+            block = text_ctl[1] if text_ctl else None
+            extra = {**extra, **retired.retire_if_carried(self.paths.out, c, other, block, pdfs[other], self.log)}
         CL.append_row(
             self.paths.results,
             {

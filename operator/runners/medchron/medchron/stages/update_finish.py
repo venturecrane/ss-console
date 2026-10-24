@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import icd_tables
-from ..audit import claims as CL, coverage as audit_coverage
+from ..audit import claims as CL, coverage as audit_coverage, retired
 from ..audit.page_text import exhibit_paths
 from ..audit.run import AuditPaths
 from ..update import assemble as A, body as B, collect as C, docx_md, handwritten as H, proofs as P
@@ -276,6 +276,7 @@ def run_proofs(sr: StageRun) -> int:
         respelled=dict(rep.get("provider_spelling_from_audit") or {}),
         review_named=RR.named_values(read_json(ud / "review_repair.json", {})) | redate_named,
         redate_moves=redate_moves,
+        retired_controls=retired.keys(out),
     )
     r = P.run(x)
     for ln in r.lines:

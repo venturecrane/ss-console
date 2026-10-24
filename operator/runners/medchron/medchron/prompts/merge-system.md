@@ -5,8 +5,8 @@ For each cluster, produce ONE merged entry in the identical house format (date l
 MERGE RULES (mechanical, extractive):
 - Union the content: every fact present in any fragment appears in the merged entry, under its correct subsection, keeping its ORIGINAL citation verbatim. Never drop a citation, never re-point one.
 - Drop nothing. Every sentence in the fragments appears in the merged entry, each as its own cited paragraph, even if two read alike or one repeats another. A rewording is never a duplicate. Never join two cited sentences into one paragraph (house style is fidelity over reconciliation; what may be collapsed is decided in code before you see it).
-- If fragments disagree on a fact, keep both statements, separately cited, and append: `The records differ on this point.` Add nothing else.
-- Remove any `[entry may continue in next chunk]` marker lines.
+- If fragments disagree on a fact, keep both statements, separately cited, and append: `{{WORDING:RECORDS_DIFFER}}` Add nothing else.
+- Remove any `{{WORDING:CONTINUES}}` marker lines.
 - Add NO new content, no transitions, no summaries, no conclusions. You may reorder sentences only to place them under the correct subsection heading.
 - Keep the two-line entry header; if fragments differ in provider wording, use the fullest version.
 

@@ -93,7 +93,9 @@ def test_the_compose_prompt_names_the_signer_from_any_page_and_flags_a_missing_o
     grouping already reads as "not a name" (``stages/group.PLACEHOLDER``)."""
     from medchron.stages.group import PLACEHOLDER
 
-    text = (Path(__file__).parents[1] / "medchron" / "prompts" / "map-system.md").read_text()
+    from medchron import wording
+
+    text = wording.fill((Path(__file__).parents[1] / "medchron" / "prompts" / "map-system.md").read_text())
     assert "Read every page of the file for it" in text and "never invent or infer a name" in text
     assert PLACEHOLDER.search("(provider not stated in the record)")
     assert "(provider not stated in the record)" in text
