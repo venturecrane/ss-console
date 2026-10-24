@@ -426,7 +426,7 @@ function matching(value: unknown, re: RegExp): string | null {
   return typeof value === 'string' && re.test(value) ? value : null
 }
 
-/** An absent routine is a person's request (null); a present one must be well-formed. */
+/** An absent routine means the seat named none (null); a present one must be well-formed. */
 function parseShortfallRoutine(value: unknown): string | null | false {
   if (value === null || value === undefined || value === '') return null
   return matching(value, SHORTFALL_NAME_RE) ?? false
