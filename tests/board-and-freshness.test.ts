@@ -96,6 +96,17 @@ describe('board: set / refresh / peers', () => {
     expect(out).toContain('Side work off this line goes to another session')
   })
 
+  it('a registered session with no mission is told to draft one, with the stance', () => {
+    // SessionStart registers the record before any focus exists; without
+    // this branch such a session would see no stance at all.
+    const unset = '/fake/worktrees/unset'
+    board(['set', unset, '--pid', String(process.pid)])
+    const out = board(['refresh', unset])
+    expect(out).toContain('[mission] not set')
+    expect(out).toContain('draft a winning line')
+    expect(out).toContain('Law 16 path first')
+  })
+
   it('refresh with no record prints nothing and does not crash', () => {
     expect(board(['refresh', '/fake/none'])).toBe('')
   })
