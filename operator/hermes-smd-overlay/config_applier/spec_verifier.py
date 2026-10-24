@@ -354,6 +354,9 @@ def judge(
 def write_state(verdict: SpecVerdict, path: Path = STATE_PATH) -> None:
     """``path`` 0644 by rename, in a 0755 directory: the gate (another uid) reads it."""
     path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    # mkdir's mode is masked by the umask and ignored for an existing directory,
+    # so the mode is set explicitly: a narrower one would blind the heartbeat.
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - root-owned 0755 so the hermes-uid gate's heartbeat can traverse it to read the root-written 0644 state.json; no uid but root can write here
     os.chmod(path.parent, 0o755)
     fd, tmp = tempfile.mkstemp(prefix=".state.", dir=str(path.parent))
     try:
