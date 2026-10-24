@@ -98,7 +98,9 @@ def rederive(sr: StageRun, before: str, after: str) -> str:
                 continue  # only the removed entry carried it
             day, code, prov = now[key]
             same_day = [e for e in entries if e["iso"] == day]
-            best = max(same_day, key=lambda e: len(BD._toks(e.get("provider")) & BD._toks(prov)), default=None)
+            best = max(
+                same_day, key=lambda e: len(BD._toks(str(e.get("provider") or "")) & BD._toks(prov)), default=None
+            )
             desc = c[1] if len(c) > 1 else ""
             out.append(f"| {code} | {desc} | {day[5:7]}/{day[8:10]}/{day[:4]} | {best['ref'] if best else ''} |")
         lines[first:end] = out

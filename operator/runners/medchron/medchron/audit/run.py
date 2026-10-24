@@ -35,7 +35,7 @@ from typing import Any, Callable
 from .. import llm
 from ..limits import LimitHold
 from . import anchors as AN, claims as CL, controls, negation as NG, verify as VF
-from .control_runs import ERROR, control_exhibit, institution, retest_exhibit  # noqa: F401 - re-exported
+from .control_runs import ERROR, control_exhibit, institution, retest_exhibit  # noqa: F401 - re-exported: tests and callers import these names from run
 from . import control_runs as CR
 from .handwritten_evidence import statements_for
 from .page_text import PageIndex, exhibit_paths
