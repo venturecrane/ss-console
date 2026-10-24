@@ -23,7 +23,7 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     help:
       what: "Enters a vendor's invoice as an unfinalized expense on its matter."
       example: 'Please enter the attached records invoice as an expense.'

@@ -43,10 +43,10 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     help:
       what: 'Drafts a mediation brief, discovery, discovery responses, a memo or a deposition outline on a matter.'
-      example: 'On matter XXXXXX, draft the mediation brief.'
+      example: 'On matter [number], draft the mediation brief.'
       admin_only: true
     addon: pi
     weight: light # the turn only resolves a matter and a class, submits a job and replies; the drafting runs in the drafting job on the Machine

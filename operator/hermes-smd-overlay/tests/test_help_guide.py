@@ -41,7 +41,7 @@ _FIXTURE_GUIDE = f"""# How to work with your Operator (SMD-authored guide)
 ## Notes for the Operator (never quoted, never mentioned to the reader)
 
 - {_NOTES_SENTINEL}.
-- Matter numbers in examples stay XXXXXX.
+- Matter numbers in examples stay [number].
 
 ## The guide
 
@@ -49,8 +49,8 @@ _FIXTURE_GUIDE = f"""# How to work with your Operator (SMD-authored guide)
 
 ### Two kinds of requests
 
-1. **Work it has been trained on.** "On matter XXXXXX, draft the demand."
-2. **One-off work.** "On matter XXXXXX, draft special interrogatories."
+1. **Work it has been trained on.** "On matter [number], draft the demand."
+2. **One-off work.** "On matter [number], draft special interrogatories."
 """
 
 _FIXTURE_TIPS = """tips:
@@ -166,7 +166,7 @@ def test_answer_rules_forbid_self_description_by_negation(sf, tmp_path):
     """The observed reply said "I'm not a general-purpose prompt assistant"."""
     rules = " ".join(_help(sf, tmp_path)["help"]["answer_rules"])
     assert "never by what you are not" in rules
-    assert "XXXXXX" in rules
+    assert "[number]" in rules
     assert "Never promise a time" in rules
     assert "—" not in rules
 
@@ -274,3 +274,29 @@ def test_tool_description_tells_the_model_to_compose_from_answer_shape():
     assert "should I prompt you the way I prompt Claude?" in desc
     depth_doc = plugin._SEAT_FACTS_SCHEMA["properties"]["depth"]["description"]
     assert "answer_shape" in depth_doc
+
+
+def test_the_shipped_help_text_passes_the_send_checker_even_unquoted(hg):
+    """OBSERVED (pilot-smokeball, 2026-10-24): the guide said matter numbers stay
+    ``XXXXXX``; the model copied an example out of its quotes, the send checker
+    refused the draft as shouting (``caps_emphasis``), and the model deleted it
+    and redrafted. Every placeholder a reader may be shown must survive the
+    checker with its quotes stripped. FAILS if any guide line, tip or skill
+    ``help.example`` carries a four-capital run the checker does not know."""
+    import yaml
+
+    from shared import output_checklist as oc
+
+    roots = (_REAL_HELP.parent,)
+    texts = [hg.read_guide(roots)] + [t["text"] for t in hg.read_tips(roots)]
+    for skill_md in sorted(_REAL_HELP.parent.glob("*/SKILL.md")):
+        front = skill_md.read_text(encoding="utf-8").split("---", 2)[1]
+        smd = ((yaml.safe_load(front) or {}).get("metadata") or {}).get("smd") or {}
+        example = (smd.get("help") or {}).get("example")
+        if example:
+            texts.append(example)
+    assert len(texts) > 5
+    for text in texts:
+        bare = text.replace('"', "").replace("“", "").replace("”", "")
+        rules = {v.rule for v in oc.check(bare, oc.STAFF_SEND)}
+        assert "caps_emphasis" not in rules, bare[:200]

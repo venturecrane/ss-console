@@ -82,7 +82,7 @@ const REQUEST_SKILLS: Record<string, { admin: boolean; klass: string; tell: stri
   'matter-inbox-router': { admin: false, klass: 'Email filing request', tell: 'email' },
 }
 
-/** Requests that name no single matter, so need no XXXXXX placeholder. */
+/** Requests that name no single matter, so need no [number] placeholder. */
 const NO_MATTER_PLACEHOLDER = new Set([
   'litigation-status',
   'combined-post-intake',
@@ -233,7 +233,7 @@ describe('operator-help: the skill', () => {
   it('keeps the guide free of em dashes, real matter numbers and timing', () => {
     const guide = read(`${HELP}/references/guide.md`)
     expect(guide).not.toContain(EM_DASH)
-    expect(guide).toContain('XXXXXX')
+    expect(guide).toContain('[number]')
     expect(guide).not.toMatch(/matter \d{3,}/i)
     expect(guide).not.toMatch(/\b(within|by tomorrow|same day)\b/i)
   })
@@ -281,7 +281,7 @@ describe('operator-help: the requests each skill invites', () => {
         expect(String(help?.what)).not.toContain(EM_DASH)
         expect(example).not.toMatch(/\bhow (do|should|can) (i|we)\b/i)
         expect(example.trim().endsWith('?')).toBe(false)
-        if (!NO_MATTER_PLACEHOLDER.has(slug)) expect(example).toContain('XXXXXX')
+        if (!NO_MATTER_PLACEHOLDER.has(slug)) expect(example).toContain('[number]')
         expect(example).not.toMatch(/\d{4,}/)
       })
 

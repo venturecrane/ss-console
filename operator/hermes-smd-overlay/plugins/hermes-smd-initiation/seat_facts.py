@@ -53,7 +53,7 @@ THREE INVARIANTS, each enforced by construction rather than by instruction:
    On depth ``help`` the ``help`` section carries authored text too: each
    request's ``what`` and ``example`` pass through verbatim from the skill's
    SMD-authored ``metadata.smd.help`` block (an example names a matter only as
-   the placeholder ``XXXXXX``), and the section's ``note`` is fixed text
+   the placeholder ``[number]``), and the section's ``note`` is fixed text
    authored in this module. None of the three is read from a matter or a client.
 
 2. **No run history.** ``last_run_at``, ``last_status`` and ``next_run_at`` are
