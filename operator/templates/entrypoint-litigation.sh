@@ -10,8 +10,9 @@
 # MEDCHRON_DATA_DIR, MEDCHRON_RUN_DIR, CONFIG_DIR, CUSTOMER_SLUG, the R2_* env
 # and _seed_endpoint from the entrypoint, and exports SMD_LITIGATION_QUEUE_DIR
 # and SMD_LITIGATION_FIRM_CONFIG (the broker's env -i line passes both on),
-# MEDCHRON_LITIGATION_INPUTS and MEDCHRON_LITIGATION_STATE_DIR (the daemon
-# inherits both and hands them to each litigation child).
+# MEDCHRON_LITIGATION_INPUTS, MEDCHRON_LITIGATION_STATE_DIR and
+# MEDCHRON_LITIGATION_TEXTCACHE_DIR (the daemon
+# inherits them and hands them to each litigation child).
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
 
@@ -29,6 +30,15 @@ export SMD_LITIGATION_QUEUE_DIR="${MEDCHRON_RUN_DIR}/litigation-queue"
 install -d -o root -g medchron -m 0750 "${MEDCHRON_DATA_DIR}/litigation"
 install -d -o medchron -g medchron -m 0700 "${MEDCHRON_DATA_DIR}/litigation/state"
 export MEDCHRON_LITIGATION_STATE_DIR="${MEDCHRON_RUN_DIR}/litigation/state"
+
+# The text cache (2026-10-24, medchron/litigation/textcache.py): every page the
+# lane paid to read, kept so a later list does not buy it again. Transcribed
+# matter text, so child-only 0700 like the state; the parent above is
+# root:medchron 0750, so the child could not make it itself (its writes would
+# stop on the first one). Survives reprovision by design; a matter leaves it
+# with `python -m medchron.litigation.textcache purge --matter <id>`.
+install -d -o medchron -g medchron -m 0700 "${MEDCHRON_DATA_DIR}/litigation/textcache"
+export MEDCHRON_LITIGATION_TEXTCACHE_DIR="${MEDCHRON_RUN_DIR}/litigation/textcache"
 
 # The firm inputs (litigation-firm.yaml, and once the seed baseline/), staged by
 # provision-customer.sh through lib/stage-litigation-inputs.sh. Fail-static

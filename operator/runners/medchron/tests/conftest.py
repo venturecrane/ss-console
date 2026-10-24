@@ -13,6 +13,15 @@ import yaml
 from medchron_testkit import FIRM_CONFIG, PRICING, job_yaml
 
 
+@pytest.fixture(autouse=True)
+def _litigation_textcache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Every test gets its own litigation text cache (never the volume's
+    default, never one shared across tests)."""
+    d = tmp_path / "litigation-textcache"
+    monkeypatch.setenv("MEDCHRON_LITIGATION_TEXTCACHE_DIR", str(d))
+    return d
+
+
 @pytest.fixture
 def firm_config_path(tmp_path: Path) -> Path:
     p = tmp_path / "firm.yaml"

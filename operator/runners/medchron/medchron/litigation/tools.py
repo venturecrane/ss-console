@@ -50,6 +50,8 @@ class MatterContext:
     log: Callable[[str], None] = print
     integrity: dict[str, str] = field(default_factory=dict)
     refs: dict[int, dict[str, Any]] = field(default_factory=dict)
+    #: The cross-job text cache (``textcache.TextCache``); None reads without it.
+    cache: Any = None
 
     def __post_init__(self) -> None:
         live = [f for f in self.files if not f.get("deleted")]
@@ -96,6 +98,13 @@ class MatterContext:
             why = str(failed.get("problem")).split(":")[0]
             return f"This file could not be read ({why}); do not treat it as absent."
         path = fetch_mod.local_path(self.data, self.matter_id, fid)
+        if path is None and fetch_mod.fill_one(self.cache, self.data, self.matter_id, f):
+            text = self.cached_text(fid)  # a duplicate_of fill resolves to the original's text
+            if text is not None:
+                self._record(
+                    fid, f, {"ok": True, "chars": len(text), "text_path": str(self._text_path(fid)), "cached": True}
+                )
+                return text
         if path is None and self.seat is not None:
             row = fetch_mod.fetch_one(self.seat, self.matter_id, f, self.data, self.log)
             missing, _retry = fetch_mod.classify([row])
@@ -108,13 +117,24 @@ class MatterContext:
         orig = path.stem
         tp = self._text_path(orig)
         if not tp.is_file():
-            rec = extract_mod.extract_file(path, path.suffix, tp, self.ocr)
-            from ..stages.base import append_jsonl
-
-            append_jsonl(self.mdir / "extracted.jsonl", {"file_id": orig, "name": f.get("name"), **rec})
+            row = fetch_mod.pulled(self.data, self.matter_id).get(orig) or {}
+            rec = extract_mod.extract_cached(
+                self.mdir,
+                {**row, "id": orig, "path": str(path), "ext": path.suffix, "cached": False},
+                self.ocr,
+                self.cache,
+            )
+            self._record(orig, f, rec)
+            if self.cache is not None and orig == fid:
+                self.cache.put_file(fid, f, row, self.matter_id)
             if not rec.get("ok"):
                 return f"This file could not be read ({rec['problem'].split(':')[0]}); do not treat it as absent."
         return tp.read_text(encoding="utf-8", errors="replace")
+
+    def _record(self, fid: str, f: dict[str, Any], rec: dict[str, Any]) -> None:
+        from ..stages.base import append_jsonl
+
+        append_jsonl(self.mdir / "extracted.jsonl", {"file_id": fid, "name": f.get("name"), **rec})
 
     def opened(self) -> dict[int, str]:
         out = {}

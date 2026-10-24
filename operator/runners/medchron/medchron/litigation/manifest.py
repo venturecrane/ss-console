@@ -9,6 +9,11 @@ On the volume (``$MEDCHRON_DATA_DIR/litigation/state/``, the runner's own)::
 
 Written only after a delivery is read back (``commit``), so a held or failed
 run leaves the next run's baseline exactly where the last good one put it.
+Two writers call ``commit``: the run's ``report`` stage, and ``baseline
+final`` (``finalload.py``), the last step of a list a person finished by hand.
+The second loads only field groups whose every value is cited, never over
+state that is newer (or the same day's, from another job), and runs as a dry
+run first whose counts are read back before the live load.
 
 Change detection is CANDIDATE-FILTERED. A matter already on the list is
 UPDATED (``update.py``) when a file that is new or whose ``dateModified``

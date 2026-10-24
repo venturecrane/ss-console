@@ -45,6 +45,10 @@ logger = logging.getLogger("medchron.litigation")
 QUEUE_ENV = "SMD_LITIGATION_QUEUE_DIR"
 INPUTS_ENV = "MEDCHRON_LITIGATION_INPUTS"
 STATE_ENV = "MEDCHRON_LITIGATION_STATE_DIR"
+#: The text cache (``litigation/textcache.py``): a dir the child owns on the
+#: volume, made by entrypoint-litigation.sh. Passed like the state dir, so the
+#: child writes where the boot made room, never an unwritable default.
+TEXTCACHE_ENV = "MEDCHRON_LITIGATION_TEXTCACHE_DIR"
 MEMORY_ENV = "SMD_LITIGATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "litigation-status"
@@ -126,6 +130,7 @@ class LitigationLane(DraftingLane):
     queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/litigation-queue"))
     inputs_dir: str | None = None
     state_dir: str | None = None
+    textcache_dir: str | None = None
     heartbeat_seconds: float = HEARTBEAT_SECONDS
     LANE = "litigation"
     HEARTBEAT = "litigation-heartbeat"
@@ -186,6 +191,8 @@ class LitigationLane(DraftingLane):
             env[INPUTS_ENV] = str(self.inputs_dir)
         if self.state_dir:
             env[STATE_ENV] = str(self.state_dir)
+        if self.textcache_dir:
+            env[TEXTCACHE_ENV] = str(self.textcache_dir)
         env.setdefault("MEDCHRON_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))
@@ -341,6 +348,7 @@ def build_lane(d: Daemon) -> LitigationLane | None:
         logger.info("no %s; the litigation lane is not started", QUEUE_ENV)
         return None
     from .litigation.manifest import state_dir
+    from .litigation.textcache import cache_dir
 
     return LitigationLane(
         run_dir=d.run_dir,
@@ -356,6 +364,7 @@ def build_lane(d: Daemon) -> LitigationLane | None:
         queue_dir=Path(raw),
         inputs_dir=os.environ.get(INPUTS_ENV) or None,
         state_dir=str(state_dir()),
+        textcache_dir=str(cache_dir()),
     )
 
 

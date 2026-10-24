@@ -7,7 +7,10 @@ Every stage records itself in ``data/state.json``; a resume skips finished
 stages, and the per-matter reads resume per matter (``data/m/<id>/readN.json``).
 The run's "today" is frozen on the first attempt, so a resume judges dates the
 way the first attempt did. The lane's state on the volume (``manifest.py``) is
-written only by ``report``, after the workbook is read back. ``review``
+written by ``report``, after the workbook is read back, and by one other
+writer: ``baseline final`` (``finalload.py``), the last step of a hand finish,
+which loads a delivered job's ``final.json`` per field group (cited groups
+only, newer state wins, a dry run first, counts read back). ``review``
 (2026-10-13, proven delivery) re-reads the built file's bytes against the data
 it was built from before anything is filed (``review.py``).
 """
@@ -36,7 +39,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, update, vocab
+from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, textcache, update, vocab
 from .progress import Progress
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
@@ -93,6 +96,7 @@ class LitigationRun(RunBase):
         log: Callable[[str], None] = print,
         today: Callable[[], dt.date] | None = None,
         readback_pause: float | None = None,
+        textcache_dir: str | Path | None = None,
     ) -> None:
         self.job = job_mod.load(job_dir)
         self.firm = firm_mod.load(inputs_dir)
@@ -122,6 +126,14 @@ class LitigationRun(RunBase):
         self._seat_factory, self._seat = seat_factory, None
         self.today = self._frozen_today(today)
         self.readback_pause = readback_pause
+        # Paid text is reused across jobs (``textcache.py``): read before
+        # extract, written after; a held job keeps what it paid to read.
+        self.cache = textcache.TextCache(
+            textcache_dir,
+            method_version=textcache.method_version(self.firm.model("transcription")),
+            job_id=self.job.job_id,
+            log=log,
+        )
 
     # ---- plumbing -------------------------------------------------------------------
     @property
@@ -205,39 +217,25 @@ class LitigationRun(RunBase):
         return list(dict.fromkeys([*p["candidates"], *(p.get("seed_files") or []), *whole]))
 
     def _fetch(self) -> None:
+        filled = self._fill_from_cache()
         self._disk_preflight()
         report, retry = {}, []
         for mid in self._active():
             p = self._plan()[mid]
-            r = fetch_mod.fetch_matter(
-                self.seat, mid, inventory.files_of(self.data, mid), self._fetch_ids(p), self.data, self.log
-            )
-            report[mid] = r
+            files = inventory.files_of(self.data, mid)
+            r = fetch_mod.fetch_matter(self.seat, mid, files, self._fetch_ids(p), self.data, self.log)
+            fetch_mod.index_downloads(self.cache, self.data, mid, files)
+            report[mid] = {**r, "cached": filled.get(mid, 0)}
             retry += r["retry"]
         fetch_mod.write_report(self.data, report)
         if retry:
             raise LitigationFailed(f"fetch_unfinished: {len(retry)} files are not fetched for a reason a retry can fix")
 
-    def _disk_preflight(self) -> None:
-        pending = count = 0
-        for mid in self._active():
-            b, n = fetch_mod.pending_bytes(
-                self.data, mid, inventory.files_of(self.data, mid), self._fetch_ids(self._plan()[mid])
-            )
-            pending, count = pending + b, count + n
-        fits, needed, free = fetch_mod.disk_check(self.data, pending)
-        gb = 1 << 30
-        self.log(f"[fetch] {count} files to fetch, {pending / gb:.1f} GB listed; {free / gb:.1f} GB free")
-        if not fits:
-            raise LitigationFailed(
-                f"disk_short: {count} files to fetch need {needed / gb:.1f} GB with headroom; "
-                f"the volume has {free / gb:.1f} GB free. Extend the seat's volume, then resume"
-            )
-
     def _extract(self) -> None:
         summary = {}
+        self._heal_cached()
         rows_by = {mid: list(fetch_mod.pulled(self.data, mid).values()) for mid in self._active()}
-        total = sum(1 for rows in rows_by.values() for r in rows if r.get("ok") and r.get("path"))
+        total = sum(1 for rows in rows_by.values() for r in rows if extract_mod._extractable(r))
         self._progress = Progress(self.log, "extract", total, "docs", every=20)
         for mid, rows in rows_by.items():
             recs = extract_mod.extract_matter(
@@ -246,6 +244,7 @@ class LitigationRun(RunBase):
                 self._ocr,
                 self._progress,
                 concurrency=int(self.firm.get("concurrency")),
+                cache=self.cache,
             )
             summary[mid] = {
                 "ok": sum(1 for r in recs if r.get("ok")),
@@ -265,6 +264,7 @@ class LitigationRun(RunBase):
             ocr=self._ocr,
             log=self.log,
             integrity=integ,
+            cache=self.cache,
         )
 
     def _fetch_report(self) -> dict[str, Any]:

@@ -41,7 +41,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import vocab
+from . import finalload, vocab
+from .finalload import load_final  # noqa: F401 - ``baseline.load_final``, the hand finish's last step
 from .manifest import _atomic
 
 _ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
@@ -482,8 +483,11 @@ def load_two_pass(root: Path) -> tuple[dict[str, dict[str, Any]], dict[str, list
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>``."""
+    """``python -m medchron.litigation.baseline firm|two_pass|discovery <hand-run dir> <state dir>``, or
+    ``... final <final.json> <files_dir> <state dir> [--job-id X] [--read-at D] [--dry-run]``."""
     args = argv if argv is not None else sys.argv[1:]
+    if args[:1] == ["final"]:  # a delivered job's values, per group (``finalload.py``)
+        return finalload.main(args)
     if len(args) == 3 and args[0] == "discovery":
         print(json.dumps(merge_discovery(Path(args[2]), Path(args[1]))))
         return 0

@@ -192,3 +192,72 @@ def test_rtf_and_doc_degrade_without_striprtf_or_antiword(tmp_path, monkeypatch)
     assert extract.extract_file(tmp_path / "c.rtf", ".rtf", tmp_path / "c.txt", None)["problem"].startswith(
         "empty_text"
     )
+
+
+def _tree(root: Path) -> dict[str, str]:
+    import hashlib
+
+    if not root.exists():
+        return {}
+    return {
+        str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob("*") if p.is_file()
+    }
+
+
+def test_read_limit_zero_counts_ocr_pages_pays_nothing_and_writes_no_cache_or_state(tmp_path, monkeypatch):
+    """2026-10-24: a rehearsal measures the OCR a real run would buy (cache
+    misses only), at $0, and leaves the text cache and the lane state as it
+    found them."""
+    from medchron.litigation import textcache
+    from medchron_testkit import make_pdf
+
+    cache = tmp_path / "volume-cache"
+    monkeypatch.setenv(textcache.ENV, str(cache))
+    textcache.TextCache(cache, method_version="other", log=lambda m: None).put_text(
+        "e" * 64, "an older entry", scanned_pages=0, matter_id=M2
+    )
+    before = _tree(cache), _tree(manifest.state_dir())
+    seat = _seat()
+    blob = make_pdf(["", "", "A printed page with enough text to carry a text layer."])
+    seat.per[M1].append({**seat.per[M1][0], "id": "f-s1", "name": "Summons scan", "size": len(blob)})
+    seat.blobs["f-s1"] = blob
+    client = ScriptedLit()
+    r = _rehearsal(tmp_path, client, seat, read_limit=0)
+    assert r.run().verdict == "held"
+    rep = json.loads((tmp_path / "report.json").read_text())
+    c = rep["counts"]
+    assert c["matters_read"] == 0 and c["ocr_pages_needed"] == 2
+    assert c["ocr_pages_by_model"] == {"claude-sonnet-5": 2}
+    assert client.calls == [] and rep["cents"]["total"] == 0
+    assert textcache.REHEARSAL_MARK in (r.data / "m" / M1 / "txt" / "f-s1.txt").read_text()
+    assert (_tree(cache), _tree(manifest.state_dir())) == before
+    rows = [json.loads(x) for x in (r.data / "ocr-needed.jsonl").read_text().splitlines()]
+    assert sorted((x["file_id"], x["page"]) for x in rows) == [("f-s1", 1), ("f-s1", 2)]
+    p = rep["projection"]
+    assert p["ocr_cents_needed"] == round(2 * p["ocr_cents_per_page"], 2) > 0 and "ocr_cents_needed" in p["method"]
+    assert "_ocr" not in rep["matters"]  # one OCR figure, from the counting stub
+
+
+def test_a_fetch_that_would_not_fit_is_recorded_not_raised(tmp_path, monkeypatch):
+    from medchron.litigation import fetch as fetch_mod
+
+    monkeypatch.setattr(fetch_mod, "free_bytes", lambda _p: 0)
+    r = _rehearsal(tmp_path, ScriptedLit(), _seat(), read_limit=0)
+    assert r.run().verdict == "held"
+    assert r._state()["fetch_refusal"].startswith("disk_short")
+    assert json.loads((tmp_path / "report.json").read_text())["counts"]["fetch_refusal"].startswith("disk_short")
+
+
+def test_a_court_only_rehearsal_never_fetches_for_discovery(tmp_path, monkeypatch):
+    r = _rehearsal(tmp_path, ScriptedLit(), _seat(), read_limit=0)
+    out = {
+        "read_groups": [],
+        "audit": "none",
+        "candidates": ["x"],
+        "limited_out": {"read_groups": ["discovery"], "audit": "none"},
+    }
+    (r.data / "plan.json").write_text(json.dumps({M1: out}))
+    monkeypatch.setattr(r, "_court_only", lambda: True)
+    assert r._active() == []
+    monkeypatch.setattr(r, "_court_only", lambda: False)
+    assert r._active() == [M1]

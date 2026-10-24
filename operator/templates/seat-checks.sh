@@ -555,6 +555,9 @@ check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/litig
 check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-queue)\" = root:workspace-broker:770 ]"
 check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-jobs)\" = root:medchron:710 ]"
 check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/state)\" = medchron:medchron:700 ]"
+# The text cache (2026-10-24): transcribed matter text, the child's alone, and
+# the child must be able to write it (its parent is root-owned).
+check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\" = medchron:medchron:700 ]"
 check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/litigation/litigation-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
 # and the gateway runs under none, so the caps must leave the gateway room: the
