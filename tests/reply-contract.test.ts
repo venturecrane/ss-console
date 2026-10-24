@@ -204,9 +204,9 @@ describe('reply-contract: advisory rules after the 2026-10-24 review', () => {
     expect(log).not.toContain('decision-needed-without-stakes-or-pick')
   })
 
-  it('failure words under STATUS: OK stay advisory, never a block', () => {
-    // ~88 percent false alarms in a 17-reply transcript sample: as a gate it
-    // would bounce a reply for saying "0 failed".
+  it('the failure-words-under-STATUS-OK advisory is gone too, and never blocks', () => {
+    // Deleted by Captain directive 2026-10-24: ~88 percent false alarms in a
+    // 17-reply transcript sample, and nothing read the log it wrote to.
     const r = runHook(
       payload(
         [
@@ -222,7 +222,8 @@ describe('reply-contract: advisory rules after the 2026-10-24 review', () => {
     )
     expect(decision(r)).toBeNull()
     const log = execFileSync('cat', [join(boardDir, 'reply-contract.log')], { encoding: 'utf8' })
-    expect(log).toContain('failure-words-below-fold-with-status-ok')
+    expect(log).toContain('"evaluated"')
+    expect(log).not.toContain('failure-words-below-fold-with-status-ok')
   })
 })
 

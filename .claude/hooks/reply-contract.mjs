@@ -23,16 +23,12 @@
  *     "Prose lines" excludes fenced code blocks, tables, and blockquotes:
  *     a short answer quoting a 30-line test log is not a wall of text.
  *
- *   LOG-ONLY (promoted to blocking only after the observed false-positive
- *   rate says they deserve it -- the primer's own design law: a line that is
- *   sometimes wrong and always loud teaches agents to skim past everything):
- *     - failure-signal words below the fold while STATUS: OK. Reviewed
- *       2026-10-24 and NOT promoted: of 17 replies in transcripts that tripped
- *       it, about 2 hid real bad news; the rest were tests failing as
- *       designed, "0 failed", or defects already fixed.
- *     (A DECISION-NEEDED-without-Stakes/My-pick rule was deleted the same day
- *     by Captain directive: 347 fires, no consequence, no correction it
- *     would have caught.)
+ *   No log-only rules remain. Both were deleted 2026-10-24 by Captain
+ *   directive after review: DECISION-NEEDED without Stakes/My pick (347 fires,
+ *   no consequence) and failure words below the fold under STATUS: OK (139
+ *   fires; a 17-reply transcript sample found ~2 real, the rest "0 failed" or
+ *   a test failing as designed). A rule that only logs, with nothing reading
+ *   the log, measures nothing; a new one should arrive with its reader.
  *
  * Loop safety: `stop_hook_active` is honored when the harness provides it;
  * a marker file keyed on the worktree provides the one-bounce guarantee when
@@ -58,7 +54,6 @@ import { homedir } from 'node:os'
 const MAX_PROSE_LINES = Number(process.env.SS_REPLY_CONTRACT_MAX || 25)
 const FOLD_PROSE_LINES = 12
 const STATUS_ENUM = /^(OK|BLOCKED|DECISION-NEEDED|DEFECT-FOUND)\b/
-const FOLD_RE = /^\s*-{3,}\s*Detail/im
 const BOUNCE_TTL_MS = 5 * 60 * 1000
 
 // Skill-formatted reports have their own mandated shapes; forcing them
@@ -71,8 +66,6 @@ const SKILL_EXEMPT = [
   /^Sentence:\s/m, // /wired contract output
   /^## Revised Plan/m,
 ]
-
-const FAILURE_WORDS = /\b(error|failed|failure|regression|broken)\b/i
 
 // Cost-minimized-against-the-fee (BLOCKING, any reply length). The Captain,
 // 2026-09-23 and again 2026-10-08 ("for the 50th time"): never say a cost is
@@ -155,23 +148,16 @@ export function evaluate(msg) {
 function evaluateShape(msg) {
   if (SKILL_EXEMPT.some((re) => re.test(msg))) return { verdict: 'exempt' }
   const { total, aboveFold, foldSeen } = proseLines(msg)
-  const advisories = []
-
-  if (foldSeen && /STATUS\s*:\s*OK\b/i.test(msg)) {
-    const below = msg.split(FOLD_RE)[1] || ''
-    if (FAILURE_WORDS.test(below)) advisories.push('failure-words-below-fold-with-status-ok')
-  }
-
-  if (total <= MAX_PROSE_LINES) return { verdict: 'pass', total, advisories }
+  if (total <= MAX_PROSE_LINES) return { verdict: 'pass', total }
 
   const header = headerOk(msg)
   const fold = foldSeen && aboveFold <= FOLD_PROSE_LINES
-  if (header && fold) return { verdict: 'pass', total, advisories }
+  if (header && fold) return { verdict: 'pass', total }
 
   const missing = []
   if (!header) missing.push('the MISSION:/STATUS:/DID:/NEXT: header (STATUS one of OK|BLOCKED|DECISION-NEEDED|DEFECT-FOUND)')
   if (!fold) missing.push(`a "--- Detail" fold with at most ${FOLD_PROSE_LINES} prose lines above it`)
-  return { verdict: 'block', total, aboveFold, missing, advisories }
+  return { verdict: 'block', total, aboveFold, missing }
 }
 
 function main() {
