@@ -90,6 +90,7 @@ def _counts(r: Any) -> dict[str, Any]:
     ocr = read_jsonl(r.data / OCR_LOG)
     return {
         "matters_listed_in_scope": inv.get("listed"),
+        "people_scope": inv.get("people_scope"),
         "matters_inventoried": len(plan),
         "files_listed": sum(len(inventory.files_of(r.data, m)) for m in plan),
         "candidate_files": sum(len(p["candidates"]) for p in plan.values()),

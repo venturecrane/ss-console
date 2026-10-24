@@ -56,6 +56,9 @@ REASON_CODES = (
     "requester_unresolved",
     "people_unresolved",
     "roles_unlisted",
+    # A people scope whose matters' Staff tags (read per matter) could not be
+    # read after every retry, or carried no tags list at all (ours).
+    "staff_tags_unlisted",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}

@@ -9,7 +9,8 @@ and every file on each. $0, read-only.
   report shares): the staff ids responsible, the staff ids assisting
   (Smokeball's Person Assisting: a paralegal's files), both (a matter must
   match each side named), the people named or the requester (any staff role
-  they hold, resolved against ``/staff``), or every matter.
+  they hold or a Staff tag on the matter, resolved against ``/staff``), or
+  every matter.
 * A matter is a litigation matter when at least ``min_court_hits`` of its file
   names read as court papers (``court_paper_patterns``), or when an earlier run
   already tracked it (it stays on the list until a person closes it).
@@ -74,6 +75,9 @@ def build(
     ids = people.ids_of(who)
     every = open_matters(seat, list(firm.get("matter_statuses")))
     people.check_roles_listed(job, (bool(m.get("originating_listed")) for m in every), len(every))
+    tags = people.staff_tags(job, _getter(seat), [m["id"] for m in every], data / people.TAGS_FILE)
+    roles_only = sum(1 for m in every if people.in_scope(m, job, ids))
+    every = [{**m, "roles": people.with_staff_tags(m.get("roles"), tags.get(m["id"], ()))} for m in every]
     listed = [m for m in every if people.in_scope(m, job, ids)]
     log(f"{len(listed)} open matters in scope")
     files_dir = data / "files"
@@ -92,7 +96,10 @@ def build(
         kept.append({**m, "court_hits": hits, "files": len(files), "responsible": roster.get(m["staff_id"], "")})
         prog.counts["kept"] = len(kept)
     log(f"{len(kept)} litigation matters kept")
-    return {"matters": kept, "staff": roster, "listed": len(listed), "people": [p.as_dict() for p in who]}
+    out = {"matters": kept, "staff": roster, "listed": len(listed), "people": [p.as_dict() for p in who]}
+    if scope is not None:
+        out["people_scope"] = {"roles_only": roles_only, "with_staff_tags": len(listed)}
+    return out
 
 
 def files_of(data: Path, matter_id: str) -> list[dict[str, Any]]:
