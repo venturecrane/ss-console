@@ -19,6 +19,10 @@ table per matter is a hand intervention; this module is the rule instead.
   NVRH, an acronym taken whole ("NV") contributing all its letters.
 * Rows a single bill label matches together are merged into one row: the
   bill does not say which department it covers, so one total cannot be split.
+  Only a label with two or more distinctive words merges (``merges``). A
+  one-word label ("Banner") matching several facilities leaves them separate:
+  its bill is shown as printed, outside the grand total, and each facility's
+  row names the label it may fall under (``shared_by``).
 * One clinician listed twice ("Eva Ramos, M.D." / "Eva M Ramos, MD") is one
   row: first and last name, credentials and middle initials dropped, same
   facility.
@@ -170,6 +174,24 @@ def collapse_clinicians(spine: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda r: r["first"] or "9999")
 
 
+def merges(label: str) -> bool:
+    """True when a label is specific enough to merge the rows it matches: two
+    or more distinctive words ("NV Ridge Health"). One word ("Banner",
+    "Banner Health") names a system, not a department, and merging every
+    facility it touches put one ledger's total over all of them, undercounting
+    the specials (the re-review's N5, 2026-10-24); those rows stay separate."""
+    return len(significant(label) - GENERIC) >= 2
+
+
+def shared_by(label: str, spine: list[dict[str, Any]]) -> list[str]:
+    """The providers a label matches when it matches more than one and is not
+    specific enough to merge them; [] otherwise."""
+    if not (label or "").strip() or merges(label):
+        return []
+    hit = hits(label, spine)
+    return [r["provider"] for r in hit] if len(hit) > 1 else []
+
+
 def merge_by_labels(
     spine: list[dict[str, Any]], labels: list[str], resolved: Callable[[str], str | None]
 ) -> list[dict[str, Any]]:
@@ -177,7 +199,7 @@ def merge_by_labels(
     as printed. A label the authored tiers already resolve is left alone."""
     spine = list(spine)
     for label in labels:
-        if not label.strip() or resolved(label):
+        if not label.strip() or resolved(label) or not merges(label):
             continue
         hit = hits(label, spine)
         if len(hit) < 2:

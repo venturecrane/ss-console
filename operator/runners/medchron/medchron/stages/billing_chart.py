@@ -151,7 +151,8 @@ class Matcher:
         self.match: dict[str, list[str]] = {k: list(v) for k, v in (cfg.get("billing", "provider_match") or {}).items()}
         self.match.update(read_json(slug_dir / "provider_match.json", {}) or {})
 
-    def timeline(self, text: str) -> list[dict[str, Any]]:
+    @staticmethod
+    def timeline(text: str) -> list[dict[str, Any]]:
         sec = text.split("## Treatment Timeline", 1)[1].split("\n## ", 1)[0]
         out = []
         for line in sec.splitlines():
@@ -205,6 +206,8 @@ class Matcher:
         got = self.authored(label, spine)
         if got or not (label or "").strip():
             return got
+        if BM.shared_by(str(label), spine):
+            return None  # names several providers and is too broad to merge them: as printed
         hit = BM.hits(str(label), spine)
         return hit[0]["provider"] if hit else None
 
@@ -248,6 +251,9 @@ class _Tally:
         self.quarantine: list = []
         self.failed: list = []
         self.inherited: list = []
+        #: Spine provider -> the broad labels (one distinctive word, several
+        #: matching providers) whose bills may cover it (N5).
+        self.shared: dict[str, set[str]] = {}
 
     def record(self, r: dict[str, Any]) -> None:
         carry = None
@@ -282,6 +288,9 @@ class _Tally:
             # never when a name simply failed to match.
             tgt = carry
             self.inherited.append((r["file"], c.get("page_first"), carry))
+        if not tgt and raw_provider:
+            for prov in BM.shared_by(raw_provider, self.spine):
+                self.shared.setdefault(prov, set()).add(raw_provider)
         key = tgt or raw_provider or NO_LABEL
         e = self.bills[tgt] if tgt else self.unmatched[key]
         e["docs"].add(r["file"])
@@ -341,7 +350,9 @@ class _Tally:
         return out
 
 
-def _row(row: dict[str, Any], e: dict[str, Any], lien: dict[str, float], dropped: int) -> dict[str, Any]:
+def _row(
+    row: dict[str, Any], e: dict[str, Any], lien: dict[str, float], dropped: int, shared: set[str] | None = None
+) -> dict[str, Any]:
     """One worksheet row: the provider's own ledger total over claim forms;
     the firm's lien report over both; NOT DERIVABLE when neither exists."""
     ranked = sorted(
@@ -357,6 +368,9 @@ def _row(row: dict[str, Any], e: dict[str, Any], lien: dict[str, float], dropped
         ours, obasis = None, f"NOT DERIVABLE - no ledger; {len(claims)} claim form(s) on file, overlapping"
     elif dropped:
         ours, obasis = None, "NOT DERIVABLE - the amount read could not be confirmed on the page; see Amounts Left Out"
+    elif shared:
+        names = ", ".join(f'"{s}"' for s in sorted(shared))
+        ours, obasis = None, f"NOT DERIVABLE - billed under {names}, a name shared by more than one provider here"
     else:
         ours, obasis = None, NO_BILL
     amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
@@ -419,7 +433,13 @@ def run(sr: StageRun) -> int:
         tally.record(r)
     lien = _lien(d, matcher, spine)
     rows = [
-        _row(row, tally.bills.get(row["provider"], _new_entry()), lien, tally.dropped_for.get(row["provider"], 0))
+        _row(
+            row,
+            tally.bills.get(row["provider"], _new_entry()),
+            lien,
+            tally.dropped_for.get(row["provider"], 0),
+            tally.shared.get(row["provider"]),
+        )
         for row in spine
     ]
     rows += [_lien_only(k, v) for k, v in lien.items() if not any(r["provider"] == k for r in rows)]

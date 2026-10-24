@@ -154,3 +154,80 @@ def test_an_entry_left_out_takes_its_providers_row_out_of_the_worksheet(job_dir,
     text = _worksheet_text(sr)
     assert "$1,800.00" in text and "$2,700.00" not in text
     assert any("billing chart and worksheet rebuilt" in ln for ln in log)
+
+
+# ---- the re-review's N2 gap: a timeline row deleted under check 4 ----------------
+ORPHAN_DOC = DOC.replace(
+    "| Example Clinic | 01/20/2026 - 03/30/2026 | 2 | Exhibit 1 - p. 2 |",
+    "| Example Clinic | 01/20/2026 - 03/30/2026 | 2 | Exhibit 1 - p. 2 |\n| Other Ortho | 02/14/2026 | 1 | Exhibit 1 - p. 3 |",
+)
+CHECK4 = (
+    '| MUST-FIX | 4 summary with no entry | the timeline row "Other Ortho" has no entry behind it '
+    "| Treatment Timeline |"
+)
+
+
+def test_a_timeline_row_deleted_under_check4_takes_its_provider_out_of_the_worksheet(
+    job_dir, firm_config_path, data_root
+):
+    """The review deletes a Treatment Timeline row no entry supports (check 4).
+    That provider leaves the billing spine too: the worksheet is rebuilt, the
+    row goes, and its bill is shown as printed, outside the grand total."""
+    sr, log = _package(job_dir, firm_config_path, data_root, ORPHAN_DOC)
+    _extract(sr, _ledger("Example Clinic", "$1,800.00"), _ledger("Other Ortho", "$900.00"))
+    assert billing_chart.run(sr) == 0 and billing_docx.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert [r["provider"] for r in chart["rows"]] == ["Example Clinic", "Other Ortho"] and chart[
+        "grand_total"
+    ] == 2700.0
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK4))) == 0, log
+    md = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "| Other Ortho |" not in md, "the review deleted the row"
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert [r["provider"] for r in chart["rows"]] == ["Example Clinic"], chart["rows"]
+    assert chart["grand_total"] == 1800.0
+    assert [r["provider"] for r in chart["as_printed_rows"]] == ["Other Ortho"]
+    assert "$2,700.00" not in _worksheet_text(sr)
+
+
+# ---- the re-review's N5: a one-word label does not merge a system's facilities ----
+BANNER_DOC = (
+    "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n"
+    "| Medical Provider | Treatment Period | Visits | Reference |\n"
+    "| Banner Desert Medical Center | 01/02/2026 | 1 | Exhibit 1 - p. 3 |\n"
+    "| Banner Thunderbird Medical Center | 01/05/2026 | 1 | Exhibit 1 - p. 4 |\n\n"
+    "## Diagnostic Highlights\n\n| ICD Code | Description | First Diagnosed | Reference |\n\n"
+    "## Medical Chronology\n\n01/02/2026\nBanner Desert Medical Center | Medical Diagnoses\n\n"
+    "Cervical strain noted. (Exhibit 1 - p. 3)\n\n"
+    "01/05/2026\nBanner Thunderbird Medical Center | Medical Diagnoses\n\nShoulder strain noted. (Exhibit 1 - p. 4)\n\n"
+    "## Exhibit List\n\n| Exhibit No. | Description |\n"
+)
+
+
+def test_a_one_word_label_keeps_a_systems_facilities_separate(job_dir: Path, firm_config_path: Path, data_root: Path):
+    """A ledger labelled only "Banner" once merged both Banner hospitals into
+    one row whose total was that single ledger, which reads as both
+    facilities' specials. The rows stay separate, neither claims the ledger,
+    each names the label, and the ledger is shown as printed, outside the
+    grand total."""
+    sr = _sr(job_dir, firm_config_path, data_root)
+    _doc(sr, BANNER_DOC)
+    _extract(sr, _ledger("Banner", "$5,000.00"))
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    by = {r["provider"]: r for r in chart["rows"]}
+    assert set(by) == {"Banner Desert Medical Center", "Banner Thunderbird Medical Center"}, by
+    for r in by.values():
+        assert r["total"] is None and '"Banner"' in r["basis"] and "more than one provider" in r["basis"]
+    assert chart["grand_total"] == 0.0
+    assert [(r["provider"], r["total"]) for r in chart["as_printed_rows"]] == [("Banner", 5000.0)]
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "INCOMPLETE" in text and "claim form" not in text[text.index("What Is Needed") :]
+
+
+def test_a_two_word_label_still_merges_and_a_one_word_label_does_not():
+    from medchron.stages import billing_match as BM
+
+    assert not BM.merges("Banner") and not BM.merges("Banner Health")
+    assert BM.merges("NV Ridge Health") and BM.merges("Banner Desert")
