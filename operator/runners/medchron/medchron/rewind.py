@@ -8,6 +8,12 @@ names, per exit code, the stages a stage may reopen; the driver resumes at the
 earliest of them instead of ending the run. The stage bounds it to once with
 its own marker; ``MAX`` bounds it again here, so a marker that did not hold
 can never loop a run.
+
+No stage uses it since 2026-10-24. The coverage gate's rebuild was a no-op:
+the gate reads ``entries_scoped_final.md`` and ``page_map.json``, which are
+written before ``build_doc``, so rebuilding from ``build_doc`` could never
+change its answer. The gate now explains by rule a file whose every entry a
+``filter`` rule removed, and holds on the rest at once.
 """
 
 from __future__ import annotations

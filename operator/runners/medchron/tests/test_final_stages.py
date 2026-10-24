@@ -199,8 +199,7 @@ def test_gate_modules_delegate_to_the_stages(job_dir: Path, firm_config_path: Pa
     )
     (d / "out" / "alpha").mkdir(parents=True)
     (d / "out" / "alpha" / "page_map.json").write_text("[]")
-    assert provenance.check(sr) == 3  # uncited, unaccounted: one rebuild of the document (2026-10-23)
-    assert provenance.check(sr) == 1  # still lost after it: holds
+    assert provenance.check(sr) == 1  # uncited, unaccounted: holds (no rebuild since 2026-10-24)
     (d / "runs" / "alpha" / "final-chronology.md").write_text(
         "## Medical Chronology\n\nA claim long enough to audit here. (Exhibit 1 - p. 1)\n## Exhibit List\n"
     )
@@ -216,5 +215,5 @@ def test_gate_modules_delegate_to_the_stages(job_dir: Path, firm_config_path: Pa
     assert extractive.dry_run(sr) == 0  # the classifier's drop of a cited page is kept, not obeyed
     assert any("kept 1 cited page(s) the classifier called non-record: 1" in line for line in strip_log)
     (d / "drops.json").write_text(json.dumps({"manual_drops": {"1": [[1, "authored"]]}, "citation_edits": []}))
-    assert extractive.dry_run(sr) == 1  # an authored drop of every cited page refuses
+    assert extractive.dry_run(sr) == 2  # an authored drop of every cited page refuses (strip.EXIT_CITED_DROP)
     assert extractive.falsify(sr) == 2  # and under falsify it is not mislabelled "cannot fail"

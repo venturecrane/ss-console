@@ -258,7 +258,12 @@ def test_scope_omits_with_disclosure_and_keeps_unclassified(job_dir: Path, firm:
     assert "Seasonal allergies" not in scoped and "Chronic neck pain" in scoped and "Subject Incident" in scoped
     omitted = json.loads((d / "omitted_preincident.json").read_text())
     assert omitted == [
-        {"date": "2025-06-01", "reason": "unrelated allergy visit", "head": "Example Clinic | Medical Diagnoses"}
+        {
+            "date": "2025-06-01",
+            "reason": "unrelated allergy visit",
+            "head": "Example Clinic | Medical Diagnoses",
+            "cites": [{"exhibit": 1, "file": None, "n": 1}],
+        }
     ]
     assert (
         "1 additional pre-incident encounters dated 2025-06-01 to 2025-06-01"
@@ -312,6 +317,31 @@ def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, fir
     assert "Neck pain since the collision." in scoped, "its host entry keeps the client's own block"
     dropped = json.loads((d / "omitted_coclient.json").read_text())
     assert [x["patient"] for x in dropped] == ["Beta Example", "Beta Example"]
+
+
+def test_scope_records_the_citations_each_removed_block_carried(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """2026-10-24: the coverage gate held a finished joint chronology on a
+    shared intake form the composer drew one entry from, because that entry
+    was the co-plaintiff's and filter removed it; nothing recorded which file
+    the removed block cited, so the gate could only call it loss. Each removed
+    block (co-client and pre-incident omit alike) now records its citations
+    and the file each names, which the gate reads to explain the file by rule."""
+    co = "01/05/2026\nSutter Health Radiology (Beta Example) | Medical Diagnoses\n\nAnkle. (Exhibit 2 - p. 9)"
+    mine = "01/07/2026\nExample Clinic (Alpha Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 1)"
+    client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n"))
+    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "exhibit_map.json").write_text(json.dumps({"clinic.pdf": 1, "intake form.pdf": 2, "allergy.pdf": 3}))
+    pre = E_PRE_ROUTINE.replace("(Exhibit 1", "(Exhibit 3")
+    (d / "entries.md").write_text("\n\n".join([pre, co, mine]))
+    assert scope_stage.run(sr) == 0
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert dropped[0]["cites"] == [{"exhibit": 2, "file": "intake form.pdf", "n": 1}]
+    omitted = json.loads((d / "omitted_preincident.json").read_text())
+    assert omitted[0]["cites"] == [{"exhibit": 3, "file": "allergy.pdf", "n": 1}]
+    # and what they are weighed against: every citation in the full assembly
+    assert json.loads((d / "full_cites.json").read_text()) == {"1": 1, "2": 1, "3": 1}
 
 
 def test_scope_keeps_an_unlabelled_client_block_after_a_co_plaintiff_block(

@@ -73,6 +73,30 @@ def _compile(patterns: list[str]) -> list[re.Pattern[str]]:
 
 
 # ---- selection ---------------------------------------------------------------
+def _folded(name: str) -> str:
+    """A folder name with case and punctuation ignored."""
+    return re.sub(r"[^0-9a-z]+", "", name.casefold())
+
+
+def _tops(slug_dir: Path) -> list[str]:
+    folders = _read_json(slug_dir / "folders.json", [])
+    return sorted({f["path"].split("/")[1] for f in folders if f.get("path", "").count("/") >= 1})
+
+
+def resolve_prefix(prefix: str, tops: list[str]) -> str | None:
+    """The real top-level folder a unit's ``folder_prefix`` names, as
+    ``/<folder>``: the exact folder, else the ONE folder that matches with case
+    and punctuation ignored (2026-10-24: a firm renamed "Alpha_Example" to
+    "ALPHA EXAMPLE" and the run held). None when there is no such folder, or
+    more than one, which still holds: guessing between two folders could pull
+    another client's records."""
+    bare = prefix.strip("/")
+    if bare in tops:
+        return f"/{bare}"
+    hits = [t for t in tops if _folded(t) == _folded(bare)]
+    return f"/{hits[0]}" if len(hits) == 1 and _folded(bare) else None
+
+
 def selection(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decision:
     """`include.json`: every top-level folder except the excluded classes.
 
@@ -100,18 +124,21 @@ def selection(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> De
     normalisation this branch would match nothing and the run would look
     correctly scoped while reading only shared classes and root PDFs.
     """
-    folders = _read_json(slug_dir / "folders.json", [])
-    tops = sorted({f["path"].split("/")[1] for f in folders if f.get("path", "").count("/") >= 1})
+    tops = _tops(slug_dir)
     exclude = _compile(cfg.get("selection", "exclude_folder_classes") or [])
     shared = _compile(cfg.get("selection", "shared_folder_classes") or [])
     holds: list[str] = []
     notes: list[str] = []
     excluded = [t for t in tops if any(rx.search(t) for rx in exclude)]
-    prefixes = [f"/{u.folder_prefix.strip('/')}" for u in job.units if u.folder_prefix]
-    if prefixes:
-        missing = [p for p in prefixes if p.lstrip("/") not in tops]
+    asked = [f"/{u.folder_prefix.strip('/')}" for u in job.units if u.folder_prefix]
+    if asked:
+        missing = [p for p in asked if resolve_prefix(p, tops) is None]
         if missing:
             holds.append(f"unit folder(s) not found at top level: {missing}")
+        prefixes = [resolve_prefix(p, tops) or p for p in asked]
+        for a, r in zip(asked, prefixes):
+            if a != r:
+                notes.append(f"unit folder {a!r} is the top-level folder {r!r} (matched ignoring case and punctuation)")
         include = prefixes + [f"/{t}" for t in tops if any(rx.search(t) for rx in shared) and t not in excluded]
         others = [t for t in tops if f"/{t}" not in include and t not in excluded]
         if others:
@@ -145,10 +172,12 @@ def units(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisi
     folder_prefix, name_token, surname, dob per unit; single-client matters
     get one unit keyed by the slug with no prefix."""
     payload: dict[str, Any] = {}
+    tops = _tops(slug_dir)
     for u in job.units:
         entry: dict[str, Any] = {"name_token": u.name_token, "surname": u.surname, "dob": u.dob}
         if u.folder_prefix:
-            entry["folder_prefix"] = u.folder_prefix
+            # The folder selection resolved, so routing matches what was pulled.
+            entry["folder_prefix"] = resolve_prefix(u.folder_prefix, tops) or u.folder_prefix
         payload[u.unit] = entry
     d = Decision("units", slug_dir / "units.json", payload)
     _write(d.artifact, payload, dry_run=dry_run)
@@ -444,14 +473,15 @@ def control(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         "control", slug_dir / (f"record_control-{unit.unit}.json" if job.joint else "record_control.json"), None
     )
     if best is None:
-        # 2026-10-23: the one control hold left, and an integrity stop. With
-        # no native text anywhere in the exhibits there is no page that is a
-        # record by construction, so the scanned-page classifier would have
-        # nothing to be falsified against.
-        d.holds.append(
-            "record control (integrity stop): no exhibited file carries native text, so the scanned-page "
-            "classifier has no record page to be checked against"
-        )
+        # With no native text anywhere in the exhibits (an all-fax matter) no
+        # page is a record by construction, so the scanned-page classifier has
+        # nothing to be falsified against. Until 2026-10-24 that held the run;
+        # it is a legitimate record set, so the classifier is skipped instead
+        # and the strip keeps every scanned page (keeping a page is harmless).
+        why = "no exhibited file carries native text, so no page is a record by construction"
+        d.payload = {"skip": True, "_decided": {"by": "medchron.decisions.control", "reason": why}}
+        d.notes.append(f"record control: {why}; the scanned-page classifier is skipped and scanned pages are kept")
+        _write(d.artifact, d.payload, dry_run=dry_run)
         return d
     if not best[0]:
         # Before 2026-10-23 a matter with no file of 800+ chars a page over

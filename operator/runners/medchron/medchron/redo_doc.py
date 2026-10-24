@@ -100,12 +100,7 @@ def _restore(restore: list[tuple[str, str]], strip_result: Path) -> None:
 def restore_unit(slug_dir: Path, unit: str, *, joint: bool) -> int:
     """The rebuild's file half for one unit, in-process: put the unstripped
     exhibits back and remove the strip result, so the strip stages can run
-    again over a rebuilt document. Returns how many exhibits were restored.
-
-    The coverage gate calls this itself (2026-10-23) when a file the composer
-    drew entries from is not cited: the run rebuilds its document once from
-    build_doc (``REDO``, through dag.Stage.rewind) before it holds, rather
-    than holding for SMD to run this module by hand."""
+    again over a rebuilt document. Returns how many exhibits were restored."""
     restore = _restores(slug_dir / "out" / unit)
     _restore(restore, _strip_result(slug_dir, unit, joint))
     return len(restore)
