@@ -75,6 +75,15 @@ not move (never a name or a date with them).
   - `smd_finishing` on a staff reassignment: "The cases have not all been moved
     yet. Nothing is needed from you; SMD is finishing it, and the next message
     you get about this will say what was moved."
+  - `smd_finishing` on the deadlines report: "The deadlines report is not filed
+    yet, and nothing new has been put in the firm's Operator Library. Nothing is
+    needed from you; SMD is finishing it, and the next message you get about this
+    report will be the filed report."
+  - `nothing_in_scope` on the deadlines report: "No report was filed: none of
+    the firm's Open or Pending matters fit this request. Nothing is needed from
+    you."
+  - The broker enforces every held wording above: `reply_bind` returns it as
+    `held_wording`, and the send refuses any other words and quotes the text.
 - **failed.** NO message. One `litigation_job_status` call (which raises SMD's
   shortfall alert) and the turn ends. The firm hears nothing about our own
   machinery.

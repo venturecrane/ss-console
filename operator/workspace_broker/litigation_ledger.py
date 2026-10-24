@@ -119,11 +119,21 @@ CREATE_SQL = (
     "close_reason TEXT, "
     "close_ref TEXT, "
     "report TEXT, "
-    "counts_json TEXT"
+    "counts_json TEXT, "
+    "reassign_json TEXT"
     ")"
 )
 #: Columns added after the table first shipped: (name, type), added on upgrade.
-ADDED_COLUMNS = (("close_reason", "TEXT"), ("close_ref", "TEXT"), ("report", "TEXT"), ("counts_json", "TEXT"))
+#: ``reassign_json`` (2026-10-24): a staff reassignment's names as the request
+#: gave them, so a ``staff_unresolved`` reply can only name one of them
+#: (held_wording).
+ADDED_COLUMNS = (
+    ("close_reason", "TEXT"),
+    ("close_ref", "TEXT"),
+    ("report", "TEXT"),
+    ("counts_json", "TEXT"),
+    ("reassign_json", "TEXT"),
+)
 #: What SMD's close writes as the row's (and the audit row's) reason: a token,
 #: never a sentence. ``work_health._CLOSED_REASONS`` reads it as decided work.
 CLOSED_REASON = "closed"
@@ -148,20 +158,9 @@ CREATE_SPEND_SQL = (
 )
 CREATE_SPEND_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_litigation_spend_at ON litigation_spend(at)"
 UNFINISHED = ("queued", "running")
-PROJECTION = (
-    "created_at",
-    "updated_at",
-    "state",
-    "trigger",
-    "requester",
-    "stage",
-    "cents",
-    "matters_total",
-    "matters_reread",
-    "flags_new",
-    "reason",
-    "folder_id",
-    "reply_sent_at",
+PROJECTION = tuple(
+    "created_at updated_at state trigger requester stage cents matters_total matters_reread flags_new reason "
+    "folder_id reply_sent_at".split()
 )
 
 
@@ -424,7 +423,8 @@ class LitigationLedger:
                 raise SubmitRefused(f"{what} for the same scope is already underway as job {twin['id']}", twin["id"])
             conn.execute(
                 "INSERT INTO litigation_jobs (id, created_at, updated_at, state, trigger, requester, request_ref, "
-                "scope_key, scope_json, file_to_matter_id, envelope_digest, report) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "scope_key, scope_json, file_to_matter_id, envelope_digest, report, reassign_json) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -438,6 +438,7 @@ class LitigationLedger:
                     env["file_to_matter_id"],
                     digest(env),
                     env.get("report") or "status",
+                    json.dumps(env["reassign"], sort_keys=True) if env.get("reassign") else None,
                 ),
             )
             conn.commit()

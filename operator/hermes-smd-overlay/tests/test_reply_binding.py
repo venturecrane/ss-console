@@ -1399,3 +1399,99 @@ def test_the_draft_id_is_read_through_the_envelopes(result) -> None:
 def test_no_draft_id_is_invented(result) -> None:
     wd = load_plugin("hermes-smd-reply").working_drafts
     assert wd.draft_id_of(result) == ""
+
+
+# -- a held job's fixed wording (ss-console 2026-10-24, job 01M5MWGB). The broker
+# refuses a held litigation or chronology reply whose words are not its hold
+# class's fixed wording, quoting the exact text. The overlay must hand that text
+# to the model as a hold to redraft from, not bury it as a send failure.
+
+HELD_TEXT = (
+    "The litigation status list is not filed yet, and nothing new has been put in the "
+    "firm's Operator Library. Nothing is needed from you; SMD is finishing it, and the "
+    "next message you get about this list will be the filed list."
+)
+IMPROVISED = "The litigation status list was not produced. Tell me if you want it run again."
+
+
+def _held_wording_broker(mod, monkeypatch, broker) -> None:
+    from shared.workspace_broker import BrokerError
+
+    def bind_reply(req):
+        broker.binds.append(req)
+        return {
+            "ok": True,
+            "bound": True,
+            "sender": ADMIN,
+            "graph_message_id": GRAPH_ID,
+            "held_wording": [HELD_TEXT],
+        }
+
+    def send_bound_reply(req, comment, *, html="", session_id="", matter_ref=None):
+        if comment.strip() != HELD_TEXT:
+            raise BrokerError(
+                f'held_wording: nothing was sent. Send exactly this: "{HELD_TEXT}".',
+                code="HeldWordingRefused",
+            )
+        broker.bound_sends.append({"binding": req, "session_id": session_id})
+        return "<sent@firm.example>"
+
+    monkeypatch.setattr(mod.msgraph_broker, "bind_reply", bind_reply)
+    monkeypatch.setattr(mod.msgraph_broker, "send_bound_reply", send_bound_reply)
+
+
+def _draft_told(mod, body: str, call: str) -> str:
+    """The draft and both hooks; what the model reads back from create_draft."""
+    _draft(mod, [ADMIN], call=call, body=body)
+    out = mod.on_transform_tool_result(
+        tool_name="mcp_msgraph_mail_create_draft",
+        args={"to": [ADMIN], "subject": "Re: list", "body_text": body},
+        result='{"draft_id": "d1"}',
+        session_id=WAKE,
+        tool_call_id=call,
+    )
+    return out if isinstance(out, str) else ""
+
+
+def test_the_bind_hands_the_model_the_held_wording(lane, monkeypatch) -> None:
+    mod, _d1, broker, _ = lane
+    _held_wording_broker(mod, monkeypatch, broker)
+    _litigation_wake(mod)
+    out = _bind(mod, {"job_id": JOB})
+    assert out["bound"] is True and out["held_wording"] == [HELD_TEXT]
+    assert "exactly the held_wording text" in out["message"]
+
+
+def test_a_refused_held_wording_is_told_with_the_exact_text_and_the_retry_goes(
+    lane, monkeypatch
+) -> None:
+    """FALSIFIER: without the HeldWordingRefused branch the refusal becomes
+    send_failed ("Do not resend ... Escalate") and the quoted text is dropped."""
+    mod, d1, broker, _ = lane
+    _held_wording_broker(mod, monkeypatch, broker)
+    _litigation_wake(mod)
+    _bind(mod, {"job_id": JOB})
+    told = _draft_told(mod, IMPROVISED, "c1")
+    assert broker.bound_sends == []
+    assert HELD_TEXT in told and "exactly the text below" in told
+    assert "Escalate" not in told and "Do not resend" not in told
+    assert [m["reason"] for m in _held(d1)] == ["held_wording"]
+    assert [m["wake_job_id"] for m in _held(d1)] == [JOB]
+    assert not [a for a, _m in d1.events() if a == "REPLY_FAILED"]
+    # The retry with the exact text goes out in the same turn.
+    retold = _draft_told(mod, HELD_TEXT, "c2")
+    assert len(broker.bound_sends) == 1 and "NOT SENT" not in retold
+
+
+def test_a_second_wording_refusal_still_names_the_text() -> None:
+    mod = load_plugin("hermes-smd-reply")
+    text = mod.notice.render(
+        mod.notice.HoldNotice(
+            reason="held_wording",
+            recipient=ADMIN,
+            message_id="m",
+            attempt=3,
+            detail=f'Send exactly this: "{HELD_TEXT}".',
+        )
+    )
+    assert HELD_TEXT in text and "Do NOT redraft" not in text

@@ -194,6 +194,17 @@ def handle_tool(args: dict[str, Any], **_: Any) -> str:
             "addressed to this sender only; the subject is set for you. It is sent once it "
             "passes the reply checks. Nothing else in this turn can be sent."
         )
+    held = verdict.get("held_wording")
+    if isinstance(held, list) and held and all(isinstance(t, str) for t in held):
+        # A held job (ss-console 2026-10-24): the broker sends only its fixed
+        # wording and refuses any other words, so the model is handed it here.
+        out["held_wording"] = held
+        out["message"] += (
+            " This job is held: the reply's whole body must be exactly "
+            + ("one of the held_wording texts" if len(held) > 1 else "the held_wording text")
+            + ", with nothing before or after it (fill <file name> with the file's name only). "
+            "Any other words are refused and nothing is sent."
+        )
     return json.dumps(out)
 
 

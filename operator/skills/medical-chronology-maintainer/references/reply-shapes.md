@@ -13,9 +13,12 @@ technical record, and every hold our side caused already paged SMD with it.
   renderer could not prove, a filing or read-back that did not finish, a cost
   cap, budget or page allowance; also the default for any class not listed):
   "The chronology for matter <number> is not filed yet, and nothing new has
-  been put on the matter (on an update: the chronology already there is
-  unchanged). Nothing is needed from you; SMD is finishing it, and the next
-  message you get about this chronology will be the filed one."
+  been put on the matter. Nothing is needed from you; SMD is finishing it, and
+  the next message you get about this chronology will be the filed one." On an
+  update: "The chronology for matter <number> is not filed yet, and nothing new
+  has been put on the matter; the chronology already there is unchanged.
+  Nothing is needed from you; SMD is finishing it, and the next message you get
+  about this chronology will be the filed one."
 - **`smd_finishing_filed`** (the update is filed; removing the earlier
   version did not finish): "The updated chronology for matter <number> is
   filed in its folder. The earlier version is still in the same folder beside
@@ -49,6 +52,9 @@ technical record, and every hold our side caused already paged SMD with it.
   it stays one complete document. Nothing is needed from you; the next message
   you get about this chronology will be the updated one." If the resubmission
   is refused, the `smd_finishing` wording instead.
+
+The broker enforces every held wording above: `reply_bind` returns it as
+`held_wording`, and the send refuses any other words and quotes the text.
 
 ## REQUEST mode, the firm's questions
 

@@ -288,7 +288,11 @@ to move for:` had no cases that fit; and `cases_skipped` cases already had
      SMD with that reason. **Never quote, paraphrase or summarize the reason, a
      gate, a stage or a code.** The same token comes back as `hold_class` on the job from `litigation_job_status`;
      when the two differ, the job's `hold_class` wins. Each class has fixed wording; use it and add
-     nothing:
+     nothing. **The broker enforces this**: on a held job `reply_bind` answers with the
+     exact text as `held_wording`, and the send refuses any other words (a greeting, a
+     sign-off, one changed word), sends nothing, and quotes the text to send. The reply's
+     whole body is that text. (On 2026-10-24 a held job's reply went out in the model's own
+     words, asking the firm whether to run it again; that is why.)
      - `smd_finishing` (our side: the gates, a value from an earlier list, a
        change with no document behind it, a filing that did not finish): "The
        litigation status list is not filed yet, and nothing new has been put in
@@ -309,10 +313,13 @@ to move for:` had no cases that fit; and `cases_skipped` cases already had
        whose answer is the firm's.
      - A hold with no `Hold class:` line, or a class not listed here, is
        `smd_finishing`.
-     - For the deadlines report (`Report: deadlines.`) the same fixed wording with
-       "the deadlines report" in place of "the litigation status list" and "No
-       report was filed: none of the firm's Open or Pending matters fit this
-       request." for `nothing_in_scope`.
+     - For the deadlines report (`Report: deadlines.`), `smd_finishing` is: "The
+       deadlines report is not filed yet, and nothing new has been put in the
+       firm's Operator Library. Nothing is needed from you; SMD is finishing it,
+       and the next message you get about this report will be the filed
+       report." and `nothing_in_scope` is: "No report was filed: none of the
+       firm's Open or Pending matters fit this request. Nothing is needed from
+       you."
      - For a staff reassignment (`Report: reassign.`), `smd_finishing` is: "The
        cases have not all been moved yet. Nothing is needed from you; SMD is
        finishing it, and the next message you get about this will say what was
