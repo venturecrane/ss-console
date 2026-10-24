@@ -450,6 +450,11 @@ class Round:
                 f"{len(image_claims)} | " + ", ".join(f"{k}={v}" for k, v in sorted(elig.items()))
             )
         self.run_tasks(clusters, image_claims, pdfs, index, doc_sha, ts)
+        return self.finish(claims, pdfs, doc_sha, ts)
+
+    def finish(self, claims: list[dict[str, Any]], pdfs: dict[int, Path], doc_sha: str, ts: str) -> int:
+        """Re-test every SUPPORTED control not retired (``control_runs``), then
+        the round's report."""
         rindex = (
             PageIndex(self.paths.slug_dir, self.paths.unit, min_chars=TEXT_MIN_CHARS) if self.mode == "text" else None
         )
