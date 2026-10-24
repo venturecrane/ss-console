@@ -387,6 +387,53 @@ def test_a_model_api_crash_is_retried_and_a_defect_crash_is_not(tmp_path) -> Non
     assert requeue.cause([{"outcome": "held"}], "held", {"reason": "per_job_cap_usd: over"}, "vision") is None
 
 
+INFRA_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+marker = jd / 'ran'
+n = int(marker.read_text()) + 1 if marker.exists() else 1
+marker.write_text(str(n))
+if n == 1:
+    st = jd / 'data' / 'example' / 'runs' / 'alpha' / 'state.json'
+    st.parent.mkdir(parents=True, exist_ok=True)
+    st.write_text(json.dumps({"stages": {"map": {"status": "failed", "exit_code": %(code)d}}}))
+    print(json.dumps([{"unit": "alpha", "outcome": "failed", "stage": "map", "dollars": 12.0, "pages": 300,
+        "documents": 40, "transient": False, "reason": "map: exit %(code)d; last output: chunk-07 failed"}]))
+    sys.exit(0)
+print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 31.0,
+    "pages": 300, "documents": 40, "folder_id": "folder-9",
+    "files": [{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}],
+    "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10,
+        "sha256": "%(sha)s"}], "review": "passed", "review_cents": 0}}]))
+"""
+
+
+def test_a_stage_exit_of_75_is_infrastructure_and_retried(tmp_path) -> None:
+    """compose.INFRA_EXIT (75, #3464): map and repair return it when an API
+    error outlived its retries. The daemon reads the stage's exit code off
+    the job's state.json and retries; the same failure with exit 1 (a defect)
+    is failed at once."""
+    from medchron import requeue
+
+    assert requeue.INFRA_EXIT == 75
+    d, broker = _daemon(tmp_path, INFRA_RUNNER % {"code": 75, "sha": "a" * 64})
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued" and "model API error at map" in broker.records[-1][2]["reason"]
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+
+    d2, broker2 = _daemon(tmp_path / "defect", INFRA_RUNNER % {"code": 1, "sha": "a" * 64})
+    _submit(d2, broker2, "01B")
+    assert d2.tick() == "failed" and broker2.records[-1][1] == "failed"
+
+
+def test_the_infrastructure_wording_is_the_fallback_when_no_exit_code_is_on_file() -> None:
+    from medchron import requeue
+
+    o = {"outcome": "failed", "reason": "map incomplete (infrastructure): an API error outlived its retries"}
+    assert requeue.cause([o], "failed", {}, "map") == "model_api"
+
+
 def test_other_holds_are_not_re_run(tmp_path) -> None:
     """Only the read-back-short hold is a wait; a review hold, or the upload's
     refusal over bytes that changed, is not re-run by the daemon."""

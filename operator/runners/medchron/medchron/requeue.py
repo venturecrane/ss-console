@@ -31,6 +31,7 @@ module, its reason saying it was retried.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any
@@ -45,6 +46,12 @@ UPLOAD_DELAY_S = 900.0
 #: How many infrastructure requeues one job gets, every cause together.
 MAX_REQUEUES = 4
 
+#: A stage's own "infrastructure, retry me later" exit: compose.INFRA_EXIT,
+#: which the map and repair stages return when an API error outlived its
+#: retries (#3464). Read off the job's state.json, where the driver records
+#: every stage's exit code; the reason text is the fallback.
+INFRA_EXIT = 75
+
 #: The upload's read-back-short hold (dag.py's exit 2 reason).
 UPLOAD_SHORT = "upload: the folder read back short"
 #: A runner that died of a signal: the child's exit code is negative.
@@ -54,7 +61,7 @@ KILLED = re.compile(r"the runner exited -\d+ without a verdict")
 #: carries when it was not, and the map stage's own infrastructure wording.
 MODEL_API = re.compile(
     r"APIConnectionError|APITimeoutError|InternalServerError|OverloadedError|overloaded_error|"
-    r"ServiceUnavailableError|RateLimitError|CallDeadlineError|\bmodel API\b"
+    r"ServiceUnavailableError|RateLimitError|CallDeadlineError|\bmodel API\b|\(infrastructure\)"
 )
 
 CAUSE_NOTE = {
@@ -90,9 +97,28 @@ def cause(outcomes: list[Any], state: str, fields: dict[str, Any], stage: str | 
     if transient_failure(outcomes):
         return "network"
     failed = [o for o in outcomes if isinstance(o, dict) and str(o.get("outcome")) == "failed"]
-    if failed and all(MODEL_API.search(str(o.get("reason") or "")) for o in failed):
+    if failed and all(_infra(o) for o in failed):
         return "model_api"
     return None
+
+
+def _infra(o: dict[str, Any]) -> bool:
+    return o.get("exit_code") == INFRA_EXIT or bool(MODEL_API.search(str(o.get("reason") or "")))
+
+
+def stage_exit(d: Any, job_id: str, o: dict[str, Any]) -> int | None:
+    """The exit code the driver recorded for the stage this outcome stopped
+    at, from ``<job>/data/<slug>/runs/<unit>/state.json`` (state.state_path,
+    under the per-job data root the daemon writes into job.yaml)."""
+    if not o.get("unit") or not o.get("stage"):
+        return None
+    path = d.job_dir(job_id) / "data" / str(d.customer_slug) / "runs" / str(o["unit"]) / "state.json"
+    try:
+        rec = (json.loads(path.read_text(encoding="utf-8")).get("stages") or {}).get(str(o["stage"])) or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    code = rec.get("exit_code") if isinstance(rec, dict) else None
+    return code if isinstance(code, int) else None
 
 
 def delay_for(why: str) -> float:
@@ -106,6 +132,9 @@ def maybe_requeue(
     infrastructure cause and its retries are not spent. Returns True when it
     did; the caller then records nothing more. On the last attempt the reason
     says it was retried (appended to a hold, whose class keys on its prefix)."""
+    for o in outcomes:
+        if isinstance(o, dict) and str(o.get("outcome")) == "failed" and "exit_code" not in o:
+            o["exit_code"] = stage_exit(d, job_id, o)
     why = cause(outcomes, state, fields, stage)
     if why is None:
         return False

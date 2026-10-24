@@ -775,8 +775,9 @@ def _worksheet_text(sr: StageRun) -> str:
     out = list((sr.slug_dir / "out" / "alpha").glob("* - Medical Billing Worksheet *.docx"))
     assert len(out) == 1
     d = Document(str(out[0]))
-    cells = [c.text for t in d.tables for r in t.rows for c in r.cells]
-    return "\n".join([p.text for p in d.paragraphs] + cells)
+    # Document order, paragraphs and table cells interleaved as they render.
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    return "\n".join("".join(p.itertext()) for p in d.element.body.iter(f"{w}p"))
 
 
 def test_a_large_amount_the_page_prints_with_its_decimal_is_accepted(
@@ -898,7 +899,10 @@ def test_facility_bills_total_against_a_clinician_named_spine(job_dir: Path, dat
     and the worksheet read SUBTOTAL $0.00 with every provider a gap. Now a
     bill matches through the facility in the provider cell (its own initials:
     "NV Ridge Health" is NVRH), one clinician listed twice is one row, and a
-    bill that matches no provider is its own row, as printed, in the total."""
+    bill that matches no provider is shown as printed under its own subtotal,
+    OUTSIDE the grand total (a first version of this worksheet once totalled
+    3x the firm's lien report), and a document that already supplied a
+    matched row adds nothing to it (same paper, counted once)."""
     cfg = json.loads(json.dumps(FIRM_CONFIG))
     cfg["billing"]["provider_match"] = {}
     firm = tmp_path / "bare-firm.yaml"
@@ -912,11 +916,20 @@ def test_facility_bills_total_against_a_clinician_named_spine(job_dir: Path, dat
         _ledger("Ramos ledger", "Eva Ramos MD", "$300.00"),
         _ledger("Ambulance invoice", "Sierra Ambulance Authority", "$1,500.00"),
     ]
+    # The NVRH statement also carries a page billed under a name that matches
+    # nothing: that paper already supplied a matched row, so it stays there.
+    rows[0]["chunks"].append(
+        {
+            "doc_type": "LEDGER",
+            "provider": "Ridgeline Billing Office",
+            "printed_totals": [{"label": "Total Charges", "amount": "$12,345.67", "page": 2}],
+        }
+    )
     (sr.slug_dir / "billing_extract.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     assert billing_chart.run(sr) == 0
     chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
     by = {r["provider"]: r for r in chart["rows"]}
-    assert chart["grand_total"] == 16145.67, (by, log)
+    assert chart["grand_total"] == 14645.67, (by, log)
     nvrh = next(r for r in chart["rows"] if r.get("merged_from") and r["total"] == 12345.67)
     assert sorted(nvrh["merged_from"]) == [
         "Mark Hale, MD (NVRH Ophthalmology)",
@@ -926,10 +939,16 @@ def test_facility_bills_total_against_a_clinician_named_spine(job_dir: Path, dat
     assert len(ramos) == 1 and ramos[0]["total"] == 300.0, "one clinician is one row"
     assert (ramos[0]["first"], ramos[0]["last"]) == ("2026-02-01", "2026-02-10")
     assert by["Joan Kerr, RN (Valley Care at Home)"]["total"] == 2000.0
-    own = by["Sierra Ambulance Authority"]
-    assert own["total"] == 1500.0 and own["as_printed"] is True
-    assert chart["unmatched"] == {"Sierra Ambulance Authority": [1500.0]}, "still listed in the report"
+    assert "Sierra Ambulance Authority" not in by, "an as-printed row is not in the grand total"
+    printed = {r["provider"]: r for r in chart["as_printed_rows"]}
+    assert list(printed) == ["Sierra Ambulance Authority"], "the same paper is counted once"
+    assert printed["Sierra Ambulance Authority"]["total"] == 1500.0
+    assert printed["Sierra Ambulance Authority"]["as_printed"] is True and chart["as_printed_subtotal"] == 1500.0
+    assert set(chart["unmatched"]) == {"Sierra Ambulance Authority", "Ridgeline Billing Office"}, "still reported"
     assert billing_docx.run(sr) == 0
     text = _worksheet_text(sr)
-    assert "$16,145.67" in text and "GRAND TOTAL" in text and "Sierra Ambulance Authority" in text
-    assert "as printed on the bill" in text
+    assert "$14,645.67" in text and "GRAND TOTAL" in text
+    head = "Billed under a name not matched to a treating provider"
+    assert head in text and text.index(head) > text.index("GRAND TOTAL")
+    assert "Sierra Ambulance Authority" in text and "SUBTOTAL (not in the grand total)" in text
+    assert "$1,500.00" in text and "Ridgeline Billing Office" not in text

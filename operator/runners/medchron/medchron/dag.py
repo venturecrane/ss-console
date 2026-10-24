@@ -206,7 +206,13 @@ STAGES: tuple[Stage, ...] = (
         scope="slug",
         requires=("decide_billing_docs",),
         runner=_billing.run,
-        exit_map={1: (FAILED, "billing pages could not be transcribed; the totals would be incomplete")},
+        exit_map={
+            1: (
+                FAILED,
+                "billing_extract exited 1: a pipeline defect (a page no read could transcribe is a named gap in "
+                "billing_gaps.json, never this exit)",
+            )
+        },
     ),
     Stage("decide_units", "", _slug, scope="slug", requires=("billing_extract",), decision="units"),
     Stage(
@@ -523,8 +529,8 @@ STAGES: tuple[Stage, ...] = (
         exit_map={
             1: (
                 FAILED,
-                "upload: refused (a folder of that name is not ours, the local bytes changed, or the read-back "
-                "found other bytes than ours)",
+                "upload: refused (the local bytes changed since the manifest, every numbered folder name is "
+                "already taken, no folder id, or the read-back found other bytes than ours)",
             ),
             2: (
                 HELD,

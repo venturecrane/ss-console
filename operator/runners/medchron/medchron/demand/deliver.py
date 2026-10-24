@@ -153,9 +153,11 @@ def file_to_matter(
     code = upload_stage.run(sr, pause=pause)  # type: ignore[arg-type]
     delivery_path = data / "runs" / UNIT / "delivery.json"
     delivery = json.loads(delivery_path.read_text(encoding="utf-8")) if delivery_path.is_file() else {}
-    # The upload stage's own last sentence is the reason (a folder it did not
-    # create, local bytes changed, no folder id, an empty manifest): one exit
-    # code covers all four, so the caller must not guess which.
+    # The upload stage's own last sentence is the reason (every numbered
+    # folder name already taken, local bytes changed, no folder id, an empty
+    # manifest; a same-name folder it did not create is no longer one, the
+    # stage numbers past it): one exit code covers all four, so the caller
+    # must not guess which.
     return {"exit": code, "said": said[-1] if said else "", **delivery}
 
 

@@ -210,19 +210,9 @@ class Matcher:
         return BM.merge_by_labels(rows, labels, lambda lab: self.authored(lab, rows))
 
 
-def run(sr: StageRun) -> int:
-    d = sr.slug_dir
-    unit = sr.unit.unit
-    sfx = f"-{unit}" if sr.job.joint else ""
-    patient = sr.unit.client_name.lower() if sr.job.joint else None
-    suspect_at = int(sr.cfg.get("billing", "suspect_amount_cents") or 50_000_000) / 100.0
-    suspect: list[tuple[str, float]] = []
-    matcher = Matcher(sr.cfg, d)
-    pages = PageText(d)
-    dropped: list[dict[str, Any]] = []
-    dropped_for: dict[str, int] = {}
-    records = read_jsonl(d / "billing_extract.jsonl")
-    labels = sorted(
+def _labels(records: list[dict[str, Any]], patient: str | None) -> list[str]:
+    """Every provider label printed on a provider bill of this unit."""
+    return sorted(
         {
             str(c.get("provider") or "").strip()
             for r in records
@@ -232,204 +222,251 @@ def run(sr: StageRun) -> int:
             and not quarantined(c, patient)
         }
     )
-    spine = matcher.spine((d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8"), labels)
-    bills: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
-    )
-    unmatched: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
-    )
-    vendor: list = []
-    subro: list = []
-    quarantine: list = []
-    failed: list = []
-    inherited: list = []
-    for r in records:
+
+
+def _new_entry() -> dict[str, Any]:
+    return {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
+
+
+class _Tally:
+    """One pass over billing_extract.jsonl: every printed total placed on a
+    row (or the report), nothing computed but the placement."""
+
+    def __init__(self, sr: StageRun, matcher: Matcher, spine: list[dict[str, Any]], patient: str | None) -> None:
+        self.sr, self.matcher, self.spine, self.patient = sr, matcher, spine, patient
+        self.suspect_at = int(sr.cfg.get("billing", "suspect_amount_cents") or 50_000_000) / 100.0
+        self.pages = PageText(sr.slug_dir)
+        self.bills: dict[str, dict[str, Any]] = defaultdict(_new_entry)
+        self.unmatched: dict[str, dict[str, Any]] = defaultdict(_new_entry)
+        self.dropped: list[dict[str, Any]] = []
+        self.dropped_for: dict[str, int] = {}
+        self.vendor: list = []
+        self.subro: list = []
+        self.quarantine: list = []
+        self.failed: list = []
+        self.inherited: list = []
+
+    def record(self, r: dict[str, Any]) -> None:
         carry = None
         for c in r.get("chunks") or []:
             if "FAILED_PAGE" in c:
-                failed.append((r["file"], c["FAILED_PAGE"]))
-                continue
-            if not isinstance(c, dict) or "doc_type" not in c:
-                continue
-            if quarantined(c, patient):
-                quarantine.append((r["file"], c.get("patient") or "", c.get("provider")))
-                continue
-            kind = c.get("doc_type")
-            if kind == "VENDOR_INVOICE":
-                vendor.append((r["file"], c.get("provider")))
-                continue
-            if kind == "LIEN_SUBROGATION":
-                subro.append(
-                    (r["file"], c.get("provider"), [t.get("amount") for t in c.get("printed_totals") or []][:3])
-                )
-                continue
-            if kind in NON_PROVIDER:
-                continue
-            raw_provider = (c.get("provider") or "").strip()
-            tgt = matcher.provider(c.get("provider"), spine)
-            direct = bool(tgt) and not MULTI.search(raw_provider)
-            if tgt:
-                carry = tgt
-            elif not raw_provider and carry:
-                # A continuation chunk carries no provider header; the name is
-                # printed once on page one. Inherit ONLY when the field is
-                # blank, never when a name simply failed to match.
-                tgt = carry
-                inherited.append((r["file"], c.get("page_first"), carry))
-            key = tgt or raw_provider or NO_LABEL
-            e = bills[tgt] if tgt else unmatched[key]
-            e["docs"].add(r["file"])
-            for t in c.get("printed_totals") or []:
-                flagged: list[tuple[str, float]] = []
-                a = money(t.get("amount"), flagged, suspect_at)
-                if a is None:
-                    continue
-                if flagged:
-                    page = _page_no(t.get("page"))
-                    ok, why = pages.prints(str(r["file"]), page, a)
-                    if not ok:
-                        dropped.append(
-                            {
-                                "file": str(r["file"]),
-                                "page": page,
-                                "amount_text": str(t.get("amount")),
-                                "reason": f"at or above the ${suspect_at:,.2f} check, and {why}; "
-                                f"left out of every total",
-                            }
-                        )
-                        dropped_for[key] = dropped_for.get(key, 0) + 1
-                        continue
-                    sr.log(f"  {t.get('amount')} on {str(r['file'])[:40]} p.{page}: printed on the page, accepted")
-                e["totals"].append((a, t.get("label"), r["file"], t.get("page"), kind))
-                lab = str(t.get("label") or "")
-                if tgt and direct and ADJ_LABEL.search(lab) and matcher.provider(lab, spine) in (None, tgt):
-                    e.setdefault("adjustments", []).append((abs(a), lab, r["file"], t.get("page")))
-            e["bdates"].extend(v for k in ("date_first", "date_last") if (v := dt(c.get(k))))
-    lien: dict[str, float] = {}
-    lp = read_json(d / "lien_report.json", None)
-    if lp:
-        for sect in ("medical_lienholders", "medical_balances_no_lien"):
-            for r in lp.get(sect) or []:
-                lien[matcher.provider(r["provider"], spine) or r["provider"]] = r["total_claim"]
-    grand = 0.0
-    rows: list[dict[str, Any]] = []
-    blank = {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
-    # (b) of row 28: a label that matches no chronology provider is its own
-    # row, as printed on the bill, by the same ledger-over-claims rule, and in
-    # the total. It is still listed under "unmatched" in the report.
-    own = [
-        (
-            {
-                "provider": k,
-                "first": min(v["bdates"]) if v["bdates"] else None,
-                "last": max(v["bdates"]) if v["bdates"] else None,
-                "as_printed": True,
-            },
-            v,
-        )
-        for k, v in sorted(unmatched.items())
-    ]
-    for row, e in [(row, bills.get(row["provider"], blank)) for row in spine] + own:
-        ranked = sorted(
-            ((total_rank(lab) if kd == "LEDGER" else 0, a, lab, fl, pg) for a, lab, fl, pg, kd in e["totals"]),
-            key=lambda t: (t[0], t[1]),
-            reverse=True,
-        )
-        best = next((t for t in ranked if t[0] > 0), None)
-        if best:
-            ours, obasis = best[1], best[3].strip()
-        elif ranked:
-            claims = {(fl, pg, a) for a, lab, fl, pg, kd in e["totals"] if a > 0}
-            ours, obasis = None, f"NOT DERIVABLE - no ledger; {len(claims)} claim form(s) on file, overlapping"
+                self.failed.append((r["file"], c["FAILED_PAGE"]))
+            elif isinstance(c, dict) and "doc_type" in c and not self._set_aside(r, c):
+                carry = self._chunk(r, c, carry)
+
+    def _set_aside(self, r: dict[str, Any], c: dict[str, Any]) -> bool:
+        kind = c.get("doc_type")
+        if quarantined(c, self.patient):
+            self.quarantine.append((r["file"], c.get("patient") or "", c.get("provider")))
+        elif kind == "VENDOR_INVOICE":
+            self.vendor.append((r["file"], c.get("provider")))
+        elif kind == "LIEN_SUBROGATION":
+            amts = [t.get("amount") for t in c.get("printed_totals") or []][:3]
+            self.subro.append((r["file"], c.get("provider"), amts))
         else:
-            ours, obasis = (
-                (None, "NOT DERIVABLE - the amount read could not be confirmed on the page; see Amounts Left Out")
-                if dropped_for.get(row["provider"])
-                else (None, "no bill located")
-            )
-        amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
-        grand += amt or 0.0
-        alternates = [
-            a
-            for a in sorted(
-                {round(x, 2) for x, lab, _, _, kd in e["totals"] if x > 0 and kd == "LEDGER" and total_rank(lab)},
-                reverse=True,
-            )
-            if amt is None or (abs(a - amt) > max(100.0, 0.01 * amt) and a >= 0.5 * amt)
-        ][:6]
-        rows.append(
+            return kind in NON_PROVIDER
+        return True
+
+    def _chunk(self, r: dict[str, Any], c: dict[str, Any], carry: str | None) -> str | None:
+        raw_provider = (c.get("provider") or "").strip()
+        tgt = self.matcher.provider(c.get("provider"), self.spine)
+        direct = bool(tgt) and not MULTI.search(raw_provider)
+        if tgt:
+            carry = tgt
+        elif not raw_provider and carry:
+            # A continuation chunk carries no provider header; the name is
+            # printed once on page one. Inherit ONLY when the field is blank,
+            # never when a name simply failed to match.
+            tgt = carry
+            self.inherited.append((r["file"], c.get("page_first"), carry))
+        key = tgt or raw_provider or NO_LABEL
+        e = self.bills[tgt] if tgt else self.unmatched[key]
+        e["docs"].add(r["file"])
+        for t in c.get("printed_totals") or []:
+            a = self._amount(r, t, key)
+            if a is None:
+                continue
+            e["totals"].append((a, t.get("label"), r["file"], t.get("page"), c.get("doc_type")))
+            lab = str(t.get("label") or "")
+            if tgt and direct and ADJ_LABEL.search(lab) and self.matcher.provider(lab, self.spine) in (None, tgt):
+                e["adjustments"].append((abs(a), lab, r["file"], t.get("page")))
+        e["bdates"].extend(v for k in ("date_first", "date_last") if (v := dt(c.get(k))))
+        return carry
+
+    def _amount(self, r: dict[str, Any], t: dict[str, Any], key: str) -> float | None:
+        """The printed figure, or None: unreadable, or over the suspect line
+        and not printed on the page with its decimal (row 18: dropped and
+        recorded, never guessed)."""
+        flagged: list[tuple[str, float]] = []
+        a = money(t.get("amount"), flagged, self.suspect_at)
+        if a is None or not flagged:
+            return a
+        page = _page_no(t.get("page"))
+        ok, why = self.pages.prints(str(r["file"]), page, a)
+        if ok:
+            self.sr.log(f"  {t.get('amount')} on {str(r['file'])[:40]} p.{page}: printed on the page, accepted")
+            return a
+        self.dropped.append(
             {
-                **row,
-                "total": amt,
-                "basis": basis,
-                "ours": ours,
-                "lien": lien.get(row["provider"]),
-                "docs": sorted(e["docs"]),
-                "adjustments": [
-                    {"amount": a, "label": lab, "doc": fl, "page": pg}
-                    for a, lab, fl, pg in sorted(e.get("adjustments") or [], reverse=True)
-                ],
-                "alternates": alternates,
+                "file": str(r["file"]),
+                "page": page,
+                "amount_text": str(t.get("amount")),
+                "reason": f"at or above the ${self.suspect_at:,.2f} check, and {why}; left out of every total",
             }
         )
-        sr.log(f"{row['provider'][:43]:<44}{(f'{amt:,.2f}' if amt is not None else '-'):>15}  {basis[:44]}")
-    for k, v in lien.items():
-        if not any(r["provider"] == k for r in rows):
-            grand += v
-            rows.append(
-                {
-                    "provider": k,
-                    "first": None,
-                    "last": None,
-                    "total": v,
-                    "basis": "Firm lien report",
-                    "ours": None,
-                    "lien": v,
-                    "docs": [],
-                    "adjustments": [],
-                    "alternates": [],
-                }
-            )
+        self.dropped_for[key] = self.dropped_for.get(key, 0) + 1
+        return None
+
+    def own_rows(self, lien: dict[str, float]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        """(b) of row 28, as revised: a label matching no chronology provider
+        is its own row, as printed on the bill, by the same ledger-over-claims
+        rule, but NOT in the grand total (a first version of this worksheet
+        once totalled 3x the firm's lien report). A document that already
+        supplied a matched row keeps its amounts there only: same paper,
+        counted once. A label the lien report carries is the lien's row."""
+        matched_docs = set().union(*(e["docs"] for e in self.bills.values())) if self.bills else set()
+        out = []
+        for k, v in sorted(self.unmatched.items()):
+            if k in lien:
+                continue
+            e = {**v, "totals": [t for t in v["totals"] if t[2] not in matched_docs]}
+            e["docs"] = {f for f in v["docs"] if f not in matched_docs}
+            if not e["docs"]:
+                continue
+            row = {"provider": k, "first": min(v["bdates"], default=None), "last": max(v["bdates"], default=None)}
+            out.append(({**row, "as_printed": True}, e))
+        return out
+
+
+def _row(row: dict[str, Any], e: dict[str, Any], lien: dict[str, float], dropped: int) -> dict[str, Any]:
+    """One worksheet row: the provider's own ledger total over claim forms;
+    the firm's lien report over both; NOT DERIVABLE when neither exists."""
+    ranked = sorted(
+        ((total_rank(lab) if kd == "LEDGER" else 0, a, lab, fl, pg) for a, lab, fl, pg, kd in e["totals"]),
+        key=lambda t: (t[0], t[1]),
+        reverse=True,
+    )
+    best = next((t for t in ranked if t[0] > 0), None)
+    if best:
+        ours, obasis = best[1], best[3].strip()
+    elif ranked:
+        claims = {(fl, pg, a) for a, lab, fl, pg, kd in e["totals"] if a > 0}
+        ours, obasis = None, f"NOT DERIVABLE - no ledger; {len(claims)} claim form(s) on file, overlapping"
+    elif dropped:
+        ours, obasis = None, "NOT DERIVABLE - the amount read could not be confirmed on the page; see Amounts Left Out"
+    else:
+        ours, obasis = None, "no bill located"
+    amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
+    ledgers = {round(x, 2) for x, lab, _, _, kd in e["totals"] if x > 0 and kd == "LEDGER" and total_rank(lab)}
+    alternates = [
+        a
+        for a in sorted(ledgers, reverse=True)
+        if amt is None or (abs(a - amt) > max(100.0, 0.01 * amt) and a >= 0.5 * amt)
+    ][:6]
+    return {
+        **row,
+        "total": amt,
+        "basis": basis,
+        "ours": ours,
+        "lien": lien.get(row["provider"]),
+        "docs": sorted(e["docs"]),
+        "adjustments": [
+            {"amount": a, "label": lab, "doc": fl, "page": pg}
+            for a, lab, fl, pg in sorted(e.get("adjustments") or [], reverse=True)
+        ],
+        "alternates": alternates,
+    }
+
+
+def _lien(d: Any, matcher: Matcher, spine: list[dict[str, Any]]) -> dict[str, float]:
+    lien: dict[str, float] = {}
+    lp = read_json(d / "lien_report.json", None)
+    for sect in ("medical_lienholders", "medical_balances_no_lien") if lp else ():
+        for r in lp.get(sect) or []:
+            lien[matcher.provider(r["provider"], spine) or r["provider"]] = r["total_claim"]
+    return lien
+
+
+def _lien_only(k: str, v: float) -> dict[str, Any]:
+    return {
+        "provider": k,
+        "first": None,
+        "last": None,
+        "total": v,
+        "basis": "Firm lien report",
+        "ours": None,
+        "lien": v,
+        "docs": [],
+        "adjustments": [],
+        "alternates": [],
+    }
+
+
+def run(sr: StageRun) -> int:
+    d = sr.slug_dir
+    unit = sr.unit.unit
+    sfx = f"-{unit}" if sr.job.joint else ""
+    patient = sr.unit.client_name.lower() if sr.job.joint else None
+    matcher = Matcher(sr.cfg, d)
+    records = read_jsonl(d / "billing_extract.jsonl")
+    chrono = (d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")
+    spine = matcher.spine(chrono, _labels(records, patient))
+    tally = _Tally(sr, matcher, spine, patient)
+    for r in records:
+        tally.record(r)
+    lien = _lien(d, matcher, spine)
+    rows = [
+        _row(row, tally.bills.get(row["provider"], _new_entry()), lien, tally.dropped_for.get(row["provider"], 0))
+        for row in spine
+    ]
+    rows += [_lien_only(k, v) for k, v in lien.items() if not any(r["provider"] == k for r in rows)]
+    printed = [_row(row, e, {}, tally.dropped_for.get(row["provider"], 0)) for row, e in tally.own_rows(lien)]
+    for r in rows + printed:
+        amt = r["total"]
+        sr.log(f"{r['provider'][:43]:<44}{(f'{amt:,.2f}' if amt is not None else '-'):>15}  {r['basis'][:44]}")
+    grand = sum(r["total"] or 0.0 for r in rows)
     gaps = [r for r in rows if r["total"] is None]
     sr.log(
         f"{'GRAND TOTAL' if not gaps else 'SUBTOTAL'} {grand:,.2f}"
         + (f"  INCOMPLETE: {len(gaps)} provider(s) have no derivable total" if gaps else "")
     )
-    if unmatched:
+    if printed:
+        sub = sum(r["total"] or 0.0 for r in printed)
         sr.log(
-            f"{len(unmatched)} billing document label(s) not matched to a chronology provider; each is its own "
-            f"row, as printed on the bill"
+            f"{len(printed)} bill label(s) not matched to a chronology provider: shown as printed under their own "
+            f"subtotal {sub:,.2f}, NOT in the grand total"
         )
     (d / f"billing_chart{sfx}.json").write_text(
         json.dumps(
             {
                 "rows": rows,
                 "grand_total": round(grand, 2),
-                "inherited_attribution": [list(x) for x in inherited],
+                "as_printed_rows": printed,
+                "as_printed_subtotal": round(sum(r["total"] or 0.0 for r in printed), 2),
+                "inherited_attribution": [list(x) for x in tally.inherited],
                 "unmatched": {
                     k: sorted({round(a, 2) for a, _, _, _, _ in v["totals"]}, reverse=True)[:5]
-                    for k, v in unmatched.items()
+                    for k, v in tally.unmatched.items()
                 },
-                "subrogation": [[a, str(b), c] for a, b, c in subro],
-                "vendor_invoices": [[a, str(b)] for a, b in vendor],
-                "quarantined": quarantine,
-                "failed_pages": failed,
+                "subrogation": [[a, str(b), c] for a, b, c in tally.subro],
+                "vendor_invoices": [[a, str(b)] for a, b in tally.vendor],
+                "quarantined": tally.quarantine,
+                "failed_pages": tally.failed,
                 "unit": unit,
                 "patient_filter": patient,
-                "suspect_amounts": [[str(a), b] for a, b in suspect],
-                "dropped_rows": dropped,
+                # Always empty since row 18: every suspect amount is settled by
+                # rule. billing_docx refuses a non-empty list as a defect.
+                "suspect_amounts": [],
+                "dropped_rows": tally.dropped,
             },
             indent=1,
         ),
         encoding="utf-8",
     )
-    (d / f"billing_dropped_rows{sfx}.json").write_text(json.dumps(dropped, indent=1), encoding="utf-8")
-    if dropped:
+    (d / f"billing_dropped_rows{sfx}.json").write_text(json.dumps(tally.dropped, indent=1), encoding="utf-8")
+    if tally.dropped:
         sr.log(
-            f"!! {len(dropped)} amount(s) at or above the suspect threshold could not be confirmed on the page; "
-            f"left out of every total and named in billing_dropped_rows{sfx}.json and on the worksheet"
+            f"!! {len(tally.dropped)} amount(s) at or above the suspect threshold could not be confirmed on the "
+            f"page; left out of every total and named in billing_dropped_rows{sfx}.json and on the worksheet"
         )
-    if suspect:
-        sr.log(f"!! {len(suspect)} amount(s) at or above the suspect threshold; likely a LOST DECIMAL in transcription")
     return 0
