@@ -84,6 +84,29 @@ describe('board: set / refresh / peers', () => {
     expect(out).toContain('[mission] ship the thing (focus: #123)')
   })
 
+  it('the mission line carries the skunkworks stance every turn', () => {
+    // Folded 2026-10-24: the Captain typed /skunkworks to reset agents. The
+    // stance rides this line because it is the only surface that survives
+    // /clear and /compact and reaches sessions that never ran /sos.
+    board(['set', me, '--mission', 'ship the thing', '--pid', String(process.pid)])
+    const out = board(['refresh', me])
+    expect(out).toContain('if the next action does not serve it, stop')
+    expect(out).toContain('Reversible repo work: name the risk and mitigation, then move')
+    expect(out).toContain('Client, paid or seat work: Law 16 path first')
+    expect(out).toContain('Side work off this line goes to another session')
+  })
+
+  it('a registered session with no mission is told to draft one, with the stance', () => {
+    // SessionStart registers the record before any focus exists; without
+    // this branch such a session would see no stance at all.
+    const unset = '/fake/worktrees/unset'
+    board(['set', unset, '--pid', String(process.pid)])
+    const out = board(['refresh', unset])
+    expect(out).toContain('[mission] not set')
+    expect(out).toContain('draft a winning line')
+    expect(out).toContain('Law 16 path first')
+  })
+
   it('refresh with no record prints nothing and does not crash', () => {
     expect(board(['refresh', '/fake/none'])).toBe('')
   })

@@ -102,7 +102,7 @@ if command -v node >/dev/null 2>&1 && [ -f "$BOARD_LIB" ]; then
   else
     node "$BOARD_LIB" set "$SELF" --pid "$PPID" 2>/dev/null || true
   fi
-  echo "[board] Registered on the session board. After the Captain states this session's focus, run: .claude/bin/mission set \"<one line>\" --focus <issue#|branch>"
+  echo "[board] Registered on the session board. Once the Captain states this session's focus, draft its winning line yourself and run: .claude/bin/mission set \"<outcome>, via <task>\" --focus <issue#|branch>. The outcome is what the business or a client experiences; product work never names a client."
 fi
 
 # --- What landed on main ahead of you ---------------------------------------

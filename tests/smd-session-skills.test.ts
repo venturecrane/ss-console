@@ -196,3 +196,52 @@ describe('/code-review covers the Operator and ends in fixes (fork, 2026-10-17)'
     expect(body).toMatch(/Never kill a running job/)
   })
 })
+
+describe('the skunkworks stance is the default (folded 2026-10-24)', () => {
+  // A PLACEMENT guard, like the rest of this file: it proves the text is where
+  // a session will read it, not that agents behave. The behavior-carrying
+  // surface is the per-turn mission suffix, executed in
+  // tests/board-and-freshness.test.ts; the measurement is the
+  // skunkworks-default-stance mechanism in the doctrine registry.
+  it('/sos records where the stance came from', () => {
+    const body = skillBody('sos')
+    expect(body).toMatch(/## The stance \(skunkworks, folded 2026-10-24\)/)
+    expect(body).toMatch(/skunkworks.*fork point is commit `6e2af4c8`/s)
+  })
+
+  it('/sos asks for a winning line the agent drafts itself, then moves', () => {
+    const body = skillBody('sos')
+    expect(body).toMatch(/<outcome>, via <task>/)
+    expect(body).toMatch(/Draft it yourself/)
+    expect(body).toMatch(/Product work never names a client/)
+  })
+
+  it('/sos keeps speed off client, paid and seat work', () => {
+    // Settled with the Captain 2026-10-24: speed is for reversible repo work;
+    // everything that reaches a client or costs money proves the path first.
+    expect(skillBody('sos')).toMatch(/Law 16 path proof before the first long run/)
+  })
+
+  it('/sos sends the stance into subagent briefs', () => {
+    expect(skillBody('sos')).toMatch(/Subagent briefs carry it/)
+  })
+
+  it('/sos points at the stance surfaces instead of restating the laws', () => {
+    // No second rulebook: a primer_line pasted here would drift from doctrine.
+    const body = skillBody('sos')
+    expect(body).toMatch(/board\.mjs`, `STANCE`/)
+    const doctrine = readFileSync(
+      resolve(ROOT, 'docs/doctrine/agent-operating-doctrine.md'),
+      'utf8'
+    )
+    const primerLines = [...doctrine.matchAll(/^primer_line: ['"](.+)['"]$/gm)].map((m) => m[1])
+    expect(primerLines.length).toBeGreaterThan(0)
+    expect(primerLines.filter((line) => body.includes(line))).toEqual([])
+  })
+
+  it('/eos grades the session against its mission, with a citation', () => {
+    const body = skillBody('eos')
+    expect(body).toMatch(/\*\*Against the mission:\*\*/)
+    expect(body).toMatch(/An uncited verdict is written as \*\*not shown\*\*/)
+  })
+})

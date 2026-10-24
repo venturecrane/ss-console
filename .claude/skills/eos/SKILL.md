@@ -292,6 +292,8 @@ This is a one-line boilerplate. Do not omit. Do not reword. Do not soften to "ma
 
 Using conversation history and gathered context, the agent generates a summary covering:
 
+**Against the mission:** the session's winning line (the `[mission]` line in the primer), then a verdict of **won**, **partly**, or **not**, then what remains open. Each verdict cites one fact a reader can check: a PR URL, a `vfy_` id, or a command and its output. An uncited verdict is written as **not shown**. This is the agent grading its own work, so the citation is what makes it more than a reflex (Law 14).
+
 **Accomplished:** What was completed this session
 
 - Issues closed/progressed

@@ -11,9 +11,12 @@
 # shows every peer's mission line to every other session.
 #
 # Convention (CLAUDE.md, Session start): set the mission right after the
-# Captain states the session's focus. Prefer an issue number or branch as
-# --focus when one exists -- canonical identifiers beat prose for overlap
-# spotting.
+# Captain states the session's focus. The mission is a WINNING line,
+# "<outcome>, via <task>": the outcome is what the business or a client
+# experiences, the task is how this session gets there. Product work never
+# names a client. Prefer an issue number or branch as --focus when one
+# exists -- canonical identifiers beat prose for overlap spotting. The primer
+# appends the skunkworks stance to this line every turn (board.mjs STANCE).
 set -u
 DIR=$(cd "$(dirname "$0")/.." && pwd)   # .claude/
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "mission: not in a git tree" >&2; exit 1; }
