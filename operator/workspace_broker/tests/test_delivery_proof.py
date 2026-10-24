@@ -208,6 +208,20 @@ def test_reply_status_names_the_key_the_reply_is_owed_under(tmp_path):
         _root(broker, "delivery_reply_status", kind="message", job_id=job)
 
 
+def test_reply_status_names_a_held_chronologys_key_by_its_reason(tmp_path):
+    """2026-10-23: a held chronology's reply is owed per distinct reason, and the
+    watch matches exactly the key the broker names, so the two must agree."""
+    import hashlib
+
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = rb._chronology_job(tmp_path, ["running"])
+    MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq").record(job, "held", {"reason": "identity: x"})
+    out = _root(_broker(tmp_path), "delivery_reply_status", kind="medchron_job", job_id=job)
+    digest = hashlib.sha256(b"identity: x").hexdigest()[:12]
+    assert out["expected_key"] == f"medchron_job:{job}:1:held:{digest}"
+
+
 def test_reply_status_names_no_key_for_a_job_owed_no_reply(tmp_path):
     job = rb._job(tmp_path, ["running"])
     out = _root(_broker(tmp_path), "delivery_reply_status", kind="demand_job", job_id=job)
