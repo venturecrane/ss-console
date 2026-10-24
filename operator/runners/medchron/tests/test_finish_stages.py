@@ -667,9 +667,13 @@ def test_summarize_collapses_pre_incident_and_rejects_a_reach_beyond_source(
     out = (d / "entries_scoped_final.md").read_text()
     assert out.startswith("Prior Medical History") and "Subject Incident" in out and "Chronic neck pain." not in out
     assert client.calls[0]["messages"][0]["content"] == E_PRE_MATERIAL.strip()
+    # A summary still beyond the source after its one retry is never kept:
+    # the pre-incident entry is itemized instead (2026-10-24 audit, row 9).
     client2 = Scripted(lambda p, n: _msg(block.replace("p. 2", "p. 7")))
     sr2 = _sr(job_dir, firm, data_root, client2)
-    assert summarize_stage.run(sr2) == 1
+    assert summarize_stage.run(sr2) == 0 and len(client2.calls) == 2
+    out2 = (d / "entries_scoped_final.md").read_text()
+    assert "p. 7" not in out2 and "Chronic neck pain." in out2 and (d / summarize_stage.FALLBACK).is_file()
     assert summarize_stage.beyond_source("(Exhibit 1 - p. 2-4)", "(Exhibit 1 - p. 3) (Exhibit 2 - p. 1)") == [
         "Exhibit 2 never cited in source"
     ]
@@ -704,9 +708,12 @@ def test_summarize_itemize_all_writes_the_block_then_every_entry_in_date_order(
     assert out == block + "\n\n" + "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST])
     assert len(client.calls) == 1
     assert client.calls[0]["messages"][0]["content"] == "\n\n".join([E_PRE_ROUTINE.strip(), E_PRE_MATERIAL.strip()])
-    # The containment check still binds under itemize_all.
+    # The containment check still binds under itemize_all: a block that
+    # reaches beyond the source twice is omitted, every entry stays.
     client2 = Scripted(lambda p, n: _msg(block.replace("p. 2", "p. 7")))
-    assert summarize_stage.run(_sr(job_dir, firm, data_root, client2)) == 1
+    assert summarize_stage.run(_sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client2)) == 0
+    out2 = (d / "entries_scoped_final.md").read_text()
+    assert out2 == "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST])
 
 
 def test_summarize_include_on_the_same_fixture_drops_pre_incident_from_the_body(

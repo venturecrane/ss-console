@@ -12,17 +12,36 @@ holes, folded records). Two optional slug-level files carry observations a
 run authored from measured facts (`text_duplicates.json`, `file_observations.json`);
 their shapes are pinned, and a file whose rows all fail the shape warns
 loudly rather than rendering an empty disclosure.
+
+Decided-by-rule disclosures (2026-10-24 stop-path audit), each read only when
+present: ``runs/<unit>/unread_pages.json`` (pages the map never read,
+stages/compose.py), ``out/<unit>/page_map.json`` rows with
+``rendered_from_text`` (stages/exhibits.py), ``runs/<unit>/
+prior_history_itemized.json`` (stages/summarize.py), ``dropped_unkept`` in
+msg_attachments.json (email attachments found and not opened), and the
+billing stages' ``billing_gaps[-<unit>].json`` and
+``billing_dropped_rows[-<unit>].json`` at the slug level. Each is a plain
+factual sentence; no figure is ever shown from a billing row the page did
+not confirm, and a record the map read is never named away.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any, Callable
 
 from .. import unopened
 from ..gates import foreign_identity as FI
 from .base import read_json, read_jsonl
+from .limitations_rules import (
+    _attachments_not_opened,
+    _billing_lines,
+    _map_unread_lines,
+    _prior_history_lines,
+    _rendered_lines,
+    _review_left_out_lines,
+    _shown,
+)
 
 
 def _plural(n: int, word: str) -> str:
@@ -219,13 +238,6 @@ def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Ca
     return o
 
 
-def _shown(name: str) -> str:
-    """A file name as the firm sees it. An email attachment's pulled row keeps
-    its extension in its name and again in ``ext`` (stages/msg.py), so the key
-    the coverage gate matches on reads "x.pdf.pdf"; the firm is shown "x.pdf"."""
-    return re.sub(r"(\.[A-Za-z0-9]{2,5})\1$", r"\1", name)
-
-
 def _withheld_attachments(d: Path, m: dict) -> int:
     """New email attachments that were withheld (the firm's direction or the
     identity rule): found, and not read."""
@@ -310,6 +322,29 @@ def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str
     return o
 
 
+#: The section heading build_doc writes, and the last section of the document.
+HEADING = "## Records Reviewed and Limitations"
+
+
+def refresh(doc: Path, slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: Any = None) -> bool:
+    """Rewrite the limitations section of ``final-chronology.md`` from the
+    artifacts as they stand now. build_doc writes the section before the
+    pre-delivery review; the review can leave an entry out by rule
+    (``review-left-out.json``) and re-render, so it calls this first and the
+    delivered document discloses what the review decided. True when the
+    section changed."""
+    md = doc.read_text(encoding="utf-8")
+    at = md.find("\n" + HEADING)
+    if at < 0:
+        log("limitations refresh: the document carries no limitations section; left as it is")
+        return False
+    fresh = md[:at] + "\n".join(section(slug_dir, unit, log, cfg))
+    if fresh == md:
+        return False
+    doc.write_text(fresh, encoding="utf-8")
+    return True
+
+
 def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: Any = None) -> list[str]:
     o = ["", "## Records Reviewed and Limitations\n"]
     raw = read_jsonl(slug_dir / "raw_manifest.jsonl")
@@ -320,6 +355,12 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: A
     folded = [r for r in ok if str(r.get("id", "")).startswith("msgatt-")]
     o += _scope_lines(slug_dir, byid, ok, folded, failed)
     o += _unread_lines(slug_dir, failed, log)
+    o += _map_unread_lines(slug_dir, unit)
+    o += _attachments_not_opened(slug_dir)
+    o += _rendered_lines(slug_dir, unit)
+    o += _billing_lines(slug_dir, unit, log)
+    o += _prior_history_lines(slug_dir, unit)
+    o += _review_left_out_lines(slug_dir, unit, log)
     o += _not_used_lines(slug_dir, byid, unit, cfg)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
     if len(o) == 2:

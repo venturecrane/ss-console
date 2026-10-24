@@ -40,7 +40,10 @@ FILE_HDR = re.compile(r"(?m)^=== FILE: .*? ===$")
 PAGE_MARK = re.compile(r"\[p\.\d+\]")
 # Composed output is a fraction of source text, but not a vanishing one:
 # healthy parts yield 0.28-0.85 of their source bytes; an emptied part yielded
-# 0.0009. 0.02 sits an order of magnitude below every real part.
+# 0.0009. 0.02 sits an order of magnitude below every real part. A part below
+# it that still answers in the house shape is honest (fax covers, legal
+# papers) and is kept by compose and repair alike; only a shapeless one is
+# treated as emptied.
 MIN_YIELD = 0.02
 
 
@@ -173,8 +176,53 @@ def split_chunk(text: str, parts: int = 2) -> list[str]:
         found = FILE_HDR.findall(part)
         if not part.lstrip().startswith("=== FILE:") and current:
             base = re.sub(r"\s*\[part \d+/\d+\]\s*===$", " ===", current)
+            base = re.sub(r"\s*\[continued\]\s*===$", " ===", base)  # a part of a part: one marker
             part = base.replace(" ===", " [continued] ===", 1) + "\n" + part
         if found:
             current = found[-1]
         fixed.append(part)
     return fixed
+
+
+#: A FILE header's parts: the name, and its fileId when present.
+FILE_PARTS = re.compile(
+    r"^=== FILE: (?P<name>.+?)(?: \(fileId (?P<id>[^)]*)\))?(?: \[part \d+/\d+\])?(?: \[continued\])? ===$"
+)
+CONTEXT_BLOCK = re.compile(r"(?s)\[context, .*?\[end context\]\n?")
+
+
+def split_files(text: str) -> list[str]:
+    """One piece per FILE header, each starting at its header (anything ahead
+    of the first header rides with the first piece). A chunk that holds one
+    file comes back whole: there is nothing smaller to send by file."""
+    heads = [m.start() for m in FILE_HDR.finditer(text)]
+    if len(heads) < 2:
+        return [text]
+    out, prev = [], 0
+    for c in heads[1:] + [len(text)]:
+        out.append(text[prev:c])
+        prev = c
+    return [p for p in out if p.strip()]
+
+
+def pieces_pages(text: str) -> list[dict[str, Any]]:
+    """Per FILE header in `text`: the header verbatim, the file's name and id,
+    and the page numbers the piece carries (None when it carries no page
+    marks, as a word-processing file's text does not). A context block is
+    the neighbour's page, never the piece's, so it is not counted."""
+    text = CONTEXT_BLOCK.sub("", text)
+    heads = list(FILE_HDR.finditer(text))
+    out: list[dict[str, Any]] = []
+    for k, h in enumerate(heads):
+        body = text[h.end() : heads[k + 1].start() if k + 1 < len(heads) else len(text)]
+        m = FILE_PARTS.match(h.group())
+        pages = sorted({int(p.group()[3:-1]) for p in PAGE_MARK.finditer(body)})
+        out.append(
+            {
+                "header": h.group(),
+                "file": m.group("name") if m else h.group(),
+                "file_id": (m.group("id") if m else None) or None,
+                "pages": pages or None,
+            }
+        )
+    return out

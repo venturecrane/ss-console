@@ -245,9 +245,14 @@ STAGES: tuple[Stage, ...] = (
         exit_map={
             1: (
                 FAILED,
-                "map incomplete: a chunk produced no output (refused, emptied, or its batch is "
-                "still processing); a rerun resumes it",
-            )
+                "map incomplete: a chunk has no output and no recorded reason (a pipeline defect; "
+                "refused or empty pages are named as unread, never a stop)",
+            ),
+            75: (
+                FAILED,
+                "map incomplete (infrastructure): an API error outlived its retries or a batch is still "
+                "processing; nothing was disclosed, and a later rerun composes it",
+            ),
         },
     ),
     Stage(
@@ -257,7 +262,14 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("map",),
         runner=_repair.run,
-        exit_map={1: (FAILED, "a truncated chunk could not be repaired at 2, 3 or 5 parts")},
+        exit_map={
+            1: (FAILED, "a truncated chunk could not be repaired at 2, 3 or 5 parts"),
+            75: (
+                FAILED,
+                "repair incomplete (infrastructure): an API error outlived its retries; nothing was disclosed, "
+                "and a later rerun repairs it",
+            ),
+        },
     ),
     Stage(
         "assemble",

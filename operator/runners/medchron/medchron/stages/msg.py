@@ -12,7 +12,10 @@ measured byte and aspect rules and both failed in both directions (a 0.20 MB
 photographed bill page dropped, a 0.33 MB banner admitted). So it keeps every
 attachment whose kind is not on the short never-a-record list, hashes ALL of
 them including the ones it does not keep (a discarded item that was never
-compared cannot prove the rule cost nothing), and reports shape. The fold
+compared cannot prove the rule cost nothing), and reports shape. What it does
+not keep is listed in `dropped_unkept`, and Records Reviewed and Limitations
+names every one that could hold a record (an archive such as a .zip, an
+attached email, a small document): nothing inside them was read. The fold
 decision is `decisions.fold`; this stage folds exactly what was decided and
 refuses to fold nothing.
 
@@ -259,7 +262,10 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
         container = str(rec.get("name") or "") + str(rec.get("ext") or "")
         for name, data in atts:
             if not isinstance(data, bytes):
-                ix.counts["other"] += 1  # a nested .msg comes back as a Message
+                # A nested .msg comes back as a Message and is not opened; it
+                # is named in the limitations like any attachment not opened.
+                ix.counts["other"] += 1
+                ix.dropped.append({"kind": "other", "attachment": name, "bytes": 0, "email": subject})
                 continue
             ix.add_attachment(subject, name, data, container=container)
         if n % 25 == 0:
