@@ -397,6 +397,16 @@ is used as before. Adding a seat means minting its token into the environment
 and adding its line to `release-tick.yml`; the conformance test fails until
 both are there.
 
+**Turning it on.** Both controller jobs run only when the repository variable
+`FLEET_RELEASE_ENABLED` is `true`; until then a tick run reports "Release
+controller not enabled" and the build job is skipped, and neither enters the
+environment (a job's `if:` is checked first, so GitHub never auto-creates
+`fleet-release` without its branch policy). Set the variable only after the
+`fleet-release` environment exists with its main-only deployment branch policy
+and all seven Fly tokens. Then immediately dispatch `release-tick.yml` with
+`dry_run: true` and read the plan in its log before the first scheduled tick
+acts.
+
 **A failed rollout pages.** The fleet-alerts Worker reads `fleet_rollouts` every
 2 minutes and emails team@smd.services once per new `failed`, `rolled_back` or
 `tooling_error` row, with the release, the detail, and the `--only` command

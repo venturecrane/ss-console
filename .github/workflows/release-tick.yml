@@ -58,13 +58,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # FLEET_RELEASE_ENABLED is set only after the fleet-release environment exists
+  # with its main-only branch policy and all seven secrets (ADR 0096). The job
+  # `if:` is evaluated before the environment is entered, so a disabled run never
+  # touches it, and never makes GitHub auto-create it without branch protection.
   tick:
     name: Advance the image release one step
     runs-on: ubuntu-latest
     timeout-minutes: 150
     environment: fleet-release
     if: >-
-      vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
+      vars.FLEET_RELEASE_ENABLED == 'true' && vars.DEPLOY_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     env:
       RELEASE: ${{ inputs.release || 'latest' }}
@@ -137,3 +142,12 @@ jobs:
             *) echo "::error::release-tick: exit $rc (1 = this run halted the release; see the log above)" ;;
           esac
           exit "$rc"
+
+  # No environment and no secrets: says why a run did nothing.
+  disabled:
+    name: Release controller not enabled
+    runs-on: ubuntu-latest
+    if: vars.FLEET_RELEASE_ENABLED != 'true'
+    steps:
+      - name: Release controller not enabled
+        run: echo "FLEET_RELEASE_ENABLED is not 'true'; the release controller is off (ADR 0096, docs/handbook/deployment-release.md)."

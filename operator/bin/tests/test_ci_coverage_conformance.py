@@ -435,7 +435,7 @@ def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
     assert concurrency.get("group") and concurrency.get("cancel-in-progress") is False, (
         "ticks must never overlap, and a running tick must never be cancelled mid-deploy"
     )
-    (job,) = wf["jobs"].values()
+    job = wf["jobs"]["tick"]
     assert job.get("environment") == FLEET_RELEASE_ENVIRONMENT
     assert "refs/heads/main" in str(job.get("if")), "a tick runs only from main"
     runs = _job_runs(job)
@@ -450,11 +450,37 @@ def test_release_automation_never_forces_a_busy_seat_or_accepts_lane_inputs() ->
         assert "--accept-lane-inputs" not in body, f"{path.name} must never pass --accept-lane-inputs"
 
 
+ENABLE_GATE = "vars.FLEET_RELEASE_ENABLED == 'true'"
+
+
+def test_every_job_that_enters_fleet_release_is_gated_on_the_enable_variable_at_job_level() -> None:
+    """A job `if:` is evaluated before the environment is entered, so a disabled
+    run never touches fleet-release, and never makes GitHub auto-create it
+    without its main-only branch policy (ADR 0096). FALSIFIER: drop the variable
+    from either job's `if:` and this fails."""
+    gated = []
+    for path in (RELEASE_TICK_PATH, DEPLOY_PATH):
+        wf = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, job in wf["jobs"].items():
+            if job.get("environment") == FLEET_RELEASE_ENVIRONMENT:
+                assert ENABLE_GATE in str(job.get("if") or ""), f"{path.name} job {name} must gate on {ENABLE_GATE}"
+                gated.append(name)
+            else:
+                assert "secrets." not in str(job) or "FLY_" not in str(job), (
+                    f"{path.name} job {name} reads a Fly secret outside the fleet-release environment"
+                )
+    assert sorted(gated) == ["build-seat-image", "tick"]
+    disabled = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))["jobs"].get("disabled") or {}
+    assert disabled.get("if") == "vars.FLEET_RELEASE_ENABLED != 'true'" and "environment" not in disabled, (
+        "a disabled run says why, without entering the environment"
+    )
+
+
 def test_release_tick_carries_one_token_per_ringed_seat_named_as_the_cli_reads_it() -> None:
     from bin.lib.fleet.fly import REGISTRY_TOKEN_ENV, seat_token_env_name
 
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
-    (job,) = wf["jobs"].values()
+    job = wf["jobs"]["tick"]
     env: dict[str, str] = {}
     for step in job["steps"]:
         env.update(step.get("env") or {})

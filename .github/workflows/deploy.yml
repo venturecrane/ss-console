@@ -267,7 +267,10 @@ jobs:
     name: Build the seat image (fleet build)
     runs-on: ubuntu-latest
     needs: deploy
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # FLEET_RELEASE_ENABLED is set only once the fleet-release environment exists
+    # with its main-only branch policy and its secrets (ADR 0096). Evaluated
+    # before the environment is entered, so a disabled run never creates it.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
     environment: fleet-release
     timeout-minutes: 90
     concurrency:

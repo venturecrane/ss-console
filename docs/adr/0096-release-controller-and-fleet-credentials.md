@@ -139,7 +139,20 @@ ADR 0007 exists to prevent.
    the release. So a release is proven by the pipeline, not by a person
    remembering to record it.
 
-8. **The laptop path stays, as the manual fallback.** `fleet release <id>`,
+8. **Off until its credentials are in place.** Both jobs that enter the
+   `fleet-release` environment (`tick` in `release-tick.yml`, and
+   `build-seat-image` in `deploy.yml`) run only when the repository variable
+   `FLEET_RELEASE_ENABLED` is `true`. The gate is the job's own `if:`, which
+   GitHub evaluates before it enters the environment, so a disabled run never
+   touches the environment and never makes GitHub auto-create it without its
+   branch policy; a `disabled` job in `release-tick.yml` says why the run did
+   nothing. The variable is set only after the environment exists with its
+   main-only deployment branch policy and all seven Fly tokens (six seats and
+   the registry), and setting it is followed at once by a dry-run dispatch of
+   `release-tick.yml` (`dry_run: true`) whose log shows the plan it would take.
+   The conformance test pins the gate on both jobs.
+
+9. **The laptop path stays, as the manual fallback.** `fleet release <id>`,
    `--only`, `fleet hold`, `fleet build` all work as before on a laptop's own
    Fly login. They are how a person finishes a halted release, fixes one seat,
    or ships a hotfix lane; they share the leases with the controller, so the two
