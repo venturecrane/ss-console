@@ -299,7 +299,7 @@ PY
     || die "R2 upload of medchron-firm.yaml failed"
   log "R2 upload OK (medchron-firm.yaml)"
 else
-  log "No medchron firm config for ${SLUG} (${MEDCHRON_FIRM_YAML}); the chronology runner will refuse jobs"
+  assert_lane_not_on_main "operator/customers/${SLUG}/medchron/firm.yaml"; log "No medchron firm config for ${SLUG} (${MEDCHRON_FIRM_YAML}); the chronology runner will refuse jobs"
 fi
 
 # ---------- Step 2c: stage the chronology runner's install-level tree (2026-09-04) ----------

@@ -69,4 +69,24 @@ engagements tree, or set SS_ALLOW_DIVERGENT_SOURCE=1 to upload this file on purp
   fi
   log "Firm config matches engagements origin/main"
 }
+# assert_lane_not_on_main <repo-relative firm file>: called when the CHECKOUT
+# lacks a lane's firm file, before "this seat authors no such lane" is said.
+# The reverse of the check above, and the gap it left: a stale or feature-branch
+# checkout that predates the file made every lane silently skip staging, and the
+# seat then deferred that lane's jobs forever. 2026-10-23: the pilot's new demand
+# inputs (engagements#293) were on main, the shared tree was not, and a
+# reprovision logged "No demand firm inputs" and exited zero. A file on main
+# that the checkout lacks is cannot-evaluate, never absent.
+assert_lane_not_on_main() {
+  local eng="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}"
+  git -C "${eng}" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  if ! git -C "${eng}" fetch origin --quiet 2>/dev/null; then
+    _firm_config_cannot_evaluate "fetching engagements origin failed, so a missing $1 cannot be told from a stale checkout" \
+      "Check network access and 'gh auth status' for venturecrane/engagements, then retry."
+    return 0
+  fi
+  git -C "${eng}" cat-file -e "origin/main:$1" 2>/dev/null || return 0
+  _firm_config_cannot_evaluate "$1 is on engagements origin/main but not in the checkout at ${eng} (on '$(git -C "${eng}" rev-parse --abbrev-ref HEAD 2>/dev/null)')" \
+    "Update that checkout to main, or point SS_ENGAGEMENTS_DIR at a fresh clone."
+}
 # <<< firm-config-currency

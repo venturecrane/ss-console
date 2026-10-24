@@ -37,6 +37,7 @@ if [ -f "${DEMAND_INPUTS_DIR}/demand-firm.yaml" ]; then
     || die "R2 sync of the demand firm inputs failed"
   log "R2 upload OK (demand firm inputs)"
 else
+  assert_lane_not_on_main "operator/customers/${SLUG}/demand/demand-firm.yaml"
   log "No demand firm inputs for ${SLUG} (${DEMAND_INPUTS_DIR}); the demand lane will defer demand jobs"
 fi
 # <<< demand-inputs-stage

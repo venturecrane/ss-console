@@ -62,5 +62,7 @@ PY
     || { rm -rf "${_drafting_stage}"; die "R2 sync of the drafting firm inputs failed"; }
   rm -rf "${_drafting_stage}"
   log "R2 upload OK (drafting firm inputs)"
+else
+  assert_lane_not_on_main "operator/customers/${SLUG}/drafting/drafting-firm.yaml"
 fi
 # <<< drafting-inputs-stage
