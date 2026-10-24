@@ -17,6 +17,9 @@ Every rule of the hand run's ``qa.py``, plus the ones its failures added:
 * the BUILT workbook carries no internal vocabulary (``leak_scan``).
 
 Each rule returns the items it refuses; ``passed`` is every list empty.
+``notes`` (``soft_notes``) are recorded and never held on: papers sent out
+for service after the service date is a legitimate re-service. A court-only
+list (``discovery=False``) does not judge discovery values it did not read.
 """
 
 from __future__ import annotations
@@ -108,21 +111,26 @@ def text_carries(text: str, iso: str) -> bool:
     """The date appears in the text in a written form. Court forms often
     print a filled date as spaced characters ("1 / 2 5 / 2 0 2 7", Yolo's CMC
     notice, 2026-10-06), so the comparison is also made with all whitespace
-    removed; every digit must still match."""
+    removed; every digit must still match.
+
+    No digit may touch either end of a match, in every comparison: without
+    that, "1 Jan 2026" is found inside "21 Jan 2026" and "1/2/2026" inside
+    "11/2/2026", a different day passing as the cited one (2026-10-24)."""
+    forms = [f.lower() for f in date_forms(iso)]
+
+    def found(hay: str, needles: list[str]) -> bool:
+        return any(re.search(r"(?<!\d)" + re.escape(n) + r"(?!\d)", hay) for n in needles)
+
     flat = " ".join(text.split()).lower()
-    if any(f.lower() in flat for f in date_forms(iso)):
+    if found(flat, forms):
         return True
     squeezed = "".join(text.split()).lower()
-    if any("".join(f.split()).lower() in squeezed for f in date_forms(iso)):
+    if found(squeezed, ["".join(f.split()) for f in forms]):
         return True
     # A blank filled by hand ("January __12__, 2026") or a comma the OCR dropped
-    # ("Executed on April 21 2026"), 2026-10-23. Without the comma the digits
-    # run together, so no digit may touch either end of the match.
+    # ("Executed on April 21 2026"), 2026-10-23.
     bare = re.sub(r"[_,]", "", squeezed)
-    return any(
-        re.search(r"(?<!\d)" + re.escape(re.sub(r"[_,]", "", "".join(f.split()).lower())) + r"(?!\d)", bare)
-        for f in date_forms(iso)
-    )
+    return found(bare, [re.sub(r"[_,]", "", "".join(f.split())) for f in forms])
 
 
 def _case_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:

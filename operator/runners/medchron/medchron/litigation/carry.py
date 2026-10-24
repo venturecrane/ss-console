@@ -22,7 +22,8 @@ A value is carried forward only when ALL of these hold:
 * the date is not in the future, and a next court date is not in the past;
 * a defendant's answer date is carried only while its status says answered,
   a service date only while its status does not say not served (the gates
-  refuse either contradiction).
+  refuse either contradiction); a sent-out-for-service date whatever the
+  status (papers go out before service, 2026-10-24).
 
 No date is ever derived from a file NAME: the runner has no such convention,
 and a name is not the document.

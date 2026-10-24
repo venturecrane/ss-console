@@ -19,6 +19,11 @@ is in neither shape; the 2026-10-08 discovery run is merged on afterwards
 (``discovery`` mode), and a matter it cannot cite reads the group again. Two-pass matters carry
 ``provenance.two_pass`` as a record; the runner does not re-audit them.
 
+Neither shape read the date papers went out for service, so a seeded
+defendant carries no ``sent_for_service`` key (the list says "Not read yet")
+unless its row has one. ``merge_sent_for_service`` adds that one field to
+stored state afterwards (``python -m medchron.litigation.backfill``).
+
 The seed's manifest records which files existed (``""`` as the modified date:
 the hand inventories carried dates, not the vendor's ``dateModified``), so a
 file added after the seed is new and a seeded file is not "changed".

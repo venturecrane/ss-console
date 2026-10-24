@@ -274,6 +274,12 @@ def test_a_court_only_list_does_not_judge_discovery_it_did_not_read():
         ("Sent: 05 Mar 2026", "2026-03-05", True),
         ("Received 12-Jan-2026 by the server", "2026-01-12", True),
         ("Date: Mon, 12 Jan 2027", "2026-01-12", False),
+        # A different day never passes as the cited one: no digit may touch a match.
+        ("Date: Wed, 21 Jan 2026", "2026-01-01", False),
+        ("Received 21-Jan-2026", "2026-01-01", False),
+        ("Filed 11/2/2026", "2026-01-02", False),
+        ("Filed 1 1 / 2 / 2 0 2 6", "2026-01-02", False),  # spaced characters, squeezed
+        ("Date: Thu, 1 Jan 2026", "2026-01-01", True),
     ],
 )
 def test_text_carries_a_hand_filled_or_comma_dropped_date(text, iso, expected):
