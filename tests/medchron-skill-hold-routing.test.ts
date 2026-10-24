@@ -9,7 +9,8 @@
  *      and a refused bind sends nothing to anyone. The overlay refuses every
  *      send in a "chronology job <id>" wake except the bound reply, so a skill
  *      that teaches any other route teaches a send that cannot land.
- *   2. A `failed` job is SMD's: nothing is sent to anyone.
+ *   2. A `failed` or `held` job is SMD's: nothing is sent to anyone (held
+ *      since 2026-10-24: the firm hears about a chronology only on delivery).
  *   3. An audit-gate hold (a citation the record does not fully support,
  *      graded PARTIAL or UNSUPPORTED) is the runner's to weaken or drop and
  *      SMD's to clear, never framed as an attorney determination, and the
@@ -39,8 +40,10 @@ describe('medical-chronology-maintainer: DELIVER replies through the bound reply
     expect(flat).toMatch(/Not the responsible attorney, not the matter's staff/)
   })
 
-  it('sends nothing on a failed job and reads the job once', () => {
-    expect(flat).toMatch(/outcome is `failed`[^]*Send NOTHING to anyone[^]*`medchron_job_status`/)
+  it('sends nothing on a failed or held job and reads the job once', () => {
+    expect(flat).toMatch(
+      /outcome is `failed` or `held`[^]*Send NOTHING to anyone[^]*`medchron_job_status`/
+    )
   })
 
   it('replies once with create_draft to the bound sender only, then stops', () => {
@@ -49,15 +52,18 @@ describe('medical-chronology-maintainer: DELIVER replies through the bound reply
   })
 })
 
+/** The paragraph that says every stop is SMD's (2026-10-24). */
+const stops = flat.slice(
+  flat.indexOf('The firm hears only on `delivered`.'),
+  flat.indexOf('**No requester**')
+)
+
 describe('medical-chronology-maintainer: a PARTIAL is never the attorney', () => {
   it('names the audit-gate hold as SMD work, never an attorney determination', () => {
-    const ours = flat.slice(
-      flat.indexOf('`smd_finishing` (our side'),
-      flat.indexOf('`smd_finishing_filed`')
-    )
-    expect(ours).toContain('`audit coverage:`')
-    expect(ours).toContain("This is SMD's failure, never the firm's decision.")
-    expect(ours).toMatch(/do not ask anyone to review, confirm or determine anything/)
+    expect(stops).toContain('`audit coverage:`')
+    expect(stops).toContain("Every stop is SMD's")
+    expect(stops).toContain('none is ever an attorney determination')
+    expect(stops).toMatch(/never ask anyone to review, confirm or determine anything/)
   })
 
   it('never asks anyone to determine, review or confirm a PARTIAL, nor emails the attorney', () => {
@@ -100,13 +106,9 @@ describe('medical-chronology-maintainer: a review hold is SMD work (2026-10-13)'
   // a must-fix before anything is filed. Like the audit gate, the hold is SMD's
   // to clear; the firm is told nothing is needed and never shown the findings.
   it('names review_held as SMD work, with nothing asked of the firm', () => {
-    const ours = flat.slice(
-      flat.indexOf('`smd_finishing` (our side'),
-      flat.indexOf('`smd_finishing_filed`')
-    )
-    expect(ours).toContain('`review_held:`')
-    expect(ours).toContain('Nothing is needed from you; SMD is finishing it')
-    expect(ours).toMatch(/do not ask anyone to review, confirm or determine anything/i)
+    expect(stops).toContain('`review_held:`')
+    expect(stops).toContain('None is explained to the firm')
+    expect(stops).toContain('Send NOTHING to anyone')
   })
 })
 

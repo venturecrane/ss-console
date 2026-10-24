@@ -21,7 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..gates.foreign_identity import WITHHELD_REASON
+from ..gates.foreign_identity import WITHHELD_REASONS
 from ..stages.base import read_json, read_jsonl
 from .select import BLANK
 
@@ -42,7 +42,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any = None) -> dict[str, Any]:
     skipped = sel.get("skipped") or {}
     covered |= {str(x) for x in skipped.get("byte-identical to a delivered exhibit") or []}
     uncovered |= {str(x) for x in skipped.get("not a PDF or an image") or []}
-    covered |= {str(x) for x in skipped.get(WITHHELD_REASON) or []}
+    covered |= {str(x) for why in WITHHELD_REASONS for x in skipped.get(why) or []}
     covered |= {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")}
     for x in sel.get("exhibits") or []:
         # Only a document with NO text is read again: one whose pages are all

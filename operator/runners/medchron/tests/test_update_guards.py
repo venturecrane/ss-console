@@ -152,16 +152,30 @@ def _fold_scene(data_root: Path, text: str) -> tuple[Path, str]:
     return sd, sha[:12]
 
 
-def test_the_fold_holds_on_an_attachment_naming_another_person(
+def test_the_fold_leaves_out_an_attachment_naming_another_person_by_rule(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
+    """2026-10-24: never folded, never held, withheld by rule and disclosed.
+    FALSIFIER: restore the fold's hold and ``d.held`` is true."""
+    from medchron.gates import foreign_identity as FI
+
     job, cfg = job_mod.load(job_dir), config_mod.load(str(firm_config_path))
     sd, sha12 = _fold_scene(data_root, "Patient Name: Gamma Other\nDOB: 05/05/1990\nOffice visit for knee pain.")
     d = decisions.fold(job, cfg, sd, dry_run=False)
-    assert d.held and "different person" in d.holds[0] and sha12 in d.holds[0]
-    assert not (sd / "msg_fold.json").exists()  # the old code folded it
+    assert not d.held
+    assert json.loads((sd / "msg_fold.json").read_text())["fold"] == []  # the old-old code folded it
+    assert FI.withheld(sd) == {sha12} and FI.withheld_reason(sd, sha12) == FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
+    assert any("left out by rule" in n and sha12 in n for n in d.notes)
+    assert not any("1990" in n or "Gamma" in n for n in d.notes)
     (sd / "identity_release.json").write_text(json.dumps({"release": [sha12]}))
-    assert not decisions.fold(job, cfg, sd, dry_run=False).held  # a person released it
+    assert decisions.fold(job, cfg, sd, dry_run=False).payload["fold"] == [sha12]  # a person released it
+
+
+def test_a_dry_run_fold_records_no_rule_decision(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    job, cfg = job_mod.load(job_dir), config_mod.load(str(firm_config_path))
+    sd, _sha12 = _fold_scene(data_root, "Patient Name: Gamma Other\nDOB: 05/05/1990\nOffice visit for knee pain.")
+    decisions.fold(job, cfg, sd, dry_run=True)
+    assert not (sd / "identity_release.json").exists() and not (sd / "msg_fold.json").exists()
 
 
 def test_the_fold_takes_the_clients_own_record(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
@@ -173,7 +187,7 @@ def test_the_fold_takes_the_clients_own_record(job_dir: Path, firm_config_path: 
     assert not d.held and d.payload["fold"] == [sha12]
 
 
-def test_identity_holds_on_a_folded_scan_naming_another_person(
+def test_identity_leaves_out_a_folded_scan_naming_another_person(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     sd = data_root / "example-matter"
@@ -182,7 +196,9 @@ def test_identity_holds_on_a_folded_scan_naming_another_person(
     (sd / "raw_manifest.jsonl").write_text(json.dumps({"id": "msgatt-abc", "ok": True, "from_email": "e"}) + "\n")
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, _seat(), log)
-    assert identity_stage.run(sr) == 2 and "different person" in log[-1]
+    assert identity_stage.run(sr) == 0
+    assert any("different person" in x and "left out by rule" in x for x in log)
+    assert not any("2001" in x for x in log)
 
 
 # ---- (c) no repair loses a value the audit did not name -----------------------

@@ -15,8 +15,12 @@ attachment folded from a named email) is a candidate, in pull order:
   not itemized;
 * not a PDF or an image: skipped and counted (it cannot be filed as an
   exhibit page the citation would point at);
-* its text names a different person (``gates/foreign_identity``): HOLD, exit 2,
-  until a person releases it;
+* its text names a different person (``gates/foreign_identity``): left out
+  BY RULE (2026-10-24, the Captain; it used to hold until a person released
+  it), recorded ``by: "rule"`` in ``identity_release.json``, kept in
+  ``selection.json`` "skipped" under the rule's own reason, and named in the
+  update's Records Reviewed paragraph (``update/reviewed.py``); what it says
+  about the other person stays in ``identity_holds.json`` for SMD;
 * a page-for-page extract of a LARGER new document or of a delivered exhibit,
   by its words (``update/subsets.py``) or by its pictures (``update/pageid``,
   ``stages/update_pages``, which runs before the vision pass):
@@ -105,7 +109,8 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
             continue
         if FI.matches(str(r["id"]), withheld):
-            skipped[FI.WITHHELD_REASON].append(str(r["id"]))
+            # Keyed by how it is disclosed: the firm's direction, or the rule's.
+            skipped.setdefault(FI.withheld_reason(sr.slug_dir, str(r["id"])), []).append(str(r["id"]))
             continue
         if r.get("sha256") in delivered_sha:
             skipped["byte-identical to a delivered exhibit"].append(str(r["id"]))
@@ -118,6 +123,8 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
 
 
 def _identity_holds(sr: StageRun, rows: list[dict[str, Any]]) -> list[str]:
+    """Each row's id with what names another person (SMD's detail), as
+    ``"<id>: <findings>"``; [] when none does."""
     surnames, dobs = FI.identities(sr.job.units)
     free = FI.released(sr.slug_dir)
     holds = []
@@ -128,6 +135,27 @@ def _identity_holds(sr: StageRun, rows: list[dict[str, Any]]) -> list[str]:
         if found:
             holds.append(f"{r['id']}: {'; '.join(found)}")
     return holds
+
+
+def _leave_out_foreign(
+    sr: StageRun, ud: Path, rows: list[dict[str, Any]], skipped: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    """`rows` without the ones whose text names another person: each is
+    withheld by rule (2026-10-24) and recorded in `skipped` under the rule's
+    reason, which the Records Reviewed paragraph names. The findings (a name,
+    a date of birth) stay in identity_holds.json for SMD, never in the log."""
+    holds = _identity_holds(sr, rows)
+    if not holds:
+        return rows
+    (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
+    ids = [h.split(":", 1)[0] for h in holds]
+    FI.withhold_by_rule(sr.slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+    skipped.setdefault(FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON], []).extend(ids)
+    sr.log(
+        f"{len(ids)} document(s) name a different person than the client; left out by rule and disclosed "
+        f"(document ids: {ids[:5]})"
+    )
+    return [r for r in rows if str(r["id"]) not in set(ids)]
 
 
 def _page_findings(sr: StageRun, rid: str, surnames: set[str], dobs: set[str]) -> list[str]:
@@ -307,15 +335,7 @@ def run(sr: StageRun) -> int:
     firm = {e["sha256"]: e for e in p["exhibits"] if e["exhibit"] not in listed}
     delivered_sha = {e["sha256"]: e["name"] for e in read_by_delivery}
     rows, skipped = _candidates(sr, delivered_sha)
-    holds = _identity_holds(sr, rows)
-    if holds:
-        # Document ids and a count only: what each record says about the other
-        # person (a name, a date of birth) stays in identity_holds.json for SMD,
-        # never in the job's reason (2026-10-13).
-        (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
-        ids = [h.split(":", 1)[0] for h in holds]
-        sr.log(HELD + f"{len(holds)} document(s) name a different person than the client (document ids: {ids[:5]})")
-        return 2
+    rows = _leave_out_foreign(sr, ud, rows, skipped)
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
     seen = S.seen_shingles([sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery])

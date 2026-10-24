@@ -16,6 +16,7 @@ loudly rather than rendering an empty disclosure.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -93,8 +94,18 @@ def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str
             f"Email in the matter file was reviewed: {m['emails_opened']} messages were opened and their attachments "
             f"extracted. {m.get('distinct_attachments') or 0} distinct attachments were found, of which "
             f"{m.get('already_pulled') or 0} were copies of documents already in the reviewed set and "
-            f"{m.get('new_to_the_corpus') or 0} were new to it and were read."
+            f"{m.get('new_to_the_corpus') or 0} were new to it"
         )
+        # A withheld attachment was found and NOT read (2026-10-24: the
+        # identity rule withholds them now, so "and were read" became false).
+        held_back = _withheld_attachments(d, m)
+        if not held_back:
+            line += " and were read."
+        elif held_back >= int(m.get("new_to_the_corpus") or 0):
+            line += f"; {'it was' if held_back == 1 else 'they were'} left out, for the reason given below."
+        else:
+            verb = "was" if held_back == 1 else "were"
+            line += f"; {held_back} of those {verb} left out, for the reason given below, and the rest were read."
         enc = m.get("encrypted") or []
         if enc:
             line += f" {_plural(len(enc), 'attachment')} could not be opened (listed below)."
@@ -208,11 +219,34 @@ def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Ca
     return o
 
 
-def _withheld_names(d: Path, byid: dict, listed: set[str]) -> list[str]:
-    """Documents the firm said to leave out that orphans.json does not already
-    name: a withheld email attachment is never folded, so it has no pulled row
-    and only the email index knows its file name."""
-    out: list[str] = []
+def _shown(name: str) -> str:
+    """A file name as the firm sees it. An email attachment's pulled row keeps
+    its extension in its name and again in ``ext`` (stages/msg.py), so the key
+    the coverage gate matches on reads "x.pdf.pdf"; the firm is shown "x.pdf"."""
+    return re.sub(r"(\.[A-Za-z0-9]{2,5})\1$", r"\1", name)
+
+
+def _withheld_attachments(d: Path, m: dict) -> int:
+    """New email attachments that were withheld (the firm's direction or the
+    identity rule): found, and not read."""
+    withheld = FI.withheld(d)
+    if not withheld:
+        return 0
+    return sum(
+        1
+        for a in m.get("attachments") or []
+        if isinstance(a, dict)
+        and not a.get("already_pulled_as")
+        and FI.matches(str(a.get("sha256") or "")[:12], withheld)
+    )
+
+
+def _withheld_names(d: Path, byid: dict, listed: set[str]) -> list[tuple[str, str]]:
+    """Withheld documents orphans.json does not already name, each with how it
+    is disclosed (``FI.withheld_reason``: the firm's direction, or the identity
+    rule's reason, 2026-10-24): a withheld email attachment is never folded, so
+    it has no pulled row and only the email index knows its file name."""
+    out: list[tuple[str, str]] = []
     m = read_json(d / "msg_attachments.json", {}) or {}
     by12 = {str(a.get("sha256") or "")[:12]: a for a in (m.get("attachments") or []) if isinstance(a, dict)}
     for wid in sorted(FI.withheld(d)):
@@ -223,7 +257,7 @@ def _withheld_names(d: Path, byid: dict, listed: set[str]) -> list[str]:
             a = by12.get(wid.removeprefix("msgatt-")) or {}
             name = str((a.get("names") or [""])[0] or "")
         if name and name not in listed:
-            out.append(name)
+            out.append((name, FI.withheld_reason(d, wid)))
     return out
 
 
@@ -252,13 +286,13 @@ def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str
         if isinstance(x, dict) and x.get("name") and x.get("reason") and x.get("reason") != unopened.REASON
     ]
     listed = {n for n, _ in rows}
-    rows += [(n, FI.WITHHELD_REASON) for n in _withheld_names(d, byid, listed)]
+    rows += _withheld_names(d, byid, listed)
     if rows:
         o += [
             "",
             "The following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n",
         ]
-        o += [f'* "{name}" - {why}' for name, why in sorted(rows)]
+        o += [f'* "{_shown(name)}" - {why}' for name, why in sorted(rows)]
     read: dict[str, str] = {}
     if unit is not None:
         for r in coverage_decide.rows(d, unit):

@@ -21,8 +21,8 @@ artifacts and reports the same two sets, keyed by document id:
 
     covered    cited in the delivered document, a byte-duplicate of something
                cited, in the authored billing-chart set, excluded by an
-               authored name rule, or left out at the firm's direction (an
-               identity decision): accounted for, and an update skips it.
+               authored name rule, or withheld by an identity decision (the
+               firm's direction or the rule's): accounted for, and an update skips it.
     uncovered  the composer read it and found nothing citable, the unit marked
                it `compose_skip` (a contentless or unreadable scan), retrieval
                failed, or it is a documented orphan: NOT in the delivered
@@ -39,7 +39,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .gates.foreign_identity import WITHHELD_REASON
+from .gates.foreign_identity import WITHHELD_REASONS
 from .stages.base import read_json, read_jsonl
 from .stages.coverage import (
     EXT_OK,
@@ -70,10 +70,10 @@ def _cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
 
 
 def _orphan_names(slug_dir: Path) -> tuple[set[str], set[str]]:
-    """(every documented orphan, the ones left out at the firm's direction)."""
+    """(every documented orphan, the ones withheld: at the firm's direction or by the identity rule)."""
     rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
     named = [o for o in rows if o.get("name")]
-    return {o["name"] for o in named}, {o["name"] for o in named if o.get("reason") == WITHHELD_REASON}
+    return {o["name"] for o in named}, {o["name"] for o in named if o.get("reason") in WITHHELD_REASONS}
 
 
 def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
@@ -108,7 +108,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         pulled[key] = row
 
     orphans, withheld = _orphan_names(slug_dir)
-    # Left out at the firm's direction is accounted for by the firm's own word,
+    # Withheld (the firm's direction or the identity rule) is accounted for,
     # the way a byte-duplicate is: an update must not read it and ask again.
     accounted = duplicates | withheld
     billing_spec = read_json(slug_dir / "billing_docs.json", [])

@@ -15,20 +15,25 @@ two things a medical record labels its patient with:
 * a labeled patient name ("Patient:", "Patient Name:") that does not carry
   the client's surname.
 
-A hit is a HOLD at the caller, never a silent skip and never a fold: a
-person reads the document and releases it, or the firm says to leave it out
+A hit is never a silent skip and never a fold. Until 2026-10-24 it was a HOLD
+at the caller and the firm was asked whose the record was. Since then (the
+Captain: a chronology reaches the firm only when it is delivered) a hit is
+WITHHELD BY RULE (``withhold_by_rule``): the document joins no unit, the run
+goes on, and the delivered package says it was left out and why, without a
+word about the other person. The decision is written where a person's would be
 (``identity_release.json`` in the job's matter directory,
-``{"release": [...], "withhold": [<id or sha12>, ...], "decisions": [...]}``,
-written by ``medchron.identity_decide``), because a co-plaintiff's records
-inside a client's chronology is the defect class (ss#2893) and a record wrongly
-withheld is recoverable. Text that names no one is not evidence of anyone: it
-passes.
+``{"release": [...], "withhold": [<id or sha12>, ...], "decisions": [...]}``),
+recorded ``by: "rule"``, so a later run never reads it again. A co-plaintiff's
+records inside a client's chronology is the defect class (ss#2893), and a
+record wrongly withheld is recoverable. Text that names no one is not evidence
+of anyone: it passes.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +64,18 @@ RELEASE_FILE = "identity_release.json"
 #: the person it names is another client's or a stranger's, and the chronology
 #: is the wrong place to say either.
 WITHHELD_REASON = "left out at the firm's direction"
+#: Who records a withhold the rule made (``record_decision``'s ``by``).
+RULE_BY = "rule"
+#: The rule's two grounds, each with its disclosure. Factual, about the file
+#: only: never the other person's name or date of birth.
+RULE_ANOTHER_PERSON = "another_person"  # its own text names someone other than the client
+RULE_UNPLACED = "unplaced"  # a joint matter's file that no client's folder or name owns
+RULE_REASONS = {
+    RULE_ANOTHER_PERSON: "names a person other than the client, so it was left out of this chronology",
+    RULE_UNPLACED: "could not be placed with one client on this matter, so it was left out of this chronology",
+}
+#: Every disclosure a withheld document can carry: what counts as accounted for.
+WITHHELD_REASONS = frozenset({WITHHELD_REASON, *RULE_REASONS.values()})
 
 
 def _norm_dob(mo: str, dy: str, yr: str) -> str | None:
@@ -183,6 +200,37 @@ def record_decision(slug_dir: Path, *, action: str, ids: list[str], by: str, sou
     body.setdefault("decisions", []).append({"action": action, "ids": list(ids), "by": by, "source": source, "at": at})
     p.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
     return body
+
+
+def withhold_by_rule(slug_dir: Path, ids: list[str], *, ground: str, at: str | None = None) -> dict[str, Any]:
+    """Withhold `ids` by rule (2026-10-24): the decision
+    ``identity_decide --withhold`` records, made by the rule instead of a
+    person. ``ground`` is a key of ``RULE_REASONS``; it rides as the decision's
+    ``source`` so the disclosure can say why."""
+    if ground not in RULE_REASONS:
+        raise ValueError(f"ground must be one of {sorted(RULE_REASONS)}, not {ground!r}")
+    stamp = at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return record_decision(slug_dir, action="withhold", ids=list(ids), by=RULE_BY, source=f"rule:{ground}", at=stamp)
+
+
+def withheld_reason(slug_dir: Path, rid: str) -> str:
+    """How a withheld document is disclosed: the rule's own wording when the
+    latest decision naming it was the rule's, else ``WITHHELD_REASON`` (a
+    person recorded the firm's direction)."""
+    p = slug_dir / RELEASE_FILE
+    decisions: list[Any] = []
+    if p.is_file():
+        try:
+            decisions = (json.loads(p.read_text(encoding="utf-8")) or {}).get("decisions") or []
+        except (OSError, ValueError, AttributeError):
+            decisions = []
+    for dec in reversed(decisions):
+        if not isinstance(dec, dict) or not any(matches(str(rid), {str(i)}) for i in dec.get("ids") or []):
+            continue
+        if dec.get("action") != "withhold" or dec.get("by") != RULE_BY:
+            return WITHHELD_REASON
+        return RULE_REASONS.get(str(dec.get("source") or "").removeprefix("rule:"), WITHHELD_REASON)
+    return WITHHELD_REASON
 
 
 def identities(units: list[Any]) -> tuple[set[str], set[str]]:

@@ -219,23 +219,14 @@ STAGES: tuple[Stage, ...] = (
             2: (REFUSED, "build_units refused: a scanned file is untranscribed or billing_extract is missing"),
             # 2026-10-23: a pulled file no client's folder or name owns is
             # decided here, after vision, not at decide_orphans after every
-            # paid stage. The firm is asked only when the file's own text names
-            # someone else or the matter has more than one client.
-            _units.IDENTITY_HELD: (
-                HELD,
-                "identity: a pulled file belongs to no client's folder and its owner is the firm's to say",
-            ),
+            # paid stage. Since 2026-10-24 one the routing cannot place, or
+            # whose own text names someone else, is left out by rule and the
+            # run goes on (stages/units ``_resolve_orphans``); nothing holds.
         },
     ),
-    Stage(
-        "identity",
-        "",
-        _slug,
-        scope="slug",
-        requires=("build_units",),
-        runner=_identity.run,
-        exit_map={2: (HELD, "identity: an emailed attachment names a different person than the client")},
-    ),
+    # Never holds since 2026-10-24: an attachment that names someone else is
+    # left out by rule and disclosed (stages/identity.py).
+    Stage("identity", "", _slug, scope="slug", requires=("build_units",), runner=_identity.run),
     # Moved here from after strip_apply (2026-10-23). Ownership is settled at
     # build_units and nothing after it changes it, so the explanations exist
     # before build_doc writes the Records Reviewed and Limitations section,

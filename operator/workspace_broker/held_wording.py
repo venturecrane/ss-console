@@ -10,32 +10,35 @@ The broker sent them, because the wording lived only in a skill and nothing
 checked it. A hold of ours must never come back to the firm as a question or a
 route to SMD; the skill said so and the model did it anyway.
 
-So the wording lives HERE, the broker refuses a held litigation or chronology
-reply whose words are not one of these (``check``), and the refusal quotes the
-exact text, so the model's retry succeeds in one step. The skills carry the
-same sentences (``tests/test_held_wording_parity.py`` pins skill == code).
+So the wording lives HERE, the broker refuses a held litigation reply whose
+words are not one of these (``check``), and the refusal quotes the exact text,
+so the model's retry succeeds in one step. The skill carries the same
+sentences (``tests/test_held_wording_parity.py`` pins skill == code).
+
+THE CHRONOLOGY HAS NO HELD WORDING (2026-10-24, the Captain): the firm hears
+about a chronology only when it is delivered, so ``reply_binding`` refuses a
+held chronology its bind outright, before any wording could matter.
 
 THE REGISTRY. ``WORDING[lane][hold class]`` is one entry per class:
 
 * a string: that class's wording for every report of the lane, or
 * a dict ``{report: wording or (wording, ...)}``: per report (litigation's
-  ``status``, ``deadlines``, ``reassign``; the chronology has one report, ``run``).
-  A tuple lists every wording the class may take (the chronology's
-  ``smd_finishing`` reads differently on an update, and its row cannot say
-  which the job was, so both are accepted).
+  ``status``, ``deadlines``, ``reassign``). A tuple lists every wording the
+  class may take.
 
 Adding a class is one entry here plus its sentence in the skill's held step.
 A class with no entry for a report falls back to that report's
 ``smd_finishing``, as the skills say.
 
-SLOTS. A wording may carry ``<number>`` (the chronology's matter number, from
-the job row), ``<name>`` and ``<why>`` (a staff reassignment's unresolved name
-and its kind, from the request's own names on the row and the hold's reason),
-and ``<file name>`` (the chronology's another_person question). The first three
-are filled from the job and so are verified, not accepted. ``<file name>`` is
-the one the broker cannot look up (it would take a practice-system read): it is
+SLOTS. A wording may carry ``<number>`` (a matter number, from the job row),
+``<name>`` and ``<why>`` (a staff reassignment's unresolved name and its kind,
+from the request's own names on the row and the hold's reason), and
+``<file name>``. The first three are filled from the job and so are verified,
+not accepted. ``<file name>`` is one the broker cannot look up: it is
 constrained to one short line with no question and no new sentence, and every
-other word around it must match.
+other word around it must match. (``<file name>`` was the chronology's
+another_person question; no wording carries it today, and the matcher keeps it
+for a lane that may.)
 
 MATCHING. HTML tags become spaces and entities are decoded, curly quotes become
 straight ones, and runs of whitespace (line breaks included) collapse to one
@@ -58,18 +61,6 @@ SLOT_NUMBER = "<number>"
 SLOT_NAME = "<name>"
 SLOT_WHY = "<why>"
 SLOT_FILE = "<file name>"
-
-_CHRON_SMD_RUN = (
-    "The chronology for matter <number> is not filed yet, and nothing new has been put on the matter. "
-    "Nothing is needed from you; SMD is finishing it, and the next message you get about this chronology "
-    "will be the filed one."
-)
-_CHRON_SMD_UPDATE = (
-    "The chronology for matter <number> is not filed yet, and nothing new has been put on the matter; the "
-    "chronology already there is unchanged. Nothing is needed from you; SMD is finishing it, and the next "
-    "message you get about this chronology will be the filed one."
-)
-_CHRON_SMD = (_CHRON_SMD_RUN, _CHRON_SMD_UPDATE)
 
 WORDING: dict[str, dict[str, Any]] = {
     "litigation": {
@@ -106,42 +97,6 @@ WORDING: dict[str, dict[str, Any]] = {
             ),
         },
     },
-    "medchron": {
-        hold_class.SMD_FINISHING: {"run": _CHRON_SMD},
-        hold_class.SMD_FINISHING_FILED: (
-            "The updated chronology for matter <number> is filed in its folder. The earlier version is still "
-            "in the same folder beside it; SMD is removing it. Nothing is needed from you."
-        ),
-        hold_class.ALREADY_CURRENT: (
-            "The chronology for matter <number> already covers every visit the new records hold, so nothing "
-            "was added and the chronology is unchanged. Nothing is needed from you."
-        ),
-        hold_class.ANOTHER_PERSON: {
-            "run": (
-                "Before the chronology for matter <number> can go on, one question: <file name> names someone "
-                "other than the client. Is it the client's record? A yes or no in this thread is all that is "
-                "needed.",
-                "Before the chronology for matter <number> can go on, one question: a record attached to one of "
-                "the emails saved in the matter names someone other than the client. Is it the client's record? "
-                "You do not have to find it: if it is not, or you would rather not have it in, say so and it "
-                "stays out. A yes or no in this thread is all that is needed.",
-            )
-        },
-        hold_class.WHICH_CHRONOLOGY: (
-            "Two chronologies for this client on matter <number> carry the same date. Which one should the new "
-            "records go into? Its file name in this thread is all that is needed."
-        ),
-        # The resubmission as the UPDATE may itself be refused; the skill then
-        # sends the smd_finishing wording, which the runner's page makes true.
-        hold_class.REROUTED_TO_UPDATE: {
-            "run": (
-                "The new records for matter <number> are going into the chronology already on the matter, so it "
-                "stays one complete document. Nothing is needed from you; the next message you get about this "
-                "chronology will be the updated one.",
-                *_CHRON_SMD,
-            )
-        },
-    },
 }
 
 #: ``<why>`` for staff_unresolved, by the kind the runner named (reassign/spec.Unresolved).
@@ -156,8 +111,9 @@ _ROLE_NAMES = {"from": "from_names", "to": "to_name", "attorney": "attorney_name
 _UNRESOLVED = re.compile(r"^staff_unresolved:\s*(from|to|attorney)\s+(unknown|ambiguous|inactive|same)\b")
 #: A legacy row with no recorded request names: the wake's own name alphabet.
 _NAME = re.compile(r"[A-Za-z][A-Za-z .'-]{0,79}")
-#: The kinds whose state is held and whose reply this module words.
-KIND_LANE = {"litigation_job": "litigation", "medchron_job": "medchron"}
+#: The kinds whose state is held and whose reply this module words. Not the
+#: chronology: a held chronology is refused its reply (reply_binding).
+KIND_LANE = {"litigation_job": "litigation"}
 _FILE_MAX = 200
 
 
@@ -167,10 +123,8 @@ class HeldWordingRefused(BindingRefused):
 
 
 def _report(lane: str, row: dict[str, Any]) -> str:
-    if lane == "litigation":
-        report = str(row.get("report") or "status")
-        return report if report in ("status", "deadlines", "reassign") else "status"
-    return "run"
+    report = str(row.get("report") or "status")
+    return report if report in ("status", "deadlines", "reassign") else "status"
 
 
 def _wordings(lane: str, cls: str, report: str) -> tuple[str, ...]:

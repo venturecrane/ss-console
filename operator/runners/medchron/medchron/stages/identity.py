@@ -4,20 +4,20 @@ matter without every DOB authored runs at half strength and says so.
 
 Since 2026-10-13 it also reads every FOLDED email attachment's text, now that
 vision has transcribed the scanned ones, for a different person
-(``gates/foreign_identity``): an attachment that names someone else holds the
-run (exit 2) until a person releases it. The fold hook checked the text
-layers it could read before vision; this is the check that sees the scans.
+(``gates/foreign_identity``). The fold hook checked the text layers it could
+read before vision; this is the check that sees the scans.
 
-The hold line is the firm's wording, because the driver copies a stage's last
-output into the job's reason and the Operator reads the reason to word the
-hold. So the line names each attachment by its own file name and the saved
-email it came from, which is what the requester can find and the one question
-can be asked about, and never what the record says about the other person (a
-date of birth, a name). That detail is SMD's and stays in ``identity_holds.json``
-beside the manifest, as the update path keeps it. On 2026-10-22 the line
-carried the id and the other person's date of birth: the Operator relayed the
-id as "an internal tag", could name no file, and sent the attorney to look
-through 350 documents.
+An attachment that names someone else is LEFT OUT BY RULE (2026-10-24, the
+Captain): it used to hold the run until the firm said whose it was, and a
+chronology now reaches the firm only when it is delivered. The withhold is
+recorded where a person's would be (``FI.withhold_by_rule``, ``by: "rule"``),
+the attachment is taken out of the units build_units wrote (exactly what a
+rerun of build_units does with a withheld id, ``_leave_out_withheld``), and the
+run goes on; decide_orphans then explains it with the rule's wording, which
+the Records Reviewed and Limitations section prints. What the record says
+about the other person (a date of birth, a name) is SMD's detail and stays in
+``identity_holds.json`` beside the manifest, never in a log line or in the
+delivered package.
 """
 
 from __future__ import annotations
@@ -73,19 +73,37 @@ def _named(hold: dict[str, Any]) -> str:
     return out
 
 
+def _leave_out(sr: StageRun, ids: list[str]) -> int:
+    """Take withheld ids out of every unit file build_units wrote; the count
+    removed."""
+    removed = 0
+    for f in sorted((sr.slug_dir / "units").glob("*.json")):
+        if f.name.startswith("_"):
+            continue
+        rows = json.loads(f.read_text(encoding="utf-8"))
+        if not isinstance(rows, list):
+            continue
+        keep = [r for r in rows if not (isinstance(r, dict) and FI.matches(str(r.get("id") or ""), set(ids)))]
+        if len(keep) != len(rows):
+            removed += len(rows) - len(keep)
+            f.write_text(json.dumps(keep, indent=1), encoding="utf-8")
+    return removed
+
+
 def run(sr: StageRun) -> int:
     foreign = _foreign_folded(sr)
     if foreign:
         # The findings (what the record says about the other person) are
-        # SMD's detail and stay on the seat; the line, which becomes the job's
-        # reason and so the Operator's words, carries names only.
+        # SMD's detail and stay on the seat; the log names files only.
         (sr.slug_dir / HOLDS_FILE).write_text(json.dumps(foreign, indent=1), encoding="utf-8")
+        ids = [h["id"] for h in foreign]
+        FI.withhold_by_rule(sr.slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+        removed = _leave_out(sr, ids)
         sr.log(
-            f"IDENTITY HOLD: {len(foreign)} folded email attachment(s) name a different person than the client: "
-            f"{'; '.join(_named(h) for h in foreign[:5])}; a person reads them and releases any that are the "
-            f"client's, or the firm says to leave them out (medchron.identity_decide)"
+            f"IDENTITY: {len(foreign)} folded email attachment(s) name a different person than the client; "
+            f"left out by rule ({removed} unit row(s) removed) and disclosed in the package: "
+            f"{'; '.join(_named(h) for h in foreign[:5])}"
         )
-        return 2
     if not sr.job.joint:
         sr.log(f"{sr.slug}: single-unit matter; nothing to check")
         return 0

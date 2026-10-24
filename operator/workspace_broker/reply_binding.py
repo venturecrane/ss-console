@@ -51,9 +51,10 @@ the recipient. So the broker, which the agent cannot steer, decides:
       ``scheduled_recipients`` entry of ``smd-note`` (re-read at bind and at
       send time), under the subject the note recorded;
     - a chronology job (2026-10-07): the same rules on the medchron ledger, one
-      reply per (job, outcome). That ledger has no attempt counter, so a job
-      held, resumed and held AGAIN gets no second hold reply: the requester
-      already has one, and SMD's shortfall alert carries the rest;
+      reply per (job, outcome), and ONLY on delivery (2026-10-24, the Captain:
+      the firm hears about a chronology only when it is delivered). A held
+      chronology is refused its reply exactly as a failed job is; SMD was
+      paged when it stopped;
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -75,7 +76,6 @@ Every verdict, bound or refused, writes a ``REPLY_BINDING`` audit row.
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import logging
 import os
@@ -133,6 +133,18 @@ SCHEDULED_LANES = {
 #: told the firm to narrow its request after our own stage failed), so its
 #: reply is refused here and the failure goes to SMD's shortfall alert instead.
 REPLYABLE_DEMAND_STATES = frozenset({"delivered", "held"})
+#: The chronology lane's narrower set (2026-10-24, the Captain): the firm hears
+#: from the Operator about a chronology ONLY when it is delivered. A held
+#: chronology is SMD's to finish, paged at the hold, and its wake turn (only a
+#: RUN rerouted to an UPDATE still has one) sends nothing.
+REPLYABLE_MEDCHRON_STATES = frozenset({"delivered"})
+
+
+def replyable_states(kind: str) -> frozenset[str]:
+    """The ledger states a job of `kind` may be replied on."""
+    return REPLYABLE_MEDCHRON_STATES if kind == "medchron_job" else REPLYABLE_DEMAND_STATES
+
+
 logger = logging.getLogger(__name__)
 #: How old an email a bare message binding may still answer.
 RECENCY_DAYS = 14
@@ -340,16 +352,9 @@ def reply_key(kind: str, ident: str, row: dict[str, Any]) -> str:
     reply for its new outcome. Also what the runner daemon's reply watch
     matches (``delivery_proof.reply_status_verb``), so the two never disagree.
 
-    A held chronology is keyed by its REASON as well (2026-10-23). The medchron
-    ledger has no attempt column, so every hold of job 3CH59XBY shared the key
-    ``medchron_job:ID:1:held``: the first hold's reply claimed it, and every
-    later hold, each for a different reason, was refused as "already had its
-    reply", so the firm heard nothing for 21 hours. A distinct reason is a new
-    outcome the requester is owed one reply for; the same reason repeated (a
-    re-recorded hold keeps its reason, medchron_ledger) is not."""
-    if kind == "medchron_job" and row["state"] == "held":
-        digest = hashlib.sha256(str(row.get("reason") or "").encode("utf-8")).hexdigest()[:12]
-        return f"{kind}:{ident}:1:held:{digest}"
+    The per-reason key a held chronology carried (2026-10-23) is gone with its
+    reply (2026-10-24): a held chronology is never replied on, so it is never
+    keyed."""
     return f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
 
 
@@ -362,9 +367,14 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
     if row["state"] == "failed":
         raise BindingRefused(
             f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-            "delivered or held, and SMD has been alerted. Send nothing to anyone."
+            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone."
         )
-    if row["state"] not in REPLYABLE_DEMAND_STATES:
+    if kind == "medchron_job" and row["state"] == "held":
+        raise BindingRefused(
+            f"{noun} job {ident} stopped and SMD is finishing it; the requester hears about a chronology only "
+            "when it is delivered, and SMD has been alerted. Send nothing to anyone."
+        )
+    if row["state"] not in replyable_states(kind):
         raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
     key = reply_key(kind, ident, row)
     if bound_replies.claimed(db_path, key):

@@ -18,6 +18,12 @@
  *      is finishing (or removing) it; the follow-up is stated, not improvised.
  *   3. The firm's questions ask one specific thing.
  *   4. The phrases that sent the firm back are absent everywhere.
+ *
+ * 2026-10-24 (the Captain): the CHRONOLOGY lane tells the firm about a
+ * chronology only when it is delivered. A held chronology sends nothing, so its
+ * hold classes carry no wording at all; the chronology block below pins that
+ * instead (the held step sends nothing, the one held wake resubmits as an
+ * update, and no shape asks the firm whose a record is).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -44,25 +50,24 @@ const SKILLS = {
     // firm's staff list cannot settle; the firm's one question.
     classes: ['smd_finishing', 'nothing_in_scope', 'staff_unresolved'],
   },
-  chronology: {
-    skill: resolve(
-      import.meta.dirname,
-      '../operator/skills/medical-chronology-maintainer/SKILL.md'
-    ),
-    shapes: resolve(
-      import.meta.dirname,
-      '../operator/skills/medical-chronology-maintainer/references/reply-shapes.md'
-    ),
-    classes: [
-      'smd_finishing',
-      'smd_finishing_filed',
-      'already_current',
-      'another_person',
-      'which_chronology',
-      'rerouted_to_update',
-    ],
-  },
 } as const
+
+const CHRONOLOGY = {
+  skill: resolve(import.meta.dirname, '../operator/skills/medical-chronology-maintainer/SKILL.md'),
+  shapes: resolve(
+    import.meta.dirname,
+    '../operator/skills/medical-chronology-maintainer/references/reply-shapes.md'
+  ),
+  // Every class the chronology lane can produce. None is worded to the firm.
+  classes: [
+    'smd_finishing',
+    'smd_finishing_filed',
+    'already_current',
+    'another_person',
+    'which_chronology',
+    'rerouted_to_update',
+  ],
+}
 
 /** The DELIVER held section of a skill: from `- **held**:` to the next step. */
 function heldSection(body: string): string {
@@ -98,9 +103,12 @@ describe('hold classes: the closed set', () => {
     )
   })
 
-  it('every token has wording in at least one skill that can receive it', () => {
-    const covered = new Set<string>(Object.values(SKILLS).flatMap((s) => [...s.classes]))
-    for (const c of CLASSES) expect(covered.has(c), `${c} has no wording anywhere`).toBe(true)
+  it('every token is worded by litigation or silenced by the chronology delivered-only rule', () => {
+    const covered = new Set<string>([
+      ...Object.values(SKILLS).flatMap((s) => [...s.classes]),
+      ...CHRONOLOGY.classes,
+    ])
+    for (const c of CLASSES) expect(covered.has(c), `${c} is handled nowhere`).toBe(true)
   })
 })
 
@@ -124,7 +132,7 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
         const w = wording(held, cls)
         expect(shapes, `${cls} must be mirrored in ${cfg.shapes}`).toContain(flat(w))
         expect(w).not.toMatch(/—/)
-        if (cls === 'another_person' || cls === 'which_chronology' || cls === 'staff_unresolved') {
+        if (cls === 'staff_unresolved') {
           // The firm's question: exactly one, specific.
           expect((w.match(/\?/g) ?? []).length).toBe(1)
           expect(w).toMatch(/all that is needed/)
@@ -147,8 +155,53 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
   })
 }
 
+describe('chronology: the firm hears only on delivery (2026-10-24)', () => {
+  const body = read(CHRONOLOGY.skill)
+  const held = heldSection(body)
+  const shapes = flat(read(CHRONOLOGY.shapes))
+
+  it('the held step sends nothing and carries no firm wording', () => {
+    expect(held).toContain('nothing is sent, ever')
+    expect(held).toContain('Bind nothing and draft nothing.')
+    // No quoted sentence: there is nothing to say to the firm about a hold.
+    expect(held).not.toMatch(/"[^"]{20,}"/)
+    expect(flat(body)).toContain('The firm hears only on `delivered`.')
+  })
+
+  it('the one held wake, rerouted_to_update, resubmits as the update and replies to no one', () => {
+    expect(held).toContain('`rerouted_to_update`')
+    expect(held).toMatch(/Resubmit it on this turn as the UPDATE/)
+    expect(held).toMatch(/end the turn without a reply/)
+  })
+
+  it('no shape asks the firm whose a record is, and the record is disclosed instead', () => {
+    for (const text of [flat(body), shapes]) {
+      expect(text).not.toContain("Is it the client's record?")
+      expect(text).not.toContain('one question:')
+    }
+    expect(shapes).toContain(
+      'names a person other than the client, so it was left out of this chronology'
+    )
+  })
+
+  it('reply-shapes states the delivered-only rule and carries no held wording', () => {
+    expect(shapes).toContain('ONLY when it is delivered')
+    for (const old of [
+      'SMD is finishing it',
+      'already covers every visit',
+      'carry the same date',
+    ]) {
+      expect(shapes).not.toContain(old)
+    }
+  })
+})
+
 describe('no held reply sends the firm back (both skills, both reply-shapes)', () => {
-  const files = Object.values(SKILLS).flatMap((s) => [s.skill, s.shapes])
+  const files = [
+    ...Object.values(SKILLS).flatMap((s) => [s.skill, s.shapes]),
+    CHRONOLOGY.skill,
+    CHRONOLOGY.shapes,
+  ]
 
   for (const f of files) {
     it(`${f}: the forbidden phrases are absent`, () => {
@@ -162,7 +215,7 @@ describe('no held reply sends the firm back (both skills, both reply-shapes)', (
   }
 
   it('each skill forbids resubmit, narrow, split and SMD-as-a-route in every held reply', () => {
-    for (const s of Object.values(SKILLS)) {
+    for (const s of [...Object.values(SKILLS), CHRONOLOGY]) {
       const text = flat(read(s.skill))
       expect(text).toMatch(/ask the firm to resubmit, repeat, narrow,? (or )?split/i)
       expect(text).toMatch(/(route the firm to SMD|tell it to send anything to SMD)/)
@@ -170,7 +223,7 @@ describe('no held reply sends the firm back (both skills, both reply-shapes)', (
   })
 
   it("the chronology names the firm's request-side questions once and specifically", () => {
-    const text = flat(read(SKILLS.chronology.skill))
+    const text = flat(read(CHRONOLOGY.skill))
     expect(text).toContain(
       '"Which matter is this chronology for? Its number is all that is needed."'
     )
@@ -187,8 +240,8 @@ describe('no held reply sends the firm back (both skills, both reply-shapes)', (
  * speaking over my head." The mode's wording is fixed; the machinery stays out.
  */
 describe('chronology ANSWER mode: a requester writing on a held job gets fixed plain words', () => {
-  const skill = read(SKILLS.chronology.skill)
-  const shapes = flat(read(SKILLS.chronology.shapes))
+  const skill = read(CHRONOLOGY.skill)
+  const shapes = flat(read(CHRONOLOGY.shapes))
   const answer = flat(
     skill.slice(skill.indexOf('## ANSWER - the requester'), skill.indexOf('## The autonomy dial'))
   )
@@ -202,8 +255,6 @@ describe('chronology ANSWER mode: a requester writing on a held job gets fixed p
 
   it.each([
     'Understood. It stays out of the chronology for matter <number>, as you say. Nothing else is needed from you; the next message you get about this chronology will be the filed one.',
-    "It is a record attached to one of the emails saved in the matter, and the matter's documents do not name it. You do not have to find it: if it is not the client's record, or you would rather not have it in, say so and it stays out. A yes or no in this thread is all that is needed.",
-    'The chronology for matter <number> is waiting on the question above. A yes or no in this thread is all that is needed; the next message you get about it will be the filed one.',
     'The chronology for matter <number> is under way. Nothing is needed from you; the next message you get about it will be the filed one.',
   ])('fixed wording in the skill, mirrored in reply-shapes: %s', (w) => {
     expect(answer).toContain(w)
@@ -219,21 +270,10 @@ describe('chronology ANSWER mode: a requester writing on a held job gets fixed p
       'who has access',
       'open, find or read anything in the matter',
       'promise a time',
+      'say the chronology stopped, or why',
     ]) {
       expect(answer).toContain(s)
     }
-  })
-
-  it('the another_person question has a shape for a record attached to a saved email', () => {
-    // FALSIFIER: before 2026-10-22 the only shape needed a file name from
-    // get_files_on_matter, and an attachment folded from a saved email has none.
-    const held = heldSection(skill)
-    const variant =
-      "a record attached to one of the emails saved in the matter names someone other than the client. Is it the client's record? You do not have to find it: if it is not, or you would rather not have it in, say so and it stays out. A yes or no in this thread is all that is needed."
-    expect(held).toContain(variant)
-    expect(shapes).toContain(variant)
-    expect((variant.match(/\?/g) ?? []).length).toBe(1)
-    expect(held).toMatch(/never name it another way \(not the id/)
   })
 
   it('the words that sent the attorney to SMD appear in no reply shape', () => {

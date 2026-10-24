@@ -7,6 +7,11 @@ on that: the gate read only a release file nobody wrote, there was no withhold
 at all, and ``medchron_job_resume`` refused every hold but the audit gate's. So
 the Operator told him it had no way to act, and he forwarded the exchange to
 SMD asking for help. Each test names the failure it stands against.
+
+2026-10-24 (the Captain): the firm is no longer asked. A record that names
+someone other than the client is withheld BY RULE wherever it is found, the
+run goes on, and the delivered package discloses it. The firm's own withhold
+(``identity_decide``) keeps working and keeps its wording.
 """
 
 from __future__ import annotations
@@ -87,13 +92,35 @@ def test_a_decision_without_who_or_where_is_refused(data_root: Path) -> None:
 
 
 # ---- the identity stage --------------------------------------------------------
-def test_a_withheld_attachment_no_longer_holds_the_run(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_an_attachment_naming_another_person_is_withheld_by_rule_and_the_run_goes_on(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """FALSIFIER: restore the identity stage's exit 2 and this returns 2."""
     sd = _held_scene(data_root)
     log: list[str] = []
-    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 2  # the 2026-10-22 hold
-    _decide(sd, "withhold", [HELD_ID])
-    log.clear()
     assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 0, log
+    assert FI.withheld(sd) == {HELD_ID}
+    assert FI.withheld_reason(sd, HELD_ID) == FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
+    body = json.loads((sd / FI.RELEASE_FILE).read_text())
+    assert body["decisions"][-1]["by"] == "rule"
+    # Decided once: a second pass finds nothing new and records nothing.
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 0
+    assert len(json.loads((sd / FI.RELEASE_FILE).read_text())["decisions"]) == 1
+
+
+def test_the_identity_stage_takes_a_withheld_attachment_out_of_the_built_units(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """build_units ran before the identity stage, so the attachment is already
+    in a unit; the rule withhold must take it out, as a rerun of build_units
+    would. FALSIFIER: drop ``_leave_out`` and the attachment stays composed."""
+    sd = _held_scene(data_root)
+    (sd / "units").mkdir()
+    (sd / "units" / "alpha.json").write_text(json.dumps([{"id": "f1"}, {"id": HELD_ID}]))
+    (sd / "units" / "_unassigned.json").write_text(json.dumps([{"id": HELD_ID}]))
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, [])) == 0
+    assert [r["id"] for r in json.loads((sd / "units" / "alpha.json").read_text())] == ["f1"]
+    assert json.loads((sd / "units" / "_unassigned.json").read_text()) == [{"id": HELD_ID}]  # not a unit
 
 
 def test_the_hold_line_names_the_attachment_and_its_email_never_the_other_person(
@@ -105,9 +132,9 @@ def test_the_hold_line_names_the_attachment_and_its_email_never_the_other_person
     # file, and sent the attorney to search the saved emails himself.
     sd = _held_scene(data_root)
     log: list[str] = []
-    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 2
-    line = log[-1]
-    assert "name a different person than the client" in line  # the classifier's token
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 0
+    line = next(x for x in log if x.startswith("IDENTITY:"))
+    assert "name a different person than the client" in line and "left out by rule" in line
     assert HELD_ID in line and '"Kaiser records 2019"' in line
     assert 'attached to the email "FW records from Kaiser.msg"' in line
     assert "1948" not in line and "date of birth" not in line.lower()
@@ -124,8 +151,9 @@ def test_an_attachment_the_manifest_cannot_name_is_held_by_id_alone(
         [{"id": HELD_ID, "ext": ".pdf", "ok": True, "from_email": "e"}],
     )
     log: list[str] = []
-    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 2
-    assert HELD_ID in log[-1] and "attached to the email" not in log[-1] and '"' not in log[-1].split(HELD_ID)[1][:2]
+    assert identity_stage.run(_sr(job_dir, firm_config_path, data_root, log)) == 0
+    line = next(x for x in log if x.startswith("IDENTITY:"))
+    assert HELD_ID in line and "attached to the email" not in line and '"' not in line.split(HELD_ID)[1][:2]
     assert (sd / identity_stage.HOLDS_FILE).is_file()
 
 
@@ -154,7 +182,7 @@ def test_a_withheld_document_joins_no_unit(job_dir: Path, firm_config_path: Path
         r["id"] for f in (sd / "units").glob("*.json") if not f.name.startswith("_") for r in json.loads(f.read_text())
     ]
     assert ids == ["f1"]
-    assert any("left out at the firm's direction" in line for line in log)
+    assert any("left out by an identity decision" in line for line in log)
 
 
 # ---- disclosure and coverage ---------------------------------------------------
@@ -172,6 +200,38 @@ def test_a_withheld_document_is_disclosed_as_left_out_not_held_as_residue(
     assert not d.held
     entry = {"name": "Kaiser records 2019.pdf", "reason": FI.WITHHELD_REASON}  # keyed as coverage keys a pulled row
     assert entry in json.loads((sd / "orphans.json").read_text())["orphans"]
+
+
+def test_a_rule_withhold_is_disclosed_with_the_rules_reason_and_counts_as_accounted_for(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """FALSIFIER: disclose every withhold as WITHHELD_REASON (the firm's
+    direction), which would say the firm decided something it never saw."""
+    sd = _held_scene(data_root)
+    (sd / "units").mkdir()
+    (sd / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": "clinic note", "ext": ".pdf"}]))
+    job = job_mod.load(job_dir)
+    cfg = config_mod.load(str(firm_config_path))
+    FI.withhold_by_rule(sd, [HELD_ID], ground=FI.RULE_ANOTHER_PERSON)
+    assert not decisions.orphans(job, cfg, sd, job.units[0], dry_run=False).held
+    reason = "names a person other than the client, so it was left out of this chronology"
+    assert {"name": "Kaiser records 2019.pdf", "reason": reason} in json.loads((sd / "orphans.json").read_text())[
+        "orphans"
+    ]
+    sets = covered.covered_sets(sd, "alpha", cfg)
+    assert HELD_ID in sets["covered"] and HELD_ID not in sets["uncovered"]
+
+
+def test_a_later_firm_withhold_takes_the_firms_wording() -> None:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as t:
+        sd = Path(t)
+        FI.withhold_by_rule(sd, [HELD_ID], ground=FI.RULE_UNPLACED)
+        assert FI.withheld_reason(sd, HELD_ID) == FI.RULE_REASONS[FI.RULE_UNPLACED]
+        _decide(sd, "withhold", [HELD_ID])
+        assert FI.withheld_reason(sd, HELD_ID) == FI.WITHHELD_REASON
+        assert FI.withheld_reason(sd, "never-decided") == FI.WITHHELD_REASON
 
 
 def test_a_withheld_document_counts_as_accounted_for_so_an_update_never_asks_again(
@@ -220,15 +280,15 @@ def test_an_updates_skip_list_counts_a_withheld_document_accounted_for(tmp_path:
     assert update_coverage.covered_sets(tmp_path, "alpha")["covered"] == [HELD_ID]
 
 
-def test_the_fold_skips_a_withheld_attachment_rather_than_holding(
+def test_the_fold_skips_a_firm_withheld_attachment_and_records_no_rule_decision(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     job, cfg = job_mod.load(job_dir), config_mod.load(str(firm_config_path))
     sd, sha12 = _fold_scene(data_root, "Patient Name: Gamma Other\nDOB: 05/05/1990\nOffice visit for knee pain.")
-    assert decisions.fold(job, cfg, sd, dry_run=False).held
     _decide(sd, "withhold", [sha12])
     d = decisions.fold(job, cfg, sd, dry_run=False)
     assert not d.held and d.payload["fold"] == []
+    assert FI.withheld_reason(sd, sha12) == FI.WITHHELD_REASON  # the firm's, not overwritten by the rule
 
 
 # ---- the root command ----------------------------------------------------------
@@ -283,3 +343,25 @@ def test_the_command_refuses_what_it_cannot_record(
     with pytest.raises(identity_decide.Refused, match=needle):
         identity_decide.plan(d, JOB, action="withhold", ids=ids, by="chris@firm.example", source="msg-1")
     assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+
+
+# ---- an update (2026-10-24) --------------------------------------------------
+def test_an_updates_rule_withhold_is_covered_named_in_records_reviewed_and_not_counted(tmp_path: Path) -> None:
+    """The update's identity screen withholds by rule (update_select); the
+    document counts as accounted for, so the next update never reads it again,
+    and Records Reviewed names it without counting it among the documents
+    reviewed. FALSIFIER: drop the rule key from ``update/reviewed.accounted``
+    and the document is reported as "not read" and counted."""
+    from medchron.update import reviewed as RV
+
+    rule = FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
+    ud_dir = tmp_path / "runs" / "alpha" / "update"
+    ud_dir.mkdir(parents=True)
+    sel = {"skipped": {rule: ["d9"]}, "exhibits": []}
+    (ud_dir / "selection.json").write_text(json.dumps(sel))
+    rows = [{"id": "d9", "ok": True, "name": "Other Clinic records", "ext": ".pdf"}, {"id": "d1", "ok": True}]
+    (tmp_path / "raw_manifest.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert "d9" in update_coverage.covered_sets(tmp_path, "alpha")["covered"]
+    out = RV.accounted(rows, sel, [], [{"id": "d1", "exhibit": 5}], [])
+    assert out["docs"] == 1 and out["left_out"] == ["Other Clinic records.pdf"]
+    assert out["unread"] == []
