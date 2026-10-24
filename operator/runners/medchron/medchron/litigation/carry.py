@@ -123,6 +123,8 @@ def _carry_defendants(prior: dict[str, Any], result: dict[str, Any], kw: dict[st
         allowed = {
             "answered": st in (vocab.ANSWERED, vocab.ANSWERED_ORIGINAL),
             "served": st not in (vocab.NOT_SERVED, vocab.OUT_FOR_SERVICE, vocab.D_UNCLEAR),
+            # Papers go out before service whatever the status says now.
+            "sent_for_service": True,
         }
         for f, ok in allowed.items():
             if ok and _empty(d.get(f)) and _qualifies(old.get(f), **kw):

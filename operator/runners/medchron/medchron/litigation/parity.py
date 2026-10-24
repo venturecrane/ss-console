@@ -74,6 +74,10 @@ def points(m: dict[str, Any] | None) -> dict[str, tuple[Any, dict[str, Any] | No
         out[f"defendants[{name}].status"] = (d.get("status"), basis)
         out[f"defendants[{name}].served"] = (_key(d.get("served"), "date"), d.get("served"))
         out[f"defendants[{name}].answered"] = (_key(d.get("answered"), "date"), d.get("answered"))
+        out[f"defendants[{name}].sent_for_service"] = (
+            _key(d.get("sent_for_service"), "date"),
+            d.get("sent_for_service"),
+        )
     for kind in ("discovery_propounded", "discovery_served_on_client"):
         for key, r in identity.keyed_rows(m.get(kind)):
             label = f"{kind}[{key}]"

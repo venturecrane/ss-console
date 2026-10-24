@@ -7,6 +7,7 @@ import datetime as dt
 import json
 from email.message import EmailMessage
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -75,6 +76,54 @@ def test_the_loop_stops_at_its_cap(tmp_path):
         )
     assert len(client.calls) == 2 + 2  # two exploring calls under a cap of 3, then two answer-now turns
     assert all(not c.get("tools") or c["tools"][-1]["name"] == "record_result" for c in client.calls)
+
+
+def test_a_read_keeps_the_sent_date_only_when_it_answered_for_it(tmp_path):
+    """The read marker (2026-10-24): a read that recorded sent_for_service,
+    dated or not, read for it; one that left the key out did not, and the list
+    must say "Not read yet", never "Not in file"."""
+    ctx = _ctx(tmp_path, LitSeat({M1: matter_docs()}))
+    n = {k: ctx.by_id[k] for k in ("f-c1", "f-p1", "f-a1")}
+    res = read.to_state(ctx, good_result(n), list(vocab.GROUPS))
+    sent = res["defendants"][0]["sent_for_service"]
+    assert sent["date"] == "2026-03-20" and sent["source"]["name"] == "POS Delta.pdf"
+    raw = good_result(n)
+    raw["defendants"][0]["sent_for_service"] = {"date": None, "doc": None}
+    assert read.to_state(ctx, raw, list(vocab.GROUPS))["defendants"][0]["sent_for_service"] == {
+        "date": None,
+        "source": None,
+    }
+    del raw["defendants"][0]["sent_for_service"]
+    assert "sent_for_service" not in read.to_state(ctx, raw, list(vocab.GROUPS))["defendants"][0]
+
+
+def test_a_check_pass_may_correct_the_sent_date_and_the_prompt_asks_for_it(tmp_path):
+    ctx = _ctx(tmp_path, LitSeat({M1: matter_docs()}))
+    n = {k: ctx.by_id[k] for k in ("f-c1", "f-p1", "f-a1")}
+    res = read.to_state(ctx, good_result(n), list(vocab.GROUPS))
+    log = read.apply_verdicts(
+        ctx,
+        res,
+        [
+            {
+                "path": "defendants[Delta Example].sent_for_service",
+                "verdict": "overturned",
+                "corrected": {"date": "2026-03-19"},
+                "doc": n["f-p1"],
+            }
+        ],
+        "verify",
+    )
+    assert res["defendants"][0]["sent_for_service"]["date"] == "2026-03-19"
+    assert [x["path"] for x in log] == ["defendants[Delta Example].sent_for_service"]
+    assert "defendants[<exact name>].sent_for_service" in read.PATHS
+    firm = SimpleNamespace(data={"form_hints": {}})
+    for role in ("read", "verify", "audit"):
+        text = read.system_for(role, firm, TODAY)
+        assert "sent_for_service" in text and "NEVER the date the\ndefendant was served" in text
+    assert "no date sent out for service" in read.system_for("audit", firm, TODAY)
+    props = read.RESULT_SCHEMA["properties"]["defendants"]["items"]["properties"]
+    assert "sent_for_service" in props
 
 
 def test_verdicts_overturn_add_and_mark_unclear(tmp_path):

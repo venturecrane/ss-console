@@ -71,6 +71,19 @@ def test_a_workbook_that_disagrees_with_its_data_is_a_must_fix(tmp_path):
     assert [f.check for f in fs] == ["rows"] and fs[0].grade == proof_review.MUST
 
 
+def test_a_sent_out_cell_that_disagrees_with_its_data_is_a_must_fix_at_its_column(tmp_path):
+    """2026-10-24: the review checks the new columns cell by cell; a sent date
+    that never got written, or a read marker the file lost, holds the list."""
+    m = _matter("100001")
+    m["defendants"][0]["sent_for_service"] = {"date": "2026-08-20", "source": {"name": "Request.msg"}}
+    blob = _book(tmp_path, [m])
+    assert review.findings(blob, [m], [m]) == []
+    unread = {**m, "defendants": [{k: v for k, v in m["defendants"][0].items() if k != "sent_for_service"}]}
+    fs = review.findings(blob, [unread], [unread])
+    col = book.DEF_HEADER.index("Sent out for service") + 1
+    assert [f.check for f in fs] == ["rows"] and f"column {col}," in fs[0].finding
+
+
 def test_an_in_scope_matter_missing_from_the_list_is_a_must_fix(tmp_path):
     ms = [_matter("100001")]
     fs = review.findings(_book(tmp_path, ms), ms, ms + [_matter("100002")])

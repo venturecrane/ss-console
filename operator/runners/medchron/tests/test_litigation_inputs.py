@@ -194,6 +194,14 @@ def test_the_three_pass_shape_converts_and_cites_only_what_resolves():
     assert m["fields_read"] == ["case", "defendants"] and not m["provenance"]["two_pass"]
     row["defendants"][0]["answered"]["source"] = "an email somewhere"
     assert baseline.from_firm(row, FILES)["fields_read"] == ["case"]  # an uncited date is read again
+    # The hand runs never read a sent-out date: the seed says "not read yet", never "not in file".
+    assert "sent_for_service" not in m["defendants"][0]
+    row["defendants"][0]["answered"]["source"] = "Answer Delta, 2026-04-30"
+    row["defendants"][0]["sent_for_service"] = {"date": "2026-03-20", "source": "POS (4de824d4)"}
+    sent = baseline.from_firm(row, FILES)["defendants"][0]["sent_for_service"]
+    assert sent["date"] == "2026-03-20" and sent["source"]["file_id"].startswith("4de824d4")
+    row["defendants"][0]["sent_for_service"] = {"date": "2026-03-20", "source": "an email somewhere"}
+    assert baseline.from_firm(row, FILES)["fields_read"] == ["case"]  # an uncited sent date is read again
 
 
 def test_the_two_pass_shape_converts_and_is_audited_first(tmp_path):

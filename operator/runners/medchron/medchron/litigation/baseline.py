@@ -117,6 +117,15 @@ def _v(date: Any, src: Any, resolve: Resolver, **extra: Any) -> dict[str, Any]:
     return {"date": first_date(date) if date else None, **extra, "source": resolve(src) if date or src else None}
 
 
+def _sent(raw: Any, resolve: Resolver) -> dict[str, Any]:
+    """``{"sent_for_service": ...}`` only when the hand run recorded one (it
+    read for it, dated or not). A shape that never read it carries no key, so
+    the list shows "Not read yet", not a "Not in file" nobody found."""
+    if not isinstance(raw, dict):
+        return {}
+    return {"sent_for_service": _v(raw.get("date"), raw.get("source"), resolve)}
+
+
 def _groups(m: dict[str, Any]) -> list[str]:
     def cited(v: Any) -> bool:
         return not (isinstance(v, dict) and v.get("date") and not v.get("source"))
@@ -131,7 +140,7 @@ def _groups(m: dict[str, Any]) -> list[str]:
     ):
         out.append(vocab.GROUP_CASE)
     ds = m.get("defendants") or []
-    if ds and all(cited(d.get("served")) and cited(d.get("answered")) for d in ds):
+    if ds and all(cited(d.get(f)) for d in ds for f in ("served", "answered", "sent_for_service")):
         out.append(vocab.GROUP_DEFENDANTS)
     return out
 
@@ -155,6 +164,7 @@ def from_firm(row: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any
                 },
                 "served": _v(sv.get("date"), sv.get("source"), r, method=sv.get("method")),
                 "answered": _v(an.get("date"), an.get("source"), r),
+                **_sent(d.get("sent_for_service"), r),
                 "flags": [str(x) for x in d.get("flags") or []],
             }
         )
@@ -199,6 +209,7 @@ def from_two_pass(rows: list[dict[str, Any]], files: list[dict[str, Any]]) -> di
                     "date": first_date(x.get("answered")),
                     "source": r(x.get("answered_src")) if first_date(x.get("answered")) else None,
                 },
+                **_sent({"date": x["sent"], "source": x.get("sent_src")} if "sent" in x else None, r),
                 "flags": [f for f in str(x.get("flags") or "").split(" | ") if f.strip()],
             }
         )
@@ -332,6 +343,83 @@ def merge_discovery(state: Path, root: Path) -> dict[str, int]:
         m.setdefault("provenance", {})["discovery_seed"] = "2026-10-08"
         _atomic(path, m)
         out["merged"] += 1
+    return out
+
+
+# ---- the sent-out date backfill: one field, merged onto stored prior state ---------------
+def _sent_row(row: Any) -> dict[str, Any] | None:
+    """A backfill row's value, or None when it is not one this merge may write:
+    a date must be ``YYYY-MM-DD`` and cite a file id (the gates refuse an
+    uncited date); a null date records that the hand run read and found none."""
+    if not isinstance(row, dict):
+        return None
+    d, src = row.get("date"), row.get("source")
+    if d is None:
+        return {"date": None, "source": None}
+    if not (isinstance(d, str) and _ISO.fullmatch(d) and isinstance(src, dict) and src.get("file_id")):
+        return None
+    return {
+        "date": d,
+        "source": {
+            "file_id": str(src["file_id"]),
+            "name": str(src.get("name") or ""),
+            "doc_date": src.get("doc_date"),
+        },
+    }
+
+
+def merge_sent_for_service(state: Path, rows: list[dict[str, Any]], *, dry_run: bool = False) -> dict[str, int]:
+    """Add ``sent_for_service`` (and nothing else) to defendants in the stored
+    prior state under ``state``. Each row is ``{"matter_id", "defendant",
+    "date", "source": {"file_id", "name", "doc_date"} | null}``.
+
+    A row is written only onto the one lane defendant it names
+    (``identity.same_person``): no match is ``skipped_unmatched`` (including a
+    matter with no stored state), two or more is ``skipped_ambiguous``, and so
+    is a second row for a defendant this merge already wrote. A defendant that
+    already carries the field (a pass read it) is left alone, as is a row with
+    an uncited or malformed date. Carries no data of its own; the rows are fed
+    in where the client's data lives."""
+    from . import identity
+
+    out = {
+        "merged": 0,
+        "skipped_unmatched": 0,
+        "skipped_ambiguous": 0,
+        "skipped_uncited": 0,
+        "already_read": 0,
+    }
+    by_matter: dict[str, list[dict[str, Any]]] = {}
+    for row in rows if isinstance(rows, list) else []:
+        mid = str(row.get("matter_id") or "") if isinstance(row, dict) else ""
+        by_matter.setdefault(mid, []).append(row)
+    for mid, mrows in by_matter.items():
+        path = state / "matters" / f"{mid}.json"
+        if not mid or not path.is_file():
+            out["skipped_unmatched"] += len(mrows)
+            continue
+        m = json.loads(path.read_text(encoding="utf-8"))
+        defs = [d for d in m.get("defendants") or [] if isinstance(d, dict)]
+        written: set[int] = set()
+        for row in mrows:
+            name = str(row.get("defendant") or "")
+            hits = [i for i, d in enumerate(defs) if name and identity.same_person(str(d.get("name") or ""), name)]
+            value = _sent_row(row)
+            if not hits:
+                out["skipped_unmatched"] += 1
+            elif len(hits) > 1 or hits[0] in written:
+                out["skipped_ambiguous"] += 1
+            elif value is None:
+                out["skipped_uncited"] += 1
+            elif "sent_for_service" in defs[hits[0]]:
+                out["already_read"] += 1
+            else:
+                defs[hits[0]]["sent_for_service"] = value
+                written.add(hits[0])
+                out["merged"] += 1
+        if written and not dry_run:
+            m.setdefault("provenance", {})["sent_for_service_backfill"] = len(written)
+            _atomic(path, m)
     return out
 
 

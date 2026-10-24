@@ -71,6 +71,41 @@ def test_a_court_only_run_reads_no_discovery_and_shows_no_discovery_tab(tmp_path
     assert "Discovery" not in load_workbook(r._out()).sheetnames
 
 
+def _discovery_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every matter's parity carries one unexplained discovery change, the
+    shape that held a court-only list on 2026-10-23."""
+    from medchron.litigation import parity
+
+    real = parity.compare
+
+    def compare(*a, **kw):
+        return [
+            *real(*a, **kw),
+            {
+                "path": "discovery_propounded[frogs|delta].date",
+                "label": "x",
+                "old": "2026-06-01",
+                "new": None,
+                "explained": False,
+                "why": "changed with no document cited",
+            },
+        ]
+
+    monkeypatch.setattr(parity, "compare", compare)
+
+
+def test_a_court_only_list_does_not_hold_on_discovery_it_did_not_read(tmp_path, monkeypatch):
+    _discovery_divergence(monkeypatch)
+    v = _run(tmp_path, CHRIS).run()
+    assert v.verdict == "delivered", v.reason
+
+
+def test_a_full_list_still_holds_on_an_unexplained_discovery_change(tmp_path, monkeypatch):
+    _discovery_divergence(monkeypatch)
+    v = _run(tmp_path, "Send me a fresh litigation status list.").run()
+    assert v.verdict != "delivered" and "parity_hold" in (v.reason or ""), v.reason
+
+
 def test_a_full_request_still_reads_discovery_and_shows_its_tab(tmp_path):
     r = _run(tmp_path, "Send me a fresh litigation status list.")
     v = r.run()

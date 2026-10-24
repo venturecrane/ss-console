@@ -62,6 +62,8 @@ GROUP_CASE = "case"
 GROUP_DEFENDANTS = "defendants"
 GROUP_DISCOVERY = "discovery"
 GROUPS = (GROUP_CASE, GROUP_DEFENDANTS, GROUP_DISCOVERY)
+#: Parity paths of the discovery group (``parity.points``).
+DISCOVERY_PATHS = ("discovery_propounded[", "discovery_served_on_client[")
 GROUP_FIELDS = {
     GROUP_CASE: ("case_name", "court", "case_number", "firm_role", "case_status", "complaint_filed", "next_court_date"),
     GROUP_DEFENDANTS: ("defendants",),

@@ -32,6 +32,7 @@ def good() -> dict:
                 "status": vocab.ANSWERED,
                 "served": {"date": "2026-04-10", "method": "personal", "source": src()},
                 "answered": {"date": "2026-04-30", "source": src("f3", "Answer.pdf")},
+                "sent_for_service": {"date": "2026-03-20", "source": src("f6", "Service request.pdf")},
                 "flags": [],
             }
         ],
@@ -50,8 +51,9 @@ def good() -> dict:
     }
 
 
-FILES = {"m1": {"f0", "f1", "f2", "f3", "f4", "f5"}}
+FILES = {"m1": {"f0", "f1", "f2", "f3", "f4", "f5", "f6"}}
 TEXTS = {
+    "f6": "Please serve the summons and complaint on Delta Example. Sent March 20, 2026",
     "f0": "COMPLAINT filed 03/02/2026",
     "f1": "served on April 10, 2026",
     "f2": "CMC set for 11/20/2026",
@@ -60,7 +62,7 @@ TEXTS = {
 }
 
 
-def run(ms, saved=None, hits=None):
+def run(ms, saved=None, hits=None, discovery=True):
     return gates.run(
         ms,
         today=TODAY,
@@ -68,11 +70,12 @@ def run(ms, saved=None, hits=None):
         saved=saved or {"m1": {}},
         text_of=lambda mid, fid: TEXTS.get(fid),
         hits=hits or {},
+        discovery=discovery,
     )
 
 
 def test_a_clean_matter_passes():
-    assert run([good()]) == {"passed": True, "issues": {}}
+    assert run([good()]) == {"passed": True, "issues": {}, "notes": {}}
 
 
 def _set(m, path, value):
@@ -101,6 +104,11 @@ CASES = [
     ("em dash in text", ("matter_flags",), ["served — no answer"]),
     ("source is not a file on the matter", ("complaint_filed", "source"), src("zz", "Elsewhere.pdf")),
     ("future date", ("discovery_propounded", 0, "date"), "2026-12-01"),
+    # The sent-out-for-service date is judged like every other date (2026-10-24).
+    ("future date", ("defendants", 0, "sent_for_service", "date"), "2027-01-01"),
+    ("date not YYYY-MM-DD", ("defendants", 0, "sent_for_service", "date"), "3/20/2026"),
+    ("date without source", ("defendants", 0, "sent_for_service", "source"), None),
+    ("source is not a file on the matter", ("defendants", 0, "sent_for_service", "source"), src("zz", "Else.pdf")),
 ]
 
 
@@ -204,3 +212,65 @@ def test_the_leak_scan_passes_plain_client_copy(tmp_path):
     p = tmp_path / "w.xlsx"
     wb.save(p)
     assert gates.leak_scan(p) == []
+
+
+# ---- the sent-out date (2026-10-24) and the court-only gates (2026-10-23) ---------------
+def test_a_sent_date_that_is_the_save_date_and_not_in_its_document_is_refused():
+    m = good()
+    m["defendants"][0]["sent_for_service"]["date"] = "2026-03-21"
+    g = run([m], saved={"m1": {"f6": {"2026-03-21"}}})
+    assert ("100001", "Delta Example: sent for service", "2026-03-21") in g["issues"][
+        "date is the Smokeball save date, not in the document"
+    ]
+
+
+def test_sent_after_served_is_a_note_never_a_hold():
+    """Re-service makes papers going out after a service date legitimate."""
+    m = good()
+    m["defendants"][0]["sent_for_service"]["date"] = "2026-05-01"
+    TEXTS["f6r"] = "Please re-serve Delta Example. Sent May 1, 2026"
+    FILES["m1"].add("f6r")
+    m["defendants"][0]["sent_for_service"]["source"] = src("f6r")
+    g = run([m])
+    assert g["passed"], g
+    assert g["notes"] == {
+        "sent out for service after the service date (re-service?)": [
+            ("100001", "Delta Example", "2026-05-01", "2026-04-10")
+        ]
+    }
+
+
+def test_a_defendant_never_read_for_its_sent_date_passes():
+    m = good()
+    del m["defendants"][0]["sent_for_service"]
+    assert run([m])["passed"]
+
+
+def test_a_court_only_list_does_not_judge_discovery_it_did_not_read():
+    """2026-10-23: most items holding a court-only list were discovery values
+    the run did not read and the list did not show."""
+    m = good()
+    m["discovery_propounded"][0]["date"] = "2026-12-01"  # future
+    m["discovery_propounded"].append({"set": "RFP", "served_on": "Delta", "date": "2026-06-02", "source": None})
+    full = run([m])
+    assert {"future date", "date without source"} <= set(full["issues"])
+    assert run([m], discovery=False)["passed"]
+    # A discovery source off the matter is not judged either; a court value still is.
+    m["discovery_propounded"][1]["source"] = src("zz", "Else.pdf")
+    assert run([m], discovery=False)["passed"]
+    m["complaint_filed"]["date"] = "2027-01-01"
+    assert "future date" in run([m], discovery=False)["issues"]
+
+
+@pytest.mark.parametrize(
+    "text,iso,expected",
+    [
+        ("Executed on January __12__, 2026 at Exampletown", "2026-01-12", True),  # a blank filled by hand
+        ("Executed on April 21 2026", "2026-04-21", True),  # a comma the OCR dropped
+        ("Dated: 4/21/2026", "2026-04-21", True),
+        ("Executed on January 12 20261", "2026-01-12", False),  # a digit runs on: not this date
+        ("Executed on January 13, 2026", "2026-01-12", False),
+    ],
+)
+def test_text_carries_a_hand_filled_or_comma_dropped_date(text, iso, expected):
+    assert gates.text_carries(text, iso) is expected

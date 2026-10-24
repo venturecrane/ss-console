@@ -121,3 +121,97 @@ def test_clean_strips_internal_vocabulary():
     )
     for bad in ("second read", "verifier", "[doc", "11111111-", "—"):
         assert bad not in s
+
+
+# ---- the sent-out date (2026-10-24) ---------------------------------------------------
+def _cells(d):
+    m = good()
+    m["defendants"] = [d]
+    return dict(zip(book.DEF_HEADER, book.defendant_rows([m])[0]["cells"]))
+
+
+def test_the_sent_out_columns_follow_served_and_leave_the_sort_keys_alone():
+    h = book.DEF_HEADER
+    assert h[9:13] == ["Served", "Served (source)", "Sent out for service", "Sent out for service (source)"]
+    assert h[:3] == ["Responsible (Smokeball)", "Next court date", "Matter #"]
+    assert len(book.DEF_WIDTHS) == len(h)
+
+
+def test_a_sent_date_renders_with_its_document():
+    c = _cells(good()["defendants"][0])
+    assert c["Sent out for service"] == "2026-03-20"
+    assert c["Sent out for service (source)"] == "Service request.pdf"
+    assert c["Served"] == "2026-04-10 (personal)"
+
+
+def test_an_unread_sent_date_is_not_read_yet_never_not_in_file():
+    """An absent key is a value nobody looked for: printing "Not in file"
+    would state a finding nobody made."""
+    d = good()["defendants"][0]
+    del d["sent_for_service"]
+    c = _cells(d)
+    assert c["Sent out for service"] == "Not read yet"
+    assert c["Sent out for service (source)"] == ""
+
+
+def test_a_read_that_found_no_request_says_not_in_file_and_why():
+    d = good()["defendants"][0]
+    d["sent_for_service"] = {"date": None, "source": None}
+    c = _cells(d)
+    assert c["Sent out for service"] == "Not in file"
+    assert c["Sent out for service (source)"] == book.NOT_IN_FILE_WHY
+
+
+def test_the_built_workbook_carries_the_sent_out_columns_and_review_checks_them(tmp_path):
+    from medchron.litigation import review
+
+    a = good()
+    b = copy.deepcopy(good())
+    b.update(matter_id="m2", number="100002")
+    del b["defendants"][0]["sent_for_service"]
+    out = tmp_path / "w.xlsx"
+    book.build([a, b], {}, out, TODAY)
+    ws = load_workbook(out)["All defendants"]
+    col = [c.value for c in ws[1]].index("Sent out for service")
+    assert [r[col].value for r in ws.iter_rows(min_row=2)] == ["2026-03-20", "Not read yet"]
+    assert gates.leak_scan(out) == []
+    scope = [{"number": "100001"}, {"number": "100002"}]
+    assert review.findings(out.read_bytes(), [a, b], scope) == []
+    # The review compares All defendants cell by cell, so the new columns too.
+    a2 = copy.deepcopy(a)
+    a2["defendants"][0]["sent_for_service"]["date"] = "2026-03-19"
+    assert [f for f in review.findings(out.read_bytes(), [a2, b], scope) if f.check == "rows"]
+
+
+def test_a_new_sent_date_with_a_source_is_explained_and_a_vanished_one_holds():
+    prior = good()
+    del prior["defendants"][0]["sent_for_service"]
+    new = good()
+    cs = parity.compare(prior, new, moved_files=set(), overturns=[], today=TODAY)
+    assert [c["path"] for c in cs] == ["defendants[deltaexample].sent_for_service"] and not parity.unexplained(cs)
+    gone = parity.unexplained(parity.compare(new, prior, moved_files=set(), overturns=[], today=TODAY))
+    assert [c["path"] for c in gone] == ["defendants[deltaexample].sent_for_service"]
+    assert book.humanize("defendants[Delta Example].sent_for_service") == "Delta Example: sent for service"
+
+
+# ---- the court-only fold-in (2026-10-23) ----------------------------------------------
+def test_discovery_paths_name_every_discovery_parity_point_and_nothing_else():
+    m = good()
+    m["discovery_served_on_client"] = [
+        {
+            "set": "Special interrogatories, set one",
+            "served_by": "Delta Example",
+            "date": "2026-07-01",
+            "source": {"file_id": "f9"},
+            "responses_served": {"value": "no", "date": None, "source": None},
+        }
+    ]
+    pts = parity.points(m)
+    disc = {p for p in pts if p.startswith(vocab.DISCOVERY_PATHS)}
+    assert len(disc) == 3 and all(p.startswith("discovery_") for p in disc)
+    assert all(not p.startswith("discovery_") for p in set(pts) - disc)
+
+
+def test_clean_drops_a_correction_lead_in():
+    assert book.clean("Corrected on double-check: served 4/10/2026") == "served 4/10/2026"
+    assert book.clean("corrected on review: no answer filed") == "no answer filed"

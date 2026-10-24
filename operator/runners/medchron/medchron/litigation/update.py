@@ -200,6 +200,19 @@ def _record(log: dict, path: str, ok: bool, prior: dict[str, Any], out: dict[str
         log["reverted"].append(path)
 
 
+#: A defendant's dated values an update may change (``identity.DATED_FIELDS``).
+_DEF_DATES = tuple(f for f, _k in identity.DATED_FIELDS)
+
+
+def _restore(d: dict[str, Any], old: dict[str, Any], f: str) -> None:
+    """``d[f]`` put back as ``old`` had it; a sent-out date the last list did
+    not carry is removed, so it stays "Not read yet" rather than "Not in file"."""
+    if f == "sent_for_service" and f not in old:
+        d.pop(f, None)
+    else:
+        d[f] = copy.deepcopy(old.get(f))
+
+
 def _guard_defendants(
     prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict
 ) -> None:
@@ -210,8 +223,14 @@ def _guard_defendants(
         key = parity.party_key(str(d.get("name") or ""))
         old = before.get(key)
         if old is None:
-            sourced = any(_carried(d.get(f), trigger, texts) for f in ("served", "answered"))
+            sourced = any(_carried(d.get(f), trigger, texts) for f in _DEF_DATES)
             if sourced:
+                d = copy.deepcopy(d)
+                if not (
+                    _carried(d.get("sent_for_service"), trigger, texts)
+                    and (d.get("sent_for_service") or {}).get("date")
+                ):
+                    d.pop("sent_for_service", None)  # an update read did not read the whole file
                 kept.append(d)
                 seen.add(key)
                 log["changed"].append(f"defendants[{d.get('name')}]")
@@ -220,13 +239,18 @@ def _guard_defendants(
             continue
         seen.add(key)
         d = copy.deepcopy(d)
-        for f in ("served", "answered"):
+        for f in _DEF_DATES:
             if not _same(old.get(f), d.get(f), "date"):
-                if _carried(d.get(f), trigger, texts) and d.get(f, {}).get("date"):
+                if _carried(d.get(f), trigger, texts) and (d.get(f) or {}).get("date"):
                     log["changed"].append(f"defendants[{d.get('name')}].{f}")
                 else:
-                    d[f] = copy.deepcopy(old.get(f))  # never un-serve, never an uncited date
+                    _restore(d, old, f)  # never un-serve, never an uncited date
                     log["reverted"].append(f"defendants[{d.get('name')}].{f}")
+            elif f == "sent_for_service" and (f in old) != (f in d):
+                # An update reads only the arrived papers: finding no request
+                # there is not "Not in file", and leaving the key out does not
+                # unread one; the list keeps what it carried.
+                _restore(d, old, f)
         if d.get("status") != old.get("status"):
             log["changed"].append(f"defendants[{d.get('name')}].status")  # always goes to the second read
         kept.append(d)

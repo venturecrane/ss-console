@@ -236,8 +236,13 @@ def same_person(a: str, b: str) -> bool:
     return min(len(x), len(y)) >= 4 and not (x.isdigit() or y.isdigit()) and _one_edit(x, y)
 
 
+#: A defendant's dated values, each ``(field, key)``. ``sent_for_service`` is
+#: the date the papers went to the process server, never the service date.
+DATED_FIELDS = (("served", "date"), ("answered", "date"), ("sent_for_service", "date"))
+
+
 def _strength(d: dict[str, Any]) -> tuple[int, int]:
-    dated = sum(1 for f in ("served", "answered") if (d.get(f) or {}).get("date") and (d.get(f) or {}).get("source"))
+    dated = sum(1 for f, _k in DATED_FIELDS if (d.get(f) or {}).get("date") and (d.get(f) or {}).get("source"))
     return (int(d.get("status") not in (None, "", vocab.D_UNCLEAR)), dated)
 
 
@@ -258,10 +263,12 @@ def merge_defendants(ds: Any) -> list[dict[str, Any]]:
             continue
         keep, other = (out[i], d) if _strength(out[i]) >= _strength(d) else (d, out[i])
         keep = copy.deepcopy(keep)
-        for f, key in (("served", "date"), ("answered", "date"), ("out_for_service", "value")):
+        for f, key in (*DATED_FIELDS, ("out_for_service", "value")):
             mine, theirs = keep.get(f) or {}, other.get(f) or {}
             if not mine.get(key) and theirs.get(key) and theirs.get("source"):
                 keep[f] = copy.deepcopy(theirs)
+        if "sent_for_service" not in keep and "sent_for_service" in other:
+            keep["sent_for_service"] = copy.deepcopy(other["sent_for_service"])  # read, even if found nothing
         keep["flags"] = list(dict.fromkeys([*(keep.get("flags") or []), *(other.get("flags") or [])]))
         out[i] = keep
     return out
