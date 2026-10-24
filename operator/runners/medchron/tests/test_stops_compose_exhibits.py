@@ -141,11 +141,15 @@ def test_a_chunk_refused_everywhere_is_retried_on_judgment_then_split_and_its_pa
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     models = [c["model"] for c in client.calls]
-    # whole: 3 composition + 1 judgment; clinic alone: 1; exam alone: 3 + 1.
+    # whole: 3 composition + 1 judgment; clinic alone: 1; exam alone: 3 + 1;
+    # each exam page alone: 1 + 1 (both pages carry the declined text).
     assert models[:4] == [COMPOSITION] * 3 + [JUDGMENT]
-    assert len(client.calls) == 9 and models.count(JUDGMENT) == 2
+    assert len(client.calls) == 13 and models.count(JUDGMENT) == 4
     unread = json.loads((d / "unread_pages.json").read_text())
-    assert [(u["file"], u["pages"], u["reason"]) for u in unread] == [("sane exam.pdf", [1, 2], "refused")]
+    assert sorted((u["file"], u["pages"], u["reason"]) for u in unread) == [
+        ("sane exam.pdf", [1], "refused"),
+        ("sane exam.pdf", [2], "refused"),
+    ]
     composed = "".join(p.read_text() for p in sorted(d.glob("map-01-*.md")))
     assert "Cervical strain" in composed  # the clinic note's record is kept, never disclosed away
     files = json.loads((sr.slug_dir / "units" / "alpha.json").read_text())
@@ -195,7 +199,8 @@ def test_a_half_that_stays_empty_is_sent_by_file_and_only_the_silent_file_is_nam
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     unread = json.loads((d / "unread_pages.json").read_text())
-    assert sorted(u["file"] for u in unread) == ["fax covers two.pdf", "fax covers.pdf"]
+    assert sorted({u["file"] for u in unread}) == ["fax covers two.pdf", "fax covers.pdf"]
+    assert sorted(p for u in unread if u["file"] == "fax covers.pdf" for p in u["pages"]) == [1, 2, 3]
     assert {u["reason"] for u in unread} == {"empty"}
 
 
@@ -219,7 +224,7 @@ def test_a_piece_that_errors_every_time_is_never_called_produced_on_a_rerun(
     _unit_files(sr, {"clinic note": clinic, "broken": "[p.1] BROKEN\n" * 30})
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     sr.doorway.retry_budget_s, sr.doorway.sleep = 0.0, lambda *_: None  # the doorway's network retries, in no time
-    assert compose_stage.run(sr) == 1
+    assert compose_stage.run(sr) == compose_stage.INFRA_EXIT == 75  # infrastructure, never a defect's 1
     d = sr.slug_dir / "runs" / "alpha"
     assert not (d / "unread_pages.json").exists()
     assert not compose_stage.produced(d, 1)
@@ -463,17 +468,102 @@ def test_repair_accepts_a_low_yield_part_that_answers_in_the_house_shape(
     assert len(client.calls) == 2 and (d / "map-01-1.md").read_text() == short
 
 
-def test_repair_still_fails_a_part_that_truncates_at_every_split(
-    job_dir: Path, tmp_path: Path, data_root: Path
-) -> None:
-    client = Scripted(lambda p, n: _msg(_map_for("f1.pdf", "f1"), stop="max_tokens"))
-    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+def _truncated_chunk(sr: StageRun, text: str) -> Path:
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
-    (d / "chunk-01.txt").write_text("".join(f"=== FILE: f{k}.pdf (fileId f{k}) ===\n[p.1] x\n" for k in range(6)))
+    (d / "chunk-01.txt").write_text(text)
     (d / "map-01.md").write_text("partial")
     (d / "usage.jsonl").write_text(json.dumps({"chunk": 1, "stop": "max_tokens"}) + "\n")
-    assert repair_stage.run(sr) == 1
+    return d
+
+
+def test_repair_names_a_single_page_that_still_truncates_unread_and_keeps_the_rest(
+    job_dir: Path, tmp_path: Path, data_root: Path
+) -> None:
+    """Truncation is narrowed to one page; only a page that still truncates
+    alone is named unread (never the pages around it), and the stage exits 0."""
+
+    def reply(p: dict, n: int) -> NS:
+        c = _content(p)
+        if "DENSE" in c:
+            return _msg(_map_for("f2.pdf", "f2"), stop="max_tokens")
+        return _msg(_map_for("f1.pdf", "f1"))
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+    text = "=== FILE: f1.pdf (fileId f1) ===\n" + "".join(
+        f"[p.{k}] {'DENSE table' if k == 3 else 'note'}\n" for k in range(1, 7)
+    )
+    d = _truncated_chunk(sr, text)
+    assert repair_stage.run(sr) == 0
+    unread = json.loads((d / "unread_pages.json").read_text())
+    assert [(u["file"], u["pages"], u["reason"]) for u in unread] == [("f1.pdf", [3], "truncated")]
+    assert (d / "map-01.md.truncated").is_file()
+    text_out = "\n".join(limitations.section(sr.slug_dir, "alpha", lambda _m: None))
+    assert '"f1.pdf" - p. 3' in text_out and "too dense" in text_out
+
+
+def test_repair_names_shapeless_pages_unread_like_a_refusal(job_dir: Path, tmp_path: Path, data_root: Path) -> None:
+    """A part that answers in no shape at every split is a refusal by
+    another name: narrowed to its pages, those still shapeless named unread."""
+
+    def reply(p: dict, n: int) -> NS:
+        return _msg("x") if "MUTE" in _content(p) else _msg(_map_for("f1.pdf", "f1"))
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+    text = "".join(
+        f"=== FILE: f{k}.pdf (fileId f{k}) ===\n[p.1] {'MUTE ' if k == 4 else ''}" + "text " * 200 + "\n"
+        for k in range(6)
+    )
+    d = _truncated_chunk(sr, text)
+    assert repair_stage.run(sr) == 0
+    unread = json.loads((d / "unread_pages.json").read_text())
+    assert [(u["file"], u["pages"], u["reason"]) for u in unread] == [("f4.pdf", [1], "empty")]
+
+
+def test_repair_with_an_api_error_exits_the_infrastructure_code_and_discloses_nothing(
+    job_dir: Path, tmp_path: Path, data_root: Path
+) -> None:
+    def reply(p: dict, n: int) -> NS:
+        if "BROKEN" in _content(p):
+            raise RuntimeError("upstream connect error")
+        return _msg(_map_for("f1.pdf", "f1"))
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+    sr.doorway.retry_budget_s, sr.doorway.sleep = 0.0, lambda *_: None
+    text = "".join(f"=== FILE: f{k}.pdf (fileId f{k}) ===\n[p.1] {'BROKEN' if k == 1 else 'ok'}\n" for k in range(3))
+    d = _truncated_chunk(sr, text)
+    assert repair_stage.run(sr) == compose_stage.INFRA_EXIT == 75
+    assert not (d / "unread_pages.json").exists() and (d / "map-01.md").is_file()
+
+
+def test_a_refused_single_file_is_halved_by_page_and_only_the_refused_page_is_unread(
+    job_dir: Path, tmp_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One 6-page file whose page 3 is declined: the whole file is no longer
+    named unread, only page 3, and the other five pages are composed."""
+
+    def reply(p: dict, n: int) -> NS:
+        if "ASSAULT-EXAM" in _content(p):
+            return _msg("", stop="refusal")
+        return _msg(_map_for("records.pdf", "records"))
+
+    client = Scripted(reply)
+    sr = _sr(job_dir, _firm(tmp_path), data_root, client)
+    body = "".join(f"[p.{k}] {'ASSAULT-EXAM' if k == 3 else 'office visit'}\n" for k in range(1, 7))
+    _unit_files(sr, {"records": body})
+    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    assert compose_stage.run(sr) == 0
+    d = sr.slug_dir / "runs" / "alpha"
+    unread = json.loads((d / "unread_pages.json").read_text())
+    assert [(u["file"], u["pages"], u["reason"]) for u in unread] == [("records.pdf", [3], "refused")]
+    composed = [p for p in d.glob("map-01-*.md") if "Cervical strain" in p.read_text()]
+    assert len(composed) >= 2  # the pages around page 3 were read
+    # every page-half header names the file once, so coverage reads the name
+    for p in d.glob("chunk-01-*.txt"):
+        assert "[continued] [continued]" not in p.read_text()
 
 
 # ---- email attachments that were found and not opened ------------------------------
@@ -508,6 +598,66 @@ def test_billing_gaps_and_dropped_rows_are_disclosed_without_a_figure(data_root:
     (d / "billing_gaps.json").unlink()
     (d / "billing_dropped_rows.json").unlink()
     assert "billing" not in "\n".join(limitations.section(d, None, lambda _m: None)).lower()
+
+
+LEFT_OUT = {
+    "unit": "alpha",
+    "entries": [
+        {
+            "date": "03/04/2026",
+            "provider": "Example Clinic",
+            "exhibit": 2,
+            "pages": [5, 6],
+            "reason": "names a person other than the client, so it was left out of this chronology",
+        },
+        {
+            "date": "03/09/2026",
+            "provider": "Example Imaging",
+            "exhibit": None,
+            "pages": [],
+            "reason": "was read by the review as about a person other than the client, and its page does not "
+            "identify the client, so it was left out of this chronology",
+        },
+    ],
+}
+
+
+def test_entries_the_review_left_out_are_named_by_date_provider_exhibit_and_pages(data_root: Path) -> None:
+    d = data_root / "example-matter"
+    (d / "out" / "alpha").mkdir(parents=True)
+    (d / "out" / "alpha" / "review-left-out.json").write_text(json.dumps(LEFT_OUT))
+    text = "\n".join(limitations.section(d, "alpha", lambda _m: None))
+    assert (
+        "* The entry dated 03/04/2026 (Example Clinic, Exhibit 2, pp. 5-6) names a person other than the client, "
+        "so it was left out of this chronology." in text
+    )
+    assert "* The entry dated 03/09/2026 (Example Imaging) was read by the review" in text
+    (d / "out" / "alpha" / "review-left-out.json").unlink()
+    assert "left out of this chronology before delivery" not in "\n".join(
+        limitations.section(d, "alpha", lambda _m: None)
+    )
+
+
+def test_refresh_puts_the_reviews_disclosure_into_the_built_document(data_root: Path) -> None:
+    """build_doc writes the section before the review; the review leaves an
+    entry out afterwards and re-renders from final-chronology.md, so the
+    section is rewritten from the artifacts as they stand then."""
+    d = data_root / "example-matter"
+    rd = d / "runs" / "alpha"
+    rd.mkdir(parents=True)
+    doc = rd / "final-chronology.md"
+    body = (
+        "Client - Medical Chronology\n\n## Medical Chronology\n\n01/02/2026\nExample Clinic | x\n\nKept. (Exhibit 1)\n"
+    )
+    doc.write_text(body + "\n".join(limitations.section(d, "alpha", lambda _m: None)))
+    assert "03/04/2026" not in doc.read_text()
+    (d / "out" / "alpha").mkdir(parents=True)
+    (d / "out" / "alpha" / "review-left-out.json").write_text(json.dumps(LEFT_OUT))
+    assert limitations.refresh(doc, d, "alpha", lambda _m: None) is True
+    out = doc.read_text()
+    assert out.startswith(body) and out.count("## Records Reviewed and Limitations") == 1
+    assert "The entry dated 03/04/2026 (Example Clinic, Exhibit 2, pp. 5-6)" in out
+    assert limitations.refresh(doc, d, "alpha", lambda _m: None) is False  # idempotent
 
 
 def test_a_joint_unit_reads_its_own_billing_files(data_root: Path) -> None:

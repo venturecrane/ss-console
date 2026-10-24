@@ -248,8 +248,9 @@ def test_compose_keeps_a_short_but_complete_half_after_the_split(
     for p in d.glob("*"):
         p.unlink()
     assert compose_stage.run(sr2) == 0
-    assert "x" != (d / "map-01-1.md").read_text() and "not read" in (d / "map-01-1.md").read_text()
-    assert sorted(u["file"] for u in json.loads((d / "unread_pages.json").read_text())) == [
+    maps = [p.read_text() for p in d.glob("map-01-*.md")]
+    assert maps and all("not read" in m for m in maps) and "x" not in maps
+    assert sorted({u["file"] for u in json.loads((d / "unread_pages.json").read_text())}) == [
         "inspection report.pdf",
         "mri report.pdf",
     ]

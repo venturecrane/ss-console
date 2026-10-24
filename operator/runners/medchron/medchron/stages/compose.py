@@ -16,17 +16,22 @@ A record the reader declines is decided by rule, never a stop (2026-10-24: a
 SANE exam or a self-harm note is a legitimate record, and a refusal on it
 failed the whole job). The ladder: REFUSAL_ATTEMPTS on the composition tier,
 then JUDGMENT_ATTEMPTS on the judgment tier, then each file of the piece
-alone (the same ladder again), so one declined record never costs its
-neighbours their entries. A single file still declined, or still empty after
-the split, has pages nothing read: they are recorded in ``unread_pages.json``
-and named to the firm in Records Reviewed and Limitations, and the piece's
-map carries that account in its FILES-SEEN line, so the coverage gate reads
-the file as explained. A record the reader did read is never put there.
+alone (the same ladder again), then a single file in page halves, down to
+one page (PAGE_HALF_ATTEMPTS on the composition tier, then the judgment
+tier), so one declined page never costs its neighbours their entries. A
+single page still declined, or still empty, is a page nothing read: it is
+recorded in ``unread_pages.json`` and named to the firm in Records Reviewed
+and Limitations, and the piece's map carries that account in its FILES-SEEN
+line, so the coverage gate reads the file as explained. A record the reader
+did read is never put there.
 
 An ERROR is different: a persistent API error is infrastructure, not the
-record, so it is never disclosed as unread. The chunk is marked failed
-(``chunk-XX.failed``) and the map exits 1; a rerun composes it again rather
-than taking a surviving sibling part for the whole.
+record, so it is never disclosed as unread and never ships a hole. The chunk
+is marked failed (``chunk-XX.failed``) and the map exits INFRA_EXIT (75,
+stable: the daemon tells "come back later" from a defect by it), as does a
+batch still processing; a rerun composes the chunk again rather than taking a
+surviving sibling part for the whole. Exit 1 is left for a chunk with no
+output and no recorded reason, which only a defect produces.
 
 Outputs under runs/<unit>/: chunk-XX.txt, chunk-XX.sha, map-XX.md (map-XX-k.md
 for parts), usage.jsonl (per call: tokens, stop, sha, window), and when a page
@@ -58,13 +63,41 @@ def well_formed(text: str) -> bool:
 REFUSAL_ATTEMPTS = 3
 #: Attempts on the judgment tier after the composition tier declined.
 JUDGMENT_ATTEMPTS = 1
+#: Composition-tier attempts on a page half: its whole file was already
+#: refused REFUSAL_ATTEMPTS times, so a half gets one try before the judgment
+#: tier, which bounds the cost of finding the declined pages.
+PAGE_HALF_ATTEMPTS = 1
+#: Exit code for infrastructure (a persistent API error, a batch still
+#: processing): nothing was disclosed, and a later rerun is the remedy. Stable;
+#: dag.py maps it and the daemon reads it (sysexits EX_TEMPFAIL).
+INFRA_EXIT = 75
 #: Pages nothing read, per unit: [{chunk, file, file_id, pages, reason}].
 UNREAD = "unread_pages.json"
 #: The reason codes, and the account each writes into the map's FILES-SEEN.
 UNREAD_REASONS = {
     "refused": "declined by the reader on every attempt",
     "empty": "the reader returned no account of these pages",
+    "truncated": "too dense to read within the output limit even one page at a time",
 }
+
+
+def page_count(text: str) -> int:
+    """Pages a single-file piece carries (its context blocks excluded)."""
+    return sum(len(p["pages"] or []) for p in pieces_pages(text))
+
+
+def narrower(text: str) -> list[str]:
+    """The next smaller pieces of a piece no reader would take: its files one
+    at a time, else (a single file) its page halves, else nothing (one page,
+    or text without page marks, is the floor)."""
+    files = split_files(text)
+    if len(files) > 1:
+        return files
+    if page_count(text) > 1:
+        halves = split_chunk(text, 2)
+        if len(halves) > 1:
+            return halves
+    return []
 
 
 def outputs_for(d: Path, i: int) -> tuple[Path, list[Path]]:
@@ -138,13 +171,14 @@ def record_unread(d: Path, label: str, text: str, reason: str, out_name: str) ->
 
 class Chunk:
     """One unit of composition work: a whole chunk, a half of an emptied one,
-    or one file of a declined one (label "3.1"). The output file name follows
-    the label; `tier` is the model tier it is on and `attempts` counts the
-    calls on that tier."""
+    or one file or page half of a declined one (label "3.1"). The output file
+    name follows the label; `tier` is the model tier it is on, `attempts`
+    counts the calls on that tier, and `budget` is its composition attempts."""
 
-    def __init__(self, i: int, text: str, part: int | None = None) -> None:
+    def __init__(self, i: int, text: str, part: int | None = None, budget: int = REFUSAL_ATTEMPTS) -> None:
         self.i, self.part, self.text, self.attempts = i, part, text, 0
         self.tier = "composition"
+        self.budget = budget
 
     @property
     def label(self) -> str:
@@ -166,6 +200,8 @@ class _Composer:
         self.refused: list[str] = []
         self.emptied: list[str] = []
         self.next_part: dict[int, int] = {}
+        #: An API error outlived its retries, or a batch is still processing.
+        self.infra = False
 
     def log_usage(self, **row: Any) -> None:
         append_jsonl(self.d / "usage.jsonl", row)
@@ -232,22 +268,26 @@ class _Composer:
             return self.handle(c, None, str(exc))
         return self.handle(c, r, None)
 
-    def _subs(self, c: Chunk, parts: list[str]) -> list[Chunk]:
+    def _subs(self, c: Chunk, parts: list[str], budget: int = REFUSAL_ATTEMPTS) -> list[Chunk]:
         subs = []
         for p in parts:
             self.next_part[c.i] = self.next_part.get(c.i, 0) + 1
-            sub = Chunk(c.i, p, part=self.next_part[c.i])
+            sub = Chunk(c.i, p, part=self.next_part[c.i], budget=budget)
             (self.d / sub.chunk_name).write_text(p, encoding="utf-8")
             subs.append(sub)
         return subs
 
     def _give_up(self, c: Chunk, reason: str) -> list[Chunk]:
         """A piece holding several files is sent one file at a time; a single
-        file is the floor, and its pages are named as unread."""
+        file in page halves; one page is the floor, and it is named unread."""
         files = split_files(c.text)
         if len(files) > 1:
             self.sr.log(f"chunk {c.label}: sending its {len(files)} files one at a time")
             return self._subs(c, files)
+        halves = narrower(c.text)
+        if halves:
+            self.sr.log(f"chunk {c.label}: {reason} as one file; sending it in page halves")
+            return self._subs(c, halves, budget=PAGE_HALF_ATTEMPTS)
         rows = record_unread(self.d, c.label, c.text, reason, c.out_name)
         (self.refused if reason == "refused" else self.emptied).append(c.label)
         named = "; ".join(f"{r['file']} pp. {r['pages'] or 'all'}" for r in rows)
@@ -263,10 +303,11 @@ class _Composer:
             if c.attempts < REFUSAL_ATTEMPTS:
                 return [c]
             failed_marker(self.d, c.i).write_text(c.label + "\n", encoding="utf-8")
+            self.infra = True
             self.sr.log(f"chunk {c.label} errored on {REFUSAL_ATTEMPTS} attempts; chunk {c.i} is incomplete")
             return []
         if state == "refused":
-            if c.tier == "composition" and c.attempts < REFUSAL_ATTEMPTS:
+            if c.tier == "composition" and c.attempts < c.budget:
                 return [c]
             if c.tier == "composition":
                 c.tier, c.attempts = "judgment", 0
@@ -331,6 +372,7 @@ class _Composer:
                     batch_dir=self.d,
                 )
                 if s.timed_out:
+                    self.infra = True
                     self.sr.log(f"compose: {len(s.timed_out)} chunk(s) in a batch still processing; rerun resumes it")
                     return
             pending = nxt
@@ -381,8 +423,11 @@ def run(sr: StageRun) -> int:
         sr.log(f"REFUSED on every attempt, pages named as unread: {comp.refused}")
     if comp.emptied:
         sr.log(f"EMPTY after every split, pages named as unread: {comp.emptied}")
+    if missing and comp.infra:
+        sr.log(f"MAP INCOMPLETE (infrastructure, nothing disclosed; a rerun composes them): {missing}")
+        return INFRA_EXIT
     if missing:
-        sr.log(f"MAP INCOMPLETE, missing chunks: {missing}")
+        sr.log(f"MAP INCOMPLETE, missing chunks with no recorded reason: {missing}")
         return 1
     sr.log(f"MAP DONE {sr.unit.unit}")
     return 0

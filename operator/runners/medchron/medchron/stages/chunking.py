@@ -176,6 +176,7 @@ def split_chunk(text: str, parts: int = 2) -> list[str]:
         found = FILE_HDR.findall(part)
         if not part.lstrip().startswith("=== FILE:") and current:
             base = re.sub(r"\s*\[part \d+/\d+\]\s*===$", " ===", current)
+            base = re.sub(r"\s*\[continued\]\s*===$", " ===", base)  # a part of a part: one marker
             part = base.replace(" ===", " [continued] ===", 1) + "\n" + part
         if found:
             current = found[-1]

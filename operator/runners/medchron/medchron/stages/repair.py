@@ -11,11 +11,17 @@ chunks" for $0; it repairs at the same window as composition, so a repair
 cannot truncate where the original did not. A part that ends cleanly having
 produced almost nothing is not repaired, it is EMPTIED (one part returned 112
 bytes for 126k chars of input, twenty files including MRI reports), and the
-split escalates 2 -> 3 -> 5 rather than leaving the chunk unrepaired. A short
-part that answers in the house shape is NOT emptied: a part of fax covers
-and legal papers honestly yields almost nothing, and below MIN_YIELD it was
-re-split until the stage failed (2026-10-24 audit, row 16). Only a part that
-still truncates, errors, or answers in no shape at every split fails it.
+split escalates 2 -> 3 -> 5 rather than leaving the chunk unrepaired.
+
+Decided by rule past the 5-way split (2026-10-24 audit, row 16). A short
+part that answers in the house shape is kept: fax covers and legal papers
+honestly yield almost nothing. A part that still truncates or answers in no
+shape is narrowed the way compose narrows a declined piece (its files one at
+a time, then a single file in page halves) down to one page; a single page
+that still truncates or answers in no shape is a page nothing read, named in
+``unread_pages.json`` and the limitations exactly as compose names one. An
+API error is never disclosed: the chunk stays unrepaired and the stage exits
+compose.INFRA_EXIT (75), so the daemon can retry later; nothing else fails it.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from .. import llm, prompts
 from ..limits import LimitHold
 from .base import StageRun, append_jsonl
 from .chunking import MIN_YIELD, split_chunk
-from .compose import read_usage, well_formed
+from .compose import INFRA_EXIT, clear_unread, narrower, outputs_for, read_usage, record_unread, well_formed
 
 
 def _run_part(
@@ -63,6 +69,91 @@ def _run_part(
     return r.text, r.stop_reason
 
 
+def _status(body: str | None, stop: str, text: str) -> str:
+    """'ok', 'error', 'truncated' or 'empty' (shapeless and implausibly short)."""
+    if body is None:
+        return "error"
+    if stop == "max_tokens":
+        return "truncated"
+    if len(body) < len(text) * MIN_YIELD and not well_formed(body):
+        return "empty"
+    return "ok"
+
+
+class _Repair:
+    def __init__(self, sr: StageRun, d: Path, model: str, system: str, max_tokens: int) -> None:
+        self.sr, self.d, self.model, self.system, self.max_tokens = sr, d, model, system, max_tokens
+        self.calls = 0
+
+    def part(self, text: str, label: str) -> tuple[str | None, str]:
+        self.calls += 1
+        body, stop = _run_part(self.sr, self.d, self.model, self.system, text, label, self.max_tokens)
+        return body, _status(body, stop, text)
+
+    def settle(self, text: str, body: str | None, status: str, label: str) -> list[tuple[str, str | None, str]]:
+        """[(text, body, status)] covering `text`: 'ok' with its body, a
+        narrowed floor piece as 'truncated'/'empty' (to be named unread), or
+        'error' (infrastructure, never disclosed)."""
+        if status in ("ok", "error"):
+            return [(text, body, status)]
+        subs = narrower(text)
+        if not subs:
+            return [(text, None, status)]
+        self.sr.log(f"  part {label} still {status}; narrowing to {len(subs)} pieces")
+        out: list[tuple[str, str | None, str]] = []
+        for k, s in enumerate(subs, 1):
+            b, st = self.part(s, f"{label}.{k}")
+            out += self.settle(s, b, st, f"{label}.{k}")
+        return out
+
+
+def _repair_chunk(rep: _Repair, c: int, src: str) -> str:
+    """'repaired', or 'infra' when an API error left the chunk unrepaired."""
+    sr, d = rep.sr, rep.d
+    # A rerun after an infrastructure exit starts clean: parts and unread rows
+    # of the earlier attempt never sit beside this one's.
+    _whole, stale = outputs_for(d, c)
+    for p in stale:
+        p.unlink()
+    for p in d.glob(f"chunk-{c:02d}-*.txt"):
+        p.unlink()
+    clear_unread(d, c)
+    results: list[tuple[str, str | None, str]] = []
+    for nparts in (2, 3, 5):
+        parts = split_chunk(src, nparts)
+        sr.log(f"chunk {c}: re-running as {len(parts)} parts ({[len(p) for p in parts]} chars)")
+        results = []
+        for k, p in enumerate(parts, 1):
+            body, status = rep.part(p, f"{c}.{k}")
+            if status == "ok" and body is not None and len(body) < len(p) * MIN_YIELD:
+                sr.log(f"  part {c}.{k} short ({len(body)}B from {len(p)}B) but complete; kept")
+            elif status != "ok":
+                sr.log(f"  part {c}.{k} still not clean ({status})")
+            results.append((p, body, status))
+        if all(st == "ok" for _p, _b, st in results):
+            break
+        if nparts != 5:
+            sr.log(f"  chunk {c}: splitting further")
+    final: list[tuple[str, str | None, str]] = []
+    for k, (p, body, status) in enumerate(results, 1):
+        final += rep.settle(p, body, status, f"{c}.{k}")
+    infra = any(st == "error" for _p, _b, st in final)
+    for k, (p, body, status) in enumerate(final, 1):
+        (d / f"chunk-{c:02d}-{k}.txt").write_text(p, encoding="utf-8")
+        name = f"map-{c:02d}-{k}.md"
+        if status == "ok" and body:
+            (d / name).write_text(body, encoding="utf-8")
+        elif status in ("truncated", "empty") and not infra:
+            rows = record_unread(d, f"{c}.{k}", p, status, name)
+            sr.log(f"  part {c}.{k} {status} at one page; named as unread: " + "; ".join(r["file"] for r in rows))
+    if infra:
+        sr.log(f"  chunk {c} NOT repaired: an API error outlived its retries (infrastructure; nothing disclosed)")
+        return "infra"
+    (d / f"map-{c:02d}.md").rename(d / f"map-{c:02d}.md.truncated")
+    sr.log(f"  chunk {c} repaired; original set aside")
+    return "repaired"
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     truncated = sorted(
@@ -78,44 +169,9 @@ def run(sr: StageRun) -> int:
         sr.log("no unrepaired truncated chunks")
         return 0
     sr.log(f"truncated chunks: {truncated}")
-    system = prompts.load("map-system", sr.cfg)
-    model = llm.model_for(sr.cfg, "composition")
     max_tokens = int(sr.cfg.get("levers", "compose_max_tokens", 128000))
-    unrepaired = 0
-    for c in truncated:
-        src = (d / f"chunk-{c:02d}.txt").read_text(encoding="utf-8")
-        ok, parts, bodies = False, [], []
-        for nparts in (2, 3, 5):
-            parts = split_chunk(src, nparts)
-            sr.log(f"chunk {c}: re-running as {len(parts)} parts ({[len(p) for p in parts]} chars)")
-            ok, bodies = True, []
-            for k, p in enumerate(parts, 1):
-                body, stop = _run_part(sr, d, model, system, p, f"{c}.{k}", max_tokens)
-                if body is None or stop == "max_tokens":
-                    ok = False
-                    sr.log(f"  part {c}.{k} still not clean (stop={stop})")
-                elif len(body) < len(p) * MIN_YIELD and not well_formed(body):
-                    ok = False
-                    sr.log(f"  part {c}.{k} produced {len(body)}B from {len(p)}B of source; implausibly empty")
-                elif len(body) < len(p) * MIN_YIELD:
-                    # Fax covers and legal papers honestly yield nothing: a short
-                    # answer in the house shape is the part's account, kept
-                    # (2026-10-24 audit, row 16; compose keeps the same).
-                    sr.log(f"  part {c}.{k} short ({len(body)}B from {len(p)}B) but complete; kept")
-                bodies.append((k, body, stop))
-            if ok:
-                break
-            sr.log(f"  chunk {c}: splitting further")
-        for k, body, _stop in bodies:
-            if body:
-                (d / f"map-{c:02d}-{k}.md").write_text(body, encoding="utf-8")
-                (d / f"chunk-{c:02d}-{k}.txt").write_text(parts[k - 1], encoding="utf-8")
-        if ok:
-            (d / f"map-{c:02d}.md").rename(d / f"map-{c:02d}.md.truncated")
-            sr.log(f"  chunk {c} repaired; original set aside")
-        else:
-            unrepaired += 1
-            sr.log(f"  chunk {c} NOT fully repaired")
+    rep = _Repair(sr, d, llm.model_for(sr.cfg, "composition"), prompts.load("map-system", sr.cfg), max_tokens)
+    outcomes = [_repair_chunk(rep, c, (d / f"chunk-{c:02d}.txt").read_text(encoding="utf-8")) for c in truncated]
     # An unrepaired chunk blocks assembly (which refuses over it), so say so
     # here with the exit code rather than a line only a person reads.
-    return 1 if unrepaired else 0
+    return INFRA_EXIT if "infra" in outcomes else 0
