@@ -21,6 +21,7 @@ from . import ids, smoke
 from .busy import BusyGate
 from .d1 import FleetStore
 from .fly import Fly, classify_deploy
+from .ledger import VerifyLedger
 from .preflight import PreflightChecker
 from .runner import ToolingError
 from .smoke import Check, SmokeRunner
@@ -55,6 +56,17 @@ class ImagePlan:
     # arrives. An image that does not carry the self-test is always "bash".
     verify: str = "bash"
     selftest_capable: bool = False
+    # False (``--no-ssh-fallback``, and always in ``--tick``): the deploy path
+    # never runs the ssh boot smoke. A self-test that gives no verdict is a
+    # tooling_error (halt, page), and a rollback is re-verified by the self-test
+    # on the rollback image. The busy gate's ssh probe is not the boot smoke and
+    # still runs: it is what keeps a running job from being restarted.
+    ssh_fallback: bool = True
+
+
+# The terminal states a verify-ledger row is written for: the ones a judge (or a
+# refusal before anything was touched) decided. waiting_idle decided nothing.
+LEDGER_STATES = frozenset({"done", "rolled_back", "failed", "tooling_error"})
 
 
 class ImageRollout:
@@ -70,10 +82,12 @@ class ImageRollout:
         sleep: Callable[[float], None],
         clock: Callable[[], float],
         fleet_side: smoke.FleetSideChecks | None = None,
+        ledger: VerifyLedger | None = None,
     ) -> None:
         self.store, self.fly, self.gate, self.preflight, self.smoker = store, fly, gate, preflight, smoker
         self.render, self.log, self.sleep, self.clock = render, log, sleep, clock
         self.fleet_side = fleet_side
+        self.ledger = ledger
 
     # -- helpers ---------------------------------------------------------------
     def _current_digest(self, seat: str) -> str | None:
@@ -131,6 +145,13 @@ class ImageRollout:
             smoke.SELFTEST_WINDOW_S, self.sleep, self.clock,
         )  # fmt: skip
         if got.cls == "timeout":
+            if not plan.ssh_fallback:
+                # No second instrument in this mode, so no verdict is no
+                # decision: halt and page, never guess, never roll back.
+                return Check(
+                    "tooling_error",
+                    f"selftest: no verdict ({got.detail}); no ssh fallback in this mode, so nothing was decided",
+                )
             # The instrument must not grade itself into silence: no verdict
             # from the seat means the boot smoke decides, and both are recorded.
             bash = self._verify_bash(seat, plan, since)
@@ -142,6 +163,21 @@ class ImageRollout:
             smoke.READBACK_WINDOW_S, self.sleep, self.clock,
         )  # fmt: skip
         return Check(image.cls, f"{side.detail}; {got.detail}; {image.detail}")
+
+    def _resmoke(self, seat: str, plan: ImagePlan, from_image: str, since: datetime) -> Check:
+        """Verify the rollback. The boot smoke, unless this mode has no ssh fallback:
+        then the self-test the rollback image runs at boot, read off the heartbeat."""
+        if plan.ssh_fallback or not plan.selftest_capable or self.fleet_side is None:
+            return self.smoker.run(seat, None)
+        side = self.fleet_side.run(seat)
+        if side.cls != "pass":
+            return side
+        target = {"image_ref": from_image, "image_digest": ids.digest_in_ref(from_image)}
+        got = smoke.read_back(
+            self.store, seat, lambda row: smoke.judge_selftest_row(row, since, target, None),
+            smoke.SELFTEST_WINDOW_S, self.sleep, self.clock,
+        )  # fmt: skip
+        return Check(got.cls, f"self-test on the rollback image: {got.detail}")
 
     # -- the seat ------------------------------------------------------------------
     def run(self, seat: str, ring: int, plan: ImagePlan) -> SeatOutcome:
@@ -167,8 +203,19 @@ class ImageRollout:
     def _finish(self, rid: str, plan: ImagePlan, out: SeatOutcome, **fields: Any) -> SeatOutcome:
         self.log(f"{out.seat}: {out.state.upper()} {out.detail}")
         if not plan.dry_run:
-            self.store.update_rollout(rid, out.state, detail=out.detail[:2000], **fields)
+            detail = out.detail[:1800]
+            note = self._ledger_note(rid, plan, out)
+            if note:
+                self.log(f"{out.seat}: {note}")
+                detail = f"{detail} | {note}"
+            self.store.update_rollout(rid, out.state, detail=detail, **fields)
         return out
+
+    def _ledger_note(self, rid: str, plan: ImagePlan, out: SeatOutcome) -> str:
+        """One verify-ledger row for a decided seat; a failure is a note, never a halt."""
+        if self.ledger is None or out.state not in LEDGER_STATES:
+            return ""
+        return self.ledger.record(out.seat, plan.release["release_id"], rid, out.state, out.detail)
 
     def _run(self, seat: str, rid: str, plan: ImagePlan) -> SeatOutcome:
         toml_text = self.render(seat)
@@ -264,7 +311,10 @@ class ImageRollout:
                 smoke_class="fail",
             )
         self.log(f"{seat}: smoke FAIL ({check.detail}); rolling back to {from_image}")
+        since = ids.utc_now()
         back = self._deploy(seat, from_image, from_toml)
-        again = self.smoker.run(seat, None) if back == "ok" else Check("fail", f"rollback deploy {back}")
+        again = (
+            self._resmoke(seat, plan, from_image, since) if back == "ok" else Check("fail", f"rollback deploy {back}")
+        )
         detail = f"smoke FAIL: {check.detail}. Rolled back to {from_image}; re-smoke {again.cls}: {again.detail}"
         return self._finish(rid, plan, SeatOutcome(seat, "rolled_back", detail), smoke_class="fail")

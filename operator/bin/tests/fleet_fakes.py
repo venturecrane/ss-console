@@ -49,6 +49,10 @@ class FakeStore:
         self.lease_expired = False
         self.completed: list[str] = []
         self.status_script: dict[str, list[dict[str, Any] | None]] = {}
+        # What finished_at a terminal rollout gets (the D1 NOW_SQL); tests move it.
+        self.now_iso = "2026-10-23T00:00:00Z"
+        self.alerts: list[dict[str, Any]] = []
+        self.holds_reads = 0
 
     # releases
     def insert_release(self, rec: dict[str, Any]) -> None:
@@ -83,6 +87,7 @@ class FakeStore:
 
     # holds
     def holds(self) -> dict[str, dict[str, Any]]:
+        self.holds_reads += 1
         return dict(self.holds_rows)
 
     def hold(self, seat: str, reason: str, held_by: str) -> None:
@@ -116,6 +121,8 @@ class FakeStore:
         row.update(fields)
         row["state"] = state
         row["history"].append(state)
+        if state in ("done", "rolled_back", "failed", "halted", "skipped_held", "tooling_error", "waiting_idle"):
+            row["finished_at"] = self.now_iso
 
     def release_done_seats(self, rid: str) -> set[str]:
         latest: dict[str, str] = {}
@@ -123,6 +130,19 @@ class FakeStore:
             if r["release_id"] == rid:
                 latest[r["customer_slug"]] = r["state"]
         return {seat for seat, state in latest.items() if state == "done"}
+
+    def release_latest(self, rid: str) -> dict[str, dict[str, Any]]:
+        latest: dict[str, dict[str, Any]] = {}
+        for r in self.rollouts.values():
+            if r["release_id"] == rid:
+                latest[r["customer_slug"]] = {"state": r["state"], "finished_at": r.get("finished_at")}
+        return latest
+
+    def open_alerts(self, seats: list[str], conditions: tuple[str, ...]) -> list[dict[str, Any]]:
+        return [
+            a for a in self.alerts
+            if a["customer_slug"] in seats and a["condition"] in conditions and a.get("status", "open") == "open"
+        ]  # fmt: skip
 
     def states(self) -> dict[str, str]:
         return {r["customer_slug"]: r["state"] for r in self.rollouts.values()}

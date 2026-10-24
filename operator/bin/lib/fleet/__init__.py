@@ -22,6 +22,8 @@ Layout:
   preflight  per-seat checks before anything is touched
   rollout    one seat's image release: snapshot, deploy, smoke, read-back, rollback
   skills     one seat's skills release: capability gate, pointer, read-back
+  tick       ``fleet release --tick``: one resumable scheduler step, the bake (ADR 0096)
+  ledger     one verify-ledger row per judged seat (crane-context POST /verify)
   build      ``fleet build``
   status     ``fleet status`` / ``releases`` / ``hold`` / ``unhold``
 

@@ -4,7 +4,7 @@ section: engineering
 order: 8
 owner: engineering
 review_every: 90
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-10-23"
 summary: The two deploy paths - the website to Cloudflare Workers, and the Operator as one image rolled out to every seat in rings
 sources:
   - label: CI - deploy.yml
@@ -45,6 +45,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/rehearsal/run.py
   - label: docs/runbooks/operator/shadow-firm.md
     href: https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/shadow-firm.md
+  - label: CI - release-tick.yml (the release controller)
+    href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/release-tick.yml
+  - label: operator/bin/lib/fleet/tick.py (one tick, the bake)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/tick.py
+  - label: ADR 0096 (the release controller and its fleet credentials)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0096-release-controller-and-fleet-credentials.md
 ---
 
 How code reaches production: the website through CI on every merge, and the
@@ -99,7 +105,7 @@ The deploy steps run in this order, and the order matters:
    These three are all that remain under `workers/`; the lead-gen pipelines
    were retired 2026-07-01 (PRs #1610/#1616).
 
-After the `deploy` job succeeds, three more jobs in the same workflow run in
+After the `deploy` job succeeds, four more jobs in the same workflow run in
 parallel, kept separate so one failing does not stop the others:
 
 - **`sync-customer-configs`** (`scripts/ci-sync-customer-configs.sh`) projects
@@ -113,6 +119,8 @@ parallel, kept separate so one failing does not stop the others:
   release" below).
 - **`publish-skills`** (`scripts/ci-publish-skills.sh`) publishes a candidate
   skills release (see "A skills release" below).
+- **`build-seat-image`** runs `fleet build` when the merge changed the seat
+  image (see "The release controller" below).
 
 A separate `ss-web-staging` Worker is declared under `[env.staging]` in
 `wrangler.toml`, with its own staging D1, R2 and KV resources; the Deploy
@@ -196,6 +204,12 @@ registry app `hermes-fleet`, which has no Machines) and a **skills version** (a
 content-addressed manifest in R2). Overlay and code changes are image releases;
 a skill-only change is a skills release and restarts nothing.
 
+Since 2026-10-23 an image release needs no laptop (ADR 0096): a merge that
+changes the image is built by CI and rolled through the rings by a scheduled
+controller, described under "The release controller" below. The steps that
+follow are what that controller runs, and they remain the manual path: a person
+finishes a halted release, fixes one seat or ships a hotfix lane with them.
+
 Run every `fleet` command from the repo root under Infisical, so R2 is
 reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <command>`.
 
@@ -258,9 +272,13 @@ D1, so going back is a release like any other.
 
 For each seat, in order, every step recorded in D1 `fleet_rollouts`:
 
+- **Already done.** A full run skips a seat whose latest rollout of this
+  release is `done`, so rerunning a release after a halt resumes it instead of
+  deploying the finished seats again. `--only` still redeploys on request.
 - **Hold.** A seat in `fleet_holds` (`fleet hold <slug> --reason "..."`, takes
   effect at once, no PR; `fleet unhold <slug>` lifts it) is skipped as
-  `skipped_held`.
+  `skipped_held`. Holds are read again before every seat, so a hold set while a
+  release is walking stops the next seat it covers.
 - **Preflight.** The release's required env must all be on the seat (secret
   names or rendered `[env]`); a staged secret the release does not declare is
   refused (`fly deploy` would apply it); a lane whose firm-input schema changed
@@ -293,7 +311,10 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   checks is under "What the verify step checks" below. With
   `--verify selftest` the seat's own self-test decides instead (the same check
   list, run on the Machine, read back from the heartbeat); see "The self-test
-  as the verifier" below. The default is `--verify bash`.
+  as the verifier" below. The default is `--verify bash`. With
+  `--no-ssh-fallback` as well, a self-test that gives no verdict is a tooling
+  error instead of a cue to run the boot smoke, and a rollback is re-verified by
+  the self-test; that is how the controller verifies.
 - **Classify.** Only a real seat failure (a smoke check that ran and said no, a
   Machine that never started, a heartbeat naming another image) rolls the seat
   back to its recorded image and toml, re-smokes it, and HALTS the rollout. A
@@ -314,7 +335,67 @@ others, and two deploys never land on one seat at once: a full rollout records
 a seat someone else is deploying as `waiting_idle` and moves on; an `--only`
 against it is refused. Exit codes: 0 success; 1 a seat failed or was refused,
 or the rollout halted; 2 usage; 3 a tooling error (nothing decided); 4 refused
-before anything ran (lease held, unknown release, source guard).
+before anything ran (lease held, unknown release, source guard). A tick adds 5
+(waiting) and 6 (a standing halt), below.
+
+### The release controller (no laptop)
+
+Two workflows run the release (ADR 0096).
+
+- **Build on merge.** The `build-seat-image` job of `deploy.yml` runs
+  `fleet build` at the merged commit when the tree differs from the newest
+  recorded image release under an image path (the
+  `.github/operator-substrate-paths.txt` list without its `.github/` lines). It
+  compares with the last BUILT commit, so a runtime merge followed quickly by a
+  docs merge is still built. When main has already moved past the commit, the
+  build-source guard refuses it and the job ends green: the newer merge's own
+  run builds the newer tree.
+- **Roll by tick.** `release-tick.yml` runs `fleet release latest --tick` at 7,
+  22, 37 and 52 minutes past every hour, when Deploy completes, and on manual
+  dispatch (with an optional release id and a dry run that records nothing).
+  Ticks never overlap. One tick takes the fleet lease, reads every seat's
+  rollout of the newest image release from D1, and advances at most one ring
+  (`operator/bin/lib/fleet/tick.py`):
+  - a seat whose latest rollout is `rolled_back`, `failed` or `tooling_error`
+    is a **standing halt**: nothing moves until a person acts, and the
+    `rollout_failed` pager has already mailed. Finish it from a laptop with
+    `fleet release <id> --only <seat>`, or hold the seat.
+  - otherwise the remaining seats of the first unfinished ring deploy, after
+    **the bake**: every unheld seat of the ring before it done on the release
+    for that ring's `bake_minutes` (30 by default; a seat may author
+    `bake_minutes` in its `seat.yaml`, and the ring takes the longest, rendered
+    into `operator/fleet/rings.yaml`), and no `selftest_failing` or
+    `image_drift` alarm open on those seats. A ring whose every seat is held
+    holds every ring after it.
+  - each seat is verified by its own self-test, with no ssh boot smoke: no
+    verdict is a tooling error that halts and pages. The busy gate still
+    probes over ssh, waiting up to 10 minutes; a seat still busy is left
+    `waiting_idle` and a later tick picks it up. A tick never passes
+    `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
+    the tick at preflight until a person re-stages the seat.
+  - every judged seat writes a `live_state` row to the verify ledger and its id
+    lands in the rollout's detail (`verify row: vfy_...`); a failed write is a
+    note there, never a failed release.
+
+  A tick exits 0 on progress, 5 when it is waiting (a bake running, the lease
+  held by a laptop run, nothing to do) and 6 on a standing halt; all three are
+  green runs. 1 (this tick halted the release), 3 and 4 fail the run.
+
+There is no approval step before the client ring. The bake, the busy gate and
+holds protect it, and a hold set by any session is read before every seat; a
+required approval would put a person back on every release.
+
+**Credentials.** The protected GitHub environment `fleet-release` (deployable
+from `main` only) holds one Fly deploy token per seat app,
+`FLY_DEPLOY_TOKEN__<SLUG>` (upper case, `-` as `_`), and `FLY_REGISTRY_TOKEN`
+for the `hermes-fleet` registry app. There is no org-wide Fly token (ADR 0054).
+The fleet CLI chooses per call: the registry token alone for the build, and for
+a seat both tokens comma-joined, because a seat token alone cannot pull the
+registry app's image. A run missing a seat's token ends that seat as a tooling
+error naming the variable; on a laptop nothing is injected and `fly auth login`
+is used as before. Adding a seat means minting its token into the environment
+and adding its line to `release-tick.yml`; the conformance test fails until
+both are there.
 
 **A failed rollout pages.** The fleet-alerts Worker reads `fleet_rollouts` every
 2 minutes and emails team@smd.services once per new `failed`, `rolled_back` or

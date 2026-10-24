@@ -252,3 +252,108 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
         run: bash scripts/ci-publish-skills.sh
+
+  # The seat image, built on merge (ADR 0096). No laptop: `fleet build` runs here
+  # at the merged commit and records the release in D1; release-tick.yml then
+  # rolls it through the rings after each ring's bake. It builds only when the
+  # tree differs from the newest recorded image release under a path the image
+  # can carry (.github/operator-substrate-paths.txt minus its .github/ lines,
+  # which change CI, not the image). Diffing against the last BUILT commit, not
+  # the push's own range, is what keeps a substrate merge from being lost when a
+  # docs merge lands before its build runs. The build-source guard refuses a
+  # commit main has already moved past (exit 4): a clean skip, because the newer
+  # merge's own run builds the newer tree.
+  build-seat-image:
+    name: Build the seat image (fleet build)
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    environment: fleet-release
+    timeout-minutes: 90
+    concurrency:
+      group: build-seat-image
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the guard compares HEAD with origin/main, and the
+          # detect step diffs against the last built commit.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      # wrangler, for D1 (the last build, and the fleet_releases record).
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet 'pyyaml==6.0.3'
+
+      - name: Install flyctl
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/superfly/flyctl/releases/download/v0.4.115/flyctl_0.4.115_Linux_x86_64.tar.gz \
+            | tar -xz -C /usr/local/bin flyctl
+          ln -sf flyctl /usr/local/bin/fly
+
+      - name: Detect image-relevant changes since the last build
+        id: changes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          grep -v '^\.github/' .github/operator-substrate-paths.txt > "$RUNNER_TEMP/image-paths.txt"
+          # Fails closed: no readable last build (empty base) means build.
+          base=$(operator/bin/fleet releases --json --limit 20 2>/dev/null \
+            | python3 -c 'import json,sys; rows=json.load(sys.stdin); print(next((r["ss_console_sha"] for r in rows if r.get("kind")=="image" and r.get("ss_console_sha")), ""))' \
+            || true)
+          echo "last built commit: ${base:-none}"
+          python3 operator/bin/substrate-paths-changed.py \
+            --base "$base" --head "$GITHUB_SHA" --paths "$RUNNER_TEMP/image-paths.txt"
+
+      - name: fleet build
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          FLY_REGISTRY_TOKEN: ${{ secrets.FLY_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=/dev/null
+          source scripts/lib/r2-creds.sh
+          derive_r2_creds
+          export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          set +e
+          operator/bin/fleet build --notes "merge ${GITHUB_SHA::8} (CI)"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 4 ]; then
+            git fetch origin main --quiet
+            if [ "$(git rev-list --count HEAD..origin/main)" != "0" ]; then
+              echo "::notice::main moved past ${GITHUB_SHA::8} before this build; the newer merge builds the newer tree"
+              exit 0
+            fi
+          fi
+          exit "$rc"
+
+      - name: No image paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "No image-relevant change since the last built commit; nothing to build."

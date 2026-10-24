@@ -41,7 +41,7 @@ from typing import Any, Callable
 
 from . import ids
 from .d1 import FleetStore
-from .fly import Fly, digest_from_build_output
+from .fly import Fly, FlyTokens, digest_from_build_output
 from .r2 import R2, image_key
 from .runner import Refusal, Runner, ToolingError, require_ok
 
@@ -127,10 +127,14 @@ class ImageExtractor:
         runner: Runner,
         sleep: Callable[[float], None] = time.sleep,
         log: Callable[[str], None] | None = None,
+        tokens: FlyTokens | None = None,
     ) -> None:
         self.runner = runner
         self.sleep = sleep
         self.log = log or (lambda _line: None)
+        # The registry app's credential (FLY_REGISTRY_TOKEN alone in CI; the
+        # laptop's login otherwise): the image lives in hermes-fleet's repository.
+        self.tokens = tokens or FlyTokens()
         self._token: str | None = None
 
     def extract(self, ref: str) -> dict[str, bytes]:
@@ -151,7 +155,10 @@ class ImageExtractor:
 
     def _auth(self) -> str:
         if self._token is None:
-            tok = require_ok(self.runner.run(["fly", "auth", "token"], timeout=60), "fly auth token").stdout.strip()
+            env = self.tokens.env_for(ids.FLEET_REGISTRY_APP) or None
+            tok = require_ok(
+                self.runner.run(["fly", "auth", "token"], timeout=60, env=env), "fly auth token"
+            ).stdout.strip()
             if not tok:
                 raise ToolingError("fly auth token printed nothing")
             self._token = tok

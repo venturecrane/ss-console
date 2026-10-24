@@ -227,8 +227,47 @@ describe('renderers', () => {
       seat('first', 0, '2026-05-01'),
     ])
     expect(yaml.slice(yaml.indexOf('\nrings:') + 1)).toBe(
-      'rings:\n  - ring: 0\n    seats: [first]\n  - ring: 2\n    seats: [mid, zeta, alpha]\n    max_parallel: 1\n'
+      'rings:\n  - ring: 0\n    seats: [first]\n    bake_minutes: 30\n  - ring: 2\n    seats: [mid, zeta, alpha]\n    max_parallel: 1\n'
     )
+  })
+
+  it('bakes a ring for the longest bake_minutes any of its seats authors (ADR 0096)', () => {
+    const seat = (slug: string, ring: number, bakeMinutes: number | null) => ({
+      slug,
+      flyApp: `hermes-${slug}`,
+      unprovisionedReason: null,
+      ring,
+      authored: '2026-01-01',
+      client: slug,
+      bakeMinutes,
+    })
+    const yaml = renderRingsYaml([
+      seat('a', 0, 10),
+      seat('b', 0, 45),
+      seat('c', 0, null),
+      seat('d', 1, null),
+      seat('e', 2, 99),
+    ])
+    // FALSIFIER: take the first or the smallest value and ring 0 bakes 10.
+    expect(yaml).toContain('  - ring: 0\n    seats: [a, b, c]\n    bake_minutes: 45\n')
+    expect(yaml).toContain('  - ring: 1\n    seats: [d]\n    bake_minutes: 30\n')
+    // The last ring has no next ring to gate.
+    expect(yaml).toContain('  - ring: 2\n    seats: [e]\n    max_parallel: 1\n')
+  })
+
+  it('refuses a bake_minutes that is not a whole minute count', () => {
+    const r = mkdtempSync(join(tmpdir(), 'seat-inventory-bake-'))
+    try {
+      seatDir(r, 'acme', SEAT_YAML('hermes-acme', 1, '2026-01-01', 'bake_minutes: -5\n'))
+      expect(() => loadSeatInventory(r)).toThrow(/bake_minutes/)
+      writeFileSync(
+        join(r, 'acme', 'seat.yaml'),
+        SEAT_YAML('hermes-acme', 1, '2026-01-01', 'bake_minutes: 45\n')
+      )
+      expect(loadSeatInventory(r)[0].bakeMinutes).toBe(45)
+    } finally {
+      rmSync(r, { recursive: true, force: true })
+    }
   })
 
   it('a new seat dir without regeneration makes the committed files stale', async () => {

@@ -194,6 +194,32 @@ class FleetStore:
         )
         return {r["customer_slug"] for r in rows}
 
+    def release_latest(self, release_id: str) -> dict[str, dict[str, Any]]:
+        """Each seat's latest rollout OF THIS RELEASE: {slug: {state, finished_at}}.
+
+        What a tick resumes from: a seat whose latest is ``done`` is not touched
+        again, a halting state stops the release until a human acts, and the
+        newest ``finished_at`` of a ring's done seats starts its bake.
+        """
+        rid = ids.sql_str(ids.release_id(release_id))
+        rows = self.d1.query(
+            "SELECT r.customer_slug, r.state, r.finished_at FROM fleet_rollouts r JOIN (SELECT customer_slug, "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"MAX(started_at) AS m FROM fleet_rollouts WHERE release_id = {rid} GROUP BY customer_slug) x "
+            f"ON r.customer_slug = x.customer_slug AND r.started_at = x.m WHERE r.release_id = {rid}"
+        )
+        return {r["customer_slug"]: {"state": r.get("state"), "finished_at": r.get("finished_at")} for r in rows}
+
+    def open_alerts(self, seats: list[str], conditions: tuple[str, ...]) -> list[dict[str, Any]]:
+        """Open fleet_alert_state rows for ``conditions`` on ``seats`` (the bake's second half)."""
+        if not seats:
+            return []
+        who = ", ".join(ids.sql_str(ids.slug(s)) for s in seats)
+        what = ", ".join(ids.sql_str(c) for c in conditions)
+        return self.d1.query(
+            "SELECT customer_slug, condition, opened_at FROM fleet_alert_state WHERE status = 'open' "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"AND customer_slug IN ({who}) AND condition IN ({what})"
+        )
+
     # -- lease ------------------------------------------------------------------
     # One table, two scopes. LEASE_NAME is the fleet lease a full rollout holds
     # while it walks the rings; seat_lease_name(slug) is held for the length of

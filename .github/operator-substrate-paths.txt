@@ -64,3 +64,10 @@ operator/ruff.toml
 # runs the mechanism.
 .github/workflows/operator-substrate.yml
 .github/operator-substrate-paths.txt
+# ADR 0096: the release controller's two workflows. test_ci_coverage_conformance
+# pins their shape (protected environment, concurrency, never --force-mid-job),
+# so a change to either must run it. deploy.yml's build-seat-image job strips
+# every .github/ line before deciding whether to build, so these never cause an
+# image build on their own.
+.github/workflows/release-tick.yml
+.github/workflows/deploy.yml
