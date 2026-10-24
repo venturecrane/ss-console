@@ -44,6 +44,9 @@ LEDGER_TOTAL = [
     (re.compile(r"^charge$|balance|amount\s*due|self.pay", re.I), 1),
 ]
 NO_LABEL = "(no provider printed on the bill)"
+#: A spine provider with no bill of any kind in the file (the worksheet's What
+#: Is Needed says exactly that for these rows, never "claim forms").
+NO_BILL = "no bill located"
 FORM_BOX = re.compile(r"^\s*\d{1,2}\s*[.)]")
 SPLIT_COLUMN = re.compile(r"^(\d{1,3}(?:,\d{3})*|\d+)(?:\s+|\s*[Il|!¦]\s*)(\d{2})$")
 
@@ -355,7 +358,7 @@ def _row(row: dict[str, Any], e: dict[str, Any], lien: dict[str, float], dropped
     elif dropped:
         ours, obasis = None, "NOT DERIVABLE - the amount read could not be confirmed on the page; see Amounts Left Out"
     else:
-        ours, obasis = None, "no bill located"
+        ours, obasis = None, NO_BILL
     amt, basis = (lien[row["provider"]], "Firm lien report") if row["provider"] in lien else (ours, obasis)
     ledgers = {round(x, 2) for x, lab, _, _, kd in e["totals"] if x > 0 and kd == "LEDGER" and total_rank(lab)}
     alternates = [

@@ -89,6 +89,7 @@ class Outcome:
     deleted_lines: list[str] = field(default_factory=list)
     repaired: int = 0
     changed: bool = False
+    left_out: int = 0
 
 
 def _names_system(f: review.Finding) -> bool:
@@ -301,9 +302,11 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
     * a check 3 MUST-FIX (code or model) whose every quoted phrase is printed
       verbatim on the page each sentence carrying it cites is the record's
       wording: a NOTE;
-    * a model check 1 MUST-FIX on one entry: the client's page makes it a
-      NOTE; a page naming another person, or naming no one, has the entry left
-      out by rule and disclosed (never naming that person)."""
+    * a model check 1 MUST-FIX on one entry: the client's page, or a page
+      naming no one, makes it a NOTE and keeps the entry (a record the map
+      read is never dropped on the review's suspicion alone); only a page
+      naming another person has the entry left out by rule and disclosed
+      (never naming that person)."""
     from . import review_evidence as EV
 
     md = before = doc.read_text(encoding="utf-8")
@@ -324,13 +327,16 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
                 continue
             cited = EV.cited_pages(block[2], _text(f))
             kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
-            if kind == "client":
+            if kind != "other":
+                # The client's page, or a page naming no one: the entry is a
+                # record the map read, and suspicion alone never drops it.
+                whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
                 out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, which is the client's: {f.finding}"
+                    f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}"
                 )
-                stats["identity_client"] += 1
+                stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
                 continue
-            reason = EV.LEFT_OUT_REASON if kind == "other" else EV.UNNAMED_REASON
+            reason = EV.LEFT_OUT_REASON
             EV.leave_out(sr, doc, block, cited, reason)
             md = doc.read_text(encoding="utf-8")
             out.changed = True
@@ -339,6 +345,7 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
                 f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
             )
             stats["identity_left_out"] += 1
+            out.left_out += 1
             sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
     if stats["identity_left_out"]:
         # The summary tables count the entries: computed again from those left.
@@ -394,7 +401,7 @@ def settle(
     if doc is None or not doc.is_file():
         return out
     stats: dict[str, int] = dict.fromkeys(
-        ("system_words_on_record", "identity_client", "identity_left_out", "summary_deleted"), 0
+        ("system_words_on_record", "identity_client", "identity_unnamed", "identity_left_out", "summary_deleted"), 0
     )
     from . import review_evidence as EV
 
@@ -479,6 +486,34 @@ def _sync_entries(sr: StageRun, gone: list[str]) -> None:
         p.write_text(re.sub(r"\n{3,}", "\n\n", "".join(keep)), encoding="utf-8")
 
 
+def rebill(sr: StageRun) -> bool:
+    """The independent review's N2 (2026-10-24): billing_chart and
+    billing_docx run before this review and take their provider rows from the
+    Treatment Timeline, so an entry the review leaves out kept its provider's
+    row and its matched bills in the worksheet and the grand total. Both run
+    again ($0, in-process) on the chronology as it now stands: a provider with
+    no entry left loses its row, and a bill that then matches no row is shown
+    as printed under its own subtotal, outside the grand total. False when
+    either refuses (nothing is filed). True with nothing to do when billing
+    never ran for this unit."""
+    from . import billing_chart as _bc, billing_docx as _bd
+
+    sfx = f"-{sr.unit.unit}" if sr.job.joint else ""
+    if not (sr.slug_dir / f"billing_chart{sfx}.json").is_file():
+        return True
+    if _bc.run(sr) != 0:
+        return False
+    # The worksheet as it was goes first: billing_docx writes none when no row
+    # is left, and a stale one must not be filed.
+    glob = str(sr.cfg.get("delivery", "worksheet_glob") or "* - Medical Billing Worksheet *.docx")
+    for old in (sr.slug_dir / "out" / sr.unit.unit).glob(glob):
+        old.unlink()
+    if _bd.run(sr) != 0:
+        return False
+    sr.log("review: billing chart and worksheet rebuilt from the chronology as it now stands")
+    return True
+
+
 def package(
     sr: StageRun,
     rd: Path,
@@ -507,6 +542,9 @@ def package(
     # only once the section is written again from the files as they stand.
     # Full build only (an update has no ``doc``); a refresh that changes the
     # section re-renders even when nothing else changed.
+    if pol.left_out and not rebill(sr):
+        sr.log("review: the billing worksheet did not rebuild after an entry was left out; nothing was filed")
+        return pol.findings, None
     if doc is not None and doc.is_file() and _limitations.refresh(doc, sr.slug_dir, sr.unit.unit, sr.log, sr.cfg):
         sr.log("review: Records Reviewed and Limitations rewritten from the files as they stand")
         pol.changed = True

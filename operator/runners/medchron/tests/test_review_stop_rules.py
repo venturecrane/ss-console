@@ -158,13 +158,23 @@ def test_leaving_an_entry_out_re_derives_the_summary_tables_from_the_entries_lef
     assert any("re-derived" in ln for ln in log)
 
 
-def test_a_check1_on_a_page_that_names_no_one_leaves_the_entry_out(job_dir, firm_config_path, data_root):
+def test_a_check1_on_a_page_that_names_no_one_keeps_the_entry_as_a_note(job_dir, firm_config_path, data_root):
+    """The independent review's B1 (2026-10-24): a page with no patient name
+    and no date of birth gives no evidence the entry is anyone else's. The
+    map read it as the client's record; the review's suspicion alone never
+    drops it (the 08-27 rule). The finding is a NOTE and nothing is left out."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     _pages(sr, "Plan: continue therapy.")
     assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
-    assert "Continue therapy." not in _md(sr)
-    left = json.loads((sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).read_text())
-    assert left["entries"][0]["reason"] == review_evidence.UNNAMED_REASON
+    md = _md(sr)
+    assert "03/30/2026\nExample Clinic" in md and "Continue therapy." in md, "the entry is kept"
+    assert not (sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).exists(), "no left-out row for it"
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which names no other person")
+    pol = json.loads((sr.slug_dir / "runs" / "alpha" / review_policy.POLICY_RECORD).read_text())
+    assert pol["identity_left_out"] == 0 and pol["identity_unnamed"] == 1
+    assert "left out" not in _notes(sr)
 
 
 def test_a_model_check3_quoting_words_the_page_prints_is_a_note(job_dir, firm_config_path, data_root):
