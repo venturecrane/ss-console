@@ -154,10 +154,7 @@ STAGES: tuple[Stage, ...] = (
         requires=("decide_selection",),
         runner=_download.run,
         external=True,
-        exit_map={
-            1: (FAILED, "download: targets are still not pulled after the pass"),
-            2: (HELD, "append: a named document id is not on the matter"),
-        },
+        exit_map=_download.EXITS,
     ),
     Stage("extract", "", _slug, scope="slug", requires=("download",), runner=_extract.run),
     Stage(
@@ -310,9 +307,8 @@ STAGES: tuple[Stage, ...] = (
         _slug_unit,
         requires=("filter",),
         runner=_exhibits.run,
-        exit_map={
-            1: (REFUSED, "exhibits: a citation could not be remapped, or a cited file sits in the unresolved lane")
-        },
+        # A cited file in the unresolved lane is settled by rule since 2026-10-24.
+        exit_map={1: (REFUSED, "exhibits: a citation names no built exhibit, or entries_scoped.md is missing")},
     ),
     Stage("condense", "", _slug_unit, paid=True, requires=("exhibits",), runner=_condense.run),
     Stage(
@@ -506,10 +502,7 @@ STAGES: tuple[Stage, ...] = (
         paid=True,
         requires=("manifest",),
         runner=_review.run,
-        exit_map={
-            1: (FAILED, "review: the pre-delivery review did not complete; nothing was filed, a rerun reviews again"),
-            2: (HELD, "review_held: the pre-delivery review found a must-fix; nothing was filed"),
-        },
+        exit_map=_review.EXITS,
     ),
     # ss#2614: the deliverable set onto the matter. The only stage that writes
     # to the firm's system; idempotent through the recorded folder id.
@@ -520,18 +513,7 @@ STAGES: tuple[Stage, ...] = (
         requires=("review",),
         runner=_upload.run,
         external=True,
-        exit_map={
-            1: (
-                FAILED,
-                "upload: refused (the local bytes changed since the manifest, every numbered folder name is "
-                "already taken, no folder id, or the read-back found other bytes than ours)",
-            ),
-            2: (
-                HELD,
-                "upload: the folder read back short after the retries; the files may still be "
-                "materializing, nothing was deleted",
-            ),
-        },
+        exit_map=_upload.EXITS,
     ),
 )
 

@@ -193,7 +193,7 @@ def test_download_pulls_the_selection_dedupes_by_content_and_verifies_size(
     assert download_stage.run(sr) == 0 and seat.mints == []
 
 
-def test_download_exits_1_when_a_target_is_still_not_pulled(
+def test_download_exits_infra_when_a_target_is_still_not_pulled(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
 ) -> None:
     seat.fail_mint.add("f2")
@@ -201,7 +201,7 @@ def test_download_exits_1_when_a_target_is_still_not_pulled(
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
-    assert download_stage.run(sr) == 1
+    assert download_stage.run(sr) == download_stage.EXIT_INFRA
     rows = [json.loads(line) for line in (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines()]
     bad = [r for r in rows if not r["ok"]]
     assert [r["id"] for r in bad] == ["f2"] and "not found" in bad[0]["error"]
@@ -228,7 +228,7 @@ def test_download_continues_when_the_vendor_no_longer_has_the_object(
     assert any("absent from the vendor's storage" in line for line in log)
 
 
-def test_download_still_exits_1_when_an_absent_object_sits_beside_a_retryable_failure(
+def test_download_still_exits_infra_when_an_absent_object_sits_beside_a_retryable_failure(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
 ) -> None:
     """The exit code is decided by the kind of failure, not the count. One
@@ -239,7 +239,7 @@ def test_download_still_exits_1_when_an_absent_object_sits_beside_a_retryable_fa
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, seat, log=log)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
-    assert download_stage.run(sr) == 1
+    assert download_stage.run(sr) == download_stage.EXIT_INFRA
     assert any("1 of 4 targets are not pulled for a reason a retry can fix" in line for line in log)
 
 
@@ -265,7 +265,7 @@ def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
-    assert download_stage.run(sr) == 1
+    assert download_stage.run(sr) == download_stage.EXIT_INFRA
     rows = {r["id"]: r for r in map(json.loads, (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines())}
     assert not rows["f1"]["ok"] and "size mismatch" in rows["f1"]["error"]
     assert not (sr.slug_dir / "raw" / "f1.pdf").exists()

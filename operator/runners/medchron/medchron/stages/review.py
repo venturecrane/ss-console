@@ -77,6 +77,18 @@ REVIEW_TEXT_MAX_CHARS = 100_000
 REVIEW_PART_MAX_ENTRIES = 60
 REVIEW_SPLIT_DEPTH = 4
 INPUT_SHA = "review-input.sha"
+#: The stage's exits (dag.py reads EXITS). Before 2026-10-24 a model call that
+#: returned no verdict and a re-render that failed both exited 1, terminal,
+#: under a reason promising "a rerun reviews again". The first is now the
+#: infrastructure exit the daemon retries (compose.INFRA_EXIT); a lossy split,
+#: a truncation that cannot split, and a failed re-render are defects.
+EXIT_INCOMPLETE, EXIT_HELD, EXIT_RERENDER, EXIT_INFRA = 1, 2, 3, 75
+EXITS = {
+    EXIT_INCOMPLETE: ("failed", "review: the pre-delivery review could not read the whole package (a defect)"),
+    EXIT_HELD: ("held", "review_held: the pre-delivery review found a must-fix; nothing was filed"),
+    EXIT_RERENDER: ("failed", "review: the settled chronology did not re-render (a defect); nothing was filed"),
+    EXIT_INFRA: ("failed", "review incomplete (infrastructure): the model returned no verdict; a later rerun reviews"),
+}
 REDO_SEEN = "review-redo.seen"
 NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
 _NOTES_TAG = " - Chronology Review Notes "
@@ -473,8 +485,8 @@ def run(
         try:
             found += _model_findings(sr, rd, model, chron, names, found)
         except review.ReviewIncomplete as exc:
-            sr.log(f"review: {exc}; nothing was filed, a rerun reviews again")
-            return 1
+            sr.log(f"review: {exc}; nothing was filed" + ("; a later rerun reviews again" if exc.retry else ""))
+            return EXIT_INFRA if exc.retry else EXIT_INCOMPLETE
         material = update_material(rd) is not None
         found, settled = review_policy.package(
             sr,
@@ -489,7 +501,7 @@ def run(
             today=today or date.today(),
         )
         if settled is None:
-            return 1
+            return EXIT_RERENDER
         rows = settled
         sha = _input_sha(rows)
         review.save(rd, found, model=model, lane="chronology")
@@ -497,7 +509,7 @@ def run(
         status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
     if status == "held":
         sr.log(review.held_reason(rec or {"findings": []}))
-        return 2
+        return EXIT_HELD
     mpath.write_text(json.dumps(_notes(sr, out, rec, rows), indent=1), encoding="utf-8")
     sr.log(
         f"review {status}: {(rec or {}).get('must_fix', 0)} must-fix, {(rec or {}).get('should_fix', 0)} should-fix, {(rec or {}).get('notes', 0)} note(s); model {(rec or {}).get('model')}"

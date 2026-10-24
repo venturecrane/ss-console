@@ -13,8 +13,9 @@ ONE EXHIBIT PER PROVIDER: the firm reads an exhibit as a provider's record
 set (a first cut split bulk productions, inferring a rule from one instance
 in the exemplar, and the firm asked why two providers had been split).
 Exhibits are built only for provider groups the chronology actually cites;
-a citation in the text overrides the undated-lane presumption, a cited
-sentinel lane refuses, and a citation that cannot be remapped is exit 1.
+a citation in the text overrides the undated-lane presumption, a cited file
+in the sentinel lane is settled by rule (``_settle_sentinel``), and a citation
+that cannot be remapped is exit 1.
 
 Every cited record gets pages (2026-10-24 audit, rows 7 and 8). A cited
 .docx/.doc narrative report has no pages of its own, and a PDF pypdf cannot
@@ -34,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import StageRun, read_json, read_jsonl
-from .group import index_rows
+from .group import PLACEHOLDER, Canon, index_rows, lane_name
 
 CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
 # What can become exhibit pages: a PDF as it is, an image as one page. A
@@ -215,6 +216,91 @@ def _add_files(
     return entries, cursor
 
 
+#: The title of the exhibit that holds cited records no rule could attribute.
+#: Neither a provider nor the review's placeholder wording; disclosed by name.
+UNATTRIBUTED = "Unattributed Records"
+
+
+def _citing_providers(src_text: str) -> dict[int, list[tuple[str, str]]]:
+    """Per old exhibit number: ``(provider, YYYY-MM-DD)`` of every entry that
+    cites it, off the entry's own head line (``<provider> | <category>``)."""
+    from .assemble import DATE_HEAD, ENTRY_SPLIT
+
+    out: dict[int, list[tuple[str, str]]] = {}
+    for chunk in ENTRY_SPLIT.split(src_text):
+        lines = chunk.strip().splitlines()
+        dm = DATE_HEAD.match(lines[0]) if lines else None
+        if dm is None or len(lines) < 2 or "|" not in lines[1]:
+            continue
+        prov, day = lines[1].split("|")[0].strip(), f"{dm.group(3)}-{dm.group(1)}-{dm.group(2)}"
+        for m in CITE.finditer(chunk):
+            out.setdefault(int(m.group(1)), []).append((prov, day))
+    return out
+
+
+def _settle_sentinel(
+    sr: StageRun, files: list[tuple[str, int, str]], src_text: str, live: list[dict[str, Any]]
+) -> None:
+    """Cited files the group stage left in the unresolved lane (2026-10-24;
+    fired 09-16). Group attributes by the map INDEX and by citations it can key
+    by exact name; assemble resolves a shortened or truncated citation by
+    prefix, so a record the chronology cites correctly can arrive here with no
+    provider. By rule: the provider its citing entries name (the rule
+    ``group.index_rows`` applies), joining that provider's exhibit; when every
+    citing entry names only a placeholder, one ``UNATTRIBUTED`` exhibit whose
+    files Limitations names. Never a refusal: the records are cited."""
+
+    canon, citing = Canon(sr.cfg), _citing_providers(src_text)
+    by_prov = {g["provider"]: g for g in live}
+    for fid, old, name in files:
+        rows = citing.get(old, [])
+        named = [p for p, _d in rows if p and not PLACEHOLDER.search(p)]
+        prov = canon(lane_name(named, canon)) if named else UNATTRIBUTED
+        first = min((d for _p, d in rows), default="9999-99-99")
+        g = by_prov.get(prov)
+        if g is None:
+            g = {
+                "provider": prov,
+                "file_ids": [],
+                "first": first,
+                "exhibit": True,
+                "unattributed": prov == UNATTRIBUTED,
+            }
+            by_prov[prov] = g
+            live.append(g)
+        g["file_ids"] = [*g["file_ids"], fid]
+        g["first"] = min(g["first"], first)
+        sr.log(f"  {name}: cited, no index row names its provider; exhibited under '{prov}' by its citing entries")
+
+
+def _live_groups(
+    sr: StageRun, groups: list[dict[str, Any]], exmap: dict[str, int], byname: dict[str, Any], src_text: str
+) -> list[dict[str, Any]]:
+    """The provider groups that become exhibits, in date order: every exhibit
+    lane, an undated lane the text cites, and the cited files of the
+    unresolved lane settled by rule (``_settle_sentinel``)."""
+
+    unresolved = Canon(sr.cfg).unresolved
+    cited_old = {int(m.group(1)) for m in re.finditer(r"\(Exhibit (\d+)", src_text)}
+    live: list[dict[str, Any]] = []
+    sentinel: list[tuple[str, int, str]] = []
+    for g in groups:
+        ids = set(g["file_ids"])
+        mine = [(str(byname[n]["id"]), old, n) for n, old in exmap.items() if (byname.get(n) or {}).get("id") in ids]
+        if not mine:
+            continue
+        if g.get("exhibit", True):
+            live.append(g)
+        elif g["provider"] == unresolved or g["provider"].startswith("(unattributed"):
+            sentinel += [m for m in mine if m[1] in cited_old]
+        elif any(old in cited_old for _f, old, _n in mine):
+            sr.log(f"  !! lane '{g['provider']}' has no dated entries but IS cited; included")
+            live.append(g)
+    _settle_sentinel(sr, sentinel, src_text, live)
+    live.sort(key=lambda g: g["first"])
+    return live
+
+
 def run(sr: StageRun) -> int:
     from pypdf import PdfWriter
 
@@ -235,25 +321,7 @@ def run(sr: StageRun) -> int:
         sr.log("REFUSING TO BUILD: merged.md holds merged cluster entries but entries_scoped.md does not exist")
         return 1
     src_text = (scoped if scoped.is_file() else rd / "entries.md").read_text(encoding="utf-8")
-    cited_old = {int(m.group(1)) for m in re.finditer(r"\(Exhibit (\d+)", src_text)}
-
-    def text_cited(g: dict[str, Any]) -> bool:
-        ids = set(g["file_ids"])
-        return any(old in cited_old for name, old in exmap.items() if (byname.get(name) or {}).get("id") in ids)
-
-    live = []
-    for g in groups:
-        if not any((byname.get(n) or {}).get("id") in set(g["file_ids"]) for n in exmap):
-            continue
-        if g.get("exhibit", True):
-            live.append(g)
-        elif text_cited(g):
-            if g["provider"].startswith("(unattributed"):
-                sr.log("REFUSING TO BUILD: an entry cites a file in the unresolved sentinel lane")
-                return 1
-            sr.log(f"  !! lane '{g['provider']}' has no dated entries but IS cited; included")
-            live.append(g)
-    live.sort(key=lambda g: g["first"])
+    live = _live_groups(sr, groups, exmap, byname, src_text)
 
     page_map: list[dict[str, Any]] = []
     remap: dict[int, tuple[int, int]] = {}
@@ -298,6 +366,7 @@ def run(sr: StageRun) -> int:
                 "record_type": rt,
                 "total_pages": cursor - 1,
                 "files": entries,
+                **({"unattributed": True} if g.get("unattributed") else {}),
             }
         )
         sr.log(f"Exhibit {n}: {cursor - 1:5d} pp  {g['provider'][:44]}")

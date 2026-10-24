@@ -16,7 +16,7 @@ loudly rather than rendering an empty disclosure.
 Decided-by-rule disclosures (2026-10-24 stop-path audit), each read only when
 present: ``runs/<unit>/unread_pages.json`` (pages the map never read,
 stages/compose.py), ``out/<unit>/page_map.json`` rows with
-``rendered_from_text`` (stages/exhibits.py), ``runs/<unit>/
+``rendered_from_text`` or ``unattributed`` (stages/exhibits.py), ``runs/<unit>/
 prior_history_itemized.json`` (stages/summarize.py), ``dropped_unkept`` in
 msg_attachments.json (email attachments found and not opened), and the
 billing stages' ``billing_gaps[-<unit>].json`` and
@@ -39,6 +39,7 @@ from .limitations_rules import (
     _map_unread_lines,
     _prior_history_lines,
     _rendered_lines,
+    _unattributed_lines,
     _review_left_out_lines,
     _shown,
 )
@@ -362,6 +363,7 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: A
     o += _map_unread_lines(slug_dir, unit)
     o += _attachments_not_opened(slug_dir)
     o += _rendered_lines(slug_dir, unit)
+    o += _unattributed_lines(slug_dir, unit)
     o += _billing_lines(slug_dir, unit, log)
     o += _prior_history_lines(slug_dir, unit)
     o += _review_left_out_lines(slug_dir, unit, log)

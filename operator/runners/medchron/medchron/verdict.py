@@ -89,3 +89,21 @@ def _from_text(out: str) -> list[Any]:
     except ValueError:
         return []
     return parsed if isinstance(parsed, list) else []
+
+
+#: What the runner's own exit code says it decided (``__main__._exit_code``).
+_DECIDED = {0: "delivered", 1: "failed", 2: "crashed outside any stage", 3: "held", 4: "refused"}
+
+
+def lost(code: int) -> str:
+    """The reason recorded when an attempt returns no verdict. A negative code
+    is a signal, and requeue.KILLED retries it. A positive code is a runner that
+    finished and decided; only its report was lost, to a defect (09-16: exit 4,
+    a refusal whose stdout a library banner spoiled before verdict.json
+    existed). None of those is retried: a retry would re-run a refusal or a
+    failure the runner already decided, so the reason names what it decided."""
+    head = f"the runner exited {code} without a verdict"
+    if code < 0:
+        return head
+    what = _DECIDED.get(code, "ended with an unknown code")
+    return f"{head}: it {what}, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)"

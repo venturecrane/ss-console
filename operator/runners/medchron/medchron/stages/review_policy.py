@@ -527,7 +527,7 @@ def package(
     """The findings after ``review_policy`` (drop, note, delete, repair once),
     and the manifest rows the review decides on: re-rendered and re-manifested
     when the chronology changed, so what is filed is what was settled. Rows
-    None when the re-render fails (nothing is filed; a rerun reviews again)."""
+    None when the re-render fails (nothing is filed; review.EXIT_RERENDER)."""
     from . import limitations as _limitations, manifest as _manifest, render as _render
 
     doc = None if update else rd / "final-chronology.md"
