@@ -89,6 +89,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from . import help_guide
+
 logger = logging.getLogger(__name__)
 
 #: Envelope identity. Consumers pin this; a shape change bumps the version.
@@ -869,10 +871,15 @@ def _help_section(
                 "sender_may_ask": may_ask,
             }
         )
+    bound = any(
+        isinstance(e, dict) and e.get("name") == help_guide.SKILL and e.get("enabled") is not False
+        for e in skills
+    )
     return {
         "read": True,
         "sender": who,
         "requests": requests,
+        **help_guide.guide_fields(bound=bound, roots=roots, unreadable=unreadable),
         "note": (
             "Offer only requests whose sender_may_ask is true, worded like their "
             "example. Never offer, describe or promise a request this list does not "
@@ -913,7 +920,12 @@ def _empty(section: str) -> dict[str, Any]:
             "scheduled": None,
             "live_jobs": None,
         },
-        "help": {"sender": None, "requests": [], "note": None},
+        "help": {
+            "sender": None,
+            "requests": [],
+            **help_guide.guide_fields(bound=False, roots=(), unreadable=[]),
+            "note": None,
+        },
     }
     return {"read": False, **shells.get(section, {})}
 

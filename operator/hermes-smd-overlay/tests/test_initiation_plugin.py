@@ -435,7 +435,105 @@ def test_help_phrasings_get_the_help_nudge_not_the_introduction(initiation, mess
     assert initiation._SEAT_HELP_NUDGE in ctx
     assert "depth 'help'" in ctx
     assert "operator-help" in ctx
+    assert "answer_shape" in ctx
     assert initiation._SEAT_FACTS_NUDGE not in ctx
+
+
+#: Chris Price's real question, verbatim, as it reached pilot-smokeball (image
+#: rel-1c955bc7). It matched none of the original six help phrases, so no help
+#: nudge rode the turn and the reply was composed without the guide
+#: (ss-console#3423). This is the acceptance fixture.
+_CHRIS_VERBATIM = (
+    "Trying to get a handle on this. Should I prompt the operator the same way I "
+    "prompt Claude - as much specifics as possible? Assume the answer is yes. "
+    "Usually I would start a project in our enterprise account and upload the docs "
+    "I wanted Claude to use with my prompt and preset instructions. Obviously the "
+    "operator has access to the client file in SB, so do I need to direct it to the "
+    "files and docs I want it to us as if I was uploading to a project, or will it "
+    "know what to pull and where to find everything? Hope that makes sense?"
+)
+
+#: How a lawyer or paralegal might ask the same thing in other words.
+_HELP_PARAPHRASES = (
+    "Quick question before I start using this. Do I need to upload the medical "
+    "records to you, or do you already have them from Smokeball?",
+    "What's the best way to ask the Operator for discovery responses? Do I give it "
+    "a full prompt like I would in Claude?",
+    "New to this. How should I phrase requests so the Operator gets it right the first time?",
+    "Do I have to point you to the specific documents in the file, or will you find them yourself?",
+    "Can you tell me how to get the most out of the operator? I usually write long "
+    "detailed prompts in Claude.",
+)
+
+#: Asks about the seat itself. They keep the introduce nudge, never the help one.
+_INTRODUCE_ASKS = (
+    "Introduce yourself and tell me what you can see.",
+    "Before we start, who are you exactly?",
+    "Walk me through what you'll do each day and week.",
+    "What are your routines?",
+    "What\u2019s running on your end right now?",
+)
+
+
+def test_chris_verbatim_question_gets_the_help_nudge_not_the_introduction(initiation):
+    """FALSIFIER: revert _SEAT_HELP_PHRASES to the original six and this fails,
+    which is the observed turn."""
+    assert initiation._seat_help_asked(_CHRIS_VERBATIM)
+    assert not initiation._seat_facts_asked(_CHRIS_VERBATIM)
+    ctx = _ctx(
+        initiation,
+        session_id="s1",
+        sender_id="staff@firm.com",
+        platform="webhook",
+        user_message=_CHRIS_VERBATIM,
+    )
+    assert initiation._SEAT_HELP_NUDGE in ctx
+    assert initiation._SEAT_FACTS_NUDGE not in ctx
+
+
+@pytest.mark.parametrize("message", _HELP_PARAPHRASES)
+def test_paraphrased_help_questions_get_the_help_nudge(initiation, message):
+    ctx = _ctx(
+        initiation,
+        session_id="s1",
+        sender_id="staff@firm.com",
+        platform="webhook",
+        user_message=message,
+    )
+    assert initiation._SEAT_HELP_NUDGE in ctx, message
+    assert initiation._SEAT_FACTS_NUDGE not in ctx
+
+
+@pytest.mark.parametrize("message", _INTRODUCE_ASKS)
+def test_introduce_asks_never_get_the_help_nudge(initiation, message):
+    assert not initiation._seat_help_asked(message), message
+    ctx = _ctx(
+        initiation,
+        session_id="s1",
+        sender_id="staff@firm.com",
+        platform="webhook",
+        user_message=message,
+    )
+    assert initiation._SEAT_HELP_NUDGE not in ctx
+    assert initiation._SEAT_FACTS_NUDGE in ctx
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Should I prompt you like Claude?",
+        "Should I prompt the Operator like Claude?",
+        "Should I prompt your Operator like Claude?",
+        "SHOULD I PROMPT THE OPERATOR?",
+    ],
+)
+def test_help_matching_reads_the_operator_as_you_and_ignores_case(initiation, message):
+    assert initiation._seat_help_asked(message), message
+
+
+def test_an_imperative_request_earns_no_seat_nudge(initiation):
+    """A work request is that work's own class; neither nudge rides it."""
+    assert initiation._seat_nudge("Please draft the demand on 12345 today.") is None
 
 
 @pytest.mark.parametrize(

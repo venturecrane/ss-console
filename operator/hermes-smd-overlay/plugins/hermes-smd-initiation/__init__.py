@@ -99,7 +99,7 @@ from shared.customer_config import CustomerConfig
 from shared.inbound import SESSION_INBOUND_ORIGIN
 from shared.tool_registration import register_wrapped_tool
 
-from . import help_state, seat_facts, skill_fence
+from . import help_guide, help_state, seat_facts, skill_fence
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,7 @@ __all__ = [
     "TOOL_HELP_SIGNALS",
     "TOOL_SEAT_FACTS",
     "TOOLS",
+    "help_guide",
     "help_state",
     "on_pre_llm_call",
     "register",
@@ -171,7 +172,8 @@ _SEAT_FACTS_SCHEMA: dict[str, Any] = {
                 "introduction = who I am, what I can see, and a one-line routine "
                 "summary. walkthrough = the full grouped routine roster. help = "
                 "how to work with me: adds the requests this seat invites, each "
-                "marked for whether this sender may ask for it. "
+                "marked for whether this sender may ask for it, plus the guide, "
+                "the tips and the answer_shape to compose the answer from. "
                 "Default introduction."
             ),
         },
@@ -191,9 +193,15 @@ _SEAT_FACTS_DESCRIPTION = (
     'yourself — "introduce yourself and tell me what you can see" (use depth '
     "'introduction'), \"walk me through what you'll do each day and week\", "
     '"what are your routines", "what\'s running" (use depth \'walkthrough\'), '
-    '"how do we work together?", "how should I ask you for things?" (use depth '
-    "'help', and offer only the requests its 'help' section marks sender_may_ask), "
-    "and compose your reply from what it returns. Never answer these from "
+    '"how do we work together?", "how should I ask you for things?", "should I '
+    'prompt you the way I prompt Claude?", "do I need to point you at the '
+    "documents?\" (use depth 'help'), "
+    "and compose your reply from what it returns. On depth 'help' the 'help' "
+    "section carries everything the answer needs: compose it from its "
+    "answer_shape, part by part in order, using the words of its guide and "
+    "tips, in the reader's own terms, and follow its answer_rules; offer by "
+    "name only the requests it marks sender_may_ask; there is no other file to "
+    "read. Describe yourself by what you do, never by what you are not. Never answer these from "
     "memory: a fluent roster of a seat you are not is the failure this tool "
     "exists to prevent. Every section carries a 'read' flag; where read is "
     "false, say plainly that you could not read it and carry on with the rest. "
@@ -232,9 +240,12 @@ _SEAT_FACTS_NUDGE = (
 #: nudge naming that depth and that skill.
 _SEAT_HELP_NUDGE = (
     "When this person is asking how to work with you (how you work together, "
-    f"how to ask you for things, what you can do for them), call {TOOL_SEAT_FACTS} "
-    "with depth 'help' and follow the operator-help skill: offer only the requests "
-    "its 'help' section marks sender_may_ask. Do not answer from memory or from "
+    "how to ask, prompt or direct you, whether to upload or point you at "
+    f"documents, what you can do for them), call {TOOL_SEAT_FACTS} with depth "
+    "'help' and compose your reply from its 'help' section: follow its "
+    "answer_shape in order, in the words of its guide and tips, and offer only "
+    "the requests it marks sender_may_ask. That section is the operator-help "
+    "answer; there is no other file to read. Do not answer from memory or from "
     "this conversation."
 )
 
@@ -259,7 +270,15 @@ _SEAT_FACTS_PHRASES: tuple[str, ...] = (
 
 #: Case-insensitive substrings that read as an ask about how to work with the
 #: seat (depth help). Checked BEFORE the introduce set, so a message carrying
-#: both is answered as help, the narrower and more useful reply.
+#: both is answered as help, the narrower and more useful reply. Matched against
+#: the NORMALIZED message (:func:`_normalize`), where "the Operator" and "your
+#: Operator" read as "you", so each phrase is written once, in "you" form.
+#:
+#: The prompting / directing / uploading phrases were added after a rostered
+#: non-admin's real question on pilot-smokeball ("Should I prompt the operator
+#: the same way I prompt Claude ... do I need to direct it to the files and docs
+#: ... or will it know what to pull") matched none of the first six and was
+#: answered without the guide (ss-console#3423).
 _SEAT_HELP_PHRASES: tuple[str, ...] = (
     "how do we work together",
     "how should i ask",
@@ -267,6 +286,43 @@ _SEAT_HELP_PHRASES: tuple[str, ...] = (
     "what can you do",
     "how do i use you",
     "how to work with you",
+    # prompting
+    "should i prompt",
+    "how should i prompt",
+    "how do i prompt",
+    "prompt you",
+    "how should i phrase",
+    "how do i phrase",
+    "best way to ask",
+    "best way to use you",
+    "get the most out of you",
+    # directing at documents, uploading
+    "do i need to direct",
+    "direct you to",
+    "point you to",
+    "point you at",
+    "do i need to upload",
+    "should i upload",
+    "upload the docs i want",
+    "know what to pull",
+    "where to find everything",
+    # using
+    "how do i get you to",
+    "how do i use",
+    "how should i use",
+    "how to use you",
+    "how do i work with you",
+    "how should i work with you",
+    "get a handle on",
+)
+
+#: How a message names the seat in the third person. Each is read as "you" so a
+#: phrase written once matches "prompt you" and "prompt the Operator" alike.
+_OPERATOR_NAMES: tuple[str, ...] = (
+    "the operator",
+    "your operator",
+    "our operator",
+    "my operator",
 )
 
 #: The channel the nudge is scoped to. On CLI/TUI the model has the skills index
@@ -274,11 +330,19 @@ _SEAT_HELP_PHRASES: tuple[str, ...] = (
 _WEBHOOK_PLATFORM = "webhook"
 
 
+def _normalize(message: str) -> str:
+    """Lowercase, straight apostrophes, single spaces, the Operator read as "you"."""
+    text = " ".join(message.lower().replace("\u2019", "'").replace("\u2018", "'").split())
+    for name in _OPERATOR_NAMES:
+        text = text.replace(name, "you")
+    return text
+
+
 def _matches(user_message: object, phrases: tuple[str, ...]) -> bool:
     if not isinstance(user_message, str) or not user_message:
         return False
-    lowered = user_message.lower()
-    return any(phrase in lowered for phrase in phrases)
+    text = _normalize(user_message)
+    return any(phrase in text for phrase in phrases)
 
 
 def _seat_facts_asked(user_message: object) -> bool:
