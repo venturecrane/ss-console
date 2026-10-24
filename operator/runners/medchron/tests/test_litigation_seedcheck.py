@@ -115,6 +115,41 @@ def test_a_past_court_date_on_an_active_seed_is_read_again():
     assert seedcheck.gaps(prior, files, TODAY)["hard"] == [vocab.GROUP_CASE]
 
 
+def _sent_prior(sent: dict | None) -> dict:
+    d = {
+        "name": "Delta",
+        "status": vocab.NOT_SERVED,
+        "served": {"date": None, "source": None},
+        "answered": {"date": None, "source": None},
+    }
+    if sent is not None:
+        d["sent_for_service"] = sent
+    return {
+        "fields_read": list(vocab.GROUPS),
+        "case_status": {"value": vocab.ACTIVE, "source": {"file_id": "c"}},
+        "complaint_filed": {"date": "2026-02-27", "source": {"file_id": "c"}},
+        "defendants": [d],
+    }
+
+
+def test_a_stored_sent_date_is_checked_like_any_defendant_date():
+    """2026-10-24, the backfilled sent-out dates: a stored one that cannot pass
+    the gates sends the defendants group back to be read; one that is its
+    file's save date has that file fetched; an unread one is no gap."""
+    files = [
+        {"id": "c", "name": "Complaint.pdf", "created": "2026-03-01", "modified": "2026-03-01"},
+        {"id": "r", "name": "Service request.msg", "created": "2026-03-20", "modified": "2026-03-20"},
+    ]
+    assert seedcheck.gaps(_sent_prior(None), files, TODAY) == {"hard": [], "soft": {}}
+    assert seedcheck.gaps(_sent_prior({"date": None, "source": None}), files, TODAY) == {"hard": [], "soft": {}}
+    uncited = seedcheck.gaps(_sent_prior({"date": "2026-03-20", "source": None}), files, TODAY)
+    assert uncited["hard"] == [vocab.GROUP_DEFENDANTS]
+    gone = seedcheck.gaps(_sent_prior({"date": "2026-03-20", "source": {"file_id": "gone"}}), files, TODAY)
+    assert gone["hard"] == [vocab.GROUP_DEFENDANTS]
+    soft = seedcheck.gaps(_sent_prior({"date": "2026-03-20", "source": {"file_id": "r"}}), files, TODAY)
+    assert soft == {"hard": [], "soft": {vocab.GROUP_DEFENDANTS: [["r", "2026-03-20"]]}}
+
+
 # ---- (b) a changed matter with missing groups reads both --------------------------------
 def test_a_changed_matter_with_a_missing_group_reads_its_update_and_the_missing_group(tmp_path):
     firm = load(make_inputs(tmp_path / "in"))

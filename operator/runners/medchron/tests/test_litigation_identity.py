@@ -311,6 +311,26 @@ def test_a_defendant_date_is_carried_only_where_the_status_allows_it():
     assert _carry(prior, new) == []
 
 
+def test_a_sent_date_folds_onto_the_kept_entry_and_carries_whatever_the_status():
+    """2026-10-24: the sent-out date is a defendant's dated value like served
+    and answered; papers go out before service, so it carries on any status."""
+    a = _d("Rashidan Okonwo", vocab.NOT_SERVED)
+    b = _d("Rshidan Okonwo", vocab.D_UNCLEAR)
+    b["sent_for_service"] = {"date": "2026-03-20", "source": src("fq")}
+    ds = identity.merge_defendants([a, b])
+    assert len(ds) == 1 and ds[0]["status"] == vocab.NOT_SERVED
+    assert ds[0]["sent_for_service"]["date"] == "2026-03-20"
+    # A twin read and found none: the kept entry is read, not unread.
+    c = _d("Rshidan Okonwo", vocab.D_UNCLEAR)
+    c["sent_for_service"] = {"date": None, "source": None}
+    assert identity.merge_defendants([a, c])[0]["sent_for_service"] == {"date": None, "source": None}
+    prior = matter(defendants=[{**_d("Quill Example", vocab.NOT_SERVED), "sent_for_service": b["sent_for_service"]}])
+    new = copy.deepcopy(prior)
+    del new["defendants"][0]["sent_for_service"]
+    assert _carry(prior, new, on_matter={"fq"}) == ["defendants[Quill Example].sent_for_service"]
+    assert new["defendants"][0]["sent_for_service"]["date"] == "2026-03-20"
+
+
 def test_court_dates_carry_only_while_they_hold():
     prior = matter(next_court_date={"date": "2026-11-20", "event": "CMC", "source": src("fc")})
     new = copy.deepcopy(prior)

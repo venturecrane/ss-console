@@ -4,7 +4,7 @@ A chronology holds when a folded email attachment names someone other than the
 client (``gates/foreign_identity``), and the requester is asked whose it is.
 Until 2026-10-22 the answer had nowhere to go: the gate read only a release
 file nobody wrote, ``medchron_job_resume`` refused every hold but the audit
-gate's, and "leave it out" did not exist. Chris Price answered a hold on 200530
+gate's, and "leave it out" did not exist. An attorney answered a hold on a matter
 with "Just leave it out of the chronology", the Operator could only tell him it
 had no way to act, and he forwarded the exchange to SMD asking for help.
 

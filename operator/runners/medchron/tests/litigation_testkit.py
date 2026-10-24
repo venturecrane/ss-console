@@ -77,7 +77,10 @@ def make_job(job_dir: Path, cents: int = 0, **over: Any) -> Path:
 
 
 COMPLAINT = "SUPERIOR COURT OF EXAMPLETOWN\nGAMMA EXAMPLE v. DELTA EXAMPLE\nCase No. CV-0001\nCOMPLAINT FOR DAMAGES\nFILED 03/02/2026"
-POS = "PROOF OF SERVICE OF SUMMONS\nDefendant DELTA EXAMPLE was personally served on 04/10/2026."
+POS = (
+    "PROOF OF SERVICE OF SUMMONS\nDefendant DELTA EXAMPLE was personally served on 04/10/2026.\n"
+    "Papers received from the firm for service on March 20, 2026 by Example Legal Process."
+)
 ANSWER = "ANSWER OF DEFENDANT DELTA EXAMPLE\nFiled April 30, 2026"
 
 
@@ -189,6 +192,9 @@ def good_result(n: dict[str, int]) -> dict[str, Any]:
                 "out_for_service": {"value": "no", "doc": None},
                 "served": {"date": "2026-04-10", "method": "personal", "doc": n["f-p1"]},
                 "answered": {"date": "2026-04-30", "doc": n["f-a1"]},
+                # The papers went to the process server before service (2026-10-24).
+                # Cited to the POS, which records when the server received them.
+                "sent_for_service": {"date": "2026-03-20", "doc": n["f-p1"]},
                 "flags": [],
             }
         ],

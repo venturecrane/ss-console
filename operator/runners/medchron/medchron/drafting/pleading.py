@@ -41,7 +41,7 @@ BOX_NAME = "SMD Pleading Line Numbers"
 RULE_NAMES = ("SMD Pleading Left Rule 1", "SMD Pleading Left Rule 2", "SMD Pleading Right Rule")
 PAGE_HEIGHT_IN = 11.0
 TITLE_PT = 10
-#: The words that make a request a request for pleading paper. Chris's own
+#: The words that make a request a request for pleading paper. An attorney's own
 #: phrasing on 2026-10-12 ("into the caption so that they are on pleading
 #: paper") and the plain forms.
 ASKS = re.compile(

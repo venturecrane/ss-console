@@ -108,7 +108,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None] = {
     "variants": None,  # a map of maps, checked in _variants
     # {responsible attorney, as the firm's authored signer map writes the
     # name: {signer, title, initials}}: how the responsible attorney signs a
-    # demand ("Christopher A. Price", "Attorney at Law", "CAP/dm"). Keyed by the
+    # demand ("Jane Q. Attorney", "Attorney at Law", "JQA/dm"). Keyed by the
     # attorney's staff name as Smokeball holds it. An attorney with no row gets
     # no demand: the job holds and names them, rather than signing for them.
     "attorneys": None,

@@ -68,7 +68,7 @@ _DISCOVERY_WORD = re.compile(r"\bdiscovery\b", re.I)
 def court_only(trigger: str, request_text: str, discovery_rx: list[re.Pattern[str]]) -> bool:
     """True when a person's request names court-paper columns and no discovery.
 
-    2026-10-23: Chris asked for complaint filed, service and answers on every
+    2026-10-23: an attorney asked for complaint filed, service and answers on every
     litigation file; the run read discovery on 152 matters he did not ask
     about. A court-only run neither reads the discovery group nor shows a
     Discovery tab; the stored discovery values stand untouched for the next
@@ -374,7 +374,8 @@ class LitigationRun(RunBase):
             files[m["id"]] = {str(f["id"]) for f in fs}
             saved[m["id"]] = {str(f["id"]): {str(f.get(k) or "")[:10] for k in ("created", "modified")} for f in fs}
             hits[m["id"]] = list((self._mjson(m["id"], "read3.json") or {}).get("hits_asked") or [])
-        g = gates.run(ms, today=self.today, files=files, saved=saved, text_of=self._text_of, hits=hits)
+        disc = not self._court_only()  # a court-only list is not judged on discovery it did not read
+        g = gates.run(ms, today=self.today, files=files, saved=saved, text_of=self._text_of, hits=hits, discovery=disc)
         unread = passes.unread_matters(self)
         if unread:  # every other matter was read; the list holds until these are
             g["issues"]["matter could not be read"] = [(u["number"], u["stage"], u["reason"][:120]) for u in unread]
@@ -409,6 +410,8 @@ class LitigationRun(RunBase):
                 unsupported=self._unsupported(p),
                 on_matter={str(f["id"]) for f in inventory.files_of(self.data, mid)},
             )
+            if self._court_only():  # discovery was not read and is not on this list
+                cs = [c for c in cs if not c["path"].startswith(vocab.DISCOVERY_PATHS)]
             changes[mid] = cs
             held += [(m["number"], c["path"]) for c in parity.unexplained(cs)]
         dump(self.data / "changes.json", changes)

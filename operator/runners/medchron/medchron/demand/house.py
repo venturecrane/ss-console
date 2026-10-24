@@ -286,7 +286,7 @@ class _Body:
         w.para("signfirm", f"**{self.signature}**")
         # The signer, title and typist initials are the firm's authored map for
         # the responsible attorney, never the model's front matter (review of
-        # #3074: "CAP/dm" on every demand Doug drafts for Chris).
+        # #3074: one attorney's initials on every demand a paralegal drafted for another).
         w.para("sign", self.signer or self.front["signer"])
         w.para("sign", self.title if self.signer else (self.front.get("signer_title") or self.title))
         if self.initials:

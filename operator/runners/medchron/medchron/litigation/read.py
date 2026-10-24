@@ -69,6 +69,7 @@ RESULT_SCHEMA = {
                         },
                     },
                     "answered": _DATED,
+                    "sent_for_service": _DATED,
                     "flags": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["name", "status"],
@@ -145,7 +146,7 @@ RECORD_VERDICTS = {
 PATHS = (
     "case_status | complaint_filed | next_court_date | case_name | court | case_number | firm_role | "
     "defendants[<exact name>].status | defendants[<exact name>].served | defendants[<exact name>].answered | "
-    "defendants[<exact name>].out_for_service | defendants[+] (a defendant the result is missing; corrected is the "
+    "defendants[<exact name>].out_for_service | defendants[<exact name>].sent_for_service | defendants[+] (a defendant the result is missing; corrected is the "
     "whole defendant) | discovery_propounded | discovery_served_on_client (corrected is the whole list)"
 )
 
@@ -170,6 +171,12 @@ spelled exactly; a corrected status is one of them too.
 Case statuses: {case_statuses}.
 Defendant statuses: {defendant_statuses}.
 Write plain sentences for flags and notes: facts only, no legal advice, no doc numbers, no file ids.
+
+Sent out for service (sent_for_service, on each defendant): the date the firm sent the papers out to be served,
+which is its request to, or dispatch of, a process server or service company (an email or order to InfoTrack,
+One Legal, a registered process server and the like), cited to that email or document. It is NEVER the date the
+defendant was served. Record it whatever the defendant's status; if the papers went out more than once, record
+the most recent request. If you searched and found no such request, record sent_for_service with a null date.
 
 Today is {today}. A next court date must be the next one AFTER today; if none is set in the file, leave its date
 null. Discovery: list each set the firm propounded (what, on whom, the date served) and each set served on the
@@ -214,7 +221,7 @@ def system_for(role: str, firm: Any, today: dt.date) -> str:
         "audit": (
             "\n\nYOUR PASS: the last check before the list goes to the firm, after an independent verify pass already "
             "confirmed the positive dates against their sources. Audit ONLY: every negative (not served, no answer, not "
-            "filed, not dismissed, active), every fact that rests on a checkbox (view_page; if you cannot see it the verdict "
+            "filed, not dismissed, active, no date sent out for service), every fact that rests on a checkbox (view_page; if you cannot see it the verdict "
             "is unclear), any contradiction between documents, and every quote in a flag or note (verbatim, right sender). "
             "Do not re-open a positive date's source unless a document contradicts it. Resolve every settlement-scan hit you "
             "are given in settlement_reviewed (doc + one line). "
@@ -285,6 +292,13 @@ def _defendant(ctx: MatterContext, d: Any) -> dict[str, Any]:
         "out_for_service": _val(ctx, d.get("out_for_service"), ("value",)),
         "served": _val(ctx, d.get("served"), ("date", "method")),
         "answered": _val(ctx, d.get("answered"), ("date",)),
+        # Kept only when the read answered it: an absent key renders "Not read
+        # yet", never "Not in file", which would be a finding nobody made.
+        **(
+            {"sent_for_service": _val(ctx, d["sent_for_service"], ("date",))}
+            if isinstance(d.get("sent_for_service"), dict)
+            else {}
+        ),
         "flags": [str(x) for x in d.get("flags") or []],
     }
 
@@ -384,6 +398,7 @@ def _corrected_value(ctx: MatterContext, field: str, v: dict[str, Any]) -> Any:
     keys = {
         "served": ("date", "method"),
         "answered": ("date",),
+        "sent_for_service": ("date",),
         "out_for_service": ("value",),
         "complaint_filed": ("date",),
         "next_court_date": ("date", "event"),

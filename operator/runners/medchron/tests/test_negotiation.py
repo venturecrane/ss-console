@@ -523,7 +523,7 @@ def test_the_real_read_renders_the_runs_own_tabs_and_parses_the_answer(tmp_path,
 
 def test_the_read_asks_for_structured_output_never_a_forced_tool():
     """claude-opus-5-5 refuses tool_choice of type tool or any with a 400; the
-    ashton-price dry run (2026-10-10) failed every read on it. FALSIFIER: put
+    a firm seat's dry run (2026-10-10) failed every read on it. FALSIFIER: put
     the forced tool call back and the request carries tool_choice again."""
     from medchron.llm import build_params
 
@@ -733,7 +733,7 @@ def test_an_accepted_offer_is_entered_but_never_emailed(tmp_path, monkeypatch):
     arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
     events = [
         _offer(kind="policy_limits_tender", amount=956000, date="2026-09-23"),
-        _offer(kind="acceptance", by="Ashton & Price for the client", amount=956000, date="2026-09-23"),
+        _offer(kind="acceptance", by="Example & Example for the client", amount=956000, date="2026-09-23"),
     ]
     layout = Layout()
     v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=events).run()

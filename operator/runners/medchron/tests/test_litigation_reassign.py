@@ -37,7 +37,7 @@ STAFF = [
     {"id": DANA, "firstName": "Dana", "lastName": " Newhire", "enabled": True},
     {"id": ED1, "firstName": "Edward", "lastName": "Lawyer", "enabled": True},
     {"id": ED2, "firstName": "Edward", "lastName": "Lawyer", "enabled": False},
-    {"id": CHR, "firstName": "Chris", "lastName": "Senior", "enabled": True},
+    {"id": CHR, "firstName": "Carl", "lastName": "Senior", "enabled": True},
     {"id": OTHER, "firstName": "Olive", "lastName": "Other", "enabled": True},
 ]
 
@@ -62,7 +62,7 @@ def world() -> dict[str, Any]:
         # Ed's (second record) litigation case by its papers, Wendy assisting: moves. T3 a straggler.
         mid(2): ({"id": mid(2), "number": "100002", "personResponsibleStaffId": ED2, "personAssistingStaffId": WEN},
                  {}, ["Complaint for damages.pdf"]),
-        # Chris's litigation case, Pat assisting: outside an "Ed's" scope.
+        # Carl's litigation case, Pat assisting: outside an "Ed's" scope.
         mid(3): ({"id": mid(3), "number": "100003", "personResponsibleStaffId": CHR, "personAssistingStaffId": PAT},
                  {CASE: "CV-0003"}, []),
         # Ed's case NOT in litigation, Pat assisting: outside a litigation-only scope.
@@ -209,7 +209,7 @@ def test_eds_litigation_cases_move_and_the_vendor_moves_some_tasks_itself(tmp_pa
     assert v.w["matters"][mid(4)][0]["personAssistingStaffId"] == PAT
     assert assignees(v, tid(4)) == [PAT]
     d = out["reassign"]
-    assert d["outside_by_attorney"] == {"Chris Senior": 1, "Edward Lawyer": 1}
+    assert d["outside_by_attorney"] == {"Carl Senior": 1, "Edward Lawyer": 1}
     assert d["from"] == ["Pat Example", "Wendy Sample"] and d["to"] == "Dana Newhire"
     assert d["attorneys"] == ["Edward Lawyer"] and d["from_with_nothing"] == []
     # the main and the (empty) additional list are written together, and the vendor's own task move is not re-sent
@@ -226,7 +226,7 @@ def test_the_straggler_put_keeps_co_assignees_categories_and_owner(tmp_path: Pat
     puts = [w for w in v.writes if w == ("PUT", f"/tasks/{tid(2)}", w[2])]
     assert len(puts) == 1
     body = puts[0][2]
-    assert body["assigneeIds"] == [DANA, CHR]  # Pat swapped for Dana, Chris kept, deduped
+    assert body["assigneeIds"] == [DANA, CHR]  # Pat swapped for Dana, Carl kept, deduped
     assert body["staffId"] == ED1  # the matter's responsible staff owns the full replace
     assert body["categories"] == ["Discovery"] and body["subject"] == "Draft responses"
     assert body["dueDateOnly"] == "2026-03-01" and body["matterId"] == mid(1)
@@ -357,7 +357,7 @@ def test_the_wake_carries_names_numbers_and_counts_only() -> None:
         trig="request", stage=None, hold_line=None,
         detail={"from": ["Pat Example", "<script>"], "to": "Dana Newhire", "attorneys": [],
                 "litigation_only": True, "statuses": ["Open", "Pending"], "cases_not_moved": ["100002", "a b c"],
-                "tasks_not_moved": {"100002": 1}, "outside_by_attorney": {"Chris Senior": 1}},
+                "tasks_not_moved": {"100002": 1}, "outside_by_attorney": {"Carl Senior": 1}},
     )  # fmt: skip
     assert "Kind: litigation. Report: reassign." in text
     assert "Moved from: Pat Example." in text and "<script>" not in text

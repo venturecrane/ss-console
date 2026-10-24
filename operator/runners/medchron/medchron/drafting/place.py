@@ -1,6 +1,6 @@
 """The attorney's own sets, placed in the caption on the firm's paper.
 
-An attorney often drafts his own discovery (on 2026-10-12, Chris drafted three
+An attorney often drafts his own discovery (on 2026-10-12, an attorney drafted three
 sets in his own Claude project) and then pastes each set by hand into a
 caption on pleading paper. This is that step, done for him: a drafting
 request (``discovery_set``) whose email ATTACHES Word documents that are sets

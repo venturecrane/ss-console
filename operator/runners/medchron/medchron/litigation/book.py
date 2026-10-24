@@ -34,15 +34,24 @@ DEF_HEADER = [
     "Case status",
     "Defendant",
     "Defendant status",
+    "Sent out for service",
+    "Sent out for service (source)",
     "Served",
     "Served (source)",
     "Answered",
     "Answered (source)",
     "Notes",
 ]
-DEF_WIDTHS = [18, 24, 10, 32, 28, 14, 24, 28, 24, 22, 40, 14, 40, 60]
+DEF_WIDTHS = [18, 24, 10, 32, 28, 14, 24, 28, 24, 16, 40, 22, 40, 14, 40, 60]
+#: The sent-out cell for a defendant no pass has read for it, and for one a
+#: pass read and found no request to a process server (with the reason in its
+#: source cell). An unread value is never shown as a finding.
+NOT_READ_YET = "Not read yet"
+NOT_IN_FILE = "Not in file"
+NOT_IN_FILE_WHY = "No request to a process server was found in the files read"
 _CLEAN = [
     (r"\s*\((?:second read|double-check|first read said)[^()]*\)", ""),
+    (r"(?i)\bcorrected on (?:double-check|second read|review):\s*", ""),  # 2026-10-23: a note's lead-in
     (r"(?i)\b(second|first|third) read\b", "review"),
     (r"(?i)\bverifier\b", "reviewer"),
     (r"(?i)\boverturn(ed|s)?\b", "corrected"),
@@ -98,6 +107,18 @@ def _sort_date(s: str) -> str:
     return m.group(0) if m else "9999"
 
 
+def sent_cells(d: dict[str, Any]) -> tuple[str, str]:
+    """(Sent out for service, its source) for one defendant: the date and its
+    document; "Not in file" and why, when a pass read and found none; "Not
+    read yet" when no pass has read it (the key is absent)."""
+    if "sent_for_service" not in d:
+        return NOT_READ_YET, ""
+    v = d.get("sent_for_service")
+    if isinstance(v, dict) and v.get("date"):
+        return _date(v), _src(v)
+    return NOT_IN_FILE, NOT_IN_FILE_WHY
+
+
 def defendant_rows(ms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for m in ms:
@@ -116,6 +137,7 @@ def defendant_rows(ms: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         _status(m),
                         d.get("name"),
                         d.get("status"),
+                        *sent_cells(d),
                         _date(d.get("served")),
                         _src(d.get("served")),
                         _date(d.get("answered")),

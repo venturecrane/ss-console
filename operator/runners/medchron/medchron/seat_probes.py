@@ -35,7 +35,7 @@ def memory_cap_mode(cgroup_root: Path = CGROUP_ROOT) -> str:
     """Which memory controller this guest offers: ``cgroup2`` (unified root),
     ``cgroup1`` (the hybrid layout Fly Machines run: v2 mounted bare at
     /sys/fs/cgroup/unified with no controllers, memory on the v1 mount), or
-    ``none``. Probed live on hermes-ashton-price 2026-08-31: no
+    ``none``. Probed live on a firm seat 2026-08-31: no
     ``cgroup.controllers`` at the root, ``cgroup ... memory`` in /proc/mounts."""
     try:
         if "memory" in (cgroup_root / "cgroup.controllers").read_text().split():

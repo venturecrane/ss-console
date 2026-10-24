@@ -17,6 +17,9 @@ Every rule of the hand run's ``qa.py``, plus the ones its failures added:
 * the BUILT workbook carries no internal vocabulary (``leak_scan``).
 
 Each rule returns the items it refuses; ``passed`` is every list empty.
+``notes`` (``soft_notes``) are recorded and never held on: papers sent out
+for service after the service date is a legitimate re-service. A court-only
+list (``discovery=False``) does not judge discovery values it did not read.
 """
 
 from __future__ import annotations
@@ -50,14 +53,20 @@ LEAK_PATTERNS = [
 TextOf = Callable[[str, str], "str | None"]
 
 
-def _dated(m: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    """Every value on a matter that carries a date, by a readable path."""
+def _dated(m: dict[str, Any], discovery: bool = True) -> list[tuple[str, dict[str, Any]]]:
+    """Every value on a matter that carries a date, by a readable path.
+    ``discovery=False`` (a court-only list, 2026-10-23): the discovery values
+    were not read this run and are not on the list, so they are not judged;
+    on one real court-only list 37 of the 48 held items were discovery."""
     out = [("complaint_filed", m.get("complaint_filed") or {}), ("next_court_date", m.get("next_court_date") or {})]
     for d in m.get("defendants") or []:
         out += [
             (f"{d.get('name')}: served", d.get("served") or {}),
             (f"{d.get('name')}: answered", d.get("answered") or {}),
+            (f"{d.get('name')}: sent for service", d.get("sent_for_service") or {}),
         ]
+    if not discovery:
+        return [(p, v) for p, v in out if isinstance(v, dict)]
     for i, r in enumerate(m.get("discovery_propounded") or []):
         out.append((f"discovery propounded #{i + 1}", r))
     for i, r in enumerate(m.get("discovery_served_on_client") or []):
@@ -89,6 +98,12 @@ def date_forms(iso: str) -> list[str]:
         f"{mo3} {d.day}, {d.year}",
         f"{mo3}. {d.day}, {d.year}",
         f"{d.day} {mon} {d.year}",
+        # An email header's day-first abbreviation ("Mon, 12 Jan 2026"), and
+        # the dashed form some forms print, 2026-10-24.
+        f"{d.day} {mo3} {d.year}",
+        f"{d.day:02d} {mo3} {d.year}",
+        f"{d.day}-{mo3}-{d.year}",
+        f"{d.day:02d}-{mo3}-{d.year}",
     ]
 
 
@@ -96,12 +111,26 @@ def text_carries(text: str, iso: str) -> bool:
     """The date appears in the text in a written form. Court forms often
     print a filled date as spaced characters ("1 / 2 5 / 2 0 2 7", Yolo's CMC
     notice, 2026-10-06), so the comparison is also made with all whitespace
-    removed; every digit must still match."""
+    removed; every digit must still match.
+
+    No digit may touch either end of a match, in every comparison: without
+    that, "1 Jan 2026" is found inside "21 Jan 2026" and "1/2/2026" inside
+    "11/2/2026", a different day passing as the cited one (2026-10-24)."""
+    forms = [f.lower() for f in date_forms(iso)]
+
+    def found(hay: str, needles: list[str]) -> bool:
+        return any(re.search(r"(?<!\d)" + re.escape(n) + r"(?!\d)", hay) for n in needles)
+
     flat = " ".join(text.split()).lower()
-    if any(f.lower() in flat for f in date_forms(iso)):
+    if found(flat, forms):
         return True
     squeezed = "".join(text.split()).lower()
-    return any("".join(f.split()).lower() in squeezed for f in date_forms(iso))
+    if found(squeezed, ["".join(f.split()) for f in forms]):
+        return True
+    # A blank filled by hand ("January __12__, 2026") or a comma the OCR dropped
+    # ("Executed on April 21 2026"), 2026-10-23.
+    bare = re.sub(r"[_,]", "", squeezed)
+    return found(bare, [re.sub(r"[_,]", "", "".join(f.split())) for f in forms])
 
 
 def _case_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:
@@ -123,9 +152,9 @@ def _case_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:
         out["em dash in text"].append(n)
 
 
-def _date_rules(m: dict[str, Any], n: str, t: str, out: dict[str, list[Any]]) -> None:
+def _date_rules(m: dict[str, Any], n: str, t: str, out: dict[str, list[Any]], discovery: bool = True) -> None:
     cs = _status(m)
-    for path, v in _dated(m):
+    for path, v in _dated(m, discovery):
         d = v.get("date")
         if d is None:
             continue
@@ -155,7 +184,19 @@ def _defendant_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> No
             out["served date but status says not served"].append((n, d.get("name")))
 
 
-def rule_matters(ms: list[dict[str, Any]], today: dt.date) -> dict[str, list[Any]]:
+def soft_notes(ms: list[dict[str, Any]]) -> dict[str, list[Any]]:
+    """Recorded, never held on. Papers sent out AFTER the service date is a
+    legitimate order when a defendant is served again, so it is not a rule."""
+    later = []
+    for m in ms:
+        for d in m.get("defendants") or []:
+            sent, served = (d.get("sent_for_service") or {}).get("date"), (d.get("served") or {}).get("date")
+            if isinstance(sent, str) and isinstance(served, str) and sent > served:
+                later.append((str(m.get("number") or m.get("matter_id")), d.get("name"), sent, served))
+    return {"sent out for service after the service date (re-service?)": later} if later else {}
+
+
+def rule_matters(ms: list[dict[str, Any]], today: dt.date, discovery: bool = True) -> dict[str, list[Any]]:
     """The qa.py rules, matter by matter."""
     t = today.isoformat()
     out: dict[str, list[Any]] = {
@@ -183,20 +224,24 @@ def rule_matters(ms: list[dict[str, Any]], today: dt.date) -> dict[str, list[Any
         n = str(m.get("number") or m.get("matter_id"))
         seen[n] = seen.get(n, 0) + 1
         _case_rules(m, n, out)
-        _date_rules(m, n, t, out)
+        _date_rules(m, n, t, out, discovery)
         _defendant_rules(m, n, out)
     out["duplicate matter"] = [n for n, k in seen.items() if k > 1]
     return out
 
 
 def rule_sources(
-    ms: list[dict[str, Any]], files: dict[str, set[str]], saved: dict[str, dict[str, set[str]]], text_of: TextOf
+    ms: list[dict[str, Any]],
+    files: dict[str, set[str]],
+    saved: dict[str, dict[str, set[str]]],
+    text_of: TextOf,
+    discovery: bool = True,
 ) -> dict[str, list[Any]]:
     """Every source is a file on the matter; a save date is not a court date."""
     bad, save = [], []
     for m in ms:
         mid, n = str(m.get("matter_id")), str(m.get("number"))
-        vals = _dated(m) + [("case_status", m.get("case_status") or {})]
+        vals = _dated(m, discovery) + [("case_status", m.get("case_status") or {})]
         for path, v in vals:
             src = v.get("source") if isinstance(v, dict) else None
             if not src:
@@ -249,14 +294,15 @@ def run(
     saved: dict[str, dict[str, set[str]]],
     text_of: TextOf,
     hits: dict[str, list[str]],
+    discovery: bool = True,
 ) -> dict[str, Any]:
     issues: dict[str, list[Any]] = {}
-    issues.update(rule_matters(ms, today))
-    issues.update(rule_sources(ms, files, saved, text_of))
+    issues.update(rule_matters(ms, today, discovery))
+    issues.update(rule_sources(ms, files, saved, text_of, discovery))
     issues.update(rule_integrity(ms))
     issues.update(rule_settlement(ms, hits))
     issues = {k: v for k, v in issues.items() if v}
-    return {"passed": not issues, "issues": issues}
+    return {"passed": not issues, "issues": issues, "notes": soft_notes(ms)}
 
 
 def leak_scan(xlsx: Path) -> list[tuple[str, str, str]]:

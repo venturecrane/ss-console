@@ -22,7 +22,8 @@ A value is carried forward only when ALL of these hold:
 * the date is not in the future, and a next court date is not in the past;
 * a defendant's answer date is carried only while its status says answered,
   a service date only while its status does not say not served (the gates
-  refuse either contradiction).
+  refuse either contradiction); a sent-out-for-service date whatever the
+  status (papers go out before service, 2026-10-24).
 
 No date is ever derived from a file NAME: the runner has no such convention,
 and a name is not the document.
@@ -123,6 +124,8 @@ def _carry_defendants(prior: dict[str, Any], result: dict[str, Any], kw: dict[st
         allowed = {
             "answered": st in (vocab.ANSWERED, vocab.ANSWERED_ORIGINAL),
             "served": st not in (vocab.NOT_SERVED, vocab.OUT_FOR_SERVICE, vocab.D_UNCLEAR),
+            # Papers go out before service whatever the status says now.
+            "sent_for_service": True,
         }
         for f, ok in allowed.items():
             if ok and _empty(d.get(f)) and _qualifies(old.get(f), **kw):

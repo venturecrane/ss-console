@@ -67,7 +67,7 @@ def test_a_carriers_answer_to_that_counter_is_the_latest():
 
 @pytest.mark.parametrize(
     "firm",
-    ["Chris: carrier at limits, client deciding.", "Entered by Christa; see file.", "", None],
+    ["Attorney: carrier at limits, client deciding.", "Entered by staff; see file.", "", None],
 )
 def test_a_summary_without_the_operator_marker_is_never_rewritten(firm):
     """FALSIFIER: drop the marker match and the firm's own summary is replaced."""
@@ -145,7 +145,7 @@ def test_an_accepted_offers_summary_says_accepted(tmp_path, monkeypatch):
 
 def test_a_firm_written_summary_gets_no_refresh_call(tmp_path, monkeypatch):
     arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
-    layout = SummaryLayout(details="Chris: carrier at limits.")
+    layout = SummaryLayout(details="Attorney: carrier at limits.")
     layout.rows = []  # an empty tab is the Operator's to fill even under the firm's summary
     v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=_tender()).run()
     assert layout.calls and layout.refreshes == []
@@ -210,6 +210,6 @@ def test_the_correction_reports_a_read_back_mismatch():
 
 
 def test_the_correction_leaves_a_firm_summary_alone():
-    tab = TabLayout("Chris: settled.", [DEMAND, TENDER])
+    tab = TabLayout("Attorney: settled.", [DEMAND, TENDER])
     out = C.correct(tab, "m", 0, {}, write=True)
     assert out["status"].startswith("unchanged") and tab.writes == []

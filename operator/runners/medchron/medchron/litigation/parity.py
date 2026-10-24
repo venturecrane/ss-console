@@ -21,7 +21,9 @@ Values are compared by IDENTITY, not wording (``identity.py``, 2026-10-14):
 a discovery set is its kind and set number, a combined name is one entry per
 set, a party is its ``party_key``. A renaming alone is never a change.
 
-Every divergence, explained or not, is also the workbook's "What changed" tab.
+Every divergence, explained or not, is also the workbook's "What changed" tab,
+except discovery divergences on a court-only list: that run did not read or
+show discovery, so they neither hold it nor appear (``run._parity``).
 """
 
 from __future__ import annotations
@@ -74,6 +76,10 @@ def points(m: dict[str, Any] | None) -> dict[str, tuple[Any, dict[str, Any] | No
         out[f"defendants[{name}].status"] = (d.get("status"), basis)
         out[f"defendants[{name}].served"] = (_key(d.get("served"), "date"), d.get("served"))
         out[f"defendants[{name}].answered"] = (_key(d.get("answered"), "date"), d.get("answered"))
+        out[f"defendants[{name}].sent_for_service"] = (
+            _key(d.get("sent_for_service"), "date"),
+            d.get("sent_for_service"),
+        )
     for kind in ("discovery_propounded", "discovery_served_on_client"):
         for key, r in identity.keyed_rows(m.get(kind)):
             label = f"{kind}[{key}]"

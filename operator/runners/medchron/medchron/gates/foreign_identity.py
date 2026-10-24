@@ -162,7 +162,7 @@ def released(slug_dir: Path) -> set[str]:
 
 
 def withheld(slug_dir: Path) -> set[str]:
-    """Held documents the firm said to leave out (2026-10-22: Chris Price
+    """Held documents the firm said to leave out (2026-10-22: an attorney
     answered an identity hold with "Just leave it out of the chronology", and
     the runner had no way to act on it). A withheld document stays out of every
     unit, never holds the run again, and is disclosed as left out."""
