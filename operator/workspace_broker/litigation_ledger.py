@@ -42,9 +42,9 @@ THE QUEUE FILE (``<queue>/<job_id>.json``) is the runner's input, exactly::
      "request_text", "scope", "file_to_matter_id", "file_to_matter_number",
      "folder_name"}
 
-with ``scope`` one of ``{"all": true}``, ``{"attorney_staff_ids": [...]}``,
-``{"paralegal_staff_ids": [...]}`` (a paralegal's files: the matter's Person
-Assisting) or both id lists together (a matter must match each), or
+with ``scope`` one of ``{"all": true}``; staff id lists (the broker queues
+them only when attorneys AND paralegals are named: the responsible attorney
+and a Person Assisting must each match; root may queue one side alone); or
 ``{"people": {"names": [...], "requester": <email or null>}}``: every matter
 the named people (and, for "my cases", the requester, found by email) hold any
 staff role on, resolved by the runner against Smokeball's staff list.
@@ -138,6 +138,9 @@ ADDED_COLUMNS = (
     ("counts_json", "TEXT"),
     ("reassign_json", "TEXT"),
 )
+# The ALTER TABLE below formats these into DDL (which takes no bound
+# parameters); this keeps them plain identifiers and types, so it stays safe.
+assert all(re.fullmatch(r"[a-z_]+", n) and re.fullmatch(r"[A-Z]+", k) for n, k in ADDED_COLUMNS)
 #: What SMD's close writes as the row's (and the audit row's) reason: a token,
 #: never a sentence. ``work_health._CLOSED_REASONS`` reads it as decided work.
 CLOSED_REASON = "closed"
@@ -312,6 +315,9 @@ class LitigationLedger:
             have = {r["name"] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
             for name, kind in ADDED_COLUMNS:
                 if name not in have:
+                    # name and kind come from ADDED_COLUMNS only (asserted plain identifiers at
+                    # import); DDL takes no bound parameters.
+                    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query, python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                     conn.execute(f"ALTER TABLE litigation_jobs ADD COLUMN {name} {kind}")
             conn.commit()
         finally:

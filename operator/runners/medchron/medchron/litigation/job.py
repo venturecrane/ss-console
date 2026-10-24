@@ -79,8 +79,9 @@ class LitigationJob:
     month_cents_used: int
     per_job_cap_usd: float | None = None
     monthly_budget_usd: float | None = None
-    #: Person Assisting staff ids (a paralegal's files). With attorney ids
-    #: too, a matter must match both; empty when no paralegal was named.
+    #: Person Assisting staff ids. With attorney ids too, a matter must match
+    #: both; empty when no paralegal was named, and for a people scope (one
+    #: side named arrives as ``people``: any staff role).
     paralegal_staff_ids: tuple[str, ...] = ()
     #: ``status`` (the list) or ``deadlines`` (the $0 deadlines report).
     report: str = "status"

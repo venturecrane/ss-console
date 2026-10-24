@@ -13,9 +13,10 @@ Three sources, all authored, none from the model:
   0640): the monthly budget the broker
   enforces at submit, and the ``attorneys`` map (display name -> Smokeball
   staff id) the broker resolves a requester's "for <attorney>" against, and
-  the ``paralegals`` map the same for "<paralegal>'s files" (the matter's
-  Person Assisting). The broker has no Smokeball access, so the maps are the
-  authored roster.
+  the ``paralegals`` map the same for "<paralegal>'s files". A name on one
+  side alone becomes a people scope (any staff role, by the roster's name);
+  both sides named keep the ids (responsible AND Person Assisting). The
+  broker has no Smokeball access, so the maps are the authored roster.
 
 ``operator_library_number`` is this lane's copy of
 ``drafting_intake.operator_library_number``; ``tests/test_litigation_intake.py``
@@ -173,8 +174,8 @@ def attorney_roster(firm: dict[str, Any] | None) -> dict[str, str]:
 
 
 def paralegal_roster(firm: dict[str, Any] | None) -> dict[str, str]:
-    """The ``paralegals`` map (name -> the staff id a matter carries as its
-    Person Assisting), read the same way as the attorneys'."""
+    """The ``paralegals`` map (name -> staff id; the id a matter carries as its
+    Person Assisting when both sides are named), read the same way as the attorneys'."""
     return _roster(firm, "paralegals")
 
 
