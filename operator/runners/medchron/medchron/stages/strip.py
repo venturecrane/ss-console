@@ -122,7 +122,9 @@ def drop_set(
             s |= {p for p, _lab in (scanned.get("nonrecord") or {}).get(str(ex), [])}
         kept = s & (cites or {}).get(ex, set())
         if kept:
-            sr.log(f"Exhibit {ex}: kept {len(kept)} cited page(s) the classifier called non-record: {compress(sorted(kept))}")
+            sr.log(
+                f"Exhibit {ex}: kept {len(kept)} cited page(s) the classifier called non-record: {compress(sorted(kept))}"
+            )
             s -= kept
         for p, _ in (authored.get("manual_drops") or {}).get(str(ex), []):
             s.add(p)
