@@ -404,3 +404,109 @@ def test_overlay_e2e_job_runs_the_harness_at_the_image_pin() -> None:
     hermes_input = (dispatch.get("inputs") or {}).get("hermes_sha")
     assert hermes_input is not None, "workflow_dispatch must accept a hermes_sha candidate"
     assert hermes_input.get("required") is False, "a blank hermes_sha runs at the Dockerfile pin"
+
+
+# -- the release controller (ADR 0096) ----------------------------------------------------
+
+RELEASE_TICK_PATH = REPO_ROOT / ".github" / "workflows" / "release-tick.yml"
+DEPLOY_PATH = REPO_ROOT / ".github" / "workflows" / "deploy.yml"
+RINGS_PATH = OPERATOR_DIR / "fleet" / "rings.yaml"
+FLEET_RELEASE_ENVIRONMENT = "fleet-release"
+
+
+def _job_runs(job: dict) -> str:
+    return "\n".join(s.get("run") or "" for s in job.get("steps") or [])
+
+
+def _ringed_seats() -> list[str]:
+    doc = yaml.safe_load(RINGS_PATH.read_text(encoding="utf-8")) or {}
+    return [seat for ring in doc.get("rings") or [] for seat in ring.get("seats") or []]
+
+
+def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
+    """The tick reads the per-app Fly tokens, so it runs only in the protected
+    environment, on main, one at a time, and on a schedule plus build completion."""
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    on = _on_block(wf)
+    assert (on.get("schedule") or [{}])[0].get("cron"), "release-tick must run on a schedule"
+    assert "Deploy" in ((on.get("workflow_run") or {}).get("workflows") or []), "it must run when Deploy completes"
+    assert "workflow_dispatch" in on
+    concurrency = wf.get("concurrency") or {}
+    assert concurrency.get("group") and concurrency.get("cancel-in-progress") is False, (
+        "ticks must never overlap, and a running tick must never be cancelled mid-deploy"
+    )
+    job = wf["jobs"]["tick"]
+    assert job.get("environment") == FLEET_RELEASE_ENVIRONMENT
+    assert "refs/heads/main" in str(job.get("if")), "a tick runs only from main"
+    runs = _job_runs(job)
+    assert "--tick" in runs and "operator/bin/fleet" in runs
+
+
+def test_release_automation_never_forces_a_busy_seat_or_accepts_lane_inputs() -> None:
+    for path in (RELEASE_TICK_PATH, DEPLOY_PATH):
+        text = path.read_text(encoding="utf-8")
+        body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        assert "--force-mid-job" not in body, f"{path.name} must never pass --force-mid-job"
+        assert "--accept-lane-inputs" not in body, f"{path.name} must never pass --accept-lane-inputs"
+
+
+ENABLE_GATE = "vars.FLEET_RELEASE_ENABLED == 'true'"
+
+
+def test_every_job_that_enters_fleet_release_is_gated_on_the_enable_variable_at_job_level() -> None:
+    """A job `if:` is evaluated before the environment is entered, so a disabled
+    run never touches fleet-release, and never makes GitHub auto-create it
+    without its main-only branch policy (ADR 0096). FALSIFIER: drop the variable
+    from either job's `if:` and this fails."""
+    gated = []
+    for path in (RELEASE_TICK_PATH, DEPLOY_PATH):
+        wf = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, job in wf["jobs"].items():
+            if job.get("environment") == FLEET_RELEASE_ENVIRONMENT:
+                assert ENABLE_GATE in str(job.get("if") or ""), f"{path.name} job {name} must gate on {ENABLE_GATE}"
+                gated.append(name)
+            else:
+                assert "secrets." not in str(job) or "FLY_" not in str(job), (
+                    f"{path.name} job {name} reads a Fly secret outside the fleet-release environment"
+                )
+    assert sorted(gated) == ["build-seat-image", "tick"]
+    disabled = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))["jobs"].get("disabled") or {}
+    assert disabled.get("if") == "vars.FLEET_RELEASE_ENABLED != 'true'" and "environment" not in disabled, (
+        "a disabled run says why, without entering the environment"
+    )
+
+
+def test_release_tick_carries_one_token_per_ringed_seat_named_as_the_cli_reads_it() -> None:
+    from bin.lib.fleet.fly import REGISTRY_TOKEN_ENV, seat_token_env_name
+
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    job = wf["jobs"]["tick"]
+    env: dict[str, str] = {}
+    for step in job["steps"]:
+        env.update(step.get("env") or {})
+    wanted = {seat_token_env_name(f"hermes-{seat}") for seat in _ringed_seats()} | {REGISTRY_TOKEN_ENV}
+    missing = sorted(name for name in wanted if env.get(name) != f"${{{{ secrets.{name} }}}}")
+    assert not missing, f"release-tick.yml must pass these from the fleet-release secrets: {missing}"
+    assert not any("FLY_API_TOKEN" in k for k in env), "no ambient Fly token: the CLI picks one per app"
+    assert "toJSON(secrets)" not in RELEASE_TICK_PATH.read_text(encoding="utf-8")
+
+
+def test_build_seat_image_job_builds_at_the_merge_from_the_protected_environment() -> None:
+    wf = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))
+    job = wf["jobs"].get("build-seat-image")
+    assert job, "deploy.yml has no build-seat-image job"
+    assert job.get("environment") == FLEET_RELEASE_ENVIRONMENT
+    assert ((job.get("concurrency") or {}).get("cancel-in-progress")) is False
+    steps = job["steps"]
+    assert (steps[0].get("with") or {}).get("fetch-depth") == 0, "the build guard needs full history"
+    detect = next(s for s in steps if s.get("id") == "changes")
+    assert "substrate-paths-changed.py" in detect["run"] and "operator-substrate-paths.txt" in detect["run"]
+    build = next(s for s in steps if "fleet build" in (s.get("run") or ""))
+    assert build.get("if") == "steps.changes.outputs.relevant == 'true'"
+    assert '"$rc" -eq 4' in build["run"] and "HEAD..origin/main" in build["run"], (
+        "exit 4 is a clean skip only when main has moved past this commit"
+    )
+    assert (build.get("env") or {}).get("FLY_REGISTRY_TOKEN") == "${{ secrets.FLY_REGISTRY_TOKEN }}"
+    assert not any(k.startswith("FLY_DEPLOY_TOKEN__") for k in build.get("env") or {}), (
+        "the build touches the registry app only; it never holds a seat token"
+    )

@@ -42,7 +42,14 @@ export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/
 const TOMBSTONE_MARKER = '.decommissioned.'
 const FLY_APP_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-const SEAT_YAML_KEYS = new Set(['fly_app', 'unprovisioned_reason', 'ring', 'authored', 'client'])
+const SEAT_YAML_KEYS = new Set([
+  'fly_app',
+  'unprovisioned_reason',
+  'ring',
+  'authored',
+  'client',
+  'bake_minutes',
+])
 
 export type SkipReason = 'scaffold' | 'hidden' | 'tombstone'
 
@@ -80,6 +87,12 @@ export interface Seat {
   authored: string
   /** The client this seat's obligations roll up to; the slug itself when not authored. */
   client: string
+  /**
+   * Minutes this seat's ring must hold a release, done with no open seat alarm,
+   * before the next ring takes it (ADR 0096). Null or absent: the default. A
+   * ring bakes for the longest value any of its seats authors.
+   */
+  bakeMinutes?: number | null
 }
 
 export class SeatInventoryError extends Error {}
@@ -131,7 +144,23 @@ function parseSeat(slug: string, raw: unknown): Seat {
   if (typeof client !== 'string' || !SLUG_RE.test(client))
     fail(slug, `client ${JSON.stringify(client)} is not a client slug`)
 
-  return { slug, ...parseFlyApp(slug, doc), ring, authored, client }
+  return {
+    slug,
+    ...parseFlyApp(slug, doc),
+    ring,
+    authored,
+    client,
+    bakeMinutes: parseBake(slug, doc),
+  }
+}
+
+/** `bake_minutes`: optional; a non-negative whole number of minutes (ADR 0096). */
+function parseBake(slug: string, doc: Record<string, unknown>): number | null {
+  const bake = doc.bake_minutes ?? null
+  if (bake === null) return null
+  if (typeof bake !== 'number' || !Number.isInteger(bake) || bake < 0)
+    fail(slug, 'bake_minutes, when authored, is a non-negative whole number of minutes')
+  return bake
 }
 
 /**

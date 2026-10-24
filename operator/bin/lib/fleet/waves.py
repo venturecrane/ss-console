@@ -13,7 +13,12 @@
   refused.
 * RINGS. operator/fleet/rings.yaml order; a ring finishes before the next
   starts. ``--parallel N`` applies within a ring; the last ring is always 1.
-* HOLDS. A seat in fleet_holds is skipped and recorded skipped_held.
+* HOLDS. A seat in fleet_holds is skipped and recorded skipped_held. Holds are
+  re-read from D1 before EVERY seat, so a hold set while a release is walking
+  stops the next seat it covers, not only the next run.
+* RESUME. A full run skips a seat whose latest rollout of THIS release is
+  ``done`` (reported, not recorded again), so re-running a release after a halt
+  continues from where it stopped. ``--only`` still redeploys on request.
 * HALT. A seat that ends rolled_back / failed / tooling_error stops the
   rollout: seats already started finish, nothing new starts, and every seat not
   reached is recorded halted.
@@ -125,7 +130,7 @@ class Waves:
         holder: str | None = None,
     ) -> WaveResult:
         """Walk the rings. ``holder`` (None only in a dry run) takes each seat's lease."""
-        holds = self.store.holds()
+        done = set() if only else self.store.release_done_seats(release["release_id"])
         result = WaveResult()
         halt = threading.Event()
         for ring in rings:
@@ -137,7 +142,7 @@ class Waves:
                 result.outcomes += [self._mark_halted(release, s, ring.number, dry_run) for s in seats]
                 continue
             seat_run = self._leased(do_seat, release, holder, refuse_held=only is not None, dry_run=dry_run)
-            result.outcomes += self._ring(ring, seats, holds, seat_run, release, parallel, dry_run, lease, halt)
+            result.outcomes += self._ring(ring, seats, done, seat_run, release, parallel, dry_run, lease, halt)
         result.halted = halt.is_set()
         if only and not any(o.seat == only for o in result.outcomes):
             raise Refusal(f"{only} is in no ring (operator/fleet/rings.yaml) or is not a live seat")
@@ -169,13 +174,18 @@ class Waves:
 
         return run
 
-    def _ring(self, ring: Ring, seats: list[str], holds: dict[str, Any], do_seat: Callable[[str, int], SeatOutcome],
+    def _ring(self, ring: Ring, seats: list[str], done: set[str], do_seat: Callable[[str, int], SeatOutcome],
               release: dict[str, Any], parallel: int, dry_run: bool, lease: Lease | None, halt: threading.Event) -> list[SeatOutcome]:  # fmt: skip
         def one(seat: str) -> SeatOutcome:
             if halt.is_set():
                 return self._mark_halted(release, seat, ring.number, dry_run)
-            if seat in holds:
-                return self._mark_held(release, seat, ring.number, holds[seat], dry_run)
+            if seat in done:
+                self.log(f"{seat}: already done on {release['release_id']}; not redeployed")
+                return SeatOutcome(seat, "done", "already done on this release; not redeployed")
+            # Read now, not at the start of the run: a hold set a minute ago counts.
+            hold = self.store.holds().get(seat)
+            if hold is not None:
+                return self._mark_held(release, seat, ring.number, hold, dry_run)
             out = do_seat(seat, ring.number)
             if out.halts:
                 halt.set()

@@ -12,11 +12,18 @@ from bin.lib.seat_dirs import seat_slugs
 from . import ids
 
 
+# Minutes every seat of a ring must have been done on a release, with no open
+# seat alarm, before the next ring takes it (ADR 0096). A ring's own value comes
+# from its seats' seat.yaml `bake_minutes`, rendered into rings.yaml.
+DEFAULT_BAKE_MINUTES = 30
+
+
 @dataclass
 class Ring:
     number: int
     seats: list[str] = field(default_factory=list)
     max_parallel: int | None = None
+    bake_minutes: int = DEFAULT_BAKE_MINUTES
 
 
 def live_seats(customers_dir: Path) -> list[str]:
@@ -29,7 +36,12 @@ def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:
     rings: list[Ring] = []
     seen: set[str] = set()
     for entry in raw.get("rings") or []:
-        ring = Ring(int(entry["ring"]), [], entry.get("max_parallel"))
+        bake = entry.get("bake_minutes", DEFAULT_BAKE_MINUTES)
+        if isinstance(bake, bool) or not isinstance(bake, int) or bake < 0:
+            raise ValueError(
+                f"{rings_file}: ring {entry.get('ring')} bake_minutes {bake!r} is not a whole minute count"
+            )
+        ring = Ring(int(entry["ring"]), [], entry.get("max_parallel"), bake)
         for seat in entry.get("seats") or []:
             ids.slug(seat)
             if seat in seen:

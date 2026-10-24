@@ -54,6 +54,21 @@ def test_seat_in_two_rings_is_refused(tmp_path: Path) -> None:
         load_rings(f, tmp_path / "c")
 
 
+def test_bake_minutes_is_read_per_ring_with_the_default_when_absent(tmp_path: Path) -> None:
+    (tmp_path / "c" / "a-seat").mkdir(parents=True)
+    (tmp_path / "c" / "a-seat" / "customer.yaml").write_text("x: 1\n")
+    f = tmp_path / "r.yaml"
+    f.write_text("rings:\n  - ring: 0\n    seats: [a-seat]\n    bake_minutes: 45\n  - ring: 1\n    seats: []\n")
+    rings = load_rings(f, tmp_path / "c")
+    assert [r.bake_minutes for r in rings] == [45, 30]
+    f.write_text("rings:\n  - ring: 0\n    seats: [a-seat]\n    bake_minutes: soon\n")
+    with pytest.raises(ValueError, match="bake_minutes"):
+        load_rings(f, tmp_path / "c")
+    # The real file states every ring's bake but the last.
+    real = load_rings(OPERATOR / "fleet/rings.yaml", OPERATOR / "customers")
+    assert all(r.bake_minutes >= 0 for r in real)
+
+
 # -- identifiers -------------------------------------------------------------------
 def test_sql_str_is_a_hex_literal_that_cannot_break_out() -> None:
     lit = ids.sql_str("x'); DROP TABLE fleet_releases; --")

@@ -5,6 +5,19 @@ returns a guess. ``deploy`` is the exception on purpose: it returns the raw
 Result, because whether a failed deploy means "the seat is broken" (roll back)
 or "the tool broke" (halt, touch nothing) is the rollout's decision
 (:func:`classify_deploy`).
+
+WHICH CREDENTIAL A CALL CARRIES (:class:`FlyTokens`, ADR 0096). On a laptop
+every call uses the operator's own ``fly auth login``: nothing is injected. In
+GitHub Actions the release controller holds no org token, only app-scoped deploy
+tokens from the protected ``fleet-release`` environment, so each call carries the
+token for the app it names: ``FLY_DEPLOY_TOKEN__<SLUG>`` for ``hermes-<slug>``,
+``FLY_REGISTRY_TOKEN`` for the ``hermes-fleet`` registry app. A seat deploy pulls
+an image out of the registry app's repository, which the seat token alone cannot
+read (probe F1, 2026-10-23: "Not authorized to access this imageref"), so every
+seat call presents BOTH macaroons, comma-joined in one FLY_API_TOKEN, which
+flyctl accepts; the pair is still refused on any other seat app. A missing token
+is a ToolingError naming the variable, never a fall back to an ambient login, and
+a token value is never part of an argv, a log line or an error.
 """
 
 from __future__ import annotations
@@ -13,7 +26,7 @@ import json
 import os
 import re
 import tempfile
-from typing import Any
+from typing import Any, Mapping
 
 from . import ids
 from .runner import Result, Runner, ToolingError, looks_like_transport_failure, require_ok
@@ -34,6 +47,80 @@ DEPLOY_SEAT_FAILURE_MARKERS = (
 )
 
 
+SEAT_TOKEN_PREFIX = "FLY_DEPLOY_TOKEN__"
+REGISTRY_TOKEN_ENV = "FLY_REGISTRY_TOKEN"
+MACAROON_SCHEME = "FlyV1 "
+
+
+def seat_token_env_name(app: str) -> str:
+    """The secret holding ``app``'s deploy token: hermes-smd-staging -> FLY_DEPLOY_TOKEN__SMD_STAGING."""
+    if not app.startswith("hermes-"):
+        raise ToolingError(f"{app} is not a seat app, so it has no per-app token name")
+    return SEAT_TOKEN_PREFIX + ids.slug(app.removeprefix("hermes-")).upper().replace("-", "_")
+
+
+def combine_tokens(seat_token: str, registry_token: str) -> str:
+    """Two app-scoped macaroons in one FLY_API_TOKEN: the seat's, then the registry's without its scheme."""
+    return f"{seat_token.strip()},{registry_token.strip().removeprefix(MACAROON_SCHEME)}"
+
+
+def app_in_args(args: tuple[str, ...]) -> str | None:
+    """The app a fly argv addresses (``-a APP``), or None."""
+    for i, arg in enumerate(args[:-1]):
+        if arg in ("-a", "--app"):
+            return args[i + 1]
+    return None
+
+
+class FlyTokens:
+    """Per-call Fly credentials: scoped (CI) or ambient (a laptop's own login).
+
+    Scoped when the run is GitHub Actions (``GITHUB_ACTIONS=true``) or any
+    per-app token is present. Then every call must name an app and carries
+    exactly that app's credential. Ambient otherwise: :meth:`env_for` returns
+    nothing and flyctl uses ``fly auth login`` as it always has.
+    """
+
+    def __init__(self, environ: Mapping[str, str] | None = None) -> None:
+        self._env = dict(environ or {})
+
+    @classmethod
+    def from_environ(cls) -> "FlyTokens":
+        return cls(os.environ)
+
+    def __repr__(self) -> str:
+        return f"FlyTokens(scoped={self.scoped})"
+
+    @property
+    def scoped(self) -> bool:
+        if self._env.get("GITHUB_ACTIONS") == "true":
+            return True
+        return any(v and (k.startswith(SEAT_TOKEN_PREFIX) or k == REGISTRY_TOKEN_ENV) for k, v in self._env.items())
+
+    def _need(self, name: str, app: str) -> str:
+        value = (self._env.get(name) or "").strip()
+        if not value:
+            raise ToolingError(
+                f"no Fly token for {app}: {name} is not set in this run. CI holds only app-scoped tokens "
+                "and never falls back to another login"
+            )
+        return value
+
+    def registry_token(self) -> str:
+        return self._need(REGISTRY_TOKEN_ENV, ids.FLEET_REGISTRY_APP)
+
+    def env_for(self, app: str | None) -> dict[str, str]:
+        """The child-process environment for one fly call against ``app``."""
+        if not self.scoped:
+            return {}
+        if not app:
+            raise ToolingError("this fly call names no app, and CI holds only app-scoped tokens")
+        if app == ids.FLEET_REGISTRY_APP:
+            return {"FLY_API_TOKEN": self.registry_token()}
+        seat = self._need(seat_token_env_name(app), app)
+        return {"FLY_API_TOKEN": combine_tokens(seat, self.registry_token())}
+
+
 def _json(res: Result, what: str) -> Any:
     require_ok(res, what)
     try:
@@ -43,20 +130,26 @@ def _json(res: Result, what: str) -> Any:
 
 
 class Fly:
-    def __init__(self, runner: Runner, repo_root: str) -> None:
+    def __init__(self, runner: Runner, repo_root: str, tokens: FlyTokens | None = None) -> None:
         self.runner = runner
         self.repo_root = repo_root
+        # Ambient unless told: only Ctx.default reads the process environment,
+        # so a test that builds a Fly never inherits CI's GITHUB_ACTIONS.
+        self.tokens = tokens or FlyTokens()
 
-    def _fly(self, *args: str, timeout: float = 180, input_text: str | None = None) -> Result:
-        return self.runner.run(["fly", *args], timeout=timeout, input_text=input_text, cwd=self.repo_root)
+    def _fly(self, *args: str, timeout: float = 180, input_text: str | None = None, app: str | None = None) -> Result:
+        env = self.tokens.env_for(app or app_in_args(args))
+        return self.runner.run(
+            ["fly", *args], timeout=timeout, input_text=input_text, cwd=self.repo_root, env=env or None
+        )
 
     # -- apps ------------------------------------------------------------------
     def app_exists(self, app: str) -> bool:
-        apps = _json(self._fly("apps", "list", "--json"), "fly apps list")
+        apps = _json(self._fly("apps", "list", "--json", app=app), "fly apps list")
         return any(isinstance(a, dict) and (a.get("Name") or a.get("name")) == app for a in apps or [])
 
     def create_app(self, app: str, org: str = "personal") -> None:
-        require_ok(self._fly("apps", "create", app, "--org", org), f"fly apps create {app}")
+        require_ok(self._fly("apps", "create", app, "--org", org, app=app), f"fly apps create {app}")
 
     # -- secrets (NAMES only) ------------------------------------------------------
     def secret_names(self, app: str) -> tuple[set[str], set[str]]:

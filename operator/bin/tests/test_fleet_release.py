@@ -499,3 +499,65 @@ def test_selftest_verify_holds_a_row_from_another_code_version(tmp_path) -> None
     w.release_all(only="smd-staging", verify="selftest", selftest_capable=True)
     # The mismatched row never passed; the fallback ran and decided.
     assert w.smoke.calls and "boot smoke fallback" in _details(w)["smd-staging"]
+
+
+# -- resumable release (ADR 0096) -------------------------------------------------------
+
+
+def test_a_seat_already_done_on_this_release_is_not_redeployed() -> None:
+    w = World()
+    first = _run(w, only="smd-staging", fleet_lease=False)
+    assert w.store.states()["smd-staging"] == "done" and not first.halted
+    before = len(w.fly.deploys)
+    _run(w)
+    # FALSIFIER: drop the done-seat skip in Waves._ring and staging deploys a second time.
+    assert [d for d in w.fly.deploys[before:] if d[0] == "hermes-smd-staging"] == []
+    assert len([r for r in w.store.rollouts.values() if r["customer_slug"] == "smd-staging"]) == 1
+    assert w.store.states()["ashton-price"] == "done"
+
+
+def test_only_still_redeploys_a_done_seat_on_request() -> None:
+    w = World()
+    _run(w, only="smd-staging", fleet_lease=False)
+    _run(w, only="smd-staging", fleet_lease=False)
+    assert [a for a, _ in deployed_images(w)] == ["hermes-smd-staging", "hermes-smd-staging"]
+
+
+def test_a_hold_set_between_two_seats_stops_the_second() -> None:
+    w = World()
+    real = w.roll.run
+
+    def deploy_then_someone_holds_scott(seat, ring, plan):
+        out = real(seat, ring, plan)
+        if seat == "pilot-smokeball":
+            w.store.hold("scott", "client demo in ten minutes", "another-session")
+        return out
+
+    w.roll.run = deploy_then_someone_holds_scott  # type: ignore[method-assign]
+    _run(w)
+    states = w.store.states()
+    # FALSIFIER: read holds once at the start of the run and scott is deployed.
+    assert states["scott"] == "skipped_held"
+    assert "hermes-scott" not in [a for a, _ in deployed_images(w)]
+    assert states["brokery"] == "done"
+
+
+def test_selftest_timeout_without_ssh_fallback_halts_as_tooling_error_and_runs_no_smoke(tmp_path) -> None:
+    w = _selftest_world(tmp_path, None)
+    result = w.release_all(verify="selftest", selftest_capable=True, ssh_fallback=False)
+    states = w.store.states()
+    assert states["smd-staging"] == "tooling_error"
+    assert "no ssh fallback" in _details(w)["smd-staging"]
+    # FALSIFIER: keep the bash fallback in this mode and the boot smoke runs (and decides).
+    assert w.smoke.calls == []
+    assert len(w.fly.deploys) == 1  # no rollback on a missing verdict
+    assert result.halted and states["pilot-smokeball"] == "halted"
+
+
+def test_rollback_without_ssh_fallback_is_reverified_by_the_selftest(tmp_path) -> None:
+    w = _selftest_world(tmp_path, {"failed_count": 1, "failed": ["retired-skills-absent"]})
+    w.release_all(only="smd-staging", verify="selftest", selftest_capable=True, ssh_fallback=False)
+    assert w.store.states()["smd-staging"] == "rolled_back"
+    # FALSIFIER: re-smoke with bash in this mode and FakeSmoke records a call.
+    assert w.smoke.calls == []
+    assert "self-test on the rollback image" in _details(w)["smd-staging"]

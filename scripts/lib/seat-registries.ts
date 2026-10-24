@@ -39,19 +39,33 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 # Every seat authors its ring, so none is in a ring by omission. As a backstop,
 # operator/bin/lib/fleet/rings.py still puts a seat named in no ring in the LAST
 # ring: a new seat is never in an early ring by accident.
+#
+# bake_minutes (ADR 0096): the next ring takes a release only after every seat
+# of this ring has been done on it this long with no open selftest_failing or
+# image_drift alarm. The longest seat.yaml \`bake_minutes\` in the ring, else the
+# default. The last ring has no next ring, so it carries none.
 # tests: operator/bin/tests/test_fleet_parts.py
 `
 
+/** The bake when no seat in a ring authors one; rings.py's DEFAULT_BAKE_MINUTES. */
+export const DEFAULT_BAKE_MINUTES = 30
+
 /** Seats in ring order, ordered within a ring by the day each was authored, then slug. */
-function ringsOf(seats: Seat[]): Array<{ ring: number; seats: string[] }> {
+function ringsOf(seats: Seat[]): Array<{ ring: number; seats: string[]; bake: number }> {
   const numbers = [...new Set(seats.map((s) => s.ring))].sort((a, b) => a - b)
-  return numbers.map((ring) => ({
-    ring,
-    seats: seats
-      .filter((s) => s.ring === ring)
-      .sort((a, b) => a.authored.localeCompare(b.authored) || a.slug.localeCompare(b.slug))
-      .map((s) => s.slug),
-  }))
+  return numbers.map((ring) => {
+    const members = seats.filter((s) => s.ring === ring)
+    const authored = members
+      .map((s) => s.bakeMinutes)
+      .filter((m): m is number => typeof m === 'number')
+    return {
+      ring,
+      seats: members
+        .sort((a, b) => a.authored.localeCompare(b.authored) || a.slug.localeCompare(b.slug))
+        .map((s) => s.slug),
+      bake: authored.length ? Math.max(...authored) : DEFAULT_BAKE_MINUTES,
+    }
+  })
 }
 
 export function renderRingsYaml(seats: Seat[]): string {
@@ -62,6 +76,7 @@ export function renderRingsYaml(seats: Seat[]): string {
     // rings.py forces the last ring to one at a time regardless; stated here so
     // the file says what the tool does.
     if (i === rings.length - 1) lines.push('    max_parallel: 1')
+    else lines.push(`    bake_minutes: ${r.bake}`)
   })
   return RINGS_HEADER + lines.join('\n') + '\n'
 }

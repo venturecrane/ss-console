@@ -3,7 +3,10 @@
   fleet build [--notes TEXT] [--declare-secret NAME ...] [--not-volume-forward-compatible]
   fleet release <release-id> [--only SLUG] [--parallel N] [--force-mid-job]
                 [--dry-run] [--accept-lane-inputs] [--max-idle-wait SECONDS]
-                [--verify bash|selftest]
+                [--verify bash|selftest] [--no-ssh-fallback]
+  fleet release <release-id>|latest --tick [--max-idle-wait SECONDS] [--dry-run]
+                                                      one scheduler step (release-tick.yml, ADR 0096):
+                                                      at most one ring, after the bake; self-test decides
   fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
                                                       staging only: plant one real violation, prove
                                                       the self-test alert opens and resolves
@@ -22,7 +25,9 @@
 
 Exit codes: 0 success; 1 a seat failed / was refused / rollout halted; 2 usage;
 3 tooling error (nothing decided); 4 refused before anything ran (lease held,
-unknown release, source guard).
+unknown release, source guard). A tick adds 5 (waiting: bake running, lease
+held by another rollout, nothing to do) and 6 (an earlier halt stands; a person
+must act); its 1 means THIS tick halted the release.
 
 Leases: a full release holds the fleet lease; every seat deploy (a release's,
 an --only, a reprovision through with-seat-lease) holds that seat's lease. So
@@ -46,7 +51,8 @@ from . import ids, status
 from .build import BuildOptions, Builder, ImageExtractor
 from .busy import BusyGate
 from .d1 import D1, FleetStore
-from .fly import Fly
+from .fly import Fly, FlyTokens
+from .ledger import VerifyLedger
 from .preflight import PreflightChecker
 from .r2 import R2, image_key
 from .rings import load_rings
@@ -55,6 +61,7 @@ from .runner import CommandRunner, Refusal, Runner, ToolingError
 from .selftest_plant import SelftestPlant
 from .skills import SkillsRollout
 from .smoke import FleetSideChecks, SmokeRunner
+from .tick import TICK_WAITING, Ticker
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
@@ -74,11 +81,16 @@ class Ctx:
     sleep: Callable[[float], None] = time.sleep
     clock: Callable[[], float] = time.time
     log: Callable[[str], None] = log
+    ledger: VerifyLedger | None = None
 
     @classmethod
     def default(cls, repo: Path = REPO) -> "Ctx":
         runner = CommandRunner()
-        return cls(repo, runner, FleetStore(D1(runner, str(repo))), R2(runner), Fly(runner, str(repo)))
+        fly = Fly(runner, str(repo), FlyTokens.from_environ())
+        return cls(repo, runner, FleetStore(D1(runner, str(repo))), R2(runner), fly, ledger=VerifyLedger.from_environ())
+
+    def extractor(self) -> ImageExtractor:
+        return ImageExtractor(self.runner, self.sleep, self.log, getattr(self.fly, "tokens", None))
 
     def rings(self) -> list[Any]:
         return load_rings(self.repo / "operator/fleet/rings.yaml", self.repo / "operator/customers")
@@ -122,6 +134,18 @@ def _parser() -> argparse.ArgumentParser:
         help="who decides a seat: the boot smoke over ssh (the self-test's verdict is recorded beside it), "
         "or the seat's heartbeat self-test (the boot smoke decides when no verdict arrives)",
     )
+    r.add_argument(
+        "--no-ssh-fallback",
+        action="store_true",
+        help="with --verify selftest: a self-test that gives no verdict halts as a tooling error instead of "
+        "running the ssh boot smoke, and a rollback is re-verified by the self-test",
+    )
+    r.add_argument(
+        "--tick",
+        action="store_true",
+        help="one resumable scheduler step (release-tick.yml): advance at most one ring, after the bake; "
+        "release id 'latest' means the newest image release. Exit 0 progress, 1 halt, 5 waiting, 6 standing halt",
+    )
     st = sub.add_parser("selftest", help="staging only: re-prove the self-test alert path with a planted violation")
     st.add_argument("--plant", required=True, metavar="CHECK_ID")
     st.add_argument("slug")
@@ -153,9 +177,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
     opts = BuildOptions(a.notes, tuple(a.declare_secret), not a.not_volume_forward_compatible)
-    rel = Builder(
-        ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner, ctx.sleep, ctx.log), ctx.log
-    ).build(opts)
+    rel = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ctx.extractor(), ctx.log).build(opts)
     print(rel["release_id"])
     return 0
 
@@ -166,9 +188,7 @@ def cmd_artifacts(ctx: Ctx, a: argparse.Namespace) -> int:
     if not release or release.get("kind") != "image":
         raise Refusal(f"no image release {a.release_id} in fleet_releases (fleet releases lists them)")
     meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
-    builder = Builder(
-        ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ImageExtractor(ctx.runner, ctx.sleep, ctx.log), ctx.log
-    )
+    builder = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ctx.extractor(), ctx.log)
     builder.upload_artifacts(release, {"hermes_sha": meta.get("hermes_sha") or ""})
     return 0
 
@@ -190,33 +210,78 @@ def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_r
     return 1 if halted else 0
 
 
-def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
-    release = ctx.store.release(ids.release_id(a.release_id))
+def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is in this checkout's history (CI checks out main)."""
+    if not sha or not ids.SHA_RE.match(sha):
+        return False
+    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", sha, "HEAD"], timeout=60)
+    if res.rc not in (0, 1):
+        raise ToolingError(f"git merge-base --is-ancestor failed (rc={res.rc})")
+    return res.rc == 0
+
+
+def _image_release(ctx: Ctx, release_id: str) -> dict[str, Any]:
+    if release_id == "latest":
+        # The newest image built from main. A hotfix-lane image (built on purpose
+        # from a divergent tree for one seat) is never "latest": the controller
+        # would otherwise roll it to every ring.
+        for rel in ctx.store.recent_releases(20):
+            if rel.get("kind") == "image" and _built_from_main(ctx, rel.get("ss_console_sha")):
+                return rel
+        raise Refusal("no image release built from main is recorded in fleet_releases")
+    release = ctx.store.release(ids.release_id(release_id))
     if not release or release.get("kind") != "image":
-        raise Refusal(f"no image release {a.release_id} in fleet_releases (fleet releases lists them)")
+        raise Refusal(f"no image release {release_id} in fleet_releases (fleet releases lists them)")
+    return release
+
+
+def _image_rollout(ctx: Ctx, holder: str) -> ImageRollout:
+    return ImageRollout(
+        ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker(ctx.fly, ctx.r2),
+        SmokeRunner(ctx.runner, str(ctx.repo)), ctx.render, ctx.log, ctx.sleep, ctx.clock,
+        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger,
+    )  # fmt: skip
+
+
+def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
+    if a.tick:
+        return cmd_release_tick(ctx, a)
+    release = _image_release(ctx, a.release_id)
     meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
     holder = holder_id()
-    gate = BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock)
-    roll = ImageRollout(
-        ctx.store,
-        ctx.fly,
-        gate,
-        PreflightChecker(ctx.fly, ctx.r2),
-        SmokeRunner(ctx.runner, str(ctx.repo)),
-        ctx.render,
-        ctx.log,
-        ctx.sleep,
-        ctx.clock,
-        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock),
-    )
+    roll = _image_rollout(ctx, holder)
     capable = _image_has_selftest(ctx, release)
     if a.verify == "selftest" and not capable:
         ctx.log(f"{release['release_id']}: the image carries no self-test; every seat is verified by the boot smoke")
+    if a.no_ssh_fallback and not (a.verify == "selftest" and capable):
+        raise Refusal("--no-ssh-fallback needs --verify selftest on an image that carries the self-test")
     plan = ImagePlan(
         release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run,
-        verify=a.verify, selftest_capable=capable,
+        verify=a.verify, selftest_capable=capable, ssh_fallback=not a.no_ssh_fallback,
     )  # fmt: skip
     return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), holder)
+
+
+def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
+    """One scheduler step (tick.py). Never forces a busy seat, never accepts lane inputs."""
+    if a.only or a.force_mid_job or a.accept_lane_inputs or a.parallel != 1:
+        raise ValueError("--tick takes none of --only, --force-mid-job, --accept-lane-inputs, --parallel")
+    release = _image_release(ctx, a.release_id)
+    if release.get("completed_last_ring_at"):
+        ctx.log(f"{release['release_id']}: already completed on every seat; nothing to do")
+        return TICK_WAITING
+    if not _image_has_selftest(ctx, release):
+        raise Refusal(f"{release['release_id']}: the image carries no self-test, and a tick never runs the ssh smoke")
+    meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
+    if a.verify != "selftest":
+        ctx.log("tick: the seat's self-test decides every seat (no ssh boot smoke in a tick)")
+    holder = holder_id()
+    roll = _image_rollout(ctx, holder)
+    plan = ImagePlan(release, meta.get("hermes_sha"), max_idle_wait=a.max_idle_wait, dry_run=a.dry_run,
+                     verify="selftest", selftest_capable=True, ssh_fallback=False)  # fmt: skip
+    return Ticker(ctx.store, ctx.log, ctx.clock).run(
+        ctx.rings(), release, lambda seat, ring: roll.run(seat, ring, plan), holder, dry_run=a.dry_run
+    )
 
 
 def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
@@ -356,6 +421,8 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "release":
         if bool(a.skills) == bool(a.release_id):
             raise Refusal("give exactly one of <release-id> or --skills <version>")
+        if a.tick and a.skills:
+            raise ValueError("--tick rolls image releases only")
         return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
     if a.cmd == "status":
         rings = ctx.rings()

@@ -1,0 +1,153 @@
+# The release controller (ADR 0096): seat image releases roll with no laptop.
+#
+# WHAT ONE RUN DOES. `fleet release latest --tick` takes the fleet lease, reads
+# every seat's rollout of the newest image release from D1, and advances AT
+# MOST ONE ring: ring N+1 starts only when every seat of ring N has been done
+# on the release for that ring's bake_minutes (operator/fleet/rings.yaml) with
+# no open selftest_failing or image_drift alarm. A seat is verified by its own
+# heartbeat self-test; there is no ssh boot smoke here, so no verdict is a
+# tooling error that halts and pages. Holds are re-read before every seat. A
+# seat running a client job waits (the busy gate) and a later run picks it up.
+# Code: operator/bin/lib/fleet/tick.py. The laptop `fleet release` stays as the
+# manual fallback (docs/handbook/deployment-release.md).
+#
+# WHAT IT NEVER DOES. --force-mid-job (a running client job always wins) and
+# --accept-lane-inputs (a lane schema change is a person's call: the seat is
+# refused at preflight, the run halts, and someone re-stages). The conformance
+# test pins both (operator/bin/tests/test_ci_coverage_conformance.py).
+#
+# CREDENTIALS. Only from the protected `fleet-release` environment, readable by
+# this workflow on main: one Fly deploy token per seat app
+# (FLY_DEPLOY_TOKEN__<SLUG>) and one for the hermes-fleet registry app
+# (FLY_REGISTRY_TOKEN). No org-wide token exists (ADR 0054). The fleet CLI puts
+# the right pair on each call (operator/bin/lib/fleet/fly.py FlyTokens). R2 is
+# derived from the Cloudflare token (scripts/lib/r2-creds.sh); verify-ledger
+# rows go to crane-context with CRANE_RELAY_KEY.
+#
+# EXIT CODES. 0 progress, 5 waiting (bake, lease held, nothing to do) and 6 a
+# standing halt that already paged are green runs; 1 (this run halted the
+# release), 3 and 4 fail the run.
+
+name: release-tick
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Image release id, or latest'
+        required: false
+        default: latest
+      dry_run:
+        description: 'Plan only: deploy and record nothing'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-tick
+  cancel-in-progress: false
+
+jobs:
+  # FLEET_RELEASE_ENABLED is set only after the fleet-release environment exists
+  # with its main-only branch policy and all seven secrets (ADR 0096). The job
+  # `if:` is evaluated before the environment is entered, so a disabled run never
+  # touches it, and never makes GitHub auto-create it without branch protection.
+  tick:
+    name: Advance the image release one step
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment: fleet-release
+    if: >-
+      vars.FLEET_RELEASE_ENABLED == 'true' && vars.DEPLOY_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    env:
+      RELEASE: ${{ inputs.release || 'latest' }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      # wrangler, for D1 (fleet_releases, fleet_rollouts, fleet_holds, the lease).
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet 'pyyaml==6.0.3'
+
+      - name: Install flyctl
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/superfly/flyctl/releases/download/v0.4.115/flyctl_0.4.115_Linux_x86_64.tar.gz \
+            | tar -xz -C /usr/local/bin flyctl
+          ln -sf flyctl /usr/local/bin/fly
+
+      - name: Tick
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}
+          FLY_REGISTRY_TOKEN: ${{ secrets.FLY_REGISTRY_TOKEN }}
+          # One line per seat in operator/fleet/rings.yaml; the conformance
+          # test fails when a ringed seat has no line here.
+          FLY_DEPLOY_TOKEN__SMD_STAGING: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_STAGING }}
+          FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL: ${{ secrets.FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL }}
+          FLY_DEPLOY_TOKEN__SCOTT: ${{ secrets.FLY_DEPLOY_TOKEN__SCOTT }}
+          FLY_DEPLOY_TOKEN__BROKERY: ${{ secrets.FLY_DEPLOY_TOKEN__BROKERY }}
+          FLY_DEPLOY_TOKEN__CAPTAIN_MARK: ${{ secrets.FLY_DEPLOY_TOKEN__CAPTAIN_MARK }}
+          FLY_DEPLOY_TOKEN__ASHTON_PRICE: ${{ secrets.FLY_DEPLOY_TOKEN__ASHTON_PRICE }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=/dev/null
+          source scripts/lib/r2-creds.sh
+          derive_r2_creds
+          export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          args=(release "$RELEASE" --tick --max-idle-wait 600)
+          if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
+          set +e
+          operator/bin/fleet "${args[@]}"
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "::notice::release-tick: progress" ;;
+            5) echo "::notice::release-tick: waiting (bake running, lease held, or nothing to do)"; rc=0 ;;
+            6) echo "::warning::release-tick: the release is halted and already paged; a person must act (fleet status)"; rc=0 ;;
+            *) echo "::error::release-tick: exit $rc (1 = this run halted the release; see the log above)" ;;
+          esac
+          exit "$rc"
+
+  # No environment and no secrets: says why a run did nothing.
+  disabled:
+    name: Release controller not enabled
+    runs-on: ubuntu-latest
+    if: vars.FLEET_RELEASE_ENABLED != 'true'
+    steps:
+      - name: Release controller not enabled
+        run: echo "FLEET_RELEASE_ENABLED is not 'true'; the release controller is off (ADR 0096, docs/handbook/deployment-release.md)."
