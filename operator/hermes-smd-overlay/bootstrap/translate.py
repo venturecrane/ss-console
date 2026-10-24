@@ -783,64 +783,14 @@ _EMAIL_REPLY_PROMPTS: dict[str, str] = {
 }
 
 
-# The quiet help pointer (ss-console#3423, increment 2). THE SINGLE SOURCE of the
-# pointer rules: the router skill and the operator-help skill point here rather
-# than restating them, so the rules cannot drift between two places. Rendered
-# into the two email-reply prompts ONLY on a seat whose persona binds
-# operator-help and enables it (``_help_pointer_bound``): a seat without the help
-# skill would be pointing people at an answer it cannot give. Scheduled digests
-# and reports never see it (they are cron turns, not this prompt). The
-# platform decides WHEN (``pointer_due`` / ``struggle_offer_due`` from
-# operator_help_signals, which records the offer as it reports it due, so a
-# line is due once whatever the model does next); the model decides only the
-# wording of one line. A question about the Operator itself is answered first
-# from operator_seat_facts (the base prompt's instruction) and never needs the
-# signals call.
-# No braces anywhere in it: the adapter renders ``{dot.path}`` placeholders.
-_HELP_POINTER_INSTRUCTION = (
-    "A help line: when the sender is asking about you or how to work with you, "
-    "call operator_seat_facts first as already instructed and answer; that reply "
-    "never carries a help line, so do not call operator_help_signals for it. A "
-    "reply that delivers a draft, confirms work you queued, answers a question "
-    "about a chronology, declines an action reserved to administrators, or goes "
-    "to anyone off your roster never carries one either. Only for any other "
-    "reply, call operator_help_signals with scope 'sender' before you write it. "
-    "If pointer_due is true, end your reply with one line in your own voice, for "
-    "example: If you're ever unsure how to ask for something, just ask me how we "
-    "can work together. If struggle_offer_due is true, end it instead with one "
-    "line offering to show them how to ask for this, with at most one example "
-    "request. A flag that is true is already recorded as offered and is true "
-    "once only. Otherwise say nothing about help."
-)
-
-#: The skill whose binding turns the pointer on.
-_HELP_SKILL = "operator-help"
-
-
-def _help_pointer_bound(customer: dict[str, Any]) -> bool:
-    """True when any persona binds operator-help and enables it."""
-    for persona in customer.get("personas") or []:
-        if not isinstance(persona, dict):
-            continue
-        for skill in persona.get("skills") or []:
-            if (
-                isinstance(skill, dict)
-                and skill.get("name") == _HELP_SKILL
-                and skill.get("enabled")
-            ):
-                return True
-    return False
-
-
-def _with_help_pointer(prompt: str) -> str:
-    """``prompt`` with the pointer instruction placed after the reply
-    instructions and BEFORE the trusted headers, so ``message_id:`` stays the
-    last trusted field and the untrusted-data fence stays the final word."""
-    marker = "\nfrom: "
-    at = prompt.find(marker)
-    if at < 0:
-        return prompt
-    return prompt[:at] + " " + _HELP_POINTER_INSTRUCTION + prompt[at:]
+# The quiet help pointer (ss-console#3423) is NOT in these prompts. The first
+# increment rendered an instruction here telling the model to call
+# operator_help_signals before every reply on a seat that binds operator-help;
+# on pilot-smokeball an ordinary question from a rostered admin was answered with
+# no call and no line, because a per-turn "call this tool" instruction is not
+# followed reliably. The initiation plugin's pre_llm_call hook now decides when
+# a line is due and hands the reply the exact line
+# (plugins/hermes-smd-initiation, ``_help_pointer_block``). Nothing here.
 
 
 def _webhook_skill_prompt(skills: list[str]) -> str:
@@ -1093,12 +1043,6 @@ def _materialize_webhook_platform(customer: dict[str, Any]) -> dict[str, Any]:
             continue
         if route_cfg.get("skills"):
             route_cfg["prompt"] = _webhook_skill_prompt(route_cfg["skills"])
-
-    # The help pointer rides the email-reply routes only, and only when the seat
-    # binds operator-help (ss-console#3423).
-    if _help_pointer_bound(customer):
-        for route_name in email_routes:
-            routes[route_name]["prompt"] = _with_help_pointer(routes[route_name]["prompt"])
 
     if not routes:
         return {}
