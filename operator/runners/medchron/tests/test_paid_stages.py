@@ -284,20 +284,21 @@ def test_build_units_routes_by_folder_then_token_and_excludes_by_config(
         ],
     )
     (sr.slug_dir / "text" / "s1.txt").write_text("[p.1] (machine transcription)\n" + PROSE)
-    # 2026-10-23: a joint matter's file no folder or token owns is the firm's
-    # question, held here with an identity reason, never left for
-    # decide_orphans after every paid stage.
-    log: list[str] = []
-    sr.log = log.append
-    assert units_stage.run(sr) == units_stage.IDENTITY_HELD
-    unassigned = json.loads((sr.slug_dir / "units" / "_unassigned.json").read_text())
-    assert [r["id"] for r in unassigned] == ["u1"]
-    assert log[-1].startswith("IDENTITY HOLD: 1 pulled file(s) belong to no client's folder")
-    assert 'u1 "Example Health Records 6.22.26.pdf" in /Shared' in log[-1]
-    # The firm says to leave it out: the rerun routes everything else.
+    # 2026-10-23: a joint matter's file no folder or token owns is decided
+    # here, never left for decide_orphans after every paid stage. Since
+    # 2026-10-24 it is left out by rule and the run goes on (it used to hold
+    # and ask the firm). FALSIFIER: restore the IDENTITY_HELD exit.
     from medchron.gates import foreign_identity as FI
 
-    FI.record_decision(sr.slug_dir, action="withhold", ids=["u1"], by="firm", source="msg", at="t")
+    log: list[str] = []
+    sr.log = log.append
+    assert units_stage.run(sr) == 0
+    line = next(x for x in log if x.startswith("IDENTITY:"))
+    assert line.startswith("IDENTITY: 1 pulled file(s) belong to no client's folder; left out by rule")
+    assert 'u1 "Example Health Records 6.22.26.pdf" in /Shared' in line
+    assert FI.withheld(sr.slug_dir) == {"u1"}
+    assert FI.withheld_reason(sr.slug_dir, "u1") == FI.RULE_REASONS[FI.RULE_UNPLACED]
+    # A rerun reads the withhold up front and routes everything else the same.
     assert units_stage.run(sr) == 0
     alpha = json.loads((sr.slug_dir / "units" / "alpha.json").read_text())
     beta = json.loads((sr.slug_dir / "units" / "beta.json").read_text())

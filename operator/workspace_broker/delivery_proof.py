@@ -315,8 +315,8 @@ def holds_for(db_path: str, kind: str, ident: str, since: str) -> int:
 def _expected_key(broker: BrokerContext, kind: str, ident: str) -> str:
     """The key this job's reply is owed under NOW, from the job's own ledger
     row: the same ``reply_binding.reply_key`` the send claims. "" when the row
-    is unreadable or the job is not in a replyable state (the watch then falls
-    back to its own attempt and state)."""
+    is unreadable or the job is not in a replyable state, a held chronology
+    included (2026-10-24: it is owed no reply, so no key is expected)."""
     from . import reply_binding  # reply_binding imports this module
 
     try:
@@ -324,7 +324,7 @@ def _expected_key(broker: BrokerContext, kind: str, ident: str) -> str:
     except (OSError, sqlite3.Error, ValueError, KeyError) as exc:
         logger.warning("delivery_reply_status: the %s ledger row for %s is unreadable: %s", kind, ident, exc)
         return ""
-    if not row or row.get("state") not in reply_binding.REPLYABLE_DEMAND_STATES:
+    if not row or row.get("state") not in reply_binding.replyable_states(kind):
         return ""
     return reply_binding.reply_key(kind, ident, row)
 

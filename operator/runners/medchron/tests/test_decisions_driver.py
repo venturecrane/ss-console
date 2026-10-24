@@ -330,7 +330,8 @@ def test_a_single_client_orphan_joins_the_unit_unless_its_text_names_someone_els
 ) -> None:
     """build_units decides a file no folder rule owns (2026-10-23): on one
     client's job it is the client's unless its own text names someone else,
-    which is asked of the firm. No synthetic unit, nothing dropped."""
+    which is left out by rule (2026-10-24; it used to be asked of the firm).
+    No synthetic unit, nothing dropped silently."""
     from medchron.stages import units as units_stage
     from medchron.stages.base import StageRun
 
@@ -355,9 +356,14 @@ def test_a_single_client_orphan_joins_the_unit_unless_its_text_names_someone_els
     o1 = {"id": "o1", "name": "scan", "ext": ".pdf", "folder": "/MISC", "text_path": str(ok)}
     assert units_stage._resolve_orphans(sr, units, [o1]) == [] and units["alpha"] == [o1]
     o2 = {"id": "o2", "name": "other scan", "ext": ".pdf", "folder": "/MISC", "text_path": str(other)}
-    held = units_stage._resolve_orphans(sr, {"alpha": []}, [o2])
-    assert [h["id"] for h in held] == ["o2"] and "1990" not in log[-1]
-    assert log[-1].startswith("IDENTITY HOLD: 1 pulled file(s) name a different person than the client")
+    units = {"alpha": []}
+    left_out = units_stage._resolve_orphans(sr, units, [o2])
+    assert [h["id"] for h in left_out] == ["o2"] and units["alpha"] == [] and "1990" not in log[-1]
+    assert log[-1].startswith("IDENTITY: 1 pulled file(s) name a different person than the client; left out by rule")
+    from medchron.gates import foreign_identity as FI
+
+    assert FI.withheld_reason(sd, "o2") == FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
+    assert "1990" in (sd / units_stage.ORPHAN_HOLDS_FILE).read_text()  # SMD's detail, on the seat
     FI_release = sd / "identity_release.json"
     FI_release.write_text(json.dumps({"release": ["o2"]}))
     units = {"alpha": []}

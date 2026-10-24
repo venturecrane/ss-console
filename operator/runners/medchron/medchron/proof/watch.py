@@ -207,9 +207,9 @@ def settle(d: Any, job_id: str, outcomes: list[Any], state: str, fields: dict[st
             alert(d, job_id, code, reason)
             return state, fields
     if state == "held":
-        # A hold our side caused is our failure: the firm is told SMD is
-        # finishing it (proof/holds.py), so SMD hears it here, with the
-        # technical reason, under the hold's own code.
+        # Every hold pages SMD here, with the technical reason, under the
+        # hold's own code (proof/holds.py). On the chronology lane this page is
+        # the only notice anyone gets: the firm hears nothing until delivery.
         code = holds.classify(d.LANE, reason)[1]
         if code is not None:
             alert(d, job_id, code, reason)
@@ -229,14 +229,33 @@ def _requester(d: Any, job_id: str) -> str:
     return str(env.get("requested_by") or env.get("requester") or "")
 
 
+def wake_owed(d: Any, state: str, reason: Any) -> bool:
+    """Whether a job that ended in ``state`` gets a DELIVER wake.
+
+    The chronology lane (the Captain, 2026-10-24): the firm hears from the
+    Operator about a chronology ONLY when it is delivered. A held chronology
+    gets no wake, so no turn exists that could word a hold to the firm; SMD is
+    paged at ``settle``. The one held chronology that still wakes is
+    ``rerouted_to_update``, for WORK: the turn resubmits the refused RUN as the
+    UPDATE and sends nothing (the broker refuses a held chronology its reply),
+    and ``check_reroutes`` pages when no UPDATE was queued. Every other lane,
+    and every other ending, is unchanged."""
+    if d.LANE != "medchron" or state != "held":
+        return True
+    return holds.classify("medchron", reason)[0] == holds.REROUTED_TO_UPDATE
+
+
 def arm_reply_watch(d: Any, job_id: str) -> None:
     """After a DELIVER wake is consumed: watch for the requester's reply when
     one is owed (the job ended delivered or held, and it has a requester; a
-    negotiation notice is always owed its one email)."""
+    negotiation notice is always owed its one email). A held chronology is owed
+    no reply (``wake_owed``): its only watch is the reroute's."""
     st = d._daemon_state(job_id)
     if st.get("state") not in ("delivered", "held"):
         return
     _arm_reroute(d, job_id, st)
+    if d.LANE == "medchron" and st.get("state") == "held":
+        return
     if not (st.get("notice") or _requester(d, job_id)):
         return  # a rehearsal submission: nobody is owed a reply
     d._write_state(
@@ -279,10 +298,10 @@ def _rows_for(job_id: str, w: dict[str, Any], resp: dict[str, Any]) -> list[dict
 
 def _arm_reroute(d: Any, job_id: str, st: dict[str, Any]) -> None:
     """A RUN the runner refused on a delivered matter (``rerouted_to_update``)
-    pages nothing at settle: the DELIVER turn resubmits it as the UPDATE. When
-    that resubmission is refused, the firm hears "SMD is finishing it", so SMD
-    MUST be paged (2026-10-13). This watch proves the UPDATE was queued, and
-    pages when it was not."""
+    pages nothing at settle: the DELIVER turn resubmits it as the UPDATE and
+    sends the firm nothing. When that resubmission is refused nobody else will
+    ever hear of it, so SMD MUST be paged (2026-10-13). This watch proves the
+    UPDATE was queued, and pages when it was not."""
     if d.LANE != "medchron" or st.get("state") != "held":
         return
     if holds.classify("medchron", st.get("reason"))[0] != holds.REROUTED_TO_UPDATE:
@@ -304,8 +323,7 @@ def _arm_reroute(d: Any, job_id: str, st: dict[str, Any]) -> None:
 
 def check_reroutes(d: Any) -> None:
     """Each tick: close a reroute watch once an UPDATE for the same matter is
-    queued; page ``stage_refused`` when none is by the time the requester's
-    reply has gone (the turn submits before it replies) or by the deadline."""
+    queued; page ``stage_refused`` when none is by the deadline."""
     from ..broker_client import BrokerError
 
     if not d.jobs.is_dir():
@@ -329,13 +347,13 @@ def check_reroutes(d: Any) -> None:
         )
         if queued:
             w.update(done=True, outcome="update_queued")
-        elif (st.get("reply_watch") or {}).get("done") or d.clock() >= float(w.get("due") or 0):
+        elif d.clock() >= float(w.get("due") or 0):
             alert(
                 d,
                 p.name,
                 "stage_refused",
                 "the runner refused a RUN on a delivered matter and no UPDATE was queued after the DELIVER "
-                "wake; the firm was told SMD is finishing it",
+                "wake; the firm has been told nothing",
             )
             w.update(done=True, outcome="paged")
         else:
@@ -422,4 +440,5 @@ __all__ = [
     "in_proof_run",
     "settle",
     "wake_lost",
+    "wake_owed",
 ]

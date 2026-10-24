@@ -701,9 +701,8 @@ def _chronology_job(tmp_path: Path, path: list[str], requester: str = ADMIN, req
     return job
 
 
-@pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_a_finished_chronology_job_replies_to_its_requester_once(tmp_path: Path, ending: str) -> None:
-    job = _chronology_job(tmp_path, ["running", ending])
+def test_a_delivered_chronology_job_replies_to_its_requester_once(tmp_path: Path) -> None:
+    job = _chronology_job(tmp_path, ["running", "delivered"])
     box = FakeMailbox()
     _ack_in_thread(box)
     assert _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})["recipients"] == [ADMIN]
@@ -712,71 +711,58 @@ def test_a_finished_chronology_job_replies_to_its_requester_once(tmp_path: Path,
     assert len(box.replies()) == 1
 
 
-def test_a_held_then_resumed_then_delivered_chronology_replies_for_each_outcome(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "identity: an attachment names another person",
+        "review_held: the pre-delivery review found 2 must-fix finding(s)",
+        "per_job_cap_usd: this run's projected cost would exceed the job's cost cap",
+        "refused: list_matter: this matter already holds a delivered chronology, so the request is an update",
+        "",
+    ],
+)
+def test_a_held_chronology_is_refused_its_reply_whatever_the_reason(tmp_path: Path, reason: str) -> None:
+    """2026-10-24 (the Captain): the firm hears about a chronology only when it
+    is delivered. A held chronology is refused a reply the way a failed one
+    is, with a reason that tells the Operator to send nothing, and nothing is
+    claimed, so its delivery can still reply.
+    FALSIFIER: drop the held-chronology refusal in ``_verify_job`` and the
+    bind answers the requester."""
+    from workspace_broker.medchron_ledger import MedchronLedger
+
+    job = _chronology_job(tmp_path, ["running"])
+    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
+    ledger.record(job, "held", {"reason": reason} if reason else {})
+    box = FakeMailbox()
+    _ack_in_thread(box)
+    out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    assert "only when it is delivered" in out["reason"]
+    assert box.replies() == []
+
+
+def test_a_held_then_resumed_then_delivered_chronology_replies_once_on_delivery(tmp_path: Path) -> None:
     from workspace_broker.medchron_ledger import MedchronLedger
 
     job = _chronology_job(tmp_path, ["running", "held"])
     box = FakeMailbox()
     _ack_in_thread(box)
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
+    with pytest.raises(BindingRefused):
+        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
     ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
     ledger.record(job, "running", {})
     ledger.record(job, "delivered", {})
     _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    assert len(box.replies()) == 2
-
-
-def test_a_chronology_held_again_for_a_new_reason_is_told_again(tmp_path: Path) -> None:
-    """FALSIFIER (job 3CH59XBY, 2026-10-22/23): the held key had no reason in it,
-    so the six holds after the first, each for a different reason, were all
-    refused as already answered and the firm heard nothing for 21 hours."""
-    from workspace_broker.medchron_ledger import MedchronLedger
-
-    job = _chronology_job(tmp_path, ["running"])
-    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
-    ledger.record(job, "held", {"reason": "identity: an attachment names another person"})
-    box = FakeMailbox()
-    _ack_in_thread(box)
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    ledger.record(job, "running", {})
-    ledger.record(job, "held", {"reason": "review_held: the pre-delivery review found 2 must-fix finding(s)"})
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    assert len(box.replies()) == 2
-
-
-def test_a_chronology_held_again_for_the_same_reason_is_not_told_twice(tmp_path: Path) -> None:
-    from workspace_broker.medchron_ledger import MedchronLedger
-
-    reason = "per_job_cap_usd: this run's projected cost would exceed the job's cost cap"
-    job = _chronology_job(tmp_path, ["running"])
-    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
-    ledger.record(job, "held", {"reason": reason})
-    box = FakeMailbox()
-    _ack_in_thread(box)
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    ledger.record(job, "running", {})
-    ledger.record(job, "held", {"reason": reason})
-    with pytest.raises(BindingRefused):
-        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    # a re-recorded hold that names no reason keeps the old one: still the same outcome
-    ledger.record(job, "held", {})
-    with pytest.raises(BindingRefused):
-        _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
     assert len(box.replies()) == 1
 
 
-def test_a_chronology_re_held_in_place_with_a_new_reason_is_told(tmp_path: Path) -> None:
-    from workspace_broker.medchron_ledger import MedchronLedger
+def test_the_delivered_only_rule_is_the_chronology_lanes_alone() -> None:
+    """The delivered-only rule is the chronology lane's; every other lane is
+    unchanged."""
+    from workspace_broker import reply_binding as rb_mod
 
-    job = _chronology_job(tmp_path, ["running"])
-    ledger = MedchronLedger(str(tmp_path / "audit.db"), tmp_path / "mq")
-    ledger.record(job, "held", {"reason": "identity: an attachment names another person"})
-    box = FakeMailbox()
-    _ack_in_thread(box)
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    ledger.record(job, "held", {"reason": "seat paused (sticky stop HARD_STOP)"})
-    _send(_broker(tmp_path, box), {"kind": "medchron_job", "job_id": job})
-    assert len(box.replies()) == 2
+    assert rb_mod.replyable_states("demand_job") == frozenset({"delivered", "held"})
+    assert rb_mod.replyable_states("medchron_job") == frozenset({"delivered"})
 
 
 def test_a_failed_chronology_job_never_replies_to_the_client(tmp_path: Path) -> None:
@@ -790,7 +776,7 @@ def test_a_failed_chronology_job_never_replies_to_the_client(tmp_path: Path) -> 
 def test_a_chronology_reply_only_reaches_the_requester(tmp_path: Path) -> None:
     """FALSIFIER: drop the requester check and the bind answers whoever sent the
     request email, even when the job names someone else."""
-    job = _chronology_job(tmp_path, ["running", "held"], requester="attorney@firm.example")
+    job = _chronology_job(tmp_path, ["running", "delivered"], requester="attorney@firm.example")
     out = _call(_broker(tmp_path, FakeMailbox()), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
     assert out["bound"] is False and "requested the job" in out["reason"]
 

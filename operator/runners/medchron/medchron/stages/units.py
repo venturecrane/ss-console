@@ -224,37 +224,36 @@ def _attach_transcripts(d: Path, recs: list[dict[str, Any]]) -> list[tuple[dict[
 
 
 def _leave_out_withheld(d: Path, usable: list[dict[str, Any]], log) -> list[dict[str, Any]]:
-    """Drop every document the firm said to leave out (an identity decision):
-    it belongs to no unit, so no stage reads it, and decisions.orphans
-    discloses it."""
+    """Drop every withheld document (an identity decision: the firm said to
+    leave it out, or the rule did): it belongs to no unit, so no stage reads
+    it, and decisions.orphans discloses it."""
     withheld = FI.withheld(d)
     if not withheld:
         return usable
     keep, left_out = [], []
     for r in usable:
         (left_out if FI.matches(str(r.get("id") or ""), withheld) else keep).append(r)
-    log(f"left out at the firm's direction (identity decision): {len(left_out)}")
+    log(f"left out by an identity decision (the firm's direction or the rule's): {len(left_out)}")
     for r in left_out:
         log(f"  - {r.get('id')}")
     return keep
 
 
-#: Exit code: a pulled file no unit owns is a question for the firm (whose is
-#: it?), held here with an "identity:" reason (dag.py) before anything paid.
-IDENTITY_HELD = 3
+#: SMD's detail of every pulled file the rule left out at build_units (what
+#: was found in it), kept on the seat; never in a log line or the package.
 ORPHAN_HOLDS_FILE = "orphan_holds.json"
 
 
 def _orphan_named(r: dict[str, Any]) -> str:
-    """How the hold line names one file: its id, its name as the firm sees it,
-    and its folder. Never what its text says about anyone."""
+    """How the log names one file: its id, its name as the firm sees it, and
+    its folder. Never what its text says about anyone."""
     out = f'{r.get("id")} "{r.get("name")}{r.get("ext") or ""}"'
     return out + (f" in {r['folder']}" if r.get("folder") else "")
 
 
 def _resolve_orphans(sr: StageRun, units: dict[str, list], unassigned: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Decide every readable file the routing left without a unit; return the
-    ones held for the firm (empty when every one was placed).
+    ones the rule left out (empty when every one was placed).
 
     WHY (2026-10-23). These files used to reach ``decisions.orphans`` after the
     strip -- every paid stage already spent -- and hold there as residue for
@@ -263,18 +262,24 @@ def _resolve_orphans(sr: StageRun, units: dict[str, list], unassigned: list[dict
 
     * one client on the job: a file whose text names no one else (or that a
       person released) is the client's and joins the unit; one whose text
-      names someone else is the firm's question, with an "identity:" reason;
+      names someone else is left out (``FI.RULE_ANOTHER_PERSON``);
     * more than one client: the routing already tried every folder and name
-      token, and a release does not say which client, so whose it is is the
-      firm's to say: held, unless the firm said to leave it out (withheld
-      files never reach this point, ``_leave_out_withheld``).
+      token, and nothing else says which client it is, so it is left out
+      (``FI.RULE_UNPLACED``); a release does not say which client, so it
+      changes nothing here.
 
-    No synthetic unit is made, and nothing is dropped: a file is placed or
-    held. The detail of what was found stays in ``orphan_holds.json``."""
+    2026-10-24 (the Captain): "left out" is a withhold BY RULE, recorded the
+    way ``identity_decide --withhold`` records the firm's (``by: "rule"``), and
+    the run goes on. It used to hold and ask the firm whose the file was; a
+    chronology now reaches the firm only when it is delivered, and the
+    delivered package names each left-out file with the rule's reason
+    (decisions.orphans -> limitations). No synthetic unit is made, and nothing
+    is dropped silently. The detail of what was found stays in
+    ``orphan_holds.json``."""
     if not unassigned:
         return []
     released = FI.released(sr.slug_dir)
-    held: list[dict[str, Any]] = []
+    left_out: list[dict[str, Any]] = []
     if len(units) == 1:
         only = next(iter(units))
         surnames, dobs = FI.identities(sr.job.units)
@@ -284,26 +289,30 @@ def _resolve_orphans(sr: StageRun, units: dict[str, list], unassigned: list[dict
             text = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
             found = FI.findings(text, surnames, dobs, firsts)
             if found and not FI.matches(str(r.get("id") or ""), released):
-                held.append({**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": found})
+                left_out.append({**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": found})
             else:
                 units[only].append(r)
                 sr.log(
                     f"  + {r['name'][:66]} | {r.get('folder')}: owned by no folder rule; names no one else, joins {only}"
                 )
+        ground = FI.RULE_ANOTHER_PERSON
     else:
-        held = [{**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": []} for r in unassigned]
-    if not held:
+        left_out = [{**{k: r.get(k) for k in ("id", "name", "ext", "folder")}, "found": []} for r in unassigned]
+        ground = FI.RULE_UNPLACED
+    if not left_out:
         return []
-    (sr.slug_dir / ORPHAN_HOLDS_FILE).write_text(json.dumps(held, indent=1), encoding="utf-8")
-    (sr.slug_dir / "units" / "_unassigned.json").write_text(
-        json.dumps([{k: h.get(k) for k in ("id", "name", "folder")} for h in held], indent=1), encoding="utf-8"
+    (sr.slug_dir / ORPHAN_HOLDS_FILE).write_text(json.dumps(left_out, indent=1), encoding="utf-8")
+    FI.withhold_by_rule(sr.slug_dir, [str(h["id"]) for h in left_out], ground=ground)
+    why = (
+        "name a different person than the client"
+        if ground == FI.RULE_ANOTHER_PERSON
+        else "belong to no client's folder"
     )
-    why = "name a different person than the client" if len(units) == 1 else "belong to no client's folder"
     sr.log(
-        f"IDENTITY HOLD: {len(held)} pulled file(s) {why}: {'; '.join(_orphan_named(h) for h in held[:5])}; "
-        f"the firm says whose each is, or to leave it out (medchron.identity_decide)"
+        f"IDENTITY: {len(left_out)} pulled file(s) {why}; left out by rule and disclosed in the package: "
+        f"{'; '.join(_orphan_named(h) for h in left_out[:5])}"
     )
-    return held
+    return left_out
 
 
 def run(sr: StageRun) -> int:
@@ -328,9 +337,7 @@ def run(sr: StageRun) -> int:
     spec = read_json(d / "units.json", None)
     units, excluded, unassigned = _route(usable, spec, sr.slug, is_excluded)
 
-    held = _resolve_orphans(sr, units, unassigned)
-    if held:
-        return IDENTITY_HELD
+    _resolve_orphans(sr, units, unassigned)
     if spec and len(units) > 1:
         # Outcome cross-check: a routed file whose NAME matches another unit's
         # token and not its own. Sees only filename-visible misrouting.

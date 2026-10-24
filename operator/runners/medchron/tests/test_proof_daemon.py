@@ -170,10 +170,14 @@ def test_a_hold_our_side_caused_pages_smd(tmp_path):
     assert state == "held" and _codes(broker) == ["gate_held"]
 
 
-def test_a_hold_that_is_an_answer_pages_nothing(tmp_path):
+def test_a_chronology_that_is_already_current_pages_smd(tmp_path):
+    """2026-10-24: this hold used to page nothing because the firm was told the
+    chronology was already current. The firm now hears nothing about a held
+    chronology, so SMD's page is the only notice.
+    FALSIFIER: set its page code back to None in proof/holds.py."""
     reason = "update_held: nothing new to add: the 2 new document(s) record no visit the delivered chronology lists"
     d, broker, state = _run(tmp_path, _unit(outcome="held", reason=reason, stage="update_collect"))
-    assert state == "held" and _codes(broker) == []
+    assert state == "held" and _codes(broker) == ["update_held"]
 
 
 def test_alerts_a_delivered_outcome_carries_are_raised_once_each(tmp_path):
@@ -210,12 +214,21 @@ def test_a_consumed_wake_arms_the_reply_watch_for_a_delivered_job_with_a_request
     assert w["due"] == d.clock() + watch.REPLY_DEADLINE_SECONDS
 
 
-def test_a_consumed_wake_arms_the_watch_for_a_held_job(tmp_path):
+def test_a_held_chronology_wakes_nobody_and_arms_no_watch_but_pages_smd(tmp_path):
+    """2026-10-24 (the Captain): the firm hears about a chronology only when it
+    is delivered. A held chronology writes no wake, so the gateway is never
+    called and no turn can tell the firm anything, and no reply is watched for;
+    SMD's page at settle is unchanged.
+    FALSIFIER: drop ``wake_owed`` from daemon._report."""
     gate = ud._FakeGate()
     d, broker = _wake(tmp_path, gate.url, _unit(outcome="held", reason="decision: x", stage="decide"))
     d.dispatch_wakes()
     gate.close()
-    assert d._daemon_state("01A")["reply_watch"]["state"] == "held"
+    st = d._daemon_state("01A")
+    assert st["state"] == "held"
+    assert "wake" not in st and gate.requests == []
+    assert "reply_watch" not in st
+    assert _codes(broker) == ["gate_held"]
 
 
 def test_a_rehearsal_job_with_no_requester_arms_no_watch(tmp_path):

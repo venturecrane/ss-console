@@ -147,6 +147,13 @@ def update_note(sr: StageRun, ud: Path) -> Any:
             )
         if filed["unread"]:
             out += f" {len(filed['unread'])} were not read: {'; '.join(filed['unread'])}."
+        if filed.get("left_out"):
+            n = len(filed["left_out"])
+            what = "document names" if n == 1 else "documents name"
+            out += (
+                f" {n} {what} a person other than the client, so {'it was' if n == 1 else 'they were'} left "
+                f"out of this chronology: {'; '.join(filed['left_out'])}."
+            )
         return out
 
     return note

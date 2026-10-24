@@ -10,6 +10,17 @@ is finishing it. The firm is asked something only when the answer is genuinely
 theirs (a record in the file that names someone else, two chronologies that
 could each be the current one).
 
+CHRONOLOGY LANE, 2026-10-24 (the Captain): the firm hears from the Operator
+about a chronology ONLY when it is delivered. A held chronology sends the firm
+nothing, so on that lane the class no longer picks firm wording: it picks the
+page (every chronology hold pages SMD, ``already_current`` and
+``which_chronology`` included, because once the firm stopped hearing about them
+nobody else would have) and the one hold that still wakes the DELIVER turn, for
+work rather than to notify anyone: ``rerouted_to_update`` (``watch.wake_owed``).
+A record that names another person no longer holds a chronology at all: it is
+left out by rule and disclosed in the delivered package
+(``gates/foreign_identity.withhold_by_rule``).
+
 ``classify`` turns a job's coded reason into two things:
 
 * the **hold class**, a closed, firm-safe token the DELIVER wake carries as
@@ -57,9 +68,9 @@ _LIMIT_SETTINGS = ("per_job_cap_usd", "chronology_package_page_allowance_per_mon
 
 #: (substring of an ``update_held:`` reason, class, page code). First match wins.
 _UPDATE_HELD = (
-    ("nothing new to", ALREADY_CURRENT, None),
+    ("nothing new to", ALREADY_CURRENT, "update_held"),
     ("name a different person", ANOTHER_PERSON, "identity_held"),
-    ("carry the newest date", WHICH_CHRONOLOGY, None),
+    ("carry the newest date", WHICH_CHRONOLOGY, "update_held"),
     ("could not be retired", SMD_FINISHING_FILED, "upload_held"),
     ("still reads present after its delete", SMD_FINISHING_FILED, "upload_held"),
     ("is no longer in its folder", SMD_FINISHING, "upload_held"),

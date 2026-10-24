@@ -242,23 +242,22 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
         # the only evidence, and a co-plaintiff's records inside a client's
         # chronology is the defect this lane must not repeat (ss#2893).
         #
-        # The reason starts "identity:" (2026-10-23). The driver copies a
-        # decision's hold as the job's reason, and proof/holds.py classes a
-        # medchron hold as a question for the firm (another_person) only on
-        # that prefix. Without it this hold read as ours (smd_finishing): the
-        # firm was never asked whose the record was, and identity_decide
-        # refused to record the answer because the hold did not class as an
-        # identity hold. The line names each attachment the way the identity
-        # stage does (its file name and the email it came from), never what it
-        # says about the other person; that detail is SMD's and stays in
-        # identity_holds.json on the seat. The screen itself is unchanged.
+        # 2026-10-24 (the Captain): it is left out BY RULE and the run goes on.
+        # It used to hold here and ask the firm whose it was; a chronology now
+        # reaches the firm only when it is delivered, and the delivered
+        # package's Records Reviewed and Limitations section names the file
+        # and says it named someone other than the client (limitations.py).
+        # What it says about the other person is SMD's detail and stays in
+        # identity_holds.json on the seat.
+        ids = [str(h["id"]) for h in foreign]
         _write(slug_dir / IDENTITY_HOLDS_FILE, foreign, dry_run=dry_run)
-        d.holds.append(
-            f"identity: {len(foreign)} emailed attachment(s) name a different person than the client: "
-            f"{'; '.join(_named(h) for h in foreign[:5])}; a person reads them and releases any that are the "
-            f"client's, or the firm says to leave them out (medchron.identity_decide)"
+        if not dry_run:
+            FI.withhold_by_rule(slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+        payload["fold"] = [sha for sha in keep if sha not in ids]
+        d.notes.append(
+            f"{len(foreign)} emailed attachment(s) name a different person than the client; left out by rule "
+            f"and disclosed: {'; '.join(_named(h) for h in foreign[:5])}"
         )
-        return d
     _write(d.artifact, payload, dry_run=dry_run)
     return d
 
@@ -340,7 +339,8 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
     """`orphans.json`: every pulled file no unit owns, with the factual reason
     it is not a source, for the coverage gate and the Records Reviewed and
     Limitations section. The reason is the config's exclusion class, the
-    firm's own leave-it-out (``WITHHELD_REASON``), a measured fact about the
+    firm's own leave-it-out (``WITHHELD_REASON``), the identity rule's
+    leave-it-out (``FI.RULE_REASONS``), a measured fact about the
     file (password, size, a type or file that would not read), or the
     firm config's name rule; never invented.
 
@@ -379,7 +379,9 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         # gate called it dropped and the record called it unread (2026-10-22).
         key = name + str(r.get("ext") or "")
         if FI.matches(str(r.get("id") or ""), withheld):
-            explained.append({"name": key, "reason": WITHHELD_REASON})
+            # The firm's direction, or the rule's own ground (a record that
+            # names someone other than the client, 2026-10-24).
+            explained.append({"name": key, "reason": FI.withheld_reason(slug_dir, str(r.get("id") or ""))})
             continue
         if str(r.get("id") or "") in locked:
             explained.append({"name": key, "reason": unopened.REASON})

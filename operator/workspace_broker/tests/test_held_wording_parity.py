@@ -25,9 +25,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workspace_broker import held_wording, hold_class
 
 SKILLS = Path(__file__).resolve().parents[2] / "skills"
+# The chronology has no held wording since 2026-10-24 (a held chronology is
+# refused its reply), so only litigation is pinned here.
 FILES = {
     "litigation": SKILLS / "litigation-status",
-    "medchron": SKILLS / "medical-chronology-maintainer",
 }
 
 
@@ -57,7 +58,7 @@ def test_every_staff_why_is_in_the_litigation_skill(why: str) -> None:
 
 def test_every_class_resolves_to_wording_on_every_report() -> None:
     """A class with no entry falls back to smd_finishing; nothing raises."""
-    reports = {"litigation": ("status", "deadlines", "reassign"), "medchron": ("run",)}
+    reports = {"litigation": ("status", "deadlines", "reassign")}
     for lane, names in reports.items():
         for cls in hold_class.CLASSES:
             for report in names:

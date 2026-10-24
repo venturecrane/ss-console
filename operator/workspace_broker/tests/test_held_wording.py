@@ -8,8 +8,12 @@ litigation status list was not produced ... tell me if you want the run
 requested again. SMD will also need to look at why it stopped."), and the
 broker transmitted them: the wording was an instruction in a skill, and
 nothing checked it. Now the broker holds the wording (``held_wording``) and
-refuses any other body for a held litigation or chronology job, naming the
-exact text so the retry succeeds in one step.
+refuses any other body for a held litigation job, naming the exact text so the
+retry succeeds in one step.
+
+A held CHRONOLOGY has no wording at all since 2026-10-24 (the Captain: the
+firm hears about a chronology only when it is delivered): its bind and its
+send are refused whatever the words, before any wording check.
 """
 
 from __future__ import annotations
@@ -283,37 +287,19 @@ CHRON_SMD_UPDATE = (
     "chronology already there is unchanged. Nothing is needed from you; SMD is finishing it, and the next "
     "message you get about this chronology will be the filed one."
 )
-CHRON_CASES = [
+CHRON_OLD_WORDINGS = [
     ("review_held: 2 must-fix findings", CHRON_SMD),
     ("per_job_cap_usd: over", CHRON_SMD_UPDATE),
-    (
-        "update_held: could not be retired",
-        "The updated chronology for matter 900201 is filed in its folder. The earlier version is still in the "
-        "same folder beside it; SMD is removing it. Nothing is needed from you.",
-    ),
     (
         "update_held: nothing new to add",
         "The chronology for matter 900201 already covers every visit the new records hold, so nothing was added "
         "and the chronology is unchanged. Nothing is needed from you.",
     ),
     (
-        "update_held: two chronologies carry the newest date",
-        "Two chronologies for this client on matter 900201 carry the same date. Which one should the new records "
-        "go into? Its file name in this thread is all that is needed.",
-    ),
-    (
         "refused: list_matter: this matter already holds a delivered chronology; submit an update",
         "The new records for matter 900201 are going into the chronology already on the matter, so it stays one "
         "complete document. Nothing is needed from you; the next message you get about this chronology will be "
         "the updated one.",
-    ),
-    ("refused: list_matter: this matter already holds a delivered chronology; submit an update", CHRON_SMD),
-    (
-        "identity: msgatt-0a1b names another person",
-        "Before the chronology for matter 900201 can go on, one question: a record attached to one of the emails "
-        "saved in the matter names someone other than the client. Is it the client's record? You do not have to "
-        "find it: if it is not, or you would rather not have it in, say so and it stays out. A yes or no in this "
-        "thread is all that is needed.",
     ),
     (
         "identity: doc 1234 names another person",
@@ -324,38 +310,27 @@ CHRON_CASES = [
 ]
 
 
-@pytest.mark.parametrize(("reason", "text"), CHRON_CASES)
-def test_each_chronology_class_accepts_its_wording_and_refuses_the_rest(tmp_path: Path, reason: str, text: str) -> None:
+@pytest.mark.parametrize(("reason", "text"), CHRON_OLD_WORDINGS)
+def test_a_held_chronology_sends_nothing_even_in_its_old_fixed_wording(tmp_path: Path, reason: str, text: str) -> None:
+    """2026-10-24: the firm hears about a chronology only when it is delivered.
+    The bind is refused and so is a send, whatever the words, and the bind
+    names no held wording. FALSIFIER: drop the held-chronology refusal in
+    ``reply_binding._verify_job`` and the old wording goes out."""
     job = _chron(tmp_path, "held", reason)
     box = _box()
-    with pytest.raises(BindingRefused):
-        _send_body(tmp_path, box, "medchron_job", job, IMPROVISED)
-    assert _send_body(tmp_path, box, "medchron_job", job, text)["recipients"] == [ADMIN]
-
-
-def test_a_chronology_reply_must_carry_its_own_matter_number(tmp_path: Path) -> None:
-    job = _chron(tmp_path, "held", "review_held: x")
-    box = _box()
-    with pytest.raises(BindingRefused) as refused:
-        _send_body(tmp_path, box, "medchron_job", job, CHRON_SMD.replace("900201", "900202"))
-    assert CHRON_SMD in str(refused.value)
+    bound = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
+    assert bound["bound"] is False and "Send nothing to anyone" in bound["reason"] and "held_wording" not in bound
+    for body in (text, IMPROVISED):
+        with pytest.raises(BindingRefused) as refused:
+            _send_body(tmp_path, box, "medchron_job", job, body)
+        assert "only when it is delivered" in str(refused.value)
     assert box.replies() == []
 
 
-def test_the_file_name_slot_cannot_carry_a_sentence(tmp_path: Path) -> None:
-    job = _chron(tmp_path, "held", "identity: doc 1234 names another person")
-    box = _box()
-    with pytest.raises(BindingRefused):
-        _send_body(
-            tmp_path,
-            box,
-            "medchron_job",
-            job,
-            "Before the chronology for matter 900201 can go on, one question: the record dated 01/01/1980? It "
-            "names someone other than the client. Is it the client's record? A yes or no in this thread is all "
-            "that is needed.",
-        )
-    assert box.replies() == []
+def test_the_chronology_has_no_held_wording() -> None:
+    from workspace_broker import held_wording
+
+    assert "medchron_job" not in held_wording.KIND_LANE and "medchron" not in held_wording.WORDING
 
 
 # -- what is unaffected -------------------------------------------------------------

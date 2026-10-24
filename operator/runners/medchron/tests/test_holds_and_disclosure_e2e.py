@@ -6,10 +6,12 @@ times in 22 hours; seven of the stops were holds only SMD could clear, each
 cleared by a merge in the middle of the job: a residue file at the orphans
 decision, a file the composer read and drew nothing from at the coverage gate,
 a fold-time identity hold that read as ours, so the firm was never asked. The
-rule since: a job stops for a record naming another person (asked of the
-firm), the authored cost limits, or an integrity falsifier. Everything else is
-decided by rule and named to the firm in Records Reviewed and Limitations, and
-no record the map drew entries from is ever disclosed as "not cited".
+rule since 2026-10-24 (the Captain): a job stops only for the authored cost
+limits or an integrity falsifier, and SMD finishes it; the firm hears about a
+chronology only when it is delivered. Everything else, a record that names a
+person other than the client included, is decided by rule and named to the
+firm in Records Reviewed and Limitations, and no record the map drew entries
+from is ever disclosed as "not cited".
 
 Each test runs the whole DAG and names the stop it stands against.
 """
@@ -25,6 +27,7 @@ from pathlib import Path
 import pytest
 
 from medchron import coverage_decide, dag, decisions, redo_doc
+from medchron.gates import foreign_identity as FI
 from medchron.proof import holds
 from medchron.state import RunState, state_path
 from medchron_testkit import FakeSeat, doc_row, make_pdf
@@ -179,28 +182,159 @@ def _fake_extract_msg(attachment: bytes) -> types.ModuleType:
     return mod
 
 
-def test_an_attachment_naming_another_person_is_asked_of_the_firm(
+INTAKE_SEEN = f"=== FILE: {INTAKE} (fileId f5) === entries: 0"
+RULE_WORDS = "names a person other than the client, so it was left out of this chronology"
+
+
+def _limitations(sd: Path) -> str:
+    doc = (sd / "runs" / "alpha" / "final-chronology.md").read_text()
+    return doc[doc.index("## Records Reviewed and Limitations") :]
+
+
+def test_an_attachment_naming_another_person_is_left_out_by_rule_and_the_job_delivers(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The fold-time identity hold carried no "identity:" prefix, so it read as
-    # SMD's (smd_finishing): the firm was never asked, and identity_decide
-    # refused to record the firm's answer.
+    # 2026-10-24: the fold-time identity check (the attachment's own text
+    # layer) used to hold the job and ask the firm whose the record was. It is
+    # now withheld by rule and the job delivers, naming the file and why.
+    # FALSIFIER: restore the fold's hold and this stops at decide_fold.
     # Over the index's 20 KB floor for an attachment (smaller is a signature).
     foreign = make_pdf(["Patient Name: Gamma Other\nDOB: 05/05/1990\nOffice visit for knee pain."] + [PROSE] * 40)
     assert len(foreign) > 20_000
     monkeypatch.setitem(sys.modules, "extract_msg", _fake_extract_msg(foreign))
     msg = b"not really ole2; the fake reader opens it"
     seat = functools.partial(_seat, [("m1", "FW records.msg", msg)])
-    o = _driver(job_dir, firm_config_path, pricing_path, client=_Model(_map()), seat_factory=seat).run()[0]
-    assert o.outcome == "held" and o.stage == "decide_fold", o
-    assert o.reason.startswith("identity: 1 emailed attachment(s) name a different person than the client")
-    assert holds.classify("medchron", o.reason) == (holds.ANOTHER_PERSON, "identity_held")
-    # Named the way the firm can find it; what it says about the other person
-    # stays in SMD's detail file.
-    assert '"records from another office.pdf" attached to the email "FW records.msg"' in o.reason
-    assert "1990" not in o.reason
-    detail = json.loads((data_root / "example-matter" / decisions.IDENTITY_HOLDS_FILE).read_text())
+    o = _driver(job_dir, firm_config_path, pricing_path, client=_Model(_map(INTAKE_SEEN)), seat_factory=seat).run()[0]
+    assert o.outcome == "delivered" and o.stage is None, o
+    sd = data_root / "example-matter"
+    assert FI.withheld_reason(sd, json.loads((sd / decisions.IDENTITY_HOLDS_FILE).read_text())[0]["id"]) == RULE_WORDS
+    # Named the way the firm can find it, with the rule's reason; what it says
+    # about the other person stays in SMD's detail file.
+    lim = _limitations(sd)
+    assert f'* "records from another office.pdf" - {RULE_WORDS}' in lim
+    assert "1990" not in lim and "Gamma" not in lim and "—" not in lim
+    # The email paragraph no longer says the left-out attachment was read.
+    assert "1 were new to it; it was left out, for the reason given below." in lim
+    detail = json.loads((sd / decisions.IDENTITY_HOLDS_FILE).read_text())
     assert any("1990" in f for f in detail[0]["found"])
+
+
+def _scan_pdf() -> bytes:
+    """A PDF with no text layer: one page carrying a noise image (incompressible,
+    so the file clears the email index's 20 KB attachment floor)."""
+    import os
+
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, 100, 100, os.urandom(100 * 100 * 3), 0)
+    doc = pymupdf.open()
+    doc.new_page().insert_image(pymupdf.Rect(72, 72, 372, 372), stream=pix.tobytes("png"))
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+FOREIGN_SCAN = "Patient Name: Gamma Other. DOB: 05/05/1990. Office visit for knee pain."
+
+
+class _ForeignScanModel(_Model):
+    """Every scanned page transcribes as another person's record: the email
+    attachment below has no text layer, so only the identity stage, after
+    vision, can see whose it is."""
+
+    def create(self, **kw):
+        if "transcribe one scanned page" in self._system(kw):
+            return _text_msg(FOREIGN_SCAN)
+        return super().create(**kw)
+
+    def stream(self, **kw):
+        if "transcribe one scanned page" in self._system(kw):
+            self.calls.append(kw)
+            from test_decisions_driver import _Stream
+
+            return _Stream(_text_msg(FOREIGN_SCAN))
+        return super().stream(**kw)
+
+
+def test_a_scanned_attachment_the_identity_stage_finds_is_left_out_by_rule_and_the_job_delivers(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The identity stage (after vision) used to hold with exit 2. It now
+    # withholds by rule, takes the attachment out of the unit build_units
+    # wrote, and the job delivers. FALSIFIER: restore the identity stage's
+    # exit 2 and this stops at identity.
+    scan = _scan_pdf()
+    assert len(scan) > 20_000  # over the index's floor for an attachment
+    monkeypatch.setitem(sys.modules, "extract_msg", _fake_extract_msg(scan))
+    seat = functools.partial(_seat, [("m1", "FW records.msg", b"not really ole2; the fake reader opens it")])
+    o = _driver(
+        job_dir, firm_config_path, pricing_path, client=_ForeignScanModel(_map(INTAKE_SEEN)), seat_factory=seat
+    ).run()[0]
+    assert o.outcome == "delivered" and o.stage is None, o
+    sd = data_root / "example-matter"
+    held = json.loads((sd / "identity_holds.json").read_text())
+    assert len(held) == 1 and FI.withheld_reason(sd, held[0]["id"]) == RULE_WORDS
+    unit_ids = [r["id"] for r in json.loads((sd / "units" / "alpha.json").read_text())]
+    assert held[0]["id"] not in unit_ids
+    lim = _limitations(sd)
+    assert f'* "records from another office.pdf" - {RULE_WORDS}' in lim  # shown once, never "x.pdf.pdf"
+    assert "1990" not in lim and "Gamma" not in lim
+    assert "it was left out, for the reason given below." in lim
+
+
+class _JointModel(_Model):
+    """Each unit's map cites that unit's own record."""
+
+    def stream(self, **kw):
+        sysm = self._system(kw)
+        if "transcribe one scanned page" in sysm or "INDEPENDENT PRE-DELIVERY REVIEW" in sysm:
+            return super().stream(**kw)
+        self.calls.append(kw)
+        from test_decisions_driver import _Stream
+
+        text = json.dumps(kw.get("messages") or [])
+        body = self.map_text.replace("f1.pdf", "g1.pdf").replace("fileId f1", "fileId g1")
+        return _Stream(_text_msg(body if "g1.pdf" in text else self.map_text))
+
+
+def _joint_seat() -> FakeSeat:
+    f1 = make_pdf([""] + [f"{PROSE} Page {i} of the record." for i in range(2, 8)])
+    g1 = make_pdf([""] + [f"{PROSE} Page {i} of the record." for i in range(2, 8)])
+    u1 = make_pdf([PROSE, PROSE])
+    docs = [
+        doc_row("f1", "f1.pdf", "fold-a", len(f1)),
+        doc_row("g1", "g1.pdf", "fold-b", len(g1)),
+        doc_row("u1", "Example Health Records 6.22.26.pdf", "fold-s", len(u1)),
+    ]
+    folders = [
+        {"id": "fold-a", "name": "Alpha_Example", "parentId": None, "path": "/Alpha_Example"},
+        {"id": "fold-b", "name": "Beta_Example", "parentId": None, "path": "/Beta_Example"},
+        {"id": "fold-s", "name": "Emails", "parentId": None, "path": "/Emails"},
+    ]
+    return FakeSeat(docs, folders, {"f1": f1, "g1": g1, "u1": u1})
+
+
+def test_a_joint_matters_file_no_client_owns_is_left_out_by_rule_and_the_job_delivers(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    # build_units used to hold a joint matter's unowned file and ask the firm
+    # whose it was. It is now withheld by rule (it could not be placed with
+    # one client), and every unit delivers, naming it.
+    # FALSIFIER: restore build_units' IDENTITY_HELD exit and this stops there.
+    from medchron_testkit import job_yaml
+
+    jd = tmp_path / "joint-job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True))
+    outs = _driver(jd, firm_config_path, pricing_path, client=_JointModel(_map()), seat_factory=_joint_seat).run()
+    assert [o.outcome for o in outs] == ["delivered", "delivered"], outs
+    sd = data_root / "example-matter"
+    words = "could not be placed with one client on this matter, so it was left out of this chronology"
+    assert FI.withheld_reason(sd, "u1") == words
+    for unit in ("alpha", "beta"):
+        doc = (sd / "runs" / unit / "final-chronology.md").read_text()
+        lim = doc[doc.index("## Records Reviewed and Limitations") :]
+        assert f'* "Example Health Records 6.22.26.pdf" - {words}' in lim, lim
 
 
 def test_the_in_run_rebuild_reopens_exactly_what_smd_reopens_by_hand() -> None:

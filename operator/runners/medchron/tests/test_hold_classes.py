@@ -7,6 +7,9 @@ SMD". These pin the three mechanical halves of the fix:
 
 * the wake carries ``Hold class: <token>`` from a closed set, never the reason;
 * every hold our side caused pages SMD under its own code, with the reason;
+* (2026-10-24, the Captain) a held CHRONOLOGY gets no wake at all, so nothing
+  can tell the firm it stopped, and every chronology hold pages SMD; the one
+  exception is a RUN rerouted to an UPDATE, which wakes for work;
 * no medical record text, and no other person's name or date of birth, rides
   a chronology update's job reason.
 """
@@ -64,12 +67,17 @@ CASES = [
         "smd_finishing",
         "update_held",
     ),
-    ("medchron", "update_held: nothing new to add: the 3 new document(s) record no visit", "already_current", None),
+    (
+        "medchron",
+        "update_held: nothing new to add: the 3 new document(s) record no visit",
+        "already_current",
+        "update_held",
+    ),
     (
         "medchron",
         "update_held: nothing new to read: every page of the new documents is already in the delivered exhibits",
         "already_current",
-        None,
+        "update_held",
     ),
     (
         "medchron",
@@ -81,7 +89,7 @@ CASES = [
         "medchron",
         "update_held: 2 chronology documents for this client carry the newest date; name the one to update by id",
         "which_chronology",
-        None,
+        "update_held",
     ),
     (
         "medchron",
@@ -221,10 +229,9 @@ def test_a_delivered_litigation_wake_carries_no_hold_class(tmp_path):
 # ---- the chronology wake and its page ---------------------------------------------
 
 
-def _held(tmp_path: Path, reason: str, stage: str) -> tuple[str, list[str], str]:
+def _held(tmp_path: Path, reason: str, stage: str) -> tuple[str, list[str], dict]:
     d, broker, state = pd._run(tmp_path, pd._unit(outcome="held", reason=reason, stage=stage))
-    task = d._daemon_state("01A")["wake"]["task"]
-    return state, pd._codes(broker), task
+    return state, pd._codes(broker), d._daemon_state("01A")
 
 
 @pytest.mark.parametrize(
@@ -258,15 +265,26 @@ def _held(tmp_path: Path, reason: str, stage: str) -> tuple[str, list[str], str]
             "update_held: nothing new to add: the 2 new document(s) record no visit",
             "update_collect",
             "already_current",
-            [],
+            ["update_held"],
+        ),
+        (
+            "update_held: 2 chronology documents for this client carry the newest date; name the one to update by id",
+            "update_base",
+            "which_chronology",
+            ["update_held"],
         ),
     ],
 )
-def test_a_chronology_hold_wakes_with_its_class_and_pages_only_our_side(tmp_path, reason, stage, cls, codes):
-    state, paged, task = _held(tmp_path, reason, stage)
+def test_a_chronology_hold_never_wakes_the_operator_and_always_pages_smd(tmp_path, reason, stage, cls, codes):
+    """2026-10-24: the firm hears about a chronology only when it is delivered.
+    No wake means no turn exists that could word the hold to the firm; SMD's
+    page is the only notice, including for the two classes that used to page
+    nothing because the firm was told (already_current, which_chronology).
+    FALSIFIER: drop ``wake_owed`` from daemon._report and a wake is written."""
+    state, paged, st = _held(tmp_path, reason, stage)
     assert state == "held"
-    assert f"Hold class: {cls}." in task.splitlines()
-    assert reason not in task and "update_held" not in task
+    assert holds.classify("medchron", reason)[0] == cls
+    assert "wake" not in st
     assert paged == codes
 
 
@@ -277,7 +295,7 @@ def test_a_refused_chronology_stage_pages_stage_refused(tmp_path):
     )
     assert state == "held"
     assert pd._codes(broker) == ["stage_refused"]
-    assert "Hold class: smd_finishing." in d._daemon_state("01A")["wake"]["task"]
+    assert "wake" not in d._daemon_state("01A")
 
 
 def test_a_run_refused_on_a_delivered_matter_is_rerouted_and_pages_nothing(tmp_path):
@@ -324,11 +342,17 @@ def test_a_rerouted_hold_arms_a_watch_for_the_update(tmp_path):
     assert w["matter_number"] == "900277" and not w.get("done")
 
 
-def test_a_refused_resubmit_pages_smd_once_the_reply_has_gone(tmp_path):
-    """The DELIVER turn submits before it replies; a reply with no UPDATE queued
-    means the resubmission was refused and the firm was told SMD is finishing it."""
+def test_a_rerouted_hold_arms_no_reply_watch(tmp_path):
+    """The rerouted turn sends the firm nothing (the broker refuses a held
+    chronology its reply), so no reply is owed and none is watched for.
+    FALSIFIER: drop the held-chronology return in ``arm_reply_watch``."""
+    d, _broker = _rerouted(tmp_path)
+    assert "reply_watch" not in d._daemon_state("01A")
+
+
+def test_a_refused_resubmit_pages_smd_once_by_the_deadline(tmp_path):
     d, broker = _rerouted(tmp_path)
-    broker.replies = [pd._row("medchron_job:01A:1:held")]
+    d.clock = lambda: 10_000_000.0
     d.dispatch_wakes()
     assert pd._codes(broker) == ["stage_refused"]
     assert d._daemon_state("01A")["reroute_watch"]["outcome"] == "paged"
@@ -352,7 +376,6 @@ def test_a_queued_update_closes_the_watch_with_no_page(tmp_path):
         {"id": "01A", "matter_number": "900277", "created_at": since},
         {"id": "01B", "matter_number": "900277", "created_at": "2999-01-01T00:00:00.000Z"},
     ]
-    broker.replies = [pd._row("medchron_job:01A:1:held")]
     d.dispatch_wakes()
     assert pd._codes(broker) == []
     assert d._daemon_state("01A")["reroute_watch"]["outcome"] == "update_queued"
@@ -361,7 +384,7 @@ def test_a_queued_update_closes_the_watch_with_no_page(tmp_path):
 def test_an_update_for_another_matter_does_not_count(tmp_path):
     d, broker = _rerouted(tmp_path)
     broker.jobs = [{"id": "01B", "matter_number": "999999", "created_at": "2999-01-01T00:00:00.000Z"}]
-    broker.replies = [pd._row("medchron_job:01A:1:held")]
+    d.clock = lambda: 10_000_000.0
     d.dispatch_wakes()
     assert pd._codes(broker) == ["stage_refused"]
 
@@ -402,11 +425,18 @@ def test_update_base_names_counts_and_indexes_never_the_chronology_text(tmp_path
     assert proof["proven"] is False and medical in proof["diffs"][0][1]  # the detail stays on the seat for SMD
 
 
-def test_an_identity_hold_names_document_ids_never_the_other_person(tmp_path, monkeypatch):
+def test_an_update_leaves_a_record_naming_another_person_out_by_rule(tmp_path, monkeypatch):
+    """2026-10-24: an update no longer holds on a record that names someone
+    else. It is withheld by rule (recorded ``by: "rule"``), drops out of the
+    candidates, is kept in "skipped" under the rule's reason (which Records
+    Reviewed names), and the log carries ids only, never the other person.
+    FALSIFIER: restore the update_select hold and this returns nothing usable."""
+    from medchron.gates import foreign_identity as FI
     from medchron.stages import update_select as us
 
     lines: list[str] = []
     ud = tmp_path / "runs" / "u1" / "update"
+    ud.mkdir(parents=True)
 
     class SR:
         slug_dir = tmp_path
@@ -416,17 +446,18 @@ def test_an_identity_hold_names_document_ids_never_the_other_person(tmp_path, mo
         def log(m: str) -> None:
             lines.append(m)
 
-    monkeypatch.setattr(us, "plan", lambda sr: {"exhibits": [], "top_exhibit": 0})
-    monkeypatch.setattr(us, "update_dir", lambda sr: ud)
-    monkeypatch.setattr(us, "_candidates", lambda sr, sha: ([{"id": "d9"}], 0))
     monkeypatch.setattr(
         us,
         "_identity_holds",
         lambda sr, rows: ["d9: a date of birth 01/02/1950 that is not the client's; a patient named Zedward"],
     )
-    assert us.run(SR()) == 2
+    skipped: dict[str, list[str]] = {FI.WITHHELD_REASON: []}
+    rows = us._leave_out_foreign(SR(), ud, [{"id": "d9"}, {"id": "d1"}], skipped)
+    assert [r["id"] for r in rows] == ["d1"]
+    assert skipped[FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]] == ["d9"]
+    assert FI.withheld(tmp_path) == {"d9"}
+    assert FI.withheld_reason(tmp_path, "d9") == FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
     joined = " | ".join(lines)
     assert "1950" not in joined and "Zedward" not in joined
-    assert "d9" in joined and "name a different person than the client" in joined
-    assert holds.classify("medchron", lines[-1]) == ("another_person", "identity_held")
+    assert "d9" in joined and "left out by rule" in joined
     assert "Zedward" in (ud / "identity_holds.json").read_text()  # SMD's detail, on the seat

@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ..gates import foreign_identity as FI
 from .base import StageRefusal, StageRun, append_jsonl, read_json, read_jsonl
 from .download import BATCH, BATCH_PAUSE_SECONDS, _mint_with_retry
 
@@ -341,8 +342,17 @@ def run_fold(sr: StageRun) -> int:
     if not report.get("comparable"):
         raise StageRefusal("refusing to fold: no raw_manifest.jsonl baseline, so 'new' is every attachment")
     if not chosen:
-        if not idx or not any(not r.get("already_pulled_as") for r in idx):
-            sr.log("nothing new inside the emails; nothing to fold")
+        # A withheld attachment (the firm's direction, or the identity rule's
+        # since 2026-10-24) is decided, not new: the fold hook left it out on
+        # purpose, and the disclosure names it.
+        withheld = FI.withheld(d)
+        new = [
+            r
+            for r in idx
+            if not r.get("already_pulled_as") and not FI.matches(str(r.get("sha256") or "")[:12], withheld)
+        ]
+        if not new:
+            sr.log("nothing new inside the emails to fold (any withheld attachment is disclosed, never folded)")
             return 0
         raise StageRefusal("refusing to fold: the decided list is empty while new attachments exist")
     by12 = {r["sha256"][:12]: r for r in idx}

@@ -418,7 +418,7 @@ class Daemon:
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
-        if finished is not None:
+        if finished is not None and proof_watch.wake_owed(self, state, fields.get("reason")):
             self._write_state(
                 job_id,
                 wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},

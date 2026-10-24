@@ -1056,22 +1056,20 @@ print(json.dumps([{"unit": "alpha", "outcome": "held", "stage": "decide_orphans"
 """
 
 
-def test_a_held_job_wakes_with_the_stage_and_never_the_reason(tmp_path):
+def test_a_held_chronology_writes_no_wake_and_its_task_would_never_carry_the_reason(tmp_path):
+    """2026-10-24: a held chronology gets no wake (the firm hears only on
+    delivery). The task the composer would write for a held job (the rerouted
+    RUN still wakes) names WHERE the run stopped in the DAG's own vocabulary
+    and nothing the tenant authored: no file name, no client name, no reason."""
     d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1", script=HELD_RUNNER)  # nothing listens
     _submit(d, broker, "01B")
     assert d.tick() == "held"
     # The ledger keeps the full reason for a person reading their own tenant.
     assert broker.records[-1][1] == "held" and "Example Clinic records 2026.pdf" in broker.records[-1][2]["reason"]
-    wake = d._daemon_state("01B")["wake"]
-    task = wake["task"]
-    # The wake names WHERE the run stopped in the DAG's own vocabulary and
-    # nothing the tenant authored: no file name, no client name, no reason.
-    assert wake["pending"] is True and "Held at: decide_orphans." in task and "rehearsal" in task
+    assert "wake" not in d._daemon_state("01B")
+    task = d._compose_wake("01B", "held", broker.records[-1][2], stage="decide_orphans")
+    assert "Held at: decide_orphans." in task and "rehearsal" in task
     assert "Example Clinic" not in task and "Alpha" not in task and ".pdf" not in task and "Reason:" not in task
-    d.tick()
-    # Nothing listens: a gateway that cannot be reached does not spend an
-    # attempt inside the grace (test_an_unreachable_gateway_*).
-    assert int(d._daemon_state("01B")["wake"].get("attempts", 0)) == 0
 
 
 def test_a_runner_with_no_verdict_wakes_without_a_stage(tmp_path):
@@ -1153,7 +1151,7 @@ def test_a_limit_hold_is_recorded_as_a_hold_and_never_prefixed_refused(tmp_path)
     assert state == "held" and fields["pages"] == 3312
     assert fields["reason"].startswith("chronology_package_page_allowance_per_month: ")
     assert not fields["reason"].startswith("refused: ")
-    assert "Held at: vision." in d._daemon_state("01A")["wake"]["task"]
+    assert "wake" not in d._daemon_state("01A")  # a held chronology tells the firm nothing
 
 
 def test_a_real_broker_envelope_round_trips_into_a_job_the_runner_parses(tmp_path):
