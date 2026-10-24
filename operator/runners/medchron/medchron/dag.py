@@ -362,7 +362,10 @@ STAGES: tuple[Stage, ...] = (
         lambda c: [*_slug_unit(c), "--falsify"],
         requires=("classify_scanned",),
         runner=_strip.run_falsify,
-        exit_map={1: (REFUSED, "strip falsifier: the content check cannot fail, so it proves nothing")},
+        exit_map={
+            1: (REFUSED, "strip falsifier: the content check cannot fail, so it proves nothing"),
+            2: (REFUSED, "strip: an authored drop removes every page a citation rests on"),
+        },
     ),
     Stage(
         "strip_dry",

@@ -10,7 +10,12 @@ pixels. `falsify` offsets the new page by one and requires the check to FAIL,
 so a check that cannot fail is never mistaken for a check that passed.
 
 The drop set is the text classifier's pages plus the scanned classifier's
-(when its controls held) plus any authored `drops[-unit].json`. Summary-table
+(when its controls held) plus any authored `drops[-unit].json`. A page the
+chronology cites is never a classifier drop: the audit verified the claim
+against that paper, so it stays in the exhibit and the classifier's call on it
+is logged, not obeyed (Pamplona, 2026-10-24: one cited page called non-record
+held a 4,418-page job). An AUTHORED drop of a cited page still refuses,
+because a person removing evidence is a question. Summary-table
 Reference cells carry their citation WITHOUT parentheses and are remapped
 through the same path (nine delivered units once shipped their tables on
 pre-strip numbers). A stripped exhibit is built by deleting pages from a copy
@@ -85,7 +90,20 @@ def page_match(a: Any, b: Any, dpi: int = 60) -> tuple[bool | None, float]:
     return r <= PIXEL_TOL, r
 
 
-def drop_set(sr: StageRun, paths: dict[int, Path]) -> dict[int, set[int]] | None:
+def cited(doc_md: str) -> dict[int, set[int]]:
+    """Every page the chronology cites, in prose and in summary-table cells."""
+    out: dict[int, set[int]] = {}
+    for m in CITE.finditer(doc_md):
+        if m.group(2):
+            out.setdefault(int(m.group(1)), set()).update(expand(m.group(2)))
+    for m in TABLE_CITE.finditer(doc_md):
+        out.setdefault(int(m.group(2)), set()).update(expand(m.group(3)))
+    return out
+
+
+def drop_set(
+    sr: StageRun, paths: dict[int, Path], cites: dict[int, set[int]] | None = None
+) -> dict[int, set[int]] | None:
     d = sr.slug_dir
     sfx = f"-{sr.unit.unit}" if sr.job.joint else ""
     nr = read_json(nonrecord_path(sr), None)
@@ -102,6 +120,12 @@ def drop_set(sr: StageRun, paths: dict[int, Path]) -> dict[int, set[int]] | None
                 sr.log("scanned_labels: the classifier's controls failed; refusing to strip on its labels")
                 return None
             s |= {p for p, _lab in (scanned.get("nonrecord") or {}).get(str(ex), [])}
+        kept = s & (cites or {}).get(ex, set())
+        if kept:
+            sr.log(
+                f"Exhibit {ex}: kept {len(kept)} cited page(s) the classifier called non-record: {compress(sorted(kept))}"
+            )
+            s -= kept
         for p, _ in (authored.get("manual_drops") or {}).get(str(ex), []):
             s.add(p)
         drops[ex] = s
@@ -116,10 +140,17 @@ def _run(sr: StageRun, mode: str) -> int:
     sfx = f"-{unit}" if sr.job.joint else ""
     outdir = d / "out" / unit
     paths = resolve_exhibit_files(outdir)
-    drops = drop_set(sr, paths)
+    authored = read_json(d / f"drops{sfx}.json", {"manual_drops": {}, "citation_edits": []})
+    cpath = d / "runs" / unit / "final-chronology.md"
+    doc_md = cpath.read_text(encoding="utf-8")
+    for e in authored.get("citation_edits") or []:
+        if e["find"] not in doc_md:
+            sr.log(f"!! citation edit not found: {e['find']}")
+            return 1
+        doc_md = doc_md.replace(e["find"], e["replace"])
+    drops = drop_set(sr, paths, cited(doc_md))
     if drops is None:
         return 1
-    authored = read_json(d / f"drops{sfx}.json", {"manual_drops": {}, "citation_edits": []})
     apply, falsify = mode == "apply", mode == "falsify"
     n_drop = sum(len(v) for v in drops.values())
     sr.log(f"{unit}: dropping {n_drop} page(s)")
@@ -140,13 +171,6 @@ def _run(sr: StageRun, mode: str) -> int:
             m[p] = n
         remap[ex], newcount[ex] = m, n
         doc.close()
-    cpath = d / "runs" / unit / "final-chronology.md"
-    doc_md = cpath.read_text(encoding="utf-8")
-    for e in authored.get("citation_edits") or []:
-        if e["find"] not in doc_md:
-            sr.log(f"!! citation edit not found: {e['find']}")
-            return 1
-        doc_md = doc_md.replace(e["find"], e["replace"])
     checks: list[tuple[int, int, int]] = []
     problems: list[tuple[int, str, str]] = []
 
@@ -175,7 +199,8 @@ def _run(sr: StageRun, mode: str) -> int:
     if problems:
         for ex, spec, why in problems:
             sr.log(f"!! Exhibit {ex} p.{spec}: {why}")
-        return 1
+        # 2 under falsify, so the refusal is not reported as "the check cannot fail".
+        return 2 if falsify else 1
     sr.log(f"  remapped {len(set(checks))} distinct page reference(s)")
     bad = 0
     unverifiable: list[list[Any]] = []
