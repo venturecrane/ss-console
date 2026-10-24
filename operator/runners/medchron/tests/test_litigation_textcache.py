@@ -23,6 +23,12 @@ from medchron_testkit import make_pdf
 
 TODAY = dt.date(2026, 10, 7)
 SCAN = make_pdf(["", ""])  # two pages, no text layer: both go to vision
+#: Built ONCE: make_pdf writes a random trailer /ID, so each call's bytes (and
+#: listed size) can differ. Two jobs must list the same files with the same
+#: (modified, size), or a cache test measures make_pdf instead of the cache
+#: (merge-queue run 40130877069: a regenerated paper's size moved, so it was
+#: downloaded again and the test read that as a cache miss).
+DOCS = matter_docs()
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +37,7 @@ def _pricing(tmp_path: Path, pricing_path: Path) -> None:
 
 
 def _docs(scan_modified: str = "2026-04-12T10:00:00") -> dict[str, list]:
-    return {M1: [*matter_docs(), ("f-s1", "Summons scan.pdf", SCAN, scan_modified)]}
+    return {M1: [*DOCS, ("f-s1", "Summons scan.pdf", SCAN, scan_modified)]}
 
 
 class CountingSeat(LitSeat):
