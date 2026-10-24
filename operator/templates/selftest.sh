@@ -124,10 +124,30 @@ check_lever() {
   esac
 }
 
-# The in-image expectation source: the live customer.yaml. A lane is authored
-# when the skill that drives it is enabled for any persona. A customer.yaml that
-# cannot be read is "cannot evaluate", which must not read as "not authored", so
-# every lane then counts as authored and its presence checks run and say why.
+# The in-image expectation source: the live customer.yaml, narrowed by what the
+# boot's fetch found in the vault. A lane is authored when the skill that
+# drives it is enabled for any persona, UNLESS (demand, drafting, litigation)
+# this boot's fetch recorded a clean `absent`: the vault was listed and holds no
+# inputs for the lane, which is how a seat that enables a lane's skill but
+# authors no inputs for it looks (pilot-smokeball's demand lane: the skill is
+# enabled, vaults/pilot-smokeball/demand/ has been empty since 2026-07-28 by
+# design). That is the same verdict the laptop smoke reaches from the
+# engagements checkout (no <lane>-firm.yaml there means none staged into the
+# vault), so the two bindings agree on it. Before 2026-10-23 the self-test
+# asked the skill alone, and pilot failed demand-firm-inputs-present on every
+# boot with "stat: cannot statx '/var/lib/smd-config/demand/demand-firm.yaml'".
+#
+# Only `absent` narrows. `unreachable` (the vault holds the inputs, or could
+# not be listed, and the seat has no copy), a missing state file, an unreadable
+# one, or one root did not write all count as authored, so a failed fetch still
+# fails the presence check: the 2026-10-14 A&P v141 falsifier, where the
+# litigation inputs were in the vault and the boot's fetch failed silently.
+# A customer.yaml that cannot be read is "cannot evaluate", which must not read
+# as "not authored", so every lane then counts as authored and its presence
+# checks run and say why. The bindings still differ where the engagements
+# checkout and the vault differ (inputs authored but never staged, or staged
+# then deleted from the checkout); the release that records both verdicts
+# shows it.
 ENABLED_SKILLS=""
 ENABLED_READ=0
 read_enabled_skills() {
@@ -150,9 +170,30 @@ lane_skill() {
     *) return 1 ;;
   esac
 }
+# lane_inputs_absent <lane>: this boot's fetch recorded a clean `absent` in a
+# regular file root owns, inside a directory root owns that nobody else can
+# write. Anything else (no file, a symlink, another owner, any other word) is
+# false, which keeps the lane authored.
+lane_inputs_absent() {
+  "${PY}" -I -B - "${SEAT_ROOT}/run/smd-lanes" "$1.inputs" "${ROOT_UID}" <<'PY' 2>/dev/null
+import os, stat, sys
+d, name, uid = sys.argv[1], sys.argv[2], int(sys.argv[3])
+try:
+    ds = os.lstat(d)
+    fs = os.lstat(os.path.join(d, name))
+    with open(os.path.join(d, name), encoding="ascii") as fh:
+        word = fh.read(64).strip()
+except (OSError, ValueError):
+    sys.exit(1)
+ok = (stat.S_ISDIR(ds.st_mode) and ds.st_uid == uid and not stat.S_IMODE(ds.st_mode) & 0o022
+      and stat.S_ISREG(fs.st_mode) and fs.st_uid == uid and word == "absent")
+sys.exit(0 if ok else 1)
+PY
+}
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
-  printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")"
+  printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
+  case "$1" in demand|drafting|litigation) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
 }
 
 # ---------- one run ----------

@@ -16,6 +16,8 @@ clean run is possible.
 Falsifiers carried, one per behaviour the plan requires:
   empty retired list fails              retired-skills-absent
   unauthored lane passes with a note    demand-firm-inputs-absent
+  cleanly empty vault is not authored   demand-firm-inputs-absent (state absent)
+  unreachable vault still fails         demand-firm-inputs-present (state unreachable)
   busy lane warns hourly, fails at boot medchron-daemon-idle
   vendor probe failure warns hourly     agentmail-webhook-secret-matches-vendor
   schema, atomic 0644 write             results.json
@@ -171,6 +173,69 @@ def test_unauthored_lane_passes_with_a_note_and_an_authored_one_is_checked(seat:
     doc = _once(seat, "hourly")
     assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
     assert _check(doc, "demand-firm-inputs-present")["ok"] is False
+
+
+def _lane_state(seat: dict[str, Path], lane: str, word: str) -> None:
+    """What entrypoint-fetch-inputs.sh records for a lane at boot."""
+    _write(seat["root"] / f"run/smd-lanes/{lane}.inputs", f"{word}\n")
+
+
+# pilot-smokeball (2026-10-23): demand-letter-drafter enabled, the vault's
+# demand/ prefix empty by design since 2026-07-28. The boot's fetch records a
+# clean `absent`; the lane is not authored for the seat and passes with a note.
+def test_enabled_lane_whose_vault_is_cleanly_empty_passes_with_a_note(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    _lane_state(seat, "demand", "absent")
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    note = _check(doc, "demand-firm-inputs-absent")
+    assert note["ok"] is True and note["warn"] is False and "not authored" in note["detail"]
+    assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-present"]
+
+
+# The 2026-10-14 A&P v141 falsifier: the inputs are in the vault and the
+# boot's fetch failed. `unreachable` keeps the lane authored, so the check fails.
+def test_enabled_lane_whose_fetch_was_unreachable_still_fails(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    _lane_state(seat, "demand", "unreachable")
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
+    present = _check(doc, "demand-firm-inputs-present")
+    assert present["ok"] is False and present["warn"] is False
+
+
+def test_enabled_lane_with_no_state_file_still_fails(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
+    assert _check(doc, "demand-firm-inputs-present")["ok"] is False
+
+
+def test_an_absent_verdict_root_did_not_write_is_not_trusted(seat: dict[str, Path]) -> None:
+    # ROOT_UID 0 while the test user wrote the file: a non-root writer cannot
+    # turn a lane's presence check off.
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    _lane_state(seat, "demand", "absent")
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID="0")
+    assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
+    assert _check(doc, "demand-firm-inputs-present")["ok"] is False
+
+
+def test_enabled_lane_with_inputs_fetched_runs_the_presence_check(seat: dict[str, Path]) -> None:
+    # The stat shim answers the real owner; the fixture's files belong to the
+    # test user, so a shim that names that owner root:medchron stands in for a
+    # seat where the entrypoint chowned the inputs.
+    shim = seat["shims"] / "stat"
+    shim.write_text(
+        shim.read_text().replace(
+            "print(out)", "print(out.replace(user(os.getuid()), 'root', 1).replace(group(os.getgid()), 'medchron', 1))"
+        )
+    )
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    _lane_state(seat, "demand", "fetched")
+    _write(seat["root"] / "var/lib/smd-config/demand/demand-firm.yaml", "firm: x\n", 0o640)
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    assert _check(doc, "demand-firm-inputs-present")["ok"] is True
+    assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
 
 
 def test_unreadable_customer_yaml_reads_as_authored_never_as_absent(seat: dict[str, Path]) -> None:

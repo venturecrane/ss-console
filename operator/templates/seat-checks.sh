@@ -606,8 +606,12 @@ check "note-jobs-dir-root-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-me
 # of medchron, demand, drafting, litigation). The laptop smoke asks the
 # engagements checkout (working tree or origin/main; boot-smoke-test.sh says
 # why both). The in-image self-test has no engagements checkout, so it asks
-# the live customer.yaml whether the lane's skill is enabled. Where the two
-# disagree on a seat, the release that records both verdicts shows it.
+# the live customer.yaml whether the lane's skill is enabled and, for demand,
+# drafting and litigation, narrows that by the boot fetch's recorded verdict
+# (/run/smd-lanes/<lane>.inputs): a clean `absent` vault listing is not
+# authored, an `unreachable` vault still is (selftest.sh lane_authored says
+# why). Where the two disagree on a seat, the release that records both
+# verdicts shows it.
 MEDCHRON_AUTHORED=0
 lane_authored medchron && MEDCHRON_AUTHORED=1
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
