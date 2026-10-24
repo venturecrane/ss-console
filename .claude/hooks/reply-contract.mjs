@@ -26,8 +26,13 @@
  *   LOG-ONLY (promoted to blocking only after the observed false-positive
  *   rate says they deserve it -- the primer's own design law: a line that is
  *   sometimes wrong and always loud teaches agents to skim past everything):
- *     - DECISION-NEEDED present but missing Stakes: / My pick:
- *     - failure-signal words below the fold while STATUS: OK
+ *     - failure-signal words below the fold while STATUS: OK. Reviewed
+ *       2026-10-24 and NOT promoted: of 17 replies in transcripts that tripped
+ *       it, about 2 hid real bad news; the rest were tests failing as
+ *       designed, "0 failed", or defects already fixed.
+ *     (A DECISION-NEEDED-without-Stakes/My-pick rule was deleted the same day
+ *     by Captain directive: 347 fires, no consequence, no correction it
+ *     would have caught.)
  *
  * Loop safety: `stop_hook_active` is honored when the harness provides it;
  * a marker file keyed on the worktree provides the one-bounce guarantee when
@@ -152,9 +157,6 @@ function evaluateShape(msg) {
   const { total, aboveFold, foldSeen } = proseLines(msg)
   const advisories = []
 
-  if (/DECISION-NEEDED/.test(msg) && !(/Stakes\s*:/i.test(msg) && /My pick\s*:/i.test(msg))) {
-    advisories.push('decision-needed-without-stakes-or-pick')
-  }
   if (foldSeen && /STATUS\s*:\s*OK\b/i.test(msg)) {
     const below = msg.split(FOLD_RE)[1] || ''
     if (FAILURE_WORDS.test(below)) advisories.push('failure-words-below-fold-with-status-ok')

@@ -444,26 +444,30 @@ mechanisms:
     file: .claude/hooks/reflex-primer.sh
     hypothesis: 'Always-on injection of the judgment-law primer lines reduces judgment-class incidents (Laws 1, 3, 4, 8) that no deterministic gate can reach.'
     success_criterion: 'Corrections attributable to Laws 1/3/4/8 captured at session close trend toward zero across the sessions between now and the review date.'
-    review: 2026-09-30
+    review: 2026-11-24
     on_failure: 'Demote or redesign. A mechanism that cannot be demoted is ceremony.'
+    last_review: '2026-10-24, NOT MET. Saved Captain corrections by month (Aug/Sep/Oct, feedback_* memories by incident date, classified from description lines): Law 1 6/4/5, Law 3 3/5/3, Law 4 5/3/0, Law 8 1/5/3. Only Law 4 trends toward zero; ownership is flat and finish-or-say-why rose. Not demoted: the primer also carries fresh doctrine (Session Mechanics 4) and, since #3468, the skunkworks stance, which is the redesign aimed at Laws 1 and 8. Re-scored 2026-11-24 with skunkworks-default-stance. Caveat: counts are corrections someone chose to save, with no session denominator.'
   - id: reply-contract
     file: .claude/hooks/reply-contract.mjs
     hypothesis: 'A Stop hook that bounces long unstructured replies once forces the header+fold shape, so the Captain finds the reviewable item without reading the wall (Law 11 mechanized).'
     success_criterion: 'Wall-of-text corrections from the Captain trend to zero, AND the observed false-positive bounce rate in ~/.claude/ss-board/reply-contract.log stays under 5 percent; the log-only rules are promoted or deleted based on the same log.'
-    review: 2026-09-30
+    review: 2026-11-24
     on_failure: 'Loosen the threshold, or demote to log-only. A shape gate that cries wolf teaches agents to satisfy its letter and bury the defect below the fold.'
+    last_review: '2026-10-24, MET ON SHAPE, OPEN ON ADVISORIES. reply-contract.log since 2026-08-02: 11,725 evaluations, 32 blocks (0.27 percent), 50 exempt. The prompts behind the bounces still in transcripts were status and obligation questions, none a request for verbatim text, so no false bounce was found. No wall-of-text correction saved after 2026-09-21; the readability corrections since are vocabulary (MST times, "the A&P Operator"), which a shape hook cannot see. Log-only rules, per the criterion: decision-needed-without-stakes-or-pick (347 fires) DELETED by Captain directive 2026-10-24. failure-words-below-fold-with-status-ok (139 fires) NOT promoted: of 17 transcript replies that tripped it, about 2 hid real bad news and about 15 were benign (a test failing as designed, "0 failed", a fixed defect), roughly 88 percent false alarms, so as a gate it would cry wolf. It stays log-only pending the Captain on whether to delete it too.'
   - id: plan-premise-gate
     file: .claude/hooks/plan-premise-gate.mjs
     hypothesis: 'Blocking plan-mode exit without an evidenced Premises table converts mid-build surprises into plan-time probes (Law 9 extended to plan time).'
     success_criterion: 'Sessions reporting a mid-build surprise attributable to an unprobed premise (environment, data, API shape, current state) trend to zero; the warn-only path (plan text unavailable) stays rare in ~/.claude/ss-board/premise-gate.log.'
-    review: 2026-09-30
+    review: 2026-11-24
     on_failure: 'Demote to warn-only. A premise table filled with ceremonial evidence is Law 12 failing at the row level and means the check needs redesign, not more force.'
+    last_review: '2026-10-24, MET FOR PLAN MODE. premise-gate.log: 145 evaluations, 128 passed with an evidenced table, 17 blocked, 0 on the warn-only path. Saved unprobed-premise corrections by month: 19/4/6. The October six are client-deliverable premises (register row, coverage diff, rehearsal recipient, a pipeline debugged one deploy at a time) that arose outside plan mode, which this gate cannot see; Law 16 (2026-10-23) now carries that half. Keep.'
   - id: session-board
     file: .claude/hooks/lib/board.mjs
     hypothesis: 'Per-turn injection of every live peer mission line ends mutually-blind concurrent sessions (Law 10 extended to peers) without a brittle collision matcher.'
     success_criterion: 'Zero duplicate-featureset builds across concurrent sessions between now and the review date; board records stay accurate (no ghost peers older than 24h observed in the primer output).'
-    review: 2026-09-30
+    review: 2026-11-24
     on_failure: 'If ghosts or noise teach agents to skim the board block, tighten pruning or remove the block. A peer listing that is sometimes wrong is worse than the blindness it replaced.'
+    last_review: '2026-10-24, MET. Zero saved duplicate-work incidents in any month; peer-blindness corrections 6/1/0, the last on 2026-09-01. Board probe 2026-10-24: 6 records, oldest updated 13.6h ago, none past the 24h MAX_AGE_H prune. Keep.'
   - id: obligation-capture-at-close
     file: .claude/skills/eos/SKILL.md
     hypothesis: 'A session that reads client correspondence is the only thing that knows what was promised in it, and it knows only until it ends. Surfacing that at close, as a check alongside the repo close-out checks, converts a promise into a register row instead of a memory nobody holds tomorrow.'

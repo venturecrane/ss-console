@@ -239,6 +239,14 @@ describe('the skunkworks stance is the default (folded 2026-10-24)', () => {
     expect(primerLines.filter((line) => body.includes(line))).toEqual([])
   })
 
+  it('/sos surfaces doctrine mechanism reviews that are past due', () => {
+    // 2026-10-24: four mechanisms sat four weeks past review with nothing
+    // showing it, because doctrine-integrity checks the date's format only.
+    const body = skillBody('sos')
+    expect(body).toMatch(/\*\*Doctrine reviews past due\.\*\*/)
+    expect(body).toMatch(/\[review\] past due/)
+  })
+
   it('/eos grades the session against its mission, with a citation', () => {
     const body = skillBody('eos')
     expect(body).toMatch(/\*\*Against the mission:\*\*/)
