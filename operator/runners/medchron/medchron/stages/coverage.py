@@ -209,23 +209,49 @@ def _billing_names(d: Path) -> set[str]:
     return {b["name"] for b in (spec.get("docs") if isinstance(spec, dict) else spec) or []}
 
 
+def cited_files(slug_dir: Path, unit: str) -> tuple[set[str], set[int]] | None:
+    """(cited unit files, hollow exhibits) for the assembled body, or None when
+    no body exists. One reader for the gate and for ``rule_rows``, so a file the
+    document cites can never also be named to the firm as one no entry is
+    drawn from."""
+    rd = slug_dir / "runs" / unit
+    body = ""
+    for cand in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md"):
+        if (rd / cand).is_file():
+            body = (rd / cand).read_text(encoding="utf-8")
+            break
+    if not body:
+        return None
+    cited_ex, hollow = cited_exhibits(body)
+    pm = read_json(slug_dir / "out" / unit / "page_map.json", None)
+    if pm is not None:
+        files = {f["file"] for e in pm if e["exhibit"] in cited_ex for f in e["files"]}
+    else:
+        files = {n for n, num in read_json(rd / "exhibit_map.json", {}).items() if num in cited_ex}
+    return files, hollow
+
+
 def rule_rows(slug_dir: Path, unit: str, cfg: Any) -> list[dict[str, str]]:
     """The unit files explained by rule: the composer read each and wrote
     `entries: 0` for it, or every entry it drew from the file was removed by a
     ``filter`` rule (``omitted_by_rule``), and nothing else accounts for it.
     One reader for the gate (which records them) and the Records Reviewed and
     Limitations section (which names them to the firm), so the two can never
-    disagree."""
+    disagree. A cited file is never listed."""
     unit_files = read_json(slug_dir / "units" / f"{unit}.json", [])
     rd = slug_dir / "runs" / unit
     counts = entry_counts(rd, unit_files)
     omitted = omitted_by_rule(rd)
     said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(slug_dir, unit, by_rule=False)}
     rules, billing = exclusions(cfg), _billing_names(slug_dir)
+    # A file the document cites is never "no entry is drawn from it", whatever
+    # its FILES-SEEN count says (a composer miscount, or a citation assemble
+    # resolved onto it). With no assembled body nothing is cited yet.
+    cited = (cited_files(slug_dir, unit) or (set(), set()))[0]
     out = []
     for f in unit_files:
         name = file_key(f)
-        if _settled(name, f, billing, rules, said):
+        if name in cited or _settled(name, f, billing, rules, said):
             continue
         why = NO_ENCOUNTER if counts.get(name) == 0 else omitted.get(name)
         if why:
@@ -363,23 +389,14 @@ def run(sr: StageRun) -> int:
 
     billing_names = _billing_names(d)
     said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(d, unit)}
-    body = ""
-    for cand in ("entries_scoped_final.md", "entries_scoped.md", "entries_final.md"):
-        if (rd / cand).is_file():
-            body = (rd / cand).read_text(encoding="utf-8")
-            break
-    if not body:
+    cited = cited_files(d, unit)
+    if cited is None:
         sr.log("COVERAGE GATE: no assembled body found")
         return 1
-    cited_ex, hollow = cited_exhibits(body)
+    cited_files_, hollow = cited
     if hollow:
         sr.log(f"  HOLLOW citations (exhibit referenced with no prose): {sorted(hollow)}")
-    pm = read_json(d / "out" / unit / "page_map.json", None)
-    if pm is not None:
-        cited_files = {f["file"] for e in pm if e["exhibit"] in cited_ex for f in e["files"]}
-    else:
-        cited_files = {n for n, num in read_json(rd / "exhibit_map.json", {}).items() if num in cited_ex}
-    return _account(sr, unit_files, cited_files, raw_by_id, (rules, billing_names, said))
+    return _account(sr, unit_files, cited_files_, raw_by_id, (rules, billing_names, said))
 
 
 def _account(

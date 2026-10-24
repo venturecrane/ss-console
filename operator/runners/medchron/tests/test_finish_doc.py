@@ -464,6 +464,140 @@ def test_strip_falsifier_ignores_a_byte_identical_neighbour_and_still_fires_on_a
     assert strip.run_falsify(sr) == 1
 
 
+def test_strip_falsifier_does_not_count_an_offset_past_the_last_page_as_proof(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N6 (2026-10-24): when the only moved cited page is an exhibit's last
+    page, the one-page offset lands past the end. That compared no content, yet
+    it counted as a mismatch, so a blind check "proved" it could fail. It is
+    not comparable; with nothing comparable the falsifier is not applicable."""
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, log=log)
+    _exhibit(sr, [ORDER_PAGE, PROSE])
+    _doc(sr, _cite("2"))
+    assert classify.run_nonrecord(sr) == 0
+    monkeypatch.setattr(strip, "page_match", lambda a, b, dpi=60: (True, 0.0))  # blind
+    assert strip.run_falsify(sr) == 0
+    assert any("not applicable" in line for line in log), log
+    assert not any("Check can fail; trustworthy" in line for line in log), log
+
+
+def _two_exhibits(sr: StageRun) -> tuple[Path, Path]:
+    out = sr.slug_dir / "out" / "alpha"
+    out.mkdir(parents=True, exist_ok=True)
+    rows, pdfs = [], []
+    for n, (label, body) in enumerate([("Example Clinic", PROSE), ("Example Imaging", "imaging " + PROSE)], 1):
+        title = f"Exhibit {n} - {label} - 01-02-2026 (Medical Records)"
+        pages = [ORDER_PAGE, INDEX_PAGE, body, body + " second"]
+        (out / f"{title}.pdf").write_bytes(make_pdf(pages))
+        pdfs.append(out / f"{title}.pdf")
+        rows.append(
+            {
+                "exhibit": n,
+                "title": title,
+                "total_pages": 4,
+                "files": [{"file": f"{label}.pdf", "old_exhibit": n, "start_page": 1, "pages": 4}],
+            }
+        )
+    (out / "page_map.json").write_text(json.dumps(rows))
+    _doc(
+        sr,
+        DOC_3.replace("(Exhibit 1 - p. 3)", "(Exhibit 1 - p. 3-4) and imaging. (Exhibit 2 - p. 4)").replace(
+            "| Exhibit 1 - p. 3 |", "| Exhibit 2 - p. 3 |"
+        ),
+    )
+    return pdfs[0], pdfs[1]
+
+
+def _killed_at(monkeypatch: pytest.MonkeyPatch, n: int, step: str = "replace") -> None:
+    """The process dies at the n-th exhibit ``step`` (the ``.orig`` hard link,
+    or the replace that follows it), as an OOM kill would."""
+    real, seen = getattr(Path, step), []
+
+    def wrapped(self, target):
+        if self.name.endswith(".stripped" if step == "replace" else ".orig"):
+            seen.append(self)
+            if len(seen) == n:
+                raise SystemExit("killed")
+        return real(self, target)
+
+    monkeypatch.setattr(Path, step, wrapped)
+
+
+@pytest.mark.parametrize("step", ["hardlink_to", "replace"])
+def test_an_apply_killed_between_two_exhibits_resumes_and_completes(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch, step: str
+) -> None:
+    """N3 (2026-10-24): the daemon requeues a signal-killed runner. An apply
+    killed after replacing one of two exhibits came back REFUSED "already
+    stripped once", which needs a person. It resumes: the replaced exhibit is
+    kept because it IS the stripped result by content, the other is stripped,
+    and the chronology is rewritten once from the pre-strip copy."""
+    import pymupdf
+
+    sr = _sr(job_dir, firm, data_root)
+    ex1, ex2 = _two_exhibits(sr)
+    assert classify.run_nonrecord(sr) == 0
+    _killed_at(monkeypatch, 2, step)
+    with pytest.raises(SystemExit):
+        strip.run_apply(sr)
+    monkeypatch.undo()
+    assert Path(str(ex1) + ".orig").exists()
+    # killed before the second link, or between the link and its replace
+    assert not Path(str(ex2) + ".orig").exists() or Path(str(ex2) + ".orig").samefile(ex2)
+    assert Path(str(ex2) + ".orig").exists() == (step == "replace")
+    assert strip.run_apply(sr) == 0
+    doc = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "(Exhibit 1 - p. 1-2)" in doc and "(Exhibit 2 - p. 2)" in doc and "| Exhibit 2 - p. 1 |" in doc
+    for pdf in (ex1, ex2):
+        with pymupdf.open(str(pdf)) as d:
+            assert len(d) == 2
+    assert json.loads((sr.slug_dir / "strip_result.json").read_text())["new_page_counts"] == {"1": 2, "2": 2}
+    assert not strip.prestrip_path(sr.slug_dir / "runs" / "alpha" / "final-chronology.md").exists()
+    assert strip.run_apply(sr) == 1  # a finished apply still never runs twice
+
+
+def test_an_apply_killed_after_the_chronology_rewrite_rewrites_it_the_same(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rewrite is idempotent: a kill after the chronology was renumbered
+    resumes from the pre-strip copy, never renumbering the renumbered text."""
+    sr = _sr(job_dir, firm, data_root)
+    _two_exhibits(sr)
+    assert classify.run_nonrecord(sr) == 0
+    real = Path.write_text
+
+    def write_text(self, data, *a, **k):
+        if self.name == "strip_result.json":
+            raise SystemExit("killed")
+        return real(self, data, *a, **k)
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+    with pytest.raises(SystemExit):
+        strip.run_apply(sr)
+    monkeypatch.undo()
+    cpath = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
+    first = cpath.read_text()
+    assert strip.run_apply(sr) == 0
+    assert cpath.read_text() == first and "(Exhibit 1 - p. 1-2)" in first
+
+
+def test_a_resumed_apply_refuses_an_exhibit_that_is_not_the_stripped_result(
+    job_dir: Path, firm: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The marker is never trusted: an exhibit with a `.orig` whose current
+    bytes are not the stripped result is a real defect, and still refuses."""
+    sr = _sr(job_dir, firm, data_root)
+    ex1, _ = _two_exhibits(sr)
+    assert classify.run_nonrecord(sr) == 0
+    _killed_at(monkeypatch, 2)
+    with pytest.raises(SystemExit):
+        strip.run_apply(sr)
+    monkeypatch.undo()
+    ex1.write_bytes(make_pdf(["something else", "entirely"]))
+    assert strip.run_apply(sr) == 1
+
+
 def test_strip_gives_each_refusal_its_own_exit_code(job_dir: Path, firm: Path, data_root: Path) -> None:
     """Other (2026-10-24): strip_falsify's exit 1 meant three things, so the
     reason the driver printed ("the content check cannot fail") was wrong for

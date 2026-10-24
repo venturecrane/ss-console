@@ -59,7 +59,6 @@
     "rehearsal/run.py::run_suite": 16,
     "runners/medchron/medchron/llm.py::_round": 17,
     "runners/medchron/medchron/stages/assemble.py::run": 16,
-    "runners/medchron/medchron/stages/coverage.py::run": 16,
     "runners/medchron/medchron/stages/exhibits.py::run": 16,
     "runners/medchron/medchron/stages/merge.py::merge_cluster": 19,
     "runners/medchron/medchron/stages/merge.py::parse_fragment": 16,

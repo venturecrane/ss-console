@@ -23,6 +23,16 @@ and saving (per-page insert_pdf reached 38 GB resident on a 2,141-page
 production); the original stays beside it as `.orig`, a second apply refuses,
 and the audit's render cache is cleared because every page number just moved.
 
+An apply killed part way (the daemon requeues a signal-killed runner; an OOM
+on a 4,000-page matter is the case) resumes rather than refusing. Before it
+replaces anything, apply copies the chronology beside itself as
+``final-chronology.md.prestrip``, and removes that copy only once the strip
+result is written. While the copy exists the apply is unfinished: it reads
+the document from the copy and each exhibit from its ``.orig``, and an
+exhibit already replaced is kept as done only if its current file matches the
+stripped result BY CONTENT (``_same_doc``); anything else still refuses. The
+chronology is rewritten from the copy, so the rewrite is the same every time.
+
 Rules since 2026-10-24, each for a legitimate record that used to stop a run:
 
 * A citation to a page outside its exhibit (beyond the last page, or p. 0)
@@ -216,21 +226,53 @@ def _remap_doc(
     return TABLE_CITE.sub(sub_table, CITE.sub(sub, doc_md)), checks, problems
 
 
+def prestrip_path(cpath: Path) -> Path:
+    """The pre-strip copy of the chronology an unfinished apply resumes from."""
+    return cpath.with_name(cpath.name + ".prestrip")
+
+
+def _sources(paths: dict[int, Path]) -> dict[int, Path]:
+    """Each exhibit's pre-strip file: its ``.orig`` where one exists."""
+    out: dict[int, Path] = {}
+    for ex, p in paths.items():
+        o = Path(str(p) + ".orig")
+        out[ex] = o if o.exists() else p
+    return out
+
+
+def _same_doc(a: Path, b: Path, pages: list[int]) -> bool:
+    """Is ``b`` the stripped result ``a``? Same page count, every page's text
+    equal, and each cited page equal by ``page_match`` (text and pixels)."""
+    import pymupdf
+
+    with pymupdf.open(str(a)) as x, pymupdf.open(str(b)) as y:
+        if len(x) != len(y) or any(x[i].get_text() != y[i].get_text() for i in range(len(x))):
+            return False
+        return all(1 <= n <= len(x) and page_match(x[n - 1], y[n - 1])[0] is True for n in pages)
+
+
 def _verify(
-    sr: StageRun, ex: int, path: Path, drops: set[int], rel: list[tuple[int, int]], falsify: bool
+    sr: StageRun,
+    ex: int,
+    path: Path,
+    drops: set[int],
+    rel: list[tuple[int, int]],
+    falsify: bool,
+    source: Path | None = None,
 ) -> tuple[int, int, list[list[Any]], Path]:
     """(mismatches, discriminating checks, unverifiable rows, the stripped copy)
     for one exhibit: the copy with its drops deleted, each cited page checked
     by content against the original. Under ``falsify`` the new page is offset
     by one, and a cited page whose neighbour is byte-identical is skipped (a
-    repeated fax page): the offset lands on the same paper, so it proves
-    nothing. The caller removes or keeps the copy."""
+    repeated fax page), as is an exhibit's last page (the offset lands past
+    the end): neither offset compares any content, so neither proves anything.
+    The caller removes or keeps the copy."""
     import pymupdf
 
-    src = pymupdf.open(str(path))
+    src = pymupdf.open(str(source or path))
     tmp = Path(str(path) + ".stripped")
     tmp.unlink(missing_ok=True)
-    cp = pymupdf.open(str(path))
+    cp = pymupdf.open(str(source or path))
     cp.delete_pages([p - 1 for p in sorted(drops)])
     cp.save(str(tmp), garbage=4, deflate=True)
     cp.close()
@@ -239,7 +281,12 @@ def _verify(
     unverifiable: list[list[Any]] = []
     for o, n in rel:
         t = n + 1 if falsify else n
-        if falsify and 1 <= t <= len(dst) and identical(dst[n - 1], dst[t - 1]):
+        if falsify and not 1 <= t <= len(dst):
+            # The offset runs past the exhibit's last page: there is no page to
+            # compare, so it is not comparable. Counting it as a mismatch would
+            # "prove" the check with no content comparison at all.
+            continue
+        if falsify and identical(dst[n - 1], dst[t - 1]):
             continue
         counted += 1
         if t < 1 or t > len(dst):
@@ -282,7 +329,10 @@ def _run(sr: StageRun, mode: str) -> int:
     paths = resolve_exhibit_files(outdir)
     authored = read_json(d / f"drops{sfx}.json", {"manual_drops": {}, "citation_edits": []})
     cpath = d / "runs" / unit / "final-chronology.md"
-    doc_md = cpath.read_text(encoding="utf-8")
+    # An unfinished apply resumes from the pre-strip document and exhibits.
+    resume = prestrip_path(cpath).is_file()
+    doc_md = (prestrip_path(cpath) if resume else cpath).read_text(encoding="utf-8")
+    src = _sources(paths) if resume else paths
     for e in authored.get("citation_edits") or []:
         if e["find"] not in doc_md:
             sr.log(f"!! citation edit not found: {e['find']}")
@@ -299,21 +349,22 @@ def _run(sr: StageRun, mode: str) -> int:
         # strip there is no remap, so there is nothing for it to prove.
         sr.log("FALSIFIER: no pages to drop, so no remap to falsify; not applicable")
         return 0
-    remap, newcount = _new_counts(paths, drops)
+    remap, newcount = _new_counts(src, drops)
     out_md, checks, problems = _remap_doc(doc_md, drops, remap, sr.log)
     if problems:
         for ex, spec, why in problems:
             sr.log(f"!! Exhibit {ex} p.{spec}: {why}")
         return EXIT_CITED_DROP
     sr.log(f"  remapped {len(set(checks))} distinct page reference(s)")
-    v = _check_all(sr, paths, drops, checks, apply=apply, falsify=falsify)
+    v = _check_all(sr, (paths, src), drops, checks, apply=apply, falsify=falsify, resume=resume)
     if v is None:
         return EXIT_BLIND
     bad, counted, unverifiable, unstripped, staged = v
     if falsify:
         if checks and not counted:
             sr.log(
-                "FALSIFIER: every cited page's neighbour is byte-identical to it; nothing to falsify, not applicable"
+                "FALSIFIER: no cited page has a comparable neighbour (each is byte-identical to the next page, "
+                "or is its exhibit's last page); nothing to falsify, not applicable"
             )
             return 0
         sr.log(
@@ -322,7 +373,7 @@ def _run(sr: StageRun, mode: str) -> int:
         )
         return 0 if (bad or not checks) else EXIT_BLIND
     if unstripped:
-        remap, newcount = _new_counts(paths, drops)
+        remap, newcount = _new_counts(src, drops)
         out_md, checks, _ = _remap_doc(doc_md, drops, remap, lambda _line: None)
     sr.log(
         f"all {len(checks)} verifiable cited page references verified identical"
@@ -333,48 +384,81 @@ def _run(sr: StageRun, mode: str) -> int:
         for tmp in staged.values():
             tmp.unlink(missing_ok=True)
         return 0
+    result = {"drops": {str(k): sorted(p) for k, p in drops.items()}, "new_page_counts": newcount}
+    result |= {"unverifiable": unverifiable, "unstripped": unstripped}
+    _commit(sr, paths, staged, (cpath, out_md), (d / f"strip_result{sfx}.json", result))
+    _clear_render_cache(sr, outdir)
+    prestrip_path(cpath).unlink()  # last: the apply is finished
+    sr.log(f"wrote stripped exhibits and {cpath.name}")
+    return 0
+
+
+def _commit(
+    sr: StageRun,
+    paths: dict[int, Path],
+    staged: dict[int, Path],
+    doc: tuple[Path, str],
+    result: tuple[Path, dict[str, Any]],
+) -> None:
+    """Replace the exhibits and rewrite the chronology. The pre-strip copy is
+    written (atomically) before anything is replaced, so a kill at any point
+    after it leaves an apply that resumes from the same inputs."""
+    cpath, out_md = doc
+    pre = prestrip_path(cpath)
+    if not pre.is_file():
+        part = pre.with_name(pre.name + ".part")
+        part.write_text(cpath.read_text(encoding="utf-8"), encoding="utf-8")
+        part.replace(pre)
     for ex, tmp in staged.items():
         orig = Path(str(paths[ex]) + ".orig")
         if not orig.exists():
             orig.hardlink_to(paths[ex])
         tmp.replace(paths[ex])
     cpath.write_text(out_md, encoding="utf-8")
-    result = {"drops": {str(k): sorted(p) for k, p in drops.items()}, "new_page_counts": newcount}
-    result |= {"unverifiable": unverifiable, "unstripped": unstripped}
-    (d / f"strip_result{sfx}.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
-    _clear_render_cache(sr, outdir)
-    sr.log(f"wrote stripped exhibits and {cpath.name}")
-    return 0
+    result[0].write_text(json.dumps(result[1], indent=1), encoding="utf-8")
+    sr.log(f"  replaced {len(staged)} exhibit(s)")
 
 
 def _check_all(
     sr: StageRun,
-    paths: dict[int, Path],
+    files: tuple[dict[int, Path], dict[int, Path]],
     drops: dict[int, set[int]],
     checks: list[tuple[int, int, int]],
     *,
     apply: bool,
     falsify: bool,
+    resume: bool = False,
 ) -> tuple[int, int, list[list[Any]], list[dict[str, Any]], dict[int, Path]] | None:
     """Verify every exhibit with a cited page: (mismatches, discriminating
     checks, unverifiable rows, exhibits left unstripped, staged copies). None
-    when apply finds an exhibit already stripped once. Outside ``falsify`` an
+    when apply finds an exhibit already stripped once (outside a resume) or,
+    resuming, an exhibit that is neither its original nor the stripped result
+    by content. Outside ``falsify`` an
     exhibit with a mismatch is left whole (its drops emptied), because the same
     paper with its original numbers is always true."""
     bad = counted = 0
     unverifiable: list[list[Any]] = []
     unstripped: list[dict[str, Any]] = []
     staged: dict[int, Path] = {}
+    paths, src = files
     for ex in sorted(paths):
         rel = sorted({(o, n) for e, o, n in checks if e == ex})
         if not rel:
             continue
-        if apply and Path(str(paths[ex]) + ".orig").exists():
+        orig = Path(str(paths[ex]) + ".orig")
+        if apply and orig.exists() and not resume:
             sr.log(f"  Ex{ex}: .orig exists, already stripped once; REFUSING to strip again")
             return None
-        miss, n_counted, unver, tmp = _verify(sr, ex, paths[ex], drops[ex], rel, falsify)
+        miss, n_counted, unver, tmp = _verify(sr, ex, paths[ex], drops[ex], rel, falsify, src[ex])
         bad, counted = bad + miss, counted + n_counted
         unverifiable += unver
+        done = _resumed(sr, ex, (orig, paths[ex], tmp), miss, [n for _o, n in rel]) if apply and resume else False
+        if done is None:
+            tmp.unlink(missing_ok=True)
+            return None
+        if done:
+            tmp.unlink(missing_ok=True)
+            continue
         if falsify or miss:
             tmp.unlink(missing_ok=True)
         else:
@@ -387,6 +471,21 @@ def _check_all(
             unstripped.append({"exhibit": ex, "reason": f"{miss} moved cited page(s) failed the content check"})
             drops[ex] = set()
     return bad, counted, unverifiable, unstripped, staged
+
+
+def _resumed(sr: StageRun, ex: int, files: tuple[Path, Path, Path], miss: int, pages: list[int]) -> bool | None:
+    """Resuming an apply: True when the interrupted run already replaced this
+    exhibit with the stripped result (checked by content, never by the marker),
+    False when it is still the original (it is stripped now), None when it is
+    neither, a real defect that refuses."""
+    orig, current, tmp = files
+    if not orig.exists() or orig.samefile(current):
+        return False
+    if not miss and _same_doc(tmp, current, pages):
+        sr.log(f"  Ex{ex}: already stripped by the interrupted apply (verified by content); kept")
+        return True
+    sr.log(f"  Ex{ex}: .orig exists and the exhibit is not the stripped result by content; REFUSING")
+    return None
 
 
 def _clear_render_cache(sr: StageRun, outdir: Path) -> None:
