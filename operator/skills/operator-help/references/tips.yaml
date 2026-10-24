@@ -4,7 +4,7 @@
 # promote, demote or reorder them, never rewrite them), the kind of struggle it
 # answers (`when`), and the plain sentence the Operator may use (`text`).
 # Rules for every `text`: plain sentences, no em dashes, no promise of timing,
-# no matter, client or party names. Matter numbers stay XXXXXX.
+# no matter, client or party names. Matter numbers stay [number].
 tips:
   - id: held_identity_check
     when: held_identity_check
@@ -20,18 +20,18 @@ tips:
   - id: vague_request
     when: vague_request
     text: >-
-      Name the matter and what you want, for example "On matter XXXXXX, list the
+      Name the matter and what you want, for example "On matter [number], list the
       medical providers." The more specific you are, the better the result.
   - id: wrong_matter
     when: wrong_matter
     text: >-
-      Give me the matter number, like "On matter XXXXXX", so I work on the file
+      Give me the matter number, like "On matter [number]", so I work on the file
       you mean and not one with a similar name.
   - id: wants_specific_document
     when: wants_specific_document
     text: >-
       If you want me to use one particular document, name it: "On matter
-      XXXXXX, read the police report and tell me who was cited."
+      [number], read the police report and tell me who was cited."
   - id: wants_changes
     when: wants_changes
     text: >-

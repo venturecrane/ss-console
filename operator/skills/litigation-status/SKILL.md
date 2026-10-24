@@ -46,7 +46,7 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     # "my cases" is the asker's own files (mine: true), never the whole firm (2026-10-24).
     help:
       what: "Sends the firm's list of its cases in litigation, or the deadlines report on named attorneys' cases."

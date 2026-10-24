@@ -21,7 +21,7 @@
   anything else is the firm's format and a competent default. The offer to
   learn an attorney's style from a couple of examples is always true, because
   SMD does that teaching.
-- Matter numbers in examples stay as XXXXXX. Never put a real matter, client or
+- Matter numbers in examples stay as [number]. Never put a real matter, client or
   party name into an example.
 - Nothing here promises a time. Never add one.
 
@@ -40,19 +40,19 @@ tell it the matter and what you need, and it pulls what it needs on its own.
 
 1. **Work it has been trained on.** For the work the firm does over and over,
    we've trained the Operator on the firm's own examples, so a one-line request
-   is enough. For example: "On matter XXXXXX, build the medical chronology." "On
-   matter XXXXXX, draft the demand." "On matter XXXXXX, draft the mediation
+   is enough. For example: "On matter [number], build the medical chronology." "On
+   matter [number], draft the demand." "On matter [number], draft the mediation
    brief." "Send me a fresh litigation status list for my cases."
 2. **One-off work.** For anything else, write it the way you would for Claude.
    Tell it the matter, what you want, and anything that matters to you. An
-   example of a detailed request: "On matter XXXXXX, draft special
+   example of a detailed request: "On matter [number], draft special
    interrogatories, RFAs and RFPDs to the defendant store. Make sure we request
    all video surveillance for 60 minutes prior to the incident, all incident
    reports, all photos, the names of employees working that day, who cleaned it
    up, how long it had been there, and prior spills in that area."
 
 If you want it to look at one particular document, just name it: "On matter
-XXXXXX, read the police report and tell me who was cited."
+[number], read the police report and tell me who was cited."
 
 ### The firm's voice, and yours
 
@@ -74,7 +74,7 @@ Every reply lands in the same email thread, so you can just keep talking to it:
   version.
 - If it asks you a question, a one-line answer is all it needs.
 - Ask it questions about a file, like "What offers have been made on matter
-  XXXXXX?" or "What medical providers are listed on matter XXXXXX?"
+  [number]?" or "What medical providers are listed on matter [number]?"
 
 ### A few things that help
 

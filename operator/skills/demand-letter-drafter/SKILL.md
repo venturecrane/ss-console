@@ -38,10 +38,10 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     help:
       what: 'Prepares the records gap audit and a draft demand on a matter.'
-      example: 'On matter XXXXXX, draft the demand.'
+      example: 'On matter [number], draft the demand.'
       admin_only: true
     addon: pi
     weight: light # the turn only resolves a matter, submits a job and replies; the heavy work runs in the demand job on the Machine

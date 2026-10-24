@@ -12,6 +12,10 @@ ss-console#3423, increment 3. One cron row (``13 14 * * *``) drives both halves:
   consume-once dispatch envelope the overlay's ``prerendered_dispatch`` sends out
   of turn, through the full gate, to the one authored recipient
   (``settings.recipient``, SMD's own address). No model composes the note.
+  A forced run by hand must set ``HERMES_HOME=/opt/data/profiles/operator`` (the
+  scheduler's value) and land within the 20-minute window before the cron fires;
+  run with the default home, the envelope sits where the cron turn never looks
+  (pilot, 2026-10-24).
 
 WHAT THE NOTE SAYS, AND FROM WHAT. It is read from the seat's help state file
 (``/opt/data/smd/help_state.db``, written by the initiation plugin's

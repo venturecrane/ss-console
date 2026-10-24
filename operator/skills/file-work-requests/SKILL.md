@@ -25,10 +25,10 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     help:
       what: "Makes the firm's own letters and forms on a matter, and enters offers, demands and medical providers on it."
-      example: 'On matter XXXXXX, do the 1st and 3rd party rep letters.'
+      example: 'On matter [number], do the 1st and 3rd party rep letters.'
       admin_only: false
     addon: pi
     weight: light # per request: one matter resolve, a card/license read when asked, one call per document, one call per facility, one reply
