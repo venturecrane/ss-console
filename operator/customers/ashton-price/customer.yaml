@@ -277,9 +277,12 @@ personas:
         version: pending
         initiation:
           manual: true
-          scheduled: false
+          scheduled: true # the daily help review (ss-console#3423 increment 3)
           webhook: false
         enabled: true
+        settings:
+          # The weekly help note goes to SMD only (ss-console#3423).
+          recipient: scott@smd.services
       - name: operator-self-test
         version: pending
         initiation:
@@ -954,6 +957,14 @@ personas:
       # read or written; a dead connection reaches team@ within the hour.
       - skill: connector-auth-check
         schedule: '13 * * * *' # hourly at :13, off the other rows' minutes
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # ss-console#3423 increment 3: the daily help review (the Operator may
+      # reorder SMD's own tips, at most 3 changes a week) and, on Mondays, the
+      # weekly note to SMD with what changed and how to undo it. SMD ops, not a
+      # firm routine: nothing reaches the firm.
+      - skill: operator-help
+        schedule: '17 14 * * *' # daily 1417 seat-local (off :13, the hourly auth check); the pre_run adds the note on Mondays
         pre_run: pre_run.py
         wake_policy: pre_run_decides
     # The weekday litigation status list (letter 93, accepted 2026-10-07). SHIPS
