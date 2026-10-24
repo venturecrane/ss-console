@@ -21,8 +21,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from pathlib import Path
 
 import pytest
+import yaml
 
 from shared import request_index
 from tests.conftest import load_plugin
@@ -325,8 +327,13 @@ def test_the_note_refuses_anything_but_its_enum(plugin, paths, roster, kind):
 def test_the_signals_refuse_an_unknown_scope(plugin, paths, roster):
     _index("m-1")
     _turn("s-1", "m-1")
-    out = json.loads(plugin._help_signals_handler({"scope": "review"}, session_id="s-1"))
+    out = json.loads(plugin._help_signals_handler({"scope": "everyone"}, session_id="s-1"))
     assert out["resolved"] is False
+    assert "refused" in out
+    # Increment 3: "review" is a known scope, and a firm person's email turn is
+    # refused it (test_help_review.py pins who may run it).
+    out = json.loads(plugin._help_signals_handler({"scope": "review"}, session_id="s-1"))
+    assert out["read"] is False
     assert "refused" in out
 
 
@@ -527,3 +534,515 @@ def test_the_narrow_request_reader_returns_no_text(paths):
     ]
     assert request_index.read_sender_requests("", 0) == []
     assert request_index.read_sender_requests(_OTHER, 0) == []
+
+
+# =========================================================================== #
+# Increment 3: the self-improving guide (help_review + help_tools)
+#
+# What these pin, each with the harm it prevents:
+#
+# * only an authored tip id moves, by promote/demote/reorder; anything else is
+#   refused, so the Operator can never write or invent advice;
+# * a promotion needs a fresh, readable review in which the tip's kind is
+#   actionable (>= 3 times from >= 2 people in 7 days);
+# * every change snapshots the list before it, and at most 3 changes land in
+#   any rolling 7 days, enforced in code;
+# * SMD's undo restores the newest snapshot; a firm person can neither change
+#   nor undo, and the review runs only on its schedule or for SMD with force;
+# * the review counts repeat asks, held/failed jobs and noted kinds, carries no
+#   address, and a source it could not read makes the whole review unreadable,
+#   never an empty one.
+# =========================================================================== #
+
+
+_SMD = "scott@smd.services"
+_TIPS = [
+    {"id": "vague_request", "when": "vague_request", "text": "Name the matter."},
+    {"id": "wants_changes", "when": "wants_changes", "text": "Reply with changes."},
+    {"id": "held_identity_check", "when": "held_identity_check", "text": "Answer in a line."},
+    {"id": "repeat_ask", "when": "repeat_ask", "text": "Tell me what was wrong."},
+]
+_TIPS_YAML = (
+    Path(__file__).resolve().parents[2] / "skills" / "operator-help" / "references" / "tips.yaml"
+)
+_DAY = 86400.0
+
+
+@pytest.fixture
+def hr(plugin):
+    return plugin.help_review
+
+
+@pytest.fixture
+def ht(plugin):
+    return plugin.help_tools
+
+
+class _AdminCfg(_Cfg):
+    admins = [_SMD, "chris@example-firm.test"]
+
+    def sender_on_roster(self, sender):
+        return super().sender_on_roster(sender) or sender == _SMD
+
+
+@pytest.fixture
+def admin_roster(plugin, monkeypatch):
+    monkeypatch.setattr(plugin, "_load_config", lambda: _AdminCfg())
+
+
+@pytest.fixture
+def no_jobs(ht, monkeypatch):
+    monkeypatch.setattr(ht, "_job_reader", lambda days: {"rows": []})
+    monkeypatch.setattr(ht, "_tips", lambda: [dict(t) for t in _TIPS])
+
+
+@pytest.fixture
+def scheduled(monkeypatch):
+    """Session ids starting cron_ resolve to the operator-help routine."""
+    from shared import cron_attribution
+
+    def _resolve(session_id, **_):
+        if str(session_id).startswith("cron_"):
+            return cron_attribution.RoutineIdentity(
+                job_id="j",
+                job_name="op-managed:operator:operator-help",
+                persona="operator",
+                skill="operator-help",
+            )
+        return None
+
+    monkeypatch.setattr(cron_attribution, "resolve_routine", _resolve)
+
+
+def _review(hr, paths, *, rows=(), tips=None, reader=None):
+    return hr.review(
+        tips=[dict(t) for t in (tips or _TIPS)],
+        job_reader=reader or (lambda days: {"rows": list(rows)}),
+        path=paths["state"],
+    )
+
+
+def _note_kind(hs, kind, sender, paths):
+    assert hs.record(kind, sender, path=paths["state"])
+
+
+def _actionable_vague(hs, paths):
+    for who in (_SENDER, _SENDER, _OTHER):
+        _note_kind(hs, "vague_request", who, paths)
+
+
+def _snapshots(paths):
+    conn = sqlite3.connect(paths["state"])
+    try:
+        return conn.execute(
+            "SELECT action, tip_id, prior_json, after_json, reason_json, undone_at "
+            "FROM help_snapshots ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+# ---- the authored kinds -----------------------------------------------------
+
+
+def test_every_kind_the_review_can_act_on_is_an_authored_tip_when(hr, hs):
+    """FALSIFIER: add a note kind with no tip and the model could note a
+    struggle the guide can never answer, and the pin goes red."""
+
+    whens = {t["when"] for t in yaml.safe_load(_TIPS_YAML.read_text())["tips"]}
+    assert set(hs.NOTE_STRUGGLE_KINDS) <= whens
+    assert {hr.KIND_REPEAT_ASK, hr.KIND_HELD_IDENTITY} <= whens
+    # nothing_in_scope is deliberately tipless: it is how a proposal reaches SMD.
+    assert hr.KIND_NOTHING_IN_SCOPE not in whens
+
+
+def test_the_note_tool_accepts_a_struggle_kind_and_records_an_event(plugin, paths, roster, hs):
+    _index("m-1")
+    _turn("s-1", "m-1")
+    assert _note(plugin, "s-1", "vague_request") == {"recorded": True}
+    conn = sqlite3.connect(paths["state"])
+    try:
+        kinds = [r[0] for r in conn.execute("SELECT kind FROM help_events")]
+        helped = conn.execute("SELECT helped_at FROM help_senders").fetchone()
+    finally:
+        conn.close()
+    assert kinds == ["vague_request"]
+    # A struggle note is not "helped": the pointer stays as it was.
+    assert helped is None  # a struggle note is not "helped": no sender row at all
+
+
+# ---- update: what may change ------------------------------------------------
+
+
+def test_an_unknown_tip_id_is_refused(hr, hs, paths):
+    _actionable_vague(hs, paths)
+    rev = _review(hr, paths)
+    for bad in ("make_it_up", "", None, "x" * 200, 7):
+        out = hr.update("promote", bad, tips=_TIPS, review=rev, path=paths["state"])
+        assert out == {"changed": False, "refused": "unknown tip id"}
+    assert hr.update("rewrite", "vague_request", tips=_TIPS, review=rev, path=paths["state"])[
+        "refused"
+    ].startswith("action must be one of")
+    assert hr.read_emphasis(path=paths["state"])["emphasis"] == []
+
+
+def test_a_promotion_needs_an_actionable_kind(hr, hs, paths):
+    """FALSIFIER: drop the actionable check and one noisy person reorders the guide."""
+    _note_kind(hs, "vague_request", _SENDER, paths)
+    _note_kind(hs, "vague_request", _SENDER, paths)
+    _note_kind(hs, "vague_request", _SENDER, paths)  # 3 times, ONE person
+    rev = _review(hr, paths)
+    assert rev["kinds"]["vague_request"] == {
+        "occurrences": 3,
+        "senders": 1,
+        "tips": ["vague_request"],
+        "actionable": False,
+    }
+    out = hr.update("promote", "vague_request", tips=_TIPS, review=rev, path=paths["state"])
+    assert out["changed"] is False and "not actionable" in out["refused"]
+    out = hr.update("promote", "vague_request", tips=_TIPS, review=None, path=paths["state"])
+    assert out["changed"] is False and "no readable review" in out["refused"]
+
+
+def test_a_promotion_snapshots_the_prior_state_with_its_counts(hr, hs, paths):
+    _actionable_vague(hs, paths)
+    rev = _review(hr, paths)
+    assert rev["actionable"] == ["vague_request"]
+    out = hr.update("promote", "vague_request", tips=_TIPS, review=rev, path=paths["state"])
+    assert out["changed"] is True
+    assert out["emphasis"] == ["vague_request"]
+    assert out["changes_left"] == hr.MAX_CHANGES - 1
+    [(action, tip, prior, after, reason, undone)] = _snapshots(paths)
+    assert (action, tip, json.loads(prior), json.loads(after), undone) == (
+        "promote",
+        "vague_request",
+        [],
+        ["vague_request"],
+        None,
+    )
+    assert json.loads(reason) == {"kind": "vague_request", "occurrences": 3, "senders": 2}
+    assert hr.read_emphasis(path=paths["state"]) == {"read": True, "emphasis": ["vague_request"]}
+
+
+def test_demote_and_reorder_move_only_emphasized_tips(hr, paths):
+    conn = hr.help_state._connect(paths["state"])
+    hr._meta_set(conn, "emphasis", ["vague_request", "wants_changes", "repeat_ask"])
+    conn.close()
+    st = paths["state"]
+    out = hr.update("reorder", "repeat_ask", tips=_TIPS, review=None, position=0, path=st)
+    assert out["emphasis"] == ["repeat_ask", "vague_request", "wants_changes"]
+    assert hr.update("reorder", "repeat_ask", tips=_TIPS, review=None, position=9, path=st)[
+        "refused"
+    ].startswith("position must be")
+    assert (
+        "not emphasized"
+        in hr.update("demote", "held_identity_check", tips=_TIPS, review=None, path=st)["refused"]
+    )
+    out = hr.update("demote", "vague_request", tips=_TIPS, review=None, path=st)
+    assert out["emphasis"] == ["repeat_ask", "wants_changes"]
+
+
+def test_at_most_three_changes_in_a_rolling_week(hr, paths):
+    """FALSIFIER: drop the window count and the review can churn the guide daily."""
+    conn = hr.help_state._connect(paths["state"])
+    hr._meta_set(conn, "emphasis", ["vague_request", "wants_changes", "repeat_ask"])
+    conn.close()
+    st = paths["state"]
+    t0 = time.time()
+    for i, pos in enumerate((0, 1, 2)):
+        out = hr.update(
+            "reorder",
+            "repeat_ask",
+            tips=_TIPS,
+            review=None,
+            position=(pos + 1) % 3,
+            path=st,
+            now=t0 + i,
+        )
+        assert out["changed"] is True, out
+    out = hr.update("demote", "repeat_ask", tips=_TIPS, review=None, path=st, now=t0 + 10)
+    assert out == {"changed": False, "refused": "weekly change limit reached", "changes_left": 0}
+    # An undo is SMD's act and spends nothing, and does not reopen the window.
+    assert hr.undo(path=st, now=t0 + 11)["restored"] is True
+    assert (
+        hr.update("demote", "repeat_ask", tips=_TIPS, review=None, path=st, now=t0 + 12)["changed"]
+        is False
+    )
+    # Eight days later the window has rolled.
+    out = hr.update("demote", "repeat_ask", tips=_TIPS, review=None, path=st, now=t0 + 8 * _DAY)
+    assert out["changed"] is True
+
+
+def test_undo_restores_the_newest_snapshot_then_the_one_before(hr, hs, paths):
+    _actionable_vague(hs, paths)
+    st = paths["state"]
+    rev = _review(hr, paths)
+    hr.update("promote", "vague_request", tips=_TIPS, review=rev, path=st)
+    hr.update("reorder", "vague_request", tips=_TIPS, review=None, position=0, path=st)  # no change
+    conn = hr.help_state._connect(st)
+    hr._meta_set(conn, "emphasis", ["vague_request", "wants_changes"])
+    conn.close()
+    hr.update("demote", "wants_changes", tips=_TIPS, review=None, path=st)
+    out = hr.undo(path=st)
+    assert out["restored"] is True and out["emphasis"] == ["vague_request", "wants_changes"]
+    out = hr.undo(path=st)
+    assert out["restored"] is True and out["emphasis"] == []
+    assert hr.undo(path=st) == {"restored": False, "reason": "nothing to undo"}
+    assert all(row[5] is not None for row in _snapshots(paths))
+
+
+def test_undo_on_a_seat_with_no_state_is_nothing_to_undo(hr, tmp_path):
+    assert hr.undo(path=tmp_path / "none.db") == {"restored": False, "reason": "nothing to undo"}
+
+
+# ---- review: what is counted ------------------------------------------------
+
+
+def _request(mid, sender, thread, imid=None, ago=3600.0):
+    assert request_index.record_inbound(
+        vendor_message_id=mid,
+        internet_message_id=imid or f"<{mid}@x>",
+        sender=sender,
+        subject="s",
+        thread_ref=thread,
+        received_at=time.time() - ago,
+        body="b",
+    )
+
+
+def test_the_review_counts_repeat_asks_jobs_and_notes(hr, hs, paths):
+    # Two people each send four emails in their own thread: two repeat asks.
+    for i in range(4):
+        _request(f"a{i}", _SENDER.lower(), "t-a")
+        _request(f"b{i}", _OTHER, "t-b")
+    _request("c0", _OTHER, "t-c")  # one email in a thread is not a repeat ask
+    rows = [
+        {
+            "lane": "medchron",
+            "state": "held",
+            "hold_class": "another_person",
+            "request_ref": "<a0@x>",
+        },
+        {
+            "lane": "litigation",
+            "state": "held",
+            "hold_class": "staff_unresolved",
+            "request_ref": "<b0@x>",
+        },
+        {
+            "lane": "medchron",
+            "state": "held",
+            "hold_class": "which_chronology",
+            "request_ref": "<gone@x>",
+        },
+        {"lane": "demand", "state": "failed", "hold_class": None, "request_ref": "<c0@x>"},
+        {
+            "lane": "medchron",
+            "state": "held",
+            "hold_class": "smd_finishing",
+            "request_ref": "<a1@x>",
+        },
+        {
+            "lane": "litigation",
+            "state": "held",
+            "hold_class": "nothing_in_scope",
+            "request_ref": "<a2@x>",
+        },
+        {
+            "lane": "litigation",
+            "state": "held",
+            "hold_class": "nothing_in_scope",
+            "request_ref": "<b1@x>",
+        },
+        {
+            "lane": "litigation",
+            "state": "held",
+            "hold_class": "nothing_in_scope",
+            "request_ref": "<b2@x>",
+        },
+    ]
+    _note_kind(hs, "wants_changes", _SENDER, paths)
+    out = _review(hr, paths, rows=rows)
+    assert out["read"] is True
+    assert out["requests"] == {"total": 9, "senders": 2, "repeat_ask_threads": 2}
+    assert out["jobs"]["held"] == {"medchron": 3, "litigation": 4}
+    assert out["jobs"]["failed"] == {"demand": 1}
+    assert out["jobs"]["hold_classes"]["smd_finishing"] == 1
+    # Our own hold is counted and never a person struggling.
+    assert "smd_finishing" not in out["kinds"]
+    held = out["kinds"]["held_identity_check"]
+    assert (held["occurrences"], held["senders"], held["actionable"]) == (3, 2, True)
+    assert out["kinds"]["repeat_ask"] == {
+        "occurrences": 2,
+        "senders": 2,
+        "tips": ["repeat_ask"],
+        "actionable": False,
+    }
+    assert out["kinds"]["nothing_in_scope"]["actionable"] is True
+    assert out["promotable"] == ["held_identity_check"]
+    assert out["proposals"] == ["nothing_in_scope"]
+    assert out["noted"] == {"wants_changes": 1}
+    blob = json.dumps(out)
+    for leak in (_SENDER.lower(), _OTHER, "<a0@x>", "t-a"):
+        assert leak not in blob
+
+
+def test_the_review_stores_counts_only_for_the_weekly_note(hr, hs, paths):
+    _actionable_vague(hs, paths)
+    out = _review(hr, paths)
+    assert out["stored"] is True
+    conn = sqlite3.connect(paths["state"])
+    try:
+        stored = json.loads(
+            conn.execute("SELECT value FROM help_meta WHERE key='last_review'").fetchone()[0]
+        )
+    finally:
+        conn.close()
+    assert stored["actionable"] == ["vague_request"]
+    assert set(stored) == {"requests", "jobs", "noted", "kinds", "actionable", "proposals", "at"}
+
+
+@pytest.mark.parametrize("broken", ["jobs", "requests", "tips"])
+def test_a_source_that_cannot_be_read_makes_the_review_unreadable_not_empty(hr, hs, paths, broken):
+    """FALSIFIER: swallow the fault into [] and "could not look" reads as
+    "nothing to fix", and a promotion could cite it."""
+    _actionable_vague(hs, paths)
+
+    def _down(days):
+        raise RuntimeError("broker socket error")
+
+    reader = _down if broken == "jobs" else None
+    if broken == "requests":
+        paths["requests"].write_bytes(b"not a database at all" * 100)
+    tips = None if broken == "tips" else _TIPS
+    out = hr.review(tips=tips, job_reader=reader or (lambda d: {"rows": []}), path=paths["state"])
+    assert out["read"] is False
+    assert out["unreadable"] == [broken]
+    assert "kinds" not in out and "actionable" not in out
+    refused = hr.update("promote", "vague_request", tips=_TIPS, review=out, path=paths["state"])
+    assert refused["changed"] is False
+
+
+def test_a_job_answer_without_rows_is_unreadable(hr, paths):
+    out = hr.review(tips=_TIPS, job_reader=lambda d: {"ok": True}, path=paths["state"])
+    assert out["read"] is False and out["unreadable"] == ["jobs"]
+
+
+# ---- who may drive it -------------------------------------------------------
+
+
+def _upd(plugin, session, **args):
+    return json.loads(plugin.help_tools.update_handler(args, session_id=session))
+
+
+def _undo(plugin, session):
+    return json.loads(plugin.help_tools.undo_handler({}, session_id=session))
+
+
+def _rev(plugin, session, **extra):
+    return json.loads(
+        plugin._help_signals_handler({"scope": "review", **extra}, session_id=session)
+    )
+
+
+def test_a_firm_person_can_neither_review_nor_change_nor_undo(
+    plugin, paths, admin_roster, no_jobs, scheduled, hs
+):
+    """FALSIFIER: gate on the roster instead of SMD and any client steers the guide."""
+    _actionable_vague(hs, paths)
+    _index("m-1", sender="chris@example-firm.test")
+    _turn("s-1", "m-1", sender="chris@example-firm.test")  # a firm ADMIN, not SMD
+    assert "refused" in _rev(plugin, "s-1", force=True)
+    assert _upd(plugin, "s-1", action="promote", tip_id="vague_request")["changed"] is False
+    assert _undo(plugin, "s-1")["restored"] is False
+    assert not _snapshots(paths)
+
+
+def test_the_scheduled_review_may_review_and_update_but_not_undo(
+    plugin, paths, admin_roster, no_jobs, scheduled, hs
+):
+    _actionable_vague(hs, paths)
+    session = "cron_abc123_20261026_141300"
+    out = _rev(plugin, session)
+    assert out["read"] is True and out["promotable"] == ["vague_request"]
+    assert _upd(plugin, session, action="promote", tip_id="vague_request")["changed"] is True
+    assert _undo(plugin, session)["restored"] is False
+    # A cron turn of another routine is not the review.
+    assert "refused" in _rev(plugin, "dm-nothing")
+
+
+def test_smd_may_force_a_review_and_undo_from_its_own_email(
+    plugin, paths, admin_roster, no_jobs, scheduled, hs
+):
+    _actionable_vague(hs, paths)
+    _index("m-9", sender=_SMD)
+    _turn("s-9", "m-9", sender=_SMD)
+    assert "refused" in _rev(plugin, "s-9")  # no force: the schedule owns the review
+    assert _rev(plugin, "s-9", force=True)["read"] is True
+    assert _upd(plugin, "s-9", action="promote", tip_id="vague_request")["changed"] is True
+    out = _undo(plugin, "s-9")
+    assert out["restored"] is True and out["emphasis"] == []
+
+
+def test_the_update_tool_takes_no_free_text(plugin):
+    schema = plugin.help_tools.GUIDE_UPDATE_SCHEMA
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == {"action", "tip_id", "position"}
+    assert plugin.help_tools.GUIDE_UNDO_SCHEMA["properties"] == {}
+    for text in (
+        plugin.help_tools.GUIDE_UPDATE_DESCRIPTION,
+        plugin.help_tools.GUIDE_UNDO_DESCRIPTION,
+    ):
+        assert "\u2014" not in text and "\u2013" not in text
+
+
+# ---- the help answer leads with the emphasis --------------------------------
+
+
+def test_the_help_section_carries_the_emphasis_in_order(plugin, paths, hr):
+    conn = hr.help_state._connect(paths["state"])
+    hr._meta_set(conn, "emphasis", ["wants_changes", "retired_tip", "vague_request"])
+    conn.close()
+    unreadable: list = []
+    tips = [dict(t) for t in _TIPS]
+    assert plugin.help_guide._emphasis(tips, unreadable) == ["wants_changes", "vague_request"]
+    assert unreadable == []
+
+
+def test_an_unreadable_emphasis_is_reported_not_empty(plugin, paths):
+    paths["state"].parent.mkdir(parents=True, exist_ok=True)
+    paths["state"].write_bytes(b"garbage" * 200)
+    unreadable: list = []
+    assert plugin.help_guide._emphasis([dict(t) for t in _TIPS], unreadable) == []
+    assert unreadable == [{"section": "help", "reason": "tip emphasis unreadable"}]
+
+
+def test_the_weekly_note_reads_what_the_review_writes(hr, hs, paths):
+    """The pre_run reads help_state.db by hand (it runs alone, outside the
+    plugin). FALSIFIER: rename a column or the last_review key on one side and
+    the note silently reports a quiet week."""
+    import importlib.util
+
+    pre_run_path = _TIPS_YAML.parents[1] / "pre_run.py"
+    spec = importlib.util.spec_from_file_location("operator_help_pre_run_pin", pre_run_path)
+    assert spec is not None and spec.loader is not None
+    pre_run = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pre_run)
+
+    _actionable_vague(hs, paths)
+    rev = _review(hr, paths)
+    assert hr.update("promote", "vague_request", tips=_TIPS, review=rev, path=paths["state"])[
+        "changed"
+    ]
+    week = pre_run.read_week(paths["state"], time.time())
+    assert week["changes"] == [
+        {
+            "action": "promote",
+            "tip_id": "vague_request",
+            "reason": {"kind": "vague_request", "occurrences": 3, "senders": 2},
+            "undone": False,
+        }
+    ]
+    assert week["last_review"]["actionable"] == ["vague_request"]
+    body = pre_run.render_note(week)
+    assert "Put the tip vague_request first" in body

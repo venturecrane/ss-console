@@ -123,7 +123,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'open-house-visitor-capture':
     'Stores the visitors you describe after an open house, answers who you met, and emails you follow-up drafts on a fixed cadence. Never contacts a visitor.',
   'operator-help':
-    'Answers "how do we work together?" for anyone at your firm: how to ask for things, the requests that person may make, and when to send examples to train it. Changes nothing.',
+    'Answers "how do we work together?" for anyone at your firm: how to ask for things, the requests that person may make, and when to send examples to train it. Never changes your files.',
   'operator-introduce':
     'Introduces itself on request: connections, matter count, voice-establishment status per kind of writing, and every routine with its schedule and on/off state. States only what it observed or read.',
   'operator-self-initiation':

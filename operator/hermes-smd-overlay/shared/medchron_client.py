@@ -108,6 +108,13 @@ class MedchronBrokerClient:
     def list_all(self) -> list[dict[str, Any]]:
         return list(self._request({"action": "medchron_job_list"}).get("jobs") or [])
 
+    # -- the help review (ss-console operator/workspace_broker/help_signals.py) --
+    def help_job_signals(self, days: int = 7) -> dict[str, Any]:
+        """Held and failed jobs in the window: lane, state, hold class and
+        request ref per row, never matter content. Raises when the broker or
+        the ledger cannot answer, so "could not look" never reads as "none"."""
+        return self._request({"action": "help_job_signals", "days": days})
+
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
         try:

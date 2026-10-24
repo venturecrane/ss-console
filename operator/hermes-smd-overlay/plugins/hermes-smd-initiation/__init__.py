@@ -100,21 +100,27 @@ from shared.customer_config import CustomerConfig
 from shared.inbound import SESSION_INBOUND_ORIGIN, UNTRUSTED_EMAIL_DELIMITER
 from shared.tool_registration import register_wrapped_tool
 
-from . import help_guide, help_state, seat_facts, skill_fence
+from . import help_guide, help_review, help_state, help_tools, seat_facts, skill_fence
 
 logger = logging.getLogger(__name__)
 
 TOOL_SEAT_FACTS = "operator_seat_facts"
 TOOL_HELP_SIGNALS = "operator_help_signals"
 TOOL_HELP_NOTE = "operator_help_note"
+TOOL_HELP_GUIDE_UPDATE = help_tools.TOOL_HELP_GUIDE_UPDATE
+TOOL_HELP_GUIDE_UNDO = help_tools.TOOL_HELP_GUIDE_UNDO
 
 __all__ = [
+    "TOOL_HELP_GUIDE_UNDO",
+    "TOOL_HELP_GUIDE_UPDATE",
     "TOOL_HELP_NOTE",
     "TOOL_HELP_SIGNALS",
     "TOOL_SEAT_FACTS",
     "TOOLS",
     "help_guide",
+    "help_review",
     "help_state",
+    "help_tools",
     "on_pre_llm_call",
     "register",
     "seat_facts",
@@ -123,7 +129,13 @@ __all__ = [
 #: Every tool this plugin registers. The classification-completeness suite reads
 #: this so the next tool added here cannot ship undecided — an unmapped tool
 #: fails closed to ``REFUSED`` and never executes.
-TOOLS: tuple[str, ...] = (TOOL_SEAT_FACTS, TOOL_HELP_SIGNALS, TOOL_HELP_NOTE)
+TOOLS: tuple[str, ...] = (
+    TOOL_SEAT_FACTS,
+    TOOL_HELP_SIGNALS,
+    TOOL_HELP_NOTE,
+    TOOL_HELP_GUIDE_UPDATE,
+    TOOL_HELP_GUIDE_UNDO,
+)
 
 
 # The authored policy statement. ``{admin_line}`` and ``{sender}`` are the only
@@ -485,7 +497,15 @@ _HELP_SIGNALS_SCHEMA: dict[str, Any] = {
         "scope": {
             "type": "string",
             "enum": list(help_state.SCOPES),
-            "description": "sender = the person whose email opened this turn.",
+            "description": (
+                "sender = the person whose email opened this turn. review = this "
+                "seat's struggle signals for the last week, counts only, for the "
+                "scheduled help review."
+            ),
+        },
+        "force": {
+            "type": "boolean",
+            "description": "review only: run it now at an SMD administrator's request.",
         },
     },
     "required": ["scope"],
@@ -499,7 +519,9 @@ _HELP_SIGNALS_DESCRIPTION = (
     "when none was given, none is due. A *_due flag is true once only, and the "
     "platform has normally consumed it before you could call this. The result "
     "carries no names, addresses, message text or matter numbers, and you must "
-    "not add any."
+    "not add any. Scope review is for the scheduled help review only: counts of "
+    "repeat asks, held and failed jobs and noted struggles for the last week, "
+    "which kinds are actionable, and the current tip emphasis."
 )
 
 _HELP_NOTE_SCHEMA: dict[str, Any] = {
@@ -511,7 +533,13 @@ _HELP_NOTE_SCHEMA: dict[str, Any] = {
             "description": (
                 "help_given = you answered this person's question about how to work "
                 "with you. pointer_offered and struggle_offer are accepted and need "
-                "nothing: operator_help_signals already recorded them."
+                "nothing: operator_help_signals already recorded them. The other "
+                "kinds note a struggle you saw in this person's request: "
+                "vague_request (no matter or no clear ask), wrong_matter (the wrong "
+                "file or a name instead of a number), wants_specific_document, "
+                "wants_changes (they asked again for changes to a draft), "
+                "not_trained_yet (work you have not been trained on). Note one only "
+                "when you saw it this turn."
             ),
         },
     },
@@ -542,6 +570,8 @@ def _help_signals_handler(
             return json.dumps(
                 {"resolved": False, "refused": f"unknown scope (one of {list(help_state.SCOPES)})"}
             )
+        if scope == help_state.SCOPE_REVIEW:
+            return help_tools.review_handler(args, session_id)
         origin = _help_origin(session_id)
         if origin is None:
             return json.dumps({"resolved": False})
@@ -857,6 +887,27 @@ def register(ctx: Any) -> None:
         schema=_HELP_NOTE_SCHEMA,
         handler=_help_note_handler,
         description=_HELP_NOTE_DESCRIPTION,
+        emoji="",
+    )
+    # The self-improving guide (ss-console#3423 increment 3): reorder SMD's own
+    # tips, and SMD's undo. Gated in the handlers (help_tools), never by an
+    # argument the model could set.
+    register_wrapped_tool(
+        ctx,
+        name=TOOL_HELP_GUIDE_UPDATE,
+        toolset="initiation",
+        schema=help_tools.GUIDE_UPDATE_SCHEMA,
+        handler=help_tools.update_handler,
+        description=help_tools.GUIDE_UPDATE_DESCRIPTION,
+        emoji="",
+    )
+    register_wrapped_tool(
+        ctx,
+        name=TOOL_HELP_GUIDE_UNDO,
+        toolset="initiation",
+        schema=help_tools.GUIDE_UNDO_SCHEMA,
+        handler=help_tools.undo_handler,
+        description=help_tools.GUIDE_UNDO_DESCRIPTION,
         emoji="",
     )
     ctx.register_hook("pre_llm_call", on_pre_llm_call)

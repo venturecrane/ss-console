@@ -229,7 +229,7 @@ vars:
     stage: agent
     requirement: optional
     consumed_by: [initiation]
-    note: "test/dev override for the Machine-local help-pointer state file; defaults to /opt/data/smd/help_state.db (plugins/hermes-smd-initiation/help_state.py). The initiation plugin is its only reader and writer (its per-turn pre_llm_call hook records an offer as it reports it due, and the diagnostic operator_help_signals tool does the same; operator_help_note records help_given). Holds one random per-seat salt and salted sha256 hashes of a person's bare address and a thread reference, with offer/help times; no address, subject or text. Rows deleted after 90 days."
+    note: "test/dev override for the Machine-local help-pointer state file; defaults to /opt/data/smd/help_state.db (plugins/hermes-smd-initiation/help_state.py). The initiation plugin is its only writer (its per-turn pre_llm_call hook records an offer as it reports it due, and the diagnostic operator_help_signals tool does the same; operator_help_note records help_given and struggle kinds; since #3423 increment 3 help_review keeps the tip emphasis, its change snapshots and the last review's counts here). The operator-help skill's pre_run reads it read-only for the Monday note to SMD. Holds one random per-seat salt and salted sha256 hashes of a person's bare address and a thread reference, with offer/help/struggle-kind times, and tip ids with counts; no address, subject or text. Rows deleted after 90 days."
   SMD_GATE_CAP_DB_PATH:
     discovery: static
     stage: agent

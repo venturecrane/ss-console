@@ -93,17 +93,17 @@ def test_register_wires_pre_llm_call_and_the_seat_facts_tool(initiation):
     # The omitted-skill read fence (skill_fence.py) is the one blocking gate.
     assert hooks.keys() == {"pre_llm_call", "pre_tool_call"}
     assert callable(hooks["pre_llm_call"])
-    # ss-console#3423 adds the quiet help pointer's two tools beside it.
-    assert [t["name"] for t in tools] == [
+    # ss-console#3423 adds the quiet help pointer's two tools beside it, and
+    # increment 3 the self-improving guide's update and undo.
+    expected = [
         initiation.TOOL_SEAT_FACTS,
         initiation.TOOL_HELP_SIGNALS,
         initiation.TOOL_HELP_NOTE,
+        initiation.TOOL_HELP_GUIDE_UPDATE,
+        initiation.TOOL_HELP_GUIDE_UNDO,
     ]
-    assert initiation.TOOLS == (
-        initiation.TOOL_SEAT_FACTS,
-        initiation.TOOL_HELP_SIGNALS,
-        initiation.TOOL_HELP_NOTE,
-    )
+    assert [t["name"] for t in tools] == expected
+    assert initiation.TOOLS == tuple(expected)
     # Same posture as the facts tool: no check_fn, so none can be dropped silently.
     assert all(t.get("check_fn") is None for t in tools)
 

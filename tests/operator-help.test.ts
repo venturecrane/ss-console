@@ -116,7 +116,9 @@ describe('operator-help: the skill', () => {
     expect(Array.isArray(fm.metadata?.hermes?.tags)).toBe(true)
     expect(fm.metadata?.smd?.vertical).toBe('neutral')
     expect(fm.metadata?.smd?.weight).toBe('light')
-    expect(fm.metadata?.smd?.action_class).toBe('read + one reply to the requester')
+    expect(fm.metadata?.smd?.action_class).toBe(
+      'read + internal_write + one reply to the requester'
+    )
     expect(typeof fm.metadata?.smd?.content_ceiling).toBe('string')
     expect(fm.metadata?.smd?.connectors).toEqual([])
     // The help skill offers requests; it is not one.
@@ -151,6 +153,43 @@ describe('operator-help: the skill', () => {
     expect(notes).toBeGreaterThan(-1)
     expect(body).toBeGreaterThan(notes)
     expect(guide.slice(body).length).toBeLessThan(4500)
+  })
+
+  // ss-console#3423 increment 3: the self-improving guide, constrained.
+  it('leads the help answer with the emphasized tips, never saying so', () => {
+    const body = flat(read(`${HELP}/SKILL.md`))
+    expect(body).toContain('**Lead with the emphasized tips.**')
+    expect(body).toContain('Never mention that a tip is emphasized')
+  })
+
+  it('reviews on its schedule from counts, changes only tip order, and stops on an unreadable review', () => {
+    const body = flat(read(`${HELP}/SKILL.md`))
+    const review = body.slice(
+      body.indexOf('## Review mode (scheduled)'),
+      body.indexOf('## Undo (SMD only)')
+    )
+    expect(review).toContain('`operator_help_signals` with `scope: "review"`')
+    expect(review).toContain('If it comes back `read: false`, stop.')
+    expect(review).toContain('Never treat it as a quiet week.')
+    expect(review).toContain('`operator_help_guide_update` with `action: "promote"`')
+    expect(review).toContain('You never write a tip.')
+    expect(review).toContain('Never retry a refusal with different words.')
+    expect(review).toContain('`force: true`')
+    expect(review).not.toContain(EM_DASH)
+  })
+
+  it('lets only SMD undo, through the tool', () => {
+    const body = flat(read(`${HELP}/SKILL.md`))
+    const undo = body.slice(body.indexOf('## Undo (SMD only)'), body.indexOf('## Never'))
+    expect(undo).toContain('call `operator_help_guide_undo` once')
+    expect(undo).toContain('never undo for a firm person')
+  })
+
+  it('ships a pre_run that wakes the review daily and renders the Monday note itself', () => {
+    const pre = read(`${HELP}/pre_run.py`)
+    expect(pre).toContain('"mode": "review"')
+    expect(pre).toContain('NOTE_WEEKDAY = 0')
+    expect(pre).not.toContain(EM_DASH)
   })
 
   it('never lets the answer describe the Operator by what it is not', () => {
