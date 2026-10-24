@@ -212,7 +212,7 @@ jobs:
       # image gets.
       - name: Set up uv (connector venvs)
         if: steps.changes.outputs.relevant == 'true'
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
       # Every hash-locked requirements file installs, the way the image
       # installs it: the seat interpreter (3.13), --no-config, --require-hashes.
@@ -315,7 +315,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.relevant == 'true'
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
       # The seat interpreter (Debian 13 ships 3.13), not the 3.11 the standalone
       # repo tested on. ruff is pinned to the same version as the substrate job.
@@ -429,7 +429,7 @@ jobs:
       # the sha. Not pruned, so the built wheels survive between runs.
       - name: Set up uv (cache hermes-deps-<sha>-py3.13)
         if: steps.changes.outputs.relevant == 'true'
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           cache-suffix: hermes-deps-${{ steps.pin.outputs.sha }}-py3.13
