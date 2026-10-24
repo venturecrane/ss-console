@@ -738,3 +738,217 @@ def test_billing_docx_refuses_a_suspect_amount(job_dir: Path, firm: Path, data_r
         json.dumps({"rows": [], "suspect_amounts": [["1,000,000", 1000000.0]]})
     )
     assert billing_docx.run(sr) == 1
+
+
+# ---- stop audit rows 17 and 18: an unread page and a large amount are disclosed, never a stop ----
+def _ledger_with(sr: StageRun, amount: str, page_text: str) -> None:
+    """A ledger whose page 1 prints `page_text` (empty = a scan, no text
+    layer) and whose transcription read `amount` as the account total."""
+    raw = sr.slug_dir / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    p = raw / "Example Clinic ledger.pdf"
+    p.write_bytes(make_pdf([page_text]))
+    (sr.slug_dir / "billing_docs.json").write_text(
+        json.dumps({"docs": [{"id": "b1", "name": "Example Clinic ledger", "path": str(p)}]})
+    )
+    rec = {
+        "file": "Example Clinic ledger",
+        "pages": 1,
+        "failures": [],
+        "chunks": [
+            {
+                "doc_type": "LEDGER",
+                "provider": "Example Clinic",
+                "patient": "Alpha Example",
+                "date_first": "01/02/2026",
+                "date_last": "01/09/2026",
+                "printed_totals": [{"label": "Total Charges", "amount": amount, "page": 1}],
+            }
+        ],
+    }
+    (sr.slug_dir / "billing_extract.jsonl").write_text(json.dumps(rec) + "\n")
+
+
+def _worksheet_text(sr: StageRun) -> str:
+    from docx import Document
+
+    out = list((sr.slug_dir / "out" / "alpha").glob("* - Medical Billing Worksheet *.docx"))
+    assert len(out) == 1
+    d = Document(str(out[0]))
+    # Document order, paragraphs and table cells interleaved as they render.
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    return "\n".join("".join(p.itertext()) for p in d.element.body.iter(f"{w}p"))
+
+
+def test_a_large_amount_the_page_prints_with_its_decimal_is_accepted(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A spinal-fusion ledger can legitimately total over the $500k suspect
+    threshold. When the page's own text prints that figure with its decimal
+    point, it is not a lost decimal: the worksheet renders (row 18)."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "$612,345.67", "Example Clinic\nTotal Charges   $612,345.67\n")
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["suspect_amounts"] == [] and chart["rows"][0]["total"] == 612345.67
+    assert billing_docx.run(sr) == 0
+    assert json.loads((sr.slug_dir / "billing_dropped_rows.json").read_text()) == []
+    assert "$612,345.67" in _worksheet_text(sr)
+
+
+@pytest.mark.parametrize(
+    "page_text",
+    ["Example Clinic\nTotal Charges   $6,123.45\n", ""],
+    ids=["page-prints-another-figure", "scan-no-text-layer"],
+)
+def test_a_large_amount_the_page_does_not_print_is_dropped_and_disclosed(
+    job_dir: Path, firm: Path, data_root: Path, page_text: str
+) -> None:
+    """A transcription that lost its decimal ("612345" for $6,123.45), or a
+    figure on a scan with nothing to check it against, is not put in the
+    total and is not guessed at either: the row is left out, recorded in
+    billing_dropped_rows.json, and named on the worksheet (row 18)."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "612345", page_text)
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["suspect_amounts"] == [] and chart["rows"][0]["total"] is None
+    assert chart["grand_total"] == 0.0, "no amount is invented for the dropped row"
+    dropped = json.loads((sr.slug_dir / "billing_dropped_rows.json").read_text())
+    assert [(r["file"], r["page"], r["amount_text"]) for r in dropped] == [("Example Clinic ledger", 1, "612345")]
+    assert set(dropped[0]) == {"file", "page", "amount_text", "reason"} and dropped[0]["reason"]
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "Amounts Left Out" in text and "Example Clinic ledger" in text and "p. 1" in text
+    assert "612345" not in text and "612,345" not in text, "an unconfirmed figure is never shown as a figure"
+
+
+def test_the_worksheet_names_each_unread_billing_page_as_not_totalled(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Row 17's worksheet half: a FAILED_PAGE is named by file and page, and
+    the worksheet says plainly its amount is not in the total."""
+    sr = _sr(job_dir, firm, data_root)
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "$1,800.00", "Total Charges $1,800.00")
+    rec = json.loads((sr.slug_dir / "billing_extract.jsonl").read_text())
+    rec["chunks"].append({"FAILED_PAGE": 2})
+    rec["failures"] = [2]
+    (sr.slug_dir / "billing_extract.jsonl").write_text(json.dumps(rec) + "\n")
+    assert billing_chart.run(sr) == 0
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "Pages Not Read" in text and "not totalled" in text
+    assert "Example Clinic ledger" in text and "p. 2" in text
+
+
+# ---- stop audit row 28: a clinician-named spine and facility-labelled bills ----
+CLINICIAN_DOC = (
+    "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n"
+    "| Medical Provider | Treatment Period | Visits | Reference |\n"
+    "| Priya Rao, PA-C (NVRH 9W Laboratory) | 01/05/2026 | 1 | Exhibit 1 - p. 1 |\n"
+    "| Mark Hale, MD (NVRH Ophthalmology) | 01/07/2026 - 01/20/2026 | 2 | Exhibit 1 - p. 2 |\n"
+    "| Eva Ramos, M.D. | 02/01/2026 | 1 | Exhibit 2 - p. 1 |\n"
+    "| Eva M Ramos, MD | 02/10/2026 | 1 | Exhibit 2 - p. 4 |\n"
+    "| Joan Kerr, RN (Valley Care at Home) | 03/01/2026 - 03/09/2026 | 3 | Exhibit 3 - p. 1 |\n\n"
+    "## Diagnostic Highlights\n\n| ICD Code | Description | First Diagnosed | Reference |\n\n"
+    "## Medical Chronology\n\n01/05/2026\nPriya Rao, PA-C (NVRH 9W Laboratory) | Labs\n\nCBC drawn. "
+    "(Exhibit 1 - p. 1)\n\n## Exhibit List\n\n| Exhibit No. | Description |\n"
+)
+
+
+def _ledger(file: str, provider: str, amount: str, label: str = "Total Charges") -> dict:
+    return {
+        "file": file,
+        "pages": 1,
+        "failures": [],
+        "chunks": [
+            {
+                "doc_type": "LEDGER",
+                "provider": provider,
+                "patient": "Alpha Example",
+                "date_first": "01/05/2026",
+                "date_last": "03/09/2026",
+                "printed_totals": [{"label": label, "amount": amount, "page": 1}],
+            }
+        ],
+    }
+
+
+def test_the_facility_rule_matches_by_words_and_initials_and_not_by_generic_words() -> None:
+    from medchron.stages import billing_match as BM
+
+    assert BM.acronym("NV Ridge Health") == "nvrh" and BM.acronym("NV Ridge Medical Center") == "nvrmc"
+    assert BM.facility_hit("NV Ridge Health", "NVRH 9W Laboratory")
+    assert BM.facility_hit("Valley Care at Home, Inc.", "Valley Care at Home")
+    assert not BM.facility_hit("Oakmont Health", "Valley Health"), "a shared generic word is not a match"
+    assert not BM.facility_hit("Medical Center", "Valley Medical Center Hospital")
+    assert BM.person_key("Eva Ramos, M.D.") == BM.person_key("Eva M Ramos, MD") == ("eva", "ramos")
+    assert BM.person_key("Example Clinic") is None, "an uncredentialed name pair is not read as a person"
+    assert BM.person_key("Joan Kerr, RN (Valley Care at Home)") == ("joan", "kerr")
+    assert BM.facilities("Joan Kerr, RN (Valley Care at Home)") == ["Valley Care at Home"]
+    assert BM.facilities("Example Clinic") == ["Example Clinic"]
+
+
+def test_facility_bills_total_against_a_clinician_named_spine(job_dir: Path, data_root: Path, tmp_path: Path) -> None:
+    """The seat replay shape (row 28): the Treatment Timeline lists
+    clinicians, the bills are labelled by facility, and the firm authored no
+    provider_match patterns for this matter. The old matcher matched nothing
+    and the worksheet read SUBTOTAL $0.00 with every provider a gap. Now a
+    bill matches through the facility in the provider cell (its own initials:
+    "NV Ridge Health" is NVRH), one clinician listed twice is one row, and a
+    bill that matches no provider is shown as printed under its own subtotal,
+    OUTSIDE the grand total (a first version of this worksheet once totalled
+    3x the firm's lien report), and a document that already supplied a
+    matched row adds nothing to it (same paper, counted once)."""
+    cfg = json.loads(json.dumps(FIRM_CONFIG))
+    cfg["billing"]["provider_match"] = {}
+    firm = tmp_path / "bare-firm.yaml"
+    firm.write_text(yaml.safe_dump(cfg))
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, log=log)
+    _doc(sr, CLINICIAN_DOC)
+    rows = [
+        _ledger("NVRH statement", "NV Ridge Health", "$12,345.67", "Overall - Total"),
+        _ledger("Valley home care ledger", "Valley Care at Home", "$2,000.00"),
+        _ledger("Ramos ledger", "Eva Ramos MD", "$300.00"),
+        _ledger("Ambulance invoice", "Sierra Ambulance Authority", "$1,500.00"),
+    ]
+    # The NVRH statement also carries a page billed under a name that matches
+    # nothing: that paper already supplied a matched row, so it stays there.
+    rows[0]["chunks"].append(
+        {
+            "doc_type": "LEDGER",
+            "provider": "Ridgeline Billing Office",
+            "printed_totals": [{"label": "Total Charges", "amount": "$12,345.67", "page": 2}],
+        }
+    )
+    (sr.slug_dir / "billing_extract.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    by = {r["provider"]: r for r in chart["rows"]}
+    assert chart["grand_total"] == 14645.67, (by, log)
+    nvrh = next(r for r in chart["rows"] if r.get("merged_from") and r["total"] == 12345.67)
+    assert sorted(nvrh["merged_from"]) == [
+        "Mark Hale, MD (NVRH Ophthalmology)",
+        "Priya Rao, PA-C (NVRH 9W Laboratory)",
+    ]
+    ramos = [r for r in chart["rows"] if "Ramos" in r["provider"]]
+    assert len(ramos) == 1 and ramos[0]["total"] == 300.0, "one clinician is one row"
+    assert (ramos[0]["first"], ramos[0]["last"]) == ("2026-02-01", "2026-02-10")
+    assert by["Joan Kerr, RN (Valley Care at Home)"]["total"] == 2000.0
+    assert "Sierra Ambulance Authority" not in by, "an as-printed row is not in the grand total"
+    printed = {r["provider"]: r for r in chart["as_printed_rows"]}
+    assert list(printed) == ["Sierra Ambulance Authority"], "the same paper is counted once"
+    assert printed["Sierra Ambulance Authority"]["total"] == 1500.0
+    assert printed["Sierra Ambulance Authority"]["as_printed"] is True and chart["as_printed_subtotal"] == 1500.0
+    assert set(chart["unmatched"]) == {"Sierra Ambulance Authority", "Ridgeline Billing Office"}, "still reported"
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "$14,645.67" in text and "GRAND TOTAL" in text
+    head = "Billed under a name not matched to a treating provider"
+    assert head in text and text.index(head) > text.index("GRAND TOTAL")
+    assert "Sierra Ambulance Authority" in text and "SUBTOTAL (not in the grand total)" in text
+    assert "$1,500.00" in text and "Ridgeline Billing Office" not in text

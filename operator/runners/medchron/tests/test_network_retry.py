@@ -220,7 +220,7 @@ def test_a_network_failure_requeues_the_job_once_and_it_is_never_marked_failed(t
     assert "failed" not in [s for _, s, _ in broker.records]
     note = broker.records[-1]
     assert note[1] == "running" and note[2]["reason"] == "retried after network error at update_review"
-    assert d._daemon_state("01A")["network_requeues"] == 1
+    assert d._daemon_state("01A")["infra_requeues"] == 1
     assert (d._daemon_state("01A").get("wake") or {}).get("pending") is not True, "no deliver turn for a requeue"
     # Not before its delay: the next tick runs nothing.
     assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "1"
@@ -229,18 +229,22 @@ def test_a_network_failure_requeues_the_job_once_and_it_is_never_marked_failed(t
     assert [s for _, s, _ in broker.records] == ["running", "running", "running", "delivered"]
 
 
-def test_a_second_network_failure_is_terminal_and_says_it_was_retried(tmp_path) -> None:
-    d, broker = _daemon(tmp_path, _runner(5))
+def test_a_network_failure_past_the_retries_is_terminal_and_says_it_was_retried(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, _runner(99))
     _submit(d, broker, "01A")
-    d.tick()
-    d._now["t"] += 301  # type: ignore[attr-defined]
+    for _ in range(requeue.MAX_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
     assert d.tick() == "failed"
     job, state, fields = broker.records[-1]
     assert state == "failed" and fields["reason"].startswith(
-        "retried after network error at update_review, failed again"
+        f"retried after network error at update_review {requeue.MAX_REQUEUES} time(s), failed again"
     )
     d._now["t"] += 10_000  # type: ignore[attr-defined]
-    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "2", "terminal: never run a third time"
+    ran = int((d.job_dir("01A") / "ran").read_text())
+    assert d.tick() is None and ran == requeue.MAX_REQUEUES + 1, "terminal: bounded"
 
 
 def test_a_failure_that_is_not_the_network_is_failed_at_once(tmp_path) -> None:
@@ -248,6 +252,198 @@ def test_a_failure_that_is_not_the_network_is_failed_at_once(tmp_path) -> None:
     d, broker = _daemon(tmp_path, script)
     _submit(d, broker, "01A")
     assert d.tick() == "failed" and broker.records[-1][1] == "failed"
+
+
+# ---- stop audit row 20: a slow read-back re-runs the upload before it parks ----------
+SHORT_REASON = (
+    "upload: the folder read back short after the retries; the files may still be materializing, nothing was deleted"
+)
+
+
+def _upload_runner(short_runs: int, *, stage: str = "upload", reason: str = SHORT_REASON) -> str:
+    """A fake runner whose upload reads back short for its first `short_runs`
+    runs (Smokeball indexing slowly, the 2026-09-24 shape), then delivers."""
+    held = json.dumps(
+        [
+            {
+                "unit": "alpha",
+                "outcome": "held",
+                "stage": stage,
+                "dollars": 31.0,
+                "pages": 300,
+                "documents": 40,
+                "reason": reason,
+            }
+        ]
+    )
+    return _runner(0).replace(
+        "if n <= 0:",
+        f"if n <= {short_runs}:\n    print({held!r})\n    sys.exit(0)\nif False:",
+    )
+
+
+def test_a_short_upload_read_back_runs_the_upload_again_after_a_delay(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, _upload_runner(2))
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued"
+    st = d._daemon_state("01A")
+    assert st["state"] == "running" and st["infra_requeues"] == 1
+    assert "held" not in [s for _, s, _ in broker.records], "a slow index is not parked as a hold"
+    assert broker.records[-1][1] == "running" and "read back short" in broker.records[-1][2]["reason"]
+    # Not before its delay.
+    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == "1"
+    d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "requeued" and d._daemon_state("01A")["infra_requeues"] == 2
+    d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+    assert "held" not in [s for _, s, _ in broker.records]
+
+
+def test_a_read_back_still_short_after_the_retries_parks_the_hold(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, _upload_runner(99))
+    _submit(d, broker, "01A")
+    for _ in range(requeue.MAX_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += requeue.UPLOAD_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "held"
+    job, state, fields = broker.records[-1]
+    assert (
+        state == "held"
+        and fields["reason"].startswith("upload: the folder read back short")
+        and "retried after upload read back short" in fields["reason"]
+    )
+    d._now["t"] += 10 * requeue.UPLOAD_DELAY_S  # type: ignore[attr-defined]
+    ran = (d.job_dir("01A") / "ran").read_text()
+    assert d.tick() is None and (d.job_dir("01A") / "ran").read_text() == ran, "parked: bounded"
+    assert int(ran) == requeue.MAX_REQUEUES + 1
+
+
+SIGNAL_RUNNER = """
+import json, os, signal, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+marker = jd / 'ran'
+n = int(marker.read_text()) + 1 if marker.exists() else 1
+marker.write_text(str(n))
+if n <= {killed}:
+    os.kill(os.getpid(), signal.SIGTERM)
+print(json.dumps([{{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 31.0,
+    "pages": 300, "documents": 40, "folder_id": "folder-9",
+    "files": [{{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}}],
+    "proof": {{"readback": "confirmed", "files": [{{"name": "x.docx", "file_id": "f1", "size": 10,
+        "sha256": "{sha}"}}], "review": "passed", "review_cents": 0}}}}]))
+"""
+
+
+def test_the_runner_exited_minus_15_without_a_verdict_is_retried_not_failed(tmp_path) -> None:
+    """The history case (09-22, 10-13, 10-23): the child died of SIGTERM with
+    the daemon still running (no Machine stop), and the job recorded "failed:
+    the runner exited -15 without a verdict", terminal. It is now retried."""
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, SIGNAL_RUNNER.format(killed=1, sha="a" * 64))
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued"
+    assert "failed" not in [s for _, s, _ in broker.records]
+    assert broker.records[-1][2]["reason"] == "retried after runner killed by a signal at an unnamed stage"
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+
+
+def test_a_runner_killed_on_every_retry_lands_failed_as_before(tmp_path) -> None:
+    from medchron import requeue
+
+    d, broker = _daemon(tmp_path, SIGNAL_RUNNER.format(killed=99, sha="a" * 64))
+    _submit(d, broker, "01A")
+    for _ in range(requeue.MAX_REQUEUES):
+        assert d.tick() == "requeued"
+        d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "failed"
+    assert "the runner exited -15 without a verdict" in broker.records[-1][2]["reason"]
+
+
+def test_a_model_api_crash_is_retried_and_a_defect_crash_is_not(tmp_path) -> None:
+    from medchron import requeue
+
+    api = (
+        "map: exit 1; last output: Traceback ... anthropic.InternalServerError: Error code: 500 - "
+        "{'type': 'error', 'error': {'type': 'api_error', 'message': 'Internal server error'}}"
+    )
+    script = (
+        _runner(1)
+        .replace('"transient": True', '"transient": False')
+        .replace("update_review: a part of the update's review did not finish; a rerun reviews again", api)
+    )
+    d, broker = _daemon(tmp_path, script)
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued" and "model API error" in broker.records[-1][2]["reason"]
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+    assert requeue.cause([{"outcome": "failed", "reason": "map: KeyError: 'p'"}], "failed", {}, "map") is None
+    assert requeue.cause([], "failed", {"reason": "the runner exited 137 without a verdict"}, None) is None
+    assert requeue.cause([{"outcome": "held"}], "held", {"reason": "per_job_cap_usd: over"}, "vision") is None
+
+
+INFRA_RUNNER = """
+import json, sys, pathlib
+jd = pathlib.Path(sys.argv[1])
+marker = jd / 'ran'
+n = int(marker.read_text()) + 1 if marker.exists() else 1
+marker.write_text(str(n))
+if n == 1:
+    st = jd / 'data' / 'example' / 'runs' / 'alpha' / 'state.json'
+    st.parent.mkdir(parents=True, exist_ok=True)
+    st.write_text(json.dumps({"stages": {"map": {"status": "failed", "exit_code": %(code)d}}}))
+    print(json.dumps([{"unit": "alpha", "outcome": "failed", "stage": "map", "dollars": 12.0, "pages": 300,
+        "documents": 40, "transient": False, "reason": "map: exit %(code)d; last output: chunk-07 failed"}]))
+    sys.exit(0)
+print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 31.0,
+    "pages": 300, "documents": 40, "folder_id": "folder-9",
+    "files": [{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}],
+    "proof": {"readback": "confirmed", "files": [{"name": "x.docx", "file_id": "f1", "size": 10,
+        "sha256": "%(sha)s"}], "review": "passed", "review_cents": 0}}]))
+"""
+
+
+def test_a_stage_exit_of_75_is_infrastructure_and_retried(tmp_path) -> None:
+    """compose.INFRA_EXIT (75, #3464): map and repair return it when an API
+    error outlived its retries. The daemon reads the stage's exit code off
+    the job's state.json and retries; the same failure with exit 1 (a defect)
+    is failed at once."""
+    from medchron import requeue
+
+    from medchron.stages import compose
+
+    assert requeue.INFRA_EXIT == compose.INFRA_EXIT == 75, "one number, the stage's and the daemon's"
+    d, broker = _daemon(tmp_path, INFRA_RUNNER % {"code": 75, "sha": "a" * 64})
+    _submit(d, broker, "01A")
+    assert d.tick() == "requeued" and "model API error at map" in broker.records[-1][2]["reason"]
+    d._now["t"] += requeue.REQUEUE_DELAY_S + 1  # type: ignore[attr-defined]
+    assert d.tick() == "delivered"
+
+    d2, broker2 = _daemon(tmp_path / "defect", INFRA_RUNNER % {"code": 1, "sha": "a" * 64})
+    _submit(d2, broker2, "01B")
+    assert d2.tick() == "failed" and broker2.records[-1][1] == "failed"
+
+
+def test_the_infrastructure_wording_is_the_fallback_when_no_exit_code_is_on_file() -> None:
+    from medchron import requeue
+
+    o = {"outcome": "failed", "reason": "map incomplete (infrastructure): an API error outlived its retries"}
+    assert requeue.cause([o], "failed", {}, "map") == "model_api"
+
+
+def test_other_holds_are_not_re_run(tmp_path) -> None:
+    """Only the read-back-short hold is a wait; a review hold, or the upload's
+    refusal over bytes that changed, is not re-run by the daemon."""
+    d, broker = _daemon(
+        tmp_path, _upload_runner(9, stage="review", reason="review_held: the pre-delivery review found a must-fix")
+    )
+    _submit(d, broker, "01A")
+    assert d.tick() == "held" and broker.records[-1][1] == "held"
 
 
 def test_a_mixed_attempt_is_a_real_failure() -> None:

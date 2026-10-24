@@ -7,7 +7,13 @@ not derivable says so instead of carrying a plausible number; the grand
 total is labelled SUBTOTAL, with a warning, whenever any row is missing. A
 worksheet is where a misattributed figure does damage, because it reads as
 the specials number: it refuses (exit 1) a chart built without the patient
-filter on a joint matter, or one carrying a suspect (lost-decimal) amount.
+filter on a joint matter, or one still carrying a suspect (lost-decimal)
+amount. The second is now an integrity falsifier only: billing_chart settles
+every suspect amount by rule (accepted when the page prints it with its
+decimal, otherwise left out and named), so a chart that still carries one
+was built by a defect (stop audit row 18, 2026-10-24). The amounts left out
+and the pages no read could transcribe are each named here by document and
+page, as not in the total.
 """
 
 from __future__ import annotations
@@ -79,6 +85,153 @@ def para(doc: Any, text: str, size: float = 9.5, italic: bool = False, before: i
     r.font.size, r.italic, r.font.color.rgb = Pt(size), italic, S.BLACK
 
 
+def _dedup(rows: list[list[str]], key: Any) -> list[list[str]]:
+    seen: set = set()
+    out = []
+    for r in rows:
+        k = key(r)
+        if k not in seen:
+            seen.add(k)
+            out.append(r)
+    return out
+
+
+def _as_printed(doc: Any, data: dict[str, Any]) -> None:
+    """Row 28 (b), as revised: bills under a name matched to no treating
+    provider, with their printed totals, under their OWN subtotal, after and
+    outside the grand total, so the same care cannot be counted twice."""
+    printed = data.get("as_printed_rows") or []
+    if not printed:
+        return
+    doc.add_paragraph("Billed under a name not matched to a treating provider", style="Heading 1")
+    para(
+        doc,
+        "Each bill below names a provider, as printed on the bill, that could not be matched to a provider in the "
+        "medical chronology. Its amount is shown here so nothing on file is left unseen, but it is NOT in the grand "
+        "total above: the same care may already be counted there under the treating provider's name, and adding it "
+        "again could count it twice.",
+    )
+    gaps = any(r["total"] is None for r in printed)
+    table(
+        doc,
+        ["Provider (as printed on the bill)", "Source", "Total Billed"],
+        [[r["provider"], r["basis"], money(r["total"])] for r in printed],
+        [2.9, 3.2, 1.1],
+        total_row=["SUBTOTAL (not in the grand total)", "", money(data.get("as_printed_subtotal") or 0.0)]
+        if not gaps
+        else ["SUBTOTAL, INCOMPLETE (not in the grand total)", "", money(data.get("as_printed_subtotal") or 0.0)],
+        right_cols=(2,),
+    )
+
+
+def _disagree(doc: Any, rows: list[dict[str, Any]]) -> None:
+    alts = [r for r in rows if r.get("alternates")]
+    if not alts:
+        return
+    doc.add_paragraph("Where Documents Disagree", style="Heading 1")
+    para(
+        doc,
+        "More than one figure appears in the file for these providers. The chart uses the one named in the Source "
+        "column; the others are listed so the choice is visible.",
+    )
+    table(
+        doc,
+        ["Provider", "Figures found in the file"],
+        [[r["provider"], ", ".join(f"${a:,.2f}" for a in r["alternates"])] for r in alts],
+        [2.6, 4.6],
+    )
+
+
+def _excluded(doc: Any, data: dict[str, Any]) -> None:
+    if data.get("subrogation"):
+        doc.add_paragraph("Health-Plan and Subrogation Claims", style="Heading 1")
+        para(
+            doc,
+            "These are claims by a health plan (or its recovery vendor) for benefits it paid, not charges by a treating "
+            "provider. They are NOT included in the total above, and including them would double-count the underlying care.",
+        )
+        srows = [
+            [str(pv)[:40], fl[:40], ", ".join(str(a) for a in (amts or [])[:2])] for fl, pv, amts in data["subrogation"]
+        ]
+        table(
+            doc,
+            ["Claimant", "Source Document", "Amounts Printed"],
+            _dedup(srows, lambda r: (r[0], r[1]))[:14],
+            [2.2, 3.0, 2.0],
+        )
+    if data.get("vendor_invoices"):
+        doc.add_paragraph("Excluded: Vendor Invoices", style="Heading 1")
+        para(
+            doc, "Invoices billed to the firm by service vendors (record retrieval and similar). Not medical specials."
+        )
+        vrows = [[str(pv)[:36], fl[:44]] for fl, pv in data["vendor_invoices"]]
+        table(doc, ["Vendor", "Source Document"], _dedup(vrows, lambda r: r[1][:40])[:14], [2.6, 4.6])
+    if data.get("quarantined"):
+        doc.add_paragraph("Excluded: Documents Naming Another Patient", style="Heading 1")
+        para(
+            doc,
+            "This matter holds documents for more than one person. The following name a different patient and are "
+            "excluded from every figure above.",
+        )
+        qrows = [[str(wh)[:26], str(pv)[:28], fl[:36]] for fl, wh, pv in data["quarantined"]]
+        table(
+            doc,
+            ["Patient Named", "Provider", "Source Document"],
+            _dedup(qrows, lambda r: (r[0], r[2][:34]))[:16],
+            [1.8, 2.2, 3.2],
+        )
+
+
+def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]]) -> None:
+    """What the figures above do not include, each named by document and page:
+    amounts left out (row 18), providers with no supportable total, and pages
+    no read could transcribe (row 17)."""
+    left_out = [r for r in data.get("dropped_rows") or [] if isinstance(r, dict)]
+    if left_out:
+        doc.add_paragraph("Amounts Left Out", style="Heading 1")
+        para(
+            doc,
+            "An amount was read from each page below but could not be confirmed against the page itself (the figure "
+            "is large enough that a missing decimal point would change it, and the page does not show it with its "
+            "decimal point). Each was left out of every figure above rather than estimated, and an unconfirmed "
+            "figure is not repeated here.",
+        )
+        lrows = [[str(r.get("file"))[:56], f"p. {r.get('page')}"] for r in left_out[:24]]
+        table(doc, ["Source Document", "Page"], lrows, [6.2, 1.0])
+    needed = [r for r in gaps if "Amounts Left Out" not in str(r.get("basis"))]
+    if needed:
+        doc.add_paragraph("What Is Needed", style="Heading 1")
+        para(
+            doc,
+            "For the providers below, the file holds individual claim forms but no account ledger or statement of the "
+            "total billed. Summing the claim forms is not reliable here because the same bills appear both individually "
+            "and inside compiled record sets, so a sum would count them twice. A current ledger from each provider, "
+            "or a Lienholder and Balances report for this matter, would complete the chart.",
+        )
+        table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in needed], [2.6, 4.6])
+    if data.get("failed_pages"):
+        doc.add_paragraph("Pages Not Read", style="Heading 1")
+        para(
+            doc,
+            f"{len(data['failed_pages'])} billing page(s) could not be read. No amount from them is in any figure "
+            f"above (not totalled), so the figures above are a floor until these pages are read.",
+        )
+        frows = _dedup([[str(fl)[:56], f"p. {pg}"] for fl, pg in data["failed_pages"]], lambda r: tuple(r))
+        table(doc, ["Source Document", "Page"], frows[:40], [6.2, 1.0])
+
+
+def _refusal(sr: StageRun, data: dict[str, Any] | None) -> str | None:
+    if data is None:
+        return "billing_chart.json not found; billing_chart runs first"
+    if sr.job.joint and not data.get("patient_filter"):
+        return "chart was built without a patient filter on a joint matter; refusing to render a worksheet"
+    if data.get("suspect_amounts"):
+        return (
+            f"chart carries {len(data['suspect_amounts'])} suspect amount(s) (likely lost decimal); refusing to render"
+        )
+    return None
+
+
 def run(sr: StageRun) -> int:
     from docx import Document
     from docx.shared import Inches
@@ -87,19 +240,12 @@ def run(sr: StageRun) -> int:
     unit = sr.unit.unit
     sfx = f"-{unit}" if sr.job.joint else ""
     data = read_json(d / f"billing_chart{sfx}.json", None)
-    if data is None:
-        sr.log("billing_chart.json not found; billing_chart runs first")
-        return 1
-    if sr.job.joint and not data.get("patient_filter"):
-        sr.log("chart was built without a patient filter on a joint matter; refusing to render a worksheet")
-        return 1
-    if data.get("suspect_amounts"):
-        sr.log(
-            f"chart carries {len(data['suspect_amounts'])} suspect amount(s) (likely lost decimal); refusing to render"
-        )
+    refused = _refusal(sr, data)
+    if refused or data is None:
+        sr.log(refused or "billing_chart.json not found")
         return 1
     rows = data["rows"]
-    if not rows and not data.get("subrogation") and not data.get("vendor_invoices"):
+    if not rows and not any(data.get(k) for k in ("subrogation", "vendor_invoices", "as_printed_rows")):
         sr.log("no billing rows and no excluded items; no worksheet for this unit")
         return 0
     gaps = [r for r in rows if r["total"] is None]
@@ -116,22 +262,21 @@ def run(sr: StageRun) -> int:
         doc,
         f"Prepared {date.today():%B %-d, %Y}. Providers and treatment dates are taken from the medical chronology "
         f"for this matter. Each amount names the document it was read from. No figure here was calculated by us "
-        f"except the total, which is the sum of the rows shown.",
+        f"except the totals, each the sum of the rows shown above it.",
         italic=True,
     )
     if gaps:
         para(
             doc,
             f"INCOMPLETE: {len(gaps)} of {len(rows)} providers have no total that can be supported from the documents "
-            f'on file. The subtotal below is therefore NOT this case\'s medical specials figure. See "What Is Needed" '
-            f"at the end.",
+            f"on file. The subtotal below is therefore NOT this case's medical specials figure. The sections at the "
+            f"end say what is missing for each.",
         )
     doc.add_paragraph("Billing by Provider", style="Heading 1")
     body: list[list[str]] = []
     grand, orphan = 0.0, False
     for r in rows:
-        if r["total"] is not None:
-            grand += r["total"]
+        grand += r["total"] or 0.0
         name = r["provider"]
         if r["first"] is None and r["last"] is None and r.get("lien"):
             name, orphan = name + " *", True
@@ -152,78 +297,10 @@ def run(sr: StageRun) -> int:
             "own report, but it cannot be attributed to a provider from the documents on file.",
             size=9,
         )
-    alts = [r for r in rows if r.get("alternates")]
-    if alts:
-        doc.add_paragraph("Where Documents Disagree", style="Heading 1")
-        para(
-            doc,
-            "More than one figure appears in the file for these providers. The chart uses the one named in the Source "
-            "column; the others are listed so the choice is visible.",
-        )
-        table(
-            doc,
-            ["Provider", "Figures found in the file"],
-            [[r["provider"], ", ".join(f"${a:,.2f}" for a in r["alternates"])] for r in alts],
-            [2.6, 4.6],
-        )
-    if data.get("subrogation"):
-        doc.add_paragraph("Health-Plan and Subrogation Claims", style="Heading 1")
-        para(
-            doc,
-            "These are claims by a health plan (or its recovery vendor) for benefits it paid, not charges by a treating "
-            "provider. They are NOT included in the total above, and including them would double-count the underlying care.",
-        )
-        seen: set = set()
-        srows = []
-        for fl, pv, amts in data["subrogation"]:
-            k = (str(pv)[:40], fl[:40])
-            if k not in seen:
-                seen.add(k)
-                srows.append([str(pv)[:40], fl[:40], ", ".join(str(a) for a in (amts or [])[:2])])
-        table(doc, ["Claimant", "Source Document", "Amounts Printed"], srows[:14], [2.2, 3.0, 2.0])
-    if data.get("vendor_invoices"):
-        doc.add_paragraph("Excluded: Vendor Invoices", style="Heading 1")
-        para(
-            doc, "Invoices billed to the firm by service vendors (record retrieval and similar). Not medical specials."
-        )
-        seen2: set = set()
-        vrows = []
-        for fl, pv in data["vendor_invoices"]:
-            if fl[:40] not in seen2:
-                seen2.add(fl[:40])
-                vrows.append([str(pv)[:36], fl[:44]])
-        table(doc, ["Vendor", "Source Document"], vrows[:14], [2.6, 4.6])
-    if data.get("quarantined"):
-        doc.add_paragraph("Excluded: Documents Naming Another Patient", style="Heading 1")
-        para(
-            doc,
-            "This matter holds documents for more than one person. The following name a different patient and are "
-            "excluded from every figure above.",
-        )
-        seen3: set = set()
-        qrows = []
-        for fl, wh, pv in data["quarantined"]:
-            k = (str(wh)[:26], fl[:34])
-            if k not in seen3:
-                seen3.add(k)
-                qrows.append([str(wh)[:26], str(pv)[:28], fl[:36]])
-        table(doc, ["Patient Named", "Provider", "Source Document"], qrows[:16], [1.8, 2.2, 3.2])
-    if gaps:
-        doc.add_paragraph("What Is Needed", style="Heading 1")
-        para(
-            doc,
-            "For the providers below, the file holds individual claim forms but no account ledger or statement of the "
-            "total billed. Summing the claim forms is not reliable here because the same bills appear both individually "
-            "and inside compiled record sets, so a sum would count them twice. A current ledger from each provider, "
-            "or a Lienholder and Balances report for this matter, would complete the chart.",
-        )
-        table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in gaps], [2.6, 4.6])
-    if data.get("failed_pages"):
-        doc.add_paragraph("Pages Not Read", style="Heading 1")
-        para(
-            doc,
-            f"{len(data['failed_pages'])} page(s) could not be read. Figures above are a floor until they are resolved.",
-        )
+    _as_printed(doc, data)
+    _disagree(doc, rows)
+    _excluded(doc, data)
+    _not_in_total(doc, data, gaps)
     stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
     glob = str(sr.cfg.get("delivery", "worksheet_glob") or "* - Medical Billing Worksheet *.docx")
     out = d / "out" / unit / glob.replace("*", who, 1).replace("*", stamp, 1)

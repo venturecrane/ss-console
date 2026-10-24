@@ -191,10 +191,13 @@ def cut_short_by_stop(d: Any, job_id: str, code: int, out: str) -> bool:
     and the driver's state file skips the stages that finished, which is
     the daemon's stated contract for a crash mid-job (daemon.py header).
 
-    Only a stop counts. A child the cgroup OOM-killed dies of SIGKILL with
-    the daemon running; that is a real failure, recorded, and a re-run
-    would die the same way. A real ending (delivered, held, refused) is
-    recorded even mid-stop: the work happened.
+    Only a stop counts here. A child killed by a signal with the daemon
+    running (the cgroup's OOM SIGKILL, or a SIGTERM no stop explains) is not a
+    stop: it returns False and goes to the lane's report. On the chronology
+    lane that report retries it after a delay, a bounded number of times, as
+    an infrastructure ending (``requeue.py``, stop audit row 20, 2026-10-24),
+    and records it failed only after the last retry. A real ending
+    (delivered, held, refused) is recorded even mid-stop: the work happened.
 
     A child that exited :data:`CHECKPOINT_EXIT` stopped at a checkpoint on the
     daemon's own request and wrote no verdict: kept claimed whatever the flag

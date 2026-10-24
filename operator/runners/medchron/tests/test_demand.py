@@ -900,10 +900,24 @@ def test_an_upload_refusal_carries_the_upload_stages_own_reason(tmp_path, pricin
     seat = seat_with(standard_docs())
     _r, v, _ = _run(tmp_path, pricing, seat, ScriptedClient())
     assert v.outcome == "delivered"
+    base = seat.created[0]["name"]
+    # A same-name folder somebody else made is left alone; the demand goes to
+    # the next numbered name (stop audit row 19), so this is no longer a stop.
     seat2 = seat_with(standard_docs())
-    seat2.folders.append({"id": "f-x", "name": seat.created[0]["name"], "parentId": None, "path": "/x"})
+    seat2.folders.append({"id": "f-x", "name": base, "parentId": None, "path": "/x"})
     _r, v2, _ = _run(tmp_path / "b", pricing, seat2, ScriptedClient())
-    assert v2.outcome == "held" and "already exists on the matter" in v2.reason
+    assert v2.outcome == "delivered", v2.reason
+    assert [c["name"] for c in seat2.created] == [f"{base} (2)"]
+    # The refusal that remains (every numbered name taken) still carries the
+    # upload stage's own sentence as the reason.
+    from medchron.stages import upload as upload_stage
+
+    seat3 = seat_with(standard_docs())
+    for n in range(1, upload_stage.FOLDER_SUFFIX_LIMIT + 1):
+        name = base if n == 1 else f"{base} ({n})"
+        seat3.folders.append({"id": f"f-{n}", "name": name, "parentId": None, "path": f"/{n}"})
+    _r, v3, _ = _run(tmp_path / "c", pricing, seat3, ScriptedClient())
+    assert v3.outcome == "held" and "already exist; refusing to add another" in v3.reason
 
 
 def test_a_records_vendors_case_number_stamp_is_not_a_lawsuit(tmp_path, pricing):

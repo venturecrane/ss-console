@@ -206,6 +206,15 @@ def test_an_oom_kill_with_the_daemon_running_is_a_failure_recorded_at_once(tmp_p
         return False
 
     lane.stopping = stopping
+    if lane.LANE == "medchron":
+        # Stop audit row 20 (2026-10-24): on the chronology lane a runner
+        # killed by a signal is an infrastructure ending, retried after a
+        # delay a bounded number of times (requeue.py), not terminal at once.
+        assert lane.tick() == "requeued"
+        assert asked["n"] == 1  # SIGKILL is not a stop signal: no grace wait
+        assert lane._daemon_state(jid)["state"] == "running" and lane._daemon_state(jid)["infra_requeues"] == 1
+        assert "failed" not in _states(client)
+        return
     assert lane.tick() == "failed"
     assert _states(client)[-1] == "failed"
     assert asked["n"] == 1  # SIGKILL is not a stop signal: no grace wait
@@ -219,6 +228,9 @@ def test_a_stop_signal_with_no_stop_after_the_grace_is_a_failure(tmp_path, make,
     submit()
     _with_child(lane, tmp_path, "term")
     lane.stopping = lambda: False
+    if lane.LANE == "medchron":  # retried, not failed (row 20; see above)
+        assert lane.tick() == "requeued" and "failed" not in _states(client)
+        return
     assert lane.tick() == "failed"
     assert _states(client)[-1] == "failed"
 

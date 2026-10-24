@@ -6,8 +6,10 @@ Idempotent by construction (ss#2614). The folder id is recorded in
 `runs/<unit>/delivery.json` BEFORE the first file goes up, so a crash between
 create_folder and the last add_file resumes by reconciling: list the folder,
 add only the names that are missing or the wrong size. A folder of the target
-name that this run did not create is somebody else's and the stage refuses
-(exit 1); this stage never deletes anything on the matter (an update's one
+name that this run did not create is somebody else's: it is left untouched
+and the delivery goes to "<name> (2)", "(3)", ... (`_free_name`); this stage
+never writes into a folder it did not create and never deletes anything on
+the matter (an update's one
 delete, of the chronology it replaces, is `update_upload`'s).
 
 `add_file` returning a null file id is normal and is not confirmation. The
@@ -71,12 +73,40 @@ from .base import StageRun
 
 READBACK_TRIES = 8
 READBACK_PAUSE_SECONDS = 15.0
+#: The highest " (n)" a delivery folder name is numbered to before the stage
+#: stops: past this, something is creating same-name folders in a loop.
+FOLDER_SUFFIX_LIMIT = 20
 
 
 def _folder_by_name(seat: Any, matter_id: str, name: str) -> dict[str, Any] | None:
     for f in seat.folder_tree(matter_id):
         if str(f.get("name") or "").strip() == name and not f.get("parentId"):
             return f
+    return None
+
+
+def _free_name(sr: StageRun, seat: Any, matter_id: str, base: str) -> str | None:
+    """The folder name this run delivers into: `base`, or the first of
+    "`base` (2)", "`base` (3)", ... that no top-level folder on the matter
+    carries.
+
+    A same-name folder this run did not create is somebody else's (a
+    paralegal made one by hand, or an earlier delivery sits there). It is
+    never written into and never touched; it used to fail the job outright
+    (stop audit row 19, 2026-10-24), which is a stop on a legitimate matter.
+    The chosen name is recorded in delivery.json with the folder id before
+    the first file goes up, so a resume returns to it and never moves on."""
+    taken = {str(f.get("name") or "").strip() for f in seat.folder_tree(matter_id) if not f.get("parentId")}
+    for n in range(1, FOLDER_SUFFIX_LIMIT + 1):
+        name = base if n == 1 else f"{base} ({n})"
+        if name not in taken:
+            if n > 1:
+                sr.log(
+                    f"a folder named '{base}' already exists on the matter and this run did not create it; "
+                    f"delivering into a new folder '{name}' instead, and leaving the existing one untouched"
+                )
+            return name
+    sr.log(f"{FOLDER_SUFFIX_LIMIT} folders named '{base}' or '{base} (n)' already exist; refusing to add another")
     return None
 
 
@@ -262,12 +292,8 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         folder_id = str(delivery["folder_id"])
         sr.log(f"resuming into folder {folder_id} ('{folder_name}') created by this run")
     else:
-        existing = _folder_by_name(seat, matter_id, folder_name)
-        if existing:
-            sr.log(
-                f"a folder named '{folder_name}' already exists on the matter (id {existing.get('id')}) and this "
-                f"run did not create it; refusing to write into it"
-            )
+        folder_name = _free_name(sr, seat, matter_id, folder_name)
+        if folder_name is None:
             return 1
         created = seat.create_folder(matter_id, folder_name)
         folder_id = str(created.get("id") or created.get("folderId") or "")

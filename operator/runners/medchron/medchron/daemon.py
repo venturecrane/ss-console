@@ -407,11 +407,14 @@ class Daemon:
                 # The delivery's own fields, including the covered/uncovered
                 # document id sets a later UPDATE reads its delta from.
                 fields.update(delivery_fields(worst, outcomes))
+        # An infrastructure ending (network, model API, a slow index, a runner
+        # killed by a signal) is retried after a delay, bounded (requeue.py):
+        # before settle, so a retry is not a page.
+        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
+            return "requeued"
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
-        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
-            return "requeued"
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
