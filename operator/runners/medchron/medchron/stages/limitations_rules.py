@@ -98,6 +98,24 @@ def _rendered_lines(d: Path, unit: str | None) -> list[str]:
     ] + [f'* "{_shown(n)}"' for n in sorted(names)]
 
 
+def _unattributed_lines(d: Path, unit: str | None) -> list[str]:
+    """The exhibit of cited records no rule could attribute to a provider
+    (stages/exhibits.py ``_settle_sentinel``): titled for what it is, and each
+    of its documents named."""
+    rows: list[tuple[int, str]] = []
+    for p in _unit_files(d, unit, "out", "page_map.json"):
+        for ex in read_json(p, []) or []:
+            if isinstance(ex, dict) and ex.get("unattributed"):
+                rows += [(int(ex.get("exhibit") or 0), str(f["file"])) for f in ex.get("files") or [] if f.get("file")]
+    if not rows:
+        return []
+    return [
+        "",
+        "Neither the record nor the chronology entries citing them name the provider of the following documents, "
+        "so they are filed together in an exhibit titled Unattributed Records:\n",
+    ] + [f'* Exhibit {n}: "{_shown(name)}"' for n, name in sorted(rows)]
+
+
 def _prior_history_lines(d: Path, unit: str | None) -> list[str]:
     """stages/summarize.py could not write a Prior Medical History summary
     that cites only pages the entries cite, so it itemized them instead."""

@@ -353,7 +353,7 @@ def test_a_changed_package_is_reviewed_again(job_dir, firm_config_path, data_roo
 
 def test_a_review_that_never_finishes_fails_and_files_nothing(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
-    assert _review(sr, FakeDoorway("| NOTE | 5 x | y | z |", "| NOTE | 5 x | y | z |")) == 1
+    assert _review(sr, FakeDoorway("| NOTE | 5 x | y | z |", "| NOTE | 5 x | y | z |")) == review.EXIT_INFRA
     assert proof_review.load(sr.slug_dir / "runs" / "alpha") is None
 
 

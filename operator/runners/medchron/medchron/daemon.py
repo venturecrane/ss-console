@@ -382,7 +382,7 @@ class Daemon:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
         stage: str | None = None
         if not outcomes:  # `verdict.read` always returns a list; empty is "no verdict from either source"
-            state, fields = "failed", {"reason": f"the runner exited {code} without a verdict"[:500]}
+            state, fields = "failed", {"reason": verdict_mod.lost(code)[:500]}
         else:
             rank = {"delivered": 0, "dry_run": 0, "held": 1, "refused": 2, "failed": 3}
             worst = max(outcomes, key=lambda o: rank.get(str(o.get("outcome")), 3))

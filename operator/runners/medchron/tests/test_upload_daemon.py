@@ -112,7 +112,9 @@ def test_upload_resumes_after_a_crash_between_create_and_add(job_dir, firm_confi
     seat.crash_after = 1  # the second add_file dies
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
-    assert upload.run(sr, pause=0, tries=2) == 2, "a failed send holds; it does not crash or retry"
+    assert upload.run(sr, pause=0, tries=2) == upload.EXIT_SEND_UNKNOWN, (
+        "a failed send holds; it does not crash or retry"
+    )
     dpath = sr.slug_dir / "runs" / "alpha" / "delivery.json"
     d = json.loads(dpath.read_text())
     assert d["folder_id"] == "folder-1"  # recorded before the first add_file
@@ -145,7 +147,7 @@ def test_upload_never_reposts_a_send_whose_response_was_lost(job_dir, firm_confi
     seat.post_then_fail = {exhibit: 0}
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
-    assert upload.run(sr, pause=0, tries=2) == 2
+    assert upload.run(sr, pause=0, tries=2) == upload.EXIT_SEND_UNKNOWN
     for _ in range(2):  # resumed twice: neither may POST the name again
         assert upload.run(sr, pause=0, tries=2) == 2
     assert [s["name"] for s in seat.sent].count(exhibit) == 1, "a resume must never re-POST a pending send"
@@ -167,7 +169,7 @@ def test_a_lost_response_whose_file_landed_confirms_without_a_resend(job_dir, fi
     seat.lag = 3
     log: list[str] = []
     sr = _upload_sr(job_dir, firm_config_path, data_root, seat, log)
-    assert upload.run(sr, pause=0, tries=1) == 2
+    assert upload.run(sr, pause=0, tries=1) == upload.EXIT_SEND_UNKNOWN
     assert upload.run(sr, pause=0, tries=6) == 0
     assert [s["name"] for s in seat.sent].count(exhibit) == 1
     d = json.loads((sr.slug_dir / "runs" / "alpha" / "delivery.json").read_text())
@@ -291,7 +293,9 @@ def test_upload_holds_on_a_delivery_record_that_predates_the_sent_flag(job_dir, 
             }
         )
     )
-    assert upload.run(sr, pause=0, tries=2) == 2, "an unreadable delivery record must hold, not re-send"
+    assert upload.run(sr, pause=0, tries=2) == upload.EXIT_PRE_FLAG, (
+        "an unreadable delivery record must hold, not re-send"
+    )
     assert seat.sent == [], "nothing may go up when the record cannot say what is already there"
     assert any("predates the `sent` flag" in line for line in log)
 

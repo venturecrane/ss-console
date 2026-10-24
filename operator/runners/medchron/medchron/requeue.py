@@ -48,8 +48,10 @@ MAX_REQUEUES = 4
 
 #: A stage's own "infrastructure, retry me later" exit: compose.INFRA_EXIT,
 #: which the map and repair stages return when an API error outlived its
-#: retries (#3464). Read off the job's state.json, where the driver records
-#: every stage's exit code; the reason text is the fallback.
+#: retries (#3464), the review when the model returned no verdict, and the
+#: download when the vendor or the network left targets unpulled (2026-10-24).
+#: Read off the job's state.json, where the driver records every stage's exit
+#: code; the reason text is the fallback.
 INFRA_EXIT = 75
 
 #: The upload's read-back-short hold (dag.py's exit 2 reason).
@@ -67,6 +69,7 @@ MODEL_API = re.compile(
 CAUSE_NOTE = {
     "network": "network error",
     "model_api": "model API error",
+    "vendor": "document vendor or network error",
     "upload_slow": "upload read back short",
     "killed": "runner killed by a signal",
 }
@@ -98,7 +101,7 @@ def cause(outcomes: list[Any], state: str, fields: dict[str, Any], stage: str | 
         return "network"
     failed = [o for o in outcomes if isinstance(o, dict) and str(o.get("outcome")) == "failed"]
     if failed and all(_infra(o) for o in failed):
-        return "model_api"
+        return "vendor" if stage == "download" else "model_api"
     return None
 
 

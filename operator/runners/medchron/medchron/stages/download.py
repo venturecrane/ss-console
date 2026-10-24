@@ -9,9 +9,15 @@ with `duplicate_of` and its bytes deleted, so downstream stages read one copy
 and pay for one (a delivered matter once carried 10/265 byte-identical files,
 all paid for twice).
 
-Exit 1 when a target is still not pulled for a reason a retry could fix: the
-frozen script printed the failures and exited 0, which is exactly the kind of
-outcome an agent reading stdout would catch and a driver would not.
+EXIT_INFRA (75) when a target is still not pulled for a reason a retry could
+fix: the frozen script printed the failures and exited 0, which is exactly the
+kind of outcome an agent reading stdout would catch and a driver would not.
+Every such reason is the vendor or the network (auth, throttling, timeouts,
+5xx, a size the vendor reports that the bytes do not match yet, a mint that
+failed twice), never the records. Until 2026-10-24 it was exit 1, which the
+ledger records as terminal `failed` (09-11, 09-14); now the daemon retries it
+after a delay (requeue.py), and the resumed pass pulls only what is missing
+(raw_manifest.jsonl rows already `ok` are skipped).
 
 The one exception is a 404 on a freshly minted presigned URL, which is the
 vendor's storage saying that object is not there. Minting again mints another
@@ -45,6 +51,16 @@ BATCH = 8
 HTTP_ABSENT = 404
 MINT_RETRY_PAUSE_SECONDS = 5.0
 BATCH_PAUSE_SECONDS = 1.0
+#: The stage's exits (dag.py reads EXITS); 75 is compose.INFRA_EXIT.
+EXIT_NOTHING, EXIT_NAMED, EXIT_INFRA = 1, 2, 75
+EXITS = {
+    EXIT_NOTHING: ("failed", "download: every target is absent from the vendor's storage; nothing to chronicle"),
+    EXIT_NAMED: ("held", "append: a named document id is not on the matter"),
+    EXIT_INFRA: (
+        "failed",
+        "download incomplete (infrastructure): vendor or network errors; a later rerun pulls the rest",
+    ),
+}
 
 
 def wanted(
@@ -108,7 +124,7 @@ def run(sr: StageRun) -> int:
         rule = {"prefixes": prefixes, "excludes": excludes, "root_pdfs": root_pdfs, "doc_exts": doc_exts}
         named = _named_targets(sr, sel, fpath, rule)
         if named is None:
-            return 2
+            return EXIT_NAMED
         targets = named
     done, seen_sha = _already(read_jsonl(log_path))
     todo = [t for t in targets if t["id"] not in done]
@@ -293,8 +309,8 @@ def _mint_with_retry(sr: StageRun, ids: list[str]) -> list[dict[str, Any]]:
 
 def _settle(sr: StageRun, failed: list[dict[str, Any]], *, n_targets: int, landed: int) -> int:
     """The exit code, decided by what kind of failure is left rather than by how
-    many there are. A caller that returns 1 here gets the pass repeated, so a
-    failure a repeat cannot fix must not return 1."""
+    many there are. EXIT_INFRA gets the pass repeated by the daemon, so a
+    failure a repeat cannot fix must not return it."""
     if not failed:
         return 0
     absent = [r for r in failed if r.get("http_status") == HTTP_ABSENT]
@@ -306,13 +322,13 @@ def _settle(sr: StageRun, failed: list[dict[str, Any]], *, n_targets: int, lande
             f"{len(retryable)} of {n_targets} targets are not pulled for a reason a retry can fix; "
             f"the rows carry the reason"
         )
-        return 1
+        return EXIT_INFRA
     if not landed:
         # Disclosure is what makes an absent document safe to continue past, and
         # disclosure needs a document to sit in. With nothing pulled there is no
         # chronology to write, only an empty one to file on the firm's matter.
         sr.log(f"all {n_targets} targets are absent from the vendor's storage; there is nothing to chronicle")
-        return 1
+        return EXIT_NOTHING
     sr.log(
         f"{len(absent)} of {n_targets} targets are absent from the vendor's storage and no retry can "
         f"produce them; each is named in the delivered document under Records Reviewed and "

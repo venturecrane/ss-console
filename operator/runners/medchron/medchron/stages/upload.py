@@ -76,6 +76,26 @@ READBACK_PAUSE_SECONDS = 15.0
 #: The highest " (n)" a delivery folder name is numbered to before the stage
 #: stops: past this, something is creating same-name folders in a loop.
 FOLDER_SUFFIX_LIMIT = 20
+#: The stage's exits (dag.py reads EXITS). Only EXIT_SHORT is a wait the daemon
+#: re-runs (requeue.UPLOAD_SHORT keys on its reason). Before 2026-10-24 a send
+#: whose outcome is unknown and a record that predates the `sent` flag also
+#: exited 2, so both were re-run four times, 900 s apart, before parking: a
+#: re-run can resolve neither, because the runner never resends either name.
+EXIT_REFUSED, EXIT_SHORT, EXIT_SEND_UNKNOWN, EXIT_PRE_FLAG = 1, 2, 3, 4
+EXITS = {
+    EXIT_REFUSED: (
+        "failed",
+        "upload: refused (the local bytes changed since the manifest, every numbered folder name is "
+        "already taken, no folder id, or the read-back found other bytes than ours)",
+    ),
+    EXIT_SHORT: (
+        "held",
+        "upload: the folder read back short after the retries; the files may still be materializing, nothing was "
+        "deleted",
+    ),
+    EXIT_SEND_UNKNOWN: ("held", "upload: a send failed and its outcome is unknown; a person reads the folder"),
+    EXIT_PRE_FLAG: ("held", "upload: delivery.json predates the sent flag; a person reads the folder"),
+}
 
 
 def _folder_by_name(seat: Any, matter_id: str, name: str) -> dict[str, Any] | None:
@@ -309,11 +329,11 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         sr.log(f"created folder '{folder_name}' (id {folder_id})")
 
     if _cannot_say_what_was_sent(sr, delivery, folder_id):
-        return 2
+        return EXIT_PRE_FLAG
     present = _files_in(seat, matter_id, folder_id)
     counts, why = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, delivery_path)
     if counts is None:
-        return 2 if why == "held" else 1
+        return EXIT_SEND_UNKNOWN if why == "held" else EXIT_REFUSED
     sent, skipped_known = counts
     already = len(manifest) - sent - skipped_known
     sr.log(f"{sent} file(s) sent, {already} already present, {skipped_known} sent by an earlier attempt")
@@ -338,7 +358,7 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     if short:
         sr.log(f"read-back short after {tries} tries: {', '.join(short)}")
         _note_unresolved(sr, [n for n in short if n in pending], folder_id)
-        return 2
+        return EXIT_SHORT
     sr.log(f"read-back complete: {len(expected)} file(s) at the expected byte counts in folder {folder_id}")
     return _prove(sr, seat, matter_id, folder_id, manifest, delivery, delivery_path, pause=pause, tries=tries)
 
@@ -372,7 +392,7 @@ def _prove(
         )
     except readback.ReadbackShort as exc:
         sr.log(f"read-back by hash could not fetch every file yet: {exc}")
-        return 2
+        return EXIT_SHORT
     except readback.ReadbackMismatch as exc:
         sr.log(f"readback_mismatch: {exc.name}: {exc.why} (folder {folder_id}); nothing further is sent")
         return 1

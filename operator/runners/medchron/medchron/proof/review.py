@@ -51,8 +51,15 @@ _CHECK_NO = re.compile(r"^\s*(\d{1,2})\b")
 
 
 class ReviewIncomplete(RuntimeError):
-    """The model review did not finish (twice). The job fails resumable: an
-    unreviewed document is never filed."""
+    """The model review did not finish (twice). An unreviewed document is
+    never filed. ``retry``: the call returned without a verdict for a reason a
+    later call can clear (no VERDICT line, a pause, an empty stop), as opposed
+    to a refusal, a truncation at the ceiling, or a caller's own defect; the
+    chronology lane exits infrastructure on it (stages/review.py)."""
+
+    def __init__(self, msg: str, *, retry: bool = False) -> None:
+        super().__init__(msg)
+        self.retry = retry
 
 
 class ReviewTruncated(ReviewIncomplete):
@@ -149,7 +156,7 @@ def run_model(
         raise ReviewTruncated(
             "the pre-delivery review ran out of output before its verdict at the largest output budget"
         )
-    raise ReviewIncomplete("the pre-delivery review did not complete")
+    raise ReviewIncomplete(f"the pre-delivery review did not complete (stop {stop or 'none'})", retry=stop != "refusal")
 
 
 def save(data: Path, findings: list[Finding], *, model: str = "", lane: str = "") -> dict[str, Any]:
