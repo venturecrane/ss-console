@@ -279,6 +279,11 @@ def _extract_body(args: dict | None) -> str | None:
     """
     if not isinstance(args, dict):
         return None
+    # An empty key never ends the search: AgentMail drafts carry both ``html``
+    # and ``text``, and the seat's own text reply sends ``html: ""`` beside the
+    # real ``text`` (2026-10-24, pilot: every text-only reply was refused as
+    # bodiless because ``html`` comes first in the key order).
+    seen_empty = False
     for key in _BODY_ARG_KEYS:
         if key not in args:
             continue
@@ -288,14 +293,15 @@ def _extract_body(args: dict | None) -> str | None:
         if isinstance(value, str):
             if value.strip():
                 return value
-            # Present-but-empty body on a draft tool: treat as no usable body
-            # so the caller fails closed rather than scanning "" and passing.
-            return ""
+            seen_empty = True
+            continue
         # Non-string body content — coerce so the markers/citation scan runs.
         coerced = str(value)
         if coerced.strip():
             return coerced
-    return None
+    # Present-but-empty body on a draft tool: treat as no usable body so the
+    # caller fails closed rather than scanning "" and passing.
+    return "" if seen_empty else None
 
 
 # ---------------------------------------------------------------------------
