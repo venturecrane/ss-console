@@ -128,12 +128,21 @@ def test_a_model_must_fix_on_a_hold_check_holds(job_dir, firm_config_path, data_
     assert log[-1].startswith("review_held:") and "no support" in log[-1]
 
 
+def _three_pages(sr: StageRun, p3: str) -> None:
+    """Exhibit 1 with the 03/30 entry's page 3 reading `p3`, re-manifested."""
+    out = sr.slug_dir / "out" / "alpha"
+    pages = ["Patient: Alpha Example DOB: 01/01/1970.", "Patient: Alpha Example DOB: 01/01/1970.", p3]
+    (out / "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf").write_bytes(make_pdf(pages))
+    assert manifest.run(sr) == 0
+
+
 def test_a_co_plaintiffs_visit_is_left_out_by_rule_not_held(job_dir, firm_config_path, data_root):
     """ss#2893: a co-plaintiff's visit inside the client's chronology. Since
     2026-10-24 it is decided on its page (``review_evidence``): the cited
-    page does not identify the client, so the entry is left out and
-    disclosed, and the job is not held."""
+    page names another person, so the entry is left out and disclosed, and
+    the job is not held."""
     sr, log = _package(job_dir, firm_config_path, data_root)
+    _three_pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
     row = "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic |"
     assert _review(sr, FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")) == 0, log
     assert "03/30/2026\nExample Clinic" not in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
@@ -281,9 +290,11 @@ def test_a_check1_must_is_never_repaired(job_dir, firm_config_path, data_root):
         "| entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |"
     )
     d = FakeDoorway(_verdict(row), FINISH)
-    # Decided on its page, never repaired (2026-10-24): the entry is left out.
+    # Decided on its page, never repaired (2026-10-24). The page names no one,
+    # so the entry the map read is kept and the finding is a note (B1).
     assert _settle_review(sr, d) == 0 and len(d.calls) == 1
-    assert "Continue therapy." not in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "Continue therapy." in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert proof_review.load(sr.slug_dir / "runs" / "alpha")["must_fix"] == 0
 
 
 def test_an_audit_gate_drop_is_listed_in_the_review_notes(job_dir, firm_config_path, data_root):

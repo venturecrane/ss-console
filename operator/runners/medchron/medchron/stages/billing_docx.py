@@ -23,6 +23,7 @@ from typing import Any
 
 from .. import docx_style as S
 from .base import StageRun, read_json
+from .billing_chart import NO_BILL
 
 
 def money(v: float | None) -> str:
@@ -198,17 +199,7 @@ def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]]) ->
         )
         lrows = [[str(r.get("file"))[:56], f"p. {r.get('page')}"] for r in left_out[:24]]
         table(doc, ["Source Document", "Page"], lrows, [6.2, 1.0])
-    needed = [r for r in gaps if "Amounts Left Out" not in str(r.get("basis"))]
-    if needed:
-        doc.add_paragraph("What Is Needed", style="Heading 1")
-        para(
-            doc,
-            "For the providers below, the file holds individual claim forms but no account ledger or statement of the "
-            "total billed. Summing the claim forms is not reliable here because the same bills appear both individually "
-            "and inside compiled record sets, so a sum would count them twice. A current ledger from each provider, "
-            "or a Lienholder and Balances report for this matter, would complete the chart.",
-        )
-        table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in needed], [2.6, 4.6])
+    _needed(doc, [r for r in gaps if "Amounts Left Out" not in str(r.get("basis"))])
     if data.get("failed_pages"):
         doc.add_paragraph("Pages Not Read", style="Heading 1")
         para(
@@ -218,6 +209,40 @@ def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]]) ->
         )
         frows = _dedup([[str(fl)[:56], f"p. {pg}"] for fl, pg in data["failed_pages"]], lambda r: tuple(r))
         table(doc, ["Source Document", "Page"], frows[:40], [6.2, 1.0])
+
+
+#: What the file holds, said only of the rows it is true of (the independent
+#: review's B2, 2026-10-24: one claim-form sentence over every gap row told
+#: the firm a provider with no bill at all had claim forms on file).
+_NEEDED_SAYS = {
+    "claim_forms": (
+        "For the providers below, the file holds individual claim forms but no account ledger or statement of the "
+        "total billed. Summing the claim forms is not reliable here because the same bills appear both individually "
+        "and inside compiled record sets, so a sum would count them twice."
+    ),
+    "no_bill": "For the providers below, no bill was found in the file.",
+    "other": "For the providers below, no total can be supported from the documents on file.",
+}
+_NEEDED_ASK = "A current ledger from each provider, or a Lienholder and Balances report for this matter, would complete the chart."
+
+
+def _needed_kind(basis: str) -> str:
+    if basis.strip() == NO_BILL:
+        return "no_bill"
+    return "claim_forms" if "claim form" in basis else "other"
+
+
+def _needed(doc: Any, needed: list[dict[str, Any]]) -> None:
+    """What Is Needed: one paragraph and table per basis (claim forms with no
+    ledger; no bill located), each paragraph true of every row under it."""
+    if not needed:
+        return
+    doc.add_paragraph("What Is Needed", style="Heading 1")
+    for kind in _NEEDED_SAYS:
+        rows = [r for r in needed if _needed_kind(str(r.get("basis") or "")) == kind]
+        if rows:
+            para(doc, f"{_NEEDED_SAYS[kind]} {_NEEDED_ASK}")
+            table(doc, ["Provider", "What is on file"], [[r["provider"], r["basis"]] for r in rows], [2.6, 4.6])
 
 
 def _refusal(sr: StageRun, data: dict[str, Any] | None) -> str | None:

@@ -37,12 +37,6 @@ from .base import StageRun
 #: "pages", "reason"}]}. The Review Notes file carries the same sentence.
 LEFT_OUT = "review-left-out.json"
 LEFT_OUT_REASON = FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
-#: A page that labels no patient at all: the review read the entry as another
-#: person's, and nothing on the page shows it is the client's.
-UNNAMED_REASON = (
-    "was read by the review as about a person other than the client, and its page does not identify the client, "
-    "so it was left out of this chronology"
-)
 _DATED = re.compile(r"^(\d{2}/\d{2}/\d{4})\s*$")
 _DATE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 _EXHIBIT_PAGE = re.compile(r"(?i)\bExhibit\s+(\d+)(?:\s*[,-]?\s*p(?:age|p)?\.?\s*(\d+))?")
