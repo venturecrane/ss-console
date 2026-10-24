@@ -115,7 +115,12 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
                     name,
                     f"evidenced billing dates only ({bills.group(1)}); the billing chart carries them",
                 )
-    return out
+    # A file split across pieces has one line per piece. When any piece gave
+    # entries the file is a source, so another piece's "nothing extractable"
+    # (since 2026-10-24 also compose's "not read (...)" for pages no reader
+    # took) never explains it: uncited, it is loss (the 08-27 rule).
+    sources = {n for n, c in entry_counts(run_dir, unit_files).items() if c > 0}
+    return {n: why for n, why in out.items() if n not in sources}
 
 
 #: Who wrote a rule row in coverage_decisions.json (coverage_decide's shape).

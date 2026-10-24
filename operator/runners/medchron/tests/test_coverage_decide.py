@@ -105,6 +105,42 @@ def test_the_command_refuses_what_it_cannot_record(
     assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
 
 
+# ---- a "not read" account never explains a file the composer drew entries from --
+NOT_READ = (
+    "| nothing extractable: not read (declined by the reader on every attempt); named as unread in the limitations"
+)
+
+
+def test_a_not_read_account_of_some_pages_never_explains_a_file_with_entries(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-10-24 (#3464): compose splits a declined file to single pages and
+    writes `nothing extractable: not read (...)` for the pages no reader took.
+    A file whose OTHER pages gave entries is a source; if the document cites
+    none of it, that is loss, and the unread pages' account must not hide it.
+    A file every page of which was unread is still explained by that account."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f7", "name": "big record", "ext": ".pdf", "ok": True, "chars": 9000},
+        {"id": "f8", "name": "sane exam", "ext": ".pdf", "ok": True, "chars": 900},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "map-01-1.md").write_text(
+        "## FILES-SEEN\n=== FILE: clinic note.pdf (fileId f1) === entries: 1\n"
+        "=== FILE: big record.pdf [part 1/2] === entries: 3\n"
+    )
+    # the shape compose.record_unread writes, one line per unread piece
+    (rd / "map-01-2.md").write_text(f"## FILES-SEEN\n=== FILE: big record.pdf [part 2/2] === {NOT_READ}\n")
+    (rd / "map-02.md").write_text(f"## FILES-SEEN\n=== FILE: sane exam.pdf (fileId f8) === {NOT_READ}\n")
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1, log
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["big record.pdf"]
+    assert any("sane exam.pdf" in line and "not read" in line for line in log), log
+
+
 # ---- row 1 (2026-10-24): a file whose every entry a filter rule removed --------
 INTAKE_FORM = "joint intake form.pdf"
 
