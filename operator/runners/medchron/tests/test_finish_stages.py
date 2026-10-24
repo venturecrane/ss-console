@@ -14,7 +14,7 @@ from medchron import config as config_mod, job as job_mod
 from medchron.stages import condense as condense_stage, exhibits as exhibits_stage, group as group_stage
 from medchron.stages import scope as scope_stage, summarize as summarize_stage
 from medchron.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat, make_pdf
+from medchron_testkit import FIRM_CONFIG, FakeSeat, job_yaml, make_pdf
 
 
 class Usage:
@@ -72,6 +72,15 @@ def firm(tmp_path: Path) -> Path:
     p = tmp_path / "firm.yaml"
     p.write_text(yaml.safe_dump(cfg))
     return p
+
+
+@pytest.fixture
+def joint_job_dir(tmp_path: Path, data_root: Path) -> Path:
+    """A two-plaintiff job: the only kind with a co-client to remove."""
+    d = tmp_path / "joint-job"
+    d.mkdir()
+    (d / "job.yaml").write_text(job_yaml(data_root, joint=True), encoding="utf-8")
+    return d
 
 
 def _sr(job_dir: Path, firm: Path, data_root: Path, client=None, log: list[str] | None = None) -> StageRun:
@@ -304,7 +313,7 @@ def test_scope_omits_with_disclosure_and_keeps_unclassified(job_dir: Path, firm:
     assert (d / "entries_full.md").is_file()
 
 
-def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, firm: Path, data_root: Path) -> None:
+def test_scope_removes_entries_attributed_to_the_co_plaintiff(joint_job_dir: Path, firm: Path, data_root: Path) -> None:
     """A chronology is ONE patient's.
 
     Live 2026-09-23 on a two-plaintiff matter: folder scoping kept every FILE out of the
@@ -330,7 +339,7 @@ def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, fir
         "Riverside ED, A. Baker, D.O. (Beta Example) | Patient Complaints & Limitations\n\n"
         "Beta Example, a 53-year-old female, was the restrained driver. (Exhibit 1 - p. 13)"
     )
-    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    sr = _sr(joint_job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "entries.md").write_text("\n\n".join([co, pd, mine, nested]))
@@ -345,7 +354,28 @@ def test_scope_removes_entries_attributed_to_the_co_plaintiff(job_dir: Path, fir
     assert [x["patient"] for x in dropped] == ["Beta Example", "Beta Example"]
 
 
-def test_scope_records_the_citations_each_removed_block_carried(job_dir: Path, firm: Path, data_root: Path) -> None:
+def test_scope_keeps_a_surname_parenthetical_on_a_single_client_job(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """N1 (2026-10-24): a single-client job has no co-plaintiff, so nothing is
+    removed as one. The surname test alone would drop the client's own care
+    under a provider named for the family (`(Example Chiropractic)`) or a short
+    given name, and coverage would tell the firm it was another patient's."""
+    clinic = "01/05/2026\nNorth Spine (Example Chiropractic) | Treatments\n\nAdjustment. (Exhibit 1 - p. 9)"
+    nick = "01/06/2026\nExample Clinic (Al Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 10)"
+    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    assert not sr.job.joint
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "omitted_coclient.json").write_text("[]")  # an earlier run's list goes
+    (d / "entries.md").write_text("\n\n".join([clinic, nick]))
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Adjustment." in scoped and "Cervical strain." in scoped
+    assert not (d / "omitted_coclient.json").exists()
+
+
+def test_scope_records_the_citations_each_removed_block_carried(
+    joint_job_dir: Path, firm: Path, data_root: Path
+) -> None:
     """2026-10-24: the coverage gate held a finished joint chronology on a
     shared intake form the composer drew one entry from, because that entry
     was the co-plaintiff's and filter removed it; nothing recorded which file
@@ -355,7 +385,7 @@ def test_scope_records_the_citations_each_removed_block_carried(job_dir: Path, f
     co = "01/05/2026\nSutter Health Radiology (Beta Example) | Medical Diagnoses\n\nAnkle. (Exhibit 2 - p. 9)"
     mine = "01/07/2026\nExample Clinic (Alpha Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 1)"
     client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n"))
-    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    sr = _sr(joint_job_dir, _with_policy(firm, "include"), data_root, client)
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "exhibit_map.json").write_text(json.dumps({"clinic.pdf": 1, "intake form.pdf": 2, "allergy.pdf": 3}))
@@ -371,7 +401,7 @@ def test_scope_records_the_citations_each_removed_block_carried(job_dir: Path, f
 
 
 def test_scope_keeps_an_unlabelled_client_block_after_a_co_plaintiff_block(
-    job_dir: Path, firm: Path, data_root: Path
+    joint_job_dir: Path, firm: Path, data_root: Path
 ) -> None:
     """The map prompt writes `<provider> | <heading>` and never requires a
     patient label, so on a joint matter the client's own blocks are often
@@ -393,7 +423,7 @@ def test_scope_keeps_an_unlabelled_client_block_after_a_co_plaintiff_block(
     assert "Lumbar strain diagnosed." in text and "Lumbar MRI unremarkable." in text
     assert "Example Clinic | Medical Diagnoses" in text
 
-    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    sr = _sr(joint_job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
     d = sr.slug_dir / "runs" / "alpha"
     d.mkdir(parents=True)
     (d / "entries.md").write_text(mixed)

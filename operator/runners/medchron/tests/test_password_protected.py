@@ -129,8 +129,14 @@ def test_the_rebuild_restores_the_unstripped_exhibits_and_resumes_from_build_doc
     (out / "Exhibit 1 - clinic.pdf.orig").write_bytes(b"original")
     (out / "Exhibit 2 - imaging.pdf").write_bytes(b"never stripped")
     (sd / "strip_result.json").write_text("{}")
+    # an unfinished apply's pre-strip copy: the next apply would resume from it
+    # and ignore the rebuilt document, so it goes with the restore
+    prestrip = sd / "runs" / "alpha" / "final-chronology.md.prestrip"
+    prestrip.parent.mkdir(parents=True)
+    prestrip.write_text("pre-strip document")
     d = _seat(tmp_path, job_dir)
     redo_doc.apply(d, redo_doc.plan(d, JOB, by="smd", source="ss-console#3414"))
+    assert not prestrip.exists()
     assert (out / "Exhibit 1 - clinic.pdf").read_bytes() == b"original"
     assert not (out / "Exhibit 1 - clinic.pdf.orig").exists()  # strip_apply's guard no longer refuses
     assert (out / "Exhibit 2 - imaging.pdf").read_bytes() == b"never stripped"

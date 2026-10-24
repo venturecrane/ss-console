@@ -133,7 +133,16 @@ def drop_coclient(sr: StageRun, d: Path, entries: list[dict[str, str]]) -> list[
     the citations its block carried (``cites``), so the coverage gate can
     explain a file whose only entries were another person's instead of holding
     on it (2026-10-24: a joint matter's shared intake form).
+
+    Joint jobs only. On a single-client job there is no co-plaintiff, and the
+    surname test would remove the client's own care under a parenthetical like
+    ``(Smith Chiropractic)`` or a short given name (``(Lupe Pamplona)`` for
+    Guadalupe), which coverage would then tell the firm was another patient's.
     """
+    if not sr.job.joint:
+        # A list left by an earlier run would explain files at the coverage gate.
+        (d / "omitted_coclient.json").unlink(missing_ok=True)
+        return entries
     kept: list[dict[str, str]] = []
     log: list[dict[str, Any]] = []
     whole = 0

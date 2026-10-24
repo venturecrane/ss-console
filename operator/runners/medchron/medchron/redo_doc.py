@@ -72,6 +72,7 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
                 "unit": u.unit,
                 "restore": _restores(slug_dir / "out" / u.unit),
                 "strip_result": str(_strip_result(slug_dir, u.unit, job.joint)),
+                "prestrip": str(_prestrip(slug_dir, u.unit)),
             }
         )
     return {
@@ -89,12 +90,23 @@ def _strip_result(slug_dir: Path, unit: str, joint: bool) -> Path:
     return slug_dir / f"strip_result{f'-{unit}' if joint else ''}.json"
 
 
-def _restore(restore: list[tuple[str, str]], strip_result: Path) -> None:
+def _prestrip(slug_dir: Path, unit: str) -> Path:
+    """An unfinished strip_apply's copy of the pre-strip chronology. It must go
+    with the restore: a rebuilt document would otherwise be ignored by the next
+    apply, which resumes from that copy while it exists."""
+    from .stages.strip import prestrip_path
+
+    return prestrip_path(slug_dir / "runs" / unit / "final-chronology.md")
+
+
+def _restore(restore: list[tuple[str, str]], strip_result: Path, prestrip: Path | None = None) -> None:
     for stripped, orig in restore:
         # The original was hard-linked beside the exhibit before the strip
         # replaced it, so the rename restores the very bytes exhibits wrote.
         Path(orig).replace(stripped)
     strip_result.unlink(missing_ok=True)
+    if prestrip is not None:
+        prestrip.unlink(missing_ok=True)
 
 
 def restore_unit(slug_dir: Path, unit: str, *, joint: bool) -> int:
@@ -102,13 +114,13 @@ def restore_unit(slug_dir: Path, unit: str, *, joint: bool) -> int:
     exhibits back and remove the strip result, so the strip stages can run
     again over a rebuilt document. Returns how many exhibits were restored."""
     restore = _restores(slug_dir / "out" / unit)
-    _restore(restore, _strip_result(slug_dir, unit, joint))
+    _restore(restore, _strip_result(slug_dir, unit, joint), _prestrip(slug_dir, unit))
     return len(restore)
 
 
 def apply(d: Any, p: dict[str, Any]) -> None:
     for u in p["units"]:
-        _restore(u["restore"], Path(u["strip_result"]))
+        _restore(u["restore"], Path(u["strip_result"]), Path(u["prestrip"]) if u.get("prestrip") else None)
     d.queue.mkdir(parents=True, exist_ok=True)
     (d.queue / f"{MARKER_PREFIX}{p['job_id']}.json").write_text(
         json.dumps(p["marker"], sort_keys=True), encoding="utf-8"

@@ -307,8 +307,12 @@ def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str
         o += [f'* "{_shown(name)}" - {why}' for name, why in sorted(rows)]
     read: dict[str, str] = {}
     if unit is not None:
+        # A decision recorded on an earlier run can name a file this document
+        # now cites; it is never described as one no entry is drawn from.
+        cited = (coverage.cited_files(d, unit) or (set(), set()))[0]
         for r in coverage_decide.rows(d, unit):
-            read[str(r["name"])] = str(r["reason"])
+            if str(r["name"]) not in cited:
+                read[str(r["name"])] = str(r["reason"])
         if cfg is not None:
             for r in coverage.rule_rows(d, unit, cfg):
                 read.setdefault(r["name"], r["reason"])

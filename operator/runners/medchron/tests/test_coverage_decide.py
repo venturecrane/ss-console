@@ -17,7 +17,7 @@ import pytest
 import test_upload_daemon as ud
 from medchron import config as config_mod, coverage_decide, job as job_mod
 from medchron.resume import MARKER_PREFIX
-from medchron.stages import coverage as coverage_stage
+from medchron.stages import coverage as coverage_stage, limitations
 from medchron.stages.base import StageRun
 from medchron_testkit import FakeSeat, seed_raw_manifest
 
@@ -198,3 +198,45 @@ def test_a_file_with_a_kept_citation_that_is_not_cited_is_still_an_integrity_sto
     _omitted_scene(data_root, "coclient", kept_elsewhere=True)
     rc, log = _gate(job_dir, firm_config_path, data_root)
     assert rc == 1 and any("COVERAGE GATE HOLD (integrity)" in line for line in log), log
+
+
+# ---- B3 (2026-10-24): a cited file is never named as one no entry is drawn from --
+def test_a_cited_file_whose_files_seen_reads_entries_0_is_not_named_unused(
+    firm_config_path: Path, data_root: Path
+) -> None:
+    """A composer miscount (or a citation assemble resolved onto another file)
+    left `entries: 0` on a file the document cites. Naming it to the firm as
+    "read in full and no entry in this chronology is drawn from" it would be a
+    false statement about the file. The uncited sibling with the same line is
+    still named (the falsifier)."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f2", "name": "spare intake page", "ext": ".pdf", "ok": True, "chars": 245},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "spare intake page.pdf": 2}))
+    (rd / "map-001.md").write_text(
+        "=== FILE: clinic note.pdf (fileId f1) === entries: 0\n"
+        "=== FILE: spare intake page.pdf (fileId f2) === entries: 0\n"
+    )
+    cfg = config_mod.load(str(firm_config_path))
+    names = [r["name"] for r in coverage_stage.rule_rows(sd, "alpha", cfg)]
+    assert names == ["spare intake page.pdf"]
+    # A decision row recorded for it on an earlier run is not repeated either.
+    coverage_decide.record(
+        sd,
+        {
+            "unit": "alpha",
+            "id": "f1",
+            "name": "clinic note.pdf",
+            "reason": "stale",
+            "by": "rule",
+            "source": "x",
+            "at": "t",
+        },
+    )
+    text = "\n".join(limitations._not_used_lines(sd, {}, "alpha", cfg))
+    assert "spare intake page.pdf" in text and "clinic note.pdf" not in text
