@@ -34,6 +34,7 @@ import json
 import re
 from typing import Any
 
+from .. import wording
 from ..audit import claims as CL
 from . import body as B, illegible as IL, review_repair as RR
 from .values import content_numbers, numbers
@@ -294,7 +295,7 @@ def refiled(
 #: the review does not raise the same unreadable mark again (2026-10-14: about
 #: 30 of 40 reverted corrections were column marks and handwritten numbers the
 #: grader could not read either).
-AS_READ = ("marked as shown on the page", "as written on the page")
+AS_READ = (wording.MARKED_AS_SHOWN, wording.AS_WRITTEN)
 #: Findings an as-read claim still answers to: a wrong visit, a copy, words
 #: about the process are not a reading.
 _STILL_RAISED = ("duplicate", "misattribut", "process", "uncited", "out-of-order", "date")

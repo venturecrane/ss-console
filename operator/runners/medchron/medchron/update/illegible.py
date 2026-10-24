@@ -30,13 +30,11 @@ import copy
 import re
 from typing import Callable
 
+from .. import wording
 from . import body as B, review_repair as RR
 
-#: Verbatim from ``prompts/map-system.md`` (the map prompt's handwritten rule).
-HOUSE_NOTE = (
-    "[NTD: A portion of the records were handwritten and illegible. Therefore, we were unable to annotate or "
-    "decipher a portion of these records and were unable to draft a complete medical summary for this treatment.]"
-)
+#: The map prompt's handwritten rule, from its one home (``medchron.wording``).
+HOUSE_NOTE = wording.NTD_ILLEGIBLE
 #: Finding classes the note answers: what the entry does not say.
 SETTLES = ("omitted", "truncated")
 #: Finding classes on a noted entry answered by dropping the sentence: a mark

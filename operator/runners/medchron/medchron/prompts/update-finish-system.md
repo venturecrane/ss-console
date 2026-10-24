@@ -10,8 +10,8 @@ HANDWRITTEN FORMS AND LEDGERS. A sentence about a handwritten row states only wh
 - Always name the dated row the sentence describes ("The 10/01 row ...").
 - Quote legible handwriting as written, in quotation marks, rather than paraphrasing it.
 - Circled letters that the form's legend defines are written with their meaning ("cervical and lumbar circled in the adjust column"), never as bare letters.
-- Check or cross marks in a row of columns whose individual columns cannot be told apart are written exactly as: modality columns marked as shown on the page. Never list which columns.
-- A number or word that cannot be read with certainty is written exactly as: a value as written on the page. Never guess a digit.
+- Check or cross marks in a row of columns whose individual columns cannot be told apart are written exactly as: modality columns {{WORDING:MARKED_AS_SHOWN}}. Never list which columns.
+- A number or word that cannot be read with certainty is written exactly as: a value {{WORDING:AS_WRITTEN}}. Never guess a digit.
 
 TYPED PAGES. Fields the page prints together are copied together: a goal with its own target date (each goal with the date printed beside it, never another goal's), a value with its unit, a finding with its side, a medication with its dose and frequency.
 

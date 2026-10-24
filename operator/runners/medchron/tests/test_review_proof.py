@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from medchron import config as config_mod, job as job_mod, unit_proof
+from medchron import config as config_mod, job as job_mod, unit_proof, wording as W
 from medchron.proof import review as proof_review
 from medchron.stages import manifest, render, review, upload
 from medchron.stages.base import StageRun
@@ -39,7 +39,7 @@ class FakeDoorway:
     def call(self, stage, **kw):
         self.calls.append({"stage": stage, **kw})
         text = self.answers.pop(0) if self.answers else CLEAN
-        return SimpleNamespace(text=text, stop_reason="end_turn")
+        return SimpleNamespace(text=text, stop_reason="end_turn", usage=None)
 
 
 def _package(job_dir: Path, firm: Path, data_root: Path, doc: str = DOC) -> tuple[StageRun, list[str]]:
@@ -136,6 +136,154 @@ def test_a_model_must_fix_on_a_non_hold_check_is_downgraded_into_the_notes(job_d
     assert "duplicated sentence" in review.docx_text(sr.slug_dir / "out" / "alpha" / names[1])
 
 
+# ---- the review's own policy (2026-10-23: stages/review_policy.py) ---------------
+def _verdict(*rows: str) -> str:
+    must = sum("| MUST-FIX |" in r for r in rows)
+    return "\n".join([*rows, f"VERDICT: {must} MUST-FIX, 0 SHOULD-FIX, 0 NOTE"])
+
+
+def _settle_review(sr: StageRun, doorway: FakeDoorway, verify=None, audit=None) -> int:
+    sr._doorway = doorway  # type: ignore[assignment]
+    return review.run(
+        sr,
+        today=TODAY,
+        verify=verify or (lambda _b, _a: []),
+        images=lambda _x, _p: None,
+        audit=audit or (lambda _sr: 0),
+    )
+
+
+def test_a_check3_finding_on_the_firms_required_wording_is_dropped_and_files(job_dir, firm_config_path, data_root):
+    """Curtis (3CH59XBY): the review held on "(provider not stated in the
+    record)", which the map prompt orders when no page names the clinician."""
+    doc = DOC.replace(
+        "Example Clinic | Treatment Recommendations",
+        f"Example Clinic {W.PROVIDER_NOT_STATED} | Treatment Recommendations",
+    )
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
+    row = f'| MUST-FIX | 3 system language | "{W.PROVIDER_NOT_STATED}" is a placeholder | entry 03/30/2026 |'
+    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 0
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["findings"] == [] and any("required wording dropped" in ln for ln in log)
+    assert not any("Review Notes" in n for n in _manifest_names(sr))
+
+
+def test_a_check2_on_the_records_differ_sentence_is_a_note_and_files(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    row = (
+        f'| MUST-FIX | 2 entries contradict | the 01/20/2026 entry gives two pain scores and "{W.RECORDS_DIFFER}" '
+        "| entry 01/20/2026 Example Clinic |"
+    )
+    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 0
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0 and rec["notes"] == 1
+    assert any("Review Notes" in n for n in _manifest_names(sr))
+
+
+def test_a_check4_summary_line_no_entry_supports_is_deleted_and_re_rendered(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    chron = sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx"
+    assert "Sprain of ligaments of cervical spine" in review.docx_text(chron)
+    row = (
+        '| MUST-FIX | 4 summary with no entry | the highlight "Sprain of ligaments of cervical spine" has no entry '
+        "behind it | Diagnostic Highlights |"
+    )
+    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 0, log
+    md = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "Sprain of ligaments of cervical spine" not in md and "Cervical strain." in md
+    assert "Sprain of ligaments of cervical spine" not in review.docx_text(chron)
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0 and "removed before delivery" in rec["findings"][0]["finding"]
+    # The recorded input sha is the re-rendered package's: a resume does not pay again.
+    d = FakeDoorway()
+    assert _settle_review(sr, d) == 0 and d.calls == []
+
+
+def test_a_check4_quote_that_names_no_single_summary_line_holds(job_dir, firm_config_path, data_root):
+    """Deletion only when the quote names exactly one line; otherwise MUST,
+    and a finding that names no entry cannot be repaired either."""
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    row = (
+        '| MUST-FIX | 4 summary with no entry | the reference "Exhibit 1 - p. 2" has no support | Treatment Timeline |'
+    )
+    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 2
+    assert log[-1].startswith("review_held:")
+    assert "| Example Clinic | 01/20/2026" in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+
+
+FINISH = (
+    '{"edits": [{"finding": "F1", "anchor": "N2.c1", "action": "replace", '
+    '"corrected": "Continue physical therapy three times weekly for six weeks. (Exhibit 1 - p. 3)", '
+    '"exhibit": 1, "page": 3, "reason": "the page states the plan"}], "complete": true}'
+)
+#: The 03/30 plan as a claim the audit grades (a value-free fragment under
+#: ``claims.MIN_CHARS`` is no claim, so no finisher edit can anchor to it).
+PLAN = "Continue physical therapy twice weekly for four weeks."
+PLAN_DOC = DOC.replace("Continue therapy.", PLAN)
+CONTRA = (
+    "| MUST-FIX | 2 entries contradict | the plan on 03/30/2026 contradicts the 01/20/2026 entry "
+    "| entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |"
+)
+
+
+def test_a_check2_must_is_repaired_once_by_the_finisher_audited_and_filed(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
+    audited: list[str] = []
+    d = FakeDoorway(_verdict(CONTRA), FINISH)
+    assert _settle_review(sr, d, audit=lambda s: audited.append("audit") or 0) == 0, log
+    assert d.calls[1]["stage"] == "update_review" and audited == ["audit"]
+    md = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert "three times weekly" in md and PLAN not in md
+    chron = sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx"
+    assert "three times weekly" in review.docx_text(chron)
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0 and rec["findings"][0]["finding"].startswith("corrected before delivery")
+    names = _manifest_names(sr)
+    assert "corrected before delivery" in review.docx_text(sr.slug_dir / "out" / "alpha" / names[1])
+
+
+def test_a_repair_the_audit_does_not_support_is_reverted_and_holds(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
+    unsupported = [{"claim": "Continue physical therapy three times weekly for six weeks."}]
+    rc = _settle_review(sr, FakeDoorway(_verdict(CONTRA), FINISH), verify=lambda _b, _a: unsupported)
+    assert rc == 2 and log[-1].startswith("review_held:")
+    assert "three times weekly" not in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+
+
+def test_a_finisher_that_declines_leaves_the_must_and_holds(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
+    decline = (
+        '{"edits": [{"finding": "F1", "anchor": "N2", "action": "decline", '
+        '"reason": "the page does not show it"}], "complete": true}'
+    )
+    assert _settle_review(sr, FakeDoorway(_verdict(CONTRA), decline)) == 2
+    assert log[-1].startswith("review_held:") and "contradicts" in log[-1]
+
+
+def test_a_check1_must_is_never_repaired(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    row = (
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's "
+        "| entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |"
+    )
+    d = FakeDoorway(_verdict(row), FINISH)
+    assert _settle_review(sr, d) == 2 and len(d.calls) == 1
+
+
+def test_an_audit_gate_drop_is_listed_in_the_review_notes(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    out = sr.slug_dir / "out" / "alpha"
+    claims = [
+        {"how": "dropped at the audit gate", "exhibit": 1, "page_spec": "2", "claim": "Range of motion was full."},
+        {"how": "dropped at the round cap", "exhibit": 1, "page_spec": "3", "claim": "Not listed here."},
+    ]
+    (out / "audit-dropped-claims.json").write_text(json.dumps({"unit": "alpha", "count": 2, "claims": claims}))
+    assert _settle_review(sr, FakeDoorway(CLEAN)) == 0
+    names = _manifest_names(sr)
+    text = review.docx_text(out / names[1])
+    assert "Range of motion was full." in text and "Exhibit 1, p. 2" in text and "Not listed here." not in text
+
+
 def test_a_held_review_is_not_paid_twice_and_smds_release_files_it_with_the_findings(
     job_dir, firm_config_path, data_root
 ):
@@ -154,7 +302,7 @@ def test_a_held_review_is_not_paid_twice_and_smds_release_files_it_with_the_find
 
 def test_a_redo_marker_reviews_afresh_once_per_request(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
-    row = "| MUST-FIX | 2 contradiction | two dates for one visit | entry 01/20/2026 |"
+    row = "| MUST-FIX | 1 another person's records | the visit is a co-plaintiff's | entry 01/20/2026 |"
     d = FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE", CLEAN)
     assert _review(sr, d) == 2
     (job_dir / proof_review.REDO_MARKER).write_text("{}")
