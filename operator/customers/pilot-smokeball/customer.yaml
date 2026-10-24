@@ -792,7 +792,7 @@ personas:
       # weekly note to SMD with what changed and how to undo it. SMD ops, not a
       # firm routine: nothing reaches the firm.
       - skill: operator-help
-        schedule: '13 14 * * *' # daily 1413 seat-local; the pre_run adds the note on Mondays
+        schedule: '17 14 * * *' # daily 1417 seat-local (off :13, the hourly auth check); the pre_run adds the note on Mondays
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: date-prep-brief
