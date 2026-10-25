@@ -45,6 +45,7 @@ from . import body as B, select as S
 from .billing_page import BILLING
 from .locate import vendor_name
 from .medlegal import REASON as MEDLEGAL_REASON
+from ..unopened import REASON as PASSWORD_REASON
 
 RECORD = "update_outcome.json"
 KIND = "already_current"
@@ -137,6 +138,8 @@ def _skipped(rid: str, sel: dict[str, Any]) -> tuple[str, str] | None:
             return UNREADABLE, "not a PDF or an image, so it has no pages to read"
         if why == IMAGE_UNREAD:
             return UNREADABLE, "an image file the page transcription could not read; the next update reads it again"
+        if why == PASSWORD_REASON:
+            return UNREADABLE, PASSWORD_REASON
         return UNACCOUNTED, why
     return None
 
