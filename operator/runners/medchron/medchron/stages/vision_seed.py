@@ -70,6 +70,15 @@ def prior_delivered(jobs: Path, matter_id: str, own_id: str) -> list[str]:
     return [name for _, name in out]
 
 
+def staged_fields(env: dict[str, Any], run_dir: Path, job_id: str) -> dict[str, Any]:
+    """What the daemon adds to an update's job.yaml: ``prior_delivered``, from
+    ``run_dir/jobs`` (not the daemon's ``jobs``: a proof twin's live elsewhere).
+    Nothing for a run."""
+    if env.get("update") is None:
+        return {}
+    return {"prior_delivered": prior_delivered(Path(run_dir) / "jobs", str(env["matter"]["id"]), job_id)}
+
+
 def delivered_same_matter(job: Any, slug: str) -> list[Path]:
     """The ``slug`` dirs of the delivered jobs the daemon named in
     ``job.yaml``, newest first, read by path (never by listing)."""
