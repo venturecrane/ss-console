@@ -722,6 +722,12 @@ REPLY_HOLD_REASONS = frozenset(
 #: to that message already went out, and this second draft was the extra one.
 _REPLY_HOLDS_NOT_A_SHORTFALL = frozenset({"duplicate_reply"})
 
+#: How long a REPLY_HELD row may stand before it is a shortfall. The redraft
+#: the hold notice asks for lands in the same turn, within seconds; three
+#: beats (``HEARTBEAT_PERIOD_SECONDS`` is 60) is long enough that a hold still
+#: standing is one nobody is redrafting.
+REPLY_HOLD_GRACE_SECONDS = 180
+
 #: A roster hold of SMD's OWN mail is not a client going unanswered
 #: (2026-10-15: the Captain answered the A&P Operator from his bare
 #: smdurgan.com mailbox, the relay held the reply correctly, and the pager told
@@ -896,7 +902,9 @@ def count_shortfalls(conn: sqlite3.Connection, now: datetime) -> ShortfallFacts:
       hold of SMD's own address (``_is_smd_address``: SMD wrote in, not a
       client), or when a LATER
       ``REPLY_SENT`` answered the same inbound message (the agent redrafted and
-      the person got their answer). Code: ``reply_held:<reason>`` from the
+      the person got their answer). A hold younger than
+      ``REPLY_HOLD_GRACE_SECONDS`` is not judged yet: its redraft is still in
+      flight. Code: ``reply_held:<reason>`` from the
       closed ``REPLY_HOLD_REASONS`` (else ``reply_held:other``), or
       ``reply_failed:<hold_expired|act_line_undelivered|send_error>``. Tool:
       the row's own ``tool`` token, else ``reply_relay``. The row's recipient
@@ -1080,11 +1088,23 @@ def _reply_events(
     for row in rows:
         if row[2] == "REPLY_SENT" and isinstance(row[8], str) and row[8]:
             answered[row[8]] = max(answered.get(row[8], ""), _iso_floor(row[1]))
+    # A hold younger than the grace is still being redrafted: the notice tells
+    # the agent to correct the draft and send again, and that send lands
+    # seconds later in the SAME turn. A beat that read the ledger between the
+    # two rows paged SMD anyway (A&P 2026-10-25: held 15:07:30Z, sent 15:07:49Z,
+    # paged 15:08:35Z, three times that day), and once the pager had the row
+    # nothing retracted it. The row is judged again on every later beat, so a
+    # hold the agent never redrafted still pages, one grace late.
+    grace = _iso_floor(
+        (datetime.fromisoformat(cutoff) - timedelta(seconds=REPLY_HOLD_GRACE_SECONDS)).isoformat()
+    )
     out: list[dict] = []
     for row in rows:
         row_id, ts, action_type, skill_name, tool, reason, for_release, message_id = row[:8]
         session_id, routine, skill, recipient = row[9], row[10], row[11], row[12]
         if action_type == "REPLY_SENT":
+            continue
+        if action_type == "REPLY_HELD" and _iso_floor(ts) > grace:
             continue
         if (
             action_type == "REPLY_HELD"
