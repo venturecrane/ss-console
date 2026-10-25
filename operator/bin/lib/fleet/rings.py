@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from bin.lib.seat_dirs import seat_slugs
+from bin.lib.seat_dirs import seat_slugs, unprovisioned_slugs
 
 from . import ids
 
@@ -27,8 +27,15 @@ class Ring:
 
 
 def live_seats(customers_dir: Path) -> list[str]:
-    """Every seat dir, by the one rule in bin/lib/seat_dirs.py (no scaffold, no tombstone)."""
-    return seat_slugs(customers_dir)
+    """Every provisioned seat dir: the one rule in bin/lib/seat_dirs.py, less fly_app: null seats.
+
+    A seat authored with ``fly_app: null`` (seat_dirs.unprovisioned_slugs) has
+    no app; the rings.yaml generator leaves it out of every ring, and this keeps
+    the backstop below from putting it back in the last ring, where a release
+    would deploy to an app that does not exist and halt the rollout.
+    """
+    skip = unprovisioned_slugs(customers_dir)
+    return [s for s in seat_slugs(customers_dir) if s not in skip]
 
 
 def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:

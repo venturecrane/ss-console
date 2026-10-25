@@ -375,10 +375,12 @@ describe('generated handbook content matches the tree', () => {
     expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([seat, { ...seat, slug: 'y' }]))
   })
 
-  it('the roster counts the same seats as the fleet tooling (rings.py live_seats)', () => {
+  it('the roster counts the same seats as the fleet tooling (rings.py live_seats + unprovisioned)', () => {
     // live_seats() never touches yaml, but rings.py imports it at module level and
     // the CI interpreter has no pyyaml (see boot-smoke-collects-failures.test.ts),
-    // so an empty stand-in module lets the real function run unchanged.
+    // so an empty stand-in module lets the real function run unchanged. The
+    // roster names every AUTHORED seat; the fleet releases only the provisioned
+    // ones, so the two partition it: released + authored-with-no-app.
     const py = execFileSync(
       'python3',
       [
@@ -387,7 +389,9 @@ describe('generated handbook content matches the tree', () => {
         'import sys, json, types; sys.modules.setdefault("yaml", types.ModuleType("yaml")); ' +
           'sys.path.insert(0, "operator"); from pathlib import Path; ' +
           'from bin.lib.fleet.rings import live_seats; ' +
-          'print(json.dumps(live_seats(Path("operator/customers"))))',
+          'from bin.lib.seat_dirs import unprovisioned_slugs; ' +
+          'root = Path("operator/customers"); ' +
+          'print(json.dumps(sorted(live_seats(root) + sorted(unprovisioned_slugs(root)))))',
       ],
       { encoding: 'utf8' }
     )

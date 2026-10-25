@@ -1,10 +1,21 @@
 {
   "_comment": "Policy inputs for every live seat, generated from ss-console operator/customers/*/customer.yaml (seat.role) and operator/roles/<role>/role.yaml (the policy: block, verbatim) by tests/policy-matrix.test.ts (ADR 0093). Underscore-prefixed scaffolds and .decommissioned. tombstones are excluded. role is null when the seat selects no role; role_policy is null when the role authors no policy: block (both resolve to the platform default). Do not hand-edit: regenerate with UPDATE_POLICY_MATRIX=1, then copy this file over hermes-smd-overlay tests/contract/policy_inputs.json in the same change, where tests/test_policy_matrix.py resolves it against tests/contract/policy_matrix_expected.json.",
-  "generated_from": "venturecrane/ss-console@b23324a85bd8f94c6026480d30db764b44c240a5",
+  "generated_from": "venturecrane/ss-console@2c0083834005deea5720a99eae0f94b9128f6c3f",
   "seats": {
     "ashton-price": {
       "role": null,
       "role_policy": null
+    },
+    "ashton-price-marketing": {
+      "role": "marketing",
+      "role_policy": {
+        "output_checklist": {
+          "profile": "paralegal"
+        },
+        "advertising_gate": "ca-law-firm",
+        "rationale": "Every piece this seat drafts for a California law firm is an advertisement under Bus. & Prof. Code 6157(b) as rewritten by SB 37 (effective 2026-01-01), and the scope sent to the firm promised that every draft passes a California attorney-advertising check before the firm sees it.",
+        "adr": "docs/adr/0098-marketing-seat-advertising-gate.md"
+      }
     },
     "brokery": {
       "role": null,

@@ -17,10 +17,51 @@ schema_version: 1
 # The persona prompt and its safety rules, rendered verbatim into SOUL.md.
 persona: persona.md
 
-# Skills are bound by the seat PR that builds them (one skill per piece type,
-# each droppable on the firm's feedback). Empty until then; an enabled skill
-# with no body would fail the seat's boot.
-skills: []
+# Skills the role's persona carries, one per piece type, each droppable on the
+# firm's feedback. `built:` says whether operator/skills/<name>/SKILL.md exists;
+# an enabled skill with no body fails the seat's boot (overlay translate
+# _install_persona_skills). The six scheduled pieces go to the firm's
+# administrators on a scheduled turn, so they carry `recipients: roster`.
+skills:
+  - name: marketing-topic-slate
+    built: true
+    settings:
+      recipients: roster
+    purpose: The monthly slate of proposed topics; the approver picks the ones to draft.
+  - name: blog-post-draft
+    built: true
+    settings:
+      recipients: roster
+    purpose: Blog posts on the picked topics, saved as pending WordPress posts for the approver to publish.
+  - name: social-post-draft
+    built: true
+    settings:
+      recipients: roster
+    purpose: Social posts for the week, emailed to the approver to post.
+  - name: youtube-episode-post
+    built: true
+    settings:
+      recipients: roster
+    purpose: A title and description for each new radio-show episode on the firm's channel.
+  - name: business-profile-post
+    built: true
+    settings:
+      recipients: roster
+    purpose: Google Business Profile posts twice a month, emailed to the approver to post.
+  - name: marketing-analytics-note
+    built: true
+    settings:
+      recipients: roster
+    purpose: The monthly note on site visits, top pages, sources, posts and episodes.
+  - name: review-reply-draft
+    built: true
+    purpose: A reply to a review the approver forwards, for the approver to post.
+  - name: press-release-draft
+    built: true
+    purpose: A press release from facts the approver supplies.
+  - name: marketing-request-router
+    built: true
+    purpose: Every email to the seat, routed to the piece it asks for.
 
 # What this role's seats may send (ADR 0093). Floors stay in code. The
 # checklist stays on the paralegal standard: drafts for a law firm meet the same

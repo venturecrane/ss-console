@@ -54,6 +54,8 @@ const skillBody = (skill: string) => flat(read(`operator/skills/${skill}/SKILL.m
 const SEND_AS_EXEMPT: Record<string, string> = {
   'open-house-visitor-capture':
     "the scott seat's AgentMail POC; AgentMail has no Send As and that seat authors no staff_send_as",
+  'marketing-request-router':
+    "the marketing seat (ADR 0098) drafts the firm's marketing for its approver and sends nothing as a person: it authors no staff_send_as and no external_send_as_staff exposure",
 }
 
 describe('send-as reaches the tool from every mail-routed skill (ADR 0089)', () => {

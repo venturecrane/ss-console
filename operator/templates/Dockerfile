@@ -595,6 +595,9 @@ COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
 COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
+# A marketing seat's advertising-gate registers (ADR 0098) from
+# vaults/<slug>/marketing/, root:hermes 0640 under /var/lib/smd-config/marketing/.
+COPY operator/templates/entrypoint-marketing.sh /app/entrypoint-marketing.sh
 # The lane-proof gate's seed and modes (lane-proofs.yaml from the vault, the
 # holds and proof-run trees), after the lanes' own trees.
 COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh

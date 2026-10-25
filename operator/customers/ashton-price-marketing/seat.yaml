@@ -1,0 +1,29 @@
+# Seat inventory entry. CONSOLE-SIDE ONLY: read by scripts/lib/seat-inventory.ts,
+# never published to R2 and never read by the seat, so nothing here can fail a
+# seat at boot. After editing run `npm run gen:seat-registries`;
+# tests/seat-inventory.test.ts fails while a generated registry is stale.
+#
+# Ashton & Price's marketing Operator (ADR 0098, seat.role: marketing): drafts
+# the firm's public marketing for its administrator to approve. AUTHORED BUT NOT
+# PROVISIONED. With fly_app null the seat is in no release ring (rings.py and
+# the rings.yaml generator both skip an unprovisioned seat), so no `fleet
+# release` deploys to an app that does not exist and no ring waits on it.
+#
+# TO PROVISION: replace fly_app with the app `fly apps create` made (expected
+# hermes-ashton-price-marketing), delete unprovisioned_reason, run
+# `npm run gen:seat-registries`, and replace every PENDING value in
+# customer.yaml (the provisioner refuses each one by name).
+
+# The seat's Fly app (ADR 0036). Authored, never derived: confirm with
+# `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
+fly_app: null
+unprovisioned_reason: >-
+  The firm has not yet created the seat's mailbox, its two Microsoft Graph app
+  registrations or the WordPress Contributor user; the seat is provisioned the
+  week the firm engages (scope letter 385, 2026-10-15).
+# Release ring once provisioned: the firm's seats deploy last, one at a time.
+ring: 3
+# The day this seat's customer.yaml first landed on main. Orders seats in a ring.
+authored: '2026-10-25'
+# The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).
+client: ashton-price

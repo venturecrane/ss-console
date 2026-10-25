@@ -17,7 +17,9 @@
 #
 # Every seat authors its ring, so none is in a ring by omission. As a backstop,
 # operator/bin/lib/fleet/rings.py still puts a seat named in no ring in the LAST
-# ring: a new seat is never in an early ring by accident.
+# ring: a new seat is never in an early ring by accident. A seat authored with
+# `fly_app: null` (no app yet) is in NO ring, here or in rings.py: there is
+# nothing to release to until it is provisioned.
 #
 # bake_minutes (ADR 0096): the next ring takes a release only after every seat
 # of this ring has been done on it this long with no open selftest_failing or

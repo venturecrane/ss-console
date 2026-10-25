@@ -922,6 +922,19 @@ def test_seats_are_discovered_from_customer_yaml_not_a_hand_kept_list(tmp_path):
     assert [s.slug for s in rec.msgraph_seats(root)] == ["graphed"]
 
 
+def test_an_unprovisioned_seat_is_not_read(tmp_path):
+    """A seat authored with seat.yaml `fly_app: null` has no mailbox credential
+    and PENDING identity fields, so the daily run neither reads nor holds on it.
+
+    FALSIFIER: drop the unprovisioned skip in msgraph_channel.msgraph_seats and
+    `pending` is listed (and the workflow-secret test fails on it).
+    """
+    root = _seat_tree(tmp_path, graphed=_MSGRAPH_YAML, pending=_MSGRAPH_YAML)
+    (Path(root) / "pending" / "seat.yaml").write_text("fly_app: null\nunprovisioned_reason: firm has no mailbox yet\n")
+    (Path(root) / "graphed" / "seat.yaml").write_text("fly_app: hermes-graphed\n")
+    assert [s.slug for s in rec.msgraph_seats(root)] == ["graphed"]
+
+
 def test_the_secret_env_is_per_seat(tmp_path):
     """ADR 0010: the firm's Graph secret is its own. A shared fallback would let
     a missing per-seat secret quietly authenticate as somebody else's app."""

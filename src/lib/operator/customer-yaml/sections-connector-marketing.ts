@@ -17,7 +17,7 @@
  *   mcp:ga4        property_id  the numeric GA4 property id (not the G- tag).
  */
 
-import { MSGRAPH_SECRET_REF_PATTERN, type ValidationError } from './types'
+import { MSGRAPH_SECRET_REF_PATTERN, type Connector, type ValidationError } from './types'
 
 export const WORDPRESS_BACKEND = 'mcp:wordpress'
 export const GA4_BACKEND = 'mcp:ga4'
@@ -92,6 +92,27 @@ function ga4Issues(value: Record<string, unknown>): Issue[] {
       'property_id must be the numeric GA4 property id (Admin, Property details), not the G- measurement id',
     ],
   ]
+}
+
+/**
+ * The validated marketing fields to carry on the connector value, present only
+ * on the backend that owns them (an absent field stays absent). Call after
+ * {@link checkMarketingConnectorFields} passed.
+ */
+export function marketingConnectorFields(
+  backend: string,
+  value: Record<string, unknown>
+): Pick<Connector, 'site_url' | 'username' | 'secret_ref' | 'property_id'> {
+  if (backend === WORDPRESS_BACKEND) {
+    const ref = value['secret_ref']
+    return {
+      site_url: value['site_url'] as string,
+      username: value['username'] as string,
+      ...(typeof ref === 'string' ? { secret_ref: ref } : {}),
+    }
+  }
+  if (backend === GA4_BACKEND) return { property_id: value['property_id'] as string | number }
+  return {}
 }
 
 /** Returns false when the connector must be dropped. */

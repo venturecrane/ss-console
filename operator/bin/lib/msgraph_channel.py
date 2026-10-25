@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .html_channel import HtmlBody
-from .seat_dirs import seat_slugs
+from .seat_dirs import seat_slugs, unprovisioned_slugs
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
@@ -105,12 +105,20 @@ def msgraph_seats(customers_dir: str | None = None) -> list[MsGraphSeat]:
 
     A seat missing any of the three identity fields is SKIPPED HERE and reported
     as a hold by the caller, never silently dropped.
+
+    A seat whose seat.yaml authors ``fly_app: null`` is left out: it is authored
+    but not provisioned, so it has no mailbox credential yet and its identity
+    fields are PENDING markers (scripts/lib/pending-config.ts). Holding on it
+    every day would be an alarm about a seat that cannot have sent anything.
     """
     import yaml  # deferred: only the msgraph half needs it
 
     root = customers_dir or _default_customers_dir()
+    unprovisioned = unprovisioned_slugs(root)
     seats: list[MsGraphSeat] = []
     for slug in seat_slugs(root):
+        if slug in unprovisioned:
+            continue
         path = os.path.join(root, slug, "customer.yaml")
         try:
             with open(path, encoding="utf-8") as handle:

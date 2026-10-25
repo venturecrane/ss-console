@@ -105,14 +105,16 @@ describe('clientOf', () => {
 
   it('takes every rollup from the seat inventory, and only from it', () => {
     // The mapping is authored as `client:` in each seat's seat.yaml. It used to
-    // be hand-kept here and carried `ashton-price-marketing`, a seat that
-    // existed nowhere. Every seat the inventory rolls up maps both ways; every
-    // other inventory seat is its own client.
+    // be hand-kept here and carried `ashton-price-marketing` before that seat
+    // existed; the seat now exists (2026-10-25) and its seat.yaml authors the
+    // rollup. Every seat the inventory rolls up maps both ways; every other
+    // inventory seat is its own client.
     for (const seat of loadSeatInventory(resolve(ROOT, 'operator/customers'))) {
       expect(clientOf(seat.slug)).toBe(seat.client)
       expect(seatsOf(seat.client)).toContain(seat.slug)
     }
-    expect(clientOf('ashton-price-marketing')).toBe('ashton-price-marketing')
+    expect(clientOf('ashton-price-marketing')).toBe('ashton-price')
+    expect(seatsOf('ashton-price')).toContain('ashton-price-marketing')
   })
 
   it('a seat on SMD entity that is its own client stays its own client', () => {

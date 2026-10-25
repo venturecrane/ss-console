@@ -3,6 +3,7 @@
   "platform_default": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
   "seats": {
     "ashton-price": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
+    "ashton-price-marketing": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
     "brokery": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
     "captain-mark": {
       "identifier_dates": "verify_recurring",

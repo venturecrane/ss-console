@@ -58,13 +58,15 @@ describe('generated registries are current (drift)', () => {
     ).toEqual([])
   })
 
-  it('the live inventory is the six seats, each with its authored app', () => {
+  it('the live inventory is the seven seats, each with its authored app or null', () => {
     // A tripwire for the PR that introduced the inventory: the generated
     // registry was proven value-identical to the hand-kept one it replaced.
     // Adding or retiring a seat updates this list in the same change.
     expect(Object.fromEntries(loadSeatInventory(CUSTOMERS).map((s) => [s.slug, s.flyApp]))).toEqual(
       {
         'ashton-price': 'hermes-ashton-price',
+        // Authored, not yet provisioned (the firm creates its mailbox first).
+        'ashton-price-marketing': null,
         brokery: 'hermes-brokery',
         'captain-mark': 'hermes-captain-mark',
         'pilot-smokeball': 'hermes-pilot-smokeball',
@@ -228,6 +230,22 @@ describe('renderers', () => {
     ])
     expect(yaml.slice(yaml.indexOf('\nrings:') + 1)).toBe(
       'rings:\n  - ring: 0\n    seats: [first]\n    bake_minutes: 30\n  - ring: 2\n    seats: [mid, zeta, alpha]\n    max_parallel: 1\n'
+    )
+  })
+
+  it('puts a seat with no Fly app in no ring (fleet release has nothing to deploy to)', () => {
+    const seat = (slug: string, flyApp: string | null) => ({
+      slug,
+      flyApp,
+      unprovisionedReason: flyApp === null ? 'not stood up yet' : null,
+      ring: 1,
+      authored: '2026-01-01',
+      client: slug,
+    })
+    const yaml = renderRingsYaml([seat('live', 'hermes-live'), seat('pending', null)])
+    // FALSIFIER: drop the flyApp filter in renderRingsYaml and `pending` joins ring 1.
+    expect(yaml.slice(yaml.indexOf('\nrings:') + 1)).toBe(
+      'rings:\n  - ring: 1\n    seats: [live]\n    max_parallel: 1\n'
     )
   })
 

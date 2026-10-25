@@ -692,6 +692,17 @@ export interface Connector {
    * 2026-07-15: reconnect claims must match who can actually reconnect).
    */
   auth_mode: string | null
+  /**
+   * The marketing seat's per-connector fields (sections-connector-marketing.ts),
+   * present only on the backend that reads them: `mcp:wordpress` carries
+   * site_url, username and an optional secret_ref; `mcp:ga4` carries
+   * property_id. Absent on every other connector. Carried through the value so
+   * the D1 projection and the portal reconstruction keep them (#1965).
+   */
+  site_url?: string
+  username?: string
+  secret_ref?: string
+  property_id?: string | number
 }
 
 /**
