@@ -116,6 +116,39 @@ def _unattributed_lines(d: Path, unit: str | None) -> list[str]:
     ] + [f'* Exhibit {n}: "{_shown(name)}"' for n, name in sorted(rows)]
 
 
+#: Written by ``stages/exhibit_merge`` under ``runs/<unit>/``: one row per
+#: merged exhibit, {"kept", "kept_title", "dropped_old", "files_kept",
+#: "files_dropped", "pages"}.
+MERGES_FILE = "exhibit_merges.json"
+
+
+def _quoted(names: list[str]) -> str:
+    return ", ".join(f'"{_shown(n)}"' for n in names)
+
+
+def _merge_lines(d: Path, unit: str | None) -> list[str]:
+    """Exhibits delivered once because two of them held the same record pages
+    (2026-10-25, Pamplona: one Kaiser ER PDF saved twice, and two overlapping
+    university-hospital exports). Factual: which files, and the exhibit that holds them."""
+    rows = [
+        r
+        for p in _unit_files(d, unit, "runs", MERGES_FILE)
+        for r in read_json(p, []) or []
+        if isinstance(r, dict) and r.get("files_dropped") and r.get("files_kept") and r.get("kept")
+    ]
+    if not rows:
+        return []
+    return [
+        "",
+        "The following documents hold the same record pages as other documents in the matter file. Each set of "
+        "pages is delivered once; nothing was removed from the matter file:\n",
+    ] + [
+        f"* {_quoted(r['files_dropped'])} and {_quoted(r['files_kept'])} hold the same record pages; they are "
+        f"delivered once, as Exhibit {r['kept']}."
+        for r in sorted(rows, key=lambda x: int(x["kept"]))
+    ]
+
+
 def _prior_history_lines(d: Path, unit: str | None) -> list[str]:
     """stages/summarize.py could not write a Prior Medical History summary
     that cites only pages the entries cite, so it itemized them instead."""
