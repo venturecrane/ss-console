@@ -381,6 +381,18 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # (tests/test_inbound_fence_completeness.py says why).
     "couples_settings_read": ActionClass.READ,
     "couples_settings_change": ActionClass.INTERNAL_WRITE,
+    # A partner's message to the other partner, passed by the agent
+    # (plugins/hermes-smd-partner-messages, ADR 0097). INTERNAL_WRITE, not a
+    # send class, and the distinction is the whole design: a send class puts a
+    # recipient the MODEL named under a ceiling, and on 2026-10-21 that ceiling
+    # held a partner's "tell Scott I think he's cute" and the model invented an
+    # approval to explain it. This tool names nobody: the recipient is the
+    # other person in ``people:``, fixed in code from the turn's structural
+    # speaker, and the text is that speaker's own words under an attribution
+    # line the code composes. Delivery is the Bot API to that person's bound DM,
+    # or the broker's ``space`` lane (exactly ``people[].email``) by email. The
+    # tool refuses a tainted turn itself before the gate ever sees it.
+    "partner_message_send": ActionClass.INTERNAL_WRITE,
     # A rostered sender's voice memo as text (plugins/hermes-smd-voice-notes,
     # 2026-09-29, ss-console#2793). READ: it spools the seat's own mail
     # attachment to the scratch spool and runs the seat's speech-to-text on

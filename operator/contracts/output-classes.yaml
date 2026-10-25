@@ -616,6 +616,15 @@ skill_bindings:
       - { artifact: settings_confirmation, seam: session_output, class: staff }
       - { artifact: couples_settings, seam: local_file, class: record }
     outbound: none # either partner changes a setting alone; nothing is sent to the other (2026-10-19)
+  # A partner's own words reach the other partner's chat (ADR 0097). The
+  # delivered text is the sender's, under an attribution line composed in code;
+  # the agent authors nothing. Telegram DM when bound, else email on the space
+  # lane to people[].email.
+  partner-messages:
+    internal:
+      - { artifact: delivery_confirmation, seam: session_output, class: staff }
+      - { artifact: partner_message_ledger, seam: local_file, class: record }
+    outbound: derived # the sender's words to the other partner only (people[]), never a third address
   gratitude-prompts:
     internal:
       - { artifact: gratitude_prompt, seam: session_output, class: staff }
