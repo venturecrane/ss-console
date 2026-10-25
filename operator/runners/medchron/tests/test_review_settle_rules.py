@@ -202,30 +202,63 @@ def test_two_cited_pages_in_the_dated_entry_are_disclosed(job_dir, firm_config_p
     assert _settle(sr, [f]).findings[0].grade == proof_review.NOTE
 
 
-def test_a_table_row_side_is_no_claim_and_holds(job_dir, firm_config_path, data_root):
-    """Falsifier: the diagnosis-table row is not an audited claim."""
+def _flagged(out: review_policy.Outcome, sr: StageRun) -> None:
+    """Not confirmed, so never disclosed as the records differing: flagged for
+    the attorney in wording that claims nothing was confirmed (2026-10-25: the
+    Operator finishes the chronology; an unresolved disagreement is the
+    attorney's to weigh, not a stop for a person)."""
+    f = out.findings[0]
+    assert f.grade == proof_review.NOTE and f.finding.startswith(review_settle.FLAG_NOTE)
+    assert review_settle.DIFFER_NOTE not in f.finding and "confirmed on" not in f.finding
+    assert _policy(sr)["differ_disclosed"] == 0 and _policy(sr)["differ_flagged"] == 1
+    assert _md(sr) == DIFFER_DOC, "flagging never edits the chronology"
+
+
+def test_a_table_row_side_is_no_claim_and_is_flagged_not_confirmed(job_dir, firm_config_path, data_root):
+    """Falsifier for the confirmed wording: the diagnosis-table row is not an audited claim."""
     sr, _ = _package(job_dir, firm_config_path, data_root, DIFFER_DOC)
     _audit_all(sr)
     f = _model(
         "2 entries contradict",
         f'"Sprain of ligaments of cervical spine" contradicts "{TRIAGE[:-1]}" and "{DISCHARGE[:-1]}"',
     )
-    out = _settle(sr, [f])
-    assert out.findings[0].grade == proof_review.MUST and _policy(sr)["differ_disclosed"] == 0
+    _flagged(_settle(sr, [f]), sr)
 
 
-def test_a_side_whose_latest_verdict_is_unsupported_holds(job_dir, firm_config_path, data_root):
+def test_a_side_whose_latest_verdict_is_unsupported_is_flagged_not_confirmed(job_dir, firm_config_path, data_root):
     sr, _ = _package(job_dir, firm_config_path, data_root, DIFFER_DOC)
     _audit_all(sr)
     _audit_all(sr, "UNSUPPORTED", only="at discharge")  # the later row is the one that counts
-    assert _settle(sr, [DIFFER]).findings[0].grade == proof_review.MUST
+    _flagged(_settle(sr, [DIFFER]), sr)
 
 
-def test_two_quotes_of_one_claim_are_one_page_and_hold(job_dir, firm_config_path, data_root):
+def test_two_quotes_of_one_claim_are_one_page_and_are_flagged_not_confirmed(job_dir, firm_config_path, data_root):
     sr, _ = _package(job_dir, firm_config_path, data_root, DIFFER_DOC)
     _audit_all(sr)
     f = _model("2 entries contradict", '"Pain was rated 7 of 10" and "of 10 at triage" disagree')
-    assert _settle(sr, [f]).findings[0].grade == proof_review.MUST
+    _flagged(_settle(sr, [f]), sr)
+
+
+def test_a_disagreement_with_no_cite_still_holds(job_dir, firm_config_path, data_root):
+    """Falsifier for the flag: nothing names where to look, so it stays MUST."""
+    sr, _ = _package(job_dir, firm_config_path, data_root, DIFFER_DOC)
+    _audit_all(sr)
+    f = _model("2 entries contradict", "two pain scores disagree somewhere", cite="")
+    out = _settle(sr, [f])
+    assert out.findings[0].grade == proof_review.MUST and _policy(sr)["differ_flagged"] == 0
+
+
+def test_a_credential_does_not_end_the_sentence_the_scrub_deletes(job_dir, firm_config_path, data_root):
+    """Pamplona 2026-10-25: split at "M.D." the system sentence matched neither
+    half, and a deletion would have left "at 12:41 PM, reads as follows."."""
+    sys_sentence = "Text on the following page, printed after a note by Thomas Roe, M.D. at 12:41 PM, reads as follows."
+    line = f"Neck pain after the collision. {sys_sentence} (Exhibit 1 - p. 2)"
+    sr, _ = _package(job_dir, firm_config_path, data_root, DOC.replace(LINE_0120, line))
+    f = _model("3 system language", f'"{sys_sentence[:-1]}" describes how the pages were read')
+    out = _settle(sr, [f])
+    md = _md(sr)
+    assert LINE_0120 in md and "reads as follows" not in md and "12:41" not in md
+    assert out.findings[0].grade == proof_review.NOTE
 
 
 # ---- the whole review ----------------------------------------------------------------
