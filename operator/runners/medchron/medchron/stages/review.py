@@ -98,6 +98,7 @@ EXITS = {
 REDO_SEEN = "review-redo.seen"
 NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
 _NOTES_TAG = " - Chronology Review Notes "
+_REVIEW_LIST_TAG = " - Records Review "
 _DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 _EXHIBIT_NO = re.compile(r"^Exhibit (\d+)\b")
 # The words that only the system writes. A hit is settled: no medical record
@@ -500,7 +501,12 @@ def _code(
     # set the attorney holds, so they count as delivered.
     filed = rd / "update" / "already_filed.json"
     names = [m["name"] for m in rows] + (json.loads(filed.read_text(encoding="utf-8")) if filed.is_file() else [])
-    others = {f"file {m['name']}": docx_text(Path(m["local_path"])) for m in rows[1:] if m["name"].endswith(".docx")}
+    # The records review is a code-built index of the files read (update/review_list), not prose to review.
+    others = {
+        f"file {m['name']}": docx_text(Path(m["local_path"]))
+        for m in rows[1:]
+        if m["name"].endswith(".docx") and _REVIEW_LIST_TAG not in m["name"]
+    }
     dob = _as_date(sr.unit.dob or "")
     return code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob), chron, names
 

@@ -72,16 +72,26 @@ def problem(outcome: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def _current(unit: str, proof: dict[str, Any]) -> tuple[str, str] | None:
-    """The zero-file delivery (2026-10-25): an update into the delivered
-    chronology that concluded nothing new files nothing, so there is nothing
-    to read back. Believed ONLY with its outcome record's summary showing no
-    entry and no exhibit added and every document accounted for in its
-    counts, and with no file filed; anything else is an unproven delivery."""
+    """An already-current update (2026-10-25): it adds nothing to the
+    delivered chronology and files one thing, its records review, beside it.
+    Believed ONLY with its outcome record's summary showing no entry and no
+    exhibit added and every document accounted for, and with the records
+    review the one file filed, proven by hash (an earlier runner that filed
+    nothing, readback "nothing_filed", is still believed); anything else is an
+    unproven delivery."""
     cur = proof.get("already_current")
     if not isinstance(cur, dict) or cur.get("kind") != "already_current":
         return "readback_unproven", f"{unit}: nothing was filed and no outcome record proves nothing new"
-    if proof.get("readback") != "nothing_filed" or proof.get("files") or int(proof.get("rows") or 0):
-        return "readback_unproven", f"{unit}: already current, yet the proof names something filed"
+    files = proof.get("files") or []
+    review = str(cur.get("review_file") or "")
+    if int(proof.get("rows") or 0) or (
+        [str(f.get("name") or "") for f in files] != [review]
+        if files
+        else proof.get("readback") != "nothing_filed" or review
+    ):
+        return "readback_unproven", f"{unit}: already current, yet the proof names a file other than its records review"
+    if files and (proof.get("readback") != "confirmed" or not all(f.get("file_id") and f.get("sha256") for f in files)):
+        return "readback_unproven", f"{unit}: already current, yet its records review is not proven by hash"
     if cur.get("entries_added") != 0 or cur.get("exhibits_added") != 0:
         return "readback_unproven", f"{unit}: already current, yet the update added entries or exhibits"
     raw = cur.get("by_reason")

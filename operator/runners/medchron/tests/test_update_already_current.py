@@ -13,6 +13,7 @@ carries the counts. Each case has its falsifier. Every name is synthetic.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -22,12 +23,15 @@ import pytest
 from medchron import dag, dag_update, unit_proof
 from medchron.proof import gate, holds
 from medchron.stages import download as download_stage, update_collect as UC
-from medchron.update import outcome as UO
+from medchron.stages.review import docx_text
+from medchron.update import outcome as UO, review_list
 from medchron.update.coverage import covered_sets
 from test_update_e2e import _driver, _job, _Model, _seat
 import update_testkit as K
 
 PHOTOS_WHY = "outside the firm's folder rules (an excluded folder or kind)"
+#: The records review an already-current update files (the driver stamps today's date).
+REVIEW = review_list.name("Alpha Example", time.strftime("%m-%d-%y"))
 
 
 def _run(tmp_path: Path, data_root: Path, firm: Path, pricing: Path, ids: list[str]) -> tuple[Any, Any, _Model]:
@@ -51,20 +55,25 @@ def test_an_update_whose_files_the_delivery_already_holds_is_delivered_already_c
 ) -> None:
     """n2 is a byte-identical copy of a delivered exhibit, n3 a photo the
     firm's folder rules exclude. Before: held at update_select, "nothing new
-    to read". Now: delivered, nothing sent, nothing deleted, every file's
-    reason recorded, and the proof the gate believes."""
+    to read". Now: delivered, nothing deleted, every file's reason recorded,
+    the records review (one row per file) the one file filed beside the
+    chronology and proven by hash, and the proof the gate believes."""
     o, seat, model = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n2", "n3"])
     assert o.outcome == "delivered" and o.stage == "update_select", o
-    assert seat.sent == [] and seat.deleted == [] and seat.created == [] and model.calls == []
+    assert [f["name"] for f in seat.sent] == [REVIEW] and seat.deleted == [] and model.calls == []
     rec = _record(data_root)
     reasons = {f["id"]: f["reason"] for f in rec["files"]}
     assert reasons == {"n2": UO.DUPLICATE, "n3": UO.EXCLUDED}
     assert next(f["text"] for f in rec["files"] if f["id"] == "n3") == f"excluded by the firm's rule: {PHOTOS_WHY}"
     assert rec["entries_added"] == 0 and rec["exhibits_added"] == 0 and UO.problem(rec) is None
     assert o.current == UO.summary(rec) and o.current["by_reason"][UO.DUPLICATE]["files"] == 1
-    # The zero-file proof, and the daemon's gate believes it.
-    assert o.proof["readback"] == "nothing_filed" and o.proof["files"] == [] and o.proof["review"] == "code_only"
+    # The records review is the one file proven, and the daemon's gate believes it.
+    assert o.proof["readback"] == "confirmed" and [f["name"] for f in o.proof["files"]] == [REVIEW]
+    assert o.proof["review"] == "code_only" and o.current["review_file"] == REVIEW
     assert gate.check([o.to_dict()]) is None
+    text = docx_text(data_root / "example-matter" / "out" / "alpha" / REVIEW)
+    assert "a byte-identical copy of an exhibit the delivered chronology already holds" in text
+    assert f"excluded by the firm's rule: {PHOTOS_WHY}" in text and "2 added nothing" in text
     # The covered record still names both, so the next update does not read them again.
     assert set(o.covered["covered"]) == {"n2", "n3"}
     st = _state(data_root)
@@ -90,7 +99,7 @@ def test_the_daemon_wake_for_an_already_current_delivery_carries_the_counts(tmp_
     verdict.write(jd, json.dumps([{"unit": "alpha", "outcome": "delivered", "current": s}]))
     d.job_dir = lambda _j: jd  # type: ignore[method-assign]
     text = d._compose_wake("J1", "delivered", {})
-    assert "Update outcome: already_current. Nothing was filed; the delivered chronology is unchanged." in text
+    assert "Update outcome: already_current. The delivered chronology is unchanged." in text
     assert "files asked: 2; files accounted for: 2; by kind: billing_only 1 file(s) 3 page(s)" in text
     assert "Delivered folder id" not in text
     assert "Update outcome" not in d._compose_wake("J1", "failed", {}, stage="update_select")
@@ -101,11 +110,13 @@ def test_every_named_file_excluded_by_the_firms_rules_is_delivered_already_curre
     tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
 ) -> None:
     """Before: held at download with "a named document id is not on the
-    matter", which was untrue. Now delivered, nothing pulled or filed, and
-    the selection records the exclusion so coverage counts it."""
+    matter", which was untrue. Now delivered, nothing pulled, the records
+    review the one file filed, and the selection records the exclusion so
+    coverage counts it."""
     o, seat, _ = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n3"])
     assert o.outcome == "delivered" and o.stage == "download", o
-    assert seat.sent == [] and seat.deleted == [] and not any("n3" in m for m in seat.mints)
+    assert [f["name"] for f in seat.sent] == [REVIEW] and seat.deleted == []
+    assert not any("n3" in m for m in seat.mints)
     rec = _record(data_root)
     assert [(f["id"], f["reason"]) for f in rec["files"]] == [("n3", UO.EXCLUDED)]
     assert gate.check([o.to_dict()]) is None
@@ -233,6 +244,14 @@ def test_the_gate_accepts_the_zero_file_kind_only_with_a_coherent_record() -> No
     filed = _proof()
     filed["files"] = [{"name": "x.docx", "file_id": "f1", "size": 1, "sha256": "a" * 64}]
     assert gate.check([_delivered(filed)])[0] == "readback_unproven"
+    # The records review filed and proven: believed. Anything beside it, or unproven: not.
+    ok = _proof(review_file=REVIEW)
+    ok |= {"readback": "confirmed", "files": [{"name": REVIEW, "file_id": "f1", "size": 1, "sha256": "a" * 64}]}
+    assert gate.check([_delivered(ok)]) is None
+    extra = dict(ok, files=ok["files"] + [{"name": "Exhibit 9.pdf", "file_id": "f2", "size": 1, "sha256": "b" * 64}])
+    assert gate.check([_delivered(extra)])[0] == "readback_unproven"
+    assert gate.check([_delivered(dict(ok, readback="unproven"))])[0] == "readback_unproven"
+    assert gate.check([_delivered(_proof(review_file=REVIEW))])[0] == "readback_unproven"  # claimed, not filed
     no_record = {"readback": "nothing_filed", "files": [], "review": "code_only"}
     assert gate.check([_delivered(no_record)])[0] == "readback_unproven"
 

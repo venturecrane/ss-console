@@ -300,6 +300,20 @@ def run_proofs(sr: StageRun) -> int:
     return 0
 
 
+def _records_review(sr: StageRun, ud: Path) -> list[str]:
+    """The records review filed beside the updated chronology (one row per file
+    the request named: added as its exhibit, or why it added nothing;
+    ``update/review_list``), or none when the request named no files."""
+    from ..update import outcome as UO, review_list as RL
+
+    requested = [str(x) for x in (read_json(sr.slug_dir / "include.json", {}) or {}).get("include_file_ids") or []]
+    if not requested:
+        return []
+    files = UO.classify(sr.slug_dir, ud, requested, collect=True)
+    added = {str(r["id"]): str(r["title"]) for r in read_json(ud / "new_exhibits.final.json", []) if r.get("id")}
+    return [RL.build(sr, files, added).name]
+
+
 def run_manifest(sr: StageRun) -> int:
     ud = update_dir(sr)
     out = sr.slug_dir / "out" / sr.unit.unit
@@ -307,7 +321,7 @@ def run_manifest(sr: StageRun) -> int:
     # A new exhibit that reuses a firm-numbered file is already on the matter;
     # a re-filed copy of a delivered exhibit (the update review) is not filed again.
     filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused") and not r.get("refiled")]
-    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed]
+    names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed] + _records_review(sr, ud)
     manifest = []
     for n in names:
         f = out / n

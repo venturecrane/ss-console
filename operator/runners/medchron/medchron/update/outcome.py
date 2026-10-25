@@ -278,6 +278,7 @@ def summary(rec: dict[str, Any]) -> dict[str, Any]:
         "by_reason": {k: dict(v) for k, v in sorted((rec.get("by_reason") or {}).items())},
         "entries_added": int(rec.get("entries_added") or 0),
         "exhibits_added": int(rec.get("exhibits_added") or 0),
+        "review_file": str(rec.get("review_file") or ""),
     }
 
 
@@ -298,26 +299,49 @@ def end(sr: Any, st: Any, stage: str, code: int, out: Any) -> Any:
         st.end("held", reason)
         out.outcome, out.reason = "held", reason
         return out
+    # The firm's answer, file by file (``review_list``), filed beside the
+    # chronology and proven by hash; the chronology itself is untouched.
+    from ..stages import update_review_file
+    from . import review_list
+
+    doc = review_list.build(sr, rec["files"], {})
+    filed, why = update_review_file.file(sr, doc)
+    if filed is None:
+        reason = f"update_held: the update found nothing to add, and its records review was not filed: {why}"[:480]
+        st.finish(stage, status="held", exit_code=code, dollars=out.dollars, pages=out.pages, note=reason)
+        st.end("held", reason)
+        out.outcome, out.reason = "held", reason
+        return out
+    rec["review_file"] = str(filed[0].get("name") or doc.name)
+    (sr.slug_dir / "runs" / sr.unit.unit / "update" / RECORD).write_text(json.dumps(rec, indent=1), encoding="utf-8")
     s = summary(rec)
-    note = f"already current, nothing filed: {line(s)}"[:480]
+    note = f"already current, records review filed: {line(s)}"[:480]
     st.finish(stage, status="current", exit_code=code, dollars=out.dollars, pages=out.pages, note=note)
     st.end("delivered", note)
-    out.current = s
+    out.current, out.files = s, filed
     sr.log(note)
     return out
 
 
 def proof(run_dir: Path, filed: list[dict[str, Any]]) -> dict[str, Any]:
-    """The zero-file proof block (``proof/gate``). Unproven (and so failed by
-    the daemon) when the record does not prove nothing new or a file was filed."""
+    """The already-current proof block (``proof/gate``): the records review
+    it filed, proven by hash, and nothing else; unproven (so failed by the
+    daemon) when the record does not prove nothing new, when anything but the
+    review was filed, or when the review is not proven."""
     rec = load(run_dir)
-    why = problem(rec) or ("files were filed" if filed else None)
+    why = problem(rec)
+    if why is None and rec is not None:
+        names = [str(f.get("name") or "") for f in filed]
+        if names != [str(rec.get("review_file") or "")] or not all(f.get("proven") and f.get("file_id") for f in filed):
+            why = "the records review is not the one proven file filed"
     if why is not None or rec is None:
         return {"readback": "unproven", "files": [], "review": "", "already_current": None, "why": why}
     return {
-        "readback": "nothing_filed",
-        "files": [],
-        "nothing_to_file": True,
+        "readback": "confirmed",
+        "files": [
+            {"name": f["name"], "file_id": str(f["file_id"]), "size": int(f.get("bytes") or 0), "sha256": f["sha256"]}
+            for f in filed
+        ],
         "review": "code_only",
         "review_cents": 0,
         "review_model": "",
@@ -334,7 +358,8 @@ def wake_lines(outcomes: list[Any], state: str) -> list[str]:
     for o in outcomes:
         s = o.get("current") if isinstance(o, dict) else None
         if isinstance(s, dict) and s.get("kind") == KIND:
-            return [f"Update outcome: {KIND}. Nothing was filed; the delivered chronology is unchanged.", line(s) + "."]
+            filed = " A records review, one row per file, was filed beside it." if s.get("review_file") else ""
+            return [f"Update outcome: {KIND}. The delivered chronology is unchanged.{filed}", line(s) + "."]
     return []
 
 
