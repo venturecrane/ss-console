@@ -188,3 +188,39 @@ def test_monday_is_judged_in_the_seat_zone(pr):
     # 05:00 UTC Monday is still Sunday evening in Phoenix: no note.
     early = datetime(2026, 10, 26, 5, 0, tzinfo=timezone.utc)
     assert _run(pr, at=early)["note"] is False
+
+
+def _rows(pr, monkeypatch) -> list:
+    rows: list = []
+    monkeypatch.setattr(
+        pr, "_wake_row", lambda verb, action_type, basis, extra: rows.append((action_type, basis)) or True
+    )
+    return rows
+
+
+def test_a_weekday_wake_writes_its_row_so_the_health_check_counts_it(pr, monkeypatch):
+    # cron_slots counts a slot as run only from a wake row; without it every
+    # non-Monday review read as "missed" (ops triage 2026-10-24).
+    rows = _rows(pr, monkeypatch)
+    _run(pr, at=TUESDAY)
+    assert rows == [("EMITTED_WAKE", "review_due")]
+
+
+def test_monday_writes_exactly_one_row(pr, monkeypatch):
+    rows = _rows(pr, monkeypatch)
+    _run(pr)
+    assert rows == [("EMITTED_WAKE", "note_ready")]
+
+
+def test_a_crashed_pre_run_still_writes_its_row(pr, monkeypatch):
+    rows = _rows(pr, monkeypatch)
+
+    def boom(_path):
+        raise RuntimeError("config unreadable")
+
+    monkeypatch.setattr(pr._H, "load_customer_yaml", boom)
+    out = io.StringIO()
+    with redirect_stdout(out):
+        assert pr.main() == 0
+    assert json.loads(out.getvalue().strip())["status"] == "pre_run_crashed"
+    assert rows == [("EMITTED_WAKE", "pre_run_crashed")]
