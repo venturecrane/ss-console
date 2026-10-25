@@ -104,6 +104,11 @@ class Job:
     requested_by: str | None = None
     request_ref: str | None = None
     update: UpdateSpec | None = None
+    # 2026-10-25: the delivered jobs on this matter still on the volume,
+    # newest first, as the daemon (root) found them when it staged an update.
+    # The child's uid cannot list the jobs dir (0710), only enter a job dir it
+    # is named; ``vision_seed`` and ``email_parents`` read these by path.
+    prior_delivered: list[str] = field(default_factory=list)
 
     @property
     def joint(self) -> bool:
@@ -286,7 +291,11 @@ def parse(data: Any, *, path: Path) -> Job:
         requested_by=data.get("requested_by"),
         request_ref=data.get("request_ref"),
         update=parse_update(data, units),
+        prior_delivered=[str(x) for x in data.get("prior_delivered") or [] if _JOB_ID.match(str(x))],
     )
+
+
+_JOB_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 
 def load(job_dir: Path) -> Job:

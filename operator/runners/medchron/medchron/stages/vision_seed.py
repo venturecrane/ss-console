@@ -41,27 +41,40 @@ def _hashes(slug_dir: Path) -> dict[str, str]:
     }
 
 
-def delivered_same_matter(jobs: Path, matter_id: str, own: Path) -> list[Path]:
-    """The slug dirs of delivered jobs on ``matter_id``, newest first."""
+def prior_delivered(jobs: Path, matter_id: str, own_id: str) -> list[str]:
+    """The ids of the delivered jobs on ``matter_id``, newest first.
+
+    Called by the DAEMON (root) when it stages an update (``job.yaml``
+    ``prior_delivered``): the child's uid can enter a job dir it is named but
+    cannot list the jobs dir (0710 root:medchron). The first proof run of this
+    code read the dir from the child and died on PermissionError (2026-10-25).
+    An unreadable job is skipped; an unlistable dir gives none."""
     import yaml
 
-    out: list[tuple[str, Path]] = []
-    for jd in jobs.iterdir() if jobs.is_dir() else ():
+    out: list[tuple[str, str]] = []
+    try:
+        dirs = [jd for jd in jobs.iterdir() if jd.is_dir()]
+    except OSError:
+        return []
+    for jd in dirs:
+        if jd.name == own_id:
+            continue
         try:
-            if jd.resolve() == own.resolve():
-                continue
             st = json.loads((jd / "daemon.json").read_text(encoding="utf-8"))
             y = yaml.safe_load((jd / "job.yaml").read_text(encoding="utf-8")) or {}
         except (OSError, ValueError, yaml.YAMLError):
             continue
-        if st.get("state") != "delivered" or str((y.get("matter") or {}).get("id") or "") != matter_id:
-            continue
-        slug = str(y.get("slug") or "")
-        sd = jd / "data" / slug
-        if slug and sd.is_dir():
-            out.append((str(st.get("finished_at") or ""), sd))  # ISO-8601 UTC: sorts as text
-    out.sort(key=lambda t: (t[0], str(t[1])), reverse=True)
-    return [sd for _, sd in out]
+        if st.get("state") == "delivered" and str((y.get("matter") or {}).get("id") or "") == matter_id:
+            out.append((str(st.get("finished_at") or ""), jd.name))  # ISO-8601 UTC: sorts as text
+    out.sort(reverse=True)
+    return [name for _, name in out]
+
+
+def delivered_same_matter(job: Any, slug: str) -> list[Path]:
+    """The ``slug`` dirs of the delivered jobs the daemon named in
+    ``job.yaml``, newest first, read by path (never by listing)."""
+    jobs = Path(job.install_root) / "jobs"
+    return [sd for jid in getattr(job, "prior_delivered", None) or [] if (sd := jobs / jid / "data" / slug).is_dir()]
 
 
 def seed(sr: StageRun, queue: list[dict[str, Any]]) -> int:
@@ -73,10 +86,9 @@ def seed(sr: StageRun, queue: list[dict[str, Any]]) -> int:
     if not want:
         return 0
     mine = _hashes(d)
-    jobs = Path(sr.job.install_root) / "jobs"
     pages = files = 0
     left = set(want)
-    for src in delivered_same_matter(jobs, str(sr.job.matter_id), Path(sr.job.path).parent):
+    for src in delivered_same_matter(sr.job, d.name):
         theirs = _hashes(src)
         for doc in sorted(left):
             part = src / "partial" / f"{doc}.jsonl"

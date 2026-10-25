@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from medchron import covered
-from medchron.stages import email_parents, msg
+from medchron.stages import email_parents, msg, vision_seed
 
 MATTER = "m-1"
 
@@ -25,10 +25,17 @@ def _jsonl(p: Path, rows: list[dict]) -> None:
     p.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
+class _Job(SimpleNamespace):
+    @property
+    def prior_delivered(self) -> list[str]:
+        """What the daemon (root) writes into job.yaml at staging."""
+        return vision_seed.prior_delivered(Path(self.install_root) / "jobs", MATTER, "UPD")
+
+
 def _sr(tmp_path: Path) -> SimpleNamespace:
     jobs = tmp_path / "run" / "jobs"
     sd = _job(jobs, "UPD", state="claimed")
-    job = SimpleNamespace(install_root=str(tmp_path / "run"), matter_id=MATTER, path=sd.parent.parent / "job.yaml")
+    job = _Job(install_root=str(tmp_path / "run"), matter_id=MATTER)
     return SimpleNamespace(job=job, slug_dir=sd, jobs=jobs)
 
 

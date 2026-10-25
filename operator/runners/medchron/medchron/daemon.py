@@ -278,6 +278,13 @@ class Daemon:
         ):
             if env.get(key) is not None:
                 doc[key] = env[key]
+        if env.get("update") is not None:
+            # The child cannot list the jobs dir; the delivered jobs it reuses
+            # reads from are named here (``vision_seed.prior_delivered``).
+            # ``run_dir/jobs``, not ``self.jobs``: a proof twin's jobs are elsewhere.
+            from .stages.vision_seed import prior_delivered
+
+            doc["prior_delivered"] = prior_delivered(self.run_dir / "jobs", str(env["matter"]["id"]), job_id)
         # The month's state is read FRESH here, on every run and every resume,
         # never taken from the envelope: the envelope's copy was true when the
         # job was submitted and is stale the moment any other job records cents.
