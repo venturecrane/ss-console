@@ -338,7 +338,7 @@ def test_a_held_review_is_not_paid_twice_and_smds_release_files_it_with_the_find
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert proof_review.status(rec) == "released" and rec["released_reason"] == "attorney asked for it as is"
     notes = review.docx_text(sr.slug_dir / "out" / "alpha" / _manifest_names(sr)[1])
-    assert "MUST-FIX" in notes and "this chunk" in notes
+    assert "graded must-fix, released by SMD" in notes and "this chunk" in notes
 
 
 def test_a_redo_marker_reviews_afresh_once_per_request(job_dir, firm_config_path, data_root):
