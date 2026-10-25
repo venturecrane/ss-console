@@ -295,6 +295,51 @@ skills:
       visitor record's name, property, stated intent, and contact. Authored
       compositional for the POC; a template comes with the vertical pack.
 
+  # ---- law-firm marketing seat (seat.role: marketing). Declared before the
+  # seat exists so the seat PR that arms these crons passes the arming gate.
+  # All compositional: each scheduled email carries model-written drafts for
+  # the firm's administrators, wrapped in `--- DRAFT <channel> ---` blocks
+  # that the outbound advertising gate checks per channel, with the seat's
+  # output checklist on the whole body. A scheduled run sends only through
+  # `marketing_draft_send`, whose recipients are fixed in code (the seat's
+  # administrators on its roster), never chosen by the model. ----
+  marketing-topic-slate:
+    render: compositional
+    note: >-
+      Monthly topic slate: about fifteen numbered topics with a why line,
+      sources and suggested channels, composed from web, analytics and the
+      firm's own posts. One recipient set, the firm's administrators.
+  blog-post-draft:
+    render: compositional
+    note: >-
+      Weekly blog batch: the drafts themselves are PENDING WordPress posts;
+      the email lists each post's edit link, image line and the gate's
+      questions. When WordPress is not wired the post rides in a blog draft
+      block instead.
+  social-post-draft:
+    render: compositional
+    note: >-
+      Weekly social drafts, one social draft block per post per network
+      (Facebook, Instagram, X), composed from the month's picks and the firm's
+      published posts.
+  youtube-episode-post:
+    render: compositional
+    note: >-
+      Weekly episode drafts, one youtube draft block per new episode on the
+      firm's public channel (title and description).
+  business-profile-post:
+    render: compositional
+    note: >-
+      Twice-monthly Business Profile draft, one gbp draft block with the
+      photograph line (the firm's own photo, or the photo the firm needs to
+      take).
+  marketing-analytics-note:
+    render: compositional
+    note: >-
+      Monthly analytics note in the cover (no draft block): counts from GA4,
+      WordPress and the public channel, and a plain line for any source that
+      could not be read.
+
   # ---- couples role (ADR 0090), armed on every seat copied from
   # operator/customers/_couples-template. Declared before the first seat
   # exists: the provisioning gate (scripts/validate-customer-yaml.ts) refuses

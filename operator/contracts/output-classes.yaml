@@ -579,6 +579,49 @@ skill_bindings:
       - { artifact: triage_note, seam: local_file, class: staff }
     outbound: derived # real drafts into the managed mailbox
 
+  # ---- law-firm marketing seat (seat.role: marketing) ----
+  # Drafts for the firm's own reviewer. Nothing these skills write is public:
+  # a blog draft is a PENDING WordPress post (the connector has no publish
+  # tool), and every other draft travels by email to the firm's administrators
+  # inside `--- DRAFT <channel> ---` blocks that the advertising gate checks.
+  # The record-store writes are the month's plan, the press count and the
+  # firm's standing guidance (record_store on the volume, so local_file).
+  marketing-topic-slate:
+    internal: []
+    outbound: derived # the slate to the firm's administrators (code-fixed on a scheduled run), or a reply in the asker's thread
+  blog-post-draft:
+    internal:
+      - { artifact: pending_post, seam: wordpress_pending_post, class: staff }
+      - { artifact: plan_record, seam: local_file, class: record }
+    outbound: derived # the review email to the firm's administrators, or a reply in the asker's thread
+  social-post-draft:
+    internal:
+      - { artifact: plan_record, seam: local_file, class: record }
+    outbound: derived # the week's drafts to the firm's administrators, or a reply in the asker's thread
+  youtube-episode-post:
+    internal: []
+    outbound: derived # episode drafts to the firm's administrators, or a reply in the asker's thread
+  business-profile-post:
+    internal:
+      - { artifact: plan_record, seam: local_file, class: record }
+    outbound: derived # the draft to the firm's administrators, or a reply in the asker's thread
+  review-reply-draft:
+    internal: []
+    outbound: derived # one reply to the administrator who forwarded the review, no one else
+  press-release-draft:
+    internal:
+      - { artifact: press_count, seam: local_file, class: record }
+    outbound: derived # one reply to the requesting administrator; the firm submits to the wire
+  marketing-analytics-note:
+    internal: []
+    outbound: derived # the note to the firm's administrators, or a reply in the asker's thread
+  marketing-request-router:
+    internal:
+      - { artifact: standing_guidance, seam: local_file, class: record }
+      - { artifact: firm_photo, seam: wordpress_media, class: record }
+      - { artifact: routing_decision, seam: session_output, class: record }
+    outbound: derived # replies in the sender's thread; a send-as call only proposes
+
   # ---- real estate: open-house POC (scott seat) ----
   open-house-visitor-capture:
     internal:
