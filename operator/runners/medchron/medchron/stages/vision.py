@@ -36,6 +36,7 @@ from typing import Any
 
 from .. import llm, stop_request
 from ..update.pageid import SKIPPED
+from . import vision_seed
 from .base import StageRun, append_jsonl, read_jsonl
 from .transcript import UNREAD, merge_pages, merged, recorded_ids, transcript_state
 
@@ -241,6 +242,7 @@ def run(sr: StageRun) -> int:
     queue = json.loads((d / "scan_queue.json").read_text(encoding="utf-8"))
     src = {r["id"]: r["path"] for r in read_jsonl(d / "raw_manifest.jsonl") if r.get("ok") and r.get("path")}
     log_path = d / "ocr_results.jsonl"
+    vision_seed.seed(sr, queue)
     files, pending = _gather(sr, queue, src, log_path)
     sr.log(f"{len(files)} file(s), {len(pending)} page(s) to transcribe")
     model = llm.model_for(sr.cfg, "transcription")
