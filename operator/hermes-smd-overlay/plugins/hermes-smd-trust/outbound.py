@@ -991,6 +991,9 @@ def check_outbound_draft(
         # Not a body-bearing draft tool; the outbound gate doesn't apply.
         return None
 
+    # A partner's own words are normalized, not refused, for a dash (ADR 0097):
+    # FIRST and in place, so what every tier scans is what is delivered.
+    _normalize_partner_message_dashes(tool_name, args)
     body = _extract_body(args)
     if body is None or not body.strip():
         if not _body_is_required(tool_name):
@@ -1228,6 +1231,35 @@ def _normalize_staff_dashes(tool_name: str, args: dict | None, session_id: str) 
             "outbound gate: normalized dashes in a staff-class %s before the marker scan (ss#2547)",
             tool_name,
         )
+    return changed
+
+
+#: INTERNAL_WRITE tools whose text is a person's own words relayed to another
+#: authored person, so a dash in it is punctuation to normalize, never a reason
+#: to refuse. ``partner_message_send`` (ADR 0097): on hermes-captain-mark
+#: 2026-10-25 17:34:43Z the first real message was refused for an em dash and
+#: the model reworded the partner's message to get past it. Only the dash is
+#: normalized; every other marker, citation and identifier check still runs.
+_DASH_NORMALIZED_WRITE_TOOLS: frozenset[str] = frozenset({"partner_message_send"})
+_DASH_NORMALIZED_WRITE_KEYS: tuple[str, ...] = ("text",)
+
+
+def _normalize_partner_message_dashes(tool_name: str, args: dict | None) -> bool:
+    """Rewrite em/en dashes in a relayed partner message, in place. True iff
+    anything changed. Any other tool, or args that are not a dict: untouched."""
+    if tool_name not in _DASH_NORMALIZED_WRITE_TOOLS or not isinstance(args, dict):
+        return False
+    changed = False
+    for key in _DASH_NORMALIZED_WRITE_KEYS:
+        value = args.get(key)
+        if not isinstance(value, str) or not value:
+            continue
+        rewritten = report_render.normalize_dashes(value)
+        if rewritten != value:
+            args[key] = rewritten
+            changed = True
+    if changed:
+        logger.info("outbound gate: normalized dashes in %s before the marker scan", tool_name)
     return changed
 
 
