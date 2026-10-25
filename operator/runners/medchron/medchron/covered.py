@@ -239,6 +239,10 @@ def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> di
         # An update into the delivered chronology retired the document it
         # replaced (by id, after the new one was proven): the record names it.
         fields["delivery"]["replaced"] = dict(worst["replaced"])
+    if worst.get("current"):
+        # An update that found nothing new filed nothing: the record says so,
+        # with the counts per reason (``update/outcome.summary``).
+        fields["delivery"]["already_current"] = dict(worst["current"])
     merged = merge_covered(outcomes)
     if merged is not None:
         fields["covered"] = merged

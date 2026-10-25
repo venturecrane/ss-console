@@ -43,6 +43,7 @@ from . import (
 )
 from .covered import covered_sets, documents_pulled
 from .deadline import is_transient
+from .update import outcome as update_outcome
 from .update.coverage import covered_sets as update_covered
 from .stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
@@ -88,6 +89,9 @@ class Outcome:
     # doorway's retry budget (deadline.is_transient). The daemon requeues such
     # a job once instead of recording it failed (requeue.py).
     transient: bool = False
+    # 2026-10-25: an update that concluded nothing new, delivered with nothing
+    # filed: its outcome record's counts (``update/outcome.summary``).
+    current: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -603,6 +607,9 @@ class Driver:
             outcome, reason = "refused", refusal
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
+            if outcome == dag.CURRENT:
+                done = Outcome(unit.unit, "delivered", None, stage.name, dollars, pages, notes)
+                return update_outcome.end(sr, st, stage.name, code, done)
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)
         st.end(outcome, reason)

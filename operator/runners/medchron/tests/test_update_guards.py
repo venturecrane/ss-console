@@ -82,13 +82,19 @@ def test_a_named_photo_is_left_out_by_the_firms_rules_and_said_so(
     assert [x["id"] for x in excluded] == ["p1"] and "folder rules" in excluded[0]["why"]
 
 
-def test_naming_only_excluded_documents_holds(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_naming_only_excluded_documents_exits_all_excluded(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """Its own exit (2026-10-25): it used to share EXIT_NAMED and was paged as
+    "not on the matter". The update DAG maps it to an already-current
+    delivery; an append run holds with the true reason."""
     seat = _seat()
     _named_job(job_dir, ["p1"])
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat, [])
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
-    assert download_stage.run(sr) == 2 and not (sr.slug_dir / "raw_manifest.jsonl").exists()
+    assert download_stage.run(sr) == download_stage.EXIT_ALL_EXCLUDED
+    assert not (sr.slug_dir / "raw_manifest.jsonl").exists()
 
 
 # ---- (a) only the named containers are opened --------------------------------

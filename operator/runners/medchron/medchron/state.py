@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-STATUSES = ("pending", "running", "done", "refused", "held", "failed", "skipped")
+STATUSES = ("pending", "running", "done", "refused", "held", "failed", "skipped", "current")
 TERMINAL_OUTCOMES = ("delivered", "held", "refused", "failed")
 
 

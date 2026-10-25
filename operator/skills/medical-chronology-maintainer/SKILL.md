@@ -443,7 +443,8 @@ apply unchanged.
 When the runner finishes a job, the platform wakes this skill with a task whose
 first line is "Run the medical-chronology-maintainer skill's DELIVER mode for
 chronology job <id>." followed by `Outcome:`, `Matter number:`, the counts, and
-`Delivered folder id:` (delivered) or `Held at: <stage>` (held or failed), a
+`Delivered folder id:` (delivered; an update that found nothing new carries
+`Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held or failed), a
 `Hold class: <class>` line (held: only `rerouted_to_update` ever wakes this
 mode), then `Requester:` and `Request ref:`. **That wake IS this mode's initiation**: it arrives
 through the seat's own authenticated machinery, the administrator initiated it at
@@ -532,6 +533,33 @@ nothing, stop.
      refuse an agent-drafted dollar figure on sight (see below), and cost is a
      question for the job's console row. The metered unit is safe to quote
      plainly because the firm authored the allowance in it.
+   - **delivered, already current** (the wake carries `Update outcome:
+already_current.`): the update read what was asked and found nothing to
+     add, so nothing was filed and the delivered chronology stands as it is.
+     There is no new folder or file to read in step 2 and no review task in
+     step 3 (there is no new document for the attorney); the ledger entry is
+     written as step 3 says, with "already current, nothing filed" in place of
+     the folder and the ids the update named as covered. The reply is short
+     and factual, worded from the wake's counts line alone: "The chronology
+     for matter <number> already includes these records. Of the <asked>
+     files named, none adds a visit:" then one line per kind the counts name,
+     with its file count, in these words: `billing_only` "billing pages
+     only"; `read_no_new_visit` "read in full; no visit or finding the
+     chronology does not already list"; `pages_already_delivered` "every page
+     is already in the chronology's exhibits"; `repeats_another_new_file`
+     "every page repeats another file in this request"; `duplicate` "exact
+     copies of files already read"; `no_record_text` "no record text on any
+     page (photographs or blank pages)"; `no_page_to_read` "only billing,
+     repeated or blank pages"; `medlegal_report` "medical-legal reports,
+     reviewed and not itemized"; `excluded_by_rule` "left out under the
+     firm's own file rules"; `left_out_by_rule` "name a person other than the
+     client, so they were left out"; `delivered_package` "files of the
+     delivered chronology itself"; `deleted` "deleted on the matter";
+     `unreadable` "not readable as record pages"; `not_retrieved` "not
+     retrievable from the matter"; `email` "emails whose attachments were
+     read as their own files". No other words about it: no grade, no
+     judgement of the records, nothing about who did the work. Close with the
+     allowance figures as above.
    - **held**: nothing is sent, ever (the Captain, 2026-10-24: the firm hears
      about a chronology only when it is delivered). Bind nothing and draft
      nothing. The only held chronology that wakes this mode is

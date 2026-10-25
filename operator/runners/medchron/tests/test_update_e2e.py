@@ -299,16 +299,21 @@ def test_a_delivered_chronology_the_seat_cannot_reproduce_holds_before_anything_
     assert "firm typed" not in (o.reason or "") and "Exhibit 1" not in (o.reason or "")
 
 
-def test_a_named_record_of_another_person_holds_before_any_paid_read(
+def test_a_named_record_of_another_person_is_left_out_before_any_paid_read(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path
 ) -> None:
+    """The record naming another person is left out by rule (2026-10-24);
+    the other two named files are a copy of a delivered exhibit and a photo
+    the firm's rules exclude, so nothing new is left: the update ends
+    delivered already current (2026-10-25), nothing paid, nothing filed."""
     job_dir, seat = scene
     other = make_pdf(["Patient Name: Gamma Other\nDOB: 05/05/1990\n" + NEW_PAGES[0], NEW_PAGES[1]])
     seat.blobs["n1"] = other
     seat.docs[3]["size"] = len(other)
     model = _Model()
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
-    assert o.outcome == "held" and o.stage == "update_select", o
+    assert o.outcome == "delivered" and o.stage == "update_select" and o.current is not None, o
+    assert o.current["by_reason"]["left_out_by_rule"]["files"] == 1
     assert model.calls == [] and seat.sent == [] and seat.deleted == []
 
 
