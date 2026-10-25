@@ -74,6 +74,7 @@ from ..gates import foreign_identity as FI
 from ..update import body as B, medlegal as ML, pageid as PI, pageid_io as PG, select as S, subsets as SUB, twins as TW
 from ..update import outcome as UO
 from ..update.locate import vendor_name
+from . import prior_reading
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
@@ -124,8 +125,10 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
     }
     withheld = FI.withheld(sr.slug_dir)
     locked = set(unopened.password_protected(sr.slug_dir))
+    raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")
+    prior = prior_reading.decided(sr, {str(r.get("id")) for r in raw})
     out = []
-    for r in read_jsonl(sr.slug_dir / "raw_manifest.jsonl"):
+    for r in raw:
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
             continue
         if FI.matches(str(r["id"]), withheld):
@@ -134,6 +137,9 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
             continue
         if r.get("sha256") in delivered_sha:
             skipped["byte-identical to a delivered exhibit"].append(str(r["id"]))
+            continue
+        if str(r["id"]) in prior:  # the delivered run read it and said why: never paid for twice
+            skipped.setdefault(prior_reading.PREFIX + prior[str(r["id"])], []).append(str(r["id"]))
             continue
         if str(r.get("ext") or "").lower() not in PAGE_SOURCES:
             skipped["not a PDF or an image"].append(str(r["id"]))

@@ -557,6 +557,8 @@ already_current.`): the update read what was asked and found nothing to
      firm's own file rules"; `left_out_by_rule` "name a person other than the
      client, so they were left out"; `delivered_package` "files of the
      delivered chronology itself"; `deleted` "deleted on the matter";
+     `read_for_the_delivered_chronology` "read for the delivered chronology,
+     which recorded why each adds nothing (the review names the reason)";
      `unreadable` "not readable as record pages"; `not_retrieved` "not
      retrievable from the matter"; `email` "emails whose attachments were
      read as their own files". Then one sentence: "The records review filed

@@ -24,6 +24,8 @@ from typing import Any
 
 from ..gates.foreign_identity import WITHHELD_REASONS
 from ..stages.base import read_json, read_jsonl
+from ..stages.prior_reading import PREFIX as PRIOR_PREFIX
+from ..unopened import REASON as PASSWORD_REASON
 from .outcome import IMAGE_UNREAD
 from .select import BLANK
 
@@ -47,6 +49,9 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any = None) -> dict[str, Any]:
     # An image the transcription could not read (``update_select._set_aside``): read again next time.
     uncovered |= {str(x) for x in skipped.get(IMAGE_UNREAD) or []}
     covered |= {str(x) for why in WITHHELD_REASONS for x in skipped.get(why) or []}
+    # The delivered run's own finding settles it (``prior_reading``); a locked PDF is read once it opens.
+    covered |= {str(x) for why, ids in skipped.items() if why.startswith(PRIOR_PREFIX) for x in ids or []}
+    uncovered |= {str(x) for x in skipped.get(PASSWORD_REASON) or []}
     covered |= {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")}
     for x in sel.get("exhibits") or []:
         # Only a document with NO text is read again: one whose pages are all
