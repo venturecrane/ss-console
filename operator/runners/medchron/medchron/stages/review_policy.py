@@ -559,6 +559,26 @@ def rebill(sr: StageRun) -> bool:
     return True
 
 
+def timeline_providers(doc: Path | None) -> set[str]:
+    """The provider cells of the chronology's Treatment Timeline (empty when
+    there is no document or no timeline)."""
+    if doc is None or not doc.is_file():
+        return set()
+    text = doc.read_text(encoding="utf-8")
+    if "## Treatment Timeline" not in text:
+        return set()
+    from .billing_chart import Matcher
+
+    return {r["provider"] for r in Matcher.timeline(text)}
+
+
+def needs_rebill(pol: Outcome, before: set[str], doc: Path | None) -> bool:
+    """True when the review took a provider off the Treatment Timeline: an
+    entry left out, or a timeline row deleted under check 4 (the re-review's
+    N2 gap, 2026-10-24: the worksheet kept that provider's row)."""
+    return bool(pol.left_out) or bool(before - timeline_providers(doc))
+
+
 def package(
     sr: StageRun,
     rd: Path,
@@ -577,6 +597,7 @@ def package(
     from . import limitations as _limitations, manifest as _manifest, render as _render
 
     doc = None if update else rd / "final-chronology.md"
+    spine_before = timeline_providers(doc)
     pol = settle(sr, doc, found, repair=repair, **inject)
     if pol.dropped:
         sr.log(
@@ -588,9 +609,10 @@ def package(
     # only once the section is written again from the files as they stand.
     # Full build only (an update has no ``doc``); a refresh that changes the
     # section re-renders even when nothing else changed.
-    # A provider heading the scrub shortened names the worksheet's row too.
-    if (pol.left_out or pol.renamed) and not rebill(sr):
-        sr.log("review: the billing worksheet did not rebuild after the entries changed; nothing was filed")
+    # A provider heading the scrub shortened leaves the timeline under its old
+    # name too, so needs_rebill covers it (and pol.renamed says so outright).
+    if (needs_rebill(pol, spine_before, doc) or pol.renamed) and not rebill(sr):
+        sr.log("review: the billing worksheet did not rebuild after the timeline changed; nothing was filed")
         return pol.findings, None
     if doc is not None and doc.is_file() and _limitations.refresh(doc, sr.slug_dir, sr.unit.unit, sr.log, sr.cfg):
         sr.log("review: Records Reviewed and Limitations rewritten from the files as they stand")
