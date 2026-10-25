@@ -319,6 +319,7 @@ def upload_media(
     name = _safe_filename(filename or (file_path or str(url)).rsplit("/", 1)[-1], ext)
     client = _get_client()
     try:
+        # nosemgrep: python.mcp.mcp-auth-passthrough-taint.mcp-auth-passthrough-taint - the request goes to the seat's own WordPress (WORDPRESS_SITE_URL, fixed at construction, https enforced, redirects off); the only tool-derived value is the filename, reduced to [A-Za-z0-9._-] by _safe_filename.
         created = client.request(
             "POST",
             "/media",

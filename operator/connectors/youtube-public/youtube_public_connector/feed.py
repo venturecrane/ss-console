@@ -9,7 +9,7 @@ Both endpoints are public and unauthenticated:
 
 Only those two fixed hosts and paths are ever fetched, the ids are validated by
 shape before they reach a URL, and responses are size-capped. Parsing uses the
-stdlib ElementTree, whose expat (2.4.1+) refuses entity-expansion bombs.
+defusedxml, which refuses DTDs, entity expansion and external entities outright.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ import json
 import re
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as SafeET
 from typing import Any
 
 FEED_URL = "https://www.youtube.com/feeds/videos.xml"
@@ -99,16 +100,14 @@ def oembed_url(video_id: str) -> str:
     return f"{OEMBED_URL}?{urllib.parse.urlencode({'url': watch, 'format': 'json'})}"
 
 
-def _text(el: ET.Element | None) -> str:
+def _text(el: Any) -> str:
     return (el.text or "").strip() if el is not None else ""
 
 
 def parse_feed(blob: bytes) -> dict[str, Any]:
     try:
-        # expat 2.4.1+ (the seat runs 3.13) refuses entity-expansion bombs, and
-        # ElementTree resolves no external entities.
-        root = ET.fromstring(blob)
-    except ET.ParseError as exc:
+        root = SafeET.fromstring(blob, forbid_dtd=True)
+    except (SafeET.ParseError, DefusedXmlException) as exc:
         raise FeedError(f"the channel feed is not readable XML ({exc})") from exc
     channel_title = _text(root.find("atom:title", _NS))
     channel_id = _text(root.find("yt:channelId", _NS))

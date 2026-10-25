@@ -5,7 +5,9 @@ description = "Author-built MCP connector reading a public YouTube channel's upl
 requires-python = ">=3.11"
 dependencies = [
     "operator-connector-sdk",
-    # Fetch and parse use the stdlib only (urllib + xml.etree).
+    # The feed is parsed with defusedxml (no DTD, no entity expansion); the
+    # fetch is stdlib urllib.
+    "defusedxml>=0.7",
 ]
 
 # The console-script the overlay registry launches as `command`
