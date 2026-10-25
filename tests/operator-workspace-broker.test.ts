@@ -49,10 +49,13 @@ describe('ADR 0045 Workspace capability broker', () => {
     expect(entrypoint).toContain('rm -rf /opt/data/workspace-broker')
     expect(entrypoint).toContain('rm -f /opt/data/oauth/google.json')
     expect(entrypoint).toContain('rm -f "${BROKER_DIR}/google.json"')
-    // Keystone (#1407): the broker's customer.yaml is now copied from the
-    // root-owned LIVE_CUSTOMER_YAML (R2 source of truth), not the agent-writable
-    // /opt/data — that relocation IS the self-loopback fix.
-    expect(entrypoint).toContain('cp "${LIVE_CUSTOMER_YAML}" "${BROKER_CUSTOMER_PATH}"')
+    // Keystone (#1407): the broker reads the root-owned LIVE_CUSTOMER_YAML (R2
+    // source of truth), never the agent-writable /opt/data. It reads it live,
+    // not a boot copy, so a roster change the applier writes reaches the reply
+    // fence (pilot-smokeball 2026-10-25: a boot copy refused a rostered sender).
+    expect(entrypoint).toContain('export SMD_CUSTOMER_YAML="${LIVE_CUSTOMER_YAML}"')
+    expect(entrypoint).not.toContain('cp "${LIVE_CUSTOMER_YAML}"')
+    expect(entrypoint).not.toContain('BROKER_CUSTOMER_PATH')
     expect(entrypoint).toContain('chmod 0700 "${BROKER_DIR}"')
     expect(entrypoint).toContain('chown -R workspace-broker:workspace-broker "${BROKER_DIR}"')
     expect(entrypoint).toContain(

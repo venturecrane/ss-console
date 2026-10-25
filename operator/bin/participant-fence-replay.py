@@ -38,7 +38,7 @@ USAGE (on a seat, as root, after uploading this file and participant_fence.py):
     /opt/workspace-broker/.venv/bin/python participant-fence-replay.py \\
         --fence-module /tmp/pfreplay/participant_fence.py --days 30 \\
         --audit-db /opt/data/audit/audit.db \\
-        --customer /var/lib/smd-workspace-broker/customer.yaml \\
+        --customer /var/lib/smd-config/customer.yaml \\
         --msgraph-read /var/lib/smd-workspace-broker/msgraph-read.json   # Graph seats
         --agentmail-cred /var/lib/smd-workspace-broker/agentmail.json    # AgentMail seats
 """

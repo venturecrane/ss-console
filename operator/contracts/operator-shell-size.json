@@ -3,6 +3,6 @@
   "ceiling": 500,
   "scripts": {
     "operator/bin/provision-customer.sh": 502,
-    "operator/templates/entrypoint.sh": 604
+    "operator/templates/entrypoint.sh": 603
   }
 }
