@@ -65,11 +65,11 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
-from io import BytesIO
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .. import unopened
 from ..gates import foreign_identity as FI
 from ..update import body as B, medlegal as ML, pageid as PI, pageid_io as PG, select as S, subsets as SUB, twins as TW
 from ..update import outcome as UO
@@ -97,9 +97,23 @@ def _write_pdf(src: Path, ext: str, dest: Path) -> int:
     else:
         with pymupdf.open(str(src)) as img:
             dest.write_bytes(img.convert_to_pdf())
-    from pypdf import PdfReader
+    # pymupdf, not pypdf: a PDF encrypted only against editing opens without
+    # a password, and pypdf refused to count its pages (2026-10-25).
+    with pymupdf.open(str(dest)) as doc:
+        return doc.page_count
 
-    return len(PdfReader(BytesIO(dest.read_bytes())).pages)
+
+def _locked(path: Path, ext: str) -> bool:
+    """A PDF that cannot be opened without its password (``unopened``)."""
+    if ext != ".pdf":
+        return False
+    import pymupdf
+
+    try:
+        with pymupdf.open(str(path)) as doc:
+            return bool(doc.needs_pass)
+    except Exception:  # noqa: BLE001 - an unopenable file is not this check's to judge; the page read decides it
+        return False
 
 
 def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
@@ -109,6 +123,7 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
         FI.WITHHELD_REASON: [],
     }
     withheld = FI.withheld(sr.slug_dir)
+    locked = set(unopened.password_protected(sr.slug_dir))
     out = []
     for r in read_jsonl(sr.slug_dir / "raw_manifest.jsonl"):
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
@@ -122,6 +137,11 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
             continue
         if str(r.get("ext") or "").lower() not in PAGE_SOURCES:
             skipped["not a PDF or an image"].append(str(r["id"]))
+            continue
+        if str(r["id"]) in locked or _locked(Path(r["path"]), str(r.get("ext") or "").lower()):
+            # 2026-10-25: a password-protected PDF crashed this stage; the run
+            # lane discloses it (``unopened``), and so does an update now.
+            skipped.setdefault(unopened.REASON, []).append(str(r["id"]))
             continue
         out.append(r)
     return out, skipped
