@@ -459,6 +459,52 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "mcp_msgraph_mail_list_prompts": ActionClass.READ,
     "mcp_msgraph_mail_list_resources": ActionClass.READ,
     "mcp_msgraph_mail_read_resource": ActionClass.READ,
+    # The marketing seat's three connectors (ss-console operator/connectors/
+    # {wordpress,youtube-public,ga4}). Classes mirror each manifest's
+    # tool_classes oracle; the boot-time connector-classification probe FATALs a
+    # seat whose baked manifest disagrees with these lines, on every seat, bound
+    # or not, so they land in the same change as the connectors.
+    #
+    # WordPress: five reads of the firm's own site, and three INTERNAL_WRITEs.
+    # None is a send class: a pending post is not published, it waits in the
+    # firm's wp-admin for a person there to publish it, and the connector has no
+    # publish tool, forces status=pending, and runs the advertising gate before
+    # each post write. upload_media puts an image in the media library (images
+    # only, decided from the bytes), which is a write into the firm's system, so
+    # it sits behind the same ceiling.
+    "mcp_wordpress_list_posts": ActionClass.READ,
+    "mcp_wordpress_get_post": ActionClass.READ,
+    "mcp_wordpress_list_categories": ActionClass.READ,
+    "mcp_wordpress_list_tags": ActionClass.READ,
+    "mcp_wordpress_list_media": ActionClass.READ,
+    "mcp_wordpress_upload_media": ActionClass.INTERNAL_WRITE,
+    "mcp_wordpress_create_pending_post": ActionClass.INTERNAL_WRITE,
+    "mcp_wordpress_update_pending_post": ActionClass.INTERNAL_WRITE,
+    # Public YouTube feed: two reads, no credential. Fenced and non-seeding.
+    "mcp_youtube_public_list_channel_videos": ActionClass.READ,
+    "mcp_youtube_public_get_video": ActionClass.READ,
+    # GA4 Data API: four reads of the firm's own analytics property.
+    "mcp_ga4_run_report": ActionClass.READ,
+    "mcp_ga4_top_pages": ActionClass.READ,
+    "mcp_ga4_traffic_sources": ActionClass.READ,
+    "mcp_ga4_month_over_month": ActionClass.READ,
+    # The four MCP protocol primitives Hermes synthesizes on each of those three
+    # servers, decided in advance the way the msgraph-mail and Smokeball four
+    # were decided after their seats' sweeps named them: READ, fenced, not a
+    # tenant source. None of the three servers declares prompts or resources, so
+    # all twelve answer empty.
+    "mcp_wordpress_get_prompt": ActionClass.READ,
+    "mcp_wordpress_list_prompts": ActionClass.READ,
+    "mcp_wordpress_list_resources": ActionClass.READ,
+    "mcp_wordpress_read_resource": ActionClass.READ,
+    "mcp_youtube_public_get_prompt": ActionClass.READ,
+    "mcp_youtube_public_list_prompts": ActionClass.READ,
+    "mcp_youtube_public_list_resources": ActionClass.READ,
+    "mcp_youtube_public_read_resource": ActionClass.READ,
+    "mcp_ga4_get_prompt": ActionClass.READ,
+    "mcp_ga4_list_prompts": ActionClass.READ,
+    "mcp_ga4_list_resources": ActionClass.READ,
+    "mcp_ga4_read_resource": ActionClass.READ,
     # --- capability-contract aliases (colon form) — never emitted at runtime,
     #     retained so audit prose / TS-side references still resolve.
     "agentmail:send_message": ActionClass.EXTERNAL_SEND,

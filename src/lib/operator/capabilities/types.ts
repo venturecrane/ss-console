@@ -26,6 +26,13 @@
  * `web.search_backend`. Its conformance entry (BANNED_METHOD_NAMES) is therefore
  * empty — there is no adapter to conform. (The first ADR 0070 cut wrapped Brave
  * in an MCP server, `mcp:brave`; that redundant layer was retired 2026-07-08.)
+ *
+ * `Website`, `VideoChannel` and `Analytics` are the marketing seat's three
+ * connector-only capabilities, bound to author-built MCP servers
+ * (operator/connectors/{wordpress,youtube-public,ga4}, ADR 0053): the firm's
+ * own WordPress site (reads plus pending, never published, posts), a public
+ * YouTube channel feed, and the firm's GA4 property. Like WebSearch they have
+ * no adapter interface here; the union exists so `connectors:` can key them.
  */
 export type CapabilityName =
   | 'PracticeManagement'
@@ -40,3 +47,6 @@ export type CapabilityName =
   | 'CallTracking'
   | 'InternalComms'
   | 'WebSearch'
+  | 'Website'
+  | 'VideoChannel'
+  | 'Analytics'

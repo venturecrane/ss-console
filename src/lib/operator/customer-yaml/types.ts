@@ -23,6 +23,9 @@ export const ACCEPTED_CAPABILITY_NAMES: ReadonlySet<CapabilityName> = new Set<Ca
   'CallTracking',
   'InternalComms',
   'WebSearch',
+  'Website',
+  'VideoChannel',
+  'Analytics',
 ])
 
 export const ACCEPTED_VERTICALS = [

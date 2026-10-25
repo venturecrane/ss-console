@@ -322,6 +322,30 @@ _FENCED_READ_TOOLS: frozenset[str] = frozenset(
         "mcp_msgraph_mail_list_prompts",
         "mcp_msgraph_mail_list_resources",
         "mcp_msgraph_mail_read_resource",
+        # Public YouTube channel feed (mcp:youtube-public, marketing seat).
+        # Titles and descriptions are text the connector does not control: the
+        # channel id is a turn argument, so any channel's uploader can be the
+        # author. Fenced like a web page.
+        "mcp_youtube_public_list_channel_videos",
+        "mcp_youtube_public_get_video",
+        # The four protocol primitives on the three marketing connectors, fenced
+        # for the reason the msgraph-mail four are: a resource body would be
+        # server-served text, and all twelve answer empty today, so the fence
+        # costs nothing. (The WordPress and GA4 READS are the firm's own site
+        # and analytics and are deliberately not fenced; see
+        # tests/test_inbound_fence_completeness.py.)
+        "mcp_wordpress_get_prompt",
+        "mcp_wordpress_list_prompts",
+        "mcp_wordpress_list_resources",
+        "mcp_wordpress_read_resource",
+        "mcp_youtube_public_get_prompt",
+        "mcp_youtube_public_list_prompts",
+        "mcp_youtube_public_list_resources",
+        "mcp_youtube_public_read_resource",
+        "mcp_ga4_get_prompt",
+        "mcp_ga4_list_prompts",
+        "mcp_ga4_list_resources",
+        "mcp_ga4_read_resource",
         # The overlay's own attachment pair (hermes-smd-mail-attachments,
         # 2026-09-18). Neither returns the attachment's BODY, and both are
         # fenced anyway, because both return the vendor's FILENAME — text an

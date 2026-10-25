@@ -26,6 +26,7 @@ import secret_custody as sc
 _OP = Path(__file__).resolve().parents[2]
 _PROVISION = _OP / "bin" / "provision-customer.sh"
 _STAGE_SMOKEBALL = _OP / "bin" / "lib" / "stage-smokeball.sh"
+_STAGE_WEB = _OP / "bin" / "lib" / "stage-web-connectors.sh"
 
 # Secrets a reader can see are unambiguously a customer's own credential — the
 # set that MUST classify as customer or the keyless/staging isolation leaks.
@@ -54,7 +55,7 @@ def _staged_secret_names() -> set[str]:
     are intentionally out of this static parse."""
     # The Smokeball staging block is a sourced library since ss#2425; it stages
     # names in the same shell, so it is part of the surface this parse must see.
-    text = _PROVISION.read_text(encoding="utf-8") + "\n" + _STAGE_SMOKEBALL.read_text(encoding="utf-8")
+    text = "\n".join(p.read_text(encoding="utf-8") for p in (_PROVISION, _STAGE_SMOKEBALL, _STAGE_WEB))
     names: set[str] = set()
     for m in re.finditer(r"\bstage_secret_from_env\s+([A-Z_][A-Z0-9_]*)", text):
         names.add(m.group(1))
@@ -79,7 +80,7 @@ def test_every_staged_secret_is_classified() -> None:
     is the drift this guard exists to catch."""
     staged = _staged_secret_names()
     # Sanity: the parse found the real surface, not zero.
-    assert "ANTHROPIC_API_KEY" in staged and "SMOKEBALL_CLIENT_ID" in staged, (
+    assert "ANTHROPIC_API_KEY" in staged and "SMOKEBALL_CLIENT_ID" in staged and "WORDPRESS_APP_PASSWORD" in staged, (
         "provision-customer.sh parse found too few staged names; the regex drifted"
     )
     unclassified: list[str] = []
@@ -138,6 +139,23 @@ def test_customer_owned_source_names_expands_per_seat() -> None:
     # No infra names leak into the isolate list.
     assert "R2_ACCESS_KEY_ID" not in names
     assert "SENTRY_DSN" not in names
+
+
+def test_marketing_connector_secrets_are_classified() -> None:
+    # The firm's site, user and password are the firm's; the per-seat source of
+    # the password is too. The GA4 key is SMD's analytics-only service account.
+    for name in (
+        "WORDPRESS_SITE_URL",
+        "WORDPRESS_USERNAME",
+        "WORDPRESS_APP_PASSWORD",
+        "WORDPRESS_APP_PASSWORD__EXAMPLE_FIRM_MARKETING",
+        "GA4_PROPERTY_ID",
+    ):
+        assert sc.classify(name) == sc.CUSTOMER, name
+    assert sc.classify("GA4_SERVICE_ACCOUNT_JSON") == sc.INFRA
+    names = sc.customer_owned_source_names("example-firm-marketing")
+    assert "WORDPRESS_APP_PASSWORD__EXAMPLE_FIRM_MARKETING" in names
+    assert "GA4_SERVICE_ACCOUNT_JSON" not in names
 
 
 def test_guard_raises_on_real_customer_value() -> None:

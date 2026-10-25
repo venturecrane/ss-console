@@ -217,6 +217,46 @@ vars:
     custody: customer
     note: paired with CLIO_CLIENT_ID
 
+  # ---- Marketing seat connectors (mcp:wordpress, mcp:ga4) ----
+  # Materialized into each connector's subprocess env only when a seat binds it
+  # (provision-customer.sh dedicated blocks). mcp:youtube-public reads nothing.
+  WORDPRESS_SITE_URL:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the firm's site root (https), from connectors.Website.site_url. Not secret; the firm's identity.
+  WORDPRESS_USERNAME:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the WordPress user (a Contributor) the firm issued, from connectors.Website.username.
+  WORDPRESS_APP_PASSWORD:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: >-
+      the firm-issued Application Password for that user, staged only from
+      WORDPRESS_APP_PASSWORD__<CID> (no global fallback). Revocable by the firm
+      from the user's profile; as a Contributor it cannot publish.
+  GA4_PROPERTY_ID:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: customer
+    note: the firm's numeric GA4 property id, from connectors.Analytics.property_id. Not secret.
+  GA4_SERVICE_ACCOUNT_JSON:
+    stage: mcp-subprocess
+    requirement: optional
+    agent_env: held
+    custody: infra
+    note: >-
+      SMD's analytics-only service-account key (no domain-wide delegation),
+      which reads only properties a firm has granted it Viewer on. Provisioning
+      refuses to stage the delegation key GOOGLE_SERVICE_ACCOUNT_JSON here.
+
   # ---- Smokeball practice-management connector (ADR 0053, author-built MCP) ----
   # Declared here because they were NOT, which is the point. This family reaches
   # the Machine and can WRITE to the client's live practice-management system —

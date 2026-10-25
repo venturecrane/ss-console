@@ -939,15 +939,10 @@ print(str(auth.get('secret_ref') or '').strip())
     _MSG_SEND_TENANT _MSG_SEND_CLIENT _MSG_SEND_SECRET
 fi
 
-# Brave Search (native:brave-free, ADR 0070). BRAVE_SEARCH_API_KEY is the env var
-# Hermes' native brave-free provider reads. The Hosted-Agent tier uses Brave's
-# FREE tier (one shared, SMD-owned key; $0, no runaway spend; keeps "your only
-# bill is Anthropic" true). Staged ONLY for a customer whose customer.yaml binds a
-# native:brave-* backend. Missing at boot => the provider stays unavailable
-# (Hermes falls back / no web search), fail-closed, no crashloop.
-if authored_channel '^backend=native:brave'; then
-  stage_secret_from_env BRAVE_SEARCH_API_KEY "${BRAVE_SEARCH_API_KEY:-}" "Brave Search API key (native brave-free provider; web search)"
-fi
+# ---------- Step 6b-web: web search, website, analytics connectors ----------
+# Brave (and web extract), WordPress and GA4 staging lives in a sourced library.
+# shellcheck source=lib/stage-web-connectors.sh
+source "${BIN_DIR}/lib/stage-web-connectors.sh"
 
 # Google service-account key (DWD). REQUIRED for any customer.yaml with
 # google_auth.mode: dwd — bootstrap.sh Step 2b dies without it. Base64-encoded
@@ -1003,12 +998,13 @@ import tomllib
 #                 The manifest itself says these four are per-customer; a flat
 #                 by-name loop structurally cannot honor that, so the dedicated
 #                 block is the only legal stager for this connector.
+#   wordpress, ga4  per-customer values; see lib/stage-web-connectors.sh.
 # The loop must never stage a name whose value is per-customer. If a future
 # connector authors per-customer credentials, add it here in the same breath.
 # NOTE: keep this heredoc body free of apostrophes. macOS bash 3.2 mis-parses a
 # stray apostrophe inside a heredoc-in-command-substitution and consumes to EOF
 # (that aborted a reprovision on 2026-06-23).
-REMAP_HANDLED = {"smokeball", "msgraph-mail"}
+REMAP_HANDLED = {"smokeball", "msgraph-mail", "wordpress", "ga4"}
 root = pathlib.Path(sys.argv[1])
 for manifest in sorted(root.glob("*/manifest.toml")):
     if manifest.parent.name in REMAP_HANDLED:

@@ -449,6 +449,31 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         "mail_spool_message",
         # The synthetic connector self-test fixture: echo returns its input.
         "mcp_reference_echo",
+        # The firm's website (mcp:wordpress). The firm's own site, but the same
+        # reads return the Operator's own pending drafts and uploads, and a
+        # draft read back must never certify what is in it.
+        "mcp_wordpress_list_posts",
+        "mcp_wordpress_get_post",
+        "mcp_wordpress_list_categories",
+        "mcp_wordpress_list_tags",
+        "mcp_wordpress_list_media",
+        # A public YouTube feed: the open web, written by whoever uploaded.
+        "mcp_youtube_public_list_channel_videos",
+        "mcp_youtube_public_get_video",
+        # Protocol primitives on the three marketing connectors (server
+        # metadata, all empty today), the same decision as msgraph-mail's four.
+        "mcp_wordpress_get_prompt",
+        "mcp_wordpress_list_prompts",
+        "mcp_wordpress_list_resources",
+        "mcp_wordpress_read_resource",
+        "mcp_youtube_public_get_prompt",
+        "mcp_youtube_public_list_prompts",
+        "mcp_youtube_public_list_resources",
+        "mcp_youtube_public_read_resource",
+        "mcp_ga4_get_prompt",
+        "mcp_ga4_list_prompts",
+        "mcp_ga4_list_resources",
+        "mcp_ga4_read_resource",
     }
 )
 

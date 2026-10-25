@@ -1,0 +1,22 @@
+[project]
+name = "ga4-connector"
+version = "0.1.0"
+description = "Author-built MCP connector reading a firm's Google Analytics 4 property (Data API, read-only) as a service account the firm grants Viewer."
+requires-python = ">=3.11"
+dependencies = [
+    "operator-connector-sdk",
+    "google-analytics-data>=0.18",
+    "google-auth>=2.30",
+]
+
+# The console-script the overlay registry launches as `command`
+# (/opt/connectors/ga4/.venv/bin/ga4-mcp).
+[project.scripts]
+ga4-mcp = "ga4_connector.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ga4_connector"]

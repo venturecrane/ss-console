@@ -43,6 +43,8 @@ const SOURCED_LIBS = [
   // reason on 2026-09-17, when the webhook-read credential pushed the script
   // past the ratchet. Its gate is the `agentmail` one counted below.
   fileURLToPath(new URL('../operator/bin/lib/stage-agentmail.sh', import.meta.url)),
+  // The marketing seat's WordPress and GA4 blocks (2026-10-25), same reason.
+  fileURLToPath(new URL('../operator/bin/lib/stage-web-connectors.sh', import.meta.url)),
 ]
 const src = [SCRIPT, ...SOURCED_LIBS].map((p) => readFileSync(p, 'utf8')).join('\n')
 

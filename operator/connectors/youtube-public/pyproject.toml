@@ -1,0 +1,23 @@
+[project]
+name = "youtube-public-connector"
+version = "0.1.0"
+description = "Author-built MCP connector reading a public YouTube channel's uploads from its public feed. No credential, no account access."
+requires-python = ">=3.11"
+dependencies = [
+    "operator-connector-sdk",
+    # The feed is parsed with defusedxml (no DTD, no entity expansion); the
+    # fetch is stdlib urllib.
+    "defusedxml>=0.7",
+]
+
+# The console-script the overlay registry launches as `command`
+# (/opt/connectors/youtube-public/.venv/bin/youtube-public-mcp).
+[project.scripts]
+youtube-public-mcp = "youtube_public_connector.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["youtube_public_connector"]

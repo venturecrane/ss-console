@@ -34,6 +34,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py
   - label: Smokeball manifest
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/manifest.toml
+  - label: wordpress manifest
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/wordpress/manifest.toml
+  - label: youtube-public manifest
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/youtube-public/manifest.toml
+  - label: ga4 manifest
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/ga4/manifest.toml
   - label: Smokeball letter_tools.py (the scanned-post pipeline)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/smokeball_connector/letter_tools.py
   - label: Smokeball letterhead.py
@@ -66,10 +72,13 @@ When no acceptable MCP exists, we write one. [ADR 0053](https://github.com/ventu
 
 Every tool is classified twice on purpose: the manifest's `tool_classes` table is the conformance oracle, and the overlay's `shared/action_classes.py` is the enforced authority. A tool that is in one and not the other fails conformance or fails closed at boot, so a new tool is a two-repo change reviewed on both sides.
 
-Two vendor connectors live here today, plus a synthetic self-test (`_reference`) that proves every rail, including refusal of an unclassified tool:
+Five vendor connectors live here today, plus a synthetic self-test (`_reference`) that proves every rail, including refusal of an unclassified tool:
 
 - **`mcp:smokeball`** - the law vertical's practice-management system of record, and the first author-built connector. Matters, contacts, tasks, events, documents, memos, and billing reads; task, event, folder, and document writes; `create_matter` as a commitment and `delete_file` as destructive. The manifest's default auth is `client_credentials`; a firm-delegated seat selects `authorization_code` in its `customer.yaml`, and that consent lands on the customer's Machine ([ADR 0054](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0054-machine-hosted-oauth-callback.md)), never on shared infrastructure.
 - **`mcp:msgraph-mail`** - Microsoft Graph mail, app-only, and the first provider adapter behind the client-custody email seam of [ADR 0078](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0078-client-custody-email-channel.md): the Operator's mailbox lives on the firm's own mail system. Every write and send is pinned in code to the one Operator mailbox named in `MSGRAPH_MAILBOX` and takes no mailbox argument; tenant-side, an Exchange `ApplicationAccessPolicy` restricts the app to that mailbox as well. There is deliberately no delete tool.
+- **`mcp:wordpress`** (capability `Website`) - a marketing seat's view of the firm's own WordPress site. It signs in as one user the firm issues, a Contributor, with an Application Password over HTTPS, so WordPress itself refuses to publish anything it writes. It reads posts, categories, tags and the media library, uploads images (with alt text and caption), and creates or revises posts **only in pending status** for a person at the firm to review and publish: there is no publish tool, no tool takes a status, a reply in any other status is reported as an error, and a revision is refused unless the post is still pending or draft and was written by the same user. Every post write first passes the California attorney-advertising gate; a BLOCK, a gate that cannot run, or a missing gate refuses the write. Seat stanza: `site_url` (https only, checked by both validators), `username`, and the password in `WORDPRESS_APP_PASSWORD__<CUSTOMER_ID>`. Its reads do not seed identifier provenance, because they also return the Operator's own pending drafts.
+- **`mcp:youtube-public`** (capability `VideoChannel`) - a public channel's recent uploads from YouTube's public feed, and one video's public record. No credential and no write. Both reads are fenced as inbound content: the channel id is an argument, so the titles and descriptions can be anyone's.
+- **`mcp:ga4`** (capability `Analytics`) - read-only Google Analytics 4 reports for the firm's own property (a general report plus top pages, traffic sources and month over month). It reads as an analytics-only service account the firm grants Viewer; the seat stanza names `property_id`. Provisioning refuses to stage the domain-wide-delegation key here, because this key sits in the connector's configuration on the seat.
 
 #### Reading a staff member's mailbox
 
@@ -115,6 +124,11 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 - read: `echo`
 - tool modules: none (tools register in server.py)
 
+**`mcp:ga4`** (`operator/connectors/ga4/`): capability `Analytics`, manifest auth default `client_credentials`, 4 tools.
+
+- read: `run_report`, `top_pages`, `traffic_sources`, `month_over_month`
+- tool modules: none (tools register in server.py)
+
 **`mcp:msgraph-mail`** (`operator/connectors/msgraph-mail/`): capability `Email`, manifest auth default `client_credentials`, 8 tools.
 
 - external_send: `send_message`, `reply_message`
@@ -129,6 +143,17 @@ Generated from `operator/connectors/*/manifest.toml` and each package's `*_tools
 - internal_write: `create_task`, `update_task`, `create_event`, `update_event`, `create_event_reminder`, `create_folder`, `add_file`, `file_attachment_to_matter`, `render_docx_template`, `render_docx_draft`, `stage_vendor_invoice`, `file_attachment_pages_to_matter`, `add_medicals_row`, `add_medicals_provider`, `render_firm_form_letter`, `add_workbook`, `create_memo`, `update_memo`, `render_sr1`, `render_sr19`, `render_funding_case_eval`, `add_negotiation_rows`
 - read: `auth_status`, `list_matters`, `get_matter`, `list_matter_types`, `get_stage_sets`, `get_stage_to_matter_mappings`, `get_contacts`, `get_contact`, `get_contact_relations`, `list_tasks`, `get_task`, `list_events`, `search_staff`, `get_staff`, `get_roles_on_matter`, `get_relationships_on_matter`, `get_files_on_matter`, `get_file`, `get_download_url`, `read_document`, `list_folders`, `prepare_event_deletion`, `get_memos_on_matter`, `get_bank_accounts`, `get_matter_balances`, `get_matter_billing_config`, `get_fees`, `get_expenses`, `read_attachment_text`, `resolve_invoice_matter`, `read_attachment_pages`, `get_webhook_subscriptions`, `get_event_types`, `prepare_records_order`, `records_orders_for_matter`, `get_matter_layouts`
 - tool modules: `smokeball_connector/attachment_tools.py`, `smokeball_connector/layout_tools.py`, `smokeball_connector/letter_tools.py`, `smokeball_connector/medicals_tools.py`, `smokeball_connector/memo_tools.py`, `smokeball_connector/records_order_tools.py`, `smokeball_connector/vendor_invoice_tools.py`, `smokeball_connector/workbook_tools.py`
+
+**`mcp:wordpress`** (`operator/connectors/wordpress/`): capability `Website`, manifest auth default `static`, 8 tools.
+
+- internal_write: `upload_media`, `create_pending_post`, `update_pending_post`
+- read: `list_posts`, `get_post`, `list_categories`, `list_tags`, `list_media`
+- tool modules: none (tools register in server.py)
+
+**`mcp:youtube-public`** (`operator/connectors/youtube-public/`): capability `VideoChannel`, manifest auth default `static`, 2 tools.
+
+- read: `list_channel_videos`, `get_video`
+- tool modules: none (tools register in server.py)
 
 <!-- END GENERATED: connector inventory -->
 

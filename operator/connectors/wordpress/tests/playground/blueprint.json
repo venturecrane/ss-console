@@ -1,0 +1,16 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "landingPage": "/",
+  "steps": [
+    {
+      "step": "defineWpConfigConsts",
+      "consts": {
+        "WP_ENVIRONMENT_TYPE": "local"
+      }
+    },
+    {
+      "step": "runPHP",
+      "code": "<?php require_once '/wordpress/wp-load.php'; require_once ABSPATH . 'wp-admin/includes/user.php'; $out = array(); foreach (array('operator' => false, 'uploader' => true) as $login => $upload) { $uid = wp_insert_user(array('user_login' => $login, 'user_pass' => wp_generate_password(24), 'user_email' => $login . '@example.test', 'role' => 'contributor')); if ($upload) { $u = new WP_User($uid); $u->add_cap('upload_files'); } $created = WP_Application_Passwords::create_new_application_password($uid, array('name' => 'smd-proof')); $out[$login] = array('id' => $uid, 'password' => $created[0]); } $admin = get_user_by('login', 'admin'); $out['published_post'] = wp_insert_post(array('post_title' => 'Published by the firm', 'post_content' => 'Firm post.', 'post_status' => 'publish', 'post_author' => $admin->ID)); $out['admin_pending_post'] = wp_insert_post(array('post_title' => 'Admin pending', 'post_content' => 'x', 'post_status' => 'pending', 'post_author' => $admin->ID)); wp_insert_term('Car Accidents', 'category'); file_put_contents(WP_CONTENT_DIR . '/proof-creds.json', json_encode($out)); echo 'ok';"
+    }
+  ]
+}

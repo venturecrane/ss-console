@@ -1,0 +1,52 @@
+# mcp:wordpress - author-built connector for a firm's own WordPress site
+# (marketing seat, capability Website).
+#
+# auth_model = static: a WordPress Application Password (core since WP 5.6)
+# sent as HTTPS Basic auth for one user the FIRM issues. The intended user is a
+# Contributor: WordPress itself then refuses publish, so the no-publish rule is
+# held by the site as well as by this code.
+#
+# NO PUBLISH TOOL EXISTS. create_pending_post forces status=pending in the
+# connector (the caller cannot pass a status), and a response carrying any other
+# status is returned as an error. update_pending_post refuses unless the post is
+# pending or draft AND authored by the authenticated user. Every create/update
+# first runs the California attorney-advertising gate
+# (/app/operator/templates/drafting/advertising_gate_check.py, ADR 0098, run with
+# this venv's interpreter, which carries PyYAML for the registers) and refuses the write on a
+# BLOCK, on a usage error, or when the checker is absent (fail closed).
+#
+# required_secrets are the RUNTIME env names. All three are PER-CUSTOMER:
+# site_url and username come from the seat's customer.yaml connector stanza and
+# the password from WORDPRESS_APP_PASSWORD__<CID>, staged by a dedicated block in
+# provision-customer.sh (the generic manifest loop skips this connector).
+#
+# COORDINATED CHANGE: shared/action_classes.py mcp_wordpress_<tool> entries,
+# shared/provenance.py (the five reads are tenant sources), and the overlay
+# registry spec in bootstrap/mcp_registry.py.
+[connector]
+name = "wordpress"
+capability = "Website"
+auth_model = "static"
+description = "WordPress REST connector: reads, media upload, and pending posts for human review. No publish path."
+
+[[connector.required_secrets]]
+runtime_env = "WORDPRESS_SITE_URL"
+purpose = "The firm's site root (https://...). NOT secret. Per-customer, from connectors.Website.site_url."
+
+[[connector.required_secrets]]
+runtime_env = "WORDPRESS_USERNAME"
+purpose = "The WordPress user the Application Password belongs to (a Contributor). NOT secret. Per-customer."
+
+[[connector.required_secrets]]
+runtime_env = "WORDPRESS_APP_PASSWORD"
+purpose = "The Application Password for that user. Client-issued, per-customer (WORDPRESS_APP_PASSWORD__<CID>)."
+
+[connector.tool_classes]
+list_posts = "read"
+get_post = "read"
+list_categories = "read"
+list_tags = "read"
+list_media = "read"
+upload_media = "internal_write"
+create_pending_post = "internal_write"
+update_pending_post = "internal_write"

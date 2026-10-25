@@ -76,6 +76,13 @@ describe('manifest-driven staging loop: per-customer connectors are skipped', ()
     expect(lines.filter((l) => l.startsWith('smokeball\t'))).toEqual([])
   })
 
+  it('the marketing connectors stay skipped: wordpress and ga4 are per-customer, youtube-public stages nothing', () => {
+    const lines = runLoop(CONNECTORS_DIR)
+    for (const name of ['wordpress', 'ga4', 'youtube-public']) {
+      expect(lines.filter((l) => l.startsWith(`${name}\t`))).toEqual([])
+    }
+  })
+
   it('still stages an SMD-owned static connector — the skip must not kill the loop', () => {
     // A fixture connector shaped like the ones the loop exists for.
     const dir = join(scratch, 'fixture-static')
