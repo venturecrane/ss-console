@@ -89,6 +89,10 @@ _LITIGATION = {
     "parity_hold": (SMD_FINISHING, "gate_held"),
     "leak_found": (SMD_FINISHING, "gate_held"),
     "filing_refused": (SMD_FINISHING, "upload_held"),
+    # 2026-10-24: the billing cycle's included status lists are used (or the
+    # authored cap cannot be read). Nothing ran and nothing was spent; SMD is
+    # paged to quote the list before it starts.
+    "list_allowance": (SMD_FINISHING, "limit_held"),
 }
 
 

@@ -59,6 +59,10 @@ REASON_CODES = (
     # A people scope whose matters' Staff tags (read per matter) could not be
     # read after every retry, or carried no tags list at all (ours).
     "staff_tags_unlisted",
+    # 2026-10-24: the billing cycle's included status lists are used, or the
+    # authored cap cannot be read. Written by the lane before the child starts
+    # (``litigation_lane.LitigationLane._allowance_hold``); nothing was spent.
+    "list_allowance",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
