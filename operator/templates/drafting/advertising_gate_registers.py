@@ -69,6 +69,133 @@ def _opt_str(value: Any, where: str) -> str | None:
     return value.strip() or None
 
 
+def _strings(value: Any, where: str) -> list[str]:
+    return [s for s in _list_of(value, str, where) if s.strip()]
+
+
+def _bool(value: Any, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise RegistersError(f"{where} must be true or false")
+    return value
+
+
+def _firm(raw: Any) -> dict:
+    if not isinstance(raw, dict):
+        raise RegistersError("firm must be a mapping")
+    return {k: _strings(raw.get(k), f"firm.{k}") for k in ("names", "office_cities", "site_urls", "phones")}
+
+
+def _roster(raw: Any) -> list[dict]:
+    roster = []
+    for i, row in enumerate(_list_of(raw, dict, "roster")):
+        name = _opt_str(row.get("name"), f"roster[{i}].name")
+        if not name:
+            raise RegistersError(f"roster[{i}].name is required")
+        roster.append(
+            {
+                "name": name,
+                "title": _opt_str(row.get("title"), f"roster[{i}].title"),
+                "lawyer": _bool(row.get("lawyer"), f"roster[{i}].lawyer"),
+                "languages": [s.lower() for s in _list_of(row.get("languages"), str, f"roster[{i}].languages")],
+            }
+        )
+    return roster
+
+
+def _disclosures(raw: Any) -> dict[str, dict[str, str | None] | None]:
+    disc_raw = _mapping(raw, "disclosures")
+    unknown = set(disc_raw) - set(_DISCLOSURE_KEYS)
+    if unknown:
+        raise RegistersError(f"disclosures has unknown keys {sorted(unknown)}")
+    out: dict[str, dict[str, str | None] | None] = {}
+    for key in _DISCLOSURE_KEYS:
+        entry = disc_raw.get(key)
+        if entry is None:
+            out[key] = None
+            continue
+        entry = _mapping(entry, f"disclosures.{key}")
+        out[key] = {lang: _opt_str(entry.get(lang), f"disclosures.{key}.{lang}") for lang in ("en", "es")}
+    return out
+
+
+def _results(raw: Any) -> list[dict]:
+    return [
+        {
+            "id": str(row.get("id") or f"results[{i}]"),
+            "text_match": _strings(row.get("text_match"), f"results[{i}].text_match"),
+            "liability_basis": _opt_str(row.get("liability_basis"), f"results[{i}].liability_basis"),
+            "injury": _opt_str(row.get("injury"), f"results[{i}].injury"),
+            "consent": _bool(row.get("consent"), f"results[{i}].consent"),
+        }
+        for i, row in enumerate(_list_of(raw, dict, "results"))
+    ]
+
+
+def _testimonials(raw: Any) -> list[dict]:
+    out = []
+    for i, row in enumerate(_list_of(raw, dict, "testimonials")):
+        text = _opt_str(row.get("text"), f"testimonials[{i}].text")
+        if not text:
+            raise RegistersError(f"testimonials[{i}] needs text and consent")
+        out.append({"text": text, "consent": _bool(row.get("consent"), f"testimonials[{i}].consent")})
+    return out
+
+
+def _awards(raw: Any) -> list[dict]:
+    out = []
+    for i, row in enumerate(_list_of(raw, dict, "awards")):
+        name = _opt_str(row.get("name"), f"awards[{i}].name")
+        if not name:
+            raise RegistersError(f"awards[{i}].name is required")
+        out.append({"name": name, "ok": row.get("not_membership_based") is True and row.get("no_fee") is True})
+    return out
+
+
+def _certifications(raw: Any) -> list[dict]:
+    return [
+        {
+            "lawyer": _opt_str(row.get("lawyer"), f"certifications[{i}].lawyer") or "",
+            "field": _opt_str(row.get("field"), f"certifications[{i}].field") or "",
+            "body": _opt_str(row.get("body"), f"certifications[{i}].body") or "",
+            "expires": str(row.get("expires") or ""),
+        }
+        for i, row in enumerate(_list_of(raw, dict, "certifications"))
+    ]
+
+
+def _fee_terms(raw: Any) -> dict:
+    fee_raw = _mapping(raw, "fee_terms")
+    percentages = []
+    for p in _list_of(fee_raw.get("percentages"), object, "fee_terms.percentages"):
+        if isinstance(p, bool) or not isinstance(p, (int, float, str)):
+            raise RegistersError("fee_terms.percentages must be numbers")
+        try:
+            percentages.append(float(str(p).rstrip("%")))
+        except ValueError as exc:
+            raise RegistersError("fee_terms.percentages must be numbers") from exc
+    no_fee = fee_raw.get("no_fee_phrases_allowed")
+    if no_fee is not None:
+        _bool(no_fee, "fee_terms.no_fee_phrases_allowed")
+    return {"percentages": percentages, "no_fee_phrases_allowed": no_fee is True}
+
+
+def _offline_contact(raw: Any) -> dict:
+    rr = _mapping(raw, "review_reply")
+    contact = _mapping(rr.get("offline_contact"), "review_reply.offline_contact")
+    return {k: _opt_str(contact.get(k), f"offline_contact.{k}") for k in ("name", "phone", "email")}
+
+
+def _channels(raw: Any) -> dict:
+    channels = {}
+    for ch, cfg in _mapping(raw, "channels").items():
+        if ch not in CHANNELS:
+            raise RegistersError(f"channels names an unknown channel {ch!r}")
+        cfg = _mapping(cfg, f"channels.{ch}")
+        flag = _bool(cfg.get("identity_in_template", False), f"channels.{ch}.identity_in_template")
+        channels[ch] = {"identity_in_template": flag}
+    return channels
+
+
 def normalize_registers(raw: Any) -> dict:
     """Validate the registers and return them with every optional key filled.
 
@@ -79,125 +206,18 @@ def normalize_registers(raw: Any) -> dict:
         raise RegistersError("the registers are not a mapping")
     if raw.get("schema") != 1:
         raise RegistersError("schema must be 1")
-    firm_raw = raw.get("firm")
-    if not isinstance(firm_raw, dict):
-        raise RegistersError("firm must be a mapping")
-    firm = {
-        k: [s for s in _list_of(firm_raw.get(k), str, f"firm.{k}") if s.strip()]
-        for k in ("names", "office_cities", "site_urls", "phones")
-    }
-    roster = []
-    for i, row in enumerate(_list_of(raw.get("roster"), dict, "roster")):
-        name = _opt_str(row.get("name"), f"roster[{i}].name")
-        if not name:
-            raise RegistersError(f"roster[{i}].name is required")
-        lawyer = row.get("lawyer")
-        if not isinstance(lawyer, bool):
-            raise RegistersError(f"roster[{i}].lawyer must be true or false")
-        roster.append(
-            {
-                "name": name,
-                "title": _opt_str(row.get("title"), f"roster[{i}].title"),
-                "lawyer": lawyer,
-                "languages": [s.lower() for s in _list_of(row.get("languages"), str, f"roster[{i}].languages")],
-            }
-        )
-    disc_raw = _mapping(raw.get("disclosures"), "disclosures")
-    unknown = set(disc_raw) - set(_DISCLOSURE_KEYS)
-    if unknown:
-        raise RegistersError(f"disclosures has unknown keys {sorted(unknown)}")
-    disclosures: dict[str, dict[str, str | None] | None] = {}
-    for key in _DISCLOSURE_KEYS:
-        entry = disc_raw.get(key)
-        if entry is None:
-            disclosures[key] = None
-            continue
-        entry = _mapping(entry, f"disclosures.{key}")
-        disclosures[key] = {lang: _opt_str(entry.get(lang), f"disclosures.{key}.{lang}") for lang in ("en", "es")}
-    results = []
-    for i, row in enumerate(_list_of(raw.get("results"), dict, "results")):
-        consent = row.get("consent")
-        if not isinstance(consent, bool):
-            raise RegistersError(f"results[{i}].consent must be true or false")
-        results.append(
-            {
-                "id": str(row.get("id") or f"results[{i}]"),
-                "text_match": [
-                    s for s in _list_of(row.get("text_match"), str, f"results[{i}].text_match") if s.strip()
-                ],
-                "liability_basis": _opt_str(row.get("liability_basis"), f"results[{i}].liability_basis"),
-                "injury": _opt_str(row.get("injury"), f"results[{i}].injury"),
-                "consent": consent,
-            }
-        )
-    testimonials = []
-    for i, row in enumerate(_list_of(raw.get("testimonials"), dict, "testimonials")):
-        text = _opt_str(row.get("text"), f"testimonials[{i}].text")
-        consent = row.get("consent")
-        if not text or not isinstance(consent, bool):
-            raise RegistersError(f"testimonials[{i}] needs text and consent")
-        testimonials.append({"text": text, "consent": consent})
-    awards = []
-    for i, row in enumerate(_list_of(raw.get("awards"), dict, "awards")):
-        name = _opt_str(row.get("name"), f"awards[{i}].name")
-        if not name:
-            raise RegistersError(f"awards[{i}].name is required")
-        awards.append(
-            {
-                "name": name,
-                "ok": row.get("not_membership_based") is True and row.get("no_fee") is True,
-            }
-        )
-    certifications = []
-    for i, row in enumerate(_list_of(raw.get("certifications"), dict, "certifications")):
-        certifications.append(
-            {
-                "lawyer": _opt_str(row.get("lawyer"), f"certifications[{i}].lawyer") or "",
-                "field": _opt_str(row.get("field"), f"certifications[{i}].field") or "",
-                "body": _opt_str(row.get("body"), f"certifications[{i}].body") or "",
-                "expires": str(row.get("expires") or ""),
-            }
-        )
-    fee_raw = _mapping(raw.get("fee_terms"), "fee_terms")
-    percentages = []
-    for p in _list_of(fee_raw.get("percentages"), object, "fee_terms.percentages"):
-        if isinstance(p, bool) or not isinstance(p, (int, float, str)):
-            raise RegistersError("fee_terms.percentages must be numbers")
-        try:
-            percentages.append(float(str(p).rstrip("%")))
-        except ValueError as exc:
-            raise RegistersError("fee_terms.percentages must be numbers") from exc
-    no_fee = fee_raw.get("no_fee_phrases_allowed")
-    if no_fee is not None and not isinstance(no_fee, bool):
-        raise RegistersError("fee_terms.no_fee_phrases_allowed must be true or false")
-    rr = _mapping(raw.get("review_reply"), "review_reply")
-    contact = _mapping(rr.get("offline_contact"), "review_reply.offline_contact")
-    channels_raw = _mapping(raw.get("channels"), "channels")
-    channels = {}
-    for ch, cfg in channels_raw.items():
-        if ch not in CHANNELS:
-            raise RegistersError(f"channels names an unknown channel {ch!r}")
-        cfg = _mapping(cfg, f"channels.{ch}")
-        flag = cfg.get("identity_in_template", False)
-        if not isinstance(flag, bool):
-            raise RegistersError(f"channels.{ch}.identity_in_template must be true or false")
-        channels[ch] = {"identity_in_template": flag}
     return {
-        "firm": firm,
-        "roster": roster,
-        "disclosures": disclosures,
-        "results": results,
-        "testimonials": testimonials,
-        "awards": awards,
-        "certifications": certifications,
-        "fee_terms": {"percentages": percentages, "no_fee_phrases_allowed": no_fee is True},
-        "blocklist": [s for s in _list_of(raw.get("blocklist"), str, "blocklist") if s.strip()],
-        "offline_contact": {
-            "name": _opt_str(contact.get("name"), "offline_contact.name"),
-            "phone": _opt_str(contact.get("phone"), "offline_contact.phone"),
-            "email": _opt_str(contact.get("email"), "offline_contact.email"),
-        },
-        "channels": channels,
+        "firm": _firm(raw.get("firm")),
+        "roster": _roster(raw.get("roster")),
+        "disclosures": _disclosures(raw.get("disclosures")),
+        "results": _results(raw.get("results")),
+        "testimonials": _testimonials(raw.get("testimonials")),
+        "awards": _awards(raw.get("awards")),
+        "certifications": _certifications(raw.get("certifications")),
+        "fee_terms": _fee_terms(raw.get("fee_terms")),
+        "blocklist": _strings(raw.get("blocklist"), "blocklist"),
+        "offline_contact": _offline_contact(raw.get("review_reply")),
+        "channels": _channels(raw.get("channels")),
     }
 
 
