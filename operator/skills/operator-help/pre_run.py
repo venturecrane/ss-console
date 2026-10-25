@@ -371,6 +371,10 @@ def run(cfg: dict, *, clock=lambda: datetime.now(timezone.utc), force: bool = Fa
     today = help_local_day(now, help_zone(cfg))
     note_due = force or today.weekday() == NOTE_WEEKDAY
     if not note_due:
+        # Every wake writes its row: the daily health check (cron_slots) counts a
+        # slot as run only from an EMITTED_WAKE or SUPPRESSED_WAKE row, so a
+        # silent weekday read as "missed" six days a week.
+        _wake_row("emitted_wake_append", "EMITTED_WAKE", "review_due", {"note": False})
         return _say({"wakeAgent": True, "mode": "review", "status": "review_due", "note": False})
     recipient = note_recipient(cfg)
     try:
@@ -417,6 +421,7 @@ def main() -> int:
         return run(_H.load_customer_yaml(None), force=force, dry=dry)
     except Exception as exc:  # noqa: BLE001 - a crashed note still wakes the review
         sys.stderr.write("[pre_run] operator-help failed: " + type(exc).__name__ + "\n")
+        _wake_row("emitted_wake_append", "EMITTED_WAKE", "pre_run_crashed", {"note": False})
         return _say({"wakeAgent": True, "mode": "review", "status": "pre_run_crashed", "note": False})
 
 
