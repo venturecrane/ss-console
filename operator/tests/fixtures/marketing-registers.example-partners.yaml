@@ -1,0 +1,57 @@
+# Registers for the SYNTHETIC firm the marketing skills' worked examples use
+# (operator/skills/*/references/example-*.md). Every name, number and sentence
+# is invented. Shape: operator/templates/drafting/advertising_gate_check.py
+# (schema 1). Read by operator/tests/test_marketing_skill_examples.py.
+schema: 1
+firm:
+  names:
+    - Example & Partners LLP
+    - Example & Partners
+  office_cities:
+    - Fresno
+  site_urls:
+    - https://www.example.com
+  phones:
+    - (559) 555-0100
+roster:
+  - name: Avery Example
+    title: Partner
+    lawyer: true
+    languages: [en]
+disclosures:
+  results:
+    en: The result portrayed was dependent on the facts of that case, and results will differ if based on different facts.
+    es: null
+  testimonial:
+    en: null
+    es: null
+  costs:
+    en: null
+    es: null
+  blog:
+    en: This post is general information, not legal advice. Reading it or contacting the firm does not create an attorney-client relationship, and information you send through this site is not treated as confidential unless and until the firm agrees to represent you.
+    es: null
+  dramatization:
+    en: null
+    es: null
+results:
+  - id: truck-collision
+    text_match: ['$1.2 million']
+    liability_basis: a commercial truck driver ran a red light
+    injury: a fractured spine
+    consent: true
+testimonials: []
+awards: []
+certifications: []
+fee_terms:
+  percentages: []
+  no_fee_phrases_allowed: false
+blocklist: []
+review_reply:
+  offline_contact:
+    name: the office manager
+    phone: (559) 555-0100
+    email: null
+channels:
+  gbp:
+    identity_in_template: false

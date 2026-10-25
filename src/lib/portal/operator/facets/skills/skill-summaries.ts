@@ -23,6 +23,10 @@
  */
 
 export const SKILL_SUMMARIES: Record<string, string> = {
+  'blog-post-draft':
+    "Drafts the month's blog posts in your firm's voice as pending WordPress posts for you to review and publish. Never publishes.",
+  'business-profile-post':
+    'Drafts your Google Business Profile posts around your own photographs. You post them; nothing is posted for you.',
   calendar:
     'Keeps the shared calendar and sends each event as an invite to the people on the account. Never invites anyone else.',
   'client-matter-digest':
@@ -41,6 +45,12 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Asks each of you, privately, about the topics you chose together. Your answers stay yours.',
   'couples-settings':
     'Set your check-ins, reminders and quiet hours by telling the agent. Either of you can change anything.',
+  'marketing-analytics-note':
+    'Sends a short monthly note on website visits, top pages, posts published and episodes, and says plainly what it could not read.',
+  'marketing-request-router':
+    'Reads what your team emails the marketing assistant and routes it to the right draft, or keeps your tone guide, topics and photos.',
+  'marketing-topic-slate':
+    'Proposes about fifteen marketing topics each month, each with a reason and sources, for you to pick ten.',
   'partner-messages':
     'Ask the agent to tell your partner something and it reaches them at once, in their own chat, as from you.',
   'daily-needs-you-digest':
@@ -134,8 +144,12 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Runs a one-page self-check on request: connections, a counted read, document output, and a live demonstration that it refuses identifiers it has not read. Reports to the requester only.',
   'opposing-response-deficiency-review':
     "Reads the opposing side's discovery responses and surfaces candidate gaps for an attorney. An assist, never a legal finding.",
+  'press-release-draft':
+    'Drafts a press release only from facts your firm approved, at most two a month. Your firm approves, picks the wire and submits.',
   'referral-source-acknowledgment':
     'Drafts a courtesy thank-you to whoever referred a new matter. Never discloses client identity. Drafted for review, never auto-sent.',
+  'review-reply-draft':
+    "Drafts a reply to each Google review you forward, never confirming or repeating anything about anyone's matter. You post it.",
   'separate-statement-assembler':
     'Assembles the Rule 3.1345 separate statement for a motion to compel by collating requests and responses. Staged for your attorney, authors no argument.',
   'service-confirmation-watcher':
@@ -148,6 +162,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Establishes how a kind of output is shaped, from examples you point it at. Admin only. Installs only rules it can show you in plain words.',
   'smd-note':
     'Sends a colleague a short note from SMD, in her own email thread or one new email to an administrator you name, in the exact words SMD approved. Never rewords it.',
+  'social-post-draft':
+    'Drafts two or three Facebook, Instagram and X posts each week for you to post. Never posts or replies to anyone.',
   'stalled-matter-nudge':
     'Surfaces matters with no recent activity and drafts a neutral follow-up. Flags inactivity, never decides what a matter needs.',
   'status-report-assembler':
@@ -169,4 +185,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'weekly-checkin-agenda':
     'Brings an agenda to your weekly check-in, built only from what each of you chose to share.',
   workspace: 'Reads and writes Google Workspace through trust-classified tools.',
+  'youtube-episode-post':
+    'Drafts a YouTube title and description for each radio-show episode for you to paste in. Never publishes.',
 }
