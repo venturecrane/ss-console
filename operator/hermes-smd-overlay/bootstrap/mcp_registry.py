@@ -397,6 +397,62 @@ MCP_CONNECTOR_REGISTRY: dict[str, McpConnectorSpec] = {
             "reply_message",
         ),
     ),
+    # WordPress (mcp:wordpress) - a firm's own website, for a marketing seat
+    # (capability Website; ss-console operator/connectors/wordpress). Local stdio
+    # server, same install posture as msgraph-mail. All three env values are
+    # per-customer (site_url + username from the seat's connector stanza, the
+    # Application Password from WORDPRESS_APP_PASSWORD__<CID>) and REQUIRED: a
+    # missing one leaves the server unwired this boot. The surface has no publish
+    # and no delete tool; create/update write ONLY pending posts, after the
+    # advertising gate. The gate's checker and the registers file are image and
+    # firm-config paths the connector reads itself; the two SMD_* entries are
+    # optional overrides a seat never needs to set.
+    "wordpress": McpConnectorSpec(
+        name="wordpress",
+        auth_model="static",
+        command="/opt/connectors/wordpress/.venv/bin/wordpress-mcp",
+        args=(),
+        env_static=(),
+        env_secrets=(
+            ("WORDPRESS_SITE_URL", "WORDPRESS_SITE_URL"),
+            ("WORDPRESS_USERNAME", "WORDPRESS_USERNAME"),
+            ("WORDPRESS_APP_PASSWORD", "WORDPRESS_APP_PASSWORD"),
+        ),
+        env_secrets_optional=(
+            ("SMD_MARKETING_REGISTERS", "SMD_MARKETING_REGISTERS"),
+            ("WORDPRESS_UPLOAD_ROOTS", "WORDPRESS_UPLOAD_ROOTS"),
+        ),
+        blocked_tools=(),
+    ),
+    # Public YouTube channel feed (mcp:youtube-public, capability VideoChannel).
+    # No credential at all: it reads what any visitor can, from two fixed public
+    # endpoints. Read-only; both reads are fenced in the inbound plugin.
+    "youtube-public": McpConnectorSpec(
+        name="youtube-public",
+        auth_model="static",
+        command="/opt/connectors/youtube-public/.venv/bin/youtube-public-mcp",
+        args=(),
+        env_static=(),
+        env_secrets=(),
+        blocked_tools=(),
+    ),
+    # Google Analytics 4 (mcp:ga4, capability Analytics). Read-only Data API as
+    # an analytics-only service account the firm grants Viewer. The key is held
+    # by this subprocess and lands in the profile's mcp config on the seat volume,
+    # which is why provisioning stages it only from its own vault name and never
+    # from the domain-wide-delegation key.
+    "ga4": McpConnectorSpec(
+        name="ga4",
+        auth_model="client_credentials",
+        command="/opt/connectors/ga4/.venv/bin/ga4-mcp",
+        args=(),
+        env_static=(),
+        env_secrets=(
+            ("GA4_SERVICE_ACCOUNT_JSON", "GA4_SERVICE_ACCOUNT_JSON"),
+            ("GA4_PROPERTY_ID", "GA4_PROPERTY_ID"),
+        ),
+        blocked_tools=(),
+    ),
     # NOTE: web search is NOT an mcp: connector. It is wired natively via Hermes'
     # bundled web providers (plugins/web/*, e.g. brave-free) and selected by
     # `connectors.WebSearch.backend: native:<provider>` -> config web.search_backend

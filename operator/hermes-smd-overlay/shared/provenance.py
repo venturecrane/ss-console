@@ -124,6 +124,17 @@ TENANT_SOURCE_READ_TOOLS: frozenset[str] = frozenset(
         # Operator's mailbox is.
         "mcp_msgraph_mail_list_staff_messages",
         "mcp_msgraph_mail_read_staff_message",
+        # NOT the mcp:wordpress reads, though the site is the firm's: the same
+        # tools return the Operator's own pending drafts and its own uploads,
+        # and a draft read back must never certify the identifiers it contains
+        # (the incident at the top of this file). They over-report instead.
+        #
+        # The firm's own analytics property (mcp:ga4): the visit and page-view
+        # figures an analytics note reports are read from here and nowhere else.
+        "mcp_ga4_run_report",
+        "mcp_ga4_top_pages",
+        "mcp_ga4_traffic_sources",
+        "mcp_ga4_month_over_month",
         # The seat's authored record stores (plugins/hermes-smd-record-store,
         # 2026-09-29). A store IS the tenant's system of record for the
         # vertical that authors one: the open-house visitor store holds what a

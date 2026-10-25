@@ -1,0 +1,19 @@
+# mcp:youtube-public - reads a PUBLIC YouTube channel's recent uploads from the
+# channel's public feed (https://www.youtube.com/feeds/videos.xml) and one
+# video's public oEmbed record. Capability VideoChannel.
+#
+# auth_model = static with ZERO required secrets: nothing here signs in, and the
+# connector can see only what any visitor can. There is no write tool.
+#
+# The two reads are FENCED in the overlay inbound plugin (titles and
+# descriptions are text the connector does not control) and do NOT seed
+# provenance (the open web, not the firm's system of record).
+[connector]
+name = "youtube-public"
+capability = "VideoChannel"
+auth_model = "static"
+description = "Public YouTube channel feed reader (no credential, read-only)."
+
+[connector.tool_classes]
+list_channel_videos = "read"
+get_video = "read"

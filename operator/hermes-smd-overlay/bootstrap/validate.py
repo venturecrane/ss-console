@@ -27,6 +27,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -1403,6 +1404,72 @@ def _validate_connectors(cfg: dict[str, Any], errors: list[str]) -> None:
             )
             continue
         _validate_msgraph_connector(key, conn, errors)
+        _validate_marketing_connector(key, backend, conn, errors)
+
+
+_WORDPRESS_BACKEND = "mcp:wordpress"
+_GA4_BACKEND = "mcp:ga4"
+_MARKETING_OWNED_FIELDS = (
+    ("site_url", _WORDPRESS_BACKEND),
+    ("username", _WORDPRESS_BACKEND),
+    ("property_id", _GA4_BACKEND),
+)
+
+
+def _is_https_site_root(raw: Any) -> bool:
+    if not isinstance(raw, str) or not raw or raw.strip() != raw or "?" in raw or "#" in raw:
+        return False
+    parts = urlsplit(raw)
+    return (
+        parts.scheme == "https"
+        and bool(parts.hostname)
+        and parts.username is None
+        and parts.password is None
+    )
+
+
+def _validate_marketing_connector(
+    key: str, backend: str, conn: dict[str, Any], errors: list[str]
+) -> None:
+    """The marketing connectors' own fields (mirrors ss-console
+    ``sections-connector-marketing.ts``). Required on the backend that reads
+    them, forbidden on every other connector (no dead config). ``site_url`` must
+    be an https site root: the WordPress connector sends an application password
+    by Basic auth, which plain http would put on the wire."""
+    prefix = f"connectors.{key}"
+    for field, owner in _MARKETING_OWNED_FIELDS:
+        if backend != owner and conn.get(field) is not None:
+            _err(
+                f"{prefix}.{field}: only valid when backend is {owner!r} (backend is {backend!r})",
+                errors,
+            )
+    if backend == _WORDPRESS_BACKEND:
+        if not _is_https_site_root(conn.get("site_url")):
+            _err(
+                f"{prefix}.site_url: must be the site root as an https URL (no query, fragment or credentials)",
+                errors,
+            )
+        username = conn.get("username")
+        if not isinstance(username, str) or not username.strip() or re.search(r"[\s:]", username):
+            _err(
+                f"{prefix}.username: must be the WordPress user name (no spaces or colons)", errors
+            )
+        ref = conn.get("secret_ref")
+        if ref is not None and (
+            not isinstance(ref, str) or not MSGRAPH_SECRET_REF_PATTERN.match(ref)
+        ):
+            _err(
+                f"{prefix}.secret_ref: must reference a per-seat Fly secret as 'fly-secret:<ENV_NAME>'",
+                errors,
+            )
+    if backend == _GA4_BACKEND:
+        pid = conn.get("property_id")
+        text = str(pid) if isinstance(pid, int) and not isinstance(pid, bool) else pid
+        if not isinstance(text, str) or not re.fullmatch(r"[0-9]{1,20}", text):
+            _err(
+                f"{prefix}.property_id: must be the numeric GA4 property id, not the G- measurement id",
+                errors,
+            )
 
 
 def _validate_msgraph_connector(key: str, conn: dict[str, Any], errors: list[str]) -> None:

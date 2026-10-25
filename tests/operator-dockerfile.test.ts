@@ -392,7 +392,14 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
       referenced.add(m[1])
     }
     // The connector loop references its file by name at build time.
-    for (const dir of ['smokeball', 'msgraph-mail', '_reference'])
+    for (const dir of [
+      'smokeball',
+      'msgraph-mail',
+      '_reference',
+      'wordpress',
+      'youtube-public',
+      'ga4',
+    ])
       referenced.add(`connector-${dir}.txt`)
     expect(referenced.size).toBeGreaterThanOrEqual(3)
     for (const file of referenced) {

@@ -22,6 +22,7 @@ import {
   type ValidationError,
 } from './types'
 import { isPlainObject, optionalEnum } from './helpers'
+import { checkMarketingConnectorFields } from './sections-connector-marketing'
 
 /**
  * `credential_custody_default` (ADR 0042) — optional top-level client-level
@@ -101,6 +102,7 @@ function checkOneConnector(
   if (webhookUrl === undefined) return null
   const msgraph = checkMsgraph(key, adapter, value, errors)
   if (msgraph === null) return null
+  if (!checkMarketingConnectorFields(key, backend, value, errors)) return null
   const enabled = typeof value['enabled'] === 'boolean' ? value['enabled'] : true
   const tokenRef = typeof value['token_ref'] === 'string' ? value['token_ref'] : null
   // ADR 0042: optional per-connector custody; null ⇒ inherit the client-level

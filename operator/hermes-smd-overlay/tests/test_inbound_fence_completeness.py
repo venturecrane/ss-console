@@ -485,3 +485,73 @@ def test_fenced_mail_entries_are_classified_reads() -> None:
     assert ghosts == set(), (
         f"fenced mail_* names that are not registered READ tools: {sorted(ghosts)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The marketing seat's three connectors (mcp:wordpress, mcp:youtube-public,
+# mcp:ga4)
+# ---------------------------------------------------------------------------
+#
+# Every READ under the three prefixes carries a decision. The WordPress and GA4
+# reads return the firm's OWN site and analytics: content the firm's staff wrote
+# on a site the firm controls, and figures from the firm's own property (GA4
+# string values are cleaned and truncated in the connector because a forged hit
+# can carry page-title text). They are the source material every marketing
+# draft is written from, and fencing them would taint every drafting turn for
+# no injection channel a firm outsider controls. The YouTube reads take a
+# channel id as an argument, so their titles and descriptions can be anyone's:
+# fenced, like a web page.
+
+#: Marketing-connector READs that return the firm's own records (not fenced).
+MARKETING_FIRM_RECORD_READS: frozenset[str] = frozenset(
+    {
+        "mcp_wordpress_list_posts",
+        "mcp_wordpress_get_post",
+        "mcp_wordpress_list_categories",
+        "mcp_wordpress_list_tags",
+        "mcp_wordpress_list_media",
+        "mcp_ga4_run_report",
+        "mcp_ga4_top_pages",
+        "mcp_ga4_traffic_sources",
+        "mcp_ga4_month_over_month",
+    }
+)
+
+_MARKETING_PREFIXES = ("mcp_wordpress_", "mcp_youtube_public_", "mcp_ga4_")
+
+
+def _marketing_read_tools() -> list[str]:
+    return [
+        name
+        for name, cls in TOOL_ACTION_CLASS_MAP.items()
+        if name.startswith(_MARKETING_PREFIXES) and cls is ActionClass.READ
+    ]
+
+
+def test_every_marketing_connector_read_is_decided() -> None:
+    reads = _marketing_read_tools()
+    assert reads, "no marketing connector READ tools found; this guard would pass vacuously"
+    fenced = _fenced_read_tools()
+    undecided = sorted(n for n in reads if n not in fenced and n not in MARKETING_FIRM_RECORD_READS)
+    assert undecided == [], (
+        f"marketing connector READ tool(s) with no fencing decision: {undecided}"
+    )
+
+
+def test_youtube_public_reads_are_fenced() -> None:
+    fenced = _fenced_read_tools()
+    for name in ("mcp_youtube_public_list_channel_videos", "mcp_youtube_public_get_video"):
+        assert name in fenced, name
+        assert name not in MARKETING_FIRM_RECORD_READS, name
+
+
+def test_marketing_firm_record_reads_are_live_unfenced_reads() -> None:
+    reads = set(_marketing_read_tools())
+    assert sorted(MARKETING_FIRM_RECORD_READS - reads) == []
+    assert sorted(MARKETING_FIRM_RECORD_READS & _fenced_read_tools()) == []
+
+
+def test_fenced_marketing_entries_are_classified_reads() -> None:
+    reads = set(_marketing_read_tools())
+    mis = {t for t in _fenced_read_tools() if t.startswith(_MARKETING_PREFIXES) and t not in reads}
+    assert mis == set(), f"fenced marketing names that are not classified READS: {sorted(mis)}"

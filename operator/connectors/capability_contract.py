@@ -28,6 +28,10 @@ CAPABILITY_NAMES: frozenset[str] = frozenset(
         "IntakeCRM",
         "CallTracking",
         "InternalComms",
+        "WebSearch",
+        "Website",
+        "VideoChannel",
+        "Analytics",
     }
 )
 

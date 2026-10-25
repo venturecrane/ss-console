@@ -1,0 +1,36 @@
+# mcp:ga4 - read-only Google Analytics 4 reports for a firm's own property
+# (Analytics Data API v1beta). Capability Analytics.
+#
+# auth_model = client_credentials: the connector mints its own token from a
+# service-account key (JWT bearer grant, scope analytics.readonly). The firm
+# grants that service account's email the Viewer role on its GA4 property; the
+# key alone reads nothing until the firm does.
+#
+# KEY CUSTODY. The key is held by the connector subprocess and written into the
+# seat's MCP config, so it must be a key whose only power is reading analytics
+# a firm has shared with it. It must NEVER be the domain-wide-delegation key
+# (GOOGLE_SERVICE_ACCOUNT_JSON), which can impersonate users; provisioning
+# stages GA4_SERVICE_ACCOUNT_JSON only from its own vault name.
+#
+# required_secrets are the RUNTIME env names. GA4_PROPERTY_ID is per-customer
+# (connectors.Analytics.property_id); the key is SMD's, staged by a dedicated
+# provision-customer.sh block (the generic manifest loop skips this connector).
+[connector]
+name = "ga4"
+capability = "Analytics"
+auth_model = "client_credentials"
+description = "Google Analytics 4 Data API reader (Viewer service account, read-only)."
+
+[[connector.required_secrets]]
+runtime_env = "GA4_SERVICE_ACCOUNT_JSON"
+purpose = "Service-account key JSON (raw or base64) of an analytics-only service account with no domain-wide delegation. SMD-owned."
+
+[[connector.required_secrets]]
+runtime_env = "GA4_PROPERTY_ID"
+purpose = "The firm's numeric GA4 property id. NOT secret. Per-customer, from connectors.Analytics.property_id."
+
+[connector.tool_classes]
+run_report = "read"
+top_pages = "read"
+traffic_sources = "read"
+month_over_month = "read"

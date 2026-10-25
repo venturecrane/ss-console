@@ -620,3 +620,41 @@ def test_msgraph_mail_mcp_primitives_are_classified_read():
         assert resolved.unmapped is False, name
         assert resolved.action_class is ActionClass.READ, name
         assert name not in TENANT_SOURCE_READ_TOOLS, name
+
+
+def test_marketing_connector_tools_mirror_their_manifests() -> None:
+    """The three marketing connectors' manifests (ss-console operator/connectors/
+    {wordpress,youtube-public,ga4}/manifest.toml) declare these classes, and the
+    boot-time connector-classification probe FATALs any seat whose baked
+    manifest disagrees with this map. The image bakes every connector, bound or
+    not, so a drift here would stop EVERY seat at boot, not only a marketing one."""
+    import pathlib
+    import tomllib
+
+    from shared.action_classes import classify_tool
+
+    connectors = pathlib.Path(__file__).resolve().parents[2] / "connectors"
+    for server in ("wordpress", "youtube-public", "ga4"):
+        conn = tomllib.loads((connectors / server / "manifest.toml").read_text())["connector"]
+        assert conn["name"] == server
+        prefix = f"mcp_{server.replace('-', '_')}_"
+        for tool, declared in conn["tool_classes"].items():
+            resolved = classify_tool(f"{prefix}{tool}")
+            assert resolved.unmapped is False, f"{prefix}{tool}"
+            assert resolved.action_class.value == declared, f"{prefix}{tool}"
+
+
+def test_no_marketing_connector_tool_is_a_send_or_publish() -> None:
+    """A pending WordPress post waits for a person at the firm; nothing on these
+    three servers transmits or publishes, so no tool may carry a send class."""
+    prefixes = ("mcp_wordpress_", "mcp_youtube_public_", "mcp_ga4_")
+    tools = {n: c for n, c in TOOL_ACTION_CLASS_MAP.items() if n.startswith(prefixes)}
+    assert tools
+    assert all(c in (ActionClass.READ, ActionClass.INTERNAL_WRITE) for c in tools.values()), tools
+    assert not any("publish" in n or "delete" in n for n in tools)
+    writes = sorted(n for n, c in tools.items() if c is ActionClass.INTERNAL_WRITE)
+    assert writes == [
+        "mcp_wordpress_create_pending_post",
+        "mcp_wordpress_update_pending_post",
+        "mcp_wordpress_upload_media",
+    ]
