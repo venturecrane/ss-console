@@ -29,6 +29,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+import httpx
+
 PAGE = 500
 MAX_ROWS = 50_000
 LIST_PAUSE_SECONDS = 0.3
@@ -122,6 +124,107 @@ def staff_roles(row: dict[str, Any]) -> dict[str, list[str]]:
         for sid in _ids_under(row, keys):
             roles.setdefault(sid, []).append(label)
     return roles
+
+
+#: A matter's Staff TAGS (2026-10-24). Smokeball tags staff on a matter apart
+#: from its roles, and the tags are NOT on the /matters LIST row: only
+#: ``GET /matters/{id}`` returns ``tags``, a list in which a ``type: "Staff"``
+#: entry names a staff member (``{"id", "type", "staff": {"id", ...}}``) and a
+#: ``type: "Custom"`` entry is a coloured label, ignored. One person's files
+#: count every matter they are tagged on, so a people scope reads them.
+#:
+#: The reads are SEQUENTIAL, one at a time with a pause between, never a
+#: thread pool: the Smokeball client has no lock around its token refresh, and
+#: Smokeball can rotate the refresh token, so two threads refreshing at once
+#: could leave the durable token file holding an invalidated token and take
+#: the seat's Smokeball access down until the firm re-consents (ADR 0054).
+#: About 576 reads run in about 5 minutes this way.
+STAFF = "Staff"
+TAG_ATTEMPTS = 4
+TAG_BACKOFF_SECONDS = 2.0
+TAG_PAUSE_SECONDS = 0.2
+
+
+class StaffTagsError(ArrivalsError):
+    """Some matter's tags could not be read after every retry."""
+
+
+def tag_staff_ids(payload: Any) -> list[str] | None:
+    """The staff ids a ``GET /matters/{id}`` payload tags, lowercased, in
+    order, once each; None when the payload carries no ``tags`` list at all."""
+    tags = payload.get("tags") if isinstance(payload, dict) else None
+    if not isinstance(tags, list):
+        return None
+    out: list[str] = []
+    for t in tags:
+        if not isinstance(t, dict) or str(t.get("type") or "").lower() != "staff":
+            continue
+        staff = t.get("staff")
+        sid = (staff.get("id") if isinstance(staff, dict) else None) or t.get("id")
+        if isinstance(sid, str) and sid.strip():
+            out.append(sid.strip().lower())
+    return list(dict.fromkeys(out))
+
+
+def _retryable(exc: BaseException) -> bool:
+    """A rate limit, a server error or a dropped connection clears with time;
+    any other 4xx does not."""
+    code = getattr(exc, "status", None) or getattr(exc, "status_code", None) or 0
+    if isinstance(code, int) and (code in (408, 429) or code >= 500):
+        return True
+    return isinstance(exc, (httpx.TransportError, ConnectionError, TimeoutError))
+
+
+def _matter(get: Callable[..., Any], mid: str, attempts: int, backoff: float, sleep: Callable[[float], Any]) -> Any:
+    for attempt in range(attempts):
+        try:
+            return get(f"/matters/{mid}")
+        except Exception as exc:
+            if attempt + 1 >= attempts or not _retryable(exc):
+                raise
+            sleep(backoff * (2**attempt))
+    raise StaffTagsError(f"/matters/{mid}: no attempt was made")
+
+
+def _not_found(exc: BaseException) -> bool:
+    return (getattr(exc, "status", None) or getattr(exc, "status_code", None)) == 404
+
+
+def staff_tags(
+    get: Callable[..., Any],
+    matter_ids: Iterable[str],
+    attempts: int = TAG_ATTEMPTS,
+    backoff: float | None = None,
+    pause: float | None = None,
+    sleep: Callable[[float], Any] = time.sleep,
+) -> tuple[dict[str, list[str] | None], list[str]]:
+    """(``{matter_id: [tagged staff ids] | None}``, matter ids answering 404)
+    from ``GET /matters/{id}``, one at a time (see ``TAG_PAUSE_SECONDS``), each
+    retried with backoff (``TAG_BACKOFF_SECONDS`` doubling) through 429s, 5xx
+    and dropped connections. A 404 is a matter gone since the list was read,
+    so it is no one's open file: counted, not raised. Any other matter still
+    unread raises ``StaffTagsError`` once every other matter is read: a failed
+    read never reads as no tags."""
+    backoff = TAG_BACKOFF_SECONDS if backoff is None else backoff
+    pause = TAG_PAUSE_SECONDS if pause is None else pause
+    ids = list(dict.fromkeys(str(m) for m in matter_ids))
+    out: dict[str, list[str] | None] = {}
+    gone: list[str] = []
+    failed: list[str] = []
+    for i, mid in enumerate(ids):
+        if i and pause:
+            sleep(pause)
+        try:
+            out[mid] = tag_staff_ids(_matter(get, mid, attempts, backoff, sleep))
+        except Exception as exc:  # noqa: BLE001 - counted; raised once the others are read
+            if _not_found(exc):
+                gone.append(mid)
+            else:
+                failed.append(type(exc).__name__)
+    if failed:
+        kinds = ", ".join(sorted(set(failed)))
+        raise StaffTagsError(f"{len(failed)} of {len(ids)} matters' staff tags could not be read ({kinds})")
+    return out, gone
 
 
 def originating_listed(row: dict[str, Any]) -> bool:

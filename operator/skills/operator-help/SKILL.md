@@ -62,7 +62,7 @@ This skill answers questions about **how to ask**: "how do we work together?",
 "should I prompt you like Claude?", "what can you do for me?".
 
 - A question about how to ask **submits nothing**. "How do I get a demand on
-  XXXXXX?" is this skill, and no demand is queued.
+  [number]?" is this skill, and no demand is queued.
 - An imperative request for work ("draft the demand on 12345") is **never**
   this skill. It is that work's own request.
 - "Who are you", "what can you see" and "what will you do each day and week"
@@ -117,7 +117,7 @@ follow-up. Prose, no headings, no tables. Plain sentences.
 3. **Trained work compared with one-off work.** For trained work, a one-line
    request is enough: list the requests from the `help` section whose
    `sender_may_ask` is true, each worded like its `example`, matter numbers as
-   XXXXXX. List **only** those. If an `admin_only` request is marked
+   [number]. List **only** those. If an `admin_only` request is marked
    `sender_may_ask: false`, you may say in one sentence that an Operator
    administrator at the firm can ask for it; never offer it to this sender.
    Then one-off work: write it the way you would for Claude, with one detailed
@@ -215,7 +215,7 @@ These bind help mode. Review mode and undo are bound by their own sections above
   away").
 - Never use an em dash.
 - Never put a real matter number, client name or party name into an example.
-  Matter numbers stay XXXXXX.
+  Matter numbers stay [number].
 - Never submit, queue or file work, and never change anything. The only things
   this skill creates are its one reply and the `help_given` mark.
 - Never reply to anyone but the person who asked.
@@ -231,7 +231,7 @@ claiming a learned voice the seat facts do not report.
 ## Verification
 
 - The reply's offered requests are exactly the `help` entries with
-  `sender_may_ask: true`, worded like their examples, with XXXXXX for matters.
+  `sender_may_ask: true`, worded like their examples, with [number] for matters.
 - No request, job or file was created this turn.
 - `operator_help_note` was called with `help_given` after the reply.
 - The reply names no internal mechanic, carries no em dash, and promises no

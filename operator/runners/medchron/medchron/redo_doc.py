@@ -27,6 +27,13 @@ the review held on 45 findings and the corrected document must be reviewed
 afresh). The classifiers' page labels describe the exhibits, which are
 unchanged; the audit re-checks only claims whose text changed; the review is
 the one paid stage that runs in full again.
+
+A MERGED JOB IS NEVER REBUILT (2026-10-25). Once ``exhibit_merge`` has
+delivered two exhibits holding the same pages as one, the dropped exhibit's
+PDF is gone and every later exhibit carries a new number; a rebuild from
+``build_doc`` would read the pre-merge bodies' numbering against the merged
+page map and bring the deleted exhibit back into the document. The request
+refuses with the reason (``runs/<unit>/exhibit_merges.json``).
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from .resume import MARKER_PREFIX
+from .stages.limitations_rules import MERGES_FILE
 
 REDO = ["build_doc", "strip_falsify", "strip_dry", "strip_apply", "render", "manifest", "review"]
 
@@ -65,6 +73,12 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
 
     job = job_mod.load(d.job_dir(job_id))
     slug_dir = job.data_root / job.slug
+    merged = [u.unit for u in job.units if _merged(slug_dir, u.unit)]
+    if merged:
+        raise Refused(
+            f"job {job_id} had duplicate exhibits merged ({', '.join(merged)}: runs/<unit>/{MERGES_FILE}); a "
+            "rebuild from build_doc would restore the deleted exhibit and the old numbering. Nothing was changed."
+        )
     units = []
     for u in job.units:
         units.append(
@@ -84,6 +98,10 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
             "redo": list(REDO),
         },
     }
+
+
+def _merged(slug_dir: Path, unit: str) -> bool:
+    return (slug_dir / "runs" / unit / MERGES_FILE).is_file()
 
 
 def _strip_result(slug_dir: Path, unit: str, joint: bool) -> Path:
@@ -112,7 +130,10 @@ def _restore(restore: list[tuple[str, str]], strip_result: Path, prestrip: Path 
 def restore_unit(slug_dir: Path, unit: str, *, joint: bool) -> int:
     """The rebuild's file half for one unit, in-process: put the unstripped
     exhibits back and remove the strip result, so the strip stages can run
-    again over a rebuilt document. Returns how many exhibits were restored."""
+    again over a rebuilt document. Returns how many exhibits were restored.
+    Refuses on a merged unit, as ``plan`` does."""
+    if _merged(slug_dir, unit):
+        raise Refused(f"unit {unit} had duplicate exhibits merged ({MERGES_FILE}); it is not rebuilt")
     restore = _restores(slug_dir / "out" / unit)
     _restore(restore, _strip_result(slug_dir, unit, joint), _prestrip(slug_dir, unit))
     return len(restore)

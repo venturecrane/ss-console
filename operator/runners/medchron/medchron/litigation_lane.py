@@ -13,7 +13,13 @@ the loop, the held-is-final rule, the back-off and the cgroup join):
   the lane's state dir on the allow-listed env, and ``job.json`` stamped fresh
   before every run with the slug, the month's litigation spend and the two
   caps from ``litigation-firm.yaml``;
-* its wake: the ``litigation-status`` skill's DELIVER mode, counts only.
+* its wake: the ``litigation-status`` skill's DELIVER mode, counts only;
+* the billing cycle's status-list allowance (2026-10-24), read when a status
+  list starts, before anything is spent (the chronology page allowance's
+  moment): a list past the cycle's included lists is held ``list_allowance:``
+  without starting the child, SMD is paged ``limit_held`` to quote it, and the
+  firm hears the fixed ``smd_finishing`` wording. A deadlines report, a staff
+  reassignment and a proof run's twin are never held by it.
 
 Memory: the child joins the DEMAND lane's memory cgroup and waits while a
 demand OR a drafting child is live, so the Machine's caps do not grow by a
@@ -74,6 +80,14 @@ class LitigationBroker:
         return self.client._request(
             {"action": "litigation_job_record", "job_id": job_id, "state": state, "fields": fields}
         )
+
+    def list_allowance(self, job_id: str) -> dict[str, Any]:
+        """The cycle's status-list allowance without this job. A missing value
+        raises: the lane defers rather than run a list it cannot meter."""
+        v = self.client._request({"action": "litigation_job_status", "exclude_job_id": job_id}).get("list_allowance")
+        if not isinstance(v, dict) or not isinstance(v.get("authored"), bool):
+            raise BrokerError("litigation_job_status carried no list_allowance; the list cannot be metered")
+        return v
 
     def month_cents(self) -> int:
         """This Pacific month's litigation spend. A missing value raises: the
@@ -176,6 +190,9 @@ class LitigationLane(DraftingLane):
         if self._busy():
             self._write_state(job_id, retry_after=self.clock() + BUSY_RETRY_SECONDS)
             return "waiting"
+        held = self._allowance_hold(job_id)
+        if held is not None:
+            return held
         try:
             jd = self._write_job(job_id)
             self.broker.record(job_id, "running", {})
@@ -219,6 +236,62 @@ class LitigationLane(DraftingLane):
         if not finished and resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
         return self._report(job_id, code, out)
+
+    def _allowance_reason(self, job_id: str) -> str | None:
+        """The ``list_allowance:`` hold reason when this status list may not
+        start, else None. Raises ``BrokerError`` when the broker cannot say."""
+        if proof_watch.in_proof_run(self):
+            return None  # a proof run's twin files nothing and is never delivered
+        try:
+            env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            env = {}
+        if str(env.get("report") or "status") != "status":
+            return None  # the allowance is for status lists only
+        state = self.broker.list_allowance(job_id)
+        if not state["authored"]:
+            return None  # unset: no cap
+        row = (self.broker.status(job_id) or {}).get("row") or {}
+        if row.get("over_allowance_ref"):
+            return None  # SMD quoted this list and the firm accepted (root's resubmit)
+        if not state.get("readable"):
+            problem = str(state.get("problem") or "unreadable")[:200]
+            return (
+                f"list_allowance: the authored list allowance or its billing cycle cannot be read ({problem}); "
+                "the list was not started"
+            )
+        used, allowance = int(state.get("used") or 0), int(state.get("allowance") or 0)
+        if used < allowance:
+            return None
+        return (
+            f"list_allowance: {used} of the {allowance} status lists included in {state.get('cycle') or 'this cycle'} "
+            "are delivered; the list was not started and is held for SMD to quote"
+        )
+
+    def _allowance_hold(self, job_id: str) -> str | None:
+        """Hold a status list past the cycle's allowance before anything runs:
+        ``running -> held`` with nothing spent, SMD paged (``proof/watch.settle``
+        pages ``limit_held`` for a ``list_allowance:`` reason), and the DELIVER
+        wake carrying the hold class, so the firm hears the fixed wording."""
+        try:
+            reason = self._allowance_reason(job_id)
+            if reason is None:
+                return None
+            self.broker.record(job_id, "running", {})
+        except BrokerError as exc:
+            logger.warning("broker could not meter %s's list allowance, deferring: %s", job_id, exc)
+            return "deferred"
+        fields: dict[str, Any] = {"cents": 0, "reason": reason[:500], "stage": "allowance"}
+        state, fields = proof_watch.settle(self, job_id, [], "held", fields)
+        try:
+            self.broker.record(job_id, state, fields)
+        except BrokerError as exc:
+            logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
+        self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get("reason"))
+        self._write_state(
+            job_id, wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields)}
+        )
+        return state
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
         reason = (

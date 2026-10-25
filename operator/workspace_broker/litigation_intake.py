@@ -40,6 +40,30 @@ FILE_TO_KEY = "file_to_matter_id"
 RECIPIENTS_KEY = "scheduled_recipients"
 #: Where the deadlines report is filed (the same library matter, its own folder).
 DEADLINES_FOLDER_KEY = "deadlines_folder_name"
+#: The litigation status lists included in each billing cycle (2026-10-24). A
+#: whole number >= 0; unauthored is NO cap (nothing is defaulted). The cycle is
+#: the firm's one billing cycle, the chronology skill's authored anchor
+#: (``cycle_window.py``), exactly as the drafting and demand counts use it.
+LIST_ALLOWANCE_KEY = "litigation_list_allowance_per_cycle"
+
+
+class ListAllowanceInvalid(ValueError):
+    """An authored list allowance that cannot be read. Not the same answer as
+    "absent": a cap the seat cannot honour must hold the list, never let it run."""
+
+
+def list_allowance_of(settings: dict[str, Any] | None) -> int | None:
+    """The authored lists-per-cycle allowance, or None when none is authored.
+
+    Raises ``ListAllowanceInvalid`` when the key is present but is not a whole
+    number >= 0 (``"40"`` quoted in YAML, ``true``, ``-1``)."""
+    if not isinstance(settings, dict) or LIST_ALLOWANCE_KEY not in settings:
+        return None
+    value = settings[LIST_ALLOWANCE_KEY]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ListAllowanceInvalid(f"{LIST_ALLOWANCE_KEY}: must be a whole number, 0 or more")
+    return value
+
 
 #: THE DEADLINES REPORT, told from the status list by the request's OWN words
 #: (2026-10-15). Code decides, never the model, and the overlay's tool needs
@@ -234,11 +258,14 @@ __all__ = [
     "DEADLINES_FOLDER_KEY",
     "FIRM_CONFIG_ENV",
     "FIRM_FILE",
+    "LIST_ALLOWANCE_KEY",
+    "ListAllowanceInvalid",
     "SKILL_NAME",
     "attorney_roster",
     "cron_row_live",
     "firm_config",
     "initiation_allows",
+    "list_allowance_of",
     "monthly_budget_cents",
     "named_attorneys",
     "named_paralegals",

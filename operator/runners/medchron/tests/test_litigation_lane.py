@@ -43,7 +43,7 @@ class FakeClient:
         a = req["action"]
         if a == "litigation_job_status":
             if "job_id" not in req:
-                return {"ok": True, "month_cents": 4321}
+                return {"ok": True, "month_cents": 4321, "list_allowance": {"authored": False}}
             return {"ok": True, "job": self.rows.get(req["job_id"])}
         if a == "litigation_job_record":
             self.records.append((req["job_id"], req["state"], req["fields"]))

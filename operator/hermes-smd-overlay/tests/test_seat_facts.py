@@ -1157,12 +1157,12 @@ def _skill_md(root, slug: str, help_block: str | None) -> None:
 
 _DEMAND_HELP = (
     'what: "Prepares a draft demand on a matter."\n'
-    'example: "On matter XXXXXX, draft the demand."\n'
+    'example: "On matter [number], draft the demand."\n'
     "admin_only: true"
 )
 _LETTERS_HELP = (
     'what: "Makes the firm\'s rep letters on a matter."\n'
-    'example: "On matter XXXXXX, do the 1st and 3rd party letters."\n'
+    'example: "On matter [number], do the 1st and 3rd party letters."\n'
     "admin_only: false"
 )
 
@@ -1242,7 +1242,7 @@ def test_help_admin_may_ask_for_every_enabled_request(sf, tmp_path):
         "skill": "demand-letter-drafter",
         "firm_name": None,
         "what": "Prepares a draft demand on a matter.",
-        "example": "On matter XXXXXX, draft the demand.",
+        "example": "On matter [number], draft the demand.",
         "admin_only": True,
         "sender_may_ask": True,
     }
@@ -1278,7 +1278,7 @@ def test_help_prefers_the_volume_copy_of_a_skill(sf, tmp_path):
     _skill_md(
         roots[0],
         "file-work-requests",
-        'what: "Newer words."\nexample: "On matter XXXXXX, do the letters."\nadmin_only: false',
+        'what: "Newer words."\nexample: "On matter [number], do the letters."\nadmin_only: false',
     )
     got = _by_skill(_help(sf, tmp_path, sender=_ADMIN, roots=roots))
     assert got["file-work-requests"]["what"] == "Newer words."

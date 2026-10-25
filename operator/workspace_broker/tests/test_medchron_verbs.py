@@ -589,18 +589,33 @@ def test_hold_and_failure_still_record_their_reason(verbs):
     assert call(v, "medchron_job_status", job_id=j)["job"]["reason"] == AUDIT_HOLD
 
 
+def test_a_stage_refusal_hold_resumes_through_the_same_verb(verbs):
+    """2026-10-24, live: Pamplona held at strip_falsify on a cited page the
+    classifier called non-record. The hold classifier pages a ``refused:`` hold
+    to SMD as ours (stage_refused); once the fix shipped the resume was refused
+    as if the firm had to decide."""
+    v, _ledger, queue = verbs
+    reason = "refused: strip falsifier: the content check cannot fail, so it proves nothing; last output: x"
+    j = _held_job(v, reason)
+    out = call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="cited pages now kept (#3460)", redo=[])
+    assert out["queued"] is True and (queue / f".resume-{j}.json").is_file()
+
+
 @pytest.mark.parametrize(
     "reason",
     [
-        "refused: the incident date is not authored on the matter",
+        "refused: list_matter: the matter already holds a delivered chronology; submit it as an update",
+        "identity: an emailed attachment names a different person than the client",
+        "per_job_cap_usd: this run's projected cost would exceed the job's cost cap before audit",
         "the per-job spending cap was reached (cap_usd)",
         "seat paused (sticky stop HARD_STOP)",
         "",
     ],
 )
 def test_every_other_hold_still_refuses_a_resume(verbs, reason):
-    """A refusal needs the firm's decision, a limit hold lifts through the
-    limit, a seat pause self-resumes. None of those is ours to re-run."""
+    """A rerouted update is resubmitted as one, a question for the firm waits
+    for the firm, a limit hold lifts through the limit, a seat pause
+    self-resumes. None of those is ours to re-run."""
     v, _ledger, queue = verbs
     j = _held_job(v, reason)
     with pytest.raises(ValueError, match="not failed"):

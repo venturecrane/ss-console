@@ -14,10 +14,10 @@ metadata:
   smd:
     vertical: law-firm
     # What a person may ask this skill for, read by operator_seat_facts depth help
-    # (ss-console#3423). SMD-authored; the example is copyable, matters as XXXXXX.
+    # (ss-console#3423). SMD-authored; the example is copyable, matters as [number].
     help:
       what: 'Builds the medical chronology on a matter from its records.'
-      example: 'On matter XXXXXX, build the medical chronology.'
+      example: 'On matter [number], build the medical chronology.'
       admin_only: true
     addon: pi
     weight: heavy # reads large medical records; escalate to the seat's escalation model (before reading) when one is authored

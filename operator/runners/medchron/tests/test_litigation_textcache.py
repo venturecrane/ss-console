@@ -30,8 +30,14 @@ def _pricing(tmp_path: Path, pricing_path: Path) -> None:
     (tmp_path / "pricing.json").write_text(pricing_path.read_text())
 
 
+# Built ONCE: make_pdf writes a random /ID, so a rebuilt paper lists a slightly
+# different size and the cache rightly reads it as a changed file (queue runs
+# 40130877069 and 40138600791 failed on exactly that). Every job lists these bytes.
+MATTER_DOCS = matter_docs()
+
+
 def _docs(scan_modified: str = "2026-04-12T10:00:00") -> dict[str, list]:
-    return {M1: [*matter_docs(), ("f-s1", "Summons scan.pdf", SCAN, scan_modified)]}
+    return {M1: [*MATTER_DOCS, ("f-s1", "Summons scan.pdf", SCAN, scan_modified)]}
 
 
 class CountingSeat(LitSeat):

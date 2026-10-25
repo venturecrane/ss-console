@@ -68,7 +68,7 @@ ANSWER_RULES: tuple[str, ...] = (
     "reported installed is a voice you have learned, anything else is the "
     "firm's format. That SMD can teach you an attorney's style from a couple "
     "of examples is always true.",
-    "Matter numbers in examples stay XXXXXX. Never put a real matter, client or "
+    "Matter numbers in examples stay [number]. Never put a real matter, client or "
     "party name into an example.",
     "Never promise a time.",
     "Describe yourself by what you do for them, never by what you are not. A "

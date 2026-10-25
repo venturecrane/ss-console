@@ -27,6 +27,7 @@ not confirm, and a record the map read is never named away.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,6 +38,7 @@ from .limitations_rules import (
     _attachments_not_opened,
     _billing_lines,
     _map_unread_lines,
+    _merge_lines,
     _prior_history_lines,
     _rendered_lines,
     _unattributed_lines,
@@ -181,8 +183,18 @@ def _unread_lines(d: Path, failed: list, log: Callable[[str], None]) -> list[str
     return o
 
 
+#: ``duplicate_kind`` of a raw_manifest row ``stages/content_dupes`` marked: the
+#: same pages in different bytes, not a byte-identical copy (2026-10-25).
+CONTENT_KIND = "content"
+
+
 def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Callable[[str], None]) -> list[str]:
+    """Byte-identical copies (the pull), same-page copies (``text_duplicates.json``:
+    ``stages/content_dupes`` writes ``kind: content`` rows, each also a
+    ``duplicate_of`` row this list must not call byte-identical), and the
+    exhibits delivered once (``_merge_lines``)."""
     o: list[str] = []
+    dupes = [r for r in dupes if r.get("duplicate_kind") != CONTENT_KIND]
     if dupes:
         rows = []
         for r in dupes:
@@ -210,6 +222,18 @@ def _duplicate_lines(d: Path, byid: dict, dupes: list, unit: str | None, log: Ca
             )
         if unit is not None:
             rows_t = [t for t in rows_t if not t.get("unit") or t["unit"] == unit]
+        rows_c = [t for t in rows_t if t.get("kind") == CONTENT_KIND]
+        rows_t = [t for t in rows_t if t.get("kind") != CONTENT_KIND]
+        if rows_c:
+            o += [
+                "",
+                "The following documents contain the same pages although the files themselves differ. One copy was "
+                "read; nothing was removed from the matter file:\n",
+            ]
+            o += [
+                f'* "{_shown(str(t["dropped"]))}" contains the same pages as "{_shown(str(t["kept"]))}"'
+                for t in sorted(rows_c, key=lambda x: str(x.get("kept", "")))
+            ]
         if rows_t:
             o += [
                 "",
@@ -274,6 +298,27 @@ def _withheld_names(d: Path, byid: dict, listed: set[str]) -> list[tuple[str, st
     return out
 
 
+def _orphan_reason(name: str, stored: str, byid: dict, cfg: Any) -> str:
+    """An orphan's reason as the firm's CURRENT exclusion rules give it.
+
+    WHY (2026-10-25, Pamplona). ``orphans.json`` is written at
+    ``decide_orphans`` and keeps the reason the rules gave then; a rule the
+    firm config gained later ("Photo of client route.docx" named by a photo
+    rule) never reached the delivered section, which still printed the older
+    reason. The first current rule matching the bare name (``decisions.orphans``
+    matches the name without its extension) wins; no match keeps the stored
+    reason. A withheld or password reason is never re-derived: those are the
+    firm's direction, the identity rule, or a measured fact, and come before
+    the exclusion rules in ``decisions.orphans`` too."""
+    if cfg is None or stored in FI.WITHHELD_REASONS or stored == unopened.REASON:
+        return stored
+    bare = next(
+        (str(r.get("name") or "") for r in byid.values() if str(r.get("name") or "") + str(r.get("ext") or "") == name),
+        re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name),
+    )
+    return next((why for rx, why in cfg.compiled("coverage", "exclusions") if rx.search(bare)), stored)
+
+
 def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str]:
     """Every pulled document that is not a source of this chronology, with the
     factual reason (2026-10-23). The reasons were already decided by rule and
@@ -294,7 +339,7 @@ def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str
 
     o: list[str] = []
     rows = [
-        (str(x.get("name") or ""), str(x.get("reason") or ""))
+        (str(x.get("name") or ""), _orphan_reason(str(x.get("name")), str(x.get("reason")), byid, cfg))
         for x in (read_json(d / "orphans.json", {}) or {}).get("orphans") or []
         if isinstance(x, dict) and x.get("name") and x.get("reason") and x.get("reason") != unopened.REASON
     ]
@@ -369,6 +414,7 @@ def section(slug_dir: Path, unit: str | None, log: Callable[[str], None], cfg: A
     o += _review_left_out_lines(slug_dir, unit, log)
     o += _not_used_lines(slug_dir, byid, unit, cfg)
     o += _duplicate_lines(slug_dir, byid, dupes, unit, log)
+    o += _merge_lines(slug_dir, unit)
     if len(o) == 2:
         o.append(
             "All documents in the reviewed folders were retrieved and read in full. No document was unreadable, "
