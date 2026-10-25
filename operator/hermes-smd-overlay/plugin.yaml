@@ -38,6 +38,7 @@ plugins:
   - plugins/hermes-smd-group-audience
   - plugins/hermes-smd-space-delivery
   - plugins/hermes-smd-couples-settings
+  - plugins/hermes-smd-partner-messages
   - plugins/hermes-smd-drafting
   - plugins/hermes-smd-establishment
   - plugins/hermes-smd-medchron

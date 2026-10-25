@@ -40,7 +40,9 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'couples-checkin':
     'Asks each of you, privately, about the topics you chose together. Your answers stay yours.',
   'couples-settings':
-    'Set your check-ins, reminders and quiet hours by telling the agent. Changes for both of you need both yeses.',
+    'Set your check-ins, reminders and quiet hours by telling the agent. Either of you can change anything.',
+  'partner-messages':
+    'Ask the agent to tell your partner something and it reaches them at once, in their own chat, as from you.',
   'daily-needs-you-digest':
     'One batched daily digest of what across your matters genuinely needs attention. Never acts, never manufactures urgency.',
   'date-night-planner':

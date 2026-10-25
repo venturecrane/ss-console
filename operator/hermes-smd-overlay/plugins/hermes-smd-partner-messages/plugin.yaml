@@ -1,0 +1,7 @@
+name: hermes-smd-partner-messages
+version: "0.1.0"
+description: "Couples role (ADR 0097): a partner hands the agent a message for the other partner and the agent delivers it, attributed, to that partner's own chat, with no approval step. partner_message_send is the one tool; the recipient is fixed in code as the other person on the seat. The next private turn of either partner is shown the recent passed messages (shared.partner_messages). Seats without people: get no tool and no hook."
+author: VentureCrane
+# Empty on purpose: the gate is register(), which asks whether the seat authors
+# people:. A failing requires_env would drop the tool silently.
+requires_env: []

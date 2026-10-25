@@ -152,6 +152,15 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # A partner's message to the other partner, passed by the agent at once
+      # (partner_message_send, ADR 0097). Manual only: a partner asks.
+      - name: partner-messages
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       - name: gratitude-prompts
         version: pending
         initiation:

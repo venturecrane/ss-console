@@ -50,6 +50,9 @@ skills:
   - name: couples-settings
     built: true
     purpose: The couple's schedules and settings, set by talking to the agent; either partner changes anything alone.
+  - name: partner-messages
+    built: true
+    purpose: One partner asks the agent to tell the other something; it reaches that partner's own chat at once, marked as from the sender (ADR 0097).
   - name: gratitude-prompts
     built: true
     settings:
