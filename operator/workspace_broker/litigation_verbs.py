@@ -23,7 +23,9 @@ Peer gating, per verb:
     litigation_job_status   gateway PID, agent uid, or uid 0. Root gets the
                             full row, and with no job id the Pacific month's
                             spend (``month_cents``), which the runner's lane
-                            meters against the firm's budget.
+                            meters against the firm's budget, and the billing
+                            cycle's status-list allowance (``list_allowance``),
+                            which the lane checks before a list starts.
     litigation_job_record   uid 0 only (the runner daemon)
     litigation_job_resume   uid 0 only, with NO agent tool.
     litigation_job_close    uid 0 only, with NO agent tool: SMD ends a HELD
@@ -61,6 +63,15 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
    delivered nothing and told nobody, so its email may ask again
    (2026-10-13); a failed scheduled run still holds its date.
 
+THE CYCLE'S LIST ALLOWANCE (2026-10-24) is NOT a submit check. Like the
+chronology's page allowance it is read when the job starts, by the lane
+(``list_allowance`` on the root status view): a status list that would be past
+the billing cycle's included lists is HELD there (``list_allowance:``, class
+``smd_finishing``, SMD paged ``limit_held`` to quote it), never run and never
+charged. After the firm accepts the quote, root resubmits the request with
+``over_allowance_ref`` (the evidence id), which rides the row and lets that one
+job run; only root may set it.
+
 Audit rows carry ids, counts and states, never the request text and never a
 matter fact.
 """
@@ -73,7 +84,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, hold_class
+from . import delivery_proof, hold_class, litigation_allowance
 from .broker_context import BrokerContext
 from .litigation_intake import (
     DEADLINES_FOLDER_KEY,
@@ -263,10 +274,17 @@ class LitigationVerbs:
             return {"ok": True, "job": job}
         out: dict[str, Any] = {"ok": True, "jobs": [LitigationLedger.project(r) for r in self._db.recent(20)]}
         if full:
-            month, cents = self.month_cents(str(request.get("exclude_job_id") or ""))
+            exclude = str(request.get("exclude_job_id") or "")
+            month, cents = self.month_cents(exclude)
             budget = monthly_budget_cents(firm_config(self.firm_config_path))
             out.update({"month": month, "month_cents": cents, "monthly_budget_cents": budget})
+            out["list_allowance"] = self.list_allowance(exclude)
         return out
+
+    def list_allowance(self, exclude: str = "") -> dict[str, Any]:
+        """The billing cycle's status-list allowance the lane checks before a
+        list starts (``litigation_allowance``)."""
+        return litigation_allowance.list_allowance(self.customer_yaml, self._db, self._now(), exclude)
 
     # -- submit ---------------------------------------------------------------
     def _input(self, raw: Any, *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
@@ -300,6 +318,9 @@ class LitigationVerbs:
     def _submit(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
         """The checks in the module docstring's order. Each helper raises
         ``_Refused`` with the sentence the skill relays; none spends anything."""
+        over = request.get("over_allowance_ref")
+        if over is not None and peer_uid != 0:
+            raise PermissionError("over_allowance_ref is set by root only: SMD's record that the list was quoted")
         try:
             given = self._input(request.get("envelope"), peer_uid=peer_uid, from_gateway=from_gateway)
             settings, admins = self._seat_gates(given["trigger"], peer_uid)
@@ -321,14 +342,14 @@ class LitigationVerbs:
                 **extra,
             }
             valid = validate_envelope(envelope)
-            job_id = self._db.submit(valid)
+            job_id = self._db.submit(valid, over_allowance_ref=None if over is None else str(over))
         except EnvelopeError as exc:
             return _refusal(str(exc))
         except _Refused as exc:
             return _refusal(str(exc))
         except SubmitRefused as exc:
             return _refusal(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
-        self._audit_submitted(job_id, valid, cents)
+        self._audit_submitted(job_id, valid, cents, over_allowance_ref=over)
         return {
             "ok": True,
             "accepted": True,
@@ -492,7 +513,9 @@ class LitigationVerbs:
             raise _Refused(f"no {'attorney' if 'attorneys' in scope_in else 'paralegal'} was named; nothing was queued")
         return {"people": {"names": names, "requester": requester if mine else None}}
 
-    def _audit_submitted(self, job_id: str, valid: dict[str, Any], cents: int) -> None:
+    def _audit_submitted(
+        self, job_id: str, valid: dict[str, Any], cents: int, *, over_allowance_ref: Any = None
+    ) -> None:
         scope = valid["scope"]
         people = scope.get("people") or {}
         self._audit(
@@ -517,6 +540,7 @@ class LitigationVerbs:
                 "requested_by": valid["requester"],
                 "request_ref": valid["message_ref"],
                 "month_cents_used": cents,
+                **({"over_allowance_ref": str(over_allowance_ref)} if over_allowance_ref is not None else {}),
             },
         )
 

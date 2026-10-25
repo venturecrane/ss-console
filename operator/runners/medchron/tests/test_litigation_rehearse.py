@@ -261,3 +261,19 @@ def test_a_court_only_rehearsal_never_fetches_for_discovery(tmp_path, monkeypatc
     assert r._active() == []
     monkeypatch.setattr(r, "_court_only", lambda: False)
     assert r._active() == [M1]
+
+
+def test_a_rehearsal_is_never_blocked_or_metered_by_the_list_allowance(tmp_path, monkeypatch):
+    """The cycle's list allowance (2026-10-24) is the lane's check at job start,
+    on a broker row. A rehearsal has neither: it runs to its own held verdict
+    with the allowance check and its broker read both wired to explode, and it
+    leaves no ledger row a cycle could count."""
+    from medchron.litigation_lane import LitigationBroker, LitigationLane
+
+    def boom(*_a, **_k):
+        raise AssertionError("a rehearsal consulted the list allowance")
+
+    monkeypatch.setattr(LitigationLane, "_allowance_reason", boom)
+    monkeypatch.setattr(LitigationBroker, "list_allowance", boom)
+    v = _rehearsal(tmp_path, ScriptedLit(), _seat()).run()
+    assert v.verdict == "held" and v.reason.startswith("rehearsal: ")

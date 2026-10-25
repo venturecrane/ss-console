@@ -124,19 +124,23 @@ CREATE_SQL = (
     "close_ref TEXT, "
     "report TEXT, "
     "counts_json TEXT, "
-    "reassign_json TEXT"
+    "reassign_json TEXT, "
+    "over_allowance_ref TEXT"
     ")"
 )
 #: Columns added after the table first shipped: (name, type), added on upgrade.
 #: ``reassign_json`` (2026-10-24): a staff reassignment's names as the request
 #: gave them, so a ``staff_unresolved`` reply can only name one of them
-#: (held_wording).
+#: (held_wording). ``over_allowance_ref`` (2026-10-24): SMD's evidence that a
+#: status list past the cycle's included lists was quoted and accepted (root's
+#: submit only); the lane's allowance check lets that one job run.
 ADDED_COLUMNS = (
     ("close_reason", "TEXT"),
     ("close_ref", "TEXT"),
     ("report", "TEXT"),
     ("counts_json", "TEXT"),
     ("reassign_json", "TEXT"),
+    ("over_allowance_ref", "TEXT"),
 )
 # The ALTER TABLE below formats these into DDL (which takes no bound
 # parameters); this keeps them plain identifiers and types, so it stays safe.
@@ -335,6 +339,26 @@ class LitigationLedger:
         finally:
             conn.close()
 
+    def delivered_lists(self, start: str, end: str, exclude: str = "") -> int:
+        """Status lists that reached delivery (filed) among jobs created in
+        [start, end), without ``exclude``: the count the cycle's list allowance
+        is metered on (2026-10-24). Held and failed jobs never count (a failed
+        job resumed to delivery counts once, then), and neither does a
+        deadlines report or a staff reassignment: the allowance is for status
+        lists. A rehearsal has no row here at all. Keyed on ``created_at``,
+        the instant every other lane's cycle count keys on, so the cycle a list
+        belongs to is fixed when it is asked for."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM litigation_jobs WHERE created_at >= ? AND created_at < ? AND id != ? "
+                "AND state = 'delivered' AND COALESCE(report, 'status') = 'status'",
+                (start, end, exclude),
+            ).fetchone()
+            return int(row["n"])
+        finally:
+            conn.close()
+
     def live_for_ref(self, ref: str, exclude: str) -> str | None:
         """Another job holding this request email (anything but a failed
         requested run), so a resume of a failed one cannot collide with a
@@ -362,10 +386,14 @@ class LitigationLedger:
         finally:
             conn.close()
 
-    def submit(self, envelope: dict[str, Any]) -> str:
+    def submit(self, envelope: dict[str, Any], *, over_allowance_ref: str | None = None) -> str:
         """Row, then queue file, so a job file on disk always has its row. The
-        duplicate-ref and same-scope checks run inside one write transaction."""
+        duplicate-ref and same-scope checks run inside one write transaction.
+        ``over_allowance_ref`` (root only, checked by the verb) rides the row,
+        never the queue file."""
         env = validate_envelope(envelope)
+        if over_allowance_ref is not None and not CLOSE_REF.match(str(over_allowance_ref)):
+            raise EnvelopeError("over_allowance_ref must be a crane_verify id (vfy_<ULID>) or an audit row id (ULID)")
         key = scope_key({**env["scope"], **({"report": env["report"]} if env.get("report") else {})})
         job_id = _ulid()
         now = _iso_utc()
@@ -394,8 +422,8 @@ class LitigationLedger:
                 raise SubmitRefused(f"{what} for the same scope is already underway as job {twin['id']}", twin["id"])
             conn.execute(
                 "INSERT INTO litigation_jobs (id, created_at, updated_at, state, trigger, requester, request_ref, "
-                "scope_key, scope_json, file_to_matter_id, envelope_digest, report, reassign_json) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "scope_key, scope_json, file_to_matter_id, envelope_digest, report, reassign_json, "
+                "over_allowance_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -410,6 +438,7 @@ class LitigationLedger:
                     digest(env),
                     env.get("report") or "status",
                     json.dumps(env["reassign"], sort_keys=True) if env.get("reassign") else None,
+                    over_allowance_ref,
                 ),
             )
             conn.commit()
