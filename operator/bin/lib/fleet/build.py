@@ -153,6 +153,15 @@ class ImageExtractor:
                 found.setdefault(wanted[member], data)
         return found
 
+    def tag_digest(self, image_ref: str) -> str:
+        """The digest the registry holds for ``image_ref``'s tag: the sha256 of
+        the manifest bytes it serves (a registry's content digest is exactly
+        that), waiting out propagation as ``extract`` does."""
+        repo, _, tag = image_ref.rpartition(":")
+        if not repo or not tag or "/" in tag or "@" in image_ref:
+            raise ToolingError(f"not a tagged image reference: {image_ref!r}")
+        return "sha256:" + hashlib.sha256(self._manifest_when_visible(repo, tag)).hexdigest()
+
     def _auth(self) -> str:
         if self._token is None:
             env = self.tokens.env_for(ids.FLEET_REGISTRY_APP) or None
@@ -330,9 +339,9 @@ class Builder:
         res = self.fly.build_push(str(toml_path), label, pins["ss_console_sha"])
         require_ok(res, "fly deploy --build-only --push")
         image_ref = f"{ids.FLEET_REGISTRY}:{label}"
-        digest = digest_from_build_output(res.text)
+        digest = self.registry_digest(image_ref, digest_from_build_output(res.text))
         if not digest:
-            raise ToolingError("could not read the pushed image digest from the build output")
+            raise ToolingError("could not read the pushed image digest from the registry or the build output")
         release = {
             "release_id": f"img-{stamp}-{pins['ss_console_sha'][:8]}",
             "kind": "image", "image_ref": image_ref, "image_digest": ids.digest(digest),
@@ -344,6 +353,27 @@ class Builder:
         self.store.insert_release(release)
         self.log(f"release {release['release_id']}: {image_ref} {digest}")
         return release
+
+    def registry_digest(self, image_ref: str, printed: str | None) -> str | None:
+        """The pushed image's digest as the registry holds it for the tag.
+
+        2026-10-25: img-202610251824-acef8d02 recorded the build log's last
+        ``sha256:`` string, which the registry answered 404 for while the tag
+        served another digest; its artifacts were never read, and every skills
+        release to the seat running it refused ("no image-capabilities.json").
+        The registry's own manifest for the tag is the truth. The build log's
+        digest is used only when the registry cannot be read, and a
+        disagreement is logged, never silent."""
+        try:
+            got = self.extractor.tag_digest(image_ref)
+        except ToolingError as exc:
+            self.log(f"WARN: could not read {image_ref}'s digest from the registry ({exc}); using the build output's")
+            return printed
+        if printed and printed != got:
+            self.log(
+                f"WARN: the build output's last digest {printed} is not the registry's {got}; recording the registry's"
+            )
+        return got
 
     def upload_artifacts(self, release: dict[str, Any], pins: dict[str, str]) -> None:
         digest = release["image_digest"]

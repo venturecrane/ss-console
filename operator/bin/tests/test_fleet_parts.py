@@ -299,6 +299,54 @@ def test_extractor_gives_up_after_the_retry_schedule(monkeypatch: pytest.MonkeyP
     assert slept == []
 
 
+def test_tag_digest_is_the_sha256_of_the_manifest_the_registry_serves(monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib
+
+    body = b'{"schemaVersion": 2, "layers": []}'
+    asked: list[tuple[str, str]] = []
+    ex = ImageExtractor(ScriptRunner(Result(0, "tok", "")))
+    monkeypatch.setattr(ex, "_manifest", lambda repo, ref: asked.append((repo, ref)) or body)
+    assert ex.tag_digest(f"{ids.FLEET_REGISTRY}:rel-1") == "sha256:" + hashlib.sha256(body).hexdigest()
+    assert asked == [(ids.FLEET_REGISTRY, "rel-1")]
+    with pytest.raises(ToolingError, match="not a tagged image reference"):
+        ex.tag_digest(f"{ids.FLEET_REGISTRY}@sha256:" + "a" * 64)
+
+
+class _TagExtractor:
+    def __init__(self, answer: str | Exception) -> None:
+        self.answer = answer
+
+    def tag_digest(self, image_ref: str) -> str:
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+def _builder(answer: str | Exception, logged: list[str]):
+    from bin.lib.fleet.build import Builder
+
+    return Builder(Path("."), None, None, None, None, _TagExtractor(answer), logged.append)  # type: ignore[arg-type]
+
+
+def test_the_build_records_the_registrys_digest_over_the_build_log() -> None:
+    """2026-10-25: the build log's last sha256 was not the pushed image; the
+    release recorded a digest the registry 404s and skills releases refused."""
+    reg, log_digest = "sha256:" + "2" * 64, "sha256:" + "b" * 64
+    logged: list[str] = []
+    assert _builder(reg, logged).registry_digest("r:t", log_digest) == reg
+    assert any("not the registry's" in m for m in logged)
+    logged.clear()
+    assert _builder(reg, logged).registry_digest("r:t", reg) == reg and logged == []
+    assert _builder(reg, logged).registry_digest("r:t", None) == reg
+
+
+def test_an_unreadable_registry_falls_back_to_the_build_log_and_says_so() -> None:
+    logged: list[str] = []
+    printed = "sha256:" + "c" * 64
+    assert _builder(ToolingError("HTTP 404 after 5 attempts"), logged).registry_digest("r:t", printed) == printed
+    assert any("could not read" in m for m in logged)
+
+
 # -- render-fly-toml ------------------------------------------------------------------------
 def test_render_fly_toml_sourced_mode_renders_every_token(tmp_path: Path) -> None:
     out = tmp_path / "fly.toml"

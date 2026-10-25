@@ -41,7 +41,7 @@ def _hashes(slug_dir: Path) -> dict[str, str]:
     }
 
 
-def _delivered_same_matter(jobs: Path, matter_id: str, own: Path) -> list[Path]:
+def delivered_same_matter(jobs: Path, matter_id: str, own: Path) -> list[Path]:
     """The slug dirs of delivered jobs on ``matter_id``, newest first."""
     import yaml
 
@@ -76,7 +76,7 @@ def seed(sr: StageRun, queue: list[dict[str, Any]]) -> int:
     jobs = Path(sr.job.install_root) / "jobs"
     pages = files = 0
     left = set(want)
-    for src in _delivered_same_matter(jobs, str(sr.job.matter_id), Path(sr.job.path).parent):
+    for src in delivered_same_matter(jobs, str(sr.job.matter_id), Path(sr.job.path).parent):
         theirs = _hashes(src)
         for doc in sorted(left):
             part = src / "partial" / f"{doc}.jsonl"

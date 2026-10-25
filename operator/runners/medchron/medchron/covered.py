@@ -153,7 +153,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     def ids(names: set[str]) -> list[str]:
         return sorted({id_of[n] for n in names if n in id_of})
 
-    covered_ids, uncovered_ids = ids(covered), ids(uncovered)
+    covered_ids, uncovered_ids = _as_matter_ids(slug_dir, ids(covered)), _as_matter_ids(slug_dir, ids(uncovered))
     # An id that landed in both sets (two rows sharing an id) would let an update
     # decide either way, so the uncovered reading wins: re-reading is recoverable,
     # skipping a record is not.
@@ -163,6 +163,22 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         "uncovered": uncovered_ids,
         "pulled": len(covered_ids) + len(uncovered_ids),
     }
+
+
+def _as_matter_ids(slug_dir: Path, ids: list[str]) -> list[str]:
+    """Each attachment folded out of an email (``msgatt-<hash>``, the runner's
+    own id) as the id of the email it came from, which is a document on the
+    matter. 2026-10-25: a delivered chronology listed 37 attachment ids as
+    uncovered, the Operator named them in an update, and the update held
+    because no such document is on the matter. A row from before the email's
+    id was recorded (``container_id``) keeps its own id; the update's pull
+    resolves those (``stages/email_parents``)."""
+    parent = {
+        str(r["id"]): str(r["container_id"])
+        for r in read_jsonl(slug_dir / "raw_manifest.jsonl")
+        if str(r.get("id") or "").startswith("msgatt-") and r.get("container_id")
+    }
+    return sorted({parent.get(i, i) for i in ids})
 
 
 def covered_payload(slug_dir: Path, units: list[str], cfg: Any) -> dict[str, Any] | None:
