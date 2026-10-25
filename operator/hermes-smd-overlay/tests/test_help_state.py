@@ -183,8 +183,10 @@ def test_the_note_accepts_offer_kinds_as_no_ops(plugin, paths, roster, hs):
     assert _signals(plugin, "s-1")["pointer_due"] is True
 
 
-def test_a_fourth_email_in_a_thread_is_offered_once_per_thread(plugin, paths, roster):
-    """Recorded by the signals call: no note is called anywhere here."""
+def test_a_fourth_email_in_a_thread_is_measured_never_offered(plugin, paths, roster):
+    """The signal is still reported; no offer is due or recorded (ashton-price
+    2026-10-25: the old line went to a firm person waiting on queued work).
+    FALSIFIER: restore the struggle_due computation and its write."""
     now = time.time()
     for i in range(1, 4):
         _index(f"m-{i}", at=now - 400 + i)
@@ -193,18 +195,18 @@ def test_a_fourth_email_in_a_thread_is_offered_once_per_thread(plugin, paths, ro
     out = _signals(plugin, "s-4")
     assert out["struggle_in_thread"] is True
     assert out["struggle_basis"] == "repeated_messages_in_thread"
-    assert out["struggle_offer_due"] is True
-    assert _signals(plugin, "s-4")["struggle_offer_due"] is False
-    # A fifth email in the same thread: still offered only the once.
-    _index("m-5", at=now - 90)
-    _turn("s-5", "m-5")
-    assert _signals(plugin, "s-5")["struggle_offer_due"] is False
-
-    # A different thread is a different offer.
+    assert out["struggle_offer_due"] is False
     for i in range(6, 10):
         _index(f"m-{i}", thread="t-2", at=now - 60 + i)
     _turn("s-9", "m-9")
-    assert _signals(plugin, "s-9")["struggle_offer_due"] is True
+    assert _signals(plugin, "s-9")["struggle_offer_due"] is False
+    conn = sqlite3.connect(paths["state"])
+    try:
+        assert conn.execute("SELECT count(*) FROM help_threads").fetchone()[0] == 0
+        kinds = [k for (k,) in conn.execute("SELECT kind FROM help_events")]
+    finally:
+        conn.close()
+    assert "struggle_offer" not in kinds
 
 
 def test_a_routine_back_and_forth_is_not_a_struggle(plugin, paths, roster):
@@ -278,7 +280,6 @@ def test_nine_prior_requests_do_not_stop_it(plugin, paths, roster, hs):
     _turn("s-x", "m-last")
     out = _signals(plugin, "s-x")
     assert out["stopped"] is False
-    assert out["struggle_offer_due"] is True
 
 
 # --------------------------------------------------------------------------- #
@@ -398,7 +399,7 @@ def test_no_address_or_thread_is_stored(plugin, paths, roster):
     for i in range(1, 4):
         _index(f"m-{i}", at=now - 100 + i, thread="conv-AAQkADI0")
     _turn("s-3", "m-3")
-    assert _signals(plugin, "s-3")["struggle_offer_due"] is True
+    assert _signals(plugin, "s-3")["struggle_in_thread"] is True
     _note(plugin, "s-3", "help_given")
     raw = paths["state"].read_bytes().lower()
     # The raw file (the sqlite header itself carries an '@' byte, so the
