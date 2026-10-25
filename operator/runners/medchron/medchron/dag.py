@@ -17,8 +17,9 @@ extract_after_fold (PR 2); vision, billing_extract, build_units (PR 4); map,
 repair_truncated, assemble, merge (PR 5); group, filter, exhibits,
 condense, summarize (PR 6); the audit loop (PR 7); build_doc, the classifiers,
 the strip, the coverage gate, the billing chart and worksheet (PR 8); identity, the ICD
-fetch, render and manifest (PR 9); the pre-delivery review (2026-10-13). Nothing runs as a subprocess any more;
-`script` stays on the Stage for the strangler's history and is always "".
+fetch, render and manifest (PR 9); the pre-delivery review (2026-10-13); the two
+duplicate-record stages, content_dupes and exhibit_merge (2026-10-25). Nothing
+runs as a subprocess any more; `script` stays on the Stage for the strangler's history and is always "".
 """
 
 from __future__ import annotations
@@ -37,8 +38,10 @@ from .stages import (
     classify as _classify,
     compose as _compose,
     condense as _condense,
+    content_dupes as _content_dupes,
     coverage as _coverage,
     dos_check as _dos_check,
+    exhibit_merge as _exhibit_merge,
     icd_fetch as _icd,
     identity as _identity,
     manifest as _manifest,
@@ -177,6 +180,10 @@ STAGES: tuple[Stage, ...] = (
         external=True,
     ),
     Stage("extract_after_fold", "", _slug, scope="slug", requires=("fold_msg",), runner=_extract.run),
+    # 2026-10-25 (Pamplona): a document whose every page another pulled one
+    # holds (8 bytes apart, or the same pages in another order) is read once,
+    # before vision pays for it twice; past build, exhibit_merge settles it.
+    Stage("content_dupes", "", _slug, scope="slug", requires=("extract_after_fold",), runner=_content_dupes.run),
     # ---- paid: transcription, units, billing -----------------------------
     Stage(
         "vision",
@@ -184,7 +191,7 @@ STAGES: tuple[Stage, ...] = (
         _slug,
         paid=True,
         scope="slug",
-        requires=("extract_after_fold",),
+        requires=("content_dupes",),
         runner=_vision.run,
         exit_map={
             1: (
@@ -337,7 +344,7 @@ STAGES: tuple[Stage, ...] = (
         "",
         lambda c: [c.slug, c.unit.unit, c.unit.client_name, c.job.incident_date],
         requires=("icd_tables",),
-        invalidates=("audit", "coverage_gate", "dos_check", "strip_apply"),
+        invalidates=("audit", "coverage_gate", "dos_check", "strip_apply", "exhibit_merge"),
         runner=_build_doc.run,
         exit_map={
             1: (
@@ -403,11 +410,30 @@ STAGES: tuple[Stage, ...] = (
             **_STRIP_COMMON,
         },
     ),
+    # 2026-10-25 (Pamplona): two exhibits holding the same pages are delivered
+    # once, renumbered and disclosed, before the gates and the audit read them.
+    # Everything after it reads the exhibits or the document, so all of it
+    # reopens; manifest in turn reopens the review.
+    Stage(
+        "exhibit_merge",
+        "",
+        _slug_unit,
+        requires=("strip_apply",),
+        runner=_exhibit_merge.run,
+        invalidates=("coverage_gate", "dos_check", "billing_chart", "billing_docx", "audit", "render", "manifest"),
+        exit_map={
+            _exhibit_merge.EXIT_BLIND: (
+                REFUSED,
+                "exhibit_merge falsifier: two exhibits pair page for page, but so does the pairing shifted by one "
+                "page, so the check cannot fail and proves nothing; nothing was merged",
+            )
+        },
+    ),
     Stage(
         "coverage_gate",
         "",
         _slug_unit,
-        requires=("strip_apply",),
+        requires=("exhibit_merge",),
         runner=_coverage.run,
         rehearse=_coverage.rehearse,
         exit_map={
