@@ -704,6 +704,13 @@ export interface Connector {
   username?: string
   secret_ref?: string
   property_id?: string | number
+  /**
+   * `connectors.WebSearch.sealed_reader` (ADR 0099). When true, the seat
+   * registers the sealed `web_research` reader: code does the searching and
+   * reading, one fixed-prompt model call returns schema-checked summaries, and
+   * the turn is marked web_derived. Boolean, WebSearch only, absent means false.
+   */
+  sealed_reader?: boolean
 }
 
 /**

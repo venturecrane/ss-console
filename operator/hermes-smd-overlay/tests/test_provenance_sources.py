@@ -340,6 +340,9 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         # Hermes-core filesystem / workspace / self-inspection.
         "read_file",
         "search_files",
+        # The sealed web reader (ADR 0099): public web summaries, never the
+        # tenant's records.
+        "web_research",
         "skills_list",
         "skill_view",
         "session_search",

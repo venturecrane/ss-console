@@ -1358,6 +1358,14 @@ _COUPLES_REFUSED_TOOLSETS = (
 )
 
 
+#: The marketing role (ADR 0098) reads the web only through the sealed reader
+#: (``web_research``, ADR 0099): the native ``web`` toolset hands the model raw
+#: page text and marks the turn unknown_external, which would undo the reader's
+#: point. So the native toolset comes off that role's menu.
+_MARKETING_ROLE = "marketing"
+_MARKETING_REFUSED_TOOLSETS = ("web",)
+
+
 def _space_mode(customer: dict[str, Any]) -> bool:
     """True iff the seat authors ``people:`` (ADR 0091 space mode). Same rule as
     ``shared.space.parse_space_config``: a present, non-null key."""
@@ -1605,6 +1613,10 @@ def _persona_config(
     # fence (shared/couples_surface.py).
     if _seat_role(customer) == _COUPLES_ROLE:
         for toolset in _COUPLES_REFUSED_TOOLSETS:
+            if toolset not in disabled_toolsets:
+                disabled_toolsets.append(toolset)
+    if _seat_role(customer) == _MARKETING_ROLE:
+        for toolset in _MARKETING_REFUSED_TOOLSETS:
             if toolset not in disabled_toolsets:
                 disabled_toolsets.append(toolset)
     # `max_turns` pins the v0.18 (v2026.7.1) per-turn tool-iteration budget of

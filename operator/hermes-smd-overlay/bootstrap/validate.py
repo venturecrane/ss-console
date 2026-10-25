@@ -1405,6 +1405,22 @@ def _validate_connectors(cfg: dict[str, Any], errors: list[str]) -> None:
             continue
         _validate_msgraph_connector(key, conn, errors)
         _validate_marketing_connector(key, backend, conn, errors)
+        _validate_sealed_reader(key, conn, errors)
+
+
+def _validate_sealed_reader(key: str, conn: dict[str, Any], errors: list[str]) -> None:
+    """``sealed_reader`` (ADR 0099): an optional boolean, valid only on the
+    WebSearch connector. Mirrors ss-console ``checkSealedReader``. Absent means
+    false: the ``web_research`` tool is not registered."""
+    raw = conn.get("sealed_reader")
+    if raw is None:
+        return
+    prefix = f"connectors.{key}.sealed_reader"
+    if key != "WebSearch":
+        _err(f"{prefix}: only valid on the WebSearch connector (connector is {key!r})", errors)
+        return
+    if not isinstance(raw, bool):
+        _err(f"{prefix}: must be true or false; got {type(raw).__name__}", errors)
 
 
 _WORDPRESS_BACKEND = "mcp:wordpress"

@@ -257,6 +257,13 @@ class MatterMembership:
         about who is a party to what."""
         return set(self._content_read)
 
+    def all_party_emails(self) -> set[str]:
+        """Every party address this session learned, across all matters."""
+        out: set[str] = set()
+        for emails in self._by_matter.values():
+            out |= emails
+        return out
+
     def matters_for(self, email: str) -> set[str]:
         """Every matter this address is known to be a party to."""
         addr = _norm(email)
@@ -308,6 +315,13 @@ def membership_for(session_id: str) -> MatterMembership:
     else:
         _sessions.move_to_end(session_id)
     return existing
+
+
+def peek(session_id: str) -> MatterMembership | None:
+    """The session's membership map WITHOUT creating one (or None). For
+    readers that must not allocate a register just by asking (the search-egress
+    screen, ADR 0099)."""
+    return _sessions.get(session_id) if session_id else None
 
 
 def drop(session_id: str) -> None:

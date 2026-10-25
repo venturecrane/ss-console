@@ -602,11 +602,25 @@ PENDING = PendingInbound()
 # ---------------------------------------------------------------------------
 
 
+# A SESSION-only trust class (ADR 0099), deliberately NOT in ``_TRUST_CLASSES``:
+# no inbound envelope may carry it (an envelope claiming it falls closed to
+# ``unknown_external`` like any other unrecognized value). Only the sealed web
+# reader marks it, after code has searched, fetched and schema-checked what a
+# fixed-prompt model call returned. It is "less tainted, not clean": every
+# consumer that asks ``is_tainted`` (every one compares against ``internal``)
+# still sees a tainted turn, and the trust gate lifts exactly one action for it
+# (a staff email whose every recipient is an authored admin).
+TRUST_CLASS_WEB_DERIVED = "web_derived"
+
 # Restrictiveness ordering for trust classes (higher == less trusted == stickier).
+# web_derived ranks between internal and the external classes, so marking is
+# monotonic: a later outside read raises a web_derived session to external, and
+# nothing ever lowers one.
 _TRUST_RANK: dict[str, int] = {
     TRUST_CLASS_INTERNAL: 0,
-    TRUST_CLASS_KNOWN_EXTERNAL: 1,
-    TRUST_CLASS_UNKNOWN_EXTERNAL: 2,
+    TRUST_CLASS_WEB_DERIVED: 1,
+    TRUST_CLASS_KNOWN_EXTERNAL: 2,
+    TRUST_CLASS_UNKNOWN_EXTERNAL: 3,
 }
 
 
@@ -1005,6 +1019,7 @@ __all__ = [
     "TRUST_CLASS_INTERNAL",
     "TRUST_CLASS_KNOWN_EXTERNAL",
     "TRUST_CLASS_UNKNOWN_EXTERNAL",
+    "TRUST_CLASS_WEB_DERIVED",
     "VERIFICATION_NOT_APPLICABLE",
     "VERIFICATION_UNVERIFIED",
     "VERIFICATION_VERIFIED",

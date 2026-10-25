@@ -50,6 +50,10 @@ UNFENCED_READ_BY_DESIGN: frozenset[str] = frozenset(
         # 2026-06-12; Captain ruled fence-both — external invites carry
         # third-party content — and they moved to _FENCED_READ_TOOLS.)
         "workspace_drive_list",
+        # The sealed web reader (ADR 0099): returns schema-validated summaries
+        # with checked source links, and the turn it returns to is web_derived
+        # so it cannot act on what it read.
+        "web_research",
         # Gmail search/list: returns only message {id, threadId} metadata
         # (messages.list contract — no snippet, subject, or body), so it carries
         # no attacker-influenceable content. The message BODY read
@@ -230,6 +234,7 @@ def test_unfenced_by_design_has_no_stale_entries() -> None:
         "hermes-smd-record-store",
         "hermes-smd-voice-notes",
         "hermes-smd-calendar",
+        "hermes-smd-research",
     ):
         registered |= set(load_plugin(plugin_dir).TOOLS)
     classified = set(TOOL_ACTION_CLASS_MAP)

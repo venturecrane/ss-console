@@ -683,6 +683,27 @@ class ProvenanceRegister:
         """
         return frozenset(self._money)
 
+    def contains_text(self, text: str) -> bool:
+        """True iff ``text`` carries an identifier this register holds.
+
+        Built for the search-egress screen (ADR 0099): a web query or URL that
+        repeats a case number, A-number, receipt, SSN or registered matter
+        number the session READ from the tenant's records is refused before it
+        leaves the seat. Dates are EXCLUDED on purpose: a date is not
+        identifying on its own, and "news from March 3, 2026" must not be
+        refused because a deadline that day was read. Names are excluded
+        too (this register's names are greeting slots, not parties).
+        """
+        if not isinstance(text, str) or not text:
+            return False
+        for hit in _extract(text, include_names=False):
+            if hit.kind is IdKind.DATE:
+                continue
+            if hit.canonical in self._canon:
+                return True
+        known = _known_number_re(self._matter_numbers)
+        return bool(known is not None and known.search(text))
+
     def verifies(self, hit: IdentifierHit) -> bool:
         if hit.kind is IdKind.NAME:
             return hit.canonical in self._names

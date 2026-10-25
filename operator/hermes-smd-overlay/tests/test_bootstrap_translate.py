@@ -447,8 +447,34 @@ def test_translate_emits_disabled_toolsets_fleet_default(tmp_path):
     for ts in ("browser", "session_search", "tts", "computer_use", "workspace"):
         assert ts in disabled
     # Load-bearing surfaces must never appear here: web is fenced-safe in
-    # client-verification-tracker, and skills/file/memory/todo are core.
+    # client-verification-tracker, and skills/file/memory/todo are core. The
+    # web assertion is ROLE-SCOPED (ADR 0099): only the marketing role drops
+    # the native web toolset (test_translate_marketing_role_disables_native_web).
     for ts in ("web", "skills", "file", "memory", "todo", "escalation", "jobs"):
+        assert ts not in disabled
+
+
+def test_translate_marketing_role_disables_native_web(tmp_path, monkeypatch):
+    """A marketing seat reads the web only through the sealed reader (ADR
+    0099), so its native ``web`` toolset is disabled; every other surface the
+    fleet-default test protects stays on."""
+    body = VALID_YAML.replace(
+        "customer_id:",
+        "seat:\n  kind: customer\n  product: operator\n  role: marketing\ncustomer_id:",
+        1,
+    )
+    assert "role: marketing" in body
+    monkeypatch.setenv("ROLES_DIR", str(Path(__file__).resolve().parents[2] / "roles"))
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, body)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
+    disabled = config["agent"]["disabled_toolsets"]
+    assert "web" in disabled
+    for ts in ("skills", "file", "memory", "todo", "escalation", "jobs"):
         assert ts not in disabled
 
 

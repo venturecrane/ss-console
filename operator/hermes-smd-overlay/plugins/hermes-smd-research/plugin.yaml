@@ -1,0 +1,7 @@
+name: hermes-smd-research
+version: "0.1.0"
+description: "The sealed web reader (ADR 0099): web_research searches (Brave) or reads a public YouTube channel feed, fetches pages under address and size limits, and returns schema-checked summaries from one tool-less model call. The turn is marked web_derived. Registered only on a seat whose customer.yaml authors connectors.WebSearch.sealed_reader: true; every other seat gets no tool."
+author: VentureCrane
+# Empty on purpose: the gate is register(), which reads the trusted config. A
+# failing requires_env would drop the tool silently.
+requires_env: []
