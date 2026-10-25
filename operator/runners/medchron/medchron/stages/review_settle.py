@@ -29,6 +29,10 @@ _ABBREV = re.compile(
     r"(?i)(?:^|\s|,)(?:dr|mr|mrs|ms|st|vs|no|pp?|approx|e\.g|i\.e|jr|sr"
     r"|m\.d|d\.o|r\.n|p\.a|n\.p|ph\.d|a\.m|p\.m|l\.v\.n|f\.n\.p|d\.p\.m)\.$"
 )
+#: A list item's number ("7.") opens its sentence, never ends one (Pamplona
+#: 2026-10-25: "7. Remaining systems as printed." split in two and the quote
+#: matched neither piece).
+_LIST_NO = re.compile(r"^\d{1,2}\.$")
 _HELD = re.compile(r"\x00(\d+)\x00")
 #: An entry's date line (exactly a date: the entry's first line).
 _DATE_LINE = re.compile(r"^\d{2}/\d{2}/\d{4}\s*$")
@@ -36,19 +40,28 @@ _DATE_LINE = re.compile(r"^\d{2}/\d{2}/\d{4}\s*$")
 _MIN_FRAGMENT = 6
 
 
+#: Every quote mark read as one: a reviewer who writes 'Findings' quotes the
+#: document's "Findings" (Pamplona 2026-10-25).
+_QUOTES = str.maketrans(dict.fromkeys('"“”‘’`', "'"))
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split()).lower().translate(_QUOTES)
+
+
 def _fragments(phrase: str) -> list[str]:
-    """A quoted phrase as the pieces it must contain, lower case and spaced
-    once: a reviewer's ellipsis ("printed after ... reads as follows") splits
-    it. Pieces shorter than ``_MIN_FRAGMENT`` are dropped; none left, no
-    deletion."""
-    out = [" ".join(p.split()).lower().strip(" ,;:") for p in re.split(r"\.\.\.|…", phrase)]
+    """A quoted phrase as the pieces it must contain, lower case, spaced
+    once, quote marks made one: a reviewer's ellipsis ("printed after ...
+    reads as follows") splits it. Pieces shorter than ``_MIN_FRAGMENT`` are
+    dropped; none left, no deletion."""
+    out = [_flat(p).strip(" ,;:") for p in re.split(r"\.\.\.|…", phrase)]
     return [p for p in out if len(p) >= _MIN_FRAGMENT]
 
 
 def _has(text: str | None, frags: list[str]) -> bool:
     if text is None or not frags:
         return False
-    t = " ".join(text.split()).lower()
+    t = _flat(text)
     return all(f in t for f in frags)
 
 
@@ -77,7 +90,7 @@ def _split(line: str) -> list[tuple[str, bool]]:
     cur = ""
     for part in _BOUNDARY.split(CL.CITE.sub(hold, line.strip()).strip()):
         cur = f"{cur} {part}" if cur else part
-        if not _ABBREV.search(cur):
+        if not _ABBREV.search(cur) and not _LIST_NO.match(cur.strip()):
             raw.append(cur)
             cur = ""
     if cur:
@@ -113,11 +126,23 @@ def _cut(line: str, frags: list[str]) -> str | None:
     return line if len(kept) == len(_split(line)) else " ".join(p[0] for p in kept)
 
 
+#: A provider heading's trailing clause that names a role or an inbox, not a
+#: provider ("<Clinic> Surgery, hand RN triage supporting <Doctor>, MD" is a
+#: message pool, Pamplona 2026-10-25). Cut, the name
+#: before the comma stays; a credential after a name ("Jane Roe, RN") is no role.
+_ROLE_CLAUSE = re.compile(
+    r"^(?P<keep>[^,|()]*[^,|()\s])\s*,\s*(?P<role>[^|]*\b(?:triage|pool|supporting|on behalf of|inbox"
+    r"|nurse line|documenting|care team|staff)\b[^|]*?)\s*$",
+    re.I,
+)
+
+
 def _heading_cut(line: str, frags: list[str]) -> str:
     """A provider heading with each parenthetical the phrase overlaps
-    deleted, with the space before it. The provider's name and the section
-    after " | " stay; the line itself is never deleted."""
-    low = line.lower()
+    deleted, with the space before it; with none, a trailing role clause the
+    phrase overlaps (``_ROLE_CLAUSE``) is cut. The provider's name and the
+    section after " | " stay; the line itself is never deleted."""
+    low = line.lower().translate(_QUOTES)  # same length as `line`: spans index it
     spans: list[tuple[int, int]] = []
     for f in frags:
         i = low.find(f)
@@ -128,6 +153,12 @@ def _heading_cut(line: str, frags: list[str]) -> str:
     for m in reversed(list(re.finditer(r"\s*\([^()]*\)", line))):
         if any(a < m.end() and m.start() < b for a, b in spans):
             out = out[: m.start()] + out[m.end() :]
+    if out != line or not spans:
+        return out
+    head, sep, rest = line.partition(" | ")
+    m = _ROLE_CLAUSE.match(head)
+    if m and any(m.start("role") < b and a < len(head) for a, b in spans):
+        return m.group("keep") + sep + rest
     return out
 
 
@@ -202,10 +233,35 @@ def scrub_system(sr: StageRun, doc: Path, out: Outcome, stats: dict[str, int]) -
         stats["system_scrubbed"] += 1
     if not edits:
         return
+    out.renamed = _rename_in_tables(lines, lo, edits)
     doc.write_text(re.sub(r"\n{3,}", "\n\n", "\n".join(ln for ln in lines if ln is not None)), encoding="utf-8")
     out.changed = True
     _sync_edits(sr, edits)
     sr.log(f"review: {len(edits)} line(s) of system wording deleted from the entries")
+    if out.renamed:
+        sr.log(f"review: {out.renamed} summary-table cell(s) carry the shortened provider heading")
+
+
+def _rename_in_tables(lines: list[str | None], lo: int, edits: list[tuple[str, str | None]]) -> int:
+    """A provider heading the scrub shortened is shortened in the summary
+    tables before the entries too (the Treatment Timeline's provider cell), so
+    the document names one provider one way. Exact cells only; the count."""
+    names = {}
+    for old, new in edits:
+        if new is not None and " | " in old and " | " in new:
+            a, b = old.partition(" | ")[0].strip(), new.partition(" | ")[0].strip()
+            if a != b and b:
+                names[a] = b
+    n = 0
+    for i in range(lo):
+        ln = lines[i]
+        if ln is None or not ln.lstrip().startswith("|"):
+            continue
+        for a, b in names.items():
+            if f"| {a} |" in ln:
+                lines[i] = ln = ln.replace(f"| {a} |", f"| {b} |")
+                n += 1
+    return n
 
 
 def _sync_edits(sr: StageRun, edits: list[tuple[str, str | None]]) -> None:
@@ -303,3 +359,45 @@ def disclose_differ(sr: StageRun, doc: Path, out: Outcome, stats: dict[str, int]
         elif f.cite.strip():
             out.findings[k] = replace(f, grade=review.NOTE, finding=FLAG_NOTE + f.finding)
             stats["differ_flagged"] = stats.get("differ_flagged", 0) + 1
+
+
+# ---- a held review, settled again on resume ---------------------------------------
+_FIELDS = ("grade", "check", "finding", "cite", "by")
+
+
+def resettle(
+    sr: StageRun,
+    rd: Path,
+    rec: dict[str, Any],
+    rows: list[dict[str, Any]],
+    code: Any,
+    *,
+    update: bool,
+    notes_tag: str,
+    today: Any,
+) -> tuple[list[review.Finding], list[dict[str, Any]]] | None:
+    """A review held on its recorded findings, settled again by today's $0
+    rules (2026-10-25, Pamplona: held on three findings a rule shipped after
+    the review could settle, and a resume only held again, since the record
+    is forgotten only when the package changes). No repair round and no
+    model call: the same findings give the same result every time. When the
+    rules change the chronology it is re-rendered and code's findings are
+    taken afresh on what will be filed (`code(rows)`), replacing the
+    recorded ones. Returns (findings, rows): rows is the same object when
+    nothing at all changed; None when the re-render fails (nothing is filed)."""
+    from . import review_policy
+
+    found = [review.Finding(**{k: str(f.get(k) or "") for k in _FIELDS}) for f in rec.get("findings") or []]
+    settled, new_rows = review_policy.package(
+        sr, rd, found, rows, update=update, notes_tag=notes_tag, repair=False, today=today
+    )
+    if new_rows is None:
+        return None
+    if new_rows is rows:
+        same = [f.grade for f in settled] == [str(f.get("grade")) for f in rec.get("findings") or []]
+        return settled, rows if same else list(rows)
+    fresh = list(code(new_rows))
+    kept = [f for f in settled if f.by != "code"]
+    left = sum(f.grade == review.MUST for f in kept + fresh)
+    sr.log(f"review: settled again on resume by the current rules: {left} must-fix left (code's findings taken afresh)")
+    return kept + fresh, new_rows

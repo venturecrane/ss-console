@@ -71,7 +71,7 @@ from typing import Any
 from .. import llm, prompts
 from ..audit.claims import CITE
 from ..proof import checks, review
-from . import review_policy
+from . import review_policy, review_settle
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
@@ -487,6 +487,23 @@ def _review_part(
         return out
 
 
+def _code(
+    sr: StageRun, rd: Path, rows: list[dict[str, Any]], today: date | None
+) -> tuple[list[review.Finding], str, list[str]]:
+    """(code's findings on the package in `rows`, the chronology's text, the
+    names counted as delivered)."""
+    chron_path = Path(rows[0]["local_path"])
+    chron = docx_text(chron_path)
+    # An update files into the delivered chronology's folder, where the
+    # delivered exhibits it still cites already are: they are part of the
+    # set the attorney holds, so they count as delivered.
+    filed = rd / "update" / "already_filed.json"
+    names = [m["name"] for m in rows] + (json.loads(filed.read_text(encoding="utf-8")) if filed.is_file() else [])
+    others = {f"file {m['name']}": docx_text(Path(m["local_path"])) for m in rows[1:] if m["name"].endswith(".docx")}
+    dob = _as_date(sr.unit.dob or "")
+    return code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob), chron, names
+
+
 def run(
     sr: StageRun,
     *,
@@ -510,19 +527,28 @@ def run(
         review.forget(rd)  # the package changed since it was reviewed
     _consume_redo(rd, sr.job.path.parent)
     status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
+    if status == "held" and rec:
+        # A resume re-applies the $0 rules to the findings already paid for
+        # (``review_settle.resettle``): no model call, the same result each time.
+        again = review_settle.resettle(
+            sr,
+            rd,
+            rec,
+            rows,
+            lambda r: _code(sr, rd, r, today)[0],
+            update=update_material(rd) is not None,
+            notes_tag=_NOTES_TAG,
+            today=today or date.today(),
+        )
+        if again is None:
+            return EXIT_RERENDER
+        if again[1] is not rows:
+            rows = again[1]
+            review.save(rd, again[0], model=str(rec.get("model") or ""), lane="chronology")
+            (rd / INPUT_SHA).write_text(_input_sha(rows), encoding="utf-8")
+            status, rec = review.gate(rd, sr.job.path.parent, consume_redo=False)
     if status == "missing":
-        chron_path = Path(rows[0]["local_path"])
-        chron = docx_text(chron_path)
-        # An update files into the delivered chronology's folder, where the
-        # delivered exhibits it still cites already are: they are part of the
-        # set the attorney holds, so they count as delivered.
-        filed = rd / "update" / "already_filed.json"
-        names = [m["name"] for m in rows] + (json.loads(filed.read_text(encoding="utf-8")) if filed.is_file() else [])
-        others = {
-            f"file {m['name']}": docx_text(Path(m["local_path"])) for m in rows[1:] if m["name"].endswith(".docx")
-        }
-        dob = _as_date(sr.unit.dob or "")
-        found = code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob)
+        found, chron, names = _code(sr, rd, rows, today)
         model = _model(sr)
         try:
             found += _model_findings(sr, rd, model, chron, names, found)
