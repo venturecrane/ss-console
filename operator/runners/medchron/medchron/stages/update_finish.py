@@ -154,6 +154,10 @@ def update_note(sr: StageRun, ud: Path) -> Any:
                 f" {n} {what} a person other than the client, so {'it was' if n == 1 else 'they were'} left "
                 f"out of this chronology: {'; '.join(filed['left_out'])}."
             )
+        for why, names in sorted((filed.get("excluded") or {}).items()):
+            n = len(names)
+            out += f" {n} requested document{'' if n == 1 else 's'} {'was' if n == 1 else 'were'} not read ({why}): "
+            out += f"{'; '.join(names)}."
         return out
 
     return note

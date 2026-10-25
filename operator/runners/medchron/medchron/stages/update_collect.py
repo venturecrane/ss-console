@@ -10,9 +10,10 @@ exhibits' numbers before the audit can key a claim to them, renames their
 files to match, and writes the audit document over
 ``runs/<unit>/final-chronology.md``: the new entries, plus a claim per
 diagnosis code they record first (``update/icd.py``), so every Diagnostic
-Highlights row the update adds is audited. Nothing new to add holds with
-``update_held:`` (the delivered chronology already lists every visit the new
-documents record), naming how many documents were read.
+Highlights row the update adds is audited. Nothing new to add (the delivered
+chronology already lists every visit the new documents record) is an ANSWER
+since 2026-10-25, not a hold: the job ends delivered already current with
+nothing filed (``update/outcome``).
 
 `update_summary` runs only when the update adds a pre-incident visit. The
 delivered Prior Medical History is NEVER rewritten: the added pre-incident
@@ -38,11 +39,11 @@ from typing import Any
 from .. import icd_tables, llm, meta_markers, prompts
 from ..audit import claims as CL
 from ..update import body as B, collect as C, handwritten as H, icd, legend as LG, providers as P
-from ..update import records_dates as RD, select as S, uncited as U
+from ..update import outcome as UO, records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .summarize import beyond_source
-from .update_base import HELD, headings, plan, update_dir
+from .update_base import headings, plan, update_dir
 
 
 def _rename(
@@ -291,11 +292,16 @@ def run_collect(sr: StageRun) -> int:
     entries, rep = _shape(sr, base_md, rd, provisional)
     entries, keep, uncited, remap = C.compact(entries, provisional)
     if not keep:
+        # An answer, not a hold (2026-10-25): delivered already current, nothing
+        # filed (``update/outcome``). This run's result is written as what it
+        # is, so no earlier attempt's entries can read as added.
+        (ud / "new_entries.md").write_text("", encoding="utf-8")
+        (ud / "new_exhibits.final.json").write_text("[]", encoding="utf-8")
         sr.log(
-            HELD + f"nothing new to add: the {len(provisional)} new document(s) record no visit the delivered "
+            f"nothing new to add: the {len(provisional)} new document(s) record no visit the delivered "
             f"chronology does not already list ({ {k: v for k, v in rep.items() if isinstance(v, int)} })"
         )
-        return 2
+        return UO.EXIT
     try:
         claims = _icd_claims(sr, ud, rd, base_md, entries)
     except icd_tables.TablesMissing as exc:
@@ -312,6 +318,7 @@ def run_collect(sr: StageRun) -> int:
     (ud / "new_entries.md").write_text("\n\n".join(entries) + "\n", encoding="utf-8")
     (ud / "compose_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     (ud / "review_checkpoint.json").unlink(missing_ok=True)  # a new collect is a new update review
+    (out / "update-review-settled.json").unlink(missing_ok=True)  # and its settled notes start empty
     doc = C.audit_document(base_md, entries, keep, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
     counts = {k: v for k, v in rep.items() if isinstance(v, int)}

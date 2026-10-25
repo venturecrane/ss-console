@@ -15,7 +15,9 @@ each one that is not a new exhibit is named with what it is:
   client, 2026-10-24): named, with the rule's reason, and not counted among
   the documents reviewed;
 * anything else the pull holds that no exhibit, copy or rule accounts for:
-  named as not read, so no document is ever left out of the count silently.
+  named as not read, so no document is ever left out of the count silently;
+* a requested document the firm's own name or folder rules kept out of the
+  pull: named under the rule's reason, not counted among those reviewed.
 """
 
 from __future__ import annotations
@@ -107,4 +109,17 @@ def accounted(
     floor = len(keep) + len(uncited) + len(copies) + len(unreadable) + len(unread)
     docs = max(len([i for i in by_id if i not in excluded]), floor)
     left_out = [vendor_name(by_id[i]) for i in by_rule if i in by_id]
-    return {"docs": docs, "copies": copies, "unreadable": unreadable, "unread": unread, "left_out": left_out}
+    # A requested document the firm's own name or folder rules kept out of the
+    # pull (``download._named_targets``), named under the rule's reason (2026-10-25).
+    by_why: dict[str, list[str]] = {}
+    for x in sel.get("excluded_named") or []:
+        why = str(x.get("why") or "excluded by the firm's rules")
+        by_why.setdefault(why, []).append(str(x.get("name") or x.get("id")))
+    return {
+        "docs": docs,
+        "copies": copies,
+        "unreadable": unreadable,
+        "unread": unread,
+        "left_out": left_out,
+        "excluded": by_why,
+    }

@@ -456,6 +456,10 @@ class Daemon:
             # Code-authored: the request was an update INTO the delivered
             # chronology, so the reply says the chronology was updated.
             lines.append("Request: update into the delivered chronology.")
+            # An update that found nothing new: its counts per reason, code-authored.
+            from .update import outcome as update_outcome
+
+            lines.extend(update_outcome.wake_lines(verdict_mod.read(self.job_dir(job_id), ""), state))
         if fields.get("folder_id"):
             lines.append(f"Delivered folder id: {fields['folder_id']}.")
         if state != "delivered":

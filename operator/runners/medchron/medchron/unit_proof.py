@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .proof import review as review_mod
+from .update import outcome as outcome_mod
 
 #: The reasons the daemon pages SMD on (proof/watch.py). A stage that ends on
 #: one says so in its own log line, and the driver carries that line as the
@@ -53,8 +54,15 @@ def block(rd: Path, files: list[dict[str, Any]], pricing: Any) -> dict[str, Any]
 
 def for_outcome(o: Any, rd: Path, pricing: Any) -> dict[str, Any] | None:
     """The proof block a delivered outcome carries; None on any other (the
-    driver sits at its module-size ceiling, so the branch lives here)."""
-    return block(rd, o.files, pricing) if o.outcome == "delivered" else None
+    driver sits at its module-size ceiling, so the branch lives here). An
+    update delivered ALREADY CURRENT filed nothing, so it has nothing to read
+    back: its block is the zero-file kind, proven by the outcome record
+    (``update/outcome.proof``) and accepted by the gate only on that."""
+    if o.outcome != "delivered":
+        return None
+    if getattr(o, "current", None) is not None:
+        return outcome_mod.proof(rd, o.files)
+    return block(rd, o.files, pricing)
 
 
 def unit_by_stage(rd: Path, pricing: Any) -> dict[str, float]:

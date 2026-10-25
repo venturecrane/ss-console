@@ -73,7 +73,7 @@ from ..audit import handwritten_evidence as HE
 from ..update import body as B, duplicates as DU, entry_edits as EE, finisher as FN, handwritten as H
 from ..update import frozen as FZ, illegible as IL
 from ..update import review_parts as RP, review_repair as RR
-from . import audit_loop
+from . import audit_loop, update_review_settle as URS
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
 from .update_review_io import At, Images, _checkpoint, _resume, _sha, already_pages, page_counts
@@ -461,19 +461,6 @@ def _mark_refiled(sr: StageRun, homes: dict[int, str]) -> None:
 
 
 # ---- the loop ---------------------------------------------------------------------
-def _plain(f: RR.Finding) -> str:
-    where = f" (Exhibit {f.exhibit}, page {f.page})" if f.exhibit and f.page else ""
-    return f"entry {f.anchor or 'unnamed'}{where}: {f.problem or f.klass}"
-
-
-def _hold_line(open_: list[RR.Finding]) -> str:
-    first = "; ".join(_plain(f) for f in open_[:4])
-    return (
-        f"update_held: the independent review of the update left {len(open_)} must-fix finding(s) the finisher "
-        f"could not correct against the pages; SMD finishes it: {first}"
-    )[:480]
-
-
 def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
     """A rerun on the audit document this stage already settled: not paid again."""
     if rec.get("doc_sha_out") != _sha(md):
@@ -486,8 +473,9 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
             sr.log("update review: released by SMD; the open findings stay in the record")
             return 0
         if not (sr.job.path.parent / PR.REDO_MARKER).is_file():
-            sr.log(_hold_line([RR.Finding(**f) for f in rec.get("open") or []]))
-            return 2
+            # Settled again by today's rules on resume (``update_review_settle``), no model call.
+            doc = sr.slug_dir / "runs" / sr.unit.unit / "final-chronology.md"
+            return URS.resume_held(sr, rec, update_dir(sr) / RECORD, doc, _sha)
     return None
 
 
@@ -678,10 +666,15 @@ def _recheck(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, u
 
 
 def _hold(c: Ctx, rec: dict[str, Any], open_: list[RR.Finding], doc: Path, ud: Path) -> int:
+    """Before it holds, the chronology review's $0 rules (``update_review_settle``)."""
+    open_ = URS.settle(c.sr, doc, open_, rec)
+    if not open_:
+        _save(ud / RECORD, rec, "clean", doc)
+        return 0
     _save(ud / RECORD, rec, "held", doc, open_)
     for f in open_:
-        c.sr.log(f"  OPEN [{f.klass}] {_plain(f)}" + (f"; not settled: {f.outcome}" if f.outcome else ""))
-    c.sr.log(_hold_line(open_))
+        c.sr.log(f"  OPEN [{f.klass}] {URS.plain(f)}" + (f"; not settled: {f.outcome}" if f.outcome else ""))
+    c.sr.log(URS.hold_line(open_))
     return 2
 
 

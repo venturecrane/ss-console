@@ -64,8 +64,10 @@ from .stages import (
 )
 
 # Outcome vocabulary shared with state.py. HOLD and REFUSE never write to the
-# matter; they end the run with a reason a person can act on.
-DONE, REFUSED, HELD, FAILED = "done", "refused", "held", "failed"
+# matter; they end the run with a reason a person can act on. CURRENT: an
+# update that concluded nothing new ends DELIVERED with nothing filed, once its
+# outcome record proves it (``update/outcome.end``).
+DONE, REFUSED, HELD, FAILED, CURRENT = "done", "refused", "held", "failed", "current"
 
 ArgvFn = Callable[["Ctx"], list[str]]
 

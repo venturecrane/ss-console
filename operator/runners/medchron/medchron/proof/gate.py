@@ -8,6 +8,8 @@ A verdict saying ``delivered`` is the runner's claim. The block it must carry::
         "files": [{name, file_id, size, sha256}]   # what was proven there,
           | "rows": N                              # or rows written and re-read,
           | "nothing_to_file": true,               # or a run with nothing to file
+        "already_current": {...},         # a chronology update that found nothing
+                                          # new: readback "nothing_filed", no file
         "review": "passed" | "released" | "code_only",
         "review_cents": 123,              # what the review cost (P7)
         "review_model": "model-id",       # "" for a code-only review
@@ -58,10 +60,37 @@ def problem(outcome: dict[str, Any]) -> tuple[str, str] | None:
     unit = str(outcome.get("unit") or outcome.get("kind") or "job")
     if not isinstance(proof, dict):
         return "proof_missing", f"{unit}: the verdict says delivered and carries no proof block"
+    if "already_current" in proof or proof.get("readback") == "nothing_filed":
+        return _current(unit, proof)
     if proof.get("readback") != "confirmed":
         return "readback_unproven", f"{unit}: read-back {proof.get('readback')!r}, not confirmed"
     if not (proof.get("files") or int(proof.get("rows") or 0) > 0 or proof.get("nothing_to_file")):
         return "readback_unproven", f"{unit}: the proof names nothing it read back"
+    if proof.get("review") not in REVIEW_PASSED:
+        return "review_missing", f"{unit}: review {proof.get('review')!r}"
+    return None
+
+
+def _current(unit: str, proof: dict[str, Any]) -> tuple[str, str] | None:
+    """The zero-file delivery (2026-10-25): an update into the delivered
+    chronology that concluded nothing new files nothing, so there is nothing
+    to read back. Believed ONLY with its outcome record's summary showing no
+    entry and no exhibit added and every document accounted for in its
+    counts, and with no file filed; anything else is an unproven delivery."""
+    cur = proof.get("already_current")
+    if not isinstance(cur, dict) or cur.get("kind") != "already_current":
+        return "readback_unproven", f"{unit}: nothing was filed and no outcome record proves nothing new"
+    if proof.get("readback") != "nothing_filed" or proof.get("files") or int(proof.get("rows") or 0):
+        return "readback_unproven", f"{unit}: already current, yet the proof names something filed"
+    if cur.get("entries_added") != 0 or cur.get("exhibits_added") != 0:
+        return "readback_unproven", f"{unit}: already current, yet the update added entries or exhibits"
+    raw = cur.get("by_reason")
+    by: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    counted = sum(int(v.get("files") or 0) for v in by.values() if isinstance(v, dict))
+    if counted != cur.get("files") or int(cur.get("files") or 0) < int(cur.get("requested") or 0):
+        return "readback_unproven", f"{unit}: already current, yet its counts do not account for every document"
+    if {"unaccounted", "selected_to_read"} & set(by):
+        return "readback_unproven", f"{unit}: already current, yet a document was unaccounted for or selected"
     if proof.get("review") not in REVIEW_PASSED:
         return "review_missing", f"{unit}: review {proof.get('review')!r}"
     return None

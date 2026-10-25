@@ -52,10 +52,19 @@ HTTP_ABSENT = 404
 MINT_RETRY_PAUSE_SECONDS = 5.0
 BATCH_PAUSE_SECONDS = 1.0
 #: The stage's exits (dag.py reads EXITS); 75 is compose.INFRA_EXIT.
-EXIT_NOTHING, EXIT_NAMED, EXIT_INFRA = 1, 2, 75
+#: EXIT_ALL_EXCLUDED (2026-10-25): every named document is excluded by the
+#: firm's rules. It used to share EXIT_NAMED and was paged as "not on the
+#: matter". On an update it is an answer (``dag_update`` maps it to CURRENT:
+#: delivered already current, nothing filed); on an append run it holds with
+#: its own true reason.
+EXIT_NOTHING, EXIT_NAMED, EXIT_ALL_EXCLUDED, EXIT_INFRA = 1, 2, 3, 75
 EXITS = {
     EXIT_NOTHING: ("failed", "download: every target is absent from the vendor's storage; nothing to chronicle"),
     EXIT_NAMED: ("held", "append: a named document id is not on the matter"),
+    EXIT_ALL_EXCLUDED: (
+        "held",
+        "append: every named document is excluded by the firm's rules; nothing is left to read",
+    ),
     EXIT_INFRA: (
         "failed",
         "download incomplete (infrastructure): vendor or network errors; a later rerun pulls the rest",
@@ -123,8 +132,8 @@ def run(sr: StageRun) -> int:
     if sel.get("include_file_ids"):
         rule = {"prefixes": prefixes, "excludes": excludes, "root_pdfs": root_pdfs, "doc_exts": doc_exts}
         named = _named_targets(sr, sel, fpath, rule)
-        if named is None:
-            return EXIT_NAMED
+        if isinstance(named, int):
+            return named
         targets = named
     done, seen_sha = _already(read_jsonl(log_path))
     todo = [t for t in targets if t["id"] not in done]
@@ -263,18 +272,19 @@ def _why_not(
     return next((why for rx, why in names if rx.search(full) and not medical_overrides(rx, why, full)), None)
 
 
-def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rule: dict[str, Any]) -> list | None:
+def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rule: dict[str, Any]) -> list | int:
     """ss#2616: only the named documents, from the full matter listing. A
-    named id the matter does not carry is a HOLD naming it (a silent skip
-    would let an update claim coverage it never pulled); a named id the
-    firm's rules exclude is left out and recorded in `named_excluded.json`,
-    which the update's coverage record and the limitations read."""
+    named id the matter does not carry is a HOLD naming it (EXIT_NAMED: a
+    silent skip would let an update claim coverage it never pulled); a named
+    id the firm's rules exclude is left out and recorded in
+    `named_excluded.json`, which the update's coverage record and the
+    limitations read. Every named id excluded is EXIT_ALL_EXCLUDED."""
     ids = {str(f) for f in sel["include_file_ids"]}
     by_id = {d["id"]: d for d in sr.manifest()}
     missing = sorted(ids - set(by_id))
     if missing:
         sr.log(f"append: {len(missing)} named document id(s) not on the matter: {', '.join(missing[:5])}")
-        return None
+        return EXIT_NAMED
     names, chron, firm = _name_rules(sr), _update_folders(sr), frozenset(_uncited_firm_exhibits(sr))
     targets, excluded = [], []
     for i in sorted(ids):
@@ -290,7 +300,7 @@ def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rul
     containers = len(ids) - len(targets) - len(excluded)
     if not targets and not containers:
         sr.log(f"append: every one of the {len(ids)} named document(s) is excluded by the firm's rules")
-        return None
+        return EXIT_ALL_EXCLUDED
     sr.log(f"append: pull restricted to {len(targets)} named document(s); {len(excluded)} left out by the firm's rules")
     return targets
 

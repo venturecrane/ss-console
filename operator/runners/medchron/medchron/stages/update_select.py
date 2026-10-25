@@ -48,11 +48,15 @@ attachment folded from a named email) is a candidate, in pull order:
   124-page file that was pages 281 to 404 of a 404-page file was once filed
   as a second exhibit and a visit itemized twice (2026-10-14). A page the
   transcription could not read holds (exit 2): it is never skipped silently.
+  The one exception (2026-10-25): an IMAGE file (a photograph) the
+  transcription could not read is set aside by rule and named
+  (``_set_aside``), never a hold.
 
 Writes ``units/<unit>.json`` for compose (selected pages only, page-marked)
 and the selection record (``update_collect`` writes the text-mode audit's
-``page_map.json`` once the exhibit numbers are final). A run where no page is left to read holds with ``update_held:``:
-the delivered chronology already carries everything these documents say.
+``page_map.json`` once the exhibit numbers are final). A run where no page is
+left to read is an ANSWER (2026-10-25, ``update/outcome``): the job ends
+delivered already current, nothing filed, every document's reason recorded.
 """
 
 from __future__ import annotations
@@ -68,6 +72,7 @@ from typing import Any
 
 from ..gates import foreign_identity as FI
 from ..update import body as B, medlegal as ML, pageid as PI, pageid_io as PG, select as S, subsets as SUB, twins as TW
+from ..update import outcome as UO
 from ..update.locate import vendor_name
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
@@ -364,6 +369,9 @@ def run(sr: StageRun) -> int:
             continue
         n = int(f["exhibit"]) if f else int(p["top_exhibit"]) + k + 1
         rec, urow = _build(sr, r, n, cdir, c, f["name"] if f else None)
+        if rec["unread"] and not f and str(r.get("ext") or "").lower() in UO.IMAGE_EXTS:
+            _set_aside(sr, rec, skipped)  # an image the transcription could not read: named, never a hold
+            continue
         sub = None if f else _refiled_whole(sr, rec, ident.pages.get(rid) or {}, by_ex)
         if sub is not None:  # every page already delivered: cited there, never a new exhibit
             whole[sub.doc] = sub
@@ -380,13 +388,26 @@ def run(sr: StageRun) -> int:
     _write(sr, ud, recs, units, skipped, subs, _readings(sr, read))
     pages = sum(len(r["read"]) for r in recs)
     if not pages:
-        sr.log(HELD + "nothing new to read: every page of the new documents is already in the delivered exhibits")
-        return 2
+        # An answer, not a hold (2026-10-25): delivered already current, nothing filed (``update/outcome``).
+        sr.log("nothing new to read: no page of the new documents is left to read; the delivered chronology is current")
+        return UO.EXIT
     sr.log(
         f"{len(recs)} new exhibit(s) from {len(rows)} document(s); {pages} page(s) to compose; "
         f"{len(subs)} re-filed extract(s) cited in the whole document; skipped {skipped}"
     )
     return 0
+
+
+def _set_aside(sr: StageRun, rec: dict[str, Any], skipped: dict[str, list[str]]) -> None:
+    """An image file (a photograph, a phone picture of a page) whose one
+    reading the transcription could not make (2026-10-25): not an exhibit and
+    not a hold. It is recorded in ``selection.json`` "skipped" under
+    ``outcome.IMAGE_UNREAD``, named in Records Reviewed as not read, and left
+    uncovered so the next update reads it again (``update/coverage``)."""
+    (sr.slug_dir / "out" / sr.unit.unit / f"{rec['title']}.pdf").unlink(missing_ok=True)
+    (update_dir(sr) / "compose" / f"{rec['id']}.txt").unlink(missing_ok=True)
+    skipped.setdefault(UO.IMAGE_UNREAD, []).append(str(rec["id"]))
+    sr.log(f"an image the page transcription could not read is set aside and named (document id {rec['id']})")
 
 
 def _refiled_whole(

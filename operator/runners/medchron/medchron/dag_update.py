@@ -17,8 +17,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .dag import BY_NAME, FAILED, HELD, REFUSED, Stage, _slug_unit
+from .dag import BY_NAME, CURRENT, FAILED, HELD, REFUSED, Stage, _slug_unit
 from .stages import (
+    download as _download,
     update_base as _ubase,
     update_collect as _ucollect,
     update_finish as _ufinish,
@@ -27,6 +28,7 @@ from .stages import (
     update_review as _ureview,
     update_upload as _uupload,
 )
+from .update import outcome as _UO
 
 
 def _reuse(name: str, **changes: object) -> Stage:
@@ -34,6 +36,9 @@ def _reuse(name: str, **changes: object) -> Stage:
 
 
 _HELD_UPDATE = (HELD, "update_held: the update into the delivered chronology cannot go on as asked")
+#: Nothing new is an answer, not a hold (2026-10-25): delivered already
+#: current with nothing filed, once ``update/outcome.end`` proves it.
+_CURRENT = (CURRENT, "already current: the delivered chronology already includes what the named documents record")
 
 UPDATE_STAGES: tuple[Stage, ...] = (
     BY_NAME["list_matter"],
@@ -50,7 +55,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         },
     ),
     _reuse("decide_selection", requires=("update_base",)),
-    BY_NAME["download"],
+    _reuse("download", exit_map={**_download.EXITS, _download.EXIT_ALL_EXCLUDED: _CURRENT}),
     BY_NAME["extract"],
     BY_NAME["index_msg"],
     BY_NAME["decide_fold"],
@@ -68,7 +73,14 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     ),
     _reuse("vision", requires=("update_pages",)),
     _reuse("identity", requires=("vision",)),
-    Stage("update_select", "", _slug_unit, requires=("identity",), runner=_uselect.run, exit_map={2: _HELD_UPDATE}),
+    Stage(
+        "update_select",
+        "",
+        _slug_unit,
+        requires=("identity",),
+        runner=_uselect.run,
+        exit_map={2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
+    ),
     _reuse("map", requires=("update_select",)),
     BY_NAME["repair_truncated"],
     BY_NAME["assemble"],
@@ -83,7 +95,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         requires=("icd_tables",),
         invalidates=("update_summary", "audit", "update_review"),
         runner=_ucollect.run_collect,
-        exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE},
+        exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
     ),
     Stage(
         "update_summary",
