@@ -959,6 +959,14 @@ scope:
   inbound_allow_from:
     - scott@smd.services
     - smdurgan@smdurgan.com
+    # Staging-only first-time senders for the quiet help pointer proof
+    # (ss-console#3423 increment 2). The pointer is due only to a rostered person
+    # with no request in the index, and every other address here has written
+    # within the month. Plus tags of the Captain's mailbox, so a reply lands with
+    # him and no account is created. Each is spent by its first email. Never
+    # copy to a client seat.
+    - scott+help-probe-1@smd.services
+    - scott+help-probe-2@smd.services
     # Staging-only probe channel (ADR 0075 verification). A rostered SMD-owned
     # AgentMail sender so the probe ladder can drive clean-trust gateway turns
     # programmatically (the CLI channel is PID-gated out of the audit broker).
