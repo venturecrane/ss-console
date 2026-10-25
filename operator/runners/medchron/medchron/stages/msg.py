@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from ..gates import foreign_identity as FI
+from . import email_parents
 from .base import StageRefusal, StageRun, append_jsonl, read_json, read_jsonl
 from .download import BATCH, BATCH_PAUSE_SECONDS, _mint_with_retry
 
@@ -85,7 +86,8 @@ def named_ids(d: Path) -> set[str] | None:
     if not ids:
         return None
     left_out = {str(x.get("id")) for x in read_json(d / "named_excluded.json", []) or []}
-    return {str(i) for i in ids} - left_out
+    # The emails a named attachment is read through (``email_parents``).
+    return ({str(i) for i in ids} | email_parents.emails(d)) - left_out
 
 
 def already_pulled_hashes(d: Path) -> dict[str, str]:
@@ -157,7 +159,7 @@ class _Index:
             }
         )
 
-    def add_attachment(self, subject: str, name: str, data: bytes, container: str = "") -> None:
+    def add_attachment(self, subject: str, name: str, data: bytes, container: str = "", container_id: str = "") -> None:
         """One attachment: `subject` is the email's subject, `container` the
         saved email's own file name in the matter (the .msg). The container is
         what a person can find: when an identity hold names an attachment,
@@ -194,6 +196,9 @@ class _Index:
                 "names": [],
                 "emails": [],
                 "containers": [],
+                # The emails' document ids on the matter (2026-10-25): what an
+                # update names to read the attachment again (``covered``).
+                "container_ids": [],
             }
             if kind == "image":
                 wh = image_dims(data)
@@ -207,6 +212,9 @@ class _Index:
             self.by_hash[h]["emails"].append(subject)
         if container and container not in self.by_hash[h]["containers"]:
             self.by_hash[h]["containers"].append(container)
+        ids = self.by_hash[h].setdefault("container_ids", [])
+        if container_id and container_id not in ids:
+            ids.append(container_id)
 
 
 #: The code page a legacy Outlook message is retried in when its strings do
@@ -267,7 +275,7 @@ def index_containers(sr: StageRun, pulled: list[dict[str, Any]], have: dict[str,
                 ix.counts["other"] += 1
                 ix.dropped.append({"kind": "other", "attachment": name, "bytes": 0, "email": subject})
                 continue
-            ix.add_attachment(subject, name, data, container=container)
+            ix.add_attachment(subject, name, data, container=container, container_id=str(rec.get("id") or ""))
         if n % 25 == 0:
             sr.log(f"  opened {n}/{len(msgs)}, distinct attachments so far: {len(ix.by_hash)}")
     return ix, len(msgs)
@@ -386,6 +394,7 @@ def run_fold(sr: StageRun) -> int:
                 # The saved email's file name in the matter: the one name a
                 # person can find it by (an identity hold says it).
                 "container": (r.get("containers") or [None])[0],
+                "container_id": (r.get("container_ids") or [None])[0],
                 "size_expected": r["bytes"],
                 "size_got": r["bytes"],
                 "sha256": r["sha256"],

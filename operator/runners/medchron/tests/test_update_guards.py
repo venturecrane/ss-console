@@ -97,6 +97,36 @@ def test_naming_only_excluded_documents_exits_all_excluded(
     assert not (sr.slug_dir / "raw_manifest.jsonl").exists()
 
 
+def test_a_named_email_attachment_is_pulled_through_its_email(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-10-25: an update named 37 attachments by the runner's own id
+    (``msgatt-<hash>``) and held "not on the matter". A delivered job on the
+    same matter says which email each came from; the pull opens that email
+    instead, and an id nothing explains still holds (the falsifier)."""
+    seat = _seat()
+    _named_job(job_dir, ["r1", "msgatt-abc123abc123"])
+    seed_seat_files(data_root, seat)
+    sr = _sr(job_dir, firm_config_path, data_root, seat, [])
+    base = Path(sr.job.install_root) / "jobs" / "BASE"
+    (base / "data" / "firm").mkdir(parents=True)
+    (base / "daemon.json").write_text(json.dumps({"state": "delivered", "finished_at": "2026-10-25T07:30:00Z"}))
+    (base / "job.yaml").write_text(yaml.safe_dump({"slug": "firm", "matter": {"id": sr.job.matter_id}}))
+    rows = base / "data" / "firm" / "raw_manifest.jsonl"
+    rows.write_text(
+        json.dumps({"id": "msgatt-abc123abc123", "container": "RE: records.msg", "container_id": "m1"}) + "\n"
+    )
+    decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
+    assert download_stage.run(sr) == 0
+    assert json.loads((sr.slug_dir / "named_email_parents.json").read_text()) == {"msgatt-abc123abc123": ["m1"]}
+    named = msg_stage.named_ids(sr.slug_dir) or set()
+    assert "m1" in named and "m2" not in named
+
+    rows.write_text("")
+    (sr.slug_dir / "named_email_parents.json").unlink()
+    assert download_stage.run(sr) == download_stage.EXIT_NAMED
+
+
 # ---- (a) only the named containers are opened --------------------------------
 class _Att:
     def __init__(self, name: str, data: bytes) -> None:
