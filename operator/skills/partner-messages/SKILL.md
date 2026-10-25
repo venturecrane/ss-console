@@ -1,6 +1,6 @@
 ---
 name: partner-messages
-description: One partner asks the agent to tell the other partner something, and the agent delivers it to that partner's own chat, marked as from the sender, at once. No approval and nothing waits. The words are the sender's; the agent adds nothing.
+description: Passes a message from one partner to the other, at once. A partner asks the agent to tell the other something and it reaches that partner's own chat, marked as from the sender. No approval and nothing waits. The words are the sender's; the agent adds nothing.
 version: 0.1.0
 author: SMD Services
 license: MIT
