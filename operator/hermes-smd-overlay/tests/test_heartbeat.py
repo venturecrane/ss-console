@@ -2360,6 +2360,34 @@ def test_an_unknown_hold_reason_rides_as_other_not_as_written(tmp_path):
     assert [e["code"] for e in facts.events] == ["reply_held:other"]
 
 
+def test_a_hold_still_inside_the_redraft_grace_is_not_yet_a_shortfall(tmp_path):
+    """The hold notice asks the agent to redraft; that send lands seconds later
+    in the same turn. A beat between the two rows must not page (A&P
+    2026-10-25: held 15:07:30Z, sent 15:07:49Z, paged 15:08:35Z). The row is
+    judged again on the next beat, so a hold nobody redrafted still pages once
+    the grace has run."""
+    inside = hb.REPLY_HOLD_GRACE_SECONDS / 3600 * 0.5
+    beyond = hb.REPLY_HOLD_GRACE_SECONDS / 3600 * 1.5
+
+    def still_redrafting(led):
+        _reply_row(led, _ts(inside), "REPLY_HELD", reason="output_checklist")
+
+    assert _shortfalls(tmp_path, still_redrafting).count == 0
+
+    def never_redrafted(led):
+        _reply_row(led, _ts(beyond), "REPLY_HELD", reason="output_checklist")
+
+    facts = _shortfalls(tmp_path, never_redrafted)
+    assert facts.count == 1
+    assert facts.events[0]["code"] == "reply_held:output_checklist"
+
+    def redrafted_after_the_grace_would_have_paged(led):
+        _reply_row(led, _ts(beyond), "REPLY_HELD", reason="output_checklist", message_id="<m-late>")
+        led.add(_ts(inside), "REPLY_SENT", {"in_reply_to": "<m-late>", "recipient": _SYNTH_ADDRESS})
+
+    assert _shortfalls(tmp_path, redrafted_after_the_grace_would_have_paged).count == 0
+
+
 def test_reply_holds_the_person_was_made_whole_on_are_not_shortfalls(tmp_path):
     """Queued for automatic release; a duplicate of a reply already sent; a hold
     the agent redrafted past (a LATER REPLY_SENT for the same inbound)."""
