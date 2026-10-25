@@ -355,6 +355,7 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         # The open web. A page is a source, but not the firm's source of record,
         # and it is writable by anyone who wants a number believed.
         "web_search",
+        "web_extract",
         # The seat's own description of itself and of its runs.
         "operator_seat_facts",
         # ss-console#3423. Booleans and counts about whether to point a person

@@ -32,6 +32,7 @@ CAPABILITY_NAMES: frozenset[str] = frozenset(
         "Website",
         "VideoChannel",
         "Analytics",
+        "WebExtract",
     }
 )
 

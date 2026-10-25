@@ -26,6 +26,7 @@ export const ACCEPTED_CAPABILITY_NAMES: ReadonlySet<CapabilityName> = new Set<Ca
   'Website',
   'VideoChannel',
   'Analytics',
+  'WebExtract',
 ])
 
 export const ACCEPTED_VERTICALS = [
