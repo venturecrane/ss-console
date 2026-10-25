@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from ..seat import SeatError
+from . import email_parents
 from .base import StageRun, append_jsonl, read_json, read_jsonl
 
 BATCH = 8
@@ -281,6 +282,16 @@ def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rul
     limitations read. Every named id excluded is EXIT_ALL_EXCLUDED."""
     ids = {str(f) for f in sel["include_file_ids"]}
     by_id = {d["id"]: d for d in sr.manifest()}
+    # An email attachment is named by the runner's own id: read it through its
+    # email (``email_parents``, 2026-10-25). One no delivered job explains
+    # stays named and is held below as not on the matter.
+    found, _left = email_parents.resolve(sr, ids - set(by_id))
+    if found:
+        email_parents.write(sr.slug_dir, found)
+        ids = (ids - set(found)) | {e for v in found.values() for e in v}
+        sr.log(
+            f"append: {len(found)} named email attachment(s) are read through {len(ids & email_parents.emails(sr.slug_dir))} email(s)"
+        )
     missing = sorted(ids - set(by_id))
     if missing:
         sr.log(f"append: {len(missing)} named document id(s) not on the matter: {', '.join(missing[:5])}")
