@@ -672,7 +672,7 @@ def _help_line_block(line: str) -> str:
         f"{_HELP_LINE_HEADER}: end your reply with this line, exactly as written, "
         f"as its own last line:\n{line}\n"
         "Leave it out only if this reply answers how to work with you, delivers a "
-        "draft or confirms work you queued, answers a question about a chronology, "
+        "draft or confirms work you queued, "
         "declines an action reserved to administrators, or goes to anyone not on "
         "your roster; if you leave it out, say nothing about help. It is already "
         "recorded as offered: do not call operator_help_signals."
