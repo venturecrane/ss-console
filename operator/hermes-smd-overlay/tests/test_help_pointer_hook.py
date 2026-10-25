@@ -137,7 +137,7 @@ def test_a_first_email_gets_the_exact_line_and_it_is_recorded(plugin, paths, mon
     assert plugin._HELP_LINE_HEADER in ctx
     assert plugin.help_state.POINTER_LINE in ctx
     assert ctx.count(plugin.help_state.POINTER_LINE) == 1
-    assert plugin.help_state.STRUGGLE_LINE not in ctx
+    assert "phrase this kind of request" not in ctx
     # The exclusions travel with the line, and the model is told not to ask.
     assert "declines an action reserved to administrators" in ctx
     assert "do not call operator_help_signals" in ctx
@@ -147,7 +147,7 @@ def test_a_first_email_gets_the_exact_line_and_it_is_recorded(plugin, paths, mon
 
 
 def test_the_line_text_is_the_single_constant_with_no_em_dash(plugin):
-    for line in (plugin.help_state.POINTER_LINE, plugin.help_state.STRUGGLE_LINE):
+    for line in (plugin.help_state.POINTER_LINE,):
         assert "—" not in line and "–" not in line
         assert "{" not in line and "}" not in line
     assert plugin.help_state.POINTER_LINE == (
@@ -165,18 +165,19 @@ def test_a_second_email_gets_no_block(plugin, paths, monkeypatch):
     assert plugin._HELP_LINE_HEADER not in ctx
 
 
-def test_a_repeated_struggle_gets_the_struggle_line_once(plugin, paths, monkeypatch):
-    """Three earlier emails in the thread make the fourth a struggle."""
+def test_a_repeated_ask_in_a_thread_gets_no_line(plugin, paths, monkeypatch):
+    """A fourth email in one thread is measured, never answered with a help line.
+
+    ashton-price 2026-10-25: the old struggle line went to a firm person following
+    up on queued chronology work; repetition cannot tell waiting from stuck."""
     _seat(plugin, monkeypatch)
-    for i in range(1, 4):
+    for i in range(1, 6):
         _arrive(f"m-{i}")
-        _hook(plugin, f"s-{i}", f"m-{i}")
-    _arrive("m-4")
-    ctx = _hook(plugin, "s-4", "m-4")
-    assert plugin.help_state.STRUGGLE_LINE in ctx
-    assert plugin.help_state.POINTER_LINE not in ctx
-    _arrive("m-5")
-    assert plugin._HELP_LINE_HEADER not in _hook(plugin, "s-5", "m-5")
+        ctx = _hook(plugin, f"s-{i}", f"m-{i}")
+        assert "phrase this kind of request" not in (ctx or "")
+        if i > 1:
+            assert plugin._HELP_LINE_HEADER not in (ctx or "")
+    assert not hasattr(plugin.help_state, "STRUGGLE_LINE")
 
 
 # --------------------------------------------------------------------------- #

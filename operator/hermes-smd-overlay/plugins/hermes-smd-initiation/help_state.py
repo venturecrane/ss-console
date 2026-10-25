@@ -2,11 +2,19 @@
 
 THE INTENT. The Operator should help people discover that they can ask it for
 help, without being noisy or repetitive. One line on a person's FIRST email to
-the seat; after that, only on an objective struggle in a thread, once per
-thread; never again for someone who has asked for help or has made ten
+the seat; never again for someone who has asked for help or has made ten
 requests. This module holds the only state those rules need, computes the
-signals, and owns the exact words of the two lines (:data:`POINTER_LINE`,
-:data:`STRUGGLE_LINE`). The initiation plugin's per-turn hook calls
+signals, and owns the exact words of that line (:data:`POINTER_LINE`).
+
+NO LINE IN A THREAD. Until 2026-10-25 a fourth message in one thread also got
+"ask me how to phrase this kind of request". On ashton-price that morning it went
+to a firm person following up on chronology work the seat had queued: repeating
+because work was waiting is not a phrasing problem, and the line read as one.
+Repetition in a thread cannot tell the two apart, so the line is gone. The
+signal is still measured (``struggle_in_thread``) and the help review still
+counts repeat asks to choose which tips lead; it only stopped being a sentence
+to a client. ``struggle_offer_due`` stays in the output, always false, and
+``KIND_STRUGGLE`` stays a known kind, so older rows and callers still read. The initiation plugin's per-turn hook calls
 :func:`sender_signals` itself on a seat that binds operator-help and, when a
 line is due, hands the reply that line verbatim. The model never decides WHEN
 and never has to remember to ask: the first live increment told the model to
@@ -14,7 +22,7 @@ call a tool on every email turn, and on pilot-smokeball an ordinary question
 was answered with no call and no line (ss-console#3423).
 
 ONCE MEANS ONCE, DURABLY. The moment :func:`sender_signals` reports
-``pointer_due`` (or ``struggle_offer_due`` for a thread), it records the offer
+``pointer_due``, it records the offer
 in the same write transaction that read the state. Nothing depends on the model
 remembering to call ``operator_help_note`` afterwards: a skipped note can never
 make the line come back once the person's older mail ages out of the request
@@ -29,7 +37,8 @@ WHAT IS STORED, AND WHAT IS NOT. A seat-local sqlite file
   leaving the file;
 * ``help_senders``: per person, when the first-email pointer was offered and
   when they were helped;
-* ``help_threads``: per (person, thread), when a struggle offer was made;
+* ``help_threads``: per (person, thread), when a struggle offer was made
+  (none written since 2026-10-25; older rows age out);
 * ``help_events`` (increment 3): one row per recorded kind (an offer, a
   help, or a struggle the model noted), hash and time, so the help review
   can count recurrences and distinct people;
@@ -71,10 +80,12 @@ an auto-reply is not a person to point at anything.
 JOB STATE IS NOT READ HERE. The per-turn pointer reads no job state: the job
 ledgers live in the broker's audit file. Increment 3's weekly review reads them
 through the broker's narrow ``help_job_signals`` verb (``help_review``), counts
-only; the pointer's struggle signal stays repetition only: at least :data:`REPEAT_ASK_PRIOR` earlier
-emails from this person in this thread (so the current one is at least the
-fourth), and the output names that basis (``struggle_basis``). A routine
-back-and-forth (ask, "shorter please", "thanks") does not reach it.
+only. The ``struggle_in_thread`` signal is repetition only: at least
+:data:`REPEAT_ASK_PRIOR` earlier emails from this person in this thread (so the
+current one is at least the fourth), and the output names that basis
+(``struggle_basis``). It is measured and reported, never turned into a line (see
+NO LINE IN A THREAD above), because without job state it cannot tell a person
+who cannot get understood from one waiting on queued work.
 
 NEVER RAISES. Every public function returns a value; a broken file costs a
 pointer, never a reply. A read fault is reported as such (``*_read: false``)
@@ -118,10 +129,6 @@ STRUGGLE_BASIS = "repeated_messages_in_thread"
 #: the per-turn hook hands it to the reply verbatim. No em dash, no braces.
 POINTER_LINE = (
     "If you're ever unsure how to ask me for something, just ask me how we can work together."
-)
-#: The one line appended, once per thread, when a person is visibly struggling.
-STRUGGLE_LINE = (
-    "If it would help, ask me how to phrase this kind of request and I'll walk you through it."
 )
 
 KIND_POINTER = "pointer_offered"
@@ -408,7 +415,6 @@ def sender_signals(
     struggle = requests_read and prior_in_thread >= REPEAT_ASK_PRIOR
     state = {"read": False, "pointer_offered": False, "helped": False, "offered_in_thread": False}
     pointer_due = False
-    struggle_due = False
     try:
         conn = _connect(path or db_path())
     except Exception:  # noqa: BLE001 — a broken file costs a pointer, never a reply
@@ -429,13 +435,8 @@ def sender_signals(
                 stopped_now = state["helped"] or len(prior) >= STOP_AFTER_REQUESTS
                 eligible = requests_read and indexed and not stopped_now
                 pointer_due = eligible and first_time and not state["pointer_offered"]
-                struggle_due = (
-                    eligible and tkey is not None and struggle and not state["offered_in_thread"]
-                )
                 if pointer_due:
                     _write(conn, KIND_POINTER, skey, tkey, ts)
-                if struggle_due:
-                    _write(conn, KIND_STRUGGLE, skey, tkey, ts)
                 conn.execute("COMMIT")
             except BaseException:
                 conn.execute("ROLLBACK")
@@ -444,7 +445,6 @@ def sender_signals(
             logger.warning("help_state: state read/record failed", exc_info=True)
             state = {**state, "read": False}
             pointer_due = False
-            struggle_due = False
         finally:
             conn.close()
 
@@ -464,7 +464,7 @@ def sender_signals(
         "struggle_basis": STRUGGLE_BASIS,
         "stopped": stopped,
         "pointer_due": bool(pointer_due),
-        "struggle_offer_due": bool(struggle_due),
+        "struggle_offer_due": False,
     }
 
 
@@ -486,7 +486,6 @@ __all__ = [
     "SCOPE_SENDER",
     "STOP_AFTER_REQUESTS",
     "STRUGGLE_BASIS",
-    "STRUGGLE_LINE",
     "db_path",
     "read_sender",
     "record",

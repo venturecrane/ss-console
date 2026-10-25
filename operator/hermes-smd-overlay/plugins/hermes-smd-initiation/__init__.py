@@ -709,12 +709,9 @@ def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str 
         if sender is None or not cfg.sender_on_roster(sender):
             return None
         signals = help_state.sender_signals(sender, origin.message_id)
-        if signals.get("pointer_due") is True:
-            line = help_state.POINTER_LINE
-        elif signals.get("struggle_offer_due") is True:
-            line = help_state.STRUGGLE_LINE
-        else:
+        if signals.get("pointer_due") is not True:
             return None
+        line = help_state.POINTER_LINE
         logger.info("hermes-smd-initiation: help line injected (sender=%s)", sender)
         return _help_line_block(line)
     except Exception:  # noqa: BLE001 — a fault costs the line, never the reply
