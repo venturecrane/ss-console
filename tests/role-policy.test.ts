@@ -37,8 +37,22 @@ const KNOBS: Record<string, Record<string, readonly string[]>> = {
   output_checklist: { profile: ['paralegal', 'household'] },
 }
 const LIST_KNOBS = new Set(['identifier_gate.provenance_sources'])
+/**
+ * Top-level scalar knobs that only TIGHTEN a seat (ADR 0098). Absent is the
+ * platform default (off); every listed value is stricter, so none needs a
+ * citation. The overlay treats an unknown value on a role that declares the key
+ * as the strictest one, so a typo here would run the gate, not skip it; this
+ * schema still refuses it before merge.
+ */
+const TIGHTENING_KNOBS: Record<string, readonly string[]> = {
+  advertising_gate: ['ca-law-firm'],
+}
 const CITATION_KEYS = ['rationale', 'adr'] as const
-const TOP_KEYS = new Set([...Object.keys(KNOBS), ...CITATION_KEYS])
+const TOP_KEYS = new Set([
+  ...Object.keys(KNOBS),
+  ...Object.keys(TIGHTENING_KNOBS),
+  ...CITATION_KEYS,
+])
 
 type Policy = Record<string, unknown>
 
@@ -85,6 +99,13 @@ function policyErrors(policy: unknown): string[] {
         continue
       }
       if (value !== allowed[0]) looser = true
+    }
+  }
+  for (const [knob, allowed] of Object.entries(TIGHTENING_KNOBS)) {
+    if (!(knob in p)) continue
+    const value = p[knob]
+    if (typeof value !== 'string' || !allowed.includes(value)) {
+      errors.push(`policy.${knob} must be one of ${allowed.join(', ')}`)
     }
   }
   for (const key of CITATION_KEYS) {
@@ -172,6 +193,16 @@ describe('role policy schema (ADR 0093)', () => {
     ).toEqual([
       'policy.rationale must be a non-empty string',
       'policy.adr must be a docs/adr/NNNN-*.md path, got "0093"',
+    ])
+  })
+
+  it('accepts a tightening knob without a citation, and refuses an unknown value', () => {
+    expect(policyErrors({ advertising_gate: 'ca-law-firm' })).toEqual([])
+    expect(policyErrors({ advertising_gate: 'off' })).toEqual([
+      'policy.advertising_gate must be one of ca-law-firm',
+    ])
+    expect(policyErrors({ advertising_gate: true })).toEqual([
+      'policy.advertising_gate must be one of ca-law-firm',
     ])
   })
 

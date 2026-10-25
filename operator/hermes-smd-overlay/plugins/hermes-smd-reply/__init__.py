@@ -87,6 +87,7 @@ from pathlib import Path
 from typing import Any
 
 from shared import (
+    advertising_gate,
     answered_messages,
     hook_worker,
     inbound,
@@ -607,6 +608,31 @@ def _checklist_violations(
         )
         return None
     return rules, output_checklist.describe(blocking)
+
+
+def _advertising_violations(
+    text: str, *, internal: bool, tool_name: str, session_id: str
+) -> tuple[str, str] | None:
+    """``(rule ids, model-facing detail)`` when the advertising gate holds the reply.
+
+    ``None`` on every seat whose role does not turn the gate on, and when the
+    reply carries only FLAGs (their row is written here). Unlike the checklist,
+    a fault holds: ``advertising_gate.scan`` returns a BLOCK when it cannot run.
+    """
+    if not advertising_gate.enabled():
+        return None
+    outcome = advertising_gate.scan([text or ""])
+    if not outcome.findings:
+        return None
+    spec_gate.audit_advertising_gate(
+        tool_name=tool_name,
+        output_class="staff" if internal else output_checklist.EXTERNAL_REPLY,
+        rules=outcome.rule_summary(),
+        session_id=session_id,
+    )
+    if not outcome.blocking:
+        return None
+    return outcome.rule_summary(), outcome.describe()
 
 
 #: :func:`_shared_reply_people` result for a shared turn this transport cannot answer.
@@ -1157,6 +1183,26 @@ def _relay_draft(**kwargs: Any) -> None:
                 origin,
                 rules=checklist_hold[0],
                 _detail=checklist_hold[1],
+            )
+            return
+
+        # (c1b) The California advertising gate (ADR 0098), only on a seat whose
+        # role turns it on (a law-firm marketing seat). A reply to the firm can
+        # carry drafts of public content; HELD on a BLOCK like the checklist,
+        # with each finding's rule and fragment in the notice. FLAGs write the
+        # row and the reply goes. A check that cannot run holds.
+        advertising_hold = _advertising_violations(
+            send_text or report_render.html_text_content(send_html),
+            internal=internal,
+            tool_name=str(kwargs.get("tool_name") or ""),
+            session_id=session_id,
+        )
+        if advertising_hold is not None:
+            _held(
+                advertising_gate.REASON,
+                origin,
+                rules=advertising_hold[0],
+                _detail=advertising_hold[1],
             )
             return
 

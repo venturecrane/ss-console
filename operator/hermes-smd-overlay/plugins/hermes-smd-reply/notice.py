@@ -93,6 +93,11 @@ _REASON_HINTS: dict[str, str] = {
         "The reply carried something a paralegal would correct before sending it. "
         "Correct exactly what is listed and draft the reply again."
     ),
+    "advertising_gate": (
+        "The reply carried something California's attorney-advertising rules do not "
+        "allow in a draft of public content. Correct exactly what is listed and draft "
+        "the reply again."
+    ),
     "send_failed": (
         "The transport refused or failed while sending, so delivery is not "
         "confirmed. Do not resend the same draft: a send that half-succeeded "

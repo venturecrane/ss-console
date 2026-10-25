@@ -703,6 +703,7 @@ REPLY_HOLD_REASONS = frozenset(
         "empty_body",
         "matter_mismatch",
         "output_checklist",
+        "advertising_gate",
         "content_sensitive",
         "content_floor_error",
         "outbound_gate_error",

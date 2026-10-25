@@ -1,0 +1,39 @@
+# The marketing role (ADR 0098): a law firm's marketing coordinator.
+#
+# A seat selects it with `seat.role: marketing` and `seat.product: operator`.
+# The seat drafts the firm's public marketing (blog posts, social posts, YouTube
+# descriptions, Business Profile posts, review replies, press releases, a topic
+# slate) and delivers every piece to the firm's administrator for approval.
+# Nothing it writes publishes on its own.
+#
+# The role's one policy knob TIGHTENS the seat: every send, draft and relayed
+# reply passes the California attorney-advertising gate
+# (operator/templates/drafting/advertising_gate_check.py) against the firm's
+# authored registers, staged at /var/lib/smd-config/marketing/marketing-firm.yaml.
+
+role: marketing
+schema_version: 1
+
+# The persona prompt and its safety rules, rendered verbatim into SOUL.md.
+persona: persona.md
+
+# Skills are bound by the seat PR that builds them (one skill per piece type,
+# each droppable on the firm's feedback). Empty until then; an enabled skill
+# with no body would fail the seat's boot.
+skills: []
+
+# What this role's seats may send (ADR 0093). Floors stay in code. The
+# checklist stays on the paralegal standard: drafts for a law firm meet the same
+# plain-sentence rules as any firm mail. `advertising_gate` loosens nothing, so
+# it needs no citation to be valid; it carries one anyway
+# (tests/role-policy.test.ts).
+policy:
+  output_checklist:
+    profile: paralegal
+  advertising_gate: ca-law-firm
+  rationale: >-
+    Every piece this seat drafts for a California law firm is an advertisement
+    under Bus. & Prof. Code 6157(b) as rewritten by SB 37 (effective
+    2026-01-01), and the scope sent to the firm promised that every draft passes
+    a California attorney-advertising check before the firm sees it.
+  adr: docs/adr/0098-marketing-seat-advertising-gate.md

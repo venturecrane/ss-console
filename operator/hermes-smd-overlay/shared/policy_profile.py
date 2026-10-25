@@ -37,6 +37,7 @@ Schema (role.yaml)::
         provenance_sources: [calendar_invite_list, couples_settings_read]  # default []
       output_checklist:
         profile: household                     # or paralegal (default)
+      advertising_gate: ca-law-firm            # absent = off (ADR 0098)
       rationale: "<why this role needs it>"
       adr: "<ss-console ADR that approved it>"
 
@@ -47,6 +48,16 @@ invitation's own dates (its start, its end, its repeat rule's last day) verify
 in the one email that carries that invitation: the body describes the act, it
 is not a claim about the world. Set only by the calendar plugin's code, for that
 one send (``provenance.self_described_dates``); dates in free text stay checked.
+
+``advertising_gate`` (ADR 0098) is the one knob that TIGHTENS: ``ca-law-firm``
+runs the California attorney-advertising gate
+(``operator/templates/drafting/advertising_gate_check.py``) over every send and
+draft the seat makes. Absent means off, which is every seat but a law-firm
+marketing seat. Because turning it off is the looser direction, a role that
+DECLARES the key keeps the gate on through every fault: an unknown or garbled
+value resolves to ``ca-law-firm``, and so does a role whose policy block is
+malformed elsewhere (the fallback carries the gate). It needs no rationale or
+adr to be valid, since it loosens nothing, though a role should cite both.
 
 ``verify_by_month_day``: a written date (with a year) verifies when its month
 and day equal a recurring date read THIS session from the seat's record store
@@ -95,6 +106,10 @@ PROFILE_PARALEGAL = "paralegal"
 PROFILE_HOUSEHOLD = "household"
 PROFILE_VALUES: frozenset[str] = frozenset({PROFILE_PARALEGAL, PROFILE_HOUSEHOLD})
 
+#: The advertising gate (ADR 0098). Closed set; absent is off.
+ADVERTISING_CA_LAW_FIRM = "ca-law-firm"
+ADVERTISING_VALUES: frozenset[str] = frozenset({ADVERTISING_CA_LAW_FIRM})
+
 #: What seat facts and the audit row call the identifier posture.
 MODE_BLOCK = "block"
 MODE_VERIFY_RECURRING = "verify_recurring"
@@ -135,7 +150,9 @@ SEAT_OWNED_SOURCE_TOOLS: frozenset[str] = frozenset(
 )
 
 _ROLE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-_POLICY_KEYS = frozenset({"identifier_gate", "output_checklist", "rationale", "adr"})
+_POLICY_KEYS = frozenset(
+    {"identifier_gate", "output_checklist", "advertising_gate", "rationale", "adr"}
+)
 _IDENTIFIER_KEYS = frozenset({"recurring_dates", "provenance_sources"})
 _CHECKLIST_KEYS = frozenset({"profile"})
 
@@ -154,6 +171,8 @@ class Policy:
     lever: bool = False
     #: Seat-owned read tools this role treats as provenance sources.
     provenance_sources: frozenset[str] = frozenset()
+    #: ``ca-law-firm`` runs the advertising gate on every send and draft; None is off.
+    advertising_gate: str | None = None
 
     @property
     def loosened(self) -> bool:
@@ -221,9 +240,29 @@ def _load_cfg() -> Any:
     return CustomerConfig.from_volume()
 
 
-def _fallback(role: str | None, cause: str, detail: str, lever: bool) -> Policy:
+def _fallback(
+    role: str | None, cause: str, detail: str, lever: bool, advertising: str | None = None
+) -> Policy:
     _warn_once(cause, detail)
-    return Policy(role=role, source=f"fallback:{cause}", lever=lever)
+    return Policy(role=role, source=f"fallback:{cause}", lever=lever, advertising_gate=advertising)
+
+
+def _advertising_gate(role: str | None, raw: Any) -> str | None:
+    """The gate a role's policy asks for. Declared at all means ON (ADR 0098).
+
+    A garbled value is never read as off: off is the looser direction, and a
+    broken policy may only make a seat stricter.
+    """
+    if not isinstance(raw, dict) or "advertising_gate" not in raw:
+        return None
+    value = raw.get("advertising_gate")
+    if value not in ADVERTISING_VALUES:
+        _warn_once(
+            f"{role}:advertising_gate",
+            f"advertising_gate {value!r} is unknown; running {ADVERTISING_CA_LAW_FIRM}",
+        )
+        return ADVERTISING_CA_LAW_FIRM
+    return value
 
 
 def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> Policy:
@@ -235,22 +274,33 @@ def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> P
     """
     if raw is None:
         return Policy(role=role, source=f"role:{role}" if role else "platform_default", lever=lever)
+    adv = _advertising_gate(role, raw)
     if not isinstance(raw, dict):
-        return _fallback(role, f"{role}:not_a_mapping", "role policy is not a mapping", lever)
+        return _fallback(role, f"{role}:not_a_mapping", "role policy is not a mapping", lever, adv)
     unknown = set(raw) - _POLICY_KEYS
     if unknown:
         return _fallback(
-            role, f"{role}:unknown_key", f"role policy has unknown keys {sorted(unknown)}", lever
+            role,
+            f"{role}:unknown_key",
+            f"role policy has unknown keys {sorted(unknown)}",
+            lever,
+            adv,
         )
     recurring = RECURRING_BLOCK
     ident = raw.get("identifier_gate")
     if ident is not None:
         if not isinstance(ident, dict) or set(ident) - _IDENTIFIER_KEYS:
-            return _fallback(role, f"{role}:identifier_gate", "identifier_gate is malformed", lever)
+            return _fallback(
+                role, f"{role}:identifier_gate", "identifier_gate is malformed", lever, adv
+            )
         recurring = ident.get("recurring_dates", RECURRING_BLOCK)
         if recurring not in RECURRING_VALUES:
             return _fallback(
-                role, f"{role}:recurring_dates", "identifier_gate.recurring_dates is unknown", lever
+                role,
+                f"{role}:recurring_dates",
+                "identifier_gate.recurring_dates is unknown",
+                lever,
+                adv,
             )
         named = ident.get("provenance_sources", [])
         if (
@@ -264,6 +314,7 @@ def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> P
                 f"{role}:provenance_sources",
                 "identifier_gate.provenance_sources names a tool off the seat-owned list",
                 lever,
+                adv,
             )
         sources = frozenset(named)
     else:
@@ -273,16 +324,18 @@ def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> P
     if checklist is not None:
         if not isinstance(checklist, dict) or set(checklist) - _CHECKLIST_KEYS:
             return _fallback(
-                role, f"{role}:output_checklist", "output_checklist is malformed", lever
+                role, f"{role}:output_checklist", "output_checklist is malformed", lever, adv
             )
         profile = checklist.get("profile", PROFILE_PARALEGAL)
         if profile not in PROFILE_VALUES:
-            return _fallback(role, f"{role}:profile", "output_checklist.profile is unknown", lever)
+            return _fallback(
+                role, f"{role}:profile", "output_checklist.profile is unknown", lever, adv
+            )
     rationale = raw.get("rationale")
     adr = raw.get("adr")
     for name, value in (("rationale", rationale), ("adr", adr)):
         if value is not None and not isinstance(value, str):
-            return _fallback(role, f"{role}:{name}", f"{name} is not a string", lever)
+            return _fallback(role, f"{role}:{name}", f"{name} is not a string", lever, adv)
     resolved = Policy(
         role=role,
         recurring_dates=recurring,
@@ -292,10 +345,11 @@ def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> P
         adr=(adr or "").strip() or None,
         lever=lever,
         provenance_sources=sources,
+        advertising_gate=adv,
     )
     if resolved.loosened and not (resolved.rationale and resolved.adr):
         return _fallback(
-            role, f"{role}:uncited", "a loosening without rationale and adr is refused", lever
+            role, f"{role}:uncited", "a loosening without rationale and adr is refused", lever, adv
         )
     return resolved
 
@@ -503,6 +557,8 @@ if __name__ == "__main__":  # pragma: no cover
 
 
 __all__ = [
+    "ADVERTISING_CA_LAW_FIRM",
+    "ADVERTISING_VALUES",
     "FLOOR_KINDS",
     "LEVER_ENV",
     "MODE_BLOCK",
