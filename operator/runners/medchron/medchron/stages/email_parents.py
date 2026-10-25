@@ -55,8 +55,7 @@ def resolve(sr: StageRun, named: set[str]) -> tuple[dict[str, list[str]], list[s
     wanted = {i for i in named if i.startswith(PREFIX)}
     found: dict[str, list[str]] = {}
     if wanted:
-        jobs = Path(sr.job.install_root) / "jobs"
-        for sd in delivered_same_matter(jobs, str(sr.job.matter_id), Path(sr.job.path).parent):
+        for sd in delivered_same_matter(sr.job, sr.slug_dir.name):
             for k, v in _parents_in(sd, wanted - set(found)).items():
                 found[k] = v
             if set(found) == wanted:

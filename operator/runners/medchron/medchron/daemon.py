@@ -45,6 +45,7 @@ from . import child as child_mod, config as config_mod, job as job_mod, lane_pro
 from . import resume as resume_mod, retention
 from . import rewake, verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
+from .stages import vision_seed
 
 logger = logging.getLogger("medchron.daemon")
 
@@ -278,6 +279,7 @@ class Daemon:
         ):
             if env.get(key) is not None:
                 doc[key] = env[key]
+        doc.update(vision_seed.staged_fields(env, self.run_dir, job_id))
         # The month's state is read FRESH here, on every run and every resume,
         # never taken from the envelope: the envelope's copy was true when the
         # job was submitted and is stale the moment any other job records cents.

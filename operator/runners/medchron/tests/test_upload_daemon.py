@@ -1190,3 +1190,29 @@ def test_a_real_broker_envelope_round_trips_into_a_job_the_runner_parses(tmp_pat
     assert job.allowance_remaining_pages == 40 and job.allowance_remaining_documents == 40
     assert job.month_cents_used == 0 and job.allowance_month == "2026-09"
     assert job.matter_number == "2026-PI-102" and job.units[0].unit == "alpha"
+
+
+def test_an_update_job_names_the_delivered_jobs_on_its_matter_and_a_run_does_not(tmp_path):
+    """2026-10-25: the child's uid cannot list the jobs dir (0710 root:medchron),
+    so the daemon names the delivered jobs an update reuses reads from, newest
+    first, in job.yaml. A held job and another matter's job are never named."""
+    d, broker = _daemon(tmp_path)
+    for jid, state, matter, at in (
+        ("01M5BASE00000000000000000A", "delivered", "m-1", "2026-10-20T00:00:00Z"),
+        ("01M5BASE00000000000000000B", "delivered", "m-1", "2026-10-25T00:00:00Z"),
+        ("01M5BASE00000000000000000C", "held", "m-1", "2026-10-25T01:00:00Z"),
+        ("01M5BASE00000000000000000D", "delivered", "m-2", "2026-10-25T02:00:00Z"),
+    ):
+        jd = d.run_dir / "jobs" / jid
+        jd.mkdir(parents=True)
+        (jd / "daemon.json").write_text(json.dumps({"state": state, "finished_at": at}))
+        (jd / "job.yaml").write_text(f"slug: firm\nmatter:\n  id: {matter}\n")
+    for jid, update in (("01Q", {"into": "delivered_chronology"}), ("01R", None)):
+        extra = {"update": update, "selection": {"include_file_ids": ["d1"]}} if update else {}
+        envelope = dict(BROKER_SUBMIT_ENVELOPE, **extra)
+        broker.rows[jid] = {"state": "submitted"}
+        (d.queue / f"{jid}.json").write_text(json.dumps(envelope))
+        assert d.claim_next() == jid
+        job = job_mod.load(d._write_job_yaml(jid))
+        want = ["01M5BASE00000000000000000B", "01M5BASE00000000000000000A"] if update else []
+        assert job.prior_delivered == want

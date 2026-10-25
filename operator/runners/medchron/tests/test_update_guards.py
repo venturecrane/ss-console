@@ -105,14 +105,14 @@ def test_a_named_email_attachment_is_pulled_through_its_email(
     same matter says which email each came from; the pull opens that email
     instead, and an id nothing explains still holds (the falsifier)."""
     seat = _seat()
-    _named_job(job_dir, ["r1", "msgatt-abc123abc123"])
+    _named_job(job_dir, ["r1", "msgatt-abc123abc123"], prior_delivered=["01M5BASE00000000000000000A"])
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat, [])
-    base = Path(sr.job.install_root) / "jobs" / "BASE"
-    (base / "data" / "firm").mkdir(parents=True)
+    base = Path(sr.job.install_root) / "jobs" / "01M5BASE00000000000000000A"
+    (base / "data" / sr.slug_dir.name).mkdir(parents=True)
     (base / "daemon.json").write_text(json.dumps({"state": "delivered", "finished_at": "2026-10-25T07:30:00Z"}))
-    (base / "job.yaml").write_text(yaml.safe_dump({"slug": "firm", "matter": {"id": sr.job.matter_id}}))
-    rows = base / "data" / "firm" / "raw_manifest.jsonl"
+    (base / "job.yaml").write_text(yaml.safe_dump({"slug": sr.slug_dir.name, "matter": {"id": sr.job.matter_id}}))
+    rows = base / "data" / sr.slug_dir.name / "raw_manifest.jsonl"
     rows.write_text(
         json.dumps({"id": "msgatt-abc123abc123", "container": "RE: records.msg", "container_id": "m1"}) + "\n"
     )
