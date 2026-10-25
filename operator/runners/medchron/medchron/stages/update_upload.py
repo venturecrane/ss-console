@@ -23,7 +23,7 @@ chronology at all:
 
 Nothing else is ever deleted: not the delivered exhibits (the updated document
 still cites them), not a worksheet, not a file the firm authored in that
-folder. A delete that fails, or an id that still reads present, holds (exit 2)
+folder. A delete that fails, or an id that still reads present, holds (exit 4)
 with both documents on the matter: a duplicate the firm can see is the safe
 failure; a matter with no chronology is not. ``delivery.json`` records the
 replacement, so a resume never deletes twice and the ledger names what was
@@ -48,6 +48,33 @@ from .upload import (
     _write_readback,
     _vendor_name,
 )
+
+#: The stage's exits (dag_update.py reads EXITS), split 2026-10-24 like the
+#: full build's (stages/upload.py). Exit 2 used to cover every hold, under a
+#: reason requeue.UPLOAD_SHORT does not match, so an update whose new files
+#: Smokeball had not listed yet parked for a person instead of being re-run.
+#: Now only the short read-back exits 2, under that prefix; a send whose
+#: outcome is unknown exits 3; the delivered chronology's own state (moved,
+#: not retired, still listed after its delete, files not proven) exits 4 and
+#: its `update_held:` line is the reason (unit_proof.paged_line).
+EXIT_REFUSED, EXIT_SHORT, EXIT_SEND_UNKNOWN, EXIT_HELD = 1, 2, 3, 4
+EXITS = {
+    EXIT_REFUSED: (
+        "failed",
+        "upload: refused (a name collision in the chronology folder, changed local bytes, or other bytes read back)",
+    ),
+    EXIT_SHORT: (
+        "held",
+        "upload: the folder read back short after the retries; the new files may still be materializing, and the "
+        "delivered chronology is untouched",
+    ),
+    EXIT_SEND_UNKNOWN: (
+        "held",
+        "upload: a send failed and its outcome is unknown; a person reads the folder; the delivered chronology is "
+        "untouched",
+    ),
+    EXIT_HELD: ("held", "update_held: the delivered chronology needs a person (moved, not retired, or still listed)"),
+}
 
 
 def _folder_rows(seat: Any, matter_id: str, folder_id: str) -> list[dict[str, Any]]:
@@ -136,7 +163,7 @@ def _retire(
                 f"update_held: the delivered chronology could not be retired ({str(exc)[:160]}); both are on the matter"
             )
             dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
-            return 2
+            return EXIT_HELD
         rec["deleted"] = True
         dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
     for attempt in range(tries):
@@ -148,7 +175,7 @@ def _retire(
         if attempt + 1 < tries:
             time.sleep(pause)
     sr.log(f"update_held: the delivered chronology (id {old['id']}) still reads present after its delete")
-    return 2
+    return EXIT_HELD
 
 
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
@@ -157,7 +184,7 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     p = plan(sr)
     if not manifest or not p:
         sr.log("update upload: no manifest or no update plan")
-        return 1
+        return EXIT_REFUSED
     matter_id, folder_id, old = sr.job.matter_id, str(p["folder_id"]), p["chronology"]
     dpath = sr.slug_dir / "runs" / sr.unit.unit / "delivery.json"
     delivery: dict[str, Any] = json.loads(dpath.read_text(encoding="utf-8")) if dpath.is_file() else {}
@@ -168,7 +195,7 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     retired = bool((delivery.get("replaced") or {}).get("deleted"))
     if not retired and not any(str(r.get("id")) == old["id"] for r in rows):
         sr.log(f"update_held: the delivered chronology (id {old['id']}) is no longer in its folder; nothing was filed")
-        return 2
+        return EXIT_HELD
     ours = {str(f.get("name")) for f in delivery["files"] if f.get("sent") or f.get("pending") or f.get("confirmed")}
     manifest = _version_clashes(sr, out, rows, manifest, ours)
     dpath.parent.mkdir(parents=True, exist_ok=True)
@@ -176,12 +203,12 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     present = _files_in(seat, matter_id, folder_id)
     counts, why = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, dpath)
     if counts is None:
-        return 2 if why == "held" else 1
+        return EXIT_SEND_UNKNOWN if why == "held" else EXIT_REFUSED
     short = _readback(sr, seat, matter_id, folder_id, manifest, tries, pause)
     _write_readback(delivery, manifest, _files_in(seat, matter_id, folder_id), dpath)
     if short:
         sr.log(f"read-back short after {tries} tries: {', '.join(short)}; the delivered chronology is untouched")
-        return 2
+        return EXIT_SHORT
     rc = _prove(sr, seat, matter_id, folder_id, manifest, delivery, dpath, pause=pause, tries=tries)
     if rc != 0:
         sr.log("the new files are not proven by hash; the delivered chronology is untouched")
@@ -189,5 +216,5 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     delivery = json.loads(dpath.read_text(encoding="utf-8"))
     if not all(f.get("proven") for f in delivery.get("files") or []):
         sr.log("update_held: not every new file is proven; the delivered chronology is untouched")
-        return 2
+        return EXIT_HELD
     return _retire(sr, seat, matter_id, folder_id, old, delivery, dpath, tries, pause)

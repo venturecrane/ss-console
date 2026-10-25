@@ -153,7 +153,7 @@ def test_a_delivered_document_moved_since_the_plan_holds(
 ) -> None:
     sr, seat = _scene(job_dir, firm_config_path, data_root, [])
     seat.docs[0]["folderId"] = "elsewhere"
-    assert update_upload.run(sr, pause=0, tries=2) == 2
+    assert update_upload.run(sr, pause=0, tries=2) == update_upload.EXIT_HELD
     assert seat.sent == [] and seat.deleted == []
 
 
@@ -167,5 +167,39 @@ def test_a_failed_delete_holds_with_both_documents_on_the_matter(
         raise RuntimeError("403")
 
     seat.delete_file = refuse  # type: ignore[method-assign]
-    assert update_upload.run(sr, pause=0, tries=2) == 2
+    assert update_upload.run(sr, pause=0, tries=2) == update_upload.EXIT_HELD
     assert [s["name"] for s in seat.sent] == [NEW, EX2] and "both are on the matter" in log[-1]
+
+
+# ---- 2026-10-24: only a short read-back is a wait the daemon re-runs ------------------
+def _upload_cause(code: int) -> str | None:
+    from medchron import dag_update, requeue
+
+    reason = {s.name: s for s in dag_update.UPDATE_STAGES}["upload"].exit_map[code][1]
+    return requeue.cause([{"outcome": "held", "stage": "upload"}], "held", {"reason": reason}, "upload")
+
+
+def test_an_update_whose_new_files_are_not_listed_yet_is_re_run_not_parked(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """Exit 2 covered every hold of an update's upload under a reason the
+    daemon's read-back-short rule does not match, so a slow Smokeball index
+    parked an update for a person. The short read-back is now exit 2 under
+    that rule's prefix; nothing is deleted while it is short."""
+    sr, seat = _scene(job_dir, firm_config_path, data_root, [])
+    seat.lag = 10  # the vendor lists the new files only after ten more reads
+    code = update_upload.run(sr, pause=0, tries=2)
+    assert code == update_upload.EXIT_SHORT and seat.deleted == []
+    assert _upload_cause(code) == "upload_slow"
+    assert update_upload.run(sr, pause=0, tries=20) == 0 and len(seat.sent) == 2 and seat.deleted == ["c1"]
+
+
+def test_an_update_send_with_an_unknown_outcome_holds_on_its_own_code(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sr, seat = _scene(job_dir, firm_config_path, data_root, [])
+    seat.crash_after = 1
+    code = update_upload.run(sr, pause=0, tries=2)
+    assert code == update_upload.EXIT_SEND_UNKNOWN and seat.deleted == []
+    assert _upload_cause(code) is None
+    assert _upload_cause(update_upload.EXIT_HELD) is None

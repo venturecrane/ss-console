@@ -169,17 +169,6 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         requires=("review",),
         runner=_uupload.run,
         external=True,
-        exit_map={
-            1: (
-                FAILED,
-                "upload: refused (a name collision in the chronology folder, changed local bytes, or other "
-                "bytes read back)",
-            ),
-            2: (
-                HELD,
-                "upload: the update could not be filed and proven yet; the delivered chronology is untouched "
-                "or both are on the matter",
-            ),
-        },
+        exit_map=_uupload.EXITS,
     ),
 )
