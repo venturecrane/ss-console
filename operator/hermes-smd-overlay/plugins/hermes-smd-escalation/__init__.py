@@ -44,7 +44,7 @@ from collections import OrderedDict
 from dataclasses import asdict
 from typing import Any
 
-from shared import escalation_ledger, inbound, provenance
+from shared import escalation_ledger, inbound, marketing_send, provenance
 from shared.audit_contract import sender_key
 from shared.customer_config import CustomerConfig
 from shared.tool_registration import register_wrapped_tool
@@ -737,6 +737,19 @@ def _reply_verdicts(args: dict[str, Any], **kwargs: Any) -> str:
     )
 
 
+def _marketing_draft_send(args: dict[str, Any], **kwargs: Any) -> str:
+    """A marketing seat's scheduled drafts email (``shared/marketing_send.py``).
+
+    Subject and text only; the recipients are fixed in code from the seat's
+    config, and the tool refuses on any seat that is not ``seat.role: marketing``.
+    """
+    return marketing_send.marketing_draft_send(
+        args,
+        session_id=_resolved_session(kwargs),
+        load_config=lambda: CustomerConfig.from_volume(),
+    )
+
+
 TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "escalation_append": (
         "Append one escalation-ledger event (fired/chased/acked/handed_off/resolved) "
@@ -771,6 +784,11 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         _casework_brief,
     ),
     "reply_verdicts": (casework.REPLY_DESCRIPTION, casework.EMPTY_SCHEMA, _reply_verdicts),
+    "marketing_draft_send": (
+        marketing_send.DESCRIPTION,
+        marketing_send.SCHEMA,
+        _marketing_draft_send,
+    ),
     "casework_step_done": (
         casework.STEP_DONE_DESCRIPTION,
         casework.EMPTY_SCHEMA,

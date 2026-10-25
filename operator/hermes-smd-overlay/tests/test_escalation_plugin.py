@@ -760,6 +760,7 @@ def test_register_registers_every_tool(escalation):
         "casework_brief",
         "reply_verdicts",
         "casework_step_done",
+        "marketing_draft_send",
     }
     for r in registered:
         assert "parameters" in r["schema"]  # function shape, not bare JSON-schema

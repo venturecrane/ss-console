@@ -225,7 +225,9 @@ def test_only_casework_brief_mints_the_capability():
         if "CodeFixedRecipients(" in path.read_text(encoding="utf-8")
         and path.name != "send_dispatch.py"
     )
-    assert minters == ["plugins/hermes-smd-escalation/casework.py"]
+    # The marketing seat's scheduled drafts (shared/marketing_send.py) are the
+    # second, scoped to seat.role marketing; tests/test_marketing_send.py.
+    assert minters == ["plugins/hermes-smd-escalation/casework.py", "shared/marketing_send.py"]
     source = (ROOT / "plugins/hermes-smd-escalation/casework.py").read_text(encoding="utf-8")
     assert source.count("CodeFixedRecipients(") == 1
 

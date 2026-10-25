@@ -42,6 +42,11 @@ from shared.action_classes import ActionClass
 #: ``test_send_tools_in_registry_are_classified_external_send``.
 CODE_FIXED_RECIPIENT_SENDS: dict[str, ActionClass] = {
     "partner_message_send": ActionClass.INTERNAL_WRITE,
+    # A marketing seat's scheduled drafts email (shared/marketing_send.py): the
+    # seat's administrators on its roster, from config; the tool takes no
+    # address, and the email it dispatches is gated again as its own send
+    # class. tests/test_marketing_send.py.
+    "marketing_draft_send": ActionClass.INTERNAL_WRITE,
 }
 
 

@@ -941,6 +941,11 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # task write they queue is gated again as update_task. Internal state only.
     "casework_finish": ActionClass.INTERNAL_WRITE,
     "casework_brief": ActionClass.INTERNAL_WRITE,
+    # A marketing seat's scheduled drafts email (shared/marketing_send.py):
+    # the same shape as casework_brief. The send itself goes through
+    # send_dispatch and is gated again as its own send class against the
+    # code-fixed recipients; the tool takes no address.
+    "marketing_draft_send": ActionClass.INTERNAL_WRITE,
     "reply_verdicts": ActionClass.INTERNAL_WRITE,
     # A date-prep step the turn ran at "handles", recorded as a step_ran row
     # (casework_steps.py): no arguments, backed by the step's own memo call.

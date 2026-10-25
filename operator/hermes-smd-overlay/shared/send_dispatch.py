@@ -80,8 +80,11 @@ class CodeFixedRecipients:
 
     This is a Python object handed to :func:`dispatch` as a keyword, never a
     payload key and never a tool argument, so nothing a model-callable tool
-    passes can carry it. Its only minter is ``casework_brief``, from the
-    envelope ``brief_state`` loaded and validated. The trust plugin's sender
+    passes can carry it. Its minters are ``casework_brief``, from the
+    envelope ``brief_state`` loaded and validated, and, on a ``seat.role:
+    marketing`` seat only, ``shared.marketing_send`` for the scheduled
+    marketing drafts, from the seat's own ``scope.admins`` that are on its
+    roster (pending the Captain's decision on that widening). The trust plugin's sender
     honours it only when ``to`` and ``cc`` equal the payload's exactly, only to
     set aside the TAINT gate (every ceiling, scan and floor still runs), and
     only for a send whose recipients classify as the firm's own staff.
