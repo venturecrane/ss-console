@@ -39,10 +39,33 @@ finisher re-reads the date on its page; it settles only when no entry is
 dated after today any more. ``review-policy.json`` counts every step (row 14:
 the residual check 2/4 after the repair is measured on replays).
 
+AND TWO MORE (2026-10-24, Pamplona: a job held at this review on 18 MUST-FIX
+after the paid audit confirmed 2,468 of 2,468 claims; 7 were the system's
+own words in the entries, 11 were check 2 disagreements the repair round
+left). Each settles by deletion or disclosure, never by a written word:
+
+3b. After step 3 and before step 4 (``review_settle.scrub_system``): every check 3 MUST-FIX
+    left, code's or the model's, has each quoted phrase deleted from the
+    entries body only (between "## Medical Chronology" and the next "## "
+    heading, so Limitations and the Exhibit List are never touched). Inside
+    a provider heading's parenthetical the parenthetical goes and the
+    provider's name stays; elsewhere the sentence holding it goes, its
+    citation kept while another sentence it covers remains. A date line is
+    never edited, and an entry's only cited paragraph is never deleted (the
+    finding stays MUST). Settled, a NOTE ("removed before delivery, system
+    wording"), only when every phrase was in the body before and none is
+    after; ``entries_scoped_final.md`` gets the same edits, best effort.
+5.  After step 4 (``review_settle.disclose_differ``): a model check 2 MUST-FIX that quotes
+    two statements, or cites two pages, each resolving to a live claim
+    whose latest audit row is SUPPORTED (or SUPPORTED_WIDENED), two of them
+    on different pages, is two confirmed record statements that disagree: a
+    NOTE that says the records differ. A side that is no confirmed claim (a
+    diagnosis-table row, a heading) keeps it MUST.
+
 Code integrity findings (an empty chronology, a cited exhibit not delivered)
 are never touched: they hold.
-Nothing here invents client text: steps 1-3 only delete or re-grade, and step
-4's sentences are the update lane's grounded, audited corrections.
+Nothing here invents client text: steps 1-3b and 5 only delete or re-grade,
+and step 4's sentences are the update lane's grounded, audited corrections.
 """
 
 from __future__ import annotations
@@ -94,7 +117,7 @@ class Outcome:
 
 def _names_system(f: review.Finding) -> bool:
     t = _text(f)
-    return bool(checks.system_vocabulary(t)) or "chunk" in t.lower()
+    return bool(checks.system_vocabulary(t) or checks.extraction_vocabulary(t)) or "chunk" in t.lower()
 
 
 def wording_and_notes(found: list[review.Finding]) -> tuple[list[review.Finding], list[review.Finding]]:
@@ -401,7 +424,16 @@ def settle(
     if doc is None or not doc.is_file():
         return out
     stats: dict[str, int] = dict.fromkeys(
-        ("system_words_on_record", "identity_client", "identity_unnamed", "identity_left_out", "summary_deleted"), 0
+        (
+            "system_words_on_record",
+            "identity_client",
+            "identity_unnamed",
+            "identity_left_out",
+            "summary_deleted",
+            "system_scrubbed",
+            "differ_disclosed",
+        ),
+        0,
     )
     from . import review_evidence as EV
 
@@ -425,6 +457,9 @@ def settle(
         _sync_entries(sr, out.deleted_lines)
         stats["summary_deleted"] = len(out.deleted_lines)
         sr.log(f"review: {len(out.deleted_lines)} summary line(s) no entry supports, deleted")
+    from . import review_settle
+
+    review_settle.scrub_system(sr, doc, out, stats)
     pend = [k for k, f in enumerate(out.findings) if _repairable(f)]
     before_rounds = {str(check_no(out.findings[k])): 0 for k in pend}
     for k in pend:
@@ -442,6 +477,7 @@ def settle(
             out.findings[k] = replace(f, grade=review.NOTE, finding=f"corrected before delivery: {f.finding}")
             out.repaired += 1
         out.changed = out.changed or after != before
+    review_settle.disclose_differ(sr, doc, out, stats)
     _record(sr, out, pend, before_rounds, stats)
     return out
 

@@ -32,6 +32,17 @@ _SYSTEM = re.compile(
     r"counted by code|by code(?!\s+(?:of|section|sections|§))|"
     r"the model(?!\s+(?:year|number|name|of)\b)(?!'s\s+(?:year|number|name)\b)|as an ai)\b"
 )
+#: How the system READ a page, which no record says of itself: the
+#: chronology's own text-extraction narrated in the delivered entries (the
+#: Pamplona review, 2026-10-24: "The image carries no transcribed text.", "In
+#: the transcription, the boxes for ...", "Text on the following page ...
+#: reads as follows"). Kept apart from ``_SYSTEM`` because the demand and
+#: litigation lanes share that list, and a demand may properly speak of a
+#: deposition's transcription. The citation tail ", machine transcription"
+#: never matches: every phrase here needs its own article or noun.
+_EXTRACTION = re.compile(
+    r"(?i)\b(in the transcription|the transcription|transcribed text|text on the following page|the image carries no)\b"
+)
 _SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
 _MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
 #: A bare figure ends at a digit boundary that is not a thousands group: the
@@ -68,6 +79,17 @@ def system_vocabulary(text: str) -> list[str]:
     """Distinct system-vocabulary hits, in order of first appearance."""
     seen: list[str] = []
     for m in _SYSTEM.finditer(text or ""):
+        w = m.group(0).lower()
+        if w not in seen:
+            seen.append(w)
+    return seen
+
+
+def extraction_vocabulary(text: str) -> list[str]:
+    """Distinct hits of the system narrating how it read a page, in order of
+    first appearance (``_EXTRACTION``)."""
+    seen: list[str] = []
+    for m in _EXTRACTION.finditer(text or ""):
         w = m.group(0).lower()
         if w not in seen:
             seen.append(w)
@@ -155,6 +177,7 @@ def fmt_cents(c: int) -> str:
 __all__ = [
     "dates",
     "dates_not_in",
+    "extraction_vocabulary",
     "fmt_cents",
     "future",
     "money",

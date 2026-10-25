@@ -35,9 +35,15 @@ and disclosed), an entry dated after today goes to the repair round to have
 its date re-read on the page (2026-10-24), a
 check 3 hit on the firm's required wording is dropped, a check 2 on the
 records-differ sentence is a note, a check 4 summary line no entry supports
-is deleted when its quote names exactly one line, and the check 2/4 MUST-FIX
-left get ONE repair round with the update lane's finisher; the chronology is
-then re-rendered and re-manifested so what is filed is what was settled.
+is deleted when its quote names exactly one line, a check 3 phrase left is
+deleted from the entries (its sentence, or a provider heading's
+parenthetical; 2026-10-24), the check 2/4 MUST-FIX left get ONE repair round
+with the update lane's finisher, and a check 2 whose every side is a claim
+the audit confirmed on a different page is disclosed as the records
+differing (2026-10-24); the chronology is then re-rendered and re-manifested
+so what is filed is what was settled. The code half also holds on the system
+narrating how it read a page ("the transcription", "transcribed text") and
+on a provider heading whose parenthetical names document types.
 
 A MUST-FIX left after that exits 2 (held, resumable in the chronology's ledger) with a reason
 starting ``review_held:``, which the daemon pages SMD on. ``review.json`` is
@@ -109,6 +115,14 @@ _SETTLED_SYSTEM = {
     "counted by code",
     "as an ai",
 }
+#: A provider heading's parenthetical that names kinds of document instead of
+#: a provider: a placeholder title the map wrote when no page named one
+#: (Pamplona, 2026-10-24: "UCDMC (inpatient flowsheets, orders and medication
+#: administration record, multiple documenting staff)").
+_PAREN = re.compile(r"\(([^()]*)\)")
+_DOC_TYPES = re.compile(
+    r"(?i)\b(?:flowsheets?|orders|medication administration record|documenting staff|multiple\b.*\bstaff)\b"
+)
 
 
 def docx_text(path: Path) -> str:
@@ -167,8 +181,35 @@ def _system_findings(where: str, text: str) -> list[review.Finding]:
             continue
         grade = review.MUST if w in _SETTLED_SYSTEM else review.SHOULD
         out.append(review.code(grade, "3 system language", f'"{w}" reads as the system\'s wording', where))
+    for w in checks.extraction_vocabulary(text):
+        out.append(
+            review.code(review.MUST, "3 system language", f'"{w}" describes how the system read the record', where)
+        )
     for s in checks.sentinels(text):
         out.append(review.code(review.MUST, "3 system language", f'a system marker "{s[:60]}" is in the text', where))
+    return out
+
+
+def heading_findings(rows: list[tuple[str, str]]) -> list[review.Finding]:
+    """A provider heading whose parenthetical names document types (one
+    finding per distinct parenthetical, cited to its first entry). MUST: it
+    describes the file, never who the provider was; ``review_policy`` deletes
+    the parenthetical and keeps the provider's name."""
+    out: list[review.Finding] = []
+    seen: set[str] = set()
+    for mdy, prov in rows:
+        for m in _PAREN.finditer(prov):
+            if not _DOC_TYPES.search(m.group(1)) or m.group(0) in seen:
+                continue
+            seen.add(m.group(0))
+            out.append(
+                review.code(
+                    review.MUST,
+                    "3 system language",
+                    f'the provider heading "{m.group(0)}" names document types, not a provider',
+                    f"entry {mdy} {prov}".strip(),
+                )
+            )
     return out
 
 
@@ -188,6 +229,7 @@ def code_findings(
         out += _system_findings(label, text)
     for n in names:
         out += _system_findings(f"file name {n}", n)
+    out += heading_findings(rows)
     if not rows:
         out.append(
             review.code(review.MUST, "empty chronology", "the chronology has no dated entries", "Medical Summary")
