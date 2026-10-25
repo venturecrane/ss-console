@@ -50,7 +50,7 @@
     },
     "native:": {
       "status": "materialized",
-      "materializer": "overlay translate.py::_materialize_web_search (native:<provider> → config web.search_backend; Hermes' bundled web provider registers the native web_search tool, classified READ). Added with the ADR 0070 native cut (2026-07-08), superseding mcp:brave — MCP-wrapping a native feature was the redundant layer. Key (e.g. BRAVE_SEARCH_API_KEY) read by the provider, staged by provision-customer.sh."
+      "materializer": "overlay translate.py::_materialize_web_search (native:<provider> under any capability but WebExtract -> config web.search_backend; Hermes' bundled web provider registers the native web_search tool, classified READ). A WebExtract connector (native:firecrawl) -> web.extract_backend, emitted only when FIRECRAWL_API_KEY is present at boot (web_extract, READ, fenced). Every seat also gets web.keyless_fallback: false, so no seat routes a query or URL to an anonymous free tier. Added with the ADR 0070 native cut (2026-07-08), superseding mcp:brave. Keys (BRAVE_SEARCH_API_KEY, FIRECRAWL_API_KEY) read by the providers, staged by operator/bin/lib/stage-web-connectors.sh."
     },
     "build:": {
       "status": "conditional",

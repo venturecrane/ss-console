@@ -33,6 +33,10 @@
  * own WordPress site (reads plus pending, never published, posts), a public
  * YouTube channel feed, and the firm's GA4 property. Like WebSearch they have
  * no adapter interface here; the union exists so `connectors:` can key them.
+ *
+ * `WebExtract` is the native page-fetch twin of WebSearch: a `native:<provider>`
+ * backend (today `native:firecrawl`) becomes Hermes config `web.extract_backend`,
+ * emitted only when the provider's key is present at boot.
  */
 export type CapabilityName =
   | 'PracticeManagement'
@@ -50,3 +54,4 @@ export type CapabilityName =
   | 'Website'
   | 'VideoChannel'
   | 'Analytics'
+  | 'WebExtract'

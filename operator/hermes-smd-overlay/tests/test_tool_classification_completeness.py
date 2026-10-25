@@ -644,6 +644,19 @@ def test_marketing_connector_tools_mirror_their_manifests() -> None:
             assert resolved.action_class.value == declared, f"{prefix}{tool}"
 
 
+def test_native_web_extract_is_read_fenced_and_not_a_source() -> None:
+    """web_extract (WebExtract capability) reads a public page: READ, fenced as
+    inbound content, and never a provenance source."""
+    from shared.action_classes import classify_tool
+    from shared.provenance import TENANT_SOURCE_READ_TOOLS
+
+    resolved = classify_tool("web_extract")
+    assert resolved.unmapped is False
+    assert resolved.action_class is ActionClass.READ
+    assert "web_extract" not in TENANT_SOURCE_READ_TOOLS
+    assert "web_extract" in load_plugin("hermes-smd-inbound")._FENCED_READ_TOOLS
+
+
 def test_no_marketing_connector_tool_is_a_send_or_publish() -> None:
     """A pending WordPress post waits for a person at the firm; nothing on these
     three servers transmits or publishes, so no tool may carry a send class."""

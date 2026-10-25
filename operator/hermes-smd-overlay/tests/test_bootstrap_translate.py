@@ -1348,13 +1348,19 @@ def test_translate_materializes_native_web_search(tmp_path):
     config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
     # Named as the active native search backend; the provider reads its own key
     # (e.g. BRAVE_SEARCH_API_KEY) at runtime — not staged into config here.
-    assert config["web"] == {"search_backend": "brave-free"}
+    # keyless_fallback is false on every seat (see the next test).
+    assert config["web"] == {"search_backend": "brave-free", "keyless_fallback": False}
     # NOT wrapped as an MCP server — that redundant layer was removed.
     assert "brave" not in config.get("mcp_servers", {})
 
 
-def test_translate_omits_web_block_without_native_connector(tmp_path):
-    """No native web connector => no ``web`` block (configs stay byte-identical)."""
+def test_translate_closes_keyless_web_on_a_seat_without_web_connectors(tmp_path):
+    """No native web connector => the ``web`` block carries ONLY
+    ``keyless_fallback: false``. Pinned Hermes otherwise resolves web_search and
+    web_extract to anonymous public free tiers when no keyed backend answers, and
+    the ``web`` toolset is on every seat, so an unauthored seat could still send a
+    query or a URL to a third party (ADR 0070: web access is authored, never
+    imposed)."""
     customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, customer_yaml_body=VALID_YAML)
     translate_customer_yaml(
         customer_yaml_path=str(customer_yaml),
@@ -1362,7 +1368,46 @@ def test_translate_omits_web_block_without_native_connector(tmp_path):
         skills_dir=str(skills_dir),
     )
     config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
-    assert "web" not in config
+    assert config["web"] == {"keyless_fallback": False}
+
+
+def test_web_extract_connector_emits_extract_backend_only_with_its_key(monkeypatch):
+    """A ``WebExtract`` connector on ``native:firecrawl`` names the extract
+    backend only when FIRECRAWL_API_KEY is present: an explicitly selected,
+    unkeyed Firecrawl falls back to Firecrawl's anonymous cloud in pinned Hermes,
+    and keyless_fallback does not stop that path."""
+    from bootstrap.translate import _materialize_web_search
+
+    connectors = {
+        "WebSearch": {"adapter": "brave", "backend": "native:brave-free", "enabled": True},
+        "WebExtract": {"adapter": "firecrawl", "backend": "native:firecrawl", "enabled": True},
+    }
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "keyless_fallback": False,
+    }
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "extract_backend": "firecrawl",
+        "keyless_fallback": False,
+    }
+    # An extract provider this overlay does not wire is never named.
+    connectors["WebExtract"]["backend"] = "native:tavily"
+    assert "extract_backend" not in _materialize_web_search(connectors)
+    # A disabled WebExtract connector is ignored, and never becomes the search backend.
+    connectors["WebExtract"] = {"backend": "native:firecrawl", "enabled": False}
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "keyless_fallback": False,
+    }
+    # WebExtract alone does not select a search backend.
+    only = {"WebExtract": {"backend": "native:firecrawl", "enabled": True}}
+    assert _materialize_web_search(only) == {
+        "extract_backend": "firecrawl",
+        "keyless_fallback": False,
+    }
 
 
 # Smokeball — author-built stdio connector with required per-seat ENVIRONMENT and
