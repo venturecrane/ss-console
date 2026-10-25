@@ -971,6 +971,10 @@ scope:
     # boot copy of this roster predated the tags).
     - scott+help-probe-3@smd.services
     - scott+help-probe-4@smd.services
+    # Added while the seat runs (image acef8d02, booted 2026-10-25 18:50Z) to
+    # prove the broker reads the live roster (#3495): a reply to it without a
+    # restart is the proof. Never copy to a client seat.
+    - scott+roster-live-probe@smd.services
     # Staging-only probe channel (ADR 0075 verification). A rostered SMD-owned
     # AgentMail sender so the probe ladder can drive clean-trust gateway turns
     # programmatically (the CLI channel is PID-gated out of the audit broker).
