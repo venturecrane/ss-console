@@ -59,8 +59,15 @@ left). Each settles by deletion or disclosure, never by a written word:
     two statements, or cites two pages, each resolving to a live claim
     whose latest audit row is SUPPORTED (or SUPPORTED_WIDENED), two of them
     on different pages, is two confirmed record statements that disagree: a
-    NOTE that says the records differ. A side that is no confirmed claim (a
-    diagnosis-table row, a heading) keeps it MUST.
+    NOTE that says the records differ. Any other check 2 MUST-FIX left with
+    a cite (a side that is a diagnosis-table row, a heading, a quote the
+    claims do not carry) is FLAGGED for the attorney: a NOTE that says only
+    that the review read the statements as possibly disagreeing and names
+    the pages to check, never that anything was confirmed. 2026-10-25, the
+    Captain: the Operator finishes the chronology end to end, so a
+    disagreement it cannot resolve is the attorney's to weigh in the notes,
+    not a stop for a person to clear; replayed on Pamplona's recorded
+    review, 4 of its 18 were this class.
 
 Code integrity findings (an empty chronology, a cited exhibit not delivered)
 are never touched: they hold.
@@ -432,6 +439,7 @@ def settle(
             "summary_deleted",
             "system_scrubbed",
             "differ_disclosed",
+            "differ_flagged",
         ),
         0,
     )

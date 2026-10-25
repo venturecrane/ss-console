@@ -22,7 +22,13 @@ from .review_policy import _DATE, _EXHIBIT_PAGE, _QUOTED, Outcome, _norm, _phras
 #: citation). Abbreviations a record writes mid-sentence ("Dr. Roe") are not
 #: boundaries (``_split``).
 _BOUNDARY = re.compile(r"(?<=[.!?\x00])\s+")
-_ABBREV = re.compile(r"(?i)(?:^|\s)(?:dr|mr|mrs|ms|st|vs|no|pp?|approx|e\.g|i\.e|jr|sr)\.$")
+#: Credentials and clock marks too: "Thomas Roe, M.D. at 12:41 PM" is one
+#: sentence; split at "M.D." the Pamplona system sentence matched neither half
+#: and a deletion would have left "at 12:41 PM, reads as follows." (2026-10-25).
+_ABBREV = re.compile(
+    r"(?i)(?:^|\s|,)(?:dr|mr|mrs|ms|st|vs|no|pp?|approx|e\.g|i\.e|jr|sr"
+    r"|m\.d|d\.o|r\.n|p\.a|n\.p|ph\.d|a\.m|p\.m|l\.v\.n|f\.n\.p|d\.p\.m)\.$"
+)
 _HELD = re.compile(r"\x00(\d+)\x00")
 #: An entry's date line (exactly a date: the entry's first line).
 _DATE_LINE = re.compile(r"^\d{2}/\d{2}/\d{4}\s*$")
@@ -216,6 +222,12 @@ def _sync_edits(sr: StageRun, edits: list[tuple[str, str | None]]) -> None:
 
 # ---- step 5: two confirmed statements that differ, disclosed ----------------------
 DIFFER_NOTE = "the records differ on this point; both statements were confirmed on their cited pages: "
+#: A disagreement the lane could not resolve to two confirmed claims: the
+#: attorney's to check, and the wording claims nothing was confirmed.
+FLAG_NOTE = (
+    "flagged for the attorney: the pre-delivery review read these statements as possibly "
+    "disagreeing; please compare them against the cited pages: "
+)
 _CONFIRMED = ("SUPPORTED", "SUPPORTED_WIDENED")
 
 
@@ -275,7 +287,9 @@ def differ_sides(f: review.Finding, claims: list[tuple[str, dict[str, Any]]]) ->
 def disclose_differ(sr: StageRun, doc: Path, out: Outcome, stats: dict[str, int]) -> None:
     """Step 5: a model check 2 MUST-FIX whose every side is a confirmed live
     claim, two of them on different pages, is the records differing: a
-    NOTE that says so (see the module docstring)."""
+    NOTE that says so. Any other check 2 MUST-FIX with a cite is flagged for
+    the attorney in a NOTE that claims nothing was confirmed (see the module
+    docstring)."""
     claims: list[tuple[str, dict[str, Any]]] | None = None
     for k, f in enumerate(out.findings):
         if f.by != "model" or f.grade != review.MUST or check_no(f) != 2:
@@ -283,7 +297,9 @@ def disclose_differ(sr: StageRun, doc: Path, out: Outcome, stats: dict[str, int]
         if claims is None:
             claims = confirmed_claims(sr, doc.read_text(encoding="utf-8"))
         sides = differ_sides(f, claims)
-        if not sides or not any(a.isdisjoint(b) for i, a in enumerate(sides) for b in sides[i + 1 :]):
-            continue
-        out.findings[k] = replace(f, grade=review.NOTE, finding=DIFFER_NOTE + f.finding)
-        stats["differ_disclosed"] += 1
+        if sides and any(a.isdisjoint(b) for i, a in enumerate(sides) for b in sides[i + 1 :]):
+            out.findings[k] = replace(f, grade=review.NOTE, finding=DIFFER_NOTE + f.finding)
+            stats["differ_disclosed"] += 1
+        elif f.cite.strip():
+            out.findings[k] = replace(f, grade=review.NOTE, finding=FLAG_NOTE + f.finding)
+            stats["differ_flagged"] = stats.get("differ_flagged", 0) + 1

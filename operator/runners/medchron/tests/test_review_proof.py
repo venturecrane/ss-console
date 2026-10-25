@@ -265,22 +265,36 @@ def test_a_check2_must_is_repaired_once_by_the_finisher_audited_and_filed(job_di
     assert "corrected before delivery" in review.docx_text(sr.slug_dir / "out" / "alpha" / names[1])
 
 
-def test_a_repair_the_audit_does_not_support_is_reverted_and_holds(job_dir, firm_config_path, data_root):
+def _flagged_not_corrected(sr) -> None:
+    """The repair kept nothing, so the disagreement is the attorney's to weigh:
+    flagged in the notes, never "corrected" (2026-10-25: the Operator finishes
+    the chronology; an unresolved check 2 no longer stops it for a person)."""
+    from medchron.stages import review_settle
+
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    (f,) = [f for f in rec["findings"] if f["check"].startswith("2")]
+    assert f["grade"] == proof_review.NOTE and f["finding"].startswith(review_settle.FLAG_NOTE)
+    assert "corrected before delivery" not in f["finding"]
+
+
+def test_a_repair_the_audit_does_not_support_is_reverted_and_flagged(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
     unsupported = [{"claim": "Continue physical therapy three times weekly for six weeks."}]
     rc = _settle_review(sr, FakeDoorway(_verdict(CONTRA), FINISH), verify=lambda _b, _a: unsupported)
-    assert rc == 2 and log[-1].startswith("review_held:")
+    assert rc == 0, log
     assert "three times weekly" not in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    _flagged_not_corrected(sr)
 
 
-def test_a_finisher_that_declines_leaves_the_must_and_holds(job_dir, firm_config_path, data_root):
+def test_a_finisher_that_declines_leaves_the_disagreement_flagged(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
     decline = (
         '{"edits": [{"finding": "F1", "anchor": "N2", "action": "decline", '
         '"reason": "the page does not show it"}], "complete": true}'
     )
-    assert _settle_review(sr, FakeDoorway(_verdict(CONTRA), decline)) == 2
-    assert log[-1].startswith("review_held:") and "contradicts" in log[-1]
+    assert _settle_review(sr, FakeDoorway(_verdict(CONTRA), decline)) == 0, log
+    _flagged_not_corrected(sr)
 
 
 def test_a_check1_must_is_never_repaired(job_dir, firm_config_path, data_root):
