@@ -1,0 +1,80 @@
+# Example registers for the advertising gate (advertising_gate_check.py).
+# A SYNTHETIC firm: every name, city, number and sentence below is invented.
+# A real firm's registers are authored in the private engagements repo and
+# staged to /var/lib/smd-config/marketing/marketing-firm.yaml on its seat.
+# Empty lists and null disclosures fail closed: nothing of that kind may be
+# claimed until the firm authors it.
+schema: 1
+firm:
+  names:
+    - Rivera & Cole Injury Lawyers
+    - Rivera & Cole
+  office_cities:
+    - Riverside
+  site_urls:
+    - https://www.example-firm.test
+  phones:
+    - (951) 555-0142
+roster:
+  - name: Dana Rivera
+    title: Partner
+    lawyer: true
+    languages: [en, es]
+  - name: Marcus Cole
+    title: Partner
+    lawyer: true
+    languages: [en]
+  - name: Lucia Ortega
+    title: Asistente legal
+    lawyer: false
+    languages: [es, en]
+disclosures:
+  results:
+    en: The result portrayed was dependent on the facts of that case, and results will differ if based on different facts.
+    es: El resultado descrito dependió de los hechos de ese caso, y los resultados serán diferentes si se basan en hechos diferentes.
+  testimonial:
+    en: This testimonial does not constitute a guarantee, warranty, or prediction regarding the outcome of your legal matter.
+    es: Este testimonio no constituye una garantía, ni una predicción sobre el resultado de su asunto legal.
+  costs:
+    en: You are not responsible for case costs if there is no recovery.
+    es: Usted no es responsable de los costos del caso si no hay recuperación.
+  blog:
+    en: This post is general information, not legal advice. Reading it or contacting us does not create an attorney-client relationship, and information you send us is not confidential until we agree to represent you.
+    es: Esta publicación es información general, no asesoría legal. Leerla o comunicarse con nosotros no crea una relación abogado-cliente, y la información que nos envíe no es confidencial hasta que aceptemos representarle.
+  dramatization:
+    en: Dramatization. Not an actual client.
+    es: Dramatización. No es un cliente real.
+results:
+  - id: truck-2024
+    text_match: ['$1.2 million', '$1,200,000']
+    liability_basis: a commercial truck driver ran a red light
+    injury: a fractured spine
+    consent: true
+  - id: experience
+    text_match: ['over 25 years']
+    liability_basis: null
+    injury: null
+    consent: true
+testimonials:
+  - text: They returned every call and explained every step.
+    source: Google review
+    date: '2025-03-02'
+    consent: true
+awards:
+  - name: Riverside County Trial Lawyer of the Year
+    not_membership_based: true
+    no_fee: true
+certifications: []
+fee_terms:
+  percentages: [33]
+  no_fee_phrases_allowed: true
+blocklist:
+  - we always get results
+review_reply:
+  offline_contact:
+    name: Dana Rivera
+    phone: (951) 555-0142
+    email: intake@example-firm.test
+channels:
+  gbp:
+    identity_in_template: true

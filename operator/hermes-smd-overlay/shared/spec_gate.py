@@ -160,6 +160,12 @@ REASON_OUTPUT_CHECKLIST = "output_checklist"
 #: breaker caught; its ``rules`` say which skill output to fix.
 REASON_OUTPUT_CHECKLIST_EXHAUSTED = "output_checklist_exhausted"
 
+#: The California advertising gate refused or flagged a message on a seat whose
+#: role turns it on (``shared/advertising_gate``, ADR 0098). Its own reason, for
+#: the same misattribution argument: it is neither the customer's spec nor the
+#: paralegal checklist.
+REASON_ADVERTISING_GATE = "advertising_gate"
+
 #: Per-property control states. The question is not "what is installed" but
 #: "what can this process PROVE about what is installed" — see
 #: ``shared.spec_manifest.manifest_state``.
@@ -698,10 +704,35 @@ def audit_output_checklist(
     )
 
 
+def audit_advertising_gate(
+    *,
+    tool_name: str,
+    output_class: str,
+    rules: str,
+    session_id: str = "",
+    tool_call_id: str = "",
+) -> None:
+    """Write the ``SPEC_GATE_TRIGGERED`` row for an advertising-gate finding.
+
+    ``rules`` is ``R-01:BLOCK,R-17:FLAG`` (``advertising_gate.Outcome.rule_summary``):
+    rule ids and severities only, never a fragment of the text. Best-effort.
+    """
+    _emit_spec_gate_audit(
+        tool_name=tool_name,
+        output_class=output_class,
+        reason=REASON_ADVERTISING_GATE,
+        session_id=session_id,
+        tool_call_id=tool_call_id,
+        detail=rules,
+    )
+
+
 __all__ = [
+    "REASON_ADVERTISING_GATE",
     "REASON_OUTPUT_CHECKLIST",
     "REASON_OUTPUT_CHECKLIST_EXHAUSTED",
     "TEMPLATED_BODY_ARG",
+    "audit_advertising_gate",
     "audit_output_checklist",
     "check_spec_gate",
     "resolve_output_class",

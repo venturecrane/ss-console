@@ -1198,7 +1198,7 @@ export type SeatProduct = (typeof SEAT_PRODUCTS)[number]
  * is every seat authored before ADR 0090; the package lives at
  * `operator/roles/<role>/`.
  */
-export const SEAT_ROLES = ['couples'] as const
+export const SEAT_ROLES = ['couples', 'marketing'] as const
 export type SeatRole = (typeof SEAT_ROLES)[number]
 
 export interface Seat {

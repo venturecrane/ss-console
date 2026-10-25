@@ -732,9 +732,11 @@ RUN chmod -R a+rX /opt/hermes /app \
 # drafting_gate_check.py is the mechanical gate a draft must pass before it
 # reaches the attorney, and drafting-discipline.md is the rule it enforces. An
 # agent that owns its own gate checker can rewrite the check it is graded by.
-# Nothing writes under that tree at runtime: the checker is INVOKED as a script
-# (`python3 <path>`), never imported, so no __pycache__ write depends on the
-# agent owning it, and a+rX below keeps it readable and traversable.
+# Nothing writes under that tree at runtime: drafting_gate_check.py is INVOKED
+# as a script (`python3 <path>`), and advertising_gate_check.py (ADR 0098) is
+# loaded by the overlay's shared/advertising_gate.py from this exact path, where
+# a failed __pycache__ write is ignored by the import system; no write depends on
+# the agent owning it, and a+rX below keeps it readable and traversable.
 RUN chown -R root:root \
       /app/overlay-pack \
       /app/operator/templates/drafting \

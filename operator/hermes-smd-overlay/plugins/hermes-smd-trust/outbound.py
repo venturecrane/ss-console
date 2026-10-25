@@ -35,6 +35,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from shared import (
+    advertising_gate,
     identifier_filter,
     output_checklist,
     policy_profile,
@@ -1082,6 +1083,15 @@ def check_outbound_draft(
         )
         if directive is not None:
             return directive
+        directive = _check_advertising(
+            tool_name=tool_name,
+            texts=[body],
+            output_class="draft",
+            session_id=session_id,
+            tool_call_id=tool_call_id,
+        )
+        if directive is not None:
+            return directive
         if tool_name in CHECKLIST_MEMO_TOOLS:
             # The file note, raw: the connector normalizes headings, emphasis
             # and quotes after this hook, so the MEMO set does not refuse them.
@@ -1335,6 +1345,16 @@ def check_outbound_send(
         )
         if directive is not None:
             return directive
+        if isinstance(args, dict) and not args.get(spec_gate.TEMPLATED_BODY_ARG):
+            directive = _check_advertising(
+                tool_name=tool_name,
+                texts=_send_texts(args),
+                output_class=_send_output_class(tool_name, args, session_id) or "unresolved",
+                session_id=session_id,
+                tool_call_id=tool_call_id,
+            )
+            if directive is not None:
+                return directive
         return _check_send_checklist(
             tool_name=tool_name, args=args, session_id=session_id, tool_call_id=tool_call_id
         )
@@ -1478,6 +1498,7 @@ _RULE_PLAIN: dict[str, str] = {
     "exclamation": "an exclamation mark",
     "caps_emphasis": "capitals for emphasis",
     "max_lines": "too many lines",
+    advertising_gate.REASON: "something California's attorney-advertising rules do not allow",
 }
 
 # ---------------------------------------------------------------------------
@@ -1824,6 +1845,73 @@ def send_checklist_rules(tool_name: str, args: dict | None, session_id: str) -> 
 def send_is_staff(tool_name: str, args: dict | None, session_id: str) -> bool:
     """True when this send resolves to the staff output class."""
     return isinstance(args, dict) and _send_output_class(tool_name, args, session_id) == "staff"
+
+
+# ---------------------------------------------------------------------------
+# The California advertising gate (ADR 0098)
+#
+# On a seat whose role sets ``advertising_gate: ca-law-firm`` (a law-firm
+# marketing seat), every send and every draft body also meets
+# ``shared/advertising_gate``: the firm's drafts for approval ride inside these
+# emails, and each one is an advertisement under B&P 6157(b). The draft-block
+# convention there lets one email carry a cover note and several drafts. On
+# every other seat this returns before reading anything (pinned by
+# tests/test_advertising_gate_outbound.py). A code-rendered body is skipped as
+# the checklist skips it: the repo wrote it, not the model.
+#
+# Disposition mirrors the checklist: a BLOCK refuses with the reason and the
+# quoted fragment; the third refusal of the same text withholds it; FLAGs
+# write the audit row and proceed. Unlike the checklist, a fault refuses: the
+# advertising gate is a legal floor the firm was promised, so a check that could
+# not run is not a pass.
+# ---------------------------------------------------------------------------
+
+
+def _check_advertising(
+    *,
+    tool_name: str,
+    texts: list[str],
+    output_class: str,
+    session_id: str,
+    tool_call_id: str,
+) -> dict | None:
+    if not advertising_gate.enabled():
+        return None
+    outcome = advertising_gate.scan([t for t in texts if t])
+    if not outcome.findings:
+        return None
+    spec_gate.audit_advertising_gate(
+        tool_name=tool_name,
+        output_class=output_class,
+        rules=outcome.rule_summary(),
+        session_id=session_id,
+        tool_call_id=tool_call_id,
+    )
+    if not outcome.blocking:
+        return None
+    key = output_checklist.fingerprint("advertising\x00" + "\x00".join(texts))
+    count = _CHECKLIST_COUNTER.bump(session_id, key)
+    plain = _RULE_PLAIN[advertising_gate.REASON]
+    detail = outcome.describe()
+    if count >= output_checklist.HOLD_AFTER:
+        return {
+            "action": "block",
+            "message": (
+                f"Withheld: this message was refused {output_checklist.HOLD_AFTER} times with "
+                f"the same text and has not been sent. It will not go out. Do not call "
+                f"{tool_name} with it again. In your run output, say that it was withheld "
+                f"because it still carried {plain}, so a person can correct what produced "
+                f"it. {detail}"
+            ),
+        }
+    return {
+        "action": "block",
+        "message": (
+            f"Refused: this message carries {len(outcome.blocking)} thing(s) California's "
+            f"attorney-advertising rules do not allow, and nothing was sent. {detail} Correct "
+            f"each one and call {tool_name} again with the corrected text."
+        ),
+    }
 
 
 def _check_send_checklist(
