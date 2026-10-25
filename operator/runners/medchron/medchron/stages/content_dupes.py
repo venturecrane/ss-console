@@ -3,7 +3,7 @@ document already holds. $0, after ``extract_after_fold`` and before vision.
 
 WHY (2026-10-25, the Pamplona job). The pull keeps one copy of a file whose
 BYTES repeat another's (stages/download, sha256). The firm had saved one
-558-page Kaiser ER PDF twice under two names, 8 bytes apart, and two UC Davis
+558-page Kaiser ER PDF twice under two names, 8 bytes apart, and two Valley Hospital
 exports holding the same 547 pages in another order: every byte-different, so
 both copies of each were read, composed, cited and built into exhibits, and the
 duplicates were caught only at delivery (stages/exhibit_merge settles a job

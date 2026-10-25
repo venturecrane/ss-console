@@ -129,7 +129,7 @@ def _quoted(names: list[str]) -> str:
 def _merge_lines(d: Path, unit: str | None) -> list[str]:
     """Exhibits delivered once because two of them held the same record pages
     (2026-10-25, Pamplona: one Kaiser ER PDF saved twice, and two overlapping
-    UC Davis exports). Factual: which files, and the exhibit that holds them."""
+    university-hospital exports). Factual: which files, and the exhibit that holds them."""
     rows = [
         r
         for p in _unit_files(d, unit, "runs", MERGES_FILE)

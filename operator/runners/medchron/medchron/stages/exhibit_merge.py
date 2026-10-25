@@ -6,7 +6,7 @@ about to ship with duplicate exhibits. Exhibit 4 was page for page Exhibit 3:
 the firm had saved one 558-page Kaiser ER PDF twice under two names, and the
 two files differed by 8 bytes, so the pull's sha256 dedupe (stages/download)
 kept both. Exhibit 7 held the same 547 pages as Exhibit 6 in another order:
-two overlapping UC Davis exports, the same text drawn with different pixels.
+two overlapping university-hospital exports, the same text drawn with different pixels.
 The Captain decided: merge before delivery, renumber, disclose. Nothing in the
 package may be invented, so a merge only re-points a citation to an identical
 page, deletes a paragraph that became an exact duplicate, and discloses the
@@ -18,7 +18,7 @@ else the hash of its 72-dpi grayscale rendering. Exhibit B (the higher number)
 merges into an earlier A only when EVERY page of B pairs one to one with an
 unused page of A of the same signature (Pamplona: 558/558 and 547/547, 69
 low-text pages paired by pixels). Partial containment never merges; it is
-logged. Pixel identity is not asked of a text page: the UC Davis copies carry
+logged. Pixel identity is not asked of a text page: the two hospital exports carry
 the same words in different pixels, and the words are the record.
 
 THE FALSIFIER RIDES IN THE STAGE. A pairing that also holds with B shifted by

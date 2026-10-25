@@ -3,8 +3,8 @@ pages are delivered once, renumbered and disclosed, with nothing invented.
 
 The scene mirrors the real case: Exhibit 3 is Exhibit 2 page for page (one
 Kaiser PDF saved twice), Exhibit 5 is Exhibit 4's pages in another order with
-the same words drawn elsewhere on the page (two UC Davis exports), one page in
-each UC Davis copy carries no text and pairs by its pixels. Every check is a
+the same words drawn elsewhere on the page (two university-hospital exports), one page in
+each hospital-export copy carries no text and pairs by its pixels. Every check is a
 falsifier pair where it can be: a partial overlap, a citation the merge cannot
 re-point, and a run of template pages each stop the merge.
 """
@@ -31,8 +31,8 @@ TITLES = {
     1: "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)",
     2: "Exhibit 2 - Kaiser - 02-01-2026 (Medical Records)",
     3: "Exhibit 3 - Kaiser - 02-01-2026 (Medical Records)",
-    4: "Exhibit 4 - UC Davis - 03-01-2026 (Medical Records)",
-    5: "Exhibit 5 - UC Davis - 03-01-2026 (Medical Records)",
+    4: "Exhibit 4 - Valley Hospital - 03-01-2026 (Medical Records)",
+    5: "Exhibit 5 - Valley Hospital - 03-01-2026 (Medical Records)",
     6: "Exhibit 6 - Other Clinic - 04-01-2026 (Medical Records)",
 }
 FILES = {1: "clinic", 2: "kaiser er", 3: "kaiser er copy", 4: "ucd export", 5: "ucd export 2", 6: "other"}
@@ -95,7 +95,7 @@ All Other Information
 Discharged home in stable condition per the note. (Exhibit 3 - p. 1)
 
 03/01/2026
-UC Davis | Follow-up
+Valley Hospital | Follow-up
 
 Follow-up visit documented range of motion limits. (Exhibit 5 - p. 1)
 
@@ -114,7 +114,7 @@ DOC = (
     "| Medical Provider | Treatment Period | Visits | Reference |\n"
     "| Example Clinic | 01/20/2026 | 1 | Exhibit 1 - p. 1 |\n"
     "| Kaiser | 02/01/2026 | 1 | Exhibit 3 - p. 2 |\n"
-    "| UC Davis | 03/01/2026 | 1 | Exhibit 5 - p. 1 |\n"
+    "| Valley Hospital | 03/01/2026 | 1 | Exhibit 5 - p. 1 |\n"
     "| Other Clinic | 04/01/2026 | 1 | Exhibit 6 - p. 2 |\n\n"
     "## Diagnostic Highlights\n\n| ICD Code | Description | First Diagnosed | Reference |\n\n"
     "## Medical Chronology\n\n"
@@ -262,7 +262,7 @@ def test_a_partial_overlap_never_merges(job_dir: Path, firm_config_path: Path, d
         "Exhibit 3 against Exhibit 2: partial: 3 of its 4 pages are also there; not merged" in line for line in log
     ), log
     pm = json.loads((sr.slug_dir / "out" / "alpha" / "page_map.json").read_text())
-    assert [e["exhibit"] for e in pm] == [1, 2, 3, 4, 5]  # only the UC Davis copy merged
+    assert [e["exhibit"] for e in pm] == [1, 2, 3, 4, 5]  # only the hospital-export copy merged
 
 
 def test_a_citation_past_the_copys_last_page_keeps_the_pair_apart(
@@ -301,18 +301,18 @@ def test_the_merge_repoints_renumbers_dedupes_and_discloses(
         "Seen in the emergency department for neck pain. (Exhibit 2 - p. 2)\n\n"
         "Medical Diagnoses\n\nCervical strain with muscle spasm, diagnosed. (Exhibit 2 - p. 3-4)\n\n"
         "All Other Information\n\nDischarged home in stable condition per the note. (Exhibit 2 - p. 1)\n\n"
-        "03/01/2026\nUC Davis | Follow-up\n\n"
+        "03/01/2026\nValley Hospital | Follow-up\n\n"
         "Follow-up visit documented range of motion limits. (Exhibit 3 - p. 3)\n\n"
         "Imaging film reviewed with the treating physician. (Exhibit 3 - p. 1-2)\n\n"
         "04/01/2026\nOther Clinic | Treatment Recommendations\n\n"
         "Continue therapy twice weekly for six weeks. (Exhibit 4 - p. 2)"
     )
     assert "| Kaiser | 02/01/2026 | 1 | Exhibit 2 - p. 2 |" in md
-    assert "| UC Davis | 03/01/2026 | 1 | Exhibit 3 - p. 3 |" in md
+    assert "| Valley Hospital | 03/01/2026 | 1 | Exhibit 3 - p. 3 |" in md
     assert "| Other Clinic | 04/01/2026 | 1 | Exhibit 4 - p. 2 |" in md
     assert (
         "## Exhibit List\n\n| Exhibit No. | Description |\n| 1 | Example Clinic - 01-20-2026 (Medical Records) |\n"
-        "| 2 | Kaiser - 02-01-2026 (Medical Records) |\n| 3 | UC Davis - 03-01-2026 (Medical Records) |\n"
+        "| 2 | Kaiser - 02-01-2026 (Medical Records) |\n| 3 | Valley Hospital - 03-01-2026 (Medical Records) |\n"
         "| 4 | Other Clinic - 04-01-2026 (Medical Records) |\n\n## Records Reviewed and Limitations"
     ) in md
     assert (
