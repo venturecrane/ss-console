@@ -19,7 +19,7 @@ import pytest
 
 from medchron.audit import claims as CL
 from medchron.proof import review as proof_review
-from medchron.stages import review, review_policy
+from medchron.stages import review, review_policy, review_settle
 from medchron.stages.base import StageRun
 from test_final_stages import DOC
 from test_review_proof import FakeDoorway, _manifest_names, _package
@@ -189,7 +189,7 @@ def test_two_confirmed_statements_on_different_pages_are_disclosed(job_dir, firm
     _audit_all(sr)
     out = _settle(sr, [DIFFER])
     assert out.findings[0].grade == proof_review.NOTE
-    assert out.findings[0].finding.startswith(review_policy.DIFFER_NOTE)
+    assert out.findings[0].finding.startswith(review_settle.DIFFER_NOTE)
     assert _policy(sr)["differ_disclosed"] == 1 and _md(sr) == DIFFER_DOC
 
 
