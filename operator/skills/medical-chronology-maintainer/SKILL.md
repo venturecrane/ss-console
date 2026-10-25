@@ -535,11 +535,13 @@ nothing, stop.
      plainly because the firm authored the allowance in it.
    - **delivered, already current** (the wake carries `Update outcome:
 already_current.`): the update read what was asked and found nothing to
-     add, so nothing was filed and the delivered chronology stands as it is.
-     There is no new folder or file to read in step 2 and no review task in
-     step 3 (there is no new document for the attorney); the ledger entry is
-     written as step 3 says, with "already current, nothing filed" in place of
-     the folder and the ids the update named as covered. The reply is short
+     add, so the delivered chronology stands as it is, and ONE document was
+     filed beside it in its folder: the records review, one row per file named
+     (its name, kind, pages, and what was done with it). In step 2 confirm that
+     one file in the delivered folder; there is no review task in step 3 (there
+     is no new chronology for the attorney); the ledger entry is written as
+     step 3 says, with "already current, records review filed" in place of the
+     folder and the ids the update named as covered. The reply is short
      and factual, worded from the wake's counts line alone: "The chronology
      for matter <number> already includes these records. Of the <asked>
      files named, none adds a visit:" then one line per kind the counts name,
@@ -557,9 +559,10 @@ already_current.`): the update read what was asked and found nothing to
      delivered chronology itself"; `deleted` "deleted on the matter";
      `unreadable` "not readable as record pages"; `not_retrieved` "not
      retrievable from the matter"; `email` "emails whose attachments were
-     read as their own files". No other words about it: no grade, no
-     judgement of the records, nothing about who did the work. Close with the
-     allowance figures as above.
+     read as their own files". Then one sentence: "The records review filed
+     beside the chronology lists each file, its pages, and what it is." No
+     other words about it: no grade, no judgement of the records, nothing about
+     who did the work. Close with the allowance figures as above.
    - **held**: nothing is sent, ever (the Captain, 2026-10-24: the firm hears
      about a chronology only when it is delivered). Bind nothing and draft
      nothing. The only held chronology that wakes this mode is
