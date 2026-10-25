@@ -38,7 +38,9 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 #
 # Every seat authors its ring, so none is in a ring by omission. As a backstop,
 # operator/bin/lib/fleet/rings.py still puts a seat named in no ring in the LAST
-# ring: a new seat is never in an early ring by accident.
+# ring: a new seat is never in an early ring by accident. A seat authored with
+# \`fly_app: null\` (no app yet) is in NO ring, here or in rings.py: there is
+# nothing to release to until it is provisioned.
 #
 # bake_minutes (ADR 0096): the next ring takes a release only after every seat
 # of this ring has been done on it this long with no open selftest_failing or
@@ -69,7 +71,9 @@ function ringsOf(seats: Seat[]): Array<{ ring: number; seats: string[]; bake: nu
 }
 
 export function renderRingsYaml(seats: Seat[]): string {
-  const rings = ringsOf(seats)
+  // A seat authored with `fly_app: null` has no app to release to, so it is in
+  // no ring (rings.py skips it too, so its backstop never adds it back).
+  const rings = ringsOf(seats.filter((s) => s.flyApp !== null))
   const lines = ['rings:']
   rings.forEach((r, i) => {
     lines.push(`  - ring: ${r.ring}`, `    seats: [${r.seats.join(', ')}]`)

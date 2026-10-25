@@ -34,6 +34,7 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 | Seat | Product | Role | Vertical |
 |---|---|---|---|
 | `ashton-price` | operator | none | law-firm |
+| `ashton-price-marketing` | operator | marketing | law-firm |
 | `brokery` | hosted-agent | none | mixed |
 | `captain-mark` | hosted-agent | couples | mixed |
 

@@ -18,4 +18,7 @@ export const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze
 })
 
 /** Seats authored with `fly_app: null`, each with its unprovisioned_reason. */
-export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({})
+export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({
+  'ashton-price-marketing':
+    "The firm has not yet created the seat's mailbox, its two Microsoft Graph app registrations or the WordPress Contributor user; the seat is provisioned the week the firm engages (scope letter 385, 2026-10-15).",
+})

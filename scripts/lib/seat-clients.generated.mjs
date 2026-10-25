@@ -5,6 +5,7 @@
 
 /** [seat, client] for every seat that is NOT its own client. */
 export const INVENTORY_SEAT_CLIENTS = Object.freeze([
+  ['ashton-price-marketing', 'ashton-price'],
   ['pilot-smokeball', 'smd-services'],
   ['scott', 'smd-services'],
   ['smd-staging', 'smd-services'],

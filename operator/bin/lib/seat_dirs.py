@@ -70,6 +70,33 @@ def seat_slugs(customers_dir: Union[str, Path]) -> list[str]:
     return sorted(name for name in os.listdir(root) if is_seat_dir(root / name))
 
 
+# ``fly_app:`` with a YAML null value on its own line. seat.yaml is a flat file;
+# scripts/lib/seat-inventory.ts is the strict parser, this is read as text so the
+# stdlib-only callers need no PyYAML.
+_NULL_APP_RE = re.compile(r"^fly_app:[ \t]*(?:null|Null|NULL|~)?[ \t]*(?:#.*)?$", re.MULTILINE)
+
+
+def unprovisioned_slugs(customers_dir: Union[str, Path]) -> set[str]:
+    """Seats whose ``seat.yaml`` authors ``fly_app: null``: authored, no app yet.
+
+    Such a seat has no Machine, no mailbox credential and no release to take, so
+    tooling that ACTS on a seat (``fleet release``'s rings, the daily send
+    reconciler's mailbox reads) leaves it out rather than holding or failing on
+    it every run. A seat.yaml that cannot be read counts as PROVISIONED: the
+    seat stays in, and whatever acts on it fails loudly, never skips silently.
+    """
+    root = Path(customers_dir)
+    out: set[str] = set()
+    for slug in seat_slugs(root):
+        try:
+            text = (root / slug / "seat.yaml").read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if _NULL_APP_RE.search(text):
+            out.add(slug)
+    return out
+
+
 if __name__ == "__main__":  # parity probe for tests/seat-inventory.test.ts
     import json
     import sys

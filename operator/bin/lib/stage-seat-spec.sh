@@ -18,6 +18,11 @@
 # customer.yaml uploads exactly as before and the spec waits for the next push
 # to main, whose publisher converges every seat. bootstrap.sh fetches the
 # object on first boot, so the upload precedes the Fly deploy.
+# A seat authored before the client gave us everything (seat.yaml fly_app:
+# null, or a PENDING marker in customer.yaml) is refused here, before a byte
+# reaches R2: scripts/lib/pending-config.ts lists the markers.
+( cd "${REPO_ROOT}" && npx --quiet tsx scripts/refuse-pending-config.ts --slug "${SLUG}" --config "${CUSTOMER_YAML}" ) \
+  || die "${SLUG} is authored but not ready to provision (the lines above name each pending value); not uploading it"
 _spec_out="$(mktemp -d)"
 log "Compiling the seat spec for ${SLUG} (scripts/compile-seat-spec.ts)"
 ( cd "${REPO_ROOT}" && npx --quiet tsx scripts/compile-seat-spec.ts compile --slug "${SLUG}" \

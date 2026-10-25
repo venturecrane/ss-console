@@ -287,8 +287,9 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # fetch-inputs is not a lane either: it is the retrying vault fetch the three
 # lanes with firm inputs share (2026-10-14: one silent failed fetch left A&P's
 # litigation lane with no inputs for a whole release), so it is sourced first.
-# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,negotiation,lane-proofs,image-manifest}.sh
-for _lane in fetch-inputs demand drafting litigation negotiation lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
+# marketing is a marketing seat's advertising-gate registers (ADR 0098), root:hermes.
+# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,negotiation,marketing,lane-proofs,image-manifest}.sh
+for _lane in fetch-inputs demand drafting litigation negotiation marketing lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
 
 # The chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and

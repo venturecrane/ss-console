@@ -22,7 +22,10 @@ import {
   type ValidationError,
 } from './types'
 import { isPlainObject, optionalEnum } from './helpers'
-import { checkMarketingConnectorFields } from './sections-connector-marketing'
+import {
+  checkMarketingConnectorFields,
+  marketingConnectorFields,
+} from './sections-connector-marketing'
 
 /**
  * `credential_custody_default` (ADR 0042) — optional top-level client-level
@@ -126,6 +129,7 @@ function checkOneConnector(
     auth_mode: authMode,
     msgraph_auth: msgraph.msgraph_auth,
     poll_seconds: msgraph.poll_seconds,
+    ...marketingConnectorFields(backend, value),
   }
 }
 

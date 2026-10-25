@@ -113,4 +113,39 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
       SMOKE.indexOf('\nseat_checks\n')
     )
   })
+
+  it('a marketing seat fetches its advertising-gate registers through the helper, root:hermes 0640 (ADR 0098)', () => {
+    const f = code(readFileSync(resolve('operator/templates/entrypoint-marketing.sh'), 'utf8'))
+    expect(ENTRYPOINT).toMatch(/for _lane in fetch-inputs [a-z -]*\bmarketing\b[a-z -]*; do/)
+    expect(DOCKERFILE).toContain(
+      'COPY operator/templates/entrypoint-marketing.sh /app/entrypoint-marketing.sh'
+    )
+    // The path the gate reads by default (advertising_gate.py, wordpress gate.py).
+    expect(f).toMatch(/SMD_MARKETING_INPUTS="\$\{CONFIG_DIR\}\/marketing"/)
+    expect(f).toMatch(
+      /elif _fetch_lane_inputs marketing "\$\{SMD_MARKETING_INPUTS\}" marketing-firm\.yaml; then/
+    )
+    expect(f).not.toMatch(/aws s3 cp/)
+    expect(f).toMatch(/elif \[ "\$\{_FETCH_INPUTS_STATE\}" = absent \]; then/)
+    expect(f).toMatch(/ERROR: the marketing registers could not be fetched/)
+    // Both readers are the hermes uid; group medchron would lock the gate out.
+    expect(f).toMatch(/chown -R root:hermes "\$\{SMD_MARKETING_INPUTS\}"/)
+    expect(f).toMatch(/-type f -exec chmod 0640/)
+    expect(f).not.toMatch(/root:medchron/)
+    // Only a marketing seat pays the fetch; cannot-evaluate still fetches.
+    expect(f).toMatch(/if \[ "\$\{_marketing_rc\}" = 3 \]; then/)
+    // The smoke expects exactly that ownership on a seat that authors registers.
+    expect(CHECKS).toMatch(/if lane_authored marketing; then/)
+    expect(CHECKS).toContain('marketing/marketing-firm.yaml)\\" = root:hermes:640 ]')
+  })
+
+  it('provisioning stages the registers from engagements origin/main, validated by the gate loader', () => {
+    const provision = code(readFileSync(resolve('operator/bin/provision-customer.sh'), 'utf8'))
+    const stage = code(readFileSync(resolve('operator/bin/lib/stage-marketing-inputs.sh'), 'utf8'))
+    expect(provision).toMatch(/for _stage in [a-z -]*\bmarketing\b[a-z -]*; do source/)
+    expect(stage).toMatch(/show "origin\/main:\$\{_rel\}"/)
+    expect(stage).toContain('operator/bin/lib/check-marketing-registers.py')
+    expect(stage).toMatch(/vaults\/\$\{SLUG\}\/marketing\/" --delete/)
+    expect(stage.indexOf('check-marketing-registers.py')).toBeLessThan(stage.indexOf('aws s3 sync'))
+  })
 })

@@ -46,6 +46,35 @@ def test_unknown_seat_joins_the_last_ring(tmp_path: Path) -> None:
     assert rings[-1].max_parallel == 1
 
 
+def test_unprovisioned_seat_is_in_no_ring(tmp_path: Path) -> None:
+    """A seat.yaml with fly_app: null has no app: no ring takes it, even one naming it.
+
+    FALSIFIER: drop the unprovisioned filter from live_seats and the backstop puts
+    new-seat back in the last ring, where a release would deploy to no app.
+    """
+    cust = tmp_path / "customers"
+    for name in ("a-seat", "new-seat", "named-seat", "unreadable-seat"):
+        (cust / name).mkdir(parents=True)
+        (cust / name / "customer.yaml").write_text("x: 1\n")
+    (cust / "a-seat" / "seat.yaml").write_text("fly_app: hermes-a-seat\n")
+    for name in ("new-seat", "named-seat"):
+        (cust / name / "seat.yaml").write_text("fly_app: null\nunprovisioned_reason: no app yet\n")
+    (cust / "unreadable-seat" / "seat.yaml").write_text("fly_app: [unclosed\n")
+    rings_file = tmp_path / "rings.yaml"
+    rings_file.write_text("rings:\n  - ring: 0\n    seats: [a-seat, named-seat]\n")
+    rings = load_rings(rings_file, cust)
+    every = [s for r in rings for s in r.seats]
+    assert "new-seat" not in every and "named-seat" not in every
+    # A seat.yaml that cannot be read is NOT a reason to skip: the seat stays in a ring.
+    assert every == ["a-seat", "unreadable-seat"]
+
+
+def test_real_unprovisioned_seats_are_in_no_ring() -> None:
+    rings = load_rings(OPERATOR / "fleet/rings.yaml", OPERATOR / "customers")
+    every = {s for r in rings for s in r.seats}
+    assert "ashton-price-marketing" not in every
+
+
 def test_seat_in_two_rings_is_refused(tmp_path: Path) -> None:
     (tmp_path / "c" / "a-seat").mkdir(parents=True)
     f = tmp_path / "r.yaml"

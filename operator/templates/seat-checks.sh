@@ -26,7 +26,8 @@
 #                                 carrying why
 #   check_broken <id> <text>      a check that cannot be evaluated: a failure
 #   lane_authored <lane>          does this seat author medchron | demand |
-#                                 drafting | litigation (the expectation source)
+#                                 drafting | litigation | marketing (the
+#                                 expectation source)
 # and the variables SEAT_ROOT (empty on a seat; a fixture tree in the tests),
 # EXPECTED_HERMES_SHA and APP_NAME.
 #
@@ -656,6 +657,17 @@ for _lane in demand drafting litigation; do
     check_note "${_lane}-firm-inputs-absent" "not authored for this seat; the ${_lane} lane defers jobs by design"
   fi
 done
+# A marketing seat's advertising-gate registers (ADR 0098), the same expectation
+# source. Group hermes, not medchron: the readers are the gateway's outbound gate
+# and the WordPress connector, both the hermes uid (entrypoint-marketing.sh).
+# FALSIFIER: empty vaults/<slug>/marketing/ and reboot, or drop the chown in
+# entrypoint-marketing.sh; the stat or the read/write probe fails.
+if lane_authored marketing; then
+  check "marketing-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml)\" = root:hermes:640 ]"
+  check "marketing-registers-agent-reads-cannot-write" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"test -r ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml && ! test -w ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml && ! test -w ${SEAT_ROOT}/var/lib/smd-config/marketing\""
+else
+  check_note "marketing-firm-inputs-absent" "not a marketing seat; no advertising-gate registers are expected"
+fi
 
 # ---------- Step 14b: the four registered runner gates refuse their planted violations (ss#2614, ADR 0087) ----------
 # `medchron probe <gate>` builds a throwaway synthetic matter, plants exactly

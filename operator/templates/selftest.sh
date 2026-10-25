@@ -167,6 +167,7 @@ lane_skill() {
     demand) echo demand-letter-drafter ;;
     drafting) echo document-drafter ;;
     litigation) echo litigation-status ;;
+    marketing) echo marketing-request-router ;;
     *) return 1 ;;
   esac
 }
@@ -193,7 +194,7 @@ PY
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
   printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
-  case "$1" in demand|drafting|litigation) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
+  case "$1" in demand|drafting|litigation|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
 }
 
 # ---------- one run ----------

@@ -1,0 +1,365 @@
+schema_version: 1
+
+# MARKETING OPERATOR seat: Ashton & Price LLP's marketing coordinator (ADR 0098,
+# role package operator/roles/marketing/). Authored 2026-10-25 from _template
+# against the scope SMD sent the firm on 2026-10-15 (letter 385; engagements
+# operator/customers/ashton-price/correspondence/). The client is ashton-price
+# (seat.yaml `client:`); this is a second seat for the same firm, with its own
+# mailbox, its own audience (the marketing approver, not the whole firm) and no
+# access to the firm's case work: no PracticeManagement, no Smokeball, no
+# chronology, demand or litigation lane.
+#
+# NOT YET PROVISIONED (seat.yaml fly_app: null). Every value the firm has not
+# yet given us is a PENDING marker that cannot pass for a real one, and the
+# provisioner refuses the seat while any remains (scripts/refuse-pending-config.ts,
+# run by operator/bin/lib/stage-seat-spec.sh before anything is uploaded):
+#   - a GUID nobody issues:            00000000-0000-0000-0000-000000000000
+#   - a string containing:             PENDING (the mailbox is also on .invalid,
+#                                      RFC 2606, so it can never resolve)
+#   - a GA4 property id of:            0 (no property has it)
+# A merge of this file writes nothing to R2 (ci-publish-customer-configs.sh never
+# creates a seat's object) and no D1 row (ci-sync-customer-configs.sh skips a
+# slug with no customer_configs row), so nothing runs until it is provisioned.
+
+# ---- IDENTITY ----
+customer_id: ashton-price-marketing
+customer_name: 'Ashton & Price LLP'
+
+# ---- SEAT DESCRIPTOR ----
+# A real law firm's marketing; the role selects the marketing persona, skills
+# and the California attorney-advertising gate (ADR 0098).
+seat:
+  kind: customer
+  product: operator
+  role: marketing
+
+vertical: law-firm
+addons: []
+practice_areas:
+  - personal-injury-plaintiff
+fly_region: sjc # Fair Oaks (Sacramento), CA; the firm's other seat's region
+
+# ---- RUNTIME ----
+# Light main, escalate up (ADR 0049), the same models as the firm's other seat.
+model: claude-sonnet-5-5
+escalation_model: claude-opus-5-5
+
+# A light seat: one gateway, no lanes on the Machine (no chronology, demand or
+# litigation runner), the brokery and scott sizing.
+machine:
+  size: shared-cpu-1x
+  memory_mb: 1024
+
+# ---- HUMANS WITH PORTAL ACCESS ----
+users:
+  - email: christa@ashtonandprice.com
+    role: staff
+    full_name: Christa Barrera
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+
+# ---- PERSONA ----
+personas:
+  - slug: marketing
+    status: active
+    # Neutral display identity, as on the firm's other seat: the firm names it
+    # if it wants a name (ADR 0035). The role's persona.md carries the register.
+    name: Marketing Operator
+    title: Marketing Coordinator
+    tone:
+      - plainspoken
+      - warm-but-professional
+      - concise
+    entitlements:
+      exposure:
+        # Every piece is a draft for the firm's approver: a pending WordPress
+        # post, or an email to the administrators. Nothing publishes.
+        internal_write: draft_for_review
+        external_send: draft_for_review
+        # Sends to a ROSTERED address only (scope.inbound_allow_from: Christa
+        # and SMD). The scheduled drafts (slate, blog, social, YouTube, Business
+        # Profile, analytics) go to the firm's administrators on a scheduled
+        # turn, which no person is present to confirm, so without this key they
+        # could never be delivered. Anything off the roster stays draft.
+        external_send_internal: autonomous
+        # A commitment is only ever an administrator-confirmed act; there is
+        # deliberately no exposure_ceiling entry for it.
+        commitment: confirm
+      exposure_ceiling:
+        internal_write: draft_for_review
+        external_send: draft_for_review
+        external_send_internal: autonomous
+    skills:
+      # The six scheduled pieces. Each also runs on an administrator's emailed
+      # request through the router below. `recipients: roster` lets a
+      # SCHEDULED turn reach the exact scope.inbound_allow_from addresses past
+      # the participant fence; a cron turn answers no email.
+      - name: marketing-topic-slate
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+      - name: blog-post-draft
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+      - name: social-post-draft
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+      - name: youtube-episode-post
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+          # The firm's public channel (youtube.com/@ashtonandprice), read off
+          # its public page and checked against the public feed 2026-10-25.
+          channel_id: UCx78MhrTw9TN9h0S7Y4GCrQ
+      - name: business-profile-post
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+      - name: marketing-analytics-note
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          recipients: roster
+          channel_id: UCx78MhrTw9TN9h0S7Y4GCrQ
+      # On request only, routed from the inbox.
+      - name: review-reply-draft
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: press-release-draft
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      # Every email to the seat lands here (webhook_triggers below).
+      - name: marketing-request-router
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      # How to work with me (#3423): answers from the seat's own facts.
+      - name: operator-help
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+    # Seat-local time (business_hours.timezone). Staggered off :00 and :30.
+    cron:
+      - skill: marketing-topic-slate
+        schedule: '17 7 1 * *' # monthly, the 1st, 0717
+        wake_policy: always
+      - skill: blog-post-draft
+        schedule: '23 7 * * 2' # weekly, Tuesday 0723
+        wake_policy: always
+      - skill: social-post-draft
+        schedule: '41 7 * * 4' # weekly, Thursday 0741
+        wake_policy: always
+      - skill: youtube-episode-post
+        schedule: '47 7 * * 1' # weekly, Monday 0747
+        wake_policy: always
+      - skill: business-profile-post
+        schedule: '13 8 1,15 * *' # twice a month, 0813
+        wake_policy: always
+      - skill: marketing-analytics-note
+        schedule: '19 8 3 * *' # monthly, the 3rd, 0819
+        wake_policy: always
+
+# ---- CONNECTORS ----
+connectors:
+  Email:
+    # The seat's own mailbox in the firm's Microsoft 365 tenant (ADR 0078), the
+    # same tenant as the firm's other seat. THE FIRM DECIDES THE MAILBOX; SMD
+    # proposed marketing@ashtonandprice.com. The firm's administrator creates it
+    # and the TWO app registrations (read: Mail.ReadWrite, no Mail.Send; send:
+    # Mail.Send, staged as MSGRAPH_SEND_CLIENT_ID__ASHTON_PRICE_MARKETING), both
+    # pinned to that mailbox by an ApplicationAccessPolicy
+    # (docs/runbooks/operator/ms-graph-azure-ad-setup.md). Until then client_id
+    # and mailbox are PENDING markers the provisioner refuses.
+    adapter: msgraph
+    backend: mcp:msgraph-mail
+    enabled: true
+    msgraph_auth:
+      tenant_id: 'e4ad47eb-14d8-4131-9e13-9573a09a7d69'
+      client_id: '00000000-0000-0000-0000-000000000000' # PENDING: the READ app's client id
+      mailbox: 'PENDING@mailbox.invalid' # the firm names it
+      secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
+    poll_seconds: 45
+  Website:
+    # The firm's WordPress site. A Contributor user the firm creates, with an
+    # Application Password (WORDPRESS_APP_PASSWORD__ASHTON_PRICE_MARKETING): a
+    # Contributor can save a pending post and cannot publish, and the connector
+    # has no publish tool either.
+    adapter: wordpress
+    backend: mcp:wordpress
+    enabled: true
+    site_url: 'https://www.ashtonandprice.com'
+    username: 'PENDING-firm-creates-contributor-user'
+    secret_ref: 'fly-secret:WORDPRESS_APP_PASSWORD'
+  VideoChannel:
+    # The firm's public YouTube channel feed, read only, no credential. The
+    # channel id is each skill's settings.channel_id above.
+    adapter: youtube-public
+    backend: mcp:youtube-public
+    enabled: true
+  Analytics:
+    # GA4 read access through a service account the firm grants Viewer. The
+    # property id is not yet known: disabled, and 0 (no property has it) is a
+    # PENDING marker the provisioner refuses.
+    adapter: ga4
+    backend: mcp:ga4
+    enabled: false
+    property_id: 0
+  # Search only, on SMD's key (ADR 0070): news, statutes and decisions for the
+  # topic slate and posts. Fenced; a turn that searched cannot send outside.
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
+
+webhook_triggers:
+  - source: msgraph
+    event_type: message.received
+    skill: marketing-request-router
+    persona: marketing
+
+# ---- SEND POLICY ----
+# Same authored values as the firm's other seat and brokery.
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+
+business_hours:
+  timezone: America/Los_Angeles
+  days: [mon, tue, wed, thu, fri]
+  start: '08:00'
+  end: '18:00'
+
+# ---- SCOPE ----
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  # Exact addresses only, NOT the firm's domain: this seat's audience is the
+  # marketing approver, not every person at the firm (the firm's other seat
+  # rosters the whole domain for case work). Christa approves marketing under
+  # letter 385; SMD for setup and support. The firm adds people by PR.
+  inbound_allow_from:
+    - christa@ashtonandprice.com
+    - scott@smd.services
+  # Who may set the firm's marketing voice and rules. Every admin is also on
+  # inbound_allow_from (validated).
+  admins:
+    - christa@ashtonandprice.com
+    - scott@smd.services
+  rule_requests_to:
+    - christa@ashtonandprice.com
+  # As on the firm's other seat: a reply quoting an [ops XXXX] tag from one of
+  # these resolves that request and nothing else. Not inbound trust.
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
+  outbound_roster:
+    - address: scott@smd.services
+      class: firm_staff
+      note: 'SMD operations desk (cards are addressed here); outbound classification only, never inbound trust'
+    - address: team@smd.services
+      class: firm_staff
+      note: 'SMD operations desk; outbound classification only, never inbound trust'
+
+# ---- RECORD STORES ----
+# Read by every rostered sender; changed only by the writers, enforced by the
+# record-store fence on the verified sender. On the volume, so edits survive a
+# reprovision.
+record_stores:
+  # The reference shelf: the tone guide, topics to add or drop, the firm's
+  # photographs, standing guidance from the approver (marketing-request-router).
+  - name: seat-reference
+    path: /opt/data/reference
+    writers:
+      - christa@ashtonandprice.com
+      - smdurgan@smdurgan.com
+  # The marketing plan: the month's picked topics and the queue the weekly
+  # drafts work through (marketing-topic-slate, blog-post-draft).
+  - name: marketing-plan
+    path: /opt/data/marketing/plan
+    writers:
+      - christa@ashtonandprice.com
+      - smdurgan@smdurgan.com
+
+# ---- ESCALATION ----
+escalation:
+  red_flag_recipients:
+    - christa@ashtonandprice.com
+    - scott@smd.services
+  failure_recipients:
+    - scott@smd.services
+
+# ---- SAFETY ----
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 2000
+    inbound_daily_cap: 100
+
+# ---- VOICE LIBRARY ----
+voice_library:
+  samples_path: 'r2://vaults/ashton-price-marketing/voice/samples/'
+
+# ---- MEMORY (isolation invariants; must match customer_id) ----
+memory:
+  d1_namespace: ashton-price-marketing
+  r2_vault_path: 'vaults/ashton-price-marketing/'
+  vectorize_index: 'hermes-ashton-price-marketing-vault'
