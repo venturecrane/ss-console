@@ -78,6 +78,24 @@ def test_an_update_whose_files_the_delivery_already_holds_is_delivered_already_c
     assert UO.wake_lines([o.to_dict()], "failed") == []
 
 
+def test_the_daemon_wake_for_an_already_current_delivery_carries_the_counts(tmp_path: Path) -> None:
+    from medchron import daemon as daemon_mod, verdict
+
+    d = daemon_mod.Daemon.__new__(daemon_mod.Daemon)
+    jd = tmp_path / "jobs" / "J1"
+    jd.mkdir(parents=True)
+    (jd / "envelope.json").write_text(json.dumps({"matter": {"number": "2099-EX-0001"}, "update": {"into": "x"}}))
+    s = {"kind": UO.KIND, "requested": 2, "files": 2, "entries_added": 0, "exhibits_added": 0}
+    s["by_reason"] = {"billing_only": {"files": 1, "pages": 3}, "read_no_new_visit": {"files": 1, "pages": 9}}
+    verdict.write(jd, json.dumps([{"unit": "alpha", "outcome": "delivered", "current": s}]))
+    d.job_dir = lambda _j: jd  # type: ignore[method-assign]
+    text = d._compose_wake("J1", "delivered", {})
+    assert "Update outcome: already_current. Nothing was filed; the delivered chronology is unchanged." in text
+    assert "files asked: 2; files accounted for: 2; by kind: billing_only 1 file(s) 3 page(s)" in text
+    assert "Delivered folder id" not in text
+    assert "Update outcome" not in d._compose_wake("J1", "failed", {}, stage="update_select")
+
+
 # ---- case 4: every named file excluded (download) -----------------------------------
 def test_every_named_file_excluded_by_the_firms_rules_is_delivered_already_current(
     tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
