@@ -217,21 +217,7 @@ def parse_update(data: dict[str, Any], units: list[Unit]) -> UpdateSpec | None:
     return UpdateSpec(into=UPDATE_INTO, chronology_file_id=fid)
 
 
-def parse(data: Any, *, path: Path) -> Job:
-    if not isinstance(data, dict):
-        raise JobError(f"{path}: top level must be a map")
-    matter = _req(data, "matter", "job")
-    if not isinstance(matter, dict):
-        raise JobError("job.matter: must be a map")
-    incident = _req(data, "incident", "job")
-    if not isinstance(incident, dict):
-        raise JobError("job.incident: must be a map")
-    date = str(_req(incident, "date", "job.incident"))
-    if not DATE_RE.match(date):
-        raise JobError("job.incident.date: expected YYYY-MM-DD")
-    source = str(_req(incident, "source", "job.incident"))
-    if source not in INCIDENT_SOURCES:
-        raise JobError(f"job.incident.source: expected one of {sorted(INCIDENT_SOURCES)}")
+def _parse_units(data: dict[str, Any]) -> list[Unit]:
     raw_units = _req(data, "units", "job")
     if not isinstance(raw_units, list) or not raw_units:
         raise JobError("job.units: at least one unit is required")
@@ -255,6 +241,25 @@ def parse(data: Any, *, path: Path) -> Job:
         )
     if len({u.unit for u in units}) != len(units):
         raise JobError("job.units: unit slugs must be unique")
+    return units
+
+
+def parse(data: Any, *, path: Path) -> Job:
+    if not isinstance(data, dict):
+        raise JobError(f"{path}: top level must be a map")
+    matter = _req(data, "matter", "job")
+    if not isinstance(matter, dict):
+        raise JobError("job.matter: must be a map")
+    incident = _req(data, "incident", "job")
+    if not isinstance(incident, dict):
+        raise JobError("job.incident: must be a map")
+    date = str(_req(incident, "date", "job.incident"))
+    if not DATE_RE.match(date):
+        raise JobError("job.incident.date: expected YYYY-MM-DD")
+    source = str(_req(incident, "source", "job.incident"))
+    if source not in INCIDENT_SOURCES:
+        raise JobError(f"job.incident.source: expected one of {sorted(INCIDENT_SOURCES)}")
+    units = _parse_units(data)
     if len(units) > 1 and any(not u.folder_prefix for u in units):
         raise JobError("job.units: a joint matter needs folder_prefix on every unit")
     cap = data.get("cap_usd")
