@@ -967,6 +967,10 @@ scope:
     # copy to a client seat.
     - scott+help-probe-1@smd.services
     - scott+help-probe-2@smd.services
+    # Spares: probe 1 was spent 2026-10-25 by a reply the broker refused (its
+    # boot copy of this roster predated the tags).
+    - scott+help-probe-3@smd.services
+    - scott+help-probe-4@smd.services
     # Staging-only probe channel (ADR 0075 verification). A rostered SMD-owned
     # AgentMail sender so the probe ladder can drive clean-trust gateway turns
     # programmatically (the CLI channel is PID-gated out of the audit broker).

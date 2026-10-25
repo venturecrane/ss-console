@@ -14,7 +14,6 @@ log() {
 
 BROKER_DIR="/var/lib/smd-workspace-broker"
 BROKER_SOCKET="/run/smd-workspace-broker/broker.sock"
-BROKER_CUSTOMER_PATH="${BROKER_DIR}/customer.yaml"
 
 # Keystone (audit 2026-06-15 — SEC-07/08/09/18/30, EFF-14, proven-live on
 # hermes-smd-staging). The live customer.yaml is the source every trust-ceiling /
@@ -348,7 +347,12 @@ rm -rf /opt/data/workspace-broker
 rm -f /opt/data/oauth/google.json
 mkdir -p "${BROKER_DIR}" "$(dirname "${BROKER_SOCKET}")"
 rm -f "${BROKER_DIR}/google.json"
-cp "${LIVE_CUSTOMER_YAML}" "${BROKER_CUSTOMER_PATH}"
+# No boot copy for the broker: it reads the live root-owned file (below), so an
+# allow-listed change the config applier writes (scope.inbound_allow_from,
+# scope.admins) reaches the reply fence as it reaches the agent. A copy taken
+# here froze the fence at boot: on pilot-smokeball 2026-10-25 a newly rostered
+# sender was answered by the agent and the reply refused by the broker.
+rm -f "${BROKER_DIR}/customer.yaml"
 chown -R workspace-broker:workspace-broker "${BROKER_DIR}"
 chmod 0700 "${BROKER_DIR}"
 chown workspace-broker:workspace-connectors "$(dirname "${BROKER_SOCKET}")"
@@ -393,7 +397,9 @@ install -d -o root -g workspace-broker -m 0770 "${ESTABLISH_SPOOL_DIR}/results"
 
 export SMD_WORKSPACE_BROKER_SOCKET="${BROKER_SOCKET}"
 export SMD_WORKSPACE_CREDENTIAL_PATH="${BROKER_DIR}/google.json"
-export SMD_CUSTOMER_YAML="${BROKER_CUSTOMER_PATH}"
+# root:root 0644 in a root-owned dir: the broker reads it, nothing but root
+# (this entrypoint and the ADR 0044 applier) writes it (keystone, #1407).
+export SMD_CUSTOMER_YAML="${LIVE_CUSTOMER_YAML}"
 # The gateway's process is forked HERE and held until the boot gates pass, so
 # SMD_GATEWAY_PID (the broker's SO_PEERCRED identity for it, the liveness
 # watcher's kill target) is its real pid before the broker starts. The
