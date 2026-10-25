@@ -38,7 +38,7 @@ from __future__ import annotations
 #: pins that.
 SMD_FINISHING = "smd_finishing"  # ours; nothing new is on the matter
 SMD_FINISHING_FILED = "smd_finishing_filed"  # ours; the update is filed, the earlier version still beside it
-ALREADY_CURRENT = "already_current"  # nothing to add: the delivered chronology already covers the new records
+ALREADY_CURRENT = "already_current"  # legacy hold reason; since 10-25 "nothing new" DELIVERS (update/outcome)
 NOTHING_IN_SCOPE = "nothing_in_scope"  # no open litigation matter fits what was asked
 ANOTHER_PERSON = "another_person"  # a record in the file names someone other than the client (ask)
 WHICH_CHRONOLOGY = "which_chronology"  # two chronologies could each be the current one (ask)
@@ -69,6 +69,11 @@ PROOF_PREFIXES = ("review_held", "readback_mismatch", "readback_unproven", "dry_
 _LIMIT_SETTINGS = ("per_job_cap_usd", "chronology_package_page_allowance_per_month", "monthly_budget_usd", "limit:")
 
 #: (substring of an ``update_held:`` reason, class, page code). First match wins.
+#: "nothing new to" (2026-10-25): an update that concludes nothing new now ends
+#: DELIVERED already current with nothing filed (``update/outcome``) and never
+#: logs this reason; the row stays so a job held by an earlier runner keeps its
+#: class and page. One that could not PROVE nothing new holds as ours instead
+#: ("found nothing to add, and ..."), paged under ``update_held``.
 _UPDATE_HELD = (
     ("nothing new to", ALREADY_CURRENT, "update_held"),
     ("name a different person", ANOTHER_PERSON, "identity_held"),
