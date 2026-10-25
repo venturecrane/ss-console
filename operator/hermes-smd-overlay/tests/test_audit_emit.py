@@ -32,6 +32,18 @@ from pathlib import Path
 
 import pytest
 
+from shared.action_classes import ActionClass
+
+#: Sends whose recipient is fixed in code to an authored person, never named
+#: by the model, and the class each must carry. ``partner_message_send``
+#: (ADR 0097): the other person in ``people:`` on a couples seat, from the
+#: turn's structural speaker; delivery is the Bot API to that person's bound
+#: DM or the broker's ``space`` lane. See
+#: ``test_send_tools_in_registry_are_classified_external_send``.
+CODE_FIXED_RECIPIENT_SENDS: dict[str, ActionClass] = {
+    "partner_message_send": ActionClass.INTERNAL_WRITE,
+}
+
 
 def load_plugin(plugin_name: str):
     """Load the plugin package so submodule imports (`from . import emit`) work.
@@ -437,9 +449,22 @@ def test_send_tools_in_registry_are_classified_external_send() -> None:
     ceiling governs it (ADR 0025). ``send_draft`` is a send (it dispatches a
     pre-composed draft), so it counts too; ``create_draft`` / ``update_draft``
     are authoring, not sending, and are excluded from this check.
+
+    The exposure ceiling governs a recipient the MODEL names. A tool whose
+    recipient is fixed in code to an authored person has no model-named
+    recipient for a ceiling to govern, and putting it under one is the
+    2026-10-21 failure (a partner's message held for an approval that exists
+    nowhere). Those are listed in ``CODE_FIXED_RECIPIENT_SENDS`` with the
+    class they must carry instead, and each one's own tests prove the
+    recipient is not the model's to choose.
     """
     mod = load_plugin("hermes-smd-audit")
+    for name, expected in CODE_FIXED_RECIPIENT_SENDS.items():
+        assert name in mod.schemas.TOOL_ACTION_CLASS_MAP, f"{name} must be classified"
+        assert mod.schemas.TOOL_ACTION_CLASS_MAP[name] is expected, name
     for name, action in mod.schemas.TOOL_ACTION_CLASS_MAP.items():
+        if name in CODE_FIXED_RECIPIENT_SENDS:
+            continue
         looks_like_send = (
             ("send" in name)
             or name.endswith(("_reply", "_forward"))
