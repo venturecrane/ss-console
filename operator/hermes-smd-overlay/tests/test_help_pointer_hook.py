@@ -140,6 +140,10 @@ def test_a_first_email_gets_the_exact_line_and_it_is_recorded(plugin, paths, mon
     assert "phrase this kind of request" not in ctx
     # The exclusions travel with the line, and the model is told not to ask.
     assert "declines an action reserved to administrators" in ctx
+    # A first-time person's chronology question keeps the line: the exclusion was
+    # model-judged, ignored on pilot-smokeball 2026-10-25, and the first reply is
+    # when the pointer helps most (vfy_01M5T6K0S6P1WJYPP9GHHRGNRQ).
+    assert "chronology" not in ctx.split(plugin._HELP_LINE_HEADER, 1)[1]
     assert "do not call operator_help_signals" in ctx
     # The authority statement still rides the same return.
     assert "INITIATION AUTHORITY" in ctx
