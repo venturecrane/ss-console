@@ -152,6 +152,95 @@ def test_an_entrys_only_paragraph_is_never_deleted_and_the_finding_holds(job_dir
     assert _policy(sr)["system_scrubbed"] == 0
 
 
+# ---- the three Pamplona residuals (2026-10-25), synthetic names --------------------
+ROLE_HEAD = "Example Clinic, hand RN triage supporting Jane Roe, MD"
+ROLE_DOC = DOC.replace(
+    "| Example Clinic | 01/20/2026 - 03/30/2026 | 2 | Exhibit 1 - p. 2 |",
+    f"| Example Clinic | 01/20/2026 | 1 | Exhibit 1 - p. 2 |\n| {ROLE_HEAD} | 03/30/2026 | 1 | Exhibit 1 - p. 3 |",
+).replace("Example Clinic | Treatment Recommendations", f"{ROLE_HEAD} | Treatment Recommendations")
+ROLE_FINDING = _model(
+    "3 system language",
+    f'The provider row "{ROLE_HEAD}" describes the record\'s role instead of naming a provider.',
+    "Provider table, 03/30/2026, Exhibit 1, p. 3",
+)
+
+
+def test_a_role_clause_in_a_provider_heading_is_cut_in_the_entry_and_the_table(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, ROLE_DOC)
+    out = _settle(sr, [ROLE_FINDING])
+    md = _md(sr)
+    assert "hand RN triage" not in md
+    assert "03/30/2026\nExample Clinic | Treatment Recommendations" in md
+    assert "| Example Clinic | 03/30/2026 | 1 | Exhibit 1 - p. 3 |" in md
+    assert out.findings[0].grade == proof_review.NOTE and out.renamed == 1
+
+
+def test_a_credential_after_a_name_is_no_role_and_stays(job_dir, firm_config_path, data_root):
+    """Falsifier: "Jane Roe, RN" is a name and a credential, never cut."""
+    head = "Jane Roe, RN"
+    doc = DOC.replace("Example Clinic | Treatment Recommendations", f"{head} | Treatment Recommendations")
+    sr, _ = _package(job_dir, firm_config_path, data_root, doc)
+    out = _settle(sr, [_model("3 system language", f'the provider row "{head}" names a role')])
+    assert f"03/30/2026\n{head} | Treatment Recommendations" in _md(sr)
+    assert out.findings[0].grade == proof_review.MUST and out.renamed == 0
+
+
+def test_a_list_number_opens_its_sentence_and_the_item_goes(job_dir, firm_config_path, data_root):
+    doc = DOC.replace(
+        "Cervical strain. (Exhibit 1 - p. 2)",
+        "Review of systems:\n1. Constitutional: no fever.\n7. Remaining systems as printed.\nCervical strain. (Exhibit 1 - p. 2)",
+    )
+    sr, _ = _package(job_dir, firm_config_path, data_root, doc)
+    out = _settle(sr, [_model("3 system language", '"7. Remaining systems as printed." is a placeholder')])
+    md = _md(sr)
+    assert "Remaining systems as printed" not in md and "1. Constitutional: no fever." in md
+    assert "Cervical strain. (Exhibit 1 - p. 2)" in md and out.findings[0].grade == proof_review.NOTE
+
+
+def test_a_reviewer_quoting_with_other_quote_marks_still_matches(job_dir, firm_config_path, data_root):
+    sentence = 'The start of the note preceding "Findings" is not printed on these pages.'
+    doc = DOC.replace(LINE_0120, f"Neck pain after the collision. {sentence} (Exhibit 1 - p. 2)")
+    sr, _ = _package(job_dir, firm_config_path, data_root, doc)
+    f = _model(
+        "3 system language",
+        "\"The start of the note preceding 'Findings' is not printed on these pages\" reads the pages",
+    )
+    out = _settle(sr, [f])
+    assert "is not printed on these pages" not in _md(sr) and LINE_0120 in _md(sr)
+    assert out.findings[0].grade == proof_review.NOTE
+
+
+def test_a_held_review_is_settled_again_on_resume_with_no_model_call(job_dir, firm_config_path, data_root):
+    """Pamplona 2026-10-25: held on findings a later rule settles; a resume
+    re-applies the $0 rules to the recorded findings and files."""
+    sr, log = _package(job_dir, firm_config_path, data_root, ROLE_DOC)
+    rd = sr.slug_dir / "runs" / "alpha"
+    rows = [m for m in json.loads((sr.slug_dir / "out" / "alpha" / "upload_manifest.json").read_text())]
+    proof_review.save(rd, [ROLE_FINDING], model="m", lane="chronology")
+    (rd / review.INPUT_SHA).write_text(review._input_sha(rows))
+    sr._doorway = FakeDoorway()  # type: ignore[assignment]  # any model call fails the test
+    rc = review.run(sr, today=TODAY)
+    assert rc == 0, log
+    rec = proof_review.load(rd)
+    assert rec["must_fix"] == 0 and "hand RN triage" not in review.docx_text(_chron(sr))
+    assert sr._doorway.calls == []  # type: ignore[attr-defined]
+
+
+def test_a_held_review_the_rules_cannot_settle_holds_again_unchanged(job_dir, firm_config_path, data_root):
+    """Falsifier: a finding no rule settles still holds on resume, the entries
+    untouched (Limitations is rewritten from the files as they stand either way)."""
+    sr, log = _package(job_dir, firm_config_path, data_root, DOC)
+    rd = sr.slug_dir / "runs" / "alpha"
+    rows = json.loads((sr.slug_dir / "out" / "alpha" / "upload_manifest.json").read_text())
+    stuck = _model("4 unsupported summary", "a summary line no entry supports", "Treatment Timeline")
+    proof_review.save(rd, [stuck], model="m", lane="chronology")
+    (rd / review.INPUT_SHA).write_text(review._input_sha(rows))
+    sr._doorway = FakeDoorway()  # type: ignore[assignment]
+    assert review.run(sr, today=TODAY) == review.EXIT_HELD
+    assert CL.body_of(_md(sr)) == CL.body_of(DOC) and sr._doorway.calls == []  # type: ignore[attr-defined]
+    assert proof_review.load(rd)["must_fix"] == 1
+
+
 def test_limitations_are_never_edited_and_the_body_alone_decides(job_dir, firm_config_path, data_root):
     lim = "* The transcription of one scanned page was partial."
     doc = DOC.replace(

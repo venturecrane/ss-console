@@ -120,6 +120,7 @@ class Outcome:
     repaired: int = 0
     changed: bool = False
     left_out: int = 0
+    renamed: int = 0
 
 
 def _names_system(f: review.Finding) -> bool:
@@ -566,6 +567,7 @@ def package(
     *,
     update: bool,
     notes_tag: str,
+    repair: bool = True,
     **inject: Any,
 ) -> tuple[list[review.Finding], list[dict[str, Any]] | None]:
     """The findings after ``review_policy`` (drop, note, delete, repair once),
@@ -575,7 +577,7 @@ def package(
     from . import limitations as _limitations, manifest as _manifest, render as _render
 
     doc = None if update else rd / "final-chronology.md"
-    pol = settle(sr, doc, found, repair=True, **inject)
+    pol = settle(sr, doc, found, repair=repair, **inject)
     if pol.dropped:
         sr.log(
             f"review: {len(pol.dropped)} finding(s) on the firm's required wording dropped: "
@@ -586,8 +588,9 @@ def package(
     # only once the section is written again from the files as they stand.
     # Full build only (an update has no ``doc``); a refresh that changes the
     # section re-renders even when nothing else changed.
-    if pol.left_out and not rebill(sr):
-        sr.log("review: the billing worksheet did not rebuild after an entry was left out; nothing was filed")
+    # A provider heading the scrub shortened names the worksheet's row too.
+    if (pol.left_out or pol.renamed) and not rebill(sr):
+        sr.log("review: the billing worksheet did not rebuild after the entries changed; nothing was filed")
         return pol.findings, None
     if doc is not None and doc.is_file() and _limitations.refresh(doc, sr.slug_dir, sr.unit.unit, sr.log, sr.cfg):
         sr.log("review: Records Reviewed and Limitations rewritten from the files as they stand")
