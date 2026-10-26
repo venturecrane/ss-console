@@ -318,7 +318,8 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   checks is under "What the verify step checks" below. With
   `--verify selftest` the seat's own self-test decides instead (the same check
   list, run on the Machine, read back from the heartbeat); see "The self-test
-  as the verifier" below. The default is `--verify bash`. With
+  as the verifier" below. The default is `--verify selftest` (since
+  2026-10-26); `--verify bash` keeps the boot smoke as the judge. With
   `--no-ssh-fallback` as well, a self-test that gives no verdict is a tooling
   error instead of a cue to run the boot smoke, and a rollback is re-verified by
   the self-test; that is how the controller verifies.
@@ -692,12 +693,14 @@ and both are recorded in `fleet_rollouts.detail`. An image whose
 `image-capabilities.json` lacks `selftest` is always verified by the boot
 smoke, and a rollback's re-smoke always uses the boot smoke.
 
-Under the default `--verify bash` the boot smoke decides, and the self-test's
-verdict as of that moment is appended to the detail (`selftest: pass ...`,
-`selftest: fail ...`, or `selftest: not yet`), at no extra wait. The rollout
-order is: one release with `--verify bash` across every ring, every
-disagreement between the two verdicts fixed as a self-test bug, then the
-default flips to `selftest`.
+Under `--verify bash` the boot smoke decides, and the self-test's verdict as of
+that moment is appended to the detail (`selftest: pass ...`,
+`selftest: fail ...`, or `selftest: not yet`), at no extra wait. That was the
+default until 2026-10-26. The cross-check release
+(`img-202610232220-4118de5f`) ran it across every ring: the two verdicts agreed
+on every seat but the pilot, where the self-test was right (it offered demand
+letters with no demand inputs, and the boot smoke had skipped the check). Both
+paths now judge lanes the same way (#3448), so the default is `selftest`.
 
 `fleet selftest --plant retired-skills-absent smd-staging` re-proves the alert
 path after any change to the self-test: it plants one real violation as root,

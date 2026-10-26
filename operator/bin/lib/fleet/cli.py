@@ -130,7 +130,10 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument(
         "--verify",
         choices=("bash", "selftest"),
-        default="bash",
+        # selftest since 2026-10-26: the cross-check release (img-202610232220-4118de5f)
+        # agreed on every seat but one, where the self-test was right (the pilot's
+        # missing demand inputs), and both paths now judge lanes alike (#3448).
+        default="selftest",
         help="who decides a seat: the boot smoke over ssh (the self-test's verdict is recorded beside it), "
         "or the seat's heartbeat self-test (the boot smoke decides when no verdict arrives)",
     )
