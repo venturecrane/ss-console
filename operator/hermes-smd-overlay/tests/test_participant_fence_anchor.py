@@ -166,6 +166,7 @@ def test_a_job_wake_anchors_on_its_own_job() -> None:
         ("drafting", "drafting_job"),
         ("chronology", "medchron_job"),
         ("litigation", "litigation_job"),
+        ("casefile", "casefile_job"),
     ],
 )
 def test_every_job_lane_wake_anchors_on_its_job(word: str, kind: str) -> None:

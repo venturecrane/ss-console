@@ -51,10 +51,11 @@ LANE_HEARTBEATS = (
     "litigation-heartbeat",
     "negotiation-heartbeat",
     "note-heartbeat",
+    "casefile-heartbeat",
 )
 
 #: A lane file older than this is stale. Lanes beat every poll (seconds) and the
-#: negotiation/litigation lanes every 30 s while a job runs.
+#: negotiation/litigation/casefile lanes every 30 s while a job runs.
 LANE_STALE_SECONDS = 180.0
 
 #: Cap on any single string field, matching the receiver's own cap.

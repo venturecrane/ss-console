@@ -117,3 +117,42 @@ def test_every_lane_is_classified_by_holds_or_named_as_using_the_default(mod: Mo
     assert default, "holds.classify no longer names the lanes that use its default branch"
     named = {w.lower() for w in re.findall(r"[A-Za-z]+", default.group(1))} - {"and"}
     assert lane in named, f"lane {lane!r} has no hold table and is not named as using the default in holds.py"
+
+
+_OPERATOR = Path(__file__).resolve().parents[3]
+
+
+def _frozenset_literal(path: Path, name: str) -> set[str]:
+    """The string members of ``NAME = frozenset({...})`` in another package's
+    source (read as text: the broker and the overlay are not importable here)."""
+    src = path.read_text(encoding="utf-8")
+    m = re.search(rf"^{name} = frozenset\(\s*\{{([^}}]*)\}}\s*\)", src, re.MULTILINE)
+    assert m, f"{path.name} no longer defines {name} as a frozenset literal"
+    return set(re.findall(r'"([a-z_]+)"', m.group(1)))
+
+
+def _heartbeat(mod: ModuleType) -> str:
+    lane = _lane_name(mod)
+    cls = next(c for _n, c in inspect.getmembers(mod, inspect.isclass) if c.__dict__.get("LANE") == lane)
+    return str(cls.HEARTBEAT)
+
+
+@pytest.mark.parametrize("mod", MODULES, ids=_short)
+def test_every_lane_heartbeat_is_read_by_the_seat_fleet_facts(mod: ModuleType) -> None:
+    # The overlay sums every lane's heartbeat into the fleet table's job counts;
+    # a lane it does not list runs jobs the console never sees.
+    beat = _heartbeat(mod)
+    src = (_OPERATOR / "hermes-smd-overlay" / "shared" / "fleet_facts.py").read_text(encoding="utf-8")
+    assert f'"{beat}",' in src, f"fleet_facts.LANE_HEARTBEATS does not read {beat!r} (lane {_lane_name(mod)!r})"
+
+
+@pytest.mark.parametrize("mod", MODULES, ids=_short)
+def test_every_lane_can_record_a_delivery_proof_under_its_reply_kind(mod: ModuleType) -> None:
+    # proof/watch.py alerts under the lane's name and binds under its reply
+    # kind; the broker refuses a lane or kind it does not know.
+    lane = _lane_name(mod)
+    broker = _OPERATOR / "workspace_broker" / "delivery_proof.py"
+    assert lane in _frozenset_literal(broker, "LANES"), f"delivery_proof.LANES lacks {lane!r}"
+    assert watch.REPLY_KIND[lane] in _frozenset_literal(broker, "REPLY_KINDS")
+    overlay = _OPERATOR / "hermes-smd-overlay" / "shared" / "heartbeat.py"
+    assert lane in _frozenset_literal(overlay, "DELIVERY_PROOF_LANES"), f"heartbeat.DELIVERY_PROOF_LANES lacks {lane!r}"

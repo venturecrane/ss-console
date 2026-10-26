@@ -66,7 +66,8 @@ def test_sums_across_lanes_and_normalizes_running(tmp_path):
     _lane(tmp_path, "demand-heartbeat", running=None, queued=1)
     _lane(tmp_path, "negotiation-heartbeat", running=["a", "b"], wakes_pending=3)
     _lane(tmp_path, "note-heartbeat", running=4)
-    assert _counts(tmp_path) == ff.LaneCounts(1 + 0 + 2 + 4, 3, 4)
+    _lane(tmp_path, "casefile-heartbeat", running="cf-1", queued=1)
+    assert _counts(tmp_path) == ff.LaneCounts(1 + 0 + 2 + 4 + 1, 4, 4)
 
 
 def test_stale_lane_makes_every_sum_unknown(tmp_path):

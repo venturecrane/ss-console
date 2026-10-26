@@ -14,7 +14,8 @@ negotiation job <ULID>." (the negotiation-watch skill; the id is a notice's,
 one wake per new offer, or a failed job's) or "... for note job <ULID>." (the
 smd-note skill: a note SMD recorded on the seat, ss-console note_by_smd.py, sent
 as a reply in the requesting colleague's own thread, or, when its wake carries
-"Trigger: scheduled.", as ONE new message the broker addresses). The earliest
+"Trigger: scheduled.", as ONE new message the broker addresses) or "... for
+casefile job <ULID>." (the case-file-manager skill). The earliest
 mention decides the kind. It is recorded at ``pre_llm_call`` from the gateway's
 sender id (``webhook:handoff``), never from anything the model writes.
 """
@@ -32,7 +33,7 @@ from shared.cron_attribution import parse_cron_session
 #: ``webhook:agentmail`` is for mail): a job's completion wake.
 HANDOFF_SENDER = "webhook:handoff"
 WAKE_JOB = re.compile(
-    r"\b(demand|drafting|chronology|litigation|negotiation|note) job ([0-9A-HJKMNP-TV-Z]{26})\b"
+    r"\b(demand|drafting|chronology|litigation|negotiation|note|casefile) job ([0-9A-HJKMNP-TV-Z]{26})\b"
 )
 #: The wake word -> the broker's job kind (ss-console reply_binding.KINDS, and
 #: the participant fence's job anchor kinds).
@@ -43,6 +44,7 @@ JOB_KIND = {
     "litigation": "litigation_job",
     "negotiation": "negotiation_job",
     "note": "note_job",
+    "casefile": "casefile_job",
 }
 JOB_KINDS = frozenset(JOB_KIND.values())
 #: The kinds whose wake may be a SCHEDULED run's (no request email): a
@@ -61,7 +63,7 @@ WAKE_TRIGGER = re.compile(r"^Trigger: (request|scheduled)\.?\s*$", re.MULTILINE)
 class TurnSources:
     """session id -> the handoff wake that opened it, with the job it names: the
     kind (``demand_job`` / ``drafting_job`` / ``medchron_job`` /
-    ``litigation_job`` / ``negotiation_job`` / ``note_job``) and id, or ("", ""). Cron turns need no record: the
+    ``litigation_job`` / ``negotiation_job`` / ``note_job`` / ``casefile_job``) and id, or ("", ""). Cron turns need no record: the
     scheduler stamps them in the session id itself."""
 
     def __init__(self, max_sessions: int = 256) -> None:
