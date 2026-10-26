@@ -41,6 +41,13 @@ CASES = [
     ("litigation", "filing_refused: a file named 'x' is already in the folder", "smd_finishing", "upload_held"),
     ("litigation", "scope_empty: no open litigation matters are in this job's scope", "nothing_in_scope", None),
     ("litigation", "something_new: never seen", "smd_finishing", "gate_held"),
+    ("casefile", "scope_empty: no open matter is in this job's scope", "nothing_in_scope", None),
+    ("casefile", "scope_unresolved: the request names someone no staff record carries", "staff_unresolved", None),
+    ("casefile", "filing_refused: a File Status is already in the folder", "smd_finishing", "upload_held"),
+    ("casefile", "all_matters_held: every matter in scope held at its gates", "smd_finishing", "gate_held"),
+    ("casefile", "nothing_approved: the approval named no proposed line", "smd_finishing", None),
+    ("casefile", "read_incomplete: 2 matters could not be read", "smd_finishing", "gate_held"),
+    ("casefile", "something_new: never seen", "smd_finishing", "gate_held"),
     (
         "medchron",
         "update_held: the independent review of the update left must-fix findings the finisher could not correct "

@@ -53,7 +53,7 @@ def test_unauthored_or_invalid_means_the_code_default(doc: dict) -> None:
 
 
 def test_demand_value_reaches_every_lane_that_can_create_the_shared_cgroup() -> None:
-    # Drafting, litigation and negotiation each create the demand cgroup at
+    # Drafting, litigation, negotiation and casefile each create the demand cgroup at
     # THEIR OWN cap when they run before the demand lane; a demand-only export
     # would let a 1 GiB default land in a cgroup authored at 512 MiB.
     assert set(LANE_ENVS["demand"]) == {
@@ -61,6 +61,8 @@ def test_demand_value_reaches_every_lane_that_can_create_the_shared_cgroup() -> 
         drafting_lane.MEMORY_ENV,
         litigation_lane.MEMORY_ENV,
         negotiation_lane.MEMORY_ENV,
+        # The case file manager (casefile_lane.MEMORY_ENV) joins it too.
+        "SMD_CASEFILE_MEMORY_MAX_BYTES",
     }
     assert LANE_ENVS["medchron"] == (daemon.MEMORY_MAX_ENV,)
     words = env_words(_doc({"demand": 512}))
@@ -75,7 +77,7 @@ def test_cli_prints_the_words_the_entrypoint_passes(tmp_path: Path) -> None:
     ).stdout.split()
     assert f"SMD_MEDCHRON_MEMORY_MAX_BYTES={1024 * MIB}" in out
     assert f"SMD_DEMAND_MEMORY_MAX_BYTES={512 * MIB}" in out
-    assert len(out) == 5
+    assert len(out) == 6
 
 
 def test_cli_prints_nothing_for_a_missing_file(tmp_path: Path) -> None:

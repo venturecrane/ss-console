@@ -34,8 +34,8 @@ left out by rule and disclosed in the delivered package
 from __future__ import annotations
 
 #: The firm-safe tokens. Each skill (litigation-status, medical-chronology-
-#: maintainer) carries wording for every one; ``tests/hold-class-wording``
-#: pins that.
+#: maintainer, case-file-manager) carries wording for every one;
+#: ``tests/hold-class-wording`` pins that.
 SMD_FINISHING = "smd_finishing"  # ours; nothing new is on the matter
 SMD_FINISHING_FILED = "smd_finishing_filed"  # ours; the update is filed, the earlier version still beside it
 ALREADY_CURRENT = "already_current"  # legacy hold reason; since 10-25 "nothing new" DELIVERS (update/outcome)
@@ -100,6 +100,20 @@ _LITIGATION = {
     "list_allowance": (SMD_FINISHING, "limit_held"),
 }
 
+#: The case file manager (lane ``casefile``). Any other code it emits
+#: (envelope_invalid, config_missing, inventory_unreadable, fetch_unfinished,
+#: disk_short, read_incomplete, readback_mismatch, stage_unfinished, limit,
+#: no_verdict, unexpected, rehearsal, apply_refused) is ours and pages
+#: ``gate_held``, the same default as litigation.
+_CASEFILE = {
+    "scope_empty": (NOTHING_IN_SCOPE, None),
+    "scope_unresolved": (STAFF_UNRESOLVED, None),
+    "filing_refused": (SMD_FINISHING, "upload_held"),
+    "all_matters_held": (SMD_FINISHING, "gate_held"),
+    # An APPLY with no approved line: nothing to write, nothing of ours broke.
+    "nothing_approved": (SMD_FINISHING, None),
+}
+
 
 def _code(reason: str) -> str:
     return reason.split(":", 1)[0].strip()
@@ -132,7 +146,7 @@ def _medchron(reason: str) -> tuple[str, str | None]:
 def classify(lane: str, reason: str | None) -> tuple[str, str | None]:
     """``(hold class, page code or None)`` for a HELD job's reason.
 
-    On the chronology and litigation lanes a reason this module does not know
+    On the chronology, litigation and casefile lanes a reason this module does not know
     is ours (``smd_finishing``) and pages: an unrecognised hold must never reach
     the firm as a question, and never go unseen by SMD."""
     text = str(reason or "").strip()
@@ -140,10 +154,12 @@ def classify(lane: str, reason: str | None) -> tuple[str, str | None]:
         return SMD_FINISHING, None  # watch.settle pages these under their own code
     if lane == "litigation":
         return _LITIGATION.get(_code(text), (SMD_FINISHING, "gate_held"))
+    if lane == "casefile":
+        return _CASEFILE.get(_code(text), (SMD_FINISHING, "gate_held"))
     if lane == "medchron":
         return _medchron(text)
-    # Demand, drafting and negotiation holds are not classified here yet: their
-    # skills carry their own hold wording and their paging is unchanged.
+    # Demand, drafting, negotiation and note holds are not classified here yet:
+    # their skills carry their own hold wording and their paging is unchanged.
     return SMD_FINISHING, None
 
 

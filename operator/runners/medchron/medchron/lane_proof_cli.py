@@ -44,6 +44,7 @@ QUEUES = {
     "drafting": "drafting-queue",
     "litigation": "litigation-queue",
     "negotiation": "negotiation-queue",
+    "casefile": "casefile-queue",
 }
 
 
@@ -54,6 +55,7 @@ JOBS = {
     "drafting": "drafting-jobs",
     "litigation": "litigation-jobs",
     "negotiation": "negotiation-jobs",
+    "casefile": "casefile-jobs",
 }
 
 
