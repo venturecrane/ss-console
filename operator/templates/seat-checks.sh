@@ -26,7 +26,7 @@
 #                                 carrying why
 #   check_broken <id> <text>      a check that cannot be evaluated: a failure
 #   lane_authored <lane>          does this seat author medchron | demand |
-#                                 drafting | litigation | marketing (the
+#                                 drafting | litigation | casefile | marketing (the
 #                                 expectation source)
 # and the variables SEAT_ROOT (empty on a seat; a fixture tree in the tests),
 # EXPECTED_HERMES_SHA and APP_NAME.
@@ -560,6 +560,16 @@ check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/ru
 # the child must be able to write it (its parent is root-owned).
 check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\" = medchron:medchron:700 ]"
 check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/litigation/litigation-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+# The case file manager: the litigation lane's checks for its own thread,
+# queue, job dir, state dir (client facts: the child's alone, 0700) and the
+# broker's copy of its firm config. It reads through the litigation lane's text
+# cache, which the litigation checks above already hold.
+check "casefile-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/casefile-child.pid"
+check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-queue)\" = root:workspace-broker:770 ]"
+check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-jobs)\" = root:medchron:710 ]"
+check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile/state)\" = medchron:medchron:700 ]"
+check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/casefile/casefile-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
 # and the gateway runs under none, so the caps must leave the gateway room: the
 # sum of every lane cgroup's limit must not exceed the authored machine memory
@@ -572,7 +582,7 @@ check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-conf
 # read from the runner itself, so a bigger default fails here before the first
 # job. An image without medchron.lane_memory exports nothing, so its lanes
 # count at their defaults, which is what that daemon would write. The
-# litigation and drafting lanes share the demand cgroup, so it counts once.
+# litigation, casefile and drafting lanes share the demand cgroup, so it counts once.
 # A lane that CANNOT run a job on this seat counts zero: with no firm inputs
 # staged it refuses or defers every job (provision-customer.sh steps 2b-2f), so
 # its cgroup is never filled. Counting it anyway demanded a 4 GB guest of every
@@ -641,7 +651,7 @@ else
   check_note "medchron-firm-config-absent" "not authored for this seat; runner refuses jobs by design, so the config-perm, token, controls, and gate-refusal checks are skipped"
 fi
 
-# The demand, drafting and litigation lanes' firm inputs: present on the seat
+# The demand, drafting, litigation and casefile lanes' firm inputs: present on the seat
 # exactly when the engagements checkout authors them (the same expectation
 # source as the medchron firm config above; provision-customer.sh stages each
 # from that path). 2026-10-14, A&P v141: the litigation inputs were in the
@@ -650,7 +660,7 @@ fi
 # lane "defer every job", which no earlier check could see: every lane check
 # above holds on an inputs-less seat BY DESIGN. FALSIFIER: empty the vault
 # prefix (or break the fetch) and reboot a seat that authors the lane.
-for _lane in demand drafting litigation; do
+for _lane in demand drafting litigation casefile; do
   if lane_authored "${_lane}"; then
     check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:medchron:640 ]"
   else

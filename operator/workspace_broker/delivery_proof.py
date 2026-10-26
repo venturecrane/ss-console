@@ -39,7 +39,7 @@ from . import bound_replies
 
 AUDIT_TYPE = "DELIVERY_PROOF_FAILED"
 PROVEN_TYPE = "DELIVERY_PROVEN"
-LANES = frozenset({"medchron", "demand", "drafting", "litigation", "negotiation", "note"})
+LANES = frozenset({"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile"})
 #: Mirrors ``medchron/proof/gate.py`` CODES: the wire vocabulary.
 CODES = frozenset(
     {
@@ -60,7 +60,9 @@ CODES = frozenset(
         "identity_held",
     }
 )
-REPLY_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"})
+REPLY_KINDS = frozenset(
+    {"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "casefile_job"}
+)
 _IDENT = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 DETAIL_MAX = 300
 logger = logging.getLogger(__name__)

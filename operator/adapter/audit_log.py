@@ -353,6 +353,19 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "LITIGATION_JOB_DELIVERED",
         "LITIGATION_JOB_FAILED",
         "LITIGATION_JOB_RESUME_REQUESTED",
+        # The case file job (a File Status filed into each matter of a caseload,
+        # then a ranked list with numbered changes the firm approves; an APPLY
+        # writes the approved ones). The litigation job's shape
+        # (operator/workspace_broker/casefile_verbs.py; the proposed lines are
+        # appended at the bound reply by operator/workspace_broker/reply_binding.py).
+        "CASEFILE_JOB_SUBMITTED",
+        "CASEFILE_JOB_RUNNING",
+        "CASEFILE_JOB_HELD",
+        "CASEFILE_JOB_DELIVERED",
+        "CASEFILE_JOB_FAILED",
+        "CASEFILE_JOB_RESUME_REQUESTED",
+        "CASEFILE_LINES_PROPOSED",
+        "CASEFILE_APPLY_SUBMITTED",
         "NEGOTIATION_JOB_SUBMITTED",
         "NEGOTIATION_JOB_RUNNING",
         "NEGOTIATION_JOB_DELIVERED",

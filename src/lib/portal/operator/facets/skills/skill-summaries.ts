@@ -29,6 +29,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Drafts your Google Business Profile posts around your own photographs. You post them; nothing is posted for you.',
   calendar:
     'Keeps the shared calendar and sends each event as an invite to the people on the account. Never invites anyone else.',
+  'case-file-manager':
+    'Reads each file in a caseload, files a current File Status in each, and sends a ranked list with numbered changes for you to approve. Changes matter details only for the lines you approve.',
   'client-matter-digest':
     'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':

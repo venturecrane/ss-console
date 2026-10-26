@@ -1308,7 +1308,8 @@ export const OBSERVABILITY_DEFAULTS: Observability = {
  * unauthored means the runner's code default (medchron 2560, demand 1024).
  * The seat entrypoint exports them to the medchron daemon
  * (operator/runners/medchron/medchron/lane_memory.py holds the same bounds).
- * `demand` caps the cgroup the drafting, litigation and negotiation lanes share.
+ * `demand` caps the cgroup the drafting, litigation, negotiation and casefile
+ * lanes share.
  */
 export interface LaneMemoryMb {
   medchron?: number

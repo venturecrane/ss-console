@@ -126,7 +126,8 @@ check_lever() {
 
 # The in-image expectation source: the live customer.yaml, narrowed by what the
 # boot's fetch found in the vault. A lane is authored when the skill that
-# drives it is enabled for any persona, UNLESS (demand, drafting, litigation)
+# drives it is enabled for any persona, UNLESS (demand, drafting, litigation and,
+# since 2026-10-26, casefile: every lane whose inputs come from the vault)
 # this boot's fetch recorded a clean `absent`: the vault was listed and holds no
 # inputs for the lane, which is how a seat that enables a lane's skill but
 # authors no inputs for it looks (pilot-smokeball's demand lane: the skill is
@@ -167,6 +168,7 @@ lane_skill() {
     demand) echo demand-letter-drafter ;;
     drafting) echo document-drafter ;;
     litigation) echo litigation-status ;;
+    casefile) echo case-file-manager ;;
     marketing) echo marketing-request-router ;;
     *) return 1 ;;
   esac
@@ -194,7 +196,7 @@ PY
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
   printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
-  case "$1" in demand|drafting|litigation|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
+  case "$1" in demand|drafting|litigation|casefile|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
 }
 
 # ---------- one run ----------

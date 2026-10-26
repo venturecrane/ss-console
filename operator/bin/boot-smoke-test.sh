@@ -469,7 +469,7 @@ lane_authored() {
 }
 lane_skill_enabled() {
   local skill
-  case "$1" in medchron) skill=medical-chronology-maintainer ;; demand) skill=demand-letter-drafter ;; drafting) skill=document-drafter ;; litigation) skill=litigation-status ;; marketing) skill=marketing-request-router ;; *) return 1 ;; esac
+  case "$1" in medchron) skill=medical-chronology-maintainer ;; demand) skill=demand-letter-drafter ;; drafting) skill=document-drafter ;; litigation) skill=litigation-status ;; casefile) skill=case-file-manager ;; marketing) skill=marketing-request-router ;; *) return 1 ;; esac
   # Cannot evaluate (no file, unparseable, no uv) reads as authored, never as
   # absent: exit 1 is the only "not enabled" answer.
   [ -f "${CUSTOMER_YAML}" ] || return 0

@@ -140,6 +140,9 @@ def test_the_three_tools_register_function_shaped_and_require_the_socket():
         # The litigation status job's two (litigation.py).
         "litigation_job_submit",
         "litigation_job_status",
+        # The Case File Manager's two (casefile.py); its apply has no tool.
+        "casefile_job_submit",
+        "casefile_job_status",
         # The negotiation watch's one (negotiation.py): scheduled only, no submit.
         "negotiation_job_status",
         # An SMD note's one (note.py): root records the note, no submit.

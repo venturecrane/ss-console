@@ -36,6 +36,7 @@ from .google_auth import materialize_credential
 from .job_ledger import JobLedgerWriter
 from .demand_verbs import DemandVerbs
 from .drafting_verbs import DraftingVerbs
+from .casefile_verbs import CasefileVerbs
 from .litigation_verbs import LitigationVerbs
 from .negotiation_verbs import NegotiationVerbs
 from .medchron_verbs import MedchronVerbs
@@ -148,6 +149,8 @@ class Broker:
     litigation: LitigationVerbs | None = None
     # The negotiation watch's request edge (negotiation_verbs.py), same posture.
     negotiation: NegotiationVerbs | None = None
+    # The Case File Manager's request edge (casefile_verbs.py), same posture.
+    casefile: CasefileVerbs | None = None
     msgraph: MsGraphOps | None = None
 
     def __init__(self) -> None:
@@ -249,6 +252,13 @@ class Broker:
         # each): its own tables on the same DB file, its own queue dir.
         self.negotiation = NegotiationVerbs.build(
             self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_NEGOTIATION_QUEUE_DIR")
+        )
+        # The Case File Manager (a caseload's File Status and ranked list, and
+        # the apply of approved lines): its own tables on the same DB file, its
+        # own queue dir (SMD_CASEFILE_QUEUE_DIR), the firm's monthly budget read
+        # from SMD_CASEFILE_FIRM_CONFIG.
+        self.casefile = CasefileVerbs.build(
+            self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_CASEFILE_QUEUE_DIR")
         )
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the

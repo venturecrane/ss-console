@@ -51,6 +51,20 @@
       "expect": { "medical-chronology-maintainer": true, "demand-letter-drafter": false }
     },
     {
+      "name": "a proven mode of a lane proves no other mode",
+      "authored": {
+        "schema": 1,
+        "lanes": { "case-file-manager.full": { "evidence": "x" } },
+        "revoked": []
+      },
+      "events": [{ "event": "proven", "key": "case-file-manager.recheck" }],
+      "expect": {
+        "case-file-manager.full": true,
+        "case-file-manager.recheck": true,
+        "case-file-manager.apply": false
+      }
+    },
+    {
       "name": "a malformed key never proves",
       "authored": { "schema": 1, "lanes": { "Demand Letter": { "evidence": "x" } }, "revoked": [] },
       "events": [{ "event": "proven", "key": "../etc" }],

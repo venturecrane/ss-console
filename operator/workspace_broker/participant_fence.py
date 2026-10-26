@@ -82,7 +82,15 @@ LANE_SEND_AS = "send_as"
 _SKILL_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,79}$")
 
 MESSAGE_KINDS = ("graph_message", "agentmail_message")
-JOB_KINDS = ("medchron_job", "demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job")
+JOB_KINDS = (
+    "medchron_job",
+    "demand_job",
+    "drafting_job",
+    "litigation_job",
+    "negotiation_job",
+    "note_job",
+    "casefile_job",
+)
 RULE_KIND = "rule"
 ANCHOR_KINDS = (*MESSAGE_KINDS, *JOB_KINDS, RULE_KIND)
 _ANCHOR_FIELD = {
@@ -95,6 +103,8 @@ _ANCHOR_FIELD = {
     "negotiation_job": "job_id",
     # An SMD note (note_verbs.py): its request email is the colleague's own.
     "note_job": "job_id",
+    # A Case File Manager job (casefile_verbs.py): its request email is the admin's own.
+    "casefile_job": "job_id",
     RULE_KIND: "proposal_id",
 }
 _ANCHOR_ID = re.compile(r"^[A-Za-z0-9=_.@<>+:-]{1,512}$")

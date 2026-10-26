@@ -123,6 +123,22 @@ def test_a_job_running_past_its_lane_limit_is_stuck():
     assert "201208" in items[0].what and "running" in items[0].what
 
 
+def test_a_case_file_job_is_read_and_held_to_its_own_lane_limit():
+    """FALSIFIER: drop CASEFILE from LANE_PREFIXES and a stuck case file job
+    is silence, never an item."""
+    rows = [
+        _job("CASEFILE", "SUBMITTED", NOW - timedelta(hours=7)),
+        _job("CASEFILE", "RUNNING", NOW - timedelta(hours=7) + timedelta(seconds=5)),
+    ]
+    items = wh.job_items(SEAT, rows, CFG, NOW)
+    assert _kinds(items) == ["job_stuck"] and "case file" in items[0].what
+    inside = [
+        _job("CASEFILE", "SUBMITTED", NOW - timedelta(hours=1)),
+        _job("CASEFILE", "RUNNING", NOW - timedelta(minutes=59)),
+    ]
+    assert wh.job_items(SEAT, inside, CFG, NOW) == []
+
+
 def test_a_job_running_inside_its_lane_limit_is_not_stuck():
     rows = [
         _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=1)),

@@ -45,7 +45,7 @@ def _proofs(
 @pytest.fixture
 def ledger(tmp_path) -> _Ledger:
     led = _Ledger(tmp_path / "audit.db")
-    for table in ("litigation_jobs", "negotiation_jobs"):
+    for table in ("litigation_jobs", "negotiation_jobs", "casefile_jobs"):
         led.conn.execute(
             f"CREATE TABLE {table} (id TEXT PRIMARY KEY, created_at TEXT, updated_at TEXT, state TEXT, "
             "request_ref TEXT, reason TEXT)"
@@ -121,6 +121,24 @@ def test_a_scheduled_hold_with_no_request_is_carded_on_its_own(ledger, tmp_path)
     assert cards[0]["lane"]["job_lane"] == "negotiation" and CONSOLE_KEY_RE.match(
         cards[0]["card_key"]
     )
+
+
+def test_a_held_case_file_apply_is_carded_under_its_request_with_its_mode_key(ledger, tmp_path):
+    """FALSIFIER: drop "casefile" from _HOLD_SQL and an APPLY waiting on its own
+    proof run is never carded, so nobody is told it waits."""
+    _hold(ledger, "casefile_jobs", "case-file-manager.apply", state="queued")
+    cards = _lane_cards(_decide(ledger, [_request(minutes_ago=2)], _proofs(tmp_path)))
+    assert len(cards) == 1
+    assert cards[0]["lane"] == {
+        "key": "case-file-manager.apply",
+        "job_lane": "casefile",
+        "held_job": HELD,
+        "why": "never_proven",
+    }
+    assert CONSOLE_KEY_RE.match(cards[0]["card_key"]) and cards[0]["matter"] is None
+    # The full read being proven does not prove the APPLY.
+    proven = _proofs(tmp_path, events=[{"event": "proven", "key": "case-file-manager.full"}])
+    assert len(_lane_cards(_decide(ledger, [_request(minutes_ago=2)], proven))) == 1
 
 
 def test_an_unreadable_record_still_pages_a_hold_and_says_so(ledger, tmp_path):

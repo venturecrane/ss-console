@@ -48,6 +48,7 @@ REPLY_KIND = {
     "drafting": "drafting_job",
     "litigation": "litigation_job",
     "negotiation": "negotiation_job",
+    "casefile": "casefile_job",
     # An SMD note (medchron/note_by_smd.py), watched by the note lane.
     "note": "note_job",
 }

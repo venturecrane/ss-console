@@ -14,7 +14,7 @@ casework row authorizes a WRITE to the firm's record. They share the broker
 Record shape (one JSON object per line)::
 
     {"v":1,"ts":<iso, broker>,"id":<ulid, broker>,"skill":<str>,
-     "matter_id":<str>,"kind":<task|date>,"source_id":<Smokeball task/event id>,
+     "matter_id":<str>,"kind":<task|date|medicals>,"source_id":<Smokeball task/event id>,
      "item_key":<hex16>,"event":<EVENTS>,"session_id":<str|absent>,
      # raises (proposed|named|briefed):
      "n":<1..999>,"dispatch_ref":<hex32>,"thread_ref":<broker-stamped>,
@@ -37,7 +37,12 @@ The doors ``validate_append`` keeps shut, each refused by name:
 * a raise with no thread (the broker could not tie it to its own send);
 * a verdict with no raise on the same thread and number;
 * an outcome with no open authorization (an approved line or a
-  closed_by_record), or a ``completed`` with no successful update_task call;
+  closed_by_record), or a ``completed`` with no witnessed write: a successful
+  update_task call of its own session, or, for a Case File Manager line
+  (``tool_call_id`` ``casefile:<apply job>:<n>``), the broker's case file
+  ledger showing that apply job delivered with line ``n`` written and read back
+  (``workspace_broker/casefile_casework.py`` supplies that witness; the agent's
+  door never can, because no audit row names a ``casefile:`` id);
 * a ``step_ran`` that is not a date item's step at ``handles``, or that names
   no successful create_memo call of its own session (every prep routine files
   its ``[Operator]`` memo on the matter, so a step that left none did not run);
@@ -59,8 +64,12 @@ from datetime import date, datetime, timedelta, timezone
 
 SCHEMA_VERSION = 1
 
-ITEM_KINDS: tuple[str, ...] = ("task", "date")
-_NAMESPACE: dict[str, str] = {"task": "__cm_task:", "date": "__cm_date:"}
+ITEM_KINDS: tuple[str, ...] = ("task", "date", "medicals")
+_NAMESPACE: dict[str, str] = {
+    "task": "__cm_task:",
+    "date": "__cm_date:",
+    "medicals": "__cm_medicals:",
+}
 
 RAISING_EVENTS: tuple[str, ...] = ("proposed", "named", "briefed")
 VERDICT_EVENTS: tuple[str, ...] = ("approved", "held")
@@ -83,10 +92,14 @@ WITNESSED_EVENTS: tuple[str, ...] = (*RAISING_EVENTS, "mentioned")
 #: deadline digest): it carries no evidence, is accepted on any class because
 #: its authority is the person and not the record, and is written only by the
 #: deadline-miss-escalator; approving it requires a named person (``decided_by``).
-ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step")
+#: ``add_row`` is a Case File Manager line: a Medicals row proposed from a bill
+#: whose text was read, applied by that lane's runner after a named approval.
+ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step", "add_row")
 LEVELS: tuple[str, ...] = ("surfaces", "prepares", "handles")
-#: The actions an approval turns into an update_task write (a step runs a skill).
-WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign")
+#: The actions an approval turns into a write: an update_task call for close,
+#: complete and reassign; for the Case File Manager's ``close`` and ``add_row``
+#: lines, its runner's apply job (a step runs a skill).
+WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign", "add_row")
 #: The one routine that may raise a ``complete``: the digest a person answers.
 COMPLETE_SKILL = "deadline-miss-escalator"
 CLASSES: tuple[str, ...] = ("open", "done", "stale", "at_stake")

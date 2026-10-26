@@ -58,7 +58,8 @@ TEXTCACHE_ENV = "MEDCHRON_LITIGATION_TEXTCACHE_DIR"
 MEMORY_ENV = "SMD_LITIGATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "litigation-status"
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid")
+#: The demand cgroup's other children (the case file job shares it too).
+BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid")
 CHILD_PID = "litigation-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0

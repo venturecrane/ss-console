@@ -203,7 +203,7 @@ def test_required_env_from_the_real_generated_arrays() -> None:
 
 
 def test_lane_inputs_digest_every_lane_schema() -> None:
-    assert set(lane_inputs(REPO)) == {"medchron", "demand", "drafting", "litigation"}
+    assert set(lane_inputs(REPO)) == {"medchron", "demand", "drafting", "litigation", "casefile"}
 
 
 def test_volume_id_prefers_the_attached_volume_over_an_orphan() -> None:

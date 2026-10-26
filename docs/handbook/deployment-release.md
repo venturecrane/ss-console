@@ -663,7 +663,7 @@ fleet reads that output into the four classes above
 
 Two expectation sources differ by transport, and the list asks each transport
 for them rather than knowing either. Whether a seat authors a runner lane
-(medchron, demand, drafting, litigation): over ssh, the engagements checkout,
+(medchron, demand, drafting, litigation, casefile): over ssh, the engagements checkout,
 as provisioning reads it; in the image, whether the live `customer.yaml`
 enables the lane's skill. The Hermes pin the running Hermes must equal: over
 ssh, the release's pin or this checkout's Dockerfile; in the image, the pin the

@@ -95,6 +95,36 @@ class MedchronBrokerClient:
         """One job's state, stage and counts (never matter facts)."""
         return self._request({"action": "litigation_job_status", "job_id": job_id})
 
+    # -- the Case File Manager (ss-console operator/workspace_broker/casefile_verbs.py) --
+    def casefile_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        """``accepted`` with a ``job_id``, or ``accepted: False`` with a ``reason``."""
+        return self._request({"action": "casefile_job_submit", "envelope": envelope})
+
+    def casefile_status(self, job_id: str) -> dict[str, Any]:
+        """One job's state, stage and counts (never matter facts)."""
+        return self._request({"action": "casefile_job_status", "job_id": job_id})
+
+    def casefile_apply(
+        self,
+        thread_ref: str,
+        approver: str,
+        message_ref: str,
+        request_text: str,
+        numbers: list[int],
+    ) -> dict[str, Any]:
+        """Queue the apply of the lines this reply named (``numbers``) and
+        approved on ``thread_ref``; the broker builds the set. Called by the casework reply path, never a turn's tool."""
+        return self._request(
+            {
+                "action": "casefile_apply_submit",
+                "thread_ref": thread_ref,
+                "approver": approver,
+                "message_ref": message_ref,
+                "request_text": request_text,
+                "numbers": list(numbers),
+            }
+        )
+
     # -- the negotiation watch (ss-console operator/workspace_broker/negotiation_verbs.py) --
     def negotiation_status(self, job_id: str) -> dict[str, Any]:
         """A notice's composed message and subject, or a job's state and counts."""

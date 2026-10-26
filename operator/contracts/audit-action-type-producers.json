@@ -522,6 +522,46 @@
       "producerFile": "operator/workspace_broker/litigation_verbs.py",
       "reason": "A person asked the runner to resume a failed litigation job (litigation_job_resume, root only), with a reason."
     },
+    "CASEFILE_JOB_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "The case file job. The workspace broker appends one row when a request is queued through casefile_job_submit: job id, trigger, mode, requester, the request's message ref; never the request text."
+    },
+    "CASEFILE_JOB_RUNNING": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "The runner daemon reported a case file job running (casefile_job_record)."
+    },
+    "CASEFILE_JOB_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "The runner held a case file job for a cause in the files or the request; the reason is a code-authored sentence, counts only."
+    },
+    "CASEFILE_JOB_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "The runner filed each File Status (or applied the approved changes) and read them back; the mode and the counts only."
+    },
+    "CASEFILE_JOB_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "A case file job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client. Also SMD's root-only casefile_job_close of a held job it finished by hand (ids and tokens only; never resumed)."
+    },
+    "CASEFILE_JOB_RESUME_REQUESTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "A person asked the runner to resume a failed case file job (casefile_job_resume, root only), with a reason."
+    },
+    "CASEFILE_LINES_PROPOSED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_casework.py",
+      "reason": "A case file job's bound reply was sent; the broker appended its numbered proposed changes to the casework ledger. Job id and line count only."
+    },
+    "CASEFILE_APPLY_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "A verified person approved numbered case file lines in their reply and an APPLY job was queued (casefile_apply_submit). Job id, message ref and the approved line numbers only."
+    },
     "NEGOTIATION_JOB_SUBMITTED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/negotiation_verbs.py",

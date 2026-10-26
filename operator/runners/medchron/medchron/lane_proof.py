@@ -65,6 +65,7 @@ SKILLS = {
     "drafting": "document-drafter",
     "litigation": "litigation-status",
     "negotiation": "negotiation-watch",
+    "casefile": "case-file-manager",
 }
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$")
 _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")
@@ -93,6 +94,12 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
         # tasks, so its first live request waits for its own proof run (which
         # stops before the first write and reports what it would move).
         return f"{skill}.{REASSIGN_CLASS}"
+    if lane == "casefile":
+        # The case file manager's three modes are different jobs: a full read of
+        # the caseload, a recheck of what changed, and an APPLY that writes the
+        # changes the firm approved. Each waits for its own proof run.
+        mode = str(envelope.get("mode") or "full")
+        return f"{skill}.{mode if _CLASS_RE.match(mode) else 'unknown'}"
     if lane == "medchron" and isinstance(envelope.get("update"), dict):
         # 2026-10-13: an update INTO the delivered chronology is its own kind of
         # job (it reads the delivered document and deletes the one it replaces),

@@ -52,6 +52,16 @@ const SKILLS = {
     // record in Smokeball carries; the firm's one ask, whose files to list.
     classes: ['smd_finishing', 'nothing_in_scope', 'staff_unresolved', 'requester_unresolved'],
   },
+  casefile: {
+    skill: resolve(import.meta.dirname, '../operator/skills/case-file-manager/SKILL.md'),
+    shapes: resolve(
+      import.meta.dirname,
+      '../operator/skills/case-file-manager/references/reply-shapes.md'
+    ),
+    // The casefile lane can produce only these (holds._CASEFILE + the default):
+    // scope_unresolved is the firm's one question (whose caseload).
+    classes: ['smd_finishing', 'nothing_in_scope', 'staff_unresolved'],
+  },
 } as const
 
 const CHRONOLOGY = {
@@ -125,7 +135,7 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
       expect(held).toContain("worded by the wake's `Hold class:` line, never by the job's")
       expect(held).toMatch(/Never quote, paraphrase or summarize the reason/)
       expect(held).toMatch(
-        /The same token comes back as `hold_class` on the job from `(medchron|litigation)_job_status`/
+        /The same token comes back as `hold_class` on the job from `(medchron|litigation|casefile)_job_status`/
       )
       expect(held).toMatch(/a class not listed here, is `smd_finishing`/)
     })
@@ -142,7 +152,14 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
         } else {
           expect(w).toContain('Nothing is needed from you')
         }
-        if (cls === 'smd_finishing') {
+        if (cls === 'smd_finishing' && name === 'casefile') {
+          // 2026-10-26 (review of #3533): the case file lane promises no later
+          // message (nothing guarantees one after a hold); it says what is true
+          // now: SMD is paged for every one of its holds.
+          expect(w).toContain('SMD has been told and is finishing it')
+          expect(w).not.toMatch(/the next message you get/)
+          expect(w).toMatch(/not filed yet/)
+        } else if (cls === 'smd_finishing') {
           expect(w).toContain('SMD is finishing it')
           expect(w).toMatch(
             /the next message you get about this (list|chronology) will be the filed/

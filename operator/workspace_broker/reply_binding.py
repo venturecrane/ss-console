@@ -55,6 +55,13 @@ the recipient. So the broker, which the agent cannot steer, decides:
       the firm hears about a chronology only when it is delivered). A held
       chronology is refused its reply exactly as a failed job is; SMD was
       paged when it stopped;
+    - a Case File Manager job (2026-10-26): exactly the litigation status rules
+      for a REQUESTED job, on the case file ledger (``casefile_store``), a
+      reply in the requester's thread; it is never scheduled. One side effect:
+      once a delivered review's reply is sent and settled, the broker raises
+      that job's numbered changes on the casework ledger, on this reply's thread
+      (``casefile_casework.after_bound_reply``), so the requester can approve
+      them by number there; a held job's reply is its fixed wording (held_wording);
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -96,15 +103,22 @@ from .negotiation_ledger import subject as negotiation_subject
 from .note_ledger import NoteLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
+from .casefile_casework import after_bound_reply, casefile_ledger_of
+from .reply_scheduled import scheduled_recipient_ok as _scheduled_recipient_ok
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")
+KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")  # fmt: skip
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"})
+JOB_KINDS = frozenset(
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
+)
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"})
+_LEDGER_MARKED_KINDS = frozenset(
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"}
+)
 _NOUN = {
+    "casefile_job": "case file",
     "demand_job": "demand",
     "drafting_job": "drafting",
     "litigation_job": "litigation status",
@@ -224,39 +238,6 @@ def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
     return NegotiationLedger(str(broker.audit_db_path), queue)
 
 
-def _authored_recipients(kind: str, customer_path: Any) -> tuple[list[str], bool]:
-    """(that kind's skill's authored ``scheduled_recipients``, whether only the
-    FIRST entry may be reached). An explicit table that raises on any other
-    kind: the old ``else`` read negotiation-watch's list for anything that was
-    not litigation, which a note must never inherit (2026-10-16)."""
-    if kind == "litigation_job":
-        from . import litigation_intake as intake
-    elif kind == "negotiation_job":
-        from . import negotiation_intake as intake
-    elif kind == "note_job":
-        from .note_verbs import note_recipients
-
-        return note_recipients(customer_path) or [], False
-    else:
-        raise ValueError(f"{kind} has no authored scheduled recipients")
-    return intake.scheduled_recipients(intake.settings_of(intake.skill_entry(customer_path))), True
-
-
-def _scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> bool:
-    """The scheduled run's requester is still a Named Administrator AND an
-    authored ``scheduled_recipients`` entry of that kind's skill, read from the
-    live yaml: the FIRST entry for litigation and negotiation, any entry for a
-    new-message note."""
-    from .medchron_ledger import admins_from_customer_yaml
-
-    who = normalize_address(requester)
-    recipients, first_only = _authored_recipients(kind, broker.customer_path)
-    admins = admins_from_customer_yaml(str(broker.customer_path)) or ()
-    if not recipients or who not in admins:
-        return False
-    return recipients[0] == who if first_only else who in recipients
-
-
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-medchron/queue"
@@ -281,6 +262,8 @@ def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
         return NoteLedger(str(broker.audit_db_path))
     if kind == "drafting_job":
         return _drafting_ledger(broker)
+    if kind == "casefile_job":
+        return casefile_ledger_of(broker)
     if kind == "demand_job":
         return _demand_ledger(broker)
     raise ValueError(f"{kind} has no ledger that marks its reply")
@@ -290,7 +273,8 @@ def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
         raise BindingRefused(
-            "a reply binding names a demand, drafting, litigation status, negotiation, chronology or SMD note job, "
+            "a reply binding names a case file, demand, drafting, litigation status, negotiation, chronology or "
+            "SMD note job, "
             "or an email"
         )
     kind = raw.get("kind")
@@ -694,6 +678,7 @@ def reply_verb(
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     _settle_sent(broker, db_path, v, result)
+    after_bound_reply(broker, v, session_id)
     return result
 
 

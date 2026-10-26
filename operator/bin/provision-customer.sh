@@ -352,15 +352,15 @@ else
 fi
 # <<< medchron-controls-stage
 
-# ---------- Steps 2d/2e/2f/2g: the demand, drafting and litigation jobs' firm inputs ----------
-# lib/stage-demand-inputs.sh, lib/stage-drafting-inputs.sh, then
-# lib/stage-litigation-inputs.sh (the last two skipped quietly for a seat with no
-# such inputs), then lib/stage-marketing-inputs.sh (a marketing seat's
+# ---------- Steps 2d/2e/2f/2g: the demand, drafting, litigation and case file jobs' firm inputs ----------
+# lib/stage-demand-inputs.sh, lib/stage-drafting-inputs.sh, lib/stage-litigation-inputs.sh,
+# then lib/stage-casefile-inputs.sh (2026-10-26; each of the four after demand skipped
+# quietly for a seat with no such inputs), then lib/stage-marketing-inputs.sh (a marketing seat's
 # advertising-gate registers, ADR 0098; skipped quietly elsewhere), then
 # lib/stage-lane-proofs-inputs.sh (the kinds of job proven on the seat,
 # 2026-10-13). One loop line: the ratchet holds this file.
 # shellcheck disable=SC1090 # the stage files are named in the comment above
-for _stage in demand drafting litigation marketing lane-proofs; do source "${BIN_DIR}/lib/stage-${_stage}-inputs.sh"; done
+for _stage in demand drafting litigation casefile marketing lane-proofs; do source "${BIN_DIR}/lib/stage-${_stage}-inputs.sh"; done
 
 # ---------- Step 3: render fly.toml ----------
 # One renderer, shared with `fleet release` (lib/render-fly-toml.sh).

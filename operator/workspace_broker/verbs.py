@@ -48,7 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import delivery_proof, help_signals, msgraph_drafts, note_verbs
+from . import casefile_verbs, delivery_proof, help_signals, msgraph_drafts, note_verbs
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -202,6 +202,17 @@ VERBS: tuple[Verb, ...] = (
     Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_record", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_resume", _only(ROOT), negotiation_verbs.negotiation_dispatch),
+    # The Case File Manager (casefile_verbs.py): a caseload read on request,
+    # and the apply of lines a Named Administrator approved, submitted by the
+    # casework reply path from the verified reply (never the model). Submit's
+    # table gate admits the agent uid for the scheduled run the lane will add;
+    # the handler pins today's request form to the gateway or root.
+    Verb("casefile_job_submit", GATEWAY_ROOT_OR_AGENT, casefile_verbs.casefile_dispatch),
+    Verb("casefile_job_status", GATEWAY_ROOT_OR_AGENT, casefile_verbs.casefile_dispatch),
+    Verb("casefile_job_record", _only(ROOT), casefile_verbs.casefile_dispatch),
+    Verb("casefile_job_resume", _only(ROOT), casefile_verbs.casefile_dispatch),
+    Verb("casefile_job_close", _only(ROOT), casefile_verbs.casefile_dispatch),
+    Verb("casefile_apply_submit", GATEWAY_OR_ROOT, casefile_verbs.casefile_dispatch),
     # SMD notes (note_verbs.py, 2026-10-15): SMD has the Operator tell a firm
     # colleague something in her own thread. Preview and record are root only
     # (a person on the seat, medchron/note_by_smd.py); the DELIVER turn reads
@@ -277,6 +288,8 @@ if set(litigation_verbs.VERBS) != {v.name for v in VERBS if v.handler is litigat
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 if set(negotiation_verbs.VERBS) != {v.name for v in VERBS if v.handler is negotiation_verbs.negotiation_dispatch}:
     raise RuntimeError("the negotiation rows above and negotiation_verbs.VERBS disagree")
+if set(casefile_verbs.VERBS) != {v.name for v in VERBS if v.handler is casefile_verbs.casefile_dispatch}:
+    raise RuntimeError("the casefile rows above and casefile_verbs.VERBS disagree")
 if set(note_verbs.VERBS) != {v.name for v in VERBS if v.name.startswith("note_")}:
     raise RuntimeError("the note rows above and note_verbs.VERBS disagree")
 

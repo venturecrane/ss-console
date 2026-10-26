@@ -130,6 +130,18 @@ def test_lane_keys_carry_the_drafting_class_and_an_unreadable_one_is_never_prove
     assert lane_proof.lane_key("somethingnew", {}).startswith("unknown-lane.")
 
 
+def test_each_case_file_mode_is_its_own_proven_kind_of_job():
+    # A full read, a recheck and an APPLY that writes approved changes are
+    # different jobs; each waits for its own proof run. No mode means full.
+    assert lane_proof.lane_key("casefile", {}) == "case-file-manager.full"
+    assert lane_proof.lane_key("casefile", {"mode": "full"}) == "case-file-manager.full"
+    assert lane_proof.lane_key("casefile", {"mode": "recheck"}) == "case-file-manager.recheck"
+    assert lane_proof.lane_key("casefile", {"mode": "apply"}) == "case-file-manager.apply"
+    assert lane_proof.lane_key("casefile", {"mode": "x; rm"}) == "case-file-manager.unknown"
+    for mode in ("full", "recheck", "apply"):
+        assert lane_proof.KEY_RE.match(lane_proof.lane_key("casefile", {"mode": mode}))
+
+
 def test_runtime_and_authored_layers_and_revocation(tmp_path: Path):
     _authored(tmp_path, {"demand-letter-drafter": {"evidence": "7 delivered"}, "litigation-status": {}})
     p = lane_proof.load(tmp_path)

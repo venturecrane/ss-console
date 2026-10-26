@@ -58,6 +58,10 @@ export const LANE_INPUTS: Record<string, { module: string; manifest: string }> =
     module: 'operator/runners/medchron/medchron/litigation/firm.py',
     manifest: 'litigation/litigation-firm.yaml',
   },
+  casefile: {
+    module: 'operator/runners/medchron/medchron/casefile/firm.py',
+    manifest: 'casefile/casefile-firm.yaml',
+  },
 }
 
 const NEED_KINDS = ['paths', 'tools', 'verbs', 'action_classes'] as const

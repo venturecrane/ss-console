@@ -104,6 +104,41 @@ WORDING: dict[str, dict[str, Any]] = {
             "all that is needed."
         ),
     },
+    # The Case File Manager (2026-10-26). Its reports are what the hold leaves
+    # true: ``full`` (a review that filed nothing), ``partial`` (a review that
+    # filed some File Statuses before it held, so "nothing new" would be false)
+    # and ``apply`` (approved changes). Every smd_finishing hold of this lane
+    # pages SMD (hold_class._CASEFILE, proof/watch.settle), which is what lets
+    # the words say so; none promises a later message.
+    "casefile": {
+        hold_class.SMD_FINISHING: {
+            "full": (
+                "The case file review is not filed yet, and nothing new has been put in the firm's files. "
+                "Nothing is needed from you; SMD has been told and is finishing it."
+            ),
+            "partial": (
+                "The case file review is not finished: some files have a new File Status, and the ranked list "
+                "is not filed yet. Nothing is needed from you; SMD has been told and is finishing it."
+            ),
+            "apply": (
+                "The approved changes have not all been made. Nothing is needed from you; SMD has been told "
+                "and is looking at them."
+            ),
+        },
+        hold_class.NOTHING_IN_SCOPE: {
+            "full": (
+                "No files were reviewed: none of the firm's Open or Pending matters fit this request. Nothing "
+                "is needed from you."
+            ),
+        },
+        hold_class.STAFF_UNRESOLVED: {
+            "full": (
+                "Nothing was read: a name in the request does not match exactly one person on the firm's staff "
+                "list in Smokeball, so I did not guess. Whose files did you mean? Reply with their full name as "
+                "Smokeball shows it; that is all that is needed."
+            ),
+        },
+    },
 }
 
 #: ``<why>`` for staff_unresolved, by the kind the runner named (reassign/spec.Unresolved).
@@ -120,7 +155,7 @@ _UNRESOLVED = re.compile(r"^staff_unresolved:\s*(from|to|attorney)\s+(unknown|am
 _NAME = re.compile(r"[A-Za-z][A-Za-z .'-]{0,79}")
 #: The kinds whose state is held and whose reply this module words. Not the
 #: chronology: a held chronology is refused its reply (reply_binding).
-KIND_LANE = {"litigation_job": "litigation"}
+KIND_LANE = {"litigation_job": "litigation", "casefile_job": "casefile"}
 _FILE_MAX = 200
 
 
@@ -129,7 +164,21 @@ class HeldWordingRefused(BindingRefused):
     message quotes the text to send; the overlay hands it to the model."""
 
 
+def _casefile_report(row: dict[str, Any]) -> str:
+    """``apply``, ``partial`` (a File Status was filed before the hold, read
+    back: the job row's own files) or ``full``."""
+    if row.get("mode") == "apply":
+        return "apply"
+    try:
+        files = (json.loads(row.get("delivery_json") or "{}") or {}).get("files") or []
+    except (ValueError, AttributeError):
+        files = []
+    return "partial" if any(isinstance(f, dict) and f.get("role") == "file_status" for f in files) else "full"
+
+
 def _report(lane: str, row: dict[str, Any]) -> str:
+    if lane == "casefile":
+        return _casefile_report(row)
     report = str(row.get("report") or "status")
     return report if report in ("status", "deadlines", "reassign") else "status"
 

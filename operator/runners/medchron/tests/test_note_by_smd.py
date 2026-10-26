@@ -29,7 +29,9 @@ SECRET = "s3cr3t-handoff-bearer-value"
 DIGEST = "d" * 64
 #: The overlay's wake pin (hermes-smd-overlay shared/turn_sources.py WAKE_JOB,
 #: with ``note`` added in overlay#458): the turn binds to the job this names.
-WAKE_JOB = re.compile(r"\b(demand|drafting|chronology|litigation|negotiation|note) job ([0-9A-HJKMNP-TV-Z]{26})\b")
+WAKE_JOB = re.compile(
+    r"\b(demand|drafting|chronology|litigation|negotiation|note|casefile) job ([0-9A-HJKMNP-TV-Z]{26})\b"
+)
 
 
 class FakeClient:

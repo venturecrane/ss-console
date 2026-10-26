@@ -43,13 +43,14 @@ LANE_PREFIXES = {
     "DRAFTING": "drafting",
     "LITIGATION": "litigation",
     "NEGOTIATION": "negotiation",
+    "CASEFILE": "casefile",
     "MEDCHRON": "medchron",
 }
 #: Leading reason tokens a person writes when ending a job on purpose.
 _CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled"})
 IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}
 ENDED_BAD = {"HELD": "held", "FAILED": "failed"}
-_JOB_TYPE = re.compile(r"^(DEMAND|DRAFTING|LITIGATION|NEGOTIATION|MEDCHRON)_JOB_([A-Z_]+)$")
+_JOB_TYPE = re.compile(r"^(DEMAND|DRAFTING|LITIGATION|NEGOTIATION|CASEFILE|MEDCHRON)_JOB_([A-Z_]+)$")
 _REASON_HEAD = re.compile(r"^[a-z0-9_.-]+")
 
 

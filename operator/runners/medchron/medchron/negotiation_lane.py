@@ -51,7 +51,8 @@ STATE_ENV = "MEDCHRON_NEGOTIATION_STATE_DIR"
 MEMORY_ENV = "SMD_NEGOTIATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "negotiation-watch"
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid")
+#: The demand cgroup's other children (the case file job shares it too).
+BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid")
 CHILD_PID = "negotiation-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0

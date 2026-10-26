@@ -1126,6 +1126,16 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # inbound, not tool arguments. Status returns states and counts only.
     "litigation_job_submit": ActionClass.INTERNAL_WRITE,
     "litigation_job_status": ActionClass.READ,
+    # The case file job (hermes-smd-medchron, ss-console casefile_verbs.py).
+    # Submit queues a job on the Machine's own runner, which files a File
+    # Status into each matter it reads: INTERNAL_WRITE. Apply submit queues the
+    # changes the firm approved by number in its reply (called from the reply
+    # path, not exposed to the agent); it writes to the firm's own matters:
+    # INTERNAL_WRITE. The requester and request are the turn's verified
+    # inbound, not tool arguments. Status returns states and counts only.
+    "casefile_job_submit": ActionClass.INTERNAL_WRITE,
+    "casefile_job_status": ActionClass.READ,
+    "casefile_apply_submit": ActionClass.INTERNAL_WRITE,
     # The negotiation watch (hermes-smd-medchron/negotiation.py, ss-console
     # negotiation_verbs.py). Scheduled only: no submit tool exists (the cron's
     # pre_run submits to the broker directly). Status returns a notice's

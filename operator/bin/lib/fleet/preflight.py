@@ -40,6 +40,7 @@ LANE_VAULT_MARKERS: dict[str, str] = {
     "demand": "demand/",
     "drafting": "drafting/",
     "litigation": "litigation/",
+    "casefile": "casefile/",
 }
 
 

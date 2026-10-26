@@ -7,7 +7,7 @@ When a firm person emails an Operator seat, SMD (team@smd.services) gets:
   many calls were refused or failed, and the minutes to first reply;
 * a ``no_reply`` alarm when nothing has answered the request within
   :data:`NO_REPLY_AFTER` and nothing else is already handling it;
-* a ``job_done`` card when a demand, drafting, litigation status or chronology job the request started
+* a ``job_done`` card when a demand, drafting, litigation status, case file or chronology job the request started
   reaches ``delivered``, ``failed`` or ``held``;
 * a ``lane_unproven`` card the moment a request asks for a kind of job not
   proven on this seat (the lane-proof gate, ss-console
@@ -42,7 +42,7 @@ The three reads, all read-only:
 * ``audit_log``: ``REPLY_SENT`` / ``REPLY_HELD`` / ``REPLY_FAILED`` rows joined
   on the inbound's vendor message id, and the per-call rows of the replying
   session, classified with the SAME ``_classify_call`` the shortfall alert uses.
-* ``demand_jobs`` / ``drafting_jobs`` / ``litigation_jobs`` / ``medchron_jobs`` in the same audit db file, joined on
+* ``demand_jobs`` / ``drafting_jobs`` / ``litigation_jobs`` / ``casefile_jobs`` / ``medchron_jobs`` in the same audit db file, joined on
   ``request_ref`` (the request's internetMessageId). A seat without one of those
   tables simply has no jobs in that lane.
 
@@ -93,7 +93,7 @@ POST_TIMEOUT_SECONDS = 5.0
 TICK_BUDGET_SECONDS = 20.0
 MAX_CARDS_PER_TICK = 10
 
-JOB_LANES = ("demand", "drafting", "litigation", "medchron")
+JOB_LANES = ("demand", "drafting", "litigation", "medchron", "casefile")
 JOB_TERMINAL = ("delivered", "failed", "held")
 
 _TOOL_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")
@@ -301,6 +301,12 @@ _JOB_SQL = {
         "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, attempt, id"
         " FROM litigation_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
     ),
+    # A case file job spans the caseload and files into each matter it read,
+    # so it names no single matter on its card.
+    "casefile": (
+        "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, attempt, id"
+        " FROM casefile_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
+    ),
 }
 #: The same reads for a ledger older than the ``attempt`` column: attempt 1.
 _JOB_SQL_NO_ATTEMPT = {
@@ -321,6 +327,12 @@ _JOB_SQL_NO_ATTEMPT = {
     "litigation": (
         "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, 1 AS attempt, id"
         " FROM litigation_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
+    ),
+    # A case file job spans the caseload and files into each matter it read,
+    # so it names no single matter on its card.
+    "casefile": (
+        "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, 1 AS attempt, id"
+        " FROM casefile_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
     ),
 }
 
@@ -387,6 +399,10 @@ _HOLD_SQL = {
     ),
     "negotiation": (
         "SELECT id, request_ref, reason, created_at, updated_at, NULL AS matter_number FROM negotiation_jobs"
+        " WHERE reason LIKE 'lane_unproven:%' AND state IN ('queued', 'failed')"
+    ),
+    "casefile": (
+        "SELECT id, request_ref, reason, created_at, updated_at, NULL AS matter_number FROM casefile_jobs"
         " WHERE reason LIKE 'lane_unproven:%' AND state IN ('queued', 'failed')"
     ),
 }

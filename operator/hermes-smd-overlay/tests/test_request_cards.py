@@ -361,6 +361,37 @@ def test_a_scheduled_litigation_job_cards_no_request(ledger) -> None:
     assert _kinds(_decide(ledger, [_request(60)])) == ["no_reply"]
 
 
+def _casefile_table(ledger: _Ledger) -> None:
+    """The case file ledger's columns this lane reads; no matter_number (a case
+    file job spans a caseload), so the lane must select NULL for it."""
+    ledger.conn.execute(
+        "CREATE TABLE casefile_jobs (id TEXT PRIMARY KEY, created_at TEXT, "
+        "updated_at TEXT, state TEXT, request_ref TEXT, reason TEXT, attempt INTEGER)"
+    )
+    ledger.conn.commit()
+
+
+def test_a_casefile_job_suppresses_the_alarm_and_cards_when_it_ends(ledger) -> None:
+    """FALSIFIER: drop "casefile" from JOB_LANES and a queued case file job
+    neither suppresses the no-reply alarm nor cards when it ends."""
+    _casefile_table(ledger)
+    ledger.conn.execute(
+        "INSERT INTO casefile_jobs (id, created_at, updated_at, state, request_ref, reason, attempt) "
+        "VALUES (?,?,?,?,?,?,?)",
+        ("cf1", _ts(15), _ts(10), "running", IMID, None, 1),
+    )
+    ledger.conn.commit()
+    assert _decide(ledger, [_request(60)]) == []
+    ledger.conn.execute(
+        "UPDATE casefile_jobs SET state='held', reason='scope_empty: none', updated_at=?", (_ts(4),)
+    )
+    ledger.conn.commit()
+    cards = _decide(ledger, [_request(60)])
+    assert _kinds(cards) == ["job_done"]
+    assert cards[0]["job"]["lane"] == "casefile" and cards[0]["job"]["state"] == "held"
+    assert cards[0]["matter"] is None
+
+
 #: The console's reason contract (ss-console src/lib/operator/request-card.ts
 #: TOKEN_RE): a card whose job reason fails it is refused outright.
 _CONSOLE_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")

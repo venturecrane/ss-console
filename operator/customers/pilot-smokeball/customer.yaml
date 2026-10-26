@@ -752,6 +752,21 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # The Case File Manager (increment 1, 2026-10-26): bound on request only,
+      # the pilot proves the path (case-file-manager.full and .apply) before
+      # any client seat runs it. No cron row. The library matter is named by
+      # its number; the job resolves it to exactly one Open matter on this
+      # tenant before anything is paid, or holds library_unresolved.
+      - name: case-file-manager
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: 'Case File Manager'
+          library_matter_number: '2026-OPS-LIBRARY'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
