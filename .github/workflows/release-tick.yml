@@ -24,6 +24,16 @@
 # derived from the Cloudflare token (scripts/lib/r2-creds.sh); verify-ledger
 # rows go to crane-context with CRANE_RELAY_KEY.
 #
+# URGENT ONE-SEAT RELEASE. Run it by hand (Actions > release-tick > Run workflow,
+# which works from a phone) and pick a seat: the release goes to that seat alone,
+# now, with no ring order and no bake. It keeps every other safeguard: the seat's
+# own self-test judges it, a failure rolls the seat back, holds are honored, and a
+# running client job is waited for (up to 30 minutes), never interrupted. It runs
+# in its own concurrency lane per seat, so it never queues behind a tick; the seat
+# lease keeps it and a tick from deploying the same seat at once. The seat is then
+# done on that release, so the tick skips it. Usual sequence for an urgent fix:
+# merge, wait for Deploy to build the image (about 6 minutes), run with the seat.
+#
 # EXIT CODES. 0 progress, 5 waiting (bake, lease held, nothing to do) and 6 a
 # standing halt that already paged are green runs; 1 (this run halted the
 # release), 3 and 4 fail the run.
@@ -43,6 +53,14 @@ on:
         description: 'Image release id, or latest'
         required: false
         default: latest
+      seat:
+        description: 'Urgent: release to this one seat now (none = the normal ring-by-ring step)'
+        type: choice
+        required: false
+        default: none
+        # One option per seat in operator/fleet/rings.yaml; the conformance test
+        # fails when they drift.
+        options: [none, smd-staging, pilot-smokeball, scott, brokery, captain-mark, ashton-price]
       dry_run:
         description: 'Plan only: deploy and record nothing'
         type: boolean
@@ -53,8 +71,10 @@ permissions:
   contents: read
   packages: read
 
+# Ticks serialize in one lane. An urgent one-seat run gets a lane per seat, so it
+# never waits behind a tick that is baking or waiting out a busy seat.
 concurrency:
-  group: release-tick
+  group: ${{ (inputs.seat && inputs.seat != 'none') && format('release-seat-{0}', inputs.seat) || 'release-tick' }}
   cancel-in-progress: false
 
 jobs:
@@ -74,6 +94,7 @@ jobs:
     env:
       RELEASE: ${{ inputs.release || 'latest' }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      SEAT: ${{ inputs.seat || 'none' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,6 +163,23 @@ jobs:
           source scripts/lib/r2-creds.sh
           derive_r2_creds
           export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          if [ "$SEAT" != "none" ]; then
+            # Urgent one-seat release: the same rollout a tick runs for that seat,
+            # judged by the seat's self-test with no ssh fallback, and a running
+            # client job waited for up to 30 minutes.
+            args=(release "$RELEASE" --only "$SEAT" --verify selftest --no-ssh-fallback --max-idle-wait 1800)
+            if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
+            set +e
+            operator/bin/fleet "${args[@]}"
+            rc=$?
+            set -e
+            case "$rc" in
+              0) echo "::notice::urgent release: $SEAT is on $RELEASE and passed its self-test" ;;
+              4) echo "::error::urgent release: refused before anything ran (another rollout holds $SEAT, or the release is unknown); see the log" ;;
+              *) echo "::error::urgent release: exit $rc on $SEAT (1 = the seat failed, was refused, rolled back or is still busy); see the log" ;;
+            esac
+            exit "$rc"
+          fi
           args=(release "$RELEASE" --tick --max-idle-wait 600)
           if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
           set +e

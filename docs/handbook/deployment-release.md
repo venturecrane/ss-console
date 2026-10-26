@@ -393,6 +393,14 @@ There is no approval step before the client ring. The bake, the busy gate and
 holds protect it, and a hold set by any session is read before every seat; a
 required approval would put a person back on every release.
 
+**An urgent fix for one seat skips the queue.** Merge the fix, let Deploy build
+the image (about 6 minutes), then run `release-tick` by hand (Actions, Run
+workflow; it works from a phone) and pick the seat. That release goes to the one
+seat now, with no ring order and no bake. The seat's self-test still judges it,
+a failure still rolls it back, a hold is still honored, and a running client job
+is still waited for, up to 30 minutes. It runs in its own lane per seat, so it
+never queues behind a tick, and the tick later skips the seat as done.
+
 **Credentials.** The protected GitHub environment `fleet-release` (deployable
 from `main` only) holds one Fly deploy token per seat app,
 `FLY_DEPLOY_TOKEN__<SLUG>` (upper case, `-` as `_`), and `FLY_REGISTRY_TOKEN`
