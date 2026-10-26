@@ -423,6 +423,21 @@ def _ringed_seats() -> list[str]:
     return [seat for ring in doc.get("rings") or [] for seat in ring.get("seats") or []]
 
 
+def test_release_tick_installs_every_tool_a_seat_render_needs() -> None:
+    """The tick renders each seat's fly.toml with operator/bin/lib/render-fly-toml.sh,
+    which calls `uv run --with pyyaml`. The first live tick (2026-10-26) ran on a
+    runner without uv: every render failed and the tick halted at ring 0 as
+    tooling_error. The unit tests stub the renderer, so only this pin catches it."""
+    render = (REPO_ROOT / "operator/bin/lib/render-fly-toml.sh").read_text(encoding="utf-8")
+    assert "uv run" in render, "the renderer no longer needs uv; drop this test with it"
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    steps = wf["jobs"]["tick"]["steps"]
+    uses = [str(s.get("uses") or "") for s in steps]
+    names = [str(s.get("name") or "") for s in steps]
+    assert any(u.startswith("astral-sh/setup-uv@") for u in uses), "the tick job must set up uv"
+    assert names.index("Set up uv") < names.index("Tick"), "uv must be installed before the tick runs"
+
+
 def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
     """The tick reads the per-app Fly tokens, so it runs only in the protected
     environment, on main, one at a time, and on a schedule plus build completion."""

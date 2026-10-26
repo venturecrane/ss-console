@@ -102,6 +102,13 @@ jobs:
       - name: Install PyYAML
         run: python3 -m pip install --quiet 'pyyaml==6.0.3'
 
+      # operator/bin/lib/render-fly-toml.sh reads the seat's machine size with
+      # `uv run --with pyyaml`; without uv every seat's render fails and the tick
+      # halts as tooling_error before deploying anything (the first live tick,
+      # 2026-10-26, run 40355171775). Same pinned action the substrate jobs use.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
       - name: Install flyctl
         run: |
           set -euo pipefail
