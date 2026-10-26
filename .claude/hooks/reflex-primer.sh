@@ -89,6 +89,7 @@ emit_laws() {
 14. A program's report about the world is a claim: a manifest, a completion, a wired map, or a done flag is proven by reading the world back after acting, never by echoing the statement that ran. Ask what the report would say if the action had matched nothing.
 15. Client documents (matter files, medical records, chronologies, anything made from them) are opened only in that client's ops workspace, never on a laptop. When a request would pull them, do not start it here: run ops-handoff <client> '<the task>' and tell the Captain to type ops <client>.
 16. Prove the path before you run it: before a paid run, restart, release or handoff on a client deliverable or long-running Operator job, write the whole path to delivery with every step proven by a probe (what runs, what it costs, what can stop it, what the client sees). An unproven step is a question, never a try; a defect found mid-run means re-prove the rest, not fix, redeploy and retry.
+17. Answer the client first, build second: when a client asks a question, the answer from what we already have goes to the Captain within the hour and to the client the same day. A session goal names what the client learns or gets, never the mechanism; every recommendation to build includes the option of answering by hand now, with its time and cost.
 Gate-enforced laws (mechanisms, not memory -- registry has the prose): 2 load-before-touch, 5 claims-trace, 6 authored-voice, 7 blast-radius, 9 deliverable-is-the-act, 11 signal-not-volume.
 PRIMER
 }

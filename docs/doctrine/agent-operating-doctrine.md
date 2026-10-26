@@ -436,6 +436,30 @@ It is `primer` rather than `gate` because no hook can see that a path was proven
 
 ---
 
+### Law 17: Answer the client first, build second
+
+```yaml
+id: answer-the-client-first
+primer_line: 'Answer the client first, build second: when a client asks a question, the answer from what we already have goes to the Captain within the hour and to the client the same day. A session goal names what the client learns or gets, never the mechanism; every recommendation to build includes the option of answering by hand now, with its time and cost.'
+cost: low
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - tests/doctrine-integrity.test.ts
+incidents:
+  - date: 2026-10-25
+    ref: 'A&P Pamplona update: the attorney asked what 222 uncovered files were and whether they were duplicates; the delivered run had already recorded the answer (photographs, court and claim papers, one duplicate, nothing to add). The session spent the day on ten PRs and seven proof runs of an update lane; the reply that night said the counts did not reconcile, and the plain answer went out by hand late that night as an SMD note (vfy_01M5VBSQWTWE7Z9XHS74P24PR9). Captain: "we never answered the clients question even until now."'
+escalation: none pending
+```
+
+A client's question is answered when the client has the answer. A system that could answer it, a document filed somewhere, or a lane that will answer the next one does not count. On 2026-10-25 the answer to an attorney's question was in a delivered run's own records by morning. The session offered the Captain one recommended path, "build now", with no "answer him now" option beside it, and wrote its goal as the mechanism ("reaches him from the Operator with no SMD hand"). Every hour after that went to the mechanism.
+
+So: state the answer, from data already on hand, to the Captain within the hour, in the client's terms. Get it to the client the same day by the fastest sound path; an SMD note (`docs/runbooks/operator/smd-note.md`) exists for exactly this. Building the machinery that answers the next request comes after, and never on the client's clock. When the Captain asks whether a request is satisfied, the first word is yes or no.
+
+It is `primer` because no hook can tell that a question was answered rather than worked on. The cost is `low`: one paragraph to the Captain before any build.
+
+---
+
 ## Mechanisms under review
 
 ```yaml
