@@ -35,6 +35,7 @@ other, which is the one thing ``load_entries``' collapsed ``{}`` cannot express.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -78,6 +79,10 @@ class _FakeConfig:
         domain = addr.rsplit("@", 1)[-1] if "@" in addr else ""
         roster = (self._raw.get("scope") or {}).get("inbound_allow_from") or []
         return any(e == addr or (e.startswith("@") and e == f"@{domain}") for e in roster)
+
+    @property
+    def admins(self) -> list:
+        return list((self._raw.get("scope") or {}).get("admins") or [])
 
     def sender_is_admin(self, sender: object) -> bool:
         if not isinstance(sender, str):
@@ -1416,3 +1421,176 @@ def test_tool_description_scopes_the_counts_line_to_the_self_description_depths(
     desc = plugin._SEAT_FACTS_DESCRIPTION
     assert "both depths" not in desc
     assert "'help' answer carries no counts line" in desc
+
+
+# --------------------------------------------------------------------------- #
+# The marketing section (ADR 0098 / 0099): registers, admins, research questions
+# --------------------------------------------------------------------------- #
+
+_DRAFTING = Path(__file__).resolve().parents[2] / "templates" / "drafting"
+_CHECKER = _DRAFTING / "advertising_gate_check.py"
+_REGISTERS = _DRAFTING / "fixtures" / "marketing-registers.example.yaml"
+
+
+def _marketing_raw() -> dict:
+    raw = _raw_config()
+    raw["seat"] = {"kind": "customer", "product": "operator", "role": "marketing"}
+    raw["scope"] = {
+        "inbound_allow_from": ["a@example-firm.test", "b@example-firm.test"],
+        "admins": ["a@example-firm.test", "@example-firm.test", 7],
+    }
+    return raw
+
+
+def _mbuild(sf, tmp_path, raw, **kw):
+    cfg = _FakeConfig(raw)
+    return sf.build_facts(
+        config_loader=lambda: cfg,
+        spec_manifest_module=_FakeManifest(),
+        home=str(tmp_path),
+        research_log=str(tmp_path / "research-log.jsonl"),
+        **kw,
+    )
+
+
+@pytest.fixture
+def gate_env(monkeypatch):
+    from shared import advertising_gate
+
+    monkeypatch.setenv(advertising_gate.GATE_PATH_ENV, str(_CHECKER))
+    monkeypatch.setenv(advertising_gate.REGISTERS_ENV, str(_REGISTERS))
+    return advertising_gate
+
+
+def test_marketing_seat_reads_registers_through_the_gates_own_loader(sf, tmp_path, gate_env):
+    """A marketing seat's file tools cannot read the staged registers (the record
+    store path fence), so the facts carry them, parsed by the gate's loader."""
+    _write_jobs(tmp_path, [])
+    m = _mbuild(sf, tmp_path, _marketing_raw())["marketing"]
+    assert m["available"] is True
+    assert m["admins"] == ["a@example-firm.test"]
+    assert m["firm"]["names"] == ["Rivera & Cole Injury Lawyers", "Rivera & Cole"]
+    assert m["firm"]["office_cities"] == ["Riverside"]
+    assert m["firm"]["phones"] == ["(951) 555-0142"]
+    assert {
+        "name": "Dana Rivera",
+        "title": "Partner",
+        "lawyer": True,
+        "languages": ["en", "es"],
+    } in m["roster"]
+    assert m["disclosures"]["blog"]["en"].startswith("This post is general information")
+    assert m["channels"]["gbp"] == {"identity_in_template": True}
+    assert "results" not in m and "testimonials" not in m and "blocklist" not in m
+    assert m["research_questions"]["items"] == []
+
+
+def test_marketing_seat_with_missing_registers_is_unavailable_never_guessed(
+    sf, tmp_path, gate_env, monkeypatch
+):
+    monkeypatch.setenv(gate_env.REGISTERS_ENV, str(tmp_path / "absent.yaml"))
+    _write_jobs(tmp_path, [])
+    m = _mbuild(sf, tmp_path, _marketing_raw())["marketing"]
+    assert m["available"] is False
+    assert "absent.yaml" in m["reason"]
+    assert "firm" not in m and "roster" not in m and "disclosures" not in m
+    assert m["admins"] == ["a@example-firm.test"]
+
+
+def test_marketing_seat_with_malformed_registers_is_unavailable(
+    sf, tmp_path, gate_env, monkeypatch
+):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("schema: 2\nfirm: {}\n", encoding="utf-8")
+    monkeypatch.setenv(gate_env.REGISTERS_ENV, str(bad))
+    _write_jobs(tmp_path, [])
+    m = _mbuild(sf, tmp_path, _marketing_raw())["marketing"]
+    assert m["available"] is False and "firm" not in m
+
+
+def test_non_marketing_seat_envelope_is_unchanged(sf, tmp_path, monkeypatch):
+    """No role, or another role: no marketing key and the builder is never
+    called, so every other seat's envelope is what it was before this section."""
+
+    def _never(*a, **k):
+        raise AssertionError("marketing facts built on a non-marketing seat")
+
+    monkeypatch.setattr(sf.marketing_facts, "build", _never)
+    _write_jobs(tmp_path, [])
+    for raw in (_raw_config(), {**_raw_config(), "seat": {"role": "couples"}}):
+        for depth in ("introduction", "walkthrough", "help"):
+            facts = _mbuild(sf, tmp_path, raw, depth=depth)
+            assert "marketing" not in facts
+            assert facts["unreadable"] == [] or all(
+                u["section"] != "marketing" for u in facts["unreadable"]
+            )
+            expected = {"schema", "depth", "unreadable", *sf.SECTIONS}
+            if depth == "help":
+                expected.add("help")
+            assert set(facts) == expected
+
+
+def test_research_questions_are_this_month_and_last_only(sf, tmp_path):
+    from datetime import datetime, timezone
+
+    mf = sf.marketing_facts
+    log = tmp_path / "research-log.jsonl"
+    rows = [
+        {
+            "ts": "2026-08-30T10:00:00Z",
+            "question": "too old",
+            "mode": "web",
+            "item_count": 3,
+            "dropped": 0,
+        },
+        {
+            "ts": "2026-09-15T10:00:00Z",
+            "question": "last month",
+            "mode": "web",
+            "item_count": 3,
+            "dropped": 1,
+        },
+        {
+            "ts": "2026-10-02T10:00:00Z",
+            "question": "this month",
+            "mode": "youtube_channel",
+            "item_count": 8,
+            "dropped": 0,
+        },
+        {
+            "ts": "2026-11-01T00:00:00Z",
+            "question": "future",
+            "mode": "web",
+            "item_count": 0,
+            "dropped": 0,
+        },
+    ]
+    log.write_text("\n".join(json.dumps(r) for r in rows) + "\nnot json\n", encoding="utf-8")
+    got = mf.research_questions(str(log), now=datetime(2026, 10, 25, tzinfo=timezone.utc))
+    assert got["read"] is True
+    assert got["months"] == ["2026-09", "2026-10"]
+    assert got["items"] == [
+        {"date": "2026-09-15", "question": "last month"},
+        {"date": "2026-10-02", "question": "this month"},
+    ]
+    jan = mf.research_questions(str(log), now=datetime(2027, 1, 3, tzinfo=timezone.utc))
+    assert jan["months"] == ["2026-12", "2027-01"] and jan["items"] == []
+    many = tmp_path / "many.jsonl"
+    many.write_text(
+        "\n".join(
+            json.dumps({"ts": f"2026-10-{1 + i % 28:02d}T00:00:00Z", "question": f"q{i}"})
+            for i in range(80)
+        ),
+        encoding="utf-8",
+    )
+    capped = mf.research_questions(str(many), now=datetime(2026, 10, 30, tzinfo=timezone.utc))[
+        "items"
+    ]
+    assert len(capped) == mf.MAX_QUESTIONS and capped[-1]["question"] == "q79"
+
+
+def test_research_log_path_mirrors_the_sealed_reader():
+    from shared import sealed_reader
+
+    mf = load_plugin("hermes-smd-initiation").seat_facts.marketing_facts
+    assert mf.DEFAULT_RESEARCH_LOG == sealed_reader.DEFAULT_LOG_PATH
+    assert mf.RESEARCH_LOG_ENV == sealed_reader.LOG_PATH_ENV
