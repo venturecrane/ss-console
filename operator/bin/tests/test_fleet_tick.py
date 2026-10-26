@@ -6,11 +6,13 @@ Each test names its falsifier: the one change to the code that turns it red.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from bin.lib.fleet import cli
+from bin.lib.fleet import fly as fly_module
 from bin.lib.fleet.build import ImageExtractor
 from bin.lib.fleet.fly import Fly, FlyTokens, combine_tokens, seat_token_env_name
 from bin.lib.fleet.ledger import VerifyLedger, head_tail
@@ -242,6 +244,46 @@ def test_a_registry_call_carries_the_registry_token_alone() -> None:
     extractor = ImageExtractor(RecordingRunner(out="tok"), tokens=FlyTokens(CI_ENV))  # type: ignore[arg-type]
     extractor._auth()
     assert extractor.runner.calls[-1][1] == {"FLY_API_TOKEN": REG_TOK}  # type: ignore[attr-defined]
+
+
+class ScriptedRunner(RecordingRunner):
+    def __init__(self, result: Result) -> None:
+        super().__init__()
+        self.result = result
+
+    def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
+        super().run(argv, input_text=input_text, timeout=timeout, cwd=cwd, env=env)
+        return self.result
+
+
+def test_app_exists_asks_about_the_one_app_and_never_lists_the_org() -> None:
+    # FALSIFIER: an org-wide `fly apps list` is refused as unauthorized to the
+    # app-scoped token CI holds; every CI image build failed that way (rc 3)
+    # from 2026-10-26 16:39Z, run 40360962583 onward.
+    runner = RecordingRunner()
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
+    assert fly.app_exists("hermes-fleet")
+    argv, env = runner.calls[-1]
+    assert argv == ["fly", "status", "-a", "hermes-fleet", "--json"]
+    assert env == {"FLY_API_TOKEN": REG_TOK}
+
+
+def test_app_exists_reads_not_found_as_no_and_anything_else_as_a_tooling_error() -> None:
+    missing = 'Error: failed to get app: failed to run query (...): Could not find App "hermes-zz"'
+    fly = Fly(ScriptedRunner(Result(1, "", missing)), "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
+    assert fly.app_exists("hermes-fleet") is False
+    refused = "Error: unauthorized (Request ID: 01M5WVSBZ3EP8ENTTX85MA964K-lax)"
+    fly = Fly(ScriptedRunner(Result(1, "", refused)), "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
+    with pytest.raises(ToolingError, match="unauthorized"):
+        fly.app_exists("hermes-fleet")
+
+
+def test_no_fly_call_in_the_fleet_library_lists_the_whole_org() -> None:
+    # CI holds only app-scoped tokens. An org-wide verb compiles, passes every
+    # fake, and fails only in CI against Fly; this keeps the class out.
+    src = "".join(p.read_text(encoding="utf-8") for p in Path(fly_module.__file__).parent.glob("*.py"))
+    for verb in ('"apps", "list"', '"orgs"', '"apps", "ls"'):
+        assert verb not in src, f"org-wide fly call {verb} in operator/bin/lib/fleet"
 
 
 def test_tokens_never_reach_an_argv_and_repr_hides_them() -> None:
