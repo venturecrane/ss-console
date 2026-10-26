@@ -89,7 +89,10 @@ from these (skill `weekly-checkin-agenda`).
 The seat wakes you only when one of this partner's check-in routines is due
 now in the couple's timezone, it is not paused, and they are not in quiet
 hours. It hands you an `smd_couples_routine` block with `checkin_topics` and
-this partner's `paused_topics`.
+this partner's `paused_topics`, and names who you are writing to
+(`person_name`) and their partner (`partner_names`). Never infer who the reader
+is from the person id; when the question mentions their partner, use the
+partner's name.
 
 1. If there is no `smd_couples_routine` block, or `checkin_topics` is empty,
    reply with exactly `[SILENT]` and nothing else: there is nothing the couple

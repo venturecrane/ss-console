@@ -159,9 +159,21 @@ def due(
 
 
 def context_for(
-    state: dict[str, Any], skill: str, space_key: str, routines: list[dict[str, Any]], now: datetime
+    state: dict[str, Any],
+    skill: str,
+    space_key: str,
+    routines: list[dict[str, Any]],
+    now: datetime,
+    names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """What the run is told. Only what this space may read."""
+    """What the run is told. Only what this space may read.
+
+    ``names`` maps each authored person id to their authored name. A person's
+    run is told who it is talking to and who their partner is BY NAME: given
+    only an id, the model has to guess which partner it is addressing, and on
+    2026-10-26 it guessed wrong and asked Scott what Scott had done that he
+    appreciated."""
+    names = names or {}
     zone = _zone(state.get("timezone"))
     local = now.astimezone(zone) if zone is not None else now
     block: dict[str, Any] = {
@@ -174,11 +186,18 @@ def context_for(
         ],
         "checkin_topics": list(state.get("checkin_topics") or []),
     }
+    if space_key == SHARED and names:
+        block["people_names"] = [n for n in names.values() if n]
     if space_key.startswith(_PERSON_PREFIX):
         pid = space_key[len(_PERSON_PREFIX) :]
         people = state.get("people") if isinstance(state.get("people"), dict) else {}
         mine = people.get(pid) if isinstance(people.get(pid), dict) else {}
         block["person"] = pid
+        if names.get(pid):
+            block["person_name"] = names[pid]
+        partners = [n for other, n in names.items() if other != pid and n]
+        if partners:
+            block["partner_names"] = partners
         block["paused_topics"] = list(mine.get("paused_topics") or [])
         block["dates_lead_days"] = mine.get("dates_lead_days")
     return {CONTEXT_KEY: block}
@@ -193,7 +212,13 @@ def _emit(wake: bool, extra: dict[str, Any] | None = None, reason: str = "") -> 
     print(json.dumps(gate))
 
 
-def main(state_path: str, skill: str, space_key: str, people: list[str]) -> None:
+def main(
+    state_path: str,
+    skill: str,
+    space_key: str,
+    people: list[str],
+    names: dict[str, str] | None = None,
+) -> None:
     """The pre-run entry point. Never raises; always ends with the gate line."""
     try:
         try:
@@ -207,7 +232,7 @@ def main(state_path: str, skill: str, space_key: str, people: list[str]) -> None
         if not routines:
             _emit(False, reason=reason)
             return
-        _emit(True, context_for(state, skill, space_key, routines, now))
+        _emit(True, context_for(state, skill, space_key, routines, now, names))
     except Exception:  # noqa: BLE001 — a gate that cannot decide stays shut
         try:
             _emit(False, reason="gate error")

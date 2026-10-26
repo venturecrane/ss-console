@@ -639,3 +639,43 @@ def test_settings_read_carries_today(seat, monkeypatch):
     set_timezone(seat, monkeypatch)
     out = read(seat)
     assert isinstance(out["today"], str) and out["today"].count(",") == 2
+
+
+# ---------------------------------------------------------------------------
+# A person's routine knows who it is talking to (captain-mark 2026-10-26)
+# ---------------------------------------------------------------------------
+
+
+def test_a_persons_run_is_told_who_it_is_writing_to_and_who_their_partner_is(
+    seat, capsys, monkeypatch, tmp_path
+):
+    """2026-10-26: p2's gratitude slot was told only ``person: p2`` and asked
+    Scott what Scott had done that he appreciated. The run must carry the
+    reader's authored name and the partner's, from the stub the boot stages.
+    FALSIFIER: drop ``names`` from ``gate_stub`` or from ``context_for``."""
+    from bootstrap.translate import _real_slot_gate_stager
+
+    customer = seat_doc()
+    names = {p["id"]: p["name"] for p in customer["people"]}
+    reader, partner = customer["people"][1], customer["people"][0]
+    space_key = f"person:{reader['id']}"
+    ref = _real_slot_gate_stager(tmp_path, customer)("persona", "gratitude-prompts", space_key)
+    stub = (tmp_path / "persona" / "scripts" / ref).read_text()
+    assert reader["name"] in stub and partner["name"] in stub
+
+    state = _state()
+    state["routines"][0]["kind"] = "gratitude-prompts"
+    state["routines"][0]["space"] = space_key
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps(state))
+
+    class _Now(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ANN001
+            return TUE_8PM
+
+    monkeypatch.setattr(couples_gate, "datetime", _Now)
+    couples_gate.main(str(path), "gratitude-prompts", space_key, list(names), names)
+    block = json.loads(capsys.readouterr().out.splitlines()[0])[couples_gate.CONTEXT_KEY]
+    assert block["person_name"] == reader["name"]
+    assert block["partner_names"] == [partner["name"]]

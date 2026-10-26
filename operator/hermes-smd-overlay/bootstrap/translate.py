@@ -2701,13 +2701,16 @@ def _real_slot_gate_stager(
     skill-body script: the gate library and one stub per slot are written into
     ``<profile>/scripts/.smd-couples/`` (inside the directory Hermes' scheduler
     allows, outside the ``scripts/<skill>/`` tree the boot refresh owns). The
-    stub carries the slot's skill, space and the authored person ids."""
+    stub carries the slot's skill, space, and the authored person ids and names."""
     from shared import couples_slots, cron_space
 
     def stage(persona_slug: str, skill: str, space_key: str) -> str:
         cfg = cron_space.space_config(customer)
         people = [p.id for p in cfg.people] if cfg is not None else []
-        return couples_slots.stage_gate(profiles_root / persona_slug, skill, space_key, people)
+        names = {p.id: p.name for p in cfg.people} if cfg is not None else {}
+        return couples_slots.stage_gate(
+            profiles_root / persona_slug, skill, space_key, people, names
+        )
 
     return stage
 
