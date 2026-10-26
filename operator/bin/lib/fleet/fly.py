@@ -47,6 +47,9 @@ DEPLOY_SEAT_FAILURE_MARKERS = (
 )
 
 
+# What Fly answers, to any token, about an app that does not exist (probed
+# 2026-10-26 with an hermes-fleet-scoped deploy token and with an org login).
+APP_NOT_FOUND_MARKER = "could not find app"
 SEAT_TOKEN_PREFIX = "FLY_DEPLOY_TOKEN__"
 REGISTRY_TOKEN_ENV = "FLY_REGISTRY_TOKEN"
 MACAROON_SCHEME = "FlyV1 "
@@ -145,8 +148,20 @@ class Fly:
 
     # -- apps ------------------------------------------------------------------
     def app_exists(self, app: str) -> bool:
-        apps = _json(self._fly("apps", "list", "--json", app=app), "fly apps list")
-        return any(isinstance(a, dict) and (a.get("Name") or a.get("name")) == app for a in apps or [])
+        """Ask about the one app, never list the org.
+
+        CI holds only app-scoped tokens, and Fly refuses an org-wide ``apps list``
+        from those as unauthorized: every CI image build failed that way from
+        2026-10-26 16:39Z until this changed. ``status -a`` is allowed to the
+        app's own token, and a missing app answers "Could not find App" to any
+        token. Anything else is a tooling error, not a "no".
+        """
+        res = self._fly("status", "-a", app, "--json", app=app)
+        if res.ok:
+            return True
+        if APP_NOT_FOUND_MARKER in res.text.lower():
+            return False
+        raise ToolingError(f"fly status -a {app} failed (rc={res.rc}): {res.text.strip()[-300:]}")
 
     def create_app(self, app: str, org: str = "personal") -> None:
         require_ok(self._fly("apps", "create", app, "--org", org, app=app), f"fly apps create {app}")
