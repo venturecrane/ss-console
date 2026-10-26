@@ -382,7 +382,9 @@ def test_a_casefile_job_suppresses_the_alarm_and_cards_when_it_ends(ledger) -> N
     )
     ledger.conn.commit()
     assert _decide(ledger, [_request(60)]) == []
-    ledger.conn.execute("UPDATE casefile_jobs SET state='held', reason='scope_empty: none', updated_at=?", (_ts(4),))
+    ledger.conn.execute(
+        "UPDATE casefile_jobs SET state='held', reason='scope_empty: none', updated_at=?", (_ts(4),)
+    )
     ledger.conn.commit()
     cards = _decide(ledger, [_request(60)])
     assert _kinds(cards) == ["job_done"]

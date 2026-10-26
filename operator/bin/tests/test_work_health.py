@@ -132,7 +132,10 @@ def test_a_case_file_job_is_read_and_held_to_its_own_lane_limit():
     ]
     items = wh.job_items(SEAT, rows, CFG, NOW)
     assert _kinds(items) == ["job_stuck"] and "case file" in items[0].what
-    inside = [_job("CASEFILE", "SUBMITTED", NOW - timedelta(hours=1)), _job("CASEFILE", "RUNNING", NOW - timedelta(minutes=59))]
+    inside = [
+        _job("CASEFILE", "SUBMITTED", NOW - timedelta(hours=1)),
+        _job("CASEFILE", "RUNNING", NOW - timedelta(minutes=59)),
+    ]
     assert wh.job_items(SEAT, inside, CFG, NOW) == []
 
 
