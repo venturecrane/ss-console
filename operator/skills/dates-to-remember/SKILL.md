@@ -119,7 +119,9 @@ shared group. Both writes land at once; tell them it is added.
 
 The seat wakes you when this partner's reminder routine is due (outside their
 quiet hours, not paused) and hands you an `smd_couples_routine` block with the
-couple's `timezone` and this partner's `dates_lead_days`.
+couple's `timezone`, this partner's `dates_lead_days`, and who you are writing
+to (`person_name`) and their partner (`partner_names`). Never infer who the
+reader is from the person id: "this partner's own birthday" is `person_name`'s.
 
 1. If there is no `smd_couples_routine` block, reply with exactly `[SILENT]`.
    List `dates` and read each `date-` record and this partner's

@@ -80,15 +80,23 @@ def stub_name(skill: str, space_key: str) -> str:
     return f"{skill}@{space_key.replace(':', '-')}.py"
 
 
-def gate_stub(state_path: str, skill: str, space_key: str, people: list[str]) -> str:
+def gate_stub(
+    state_path: str,
+    skill: str,
+    space_key: str,
+    people: list[str],
+    names: dict[str, str] | None = None,
+) -> str:
     """The per-slot pre-run script: the slot's identity, baked in at boot from
-    authored values, handed to the shared gate."""
+    authored values (person ids and their authored names), handed to the shared
+    gate."""
     return (
         "# Generated at boot by hermes-smd (shared.couples_slots). Do not edit.\n"
         "import os\nimport sys\n\n"
         "sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\n"
         "import couples_gate  # noqa: E402\n\n"
-        f"couples_gate.main({state_path!r}, {skill!r}, {space_key!r}, {list(people)!r})\n"
+        f"couples_gate.main({state_path!r}, {skill!r}, {space_key!r}, {list(people)!r}, "
+        f"{dict(names or {})!r})\n"
     )
 
 
@@ -110,13 +118,19 @@ def _write(target: Path, content: bytes) -> None:
         raise
 
 
-def stage_gate(profile_dir: Path, skill: str, space_key: str, people: list[str]) -> str:
+def stage_gate(
+    profile_dir: Path,
+    skill: str,
+    space_key: str,
+    people: list[str],
+    names: dict[str, str] | None = None,
+) -> str:
     """Stage the gate library and this slot's stub under the profile's scripts
     dir. Returns the ref Hermes resolves under ``scripts/``."""
     scripts = profile_dir / "scripts" / GATE_DIR
     _write(scripts / GATE_LIB, Path(couples_gate.__file__).read_bytes())
     name = stub_name(skill, space_key)
-    stub = gate_stub(str(cs.settings_path()), skill, space_key, people)
+    stub = gate_stub(str(cs.settings_path()), skill, space_key, people, names)
     _write(scripts / name, stub.encode("utf-8"))
     return f"{GATE_DIR}/{name}"
 
