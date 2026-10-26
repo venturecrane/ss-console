@@ -224,6 +224,14 @@ connectors:
       mailbox: operator@smdopslab.onmicrosoft.com
       secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'
     poll_seconds: 45
+  # ADR 0099: SMD's own sandbox carries the sealed reader (web_research) so the
+  # web_derived path is proven here before any client seat relies on it.
+  # SMD-keyed Brave search (ADR 0070); key staged at next reprovision.
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
+    sealed_reader: true
 
 # ---- WEBHOOK TRIGGERS ----
 # The e2e wake path: a new message in the operator's sandbox inbox (delivered

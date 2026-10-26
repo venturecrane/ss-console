@@ -250,12 +250,15 @@ connectors:
     backend: mcp:ga4
     enabled: false
     property_id: 0
-  # Search only, on SMD's key (ADR 0070): news, statutes and decisions for the
-  # topic slate and posts. Fenced; a turn that searched cannot send outside.
+  # Search only, on SMD's key (ADR 0070), and ONLY through the sealed reader
+  # `web_research` (ADR 0099): the marketing role disables the native web
+  # toolset. A turn that researched is web_derived and may email only the
+  # exact scope.admins; the skills take those addresses from operator_seat_facts.
   WebSearch:
     adapter: brave
     backend: 'native:brave-free'
     enabled: true
+    sealed_reader: true
 
 webhook_triggers:
   - source: msgraph

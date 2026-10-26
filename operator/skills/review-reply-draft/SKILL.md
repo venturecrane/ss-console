@@ -116,10 +116,13 @@ Then decide the kind:
 
 ## Procedure
 
-1. `read_file` on `/var/lib/smd-config/marketing/marketing-firm.yaml` for
-   `review_reply.offline_contact` and `firm.names`. If the offline contact is
-   not authored, a negative reply uses only the professional-obligations
-   sentence from the library (no invitation), and you say so in the cover.
+1. `operator_seat_facts` (depth `introduction`), its `marketing` section, for `review_reply_contact` (the
+   registers' `review_reply.offline_contact`) and `firm.names`. If the section
+   is absent or says `available: false`, draft nothing and reply in one line
+   that the firm's registers could not be read, naming the `reason`. If the
+   offline contact is not authored, a negative reply uses only the
+   professional-obligations sentence from the library (no invitation), and you
+   say so in the cover.
 2. Read the `seat-reference` store's `tone-guide.md` if it exists (whether the
    firm signs replies, and how).
 3. Read the review (above) and decide its kind.
