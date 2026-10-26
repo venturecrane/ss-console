@@ -109,4 +109,16 @@ lanes:
       from the Operator mailbox, words verbatim, located in Sent Items; an
       identical rerun and an identifier the request did not carry were both
       refused (vfy_01M5137PJ2AHY35BXQ2SGBW6R9).
+  medical-chronology-maintainer.update_delivered:
+    proven_at: '2026-10-26'
+    evidence: >-
+      An update into a delivered chronology (ss#3493, ss#3496, ss#3507,
+      ss#3509..ss#3512, ss#3514, ss#3516). Proof run 7 of held job
+      01M5STAR2H734AEBQCRPN21FRB (attempt 20261026T030728Z, image
+      img-202610260246-7aac379e): passed at $0, already current, the records
+      review staged with every named file accounted for and no internal labels
+      (vfy_01M5V38115BP3VF8A7BP96EVF7). Accepted on the seat
+      2026-10-26T03:14Z; the live run filed the review, read it back by hash,
+      and replied in the requester's thread at 03:22Z
+      (vfy_01M5V3TKX51CRNS37YW765QTTA).
 revoked: []
