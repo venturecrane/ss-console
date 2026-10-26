@@ -30,6 +30,10 @@ from .casework_rules import _REPLIES, _append, _event, _numbers, _queued_note
 
 logger = logging.getLogger(__name__)
 
+#: The Case File Manager's lines are applied by that lane's runner, never by a
+#: task write queued here: an approved line is handed to the broker, which
+#: builds the apply from the ledger itself (``casefile_apply_submit``).
+CASEFILE_SKILL = "case-file-manager"
 APPROVED = "approved"
 HELD = "held"
 WRITES_QUEUED = "writes_queued"
@@ -150,6 +154,17 @@ def render_reply_confirmation(state: dict, outcomes: dict[str, str]) -> str:
         parts.append(f"Leaving {_named(state['left'])} {tail}.")
     if state["answered"]:
         parts.append(f"I already had your answer on {_named(state['answered'])}.")
+    applying = state.get("casefile_applying") or []
+    if applying:
+        pronoun = "it" if len(applying) == 1 else "each"
+        parts.append(
+            f"Making {_named(applying)} now; I'll reply in this thread once {pronoun} is done and checked."
+        )
+    stuck = sorted(set(state.get("casefile") or []) - set(applying))
+    if stuck:
+        parts.append(
+            f"I couldn't start {_named(stuck)} just now; SMD has been told and will follow up."
+        )
     if failed:
         pronoun, verb = ("it", "is") if len(failed) == 1 else ("them", "are")
         parts.append(
@@ -229,6 +244,10 @@ def _start_steps(
 
 
 def _act_on_approval(state: dict, number: int, group: list[dict]) -> None:
+    if any(row.get("skill") == CASEFILE_SKILL for row in group):
+        if number not in state["casefile"]:
+            state["casefile"].append(number)
+        return
     for row in group:
         payload = _payload(row)
         action = payload.get("action")
@@ -268,6 +287,7 @@ def reply_verdicts(
     casework_ledger_path: str,
     acts: CaseworkActs = CASEWORK_ACTS,
     escalation_ledger_path: str | None = None,
+    casefile_apply: Callable[[str, Any], dict] | None = None,
 ) -> str:
     """Resolve this turn's verified reply to its casework rows and act on it.
 
@@ -337,6 +357,8 @@ def reply_verdicts(
         "left": [],
         "answered": [],
         "not_recorded": [],
+        "casefile": [],
+        "casefile_applying": [],
         # The one dispatch this thread's rows carry (two were refused above).
         "names": sent_lines.labels(
             next(row.get("dispatch_ref") for group in listing.values() for row in group)
@@ -364,12 +386,36 @@ def reply_verdicts(
             _start_steps(append, group, session_id, number, thread_ref)
             _act_on_approval(state, number, group)
 
+    if state["casefile"]:
+        state["casefile_applying"] = _start_casefile_apply(
+            casefile_apply, thread_ref, origin, state["casefile"]
+        )
     if state["writes"]:
         acts.load(session_id, [write for _, write in state["writes"]])
         _REPLIES.put(session_id, state)
         count = len(state["writes"])
         return _reply(WRITES_QUEUED, "", writes=count, note=_queued_note(count, "reply_verdicts"))
     return _confirmed(session_id, state, {})
+
+
+def _start_casefile_apply(
+    casefile_apply: Callable[[str, Any], dict] | None,
+    thread_ref: str,
+    origin: Any,
+    numbers: list[int],
+) -> list[int]:
+    """Ask the broker to apply the Case File Manager lines approved on this
+    thread. The broker decides which lines: those this thread raised, approved
+    by a Named Administrator, not yet taken. Returns the numbers it took."""
+    if casefile_apply is None:
+        return []
+    try:
+        got = casefile_apply(thread_ref, origin) or {}
+    except Exception:  # noqa: BLE001 - a broker refusal or a dropped socket starts nothing; the reply says so
+        logger.warning("casework: the case file apply could not be queued")
+        return []
+    taken = got.get("lines") if got.get("accepted") else None
+    return sorted(n for n in taken or [] if n in numbers)
 
 
 def _confirmed(session_id: str, state: dict, outcomes: dict[str, str]) -> str:

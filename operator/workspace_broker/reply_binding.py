@@ -731,7 +731,7 @@ def _raise_casefile_lines(broker: BrokerContext, v: Verified, session_id: str) -
 
     try:
         raised = raise_lines(broker, v.job_id, v.conversation_id, session_id)
-    except Exception:  # noqa: BLE001 - the reply already went; a lost raise is logged and the lines stay proposed
+    except Exception:
         logger.exception("could not raise the case file lines of %s", v.job_id)
         return
     if raised and broker.ledger is not None:

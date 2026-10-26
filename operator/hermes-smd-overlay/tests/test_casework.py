@@ -1119,3 +1119,59 @@ def test_a_named_confirmation_passes_the_identifier_gate_on_a_turn_that_read_not
     assert not identifier_filter.check(text, register).unverified
     # Only the rendered names were seeded, never anything else.
     assert identifier_filter.check("matter 2026-PI-999", register).unverified
+
+
+def _casefile_row(n, task, kind="task"):
+    action = "close" if kind == "task" else "add_row"
+    return {
+        **_raise_row(n, _key(task, kind=kind), task, action),
+        "skill": "case-file-manager",
+        "kind": kind,
+        "payload": {
+            "action": action,
+            "class": "done" if kind == "task" else "open",
+            "evidence": ["job:x"],
+        },
+    }
+
+
+def _casefile_answer(path, broker, apply):
+    return json.loads(
+        casework.reply_verdicts(
+            session_id=REPLY_SESSION,
+            load_config=_Config,
+            verified_acker=lambda _s: {"name": "Dana Whitfield", "key": "k" * 64},
+            append=lambda event: broker.append(event) or {"ok": True},
+            fallthrough=lambda: "{}",
+            casework_ledger_path=path,
+            casefile_apply=apply,
+        )
+    )
+
+
+def test_case_file_lines_are_handed_to_the_broker_never_queued_as_task_writes(tmp_path, rows):
+    path = _ledger(tmp_path, [_casefile_row(1, "t-1"), _casefile_row(2, "med-1", "medicals")])
+    _reply_origin("yes to all")
+    broker: list = []
+    asked: list = []
+
+    def apply(thread, origin):
+        asked.append((thread, origin.sender_address))
+        return {"ok": True, "accepted": True, "job_id": "J", "lines": [1, 2]}
+
+    out = _casefile_answer(path, broker, apply)
+    assert out["status"] == "done"
+    assert [(e["event"], e["n"]) for e in broker] == [("approved", 1), ("approved", 2)]
+    assert asked == [(THREAD, ATTORNEY)]
+    assert not CASEWORK_ACTS.pending(REPLY_SESSION)
+    assert "Making 1 and 2 now" in out["confirmation_text"]
+
+
+def test_a_case_file_apply_the_broker_refuses_is_said_never_claimed(tmp_path, rows):
+    path = _ledger(tmp_path, [_casefile_row(1, "t-1")])
+    _reply_origin("yes")
+    out = _casefile_answer(
+        path, [], lambda _t, _o: {"ok": True, "accepted": False, "reason": "nothing_approved"}
+    )
+    assert "couldn't start 1" in out["confirmation_text"]
+    assert "Making" not in out["confirmation_text"]
