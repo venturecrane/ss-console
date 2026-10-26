@@ -300,9 +300,11 @@ skills:
   # All compositional: each scheduled email carries model-written drafts for
   # the firm's administrators, wrapped in `--- DRAFT <channel> ---` blocks
   # that the outbound advertising gate checks per channel, with the seat's
-  # output checklist on the whole body. A scheduled run sends only through
-  # `marketing_draft_send`, whose recipients are fixed in code (the seat's
-  # administrators on its roster), never chosen by the model. ----
+  # output checklist on the whole body. A scheduled run sends with
+  # `smd_send_message` to the exact `scope.admins` addresses that
+  # `operator_seat_facts` reports (the skill's `recipients: roster` lane); a
+  # run that read the web through `web_research` is web_derived, and the trust
+  # gate then refuses any recipient not on `scope.admins` (ADR 0099). ----
   marketing-topic-slate:
     render: compositional
     note: >-

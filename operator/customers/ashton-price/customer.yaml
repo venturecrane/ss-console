@@ -1114,6 +1114,12 @@ connectors:
   #
   # Documents ride the Smokeball Documents API (get_files_on_matter), not a
   # separate store.
+  # ADR 0070/0099: SMD-keyed search replacing the closed keyless fallback; key
+  # staged at next reprovision.
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
 
 # ---- WEBHOOK TRIGGERS ----
 # GO-LIVE POSTURE (Captain directive 2026-08-13, extending the 2026-08-12 cron

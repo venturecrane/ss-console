@@ -9,6 +9,7 @@ Where visitors came from: search 61 percent, direct 22 percent, social 9 percent
 Blog posts published: 9 (What to know about California's rules for e-bike riders, Driving in valley fog, and 7 more). Waiting for review in WordPress: 1.
 Radio episodes on the channel: 4.
 Topics picked for the month: 10. Press releases drafted: 0.
+Research questions for the month: 3. New California e-bike rules taking effect in 2027 (October 2), pedestrian safety near schools in Fresno County (October 2), what people ask after a rear-end collision (October 9).
 The e-bike post was the most read page in its first month.
 ```
 

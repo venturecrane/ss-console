@@ -25,7 +25,7 @@ metadata:
       admin_only: true
     skill_type: scheduled drafting (twice monthly) + on request
     weight: light # one short post from material already chosen
-    action_class: read + internal_write # the plan, the photos list and the firm's own posts are read; the plan records the topic used; one email to the reviewers
+    action_class: read + internal_write # the plan, the photos list and the firm's own posts are read; the plan records the topic used; one email to the administrators
     content_ceiling: staff # a draft for the firm's reviewer to post on the profile
     connectors:
       - wordpress # Website: the firm's newly published posts
@@ -50,12 +50,14 @@ posts nothing.
 
 ## Inputs
 
-This skill reads only the firm's own material, never the web.
+This skill reads only the firm's own material. It never calls
+`web_research`: after a web read the seat refuses every record-store write
+and the turn could email only the seat's administrators.
 
-1. The registers: `read_file` on
-   `/var/lib/smd-config/marketing/marketing-firm.yaml` for `firm.names`,
-   `firm.office_cities` and `channels.gbp.identity_in_template`. If it will not
-   read, or carries no firm name, draft nothing and end with that line.
+1. The registers and the administrators: `operator_seat_facts` (depth `introduction`), its `marketing` section, for `firm.names`,
+   `firm.office_cities`, `channels.gbp.identity_in_template` and `admins`.
+   If the section is absent or says `available: false`, draft nothing and end with one line saying the registers could not be read, naming the section's `reason`.
+   No firm name: the same.
 2. The `marketing-plan` store: `plan-<YYYY-MM>.md`. A topic with `gbp` in its
    channels and no `Gbp:` line yet comes first; then a topic whose blog post is
    published.
@@ -122,12 +124,15 @@ the `Photo:` line.
 
 ## Delivery
 
-- **Scheduled**: one email through `marketing_draft_send` (`subject`, `text`),
-  which fixes the recipients in code to the firm's administrators on this
-  seat's roster; you never name an address. `sent` is done; anything else did
-  not go, and its `reason` says why. If the tool is not available on this seat,
-  send nothing by any other tool and end the turn with one line saying the
-  draft was not delivered.
+- **Scheduled**: one email with `smd_send_message` (`to`, `subject`,
+  `text`). `to` is every address in the `marketing` section's `admins`,
+  exactly as listed; nothing goes in `cc` or `bcc`, and no other address is
+  ever named. This skill's `recipients: roster` setting is what lets a
+  scheduled turn reach the administrators, and the seat checks every recipient
+  against them in code and refuses anyone else. A result that starts `Sent`
+  went; anything else did not go and says why. If `admins` is empty, send
+  nothing and end the turn with one line saying the draft was not delivered
+  because this seat lists no administrators.
 - **On request**: one reply with `create_draft` addressed only to the sender,
   in their thread.
 

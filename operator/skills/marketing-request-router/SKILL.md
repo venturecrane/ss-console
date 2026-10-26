@@ -32,6 +32,7 @@ metadata:
     connectors:
       - email # the inbound email and the reply in the sender's thread
       - wordpress # Website: the firm's photographs go to the media library
+      - web_research # sealed reader, used only by the routed skills that research (ADR 0099)
 ---
 
 # Marketing Request Router
@@ -72,6 +73,18 @@ the same message. The full rubric, with the tells and tie-breaks, is
    the sender is one). Anyone else on the roster gets a one-line reply naming
    who at the firm can ask, and nothing is drafted or written. Help and
    general messages are open to the whole roster.
+3. **The web, and what follows it.** A routed skill reads the web only
+   through `web_research`, never another tool. After `web_research` returns,
+   this conversation can email only the seat's administrators (the exact
+   `admins` addresses `operator_seat_facts` reports in its `marketing`
+   section), and the seat refuses every record-store write. The reply to the
+   sender with `create_draft` still goes. So a turn that keeps anything (slate
+   picks, a plan entry, standing guidance) writes it before the first
+   `web_research` call, as each skill's procedure orders, and a general message
+   or a help request never calls `web_research` at all.
+4. **The firm's registers** (names, cities, roster, disclosures) come from
+   `operator_seat_facts` (its `marketing` section), never from a file path:
+   this seat's file tools read only skill files.
 
 ## Per class
 
@@ -96,7 +109,10 @@ the same message. The full rubric, with the tells and tie-breaks, is
   this turn**: read `blog-post-draft`'s procedure with `read_file` on
   `/app/skills/blog-post-draft/SKILL.md` and carry out its REQUEST or REVISE
   mode. If you cannot read the skill file this turn, say so plainly rather than
-  approximating it. One post per request.
+  approximating it. One post per request. REQUEST mode writes the plan entry
+  first, then reads its sources through `web_research`, then saves the pending
+  post and replies; REVISE mode reads no web unless the change asks for a new
+  source.
 - **Press release request** (asking for a press release, with the facts in
   the email) → **EXECUTE in this turn**: read `press-release-draft`'s
   procedure with `read_file` on `/app/skills/press-release-draft/SKILL.md`
@@ -111,7 +127,10 @@ the same message. The full rubric, with the tells and tie-breaks, is
   Profile post on `/app/skills/business-profile-post/SKILL.md`; a new topic
   slate on `/app/skills/marketing-topic-slate/SKILL.md`; the analytics note on
   `/app/skills/marketing-analytics-note/SKILL.md`. If you cannot read that
-  skill file this turn, say so plainly rather than approximating it.
+  skill file this turn, say so plainly rather than approximating it. The
+  slate, the YouTube draft and the analytics note read the web through
+  `web_research`; social and Business Profile drafts never do. Each replies
+  to the sender with `create_draft`, as its on-request procedure says.
 - **Standing guidance** → **EXECUTE in this turn**, per The reference shelf
   below.
 - **Send-as request** → **PROPOSE in this turn.** **Send as a staff member.**

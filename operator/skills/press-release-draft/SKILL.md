@@ -72,17 +72,19 @@ administrators; draft nothing.
 
 ## Rules from the registers
 
-`read_file` on `/var/lib/smd-config/marketing/marketing-firm.yaml`:
+`operator_seat_facts` (depth `introduction`), its `marketing` section. If the section is absent or says
+`available: false`, draft nothing and reply in one line that the firm's
+registers could not be read, naming the `reason`.
 
 - `firm.names` and `firm.office_cities`: the firm's name and office city in the
   dateline and the boilerplate.
 - `disclosures.results`: word for word, in the paragraph right after any
   result (a verdict, a settlement, an amount, a "win").
 - `roster`: a lawyer is named and titled only as the roster gives them.
-- `results`: when the release states a result, the registers should carry it
-  (the gate checks); if the email's figure is not in the registers, draft it as
-  given and ask, in the cover, that the firm add it to its results register
-  before release, because the gate will hold the draft until then.
+- Results are not in the section: the advertising gate checks every result
+  against the firm's results register on the way out. When the release states
+  a result, draft it as given; if the gate holds the draft for it, ask, in the
+  cover, that the firm add it to its results register before release.
 
 If the registers will not read or carry no firm name, office city or results
 disclaimer, draft nothing and reply saying which is missing.

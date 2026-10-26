@@ -134,6 +134,12 @@ connectors:
     # the account lists agentcrane@agentmail.to with the hermes-scott webhook
     # bound to it, and no scott@agentmail.to). Authored, not derived.
     inbox_address: agentcrane@agentmail.to
+  # ADR 0070/0099: SMD-keyed search replacing the closed keyless fallback; key
+  # staged at next reprovision.
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
 
 webhook_triggers:
   # One trigger per (source, event); it names ONE skill. Re-pointed from

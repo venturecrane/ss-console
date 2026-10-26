@@ -29,8 +29,6 @@ Sources: https://www.insurance.ca.gov/example
 Why: seasonal; Caltrans has announced lane closures for December.
 Suggested for: social, gbp
 Sources: https://dot.ca.gov/example
-
-Sources were read from search results only.
 ```
 
 Why it passes: no topic names a person involved in a news event, describes
