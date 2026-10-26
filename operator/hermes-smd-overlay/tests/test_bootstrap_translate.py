@@ -390,7 +390,10 @@ def test_translate_pins_upstream_defaults_that_flipped_in_v0_20(tmp_path):
     # No timeout key: the gateway approval wait is 300s at both tags.
     assert "timeout" not in config["approvals"]
     assert config["display"] == {"show_reasoning": False}
-    assert list(config)[-4:] == ["tools", "approvals", "display", "auxiliary"]
+    # A delivered routine is only what the agent wrote: no "Cronjob Response"
+    # header, no "stop reminder" footer (captain-mark, 2026-10-26).
+    assert config["cron"] == {"wrap_response": False}
+    assert list(config)[-5:] == ["tools", "approvals", "display", "cron", "auxiliary"]
 
 
 def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
@@ -427,7 +430,7 @@ def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
     assert config["gateway"]["loop_watchdog"] is True
     assert config["gateway"]["loop_watchdog_max_strikes"] in (6, 12)
     # Still appended before the three pin-only keys.
-    assert list(config)[-5:] == ["gateway", "tools", "approvals", "display", "auxiliary"]
+    assert list(config)[-6:] == ["gateway", "tools", "approvals", "display", "cron", "auxiliary"]
 
 
 def test_translate_emits_disabled_toolsets_fleet_default(tmp_path):
