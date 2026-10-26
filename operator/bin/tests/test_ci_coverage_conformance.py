@@ -469,6 +469,34 @@ def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
     assert "--tick" in runs and "operator/bin/fleet" in runs
 
 
+def test_the_urgent_one_seat_release_offers_every_ringed_seat_and_nothing_else() -> None:
+    """The dispatch dropdown is the only way to name a seat from a phone. A seat
+    added to rings.yaml without a line here could not get an urgent fix; a stale
+    line names a seat that no longer exists."""
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    seat = _on_block(wf)["workflow_dispatch"]["inputs"]["seat"]
+    assert seat.get("type") == "choice" and seat.get("default") == "none"
+    assert seat["options"][0] == "none"
+    assert sorted(seat["options"][1:]) == sorted(_ringed_seats())
+
+
+def test_the_urgent_one_seat_release_keeps_the_seat_safeguards_and_its_own_lane() -> None:
+    """One seat, now, judged by its own self-test with no ssh fallback, a running
+    client job waited for. It runs in a per-seat concurrency lane so it never
+    queues behind a tick (the seat lease stops a double deploy)."""
+    text = RELEASE_TICK_PATH.read_text(encoding="utf-8")
+    wf = yaml.safe_load(text)
+    runs = _job_runs(wf["jobs"]["tick"])
+    urgent = runs.split('if [ "$SEAT" != "none" ]; then', 1)[1].split("\nfi\n", 1)[0]
+    for flag in ('--only "$SEAT"', "--verify selftest", "--no-ssh-fallback", "--max-idle-wait"):
+        assert flag in urgent, f"the urgent release must pass {flag}"
+    assert "--tick" not in urgent
+    group = str((wf.get("concurrency") or {}).get("group"))
+    assert "release-seat-" in group and "inputs.seat" in group and "'release-tick'" in group, (
+        "an urgent run needs its own lane per seat; every tick shares one"
+    )
+
+
 def test_release_automation_never_forces_a_busy_seat_or_accepts_lane_inputs() -> None:
     for path in (RELEASE_TICK_PATH, DEPLOY_PATH):
         text = path.read_text(encoding="utf-8")
