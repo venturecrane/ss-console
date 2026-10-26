@@ -73,7 +73,7 @@ ADR 0007 exists to prevent.
    `done` on the release, at least one is, the newest of their `finished_at`
    is at least that ring's `bake_minutes` old, and no `selftest_failing`,
    `image_drift` or `rollout_failed` alarm is open on those seats.
-   `bake_minutes` defaults to 30; a seat may author `bake_minutes` in its
+   `bake_minutes` defaults to 10 (30 until 2026-10-26; at six seats the wait cost more than it caught); a seat may author `bake_minutes` in its
    `seat.yaml`, and a ring bakes for the longest value any of its seats
    authors, rendered into `operator/fleet/rings.yaml` by
    `scripts/gen-seat-registries.ts`. (`rollout_failed` is event-shaped and

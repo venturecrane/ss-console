@@ -229,7 +229,7 @@ describe('renderers', () => {
       seat('first', 0, '2026-05-01'),
     ])
     expect(yaml.slice(yaml.indexOf('\nrings:') + 1)).toBe(
-      'rings:\n  - ring: 0\n    seats: [first]\n    bake_minutes: 30\n  - ring: 2\n    seats: [mid, zeta, alpha]\n    max_parallel: 1\n'
+      'rings:\n  - ring: 0\n    seats: [first]\n    bake_minutes: 10\n  - ring: 2\n    seats: [mid, zeta, alpha]\n    max_parallel: 1\n'
     )
   })
 
@@ -268,7 +268,7 @@ describe('renderers', () => {
     ])
     // FALSIFIER: take the first or the smallest value and ring 0 bakes 10.
     expect(yaml).toContain('  - ring: 0\n    seats: [a, b, c]\n    bake_minutes: 45\n')
-    expect(yaml).toContain('  - ring: 1\n    seats: [d]\n    bake_minutes: 30\n')
+    expect(yaml).toContain('  - ring: 1\n    seats: [d]\n    bake_minutes: 10\n')
     // The last ring has no next ring to gate.
     expect(yaml).toContain('  - ring: 2\n    seats: [e]\n    max_parallel: 1\n')
   })

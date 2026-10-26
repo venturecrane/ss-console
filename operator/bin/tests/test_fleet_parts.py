@@ -89,7 +89,7 @@ def test_bake_minutes_is_read_per_ring_with_the_default_when_absent(tmp_path: Pa
     f = tmp_path / "r.yaml"
     f.write_text("rings:\n  - ring: 0\n    seats: [a-seat]\n    bake_minutes: 45\n  - ring: 1\n    seats: []\n")
     rings = load_rings(f, tmp_path / "c")
-    assert [r.bake_minutes for r in rings] == [45, 30]
+    assert [r.bake_minutes for r in rings] == [45, 10]
     f.write_text("rings:\n  - ring: 0\n    seats: [a-seat]\n    bake_minutes: soon\n")
     with pytest.raises(ValueError, match="bake_minutes"):
         load_rings(f, tmp_path / "c")

@@ -370,7 +370,7 @@ Two workflows run the release (ADR 0096).
     `fleet release <id> --only <seat>`, or hold the seat.
   - otherwise the remaining seats of the first unfinished ring deploy, after
     **the bake**: every unheld seat of the ring before it done on the release
-    for that ring's `bake_minutes` (30 by default; a seat may author
+    for that ring's `bake_minutes` (10 by default; a seat may author
     `bake_minutes` in its `seat.yaml`, and the ring takes the longest, rendered
     into `operator/fleet/rings.yaml`), and no `selftest_failing` or
     `image_drift` alarm open on those seats. A ring whose every seat is held
