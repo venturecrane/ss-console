@@ -89,7 +89,9 @@ describe('the footer', () => {
     const text = renderReport(rows, 'then')
     expect(text).toContain('NEW KIND document-drafter.discovery_set job waiting')
     expect(text).toContain('NEW KIND file-work-requests first use')
-    expect(text).toContain('2 new kinds of ask, 0 requester messages on held jobs.')
+    expect(text).toContain(
+      '2 new kinds of ask, 0 requester messages on held jobs, 0 later replies sent.'
+    )
   })
 
   it('a reply line says what the request queued; a pre-0134 card says unknown, never none', () => {
@@ -110,7 +112,18 @@ describe('the footer', () => {
     expect(summarize(rows).heldReply).toBe(1)
     const text = renderReport(rows, 'then')
     expect(text).toContain('REQUESTER WROTE on held medchron job at +98m')
-    expect(text).toContain('1 requester messages on held jobs.')
+    expect(text).toContain('1 requester messages on held jobs, 0 later replies sent.')
+  })
+
+  it('a later reply is listed under its request and counted (0141)', () => {
+    const rows = [row(A, 'replied'), row(A, 'followup', { minutes: 50 })]
+    const s = summarize(rows)
+    expect(s.laterReplies).toBe(1)
+    // Grouped under the request it answers: one request, two cards.
+    expect(s.requests).toBe(1)
+    const text = renderReport(rows, 'then')
+    expect(text).toContain('later reply sent at +50m')
+    expect(text).toContain('1 later replies sent.')
   })
 
   it('a card not yet emailed says so', () => {

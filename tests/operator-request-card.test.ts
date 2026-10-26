@@ -560,6 +560,51 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(JSON.stringify(await rows())).not.toContain('UNIQUEWROTEMARK')
   })
 
+  it('a followup card is recorded and emailed with the later reply words (0141)', async () => {
+    // FALSIFIER: drop migration 0141 and the kind CHECK rejects the INSERT
+    // (500); drop 'followup' from CARD_KINDS and the parse refuses (400).
+    const res = await post(
+      body({
+        card_key: `${HASH}:followup-${'a'.repeat(16)}`,
+        kind: 'followup',
+        minutes: 50,
+        reply_opening: 'Correction: both records are unreadable UNIQUELATERMARK',
+        tools: [],
+      })
+    )
+    expect(res.status).toBe(200)
+    const [row] = await rows()
+    expect(row).toMatchObject({ kind: 'followup', minutes: 50, job_lane: null })
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
+    expect(sent.subject).toBe(`[SMD Ops] ${SLUG} later reply sent at +50m: ${SUBJECT}`)
+    expect(sent.text).toContain('UNIQUELATERMARK')
+    expect(sent.text).toContain('It is what the requester was told')
+    expect(sent.text).not.toMatch(/—/)
+    expect(JSON.stringify(await rows())).not.toContain('UNIQUELATERMARK')
+  })
+
+  it('a followup key must name its kind and carry no job (0141)', async () => {
+    const followup = { kind: 'followup', tools: [] }
+    // A followup key with the wrong suffix, a followup kind on a replied key,
+    // and a followup carrying a job are each a 400, never a partial card.
+    expect(
+      (await post(body({ ...followup, card_key: `${HASH}:followup-${'a'.repeat(15)}` }))).status
+    ).toBe(400)
+    expect((await post(body({ ...followup, card_key: `${HASH}:replied` }))).status).toBe(400)
+    expect(
+      (
+        await post(
+          body({
+            ...followup,
+            card_key: `${HASH}:followup-${'b'.repeat(16)}`,
+            job: { lane: 'medchron', state: 'held', reason: null },
+          })
+        )
+      ).status
+    ).toBe(400)
+  })
+
   it('no Resend key is a failure, never a pretend send', async () => {
     delete (testEnv as unknown as Record<string, unknown>).RESEND_API_KEY
     expect((await post(body())).status).toBe(502)
