@@ -647,6 +647,46 @@ a release, a job, a setting, a gate or an allowance; say who has access or who
 must act next; ask the sender to open, find or read anything in the matter;
 promise a time; or route the sender to SMD or offer SMD as somewhere to take it.
 
+## FOLLOW-UP - a question about the files a delivered chronology did not read
+
+The requester writes again on a DELIVERED chronology or update and asks about
+files it did not read ("which two files?", "why weren't these included?"). The
+answer is in the job's own record; never search for it and never guess it. On
+2026-10-26 the Operator read five lines of an 836-file listing looking for the
+files by name, told an attorney the listing was too large to search, guessed the
+files were scans with no text layer (the update had recorded that they were
+password-protected), and handed him a decision he did not need to make.
+
+1. **Read the job**: `medchron_job_status` with that delivery's `job_id` (from
+   the delivery memo, or the matter's newest delivered job). The single-job read
+   carries `uncovered_document_ids` and `uncovered_reasons`; the recent list
+   carries counts only, so it cannot answer this.
+2. **Name each file by id**: for every id in `uncovered_document_ids`,
+   `get_file(matter_id, file_id)` for its name. Never look a file up by name in
+   `get_files_on_matter`.
+3. **Word each reason only from `uncovered_reasons`**, with the fixed phrase for
+   its token:
+
+   | token                | say                                                                      |
+   | -------------------- | ------------------------------------------------------------------------ |
+   | `password_protected` | password-protected; it opens once someone sends an unlocked copy         |
+   | `no_text`            | it carries no readable text, so there was nothing in it to read          |
+   | `image_unreadable`   | an image the page reading could not make out                             |
+   | `not_pdf_or_image`   | not a PDF or an image, so it is not a type the chronology reads          |
+   | `retrieval_failed`   | it could not be downloaded from the matter when the chronology was built |
+   | `not_explained`      | the record does not say why                                              |
+
+   An id with no token (the map is missing, or a record written before reasons
+   existed) is said as "the record does not say why".
+
+4. **Reply once**, by `create_draft` to the sender: each file's name and its
+   phrase, then one sentence that the next update reads any of them that has
+   become readable. Nothing more.
+
+**Never:** guess a cause the record does not state; describe what a file looks
+like; say a listing is too large to search; offer the requester a decision or a
+list of options; or ask him to find, open or check a file.
+
 ## The autonomy dial
 
 Per ADR 0035 there are no imposed defaults. Routine 11 starts on request and, once

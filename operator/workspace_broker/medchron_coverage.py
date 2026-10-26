@@ -27,6 +27,15 @@ from typing import Any
 MAX_COVERED_IDS = 20_000
 MAX_ID_LEN = 200
 
+#: Why an uncovered document went unread, as a fixed code-authored token
+#: (``covered.why``). Never a file name or any text from a document: this
+#: record holds ids and counts only (ADR 0052). Pinned to the runner's
+#: ``medchron.uncovered_why.TOKENS`` by a test, since the two cannot import
+#: each other.
+WHY_TOKENS = frozenset(
+    {"retrieval_failed", "not_pdf_or_image", "image_unreadable", "password_protected", "no_text", "not_explained"}
+)
+
 
 def validate_covered(payload: Any) -> str:
     """The covered/uncovered document id sets, as JSON, or raise ValueError.
@@ -84,7 +93,29 @@ def validate_covered(payload: Any) -> str:
                 "a stage dropped rows between the coverage gate and this record"
             )
         out["pulled"] = pulled
+    if "why" in payload:
+        out["why"] = _validate_why(payload["why"], set(sets["uncovered"]))
     return json.dumps(out, sort_keys=True)
+
+
+def _validate_why(raw: Any, uncovered: set[str]) -> dict[str, str]:
+    """The optional `{uncovered id: token}` map, or raise ValueError.
+
+    Refused, never trimmed: a reason for an id the record calls covered, or a
+    value outside the vocabulary, means the runner wrote something this record
+    must not hold (a name, a sentence of a document), and storing the rest
+    would hide that.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("covered.why must be an object of document id to reason token")
+    out: dict[str, str] = {}
+    for key, token in raw.items():
+        if not isinstance(key, str) or key.strip() not in uncovered:
+            raise ValueError("covered.why names a document that is not in covered.uncovered")
+        if token not in WHY_TOKENS:
+            raise ValueError(f"covered.why holds a value outside the reason vocabulary {sorted(WHY_TOKENS)}")
+        out[key.strip()] = token
+    return dict(sorted(out.items()))
 
 
 def union_coverage(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -143,6 +174,18 @@ def union_coverage(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         "covered_document_ids": sorted(covered),
         "uncovered_document_ids": sorted(uncovered),
     }
+
+
+def parse_why(raw: Any) -> dict[str, str] | None:
+    """One row's stored reasons for its uncovered ids, or None when the row
+    carries no record or a record written before reasons existed."""
+    if not raw:
+        return None
+    try:
+        why = json.loads(raw).get("why")
+    except (ValueError, AttributeError):
+        return None
+    return dict(why) if isinstance(why, dict) else None
 
 
 def parse_covered(raw: Any) -> tuple[list[str] | None, list[str] | None]:
