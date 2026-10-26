@@ -322,10 +322,12 @@ class _TagExtractor:
         return self.answer
 
 
-def _builder(answer: str | Exception, logged: list[str]):
+def _builder(answer: str | Exception, logged: list[str], scoped: bool = False):
     from bin.lib.fleet.build import Builder
+    from bin.lib.fleet.fly import Fly, FlyTokens
 
-    return Builder(Path("."), None, None, None, None, _TagExtractor(answer), logged.append)  # type: ignore[arg-type]
+    fly = Fly(None, ".", FlyTokens({"GITHUB_ACTIONS": "true"} if scoped else {}))  # type: ignore[arg-type]
+    return Builder(Path("."), None, fly, None, None, _TagExtractor(answer), logged.append)  # type: ignore[arg-type]
 
 
 def test_the_build_records_the_registrys_digest_over_the_build_log() -> None:
@@ -345,6 +347,19 @@ def test_an_unreadable_registry_falls_back_to_the_build_log_and_says_so() -> Non
     printed = "sha256:" + "c" * 64
     assert _builder(ToolingError("HTTP 404 after 5 attempts"), logged).registry_digest("r:t", printed) == printed
     assert any("could not read" in m for m in logged)
+
+
+def test_an_unattended_build_never_records_an_unconfirmed_digest() -> None:
+    """In CI (scoped tokens) nobody reads a WARN: a digest the registry did not
+    confirm is the 10-25 wrong-digest release. FALSIFIER: drop the scoped raise."""
+    with pytest.raises(ToolingError, match="could not read"):
+        _builder(ToolingError("HTTP 401"), [], scoped=True).registry_digest("r:t", "sha256:" + "c" * 64)
+
+
+def test_an_unattended_build_skips_the_registry_app_check() -> None:
+    """A token scoped to the registry app proves it exists; asking the org is what
+    failed every CI build. FALSIFIER: drop the scoped early return."""
+    _builder("sha256:" + "1" * 64, [], scoped=True).ensure_registry_app()
 
 
 # -- render-fly-toml ------------------------------------------------------------------------

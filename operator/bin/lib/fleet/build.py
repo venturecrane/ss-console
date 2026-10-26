@@ -320,6 +320,10 @@ class Builder:
         return {"ss_console_sha": ss_sha, "overlay_ref": ss_sha, "hermes_sha": hermes}
 
     def ensure_registry_app(self) -> None:
+        if self.fly.tokens.scoped:
+            # A token scoped to the registry app proves it exists, and could not
+            # create it anyway.
+            return
         if not self.fly.app_exists(ids.FLEET_REGISTRY_APP):
             self.log(f"creating the registry app {ids.FLEET_REGISTRY_APP} (no Machines)")
             self.fly.create_app(ids.FLEET_REGISTRY_APP)
@@ -361,12 +365,16 @@ class Builder:
         ``sha256:`` string, which the registry answered 404 for while the tag
         served another digest; its artifacts were never read, and every skills
         release to the seat running it refused ("no image-capabilities.json").
-        The registry's own manifest for the tag is the truth. The build log's
-        digest is used only when the registry cannot be read, and a
-        disagreement is logged, never silent."""
+        The registry's own manifest for the tag is the truth. On a laptop the
+        build log's digest is used only when the registry cannot be read, and a
+        disagreement is logged, never silent. Unattended (scoped tokens, CI)
+        nobody reads that warning, so an unreadable registry fails the build."""
         try:
             got = self.extractor.tag_digest(image_ref)
         except ToolingError as exc:
+            if self.fly.tokens.scoped:
+                # Unattended (CI): never record a digest the registry did not confirm.
+                raise ToolingError(f"could not read {image_ref}'s digest from the registry: {exc}") from exc
             self.log(f"WARN: could not read {image_ref}'s digest from the registry ({exc}); using the build output's")
             return printed
         if printed and printed != got:
@@ -380,6 +388,8 @@ class Builder:
         try:
             files = self.extractor.extract(f"{release['image_ref']}@{digest}")
         except (ToolingError, OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as exc:
+            if self.fly.tokens.scoped:
+                raise ToolingError(f"could not read artifacts out of the image: {exc}") from exc
             self.log(f"WARN: could not read artifacts out of the image ({exc}); recording without capabilities")
             files = {}
         arrays = (
@@ -395,6 +405,8 @@ class Builder:
         for name in ("image-manifest.json", "image-capabilities.json"):
             if name in files:
                 self.r2.put_bytes(image_key(digest, name), files[name])
+            elif self.fly.tokens.scoped:
+                raise ToolingError(f"{name} not found in the image; refusing to record a release skills cannot reach")
             else:
                 self.log(f"WARN: {name} not found in the image; skills releases to this image will refuse")
         self.r2.put_json(image_key(digest, "release.json"), {**release, "hermes_sha": pins["hermes_sha"]})

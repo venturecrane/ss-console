@@ -145,8 +145,21 @@ class Fly:
 
     # -- apps ------------------------------------------------------------------
     def app_exists(self, app: str) -> bool:
-        apps = _json(self._fly("apps", "list", "--json", app=app), "fly apps list")
-        return any(isinstance(a, dict) and (a.get("Name") or a.get("name")) == app for a in apps or [])
+        """Whether ``app`` exists, asked of that app alone.
+
+        ``fly apps list`` is org-scoped and CI holds only app-scoped tokens, so
+        every CI build died on it (``unauthorized``); ``machines list -a`` works
+        under the app's own token. Under a scoped token "not found" is never
+        read as absent: a token that does not cover the app is answered the
+        same way, and calling an existing seat new is what ``seat-image`` exists
+        to prevent."""
+        res = self._fly("machines", "list", "-a", app, "--json", app=app)
+        if res.ok:
+            return True
+        if "app not found" in res.text.lower() and not self.tokens.scoped:
+            return False
+        tail = (res.stderr or res.stdout).strip().splitlines()[-1:]
+        raise ToolingError(f"could not tell whether {app} exists (rc={res.rc}): {' / '.join(tail)}")
 
     def create_app(self, app: str, org: str = "personal") -> None:
         require_ok(self._fly("apps", "create", app, "--org", org, app=app), f"fly apps create {app}")
