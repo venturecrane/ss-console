@@ -412,6 +412,23 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # on arrival (superseded the mcp:brave connector, whose whole layer was the
     # redundant wrapper that MCP-wrapped a native Hermes feature).
     "web_search": ActionClass.READ,
+    # Native web extract (WebExtract capability): Hermes' same `web` toolset
+    # fetches a page's text through the provider named in `web.extract_backend`
+    # (translate.py emits it only for an authored WebExtract connector whose key
+    # is present). READ for the reason web_search is: it reads a public page,
+    # writes nothing, sends nothing. Its result is fenced as inbound content
+    # (hermes-smd-inbound) and does not seed provenance. With no provider named,
+    # and keyless_fallback false on every seat, the tool answers "not
+    # configured" rather than routing a URL to an anonymous free tier.
+    "web_extract": ActionClass.READ,
+    # The sealed web reader (plugins/hermes-smd-research, ADR 0099). READ: it
+    # searches and reads public pages and returns schema-checked summaries; it
+    # writes nothing and sends nothing. It is NOT fenced (its output is
+    # code-validated summaries with checked links, not raw page text) and it
+    # seeds no provenance; instead it marks the turn web_derived, which the
+    # trust gate reads to refuse every sensitive action but a staff email to
+    # the seat's authored admins.
+    "web_research": ActionClass.READ,
     # msgraph-mail author-built connector (ss #1978 / ADR 0078 slice 1 — the
     # COORDINATED CHANGE its manifest.toml names). Runtime names are
     # mcp_msgraph_mail_<tool>. Classes mirror the manifest's tool_classes

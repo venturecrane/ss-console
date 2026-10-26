@@ -25,6 +25,15 @@ if authored_channel '^backend=native:brave'; then
   stage_secret_from_env BRAVE_SEARCH_API_KEY "${BRAVE_SEARCH_API_KEY:-}" "Brave Search API key (native brave-free provider; web search)"
 fi
 
+# Firecrawl web extract (WebExtract: native:firecrawl). FIRECRAWL_API_KEY is the
+# env var Hermes' firecrawl provider reads; SMD's shared, SMD-owned key (infra,
+# like Brave). Unset => skipped, and the overlay then does NOT name firecrawl as
+# the extract backend (an unkeyed explicit selection would route URLs to
+# Firecrawl's anonymous cloud), so web_extract answers "not configured".
+if authored_channel '^backend=native:firecrawl$'; then
+  stage_secret_from_env FIRECRAWL_API_KEY "${FIRECRAWL_API_KEY:-}" "Firecrawl API key (native firecrawl provider; web extract)"
+fi
+
 # WordPress (backend: mcp:wordpress, capability Website; a marketing seat). The
 # connector authenticates as ONE WordPress user the firm issues (a Contributor)
 # with an Application Password over HTTPS Basic auth. site_url and username are

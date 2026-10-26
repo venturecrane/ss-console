@@ -106,6 +106,8 @@ function checkOneConnector(
   const msgraph = checkMsgraph(key, adapter, value, errors)
   if (msgraph === null) return null
   if (!checkMarketingConnectorFields(key, backend, value, errors)) return null
+  const sealedReader = checkSealedReader(key, value['sealed_reader'], errors)
+  if (sealedReader === undefined) return null
   const enabled = typeof value['enabled'] === 'boolean' ? value['enabled'] : true
   const tokenRef = typeof value['token_ref'] === 'string' ? value['token_ref'] : null
   // ADR 0042: optional per-connector custody; null ⇒ inherit the client-level
@@ -130,7 +132,35 @@ function checkOneConnector(
     msgraph_auth: msgraph.msgraph_auth,
     poll_seconds: msgraph.poll_seconds,
     ...marketingConnectorFields(backend, value),
+    ...(sealedReader === true ? { sealed_reader: true } : {}),
   }
+}
+
+/**
+ * `sealed_reader` (ADR 0099): optional boolean, only on the WebSearch
+ * connector. Mirrors the overlay's `bootstrap/validate.py`. Returns the value
+ * (null when absent), or undefined when the connector must be dropped.
+ */
+function checkSealedReader(
+  key: string,
+  raw: unknown,
+  errors: ValidationError[]
+): boolean | null | undefined {
+  if (raw === undefined || raw === null) return null
+  const path = `connectors.${key}.sealed_reader`
+  if (key !== 'WebSearch') {
+    errors.push({
+      code: 'InvalidFormat',
+      path,
+      message: `sealed_reader is only valid on the WebSearch connector (connector is "${key}")`,
+    })
+    return undefined
+  }
+  if (typeof raw !== 'boolean') {
+    errors.push({ code: 'TypeMismatch', path, message: `${path} must be true or false` })
+    return undefined
+  }
+  return raw
 }
 
 /**

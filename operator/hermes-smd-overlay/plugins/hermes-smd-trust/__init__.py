@@ -33,6 +33,7 @@ from shared import (
     read_volume,
     rendered_body_gate,
     report_render,
+    search_egress,
     send_anchor,
     spec_stamp,
     tool_gate,
@@ -707,6 +708,10 @@ def on_post_tool_call(**kwargs: Any) -> None:
         matter_binding.record_from_read(
             resolved, result, tool_name=tool_name, args=kwargs.get("args")
         )
+        # Search egress (ADR 0099): client-side party NAMES, seeded only from
+        # structured Smokeball contact/matter/role fields, so the egress screen
+        # can refuse a web query that names a client. Inert on every other tool.
+        search_egress.record_party_names(resolved, tool_name, result)
         # Read-volume gate (agreement §2.8): two mechanical observations ride
         # the same read stream — a read_file of the gated skill's SKILL.md
         # marks the session as a review (the spine path), and a counted

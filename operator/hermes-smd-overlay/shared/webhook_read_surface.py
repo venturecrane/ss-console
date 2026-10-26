@@ -158,9 +158,25 @@ class WebhookReadSurfaceError(RuntimeError):
     """The resolved webhook tool surface does not carry ``read_file``."""
 
 
-def webhook_platform_toolsets() -> list[str]:
-    """The exact ``platform_toolsets.webhook`` list the config half must emit."""
-    return [*WEBHOOK_SAFE_TOOLSETS, WEBHOOK_READ_TOOLSET]
+#: The sealed web reader's plugin toolset (``plugins/hermes-smd-research``,
+#: ADR 0099). Named on the webhook list ONLY for a seat that authors
+#: ``connectors.WebSearch.sealed_reader: true``, the only seats where the plugin
+#: registers it. Pinned Hermes already turns plugin toolsets on for an explicit
+#: platform list (``hermes_cli/tools_config.py`` ``_enabled_plugin_toolsets``:
+#: default-on unless the platform's ``known_plugin_toolsets`` lists it), so this
+#: does not create reachability; it pins it, so a later ``known_plugin_toolsets``
+#: save cannot silently take ``web_research`` off the email channel.
+RESEARCH_TOOLSET = "research"
+
+
+def webhook_platform_toolsets(*, sealed_reader: bool = False) -> list[str]:
+    """The exact ``platform_toolsets.webhook`` list the config half must emit.
+
+    Every seat gets the same list; a seat authoring the sealed web reader also
+    names :data:`RESEARCH_TOOLSET` (absent everywhere else).
+    """
+    base = [*WEBHOOK_SAFE_TOOLSETS, WEBHOOK_READ_TOOLSET]
+    return [*base, RESEARCH_TOOLSET] if sealed_reader else base
 
 
 def register_webhook_read_toolset() -> None:
@@ -332,6 +348,7 @@ __all__ = [
     "WEBHOOK_EXPECTED_TOOLS",
     "WEBHOOK_READ_TOOLS",
     "WEBHOOK_READ_TOOLSET",
+    "RESEARCH_TOOLSET",
     "WEBHOOK_SAFE_TOOLSETS",
     "WebhookReadSurfaceError",
     "assert_read_file_on_webhook",

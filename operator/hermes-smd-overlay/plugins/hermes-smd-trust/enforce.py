@@ -62,6 +62,7 @@ from shared import (
     content_floor,
     matter_gate,
     read_volume,
+    search_egress,
     send_anchor,
     spec_gate,
     turn_principal,
@@ -79,7 +80,12 @@ from shared.action_classes import (
 )
 from shared.casework_acts import CASEWORK_ACTS
 from shared.customer_config import CustomerConfigMissingError
-from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT, TRUST_CLASS_INTERNAL
+from shared.inbound import (
+    SESSION_INBOUND_ORIGIN,
+    SESSION_TAINT,
+    TRUST_CLASS_INTERNAL,
+    TRUST_CLASS_WEB_DERIVED,
+)
 from shared.pending_acts import PENDING_ACTS
 from shared.pending_send import PENDING_SEND
 from shared.trust_decision import (
@@ -110,6 +116,10 @@ _TAINT_GATED_CLASSES: frozenset[ActionClass] = frozenset(
 #: model, fixed its recipients (Captain decision 2026-09-28; see
 #: ``_evaluate_tool_call``).
 TAINT_EXEMPT_CODE_FIXED = "code_fixed_recipients"
+
+#: The audit marker on a staff email the taint gate let through on a
+#: web_derived turn because every recipient is an authored admin (ADR 0099).
+WEB_DERIVED_ADMIN_SEND = "web_derived_admin_recipients"
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +245,7 @@ def enforce(
     current_turn_approval: bool = False,
     vertical_floors: Mapping[ActionClass, Ceiling] | None = None,
     inbound_trust_class: str = TRUST_CLASS_INTERNAL,
+    admin_recipients: bool = False,
 ) -> EnforcementDecision:
     """Return whether this tool call is allowed under the persona's exposure.
 
@@ -294,7 +305,44 @@ def enforce(
     # of untrusted content. The action is refused here (the agent may still READ
     # and DRAFT). It does not remove an authored capability, it withholds it for
     # the tainted turn only.
-    if inbound_trust_class != TRUST_CLASS_INTERNAL and action in _TAINT_GATED_CLASSES:
+    #
+    # WEB_DERIVED (ADR 0099) is the one graded exception. The turn read web
+    # material only through the sealed reader (code searched and fetched; a
+    # fixed-prompt model call returned schema-checked summaries). Such a turn is
+    # "less tainted, not clean": every gated class stays refused EXCEPT a staff
+    # email whose every recipient is an exact authored ``scope.admins`` address
+    # (``admin_recipients``, decided in code by the caller from the trusted
+    # config). The worst an injected page can do there is put slanted words in
+    # front of the firm's own administrator, who reviews them. The class's own
+    # authored ceiling still decides below; nothing is widened past it.
+    web_admin_send = (
+        inbound_trust_class == TRUST_CLASS_WEB_DERIVED
+        and action is ActionClass.EXTERNAL_SEND_INTERNAL
+        and admin_recipients
+    )
+    if (
+        inbound_trust_class == TRUST_CLASS_WEB_DERIVED
+        and action in _TAINT_GATED_CLASSES
+        and not web_admin_send
+    ):
+        return EnforcementDecision(
+            allowed=False,
+            reason=(
+                f"{action.value} refused: this turn read web material "
+                f"(trust_class={TRUST_CLASS_WEB_DERIVED}); on a web_derived turn the only "
+                "sensitive action allowed is a staff email whose every recipient is an "
+                "authored admin; read and draft otherwise"
+            ),
+            audit_action="refuse",
+            action_class=action,
+            authored_ceiling=authored,
+            vertical_floor=floor,
+            effective_ceiling=effective,
+        )
+    if (
+        inbound_trust_class not in (TRUST_CLASS_INTERNAL, TRUST_CLASS_WEB_DERIVED)
+        and action in _TAINT_GATED_CLASSES
+    ):
         return EnforcementDecision(
             allowed=False,
             reason=(
@@ -316,9 +364,16 @@ def enforce(
         current_turn_approval=current_turn_approval,
     )
     # Splice the audit ceiling trail onto the class-specific decision.
+    reason = decision.reason
+    if web_admin_send:
+        reason = (
+            f"{reason} | TAINT_EXEMPT: {WEB_DERIVED_ADMIN_SEND} "
+            f"(turn trust_class={TRUST_CLASS_WEB_DERIVED}; every recipient is an authored admin, "
+            "ADR 0099)"
+        )
     return EnforcementDecision(
         allowed=decision.allowed,
-        reason=decision.reason,
+        reason=reason,
         audit_action=decision.audit_action,
         action_class=action,
         authored_ceiling=authored,
@@ -1072,6 +1127,10 @@ def resolved_send_class(
         # code_fixed_recipients`` there). Only the out-of-turn dispatcher's
         # verified capability sets this (outbound.code_fixed_scope).
         tainted = False
+    elif _web_derived_admin_send(tool_name, args or {}, session_id):
+        # Mirrors evaluate_tool_call (ADR 0099): every recipient is an authored
+        # admin on a web_derived turn, so the recipients are classified as written.
+        tainted = False
     try:
         return _reclassify_send(
             tool_name, args or {}, classification.action_class, session_id, tainted
@@ -1101,6 +1160,45 @@ def _taint_gate_input(
     if code_fixed_recipients and effective_action is ActionClass.EXTERNAL_SEND_INTERNAL:
         return TRUST_CLASS_INTERNAL
     return session_taint
+
+
+def _resolve_admins() -> list[str]:
+    """Live ``scope.admins`` from the trusted config. Empty on any fault, which
+    is the safe direction: no admin means the web_derived exception never applies."""
+    from shared.customer_config import CustomerConfig  # local import
+
+    try:
+        return list(CustomerConfig.from_volume().admins)
+    except Exception:  # noqa: BLE001 - unreadable config grants nothing
+        return []
+
+
+def _web_derived_admin_send(tool_name: str, args: dict, session_id: str) -> bool:
+    """True iff this is a proactive send on a web_derived turn whose every
+    resolved recipient is an EXACT authored ``scope.admins`` address (ADR 0099).
+
+    The recipient set is resolved by code (``send_recipients``: the args' to/cc/
+    bcc, or a draft this session recorded), and compared against the trusted
+    config, never against anything the model or a page said. An unresolved or
+    empty recipient set is False. Any fault is False: the strict path stays.
+    """
+    try:
+        if SESSION_TAINT.trust_class(session_id) != TRUST_CLASS_WEB_DERIVED:
+            return False
+        from shared.outbound_recipient import CLASSIFIED_SEND_TOOLS, send_recipients
+
+        if tool_name not in CLASSIFIED_SEND_TOOLS:
+            return False
+        recips = send_recipients(tool_name, args or {}, session_id)
+        if not recips:
+            return False
+        admins = set(_resolve_admins())
+        if not admins:
+            return False
+        return all(isinstance(r, str) and r.strip().lower() in admins for r in recips)
+    except Exception:  # noqa: BLE001 - see docstring
+        logger.debug("trust: web_derived admin-send check failed", exc_info=True)
+        return False
 
 
 def session_is_tainted(session_id: str) -> bool:
@@ -1491,6 +1589,31 @@ def _evaluate_tool_call(
         )
         return {"action": "block", "message": f"Refused: {mixing_refusal}"}
 
+    # 1b'. Search egress (ADR 0099). Same placement argument as the mixing
+    # fence: what a web query carries leaves the seat the moment the call runs,
+    # so no exposure ceiling can be the control. Layer 1 keeps web search out
+    # of a session that read client material on a client-data seat; Layer 2
+    # screens the query for identifiers, read tokens, matter numbers, party
+    # emails and client-side party names. The reason names kinds, never values,
+    # and the audit row gets the length and the verdict only.
+    if tool_name in search_egress.SEARCH_TOOLS:
+        egress = search_egress.evaluate(session_id, tool_name, args or {})
+        search_egress.record_verdict(tool_call_id, egress)
+        if egress.refused:
+            _record_decision(
+                tool_call_id,
+                tool_name,
+                _resolve_active_persona(),
+                action_class=ActionClass.READ.value,
+                audit_action="refuse",
+                allowed=False,
+                reason=f"SEARCH_EGRESS ({egress.verdict}): {egress.reason}",
+                effective_ceiling=Ceiling.REFUSED,
+                session_id=session_id,
+                session_match=session_match,
+            )
+            return {"action": "block", "message": f"Refused: {egress.reason}"}
+
     # 1c. The read-volume gate (agreement §2.8, routine 5). Same placement
     # argument as the mixing fence above: not an exposure question — the
     # authored threshold is a commercial term no ceiling should override — and
@@ -1540,6 +1663,12 @@ def _evaluate_tool_call(
         exposure = _resolve_persona_exposure(persona_slug)
         vertical_floors = _resolve_vertical_floors()
         session_taint = SESSION_TAINT.trust_class(session_id)
+        # ADR 0099: on a web_derived turn, a send whose every recipient is an
+        # authored admin is classified as written (the recipients are bounded by
+        # the trusted config, so a page cannot steer them anywhere else).
+        web_admin_send = session_taint == TRUST_CLASS_WEB_DERIVED and _web_derived_admin_send(
+            tool_name, args or {}, session_id
+        )
 
         # Staff send-as (ss ADR 0089). A send carrying ``from`` is its own class,
         # decided BEFORE the recipient axis and before the taint gate reads the
@@ -1563,7 +1692,9 @@ def _evaluate_tool_call(
                 session_id,
                 # A code-fixed recipient did not come from tainted content, so
                 # its provenance is not tainted even when the turn is.
-                tainted=session_taint != TRUST_CLASS_INTERNAL and not code_fixed_recipients,
+                tainted=session_taint != TRUST_CLASS_INTERNAL
+                and not code_fixed_recipients
+                and not web_admin_send,
             )
         gate_trust_class = _taint_gate_input(session_taint, effective_action, code_fixed_recipients)
 
@@ -1633,6 +1764,7 @@ def _evaluate_tool_call(
             current_turn_approval=approved_replay or _resolve_current_turn_approval(args),
             vertical_floors=vertical_floors,
             inbound_trust_class=gate_trust_class,
+            admin_recipients=web_admin_send,
         )
         if gate_trust_class != session_taint:
             decision = dataclasses.replace(

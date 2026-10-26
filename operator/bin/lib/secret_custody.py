@@ -158,6 +158,9 @@ _INFRA_EXACT: frozenset[str] = frozenset(
         # customer's credential — so it is infra, safe to be real/emulated in a
         # keyless build and never gated behind the customer-handoff door.
         "BRAVE_SEARCH_API_KEY",
+        # Firecrawl web extract (lib/stage-web-connectors.sh, native:firecrawl).
+        # SMD's shared account key, as Brave's is: infra.
+        "FIRECRAWL_API_KEY",
         # Speech-to-text for voice notes (provision-customer.sh, the Email
         # connector block; ss#2793). GROQ_API_KEY is SMD's SHARED account key for
         # Hermes' Groq Whisper provider, one key across every seat that has a

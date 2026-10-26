@@ -38,6 +38,7 @@ import types
 import pytest
 
 from shared.webhook_read_surface import (
+    RESEARCH_TOOLSET,
     WEBHOOK_EXPECTED_TOOLS,
     WEBHOOK_READ_TOOLS,
     WEBHOOK_READ_TOOLSET,
@@ -313,9 +314,95 @@ def test_platform_toolsets_is_unchanged_by_the_expected_tier(hermes):
     created for the warn tier.
 
     Falsifier: add a toolset name to the emitted list. This test exists to stop a
-    future author from helpfully re-adding the half the probe retired."""
+    future author from helpfully re-adding the half the probe retired.
+
+    One deliberate, seat-scoped exception (ADR 0099): a seat authoring the
+    sealed web reader also names ``research``
+    (:func:`test_a_sealed_reader_seat_offers_web_research_on_webhook_turns`).
+    The default list, which every other seat gets, is unchanged."""
     assert webhook_platform_toolsets() == [*WEBHOOK_SAFE_TOOLSETS, WEBHOOK_READ_TOOLSET]
     assert all(t not in webhook_platform_toolsets() for t in WEBHOOK_EXPECTED_TOOLS)
+    assert webhook_platform_toolsets(sealed_reader=True) == [
+        *WEBHOOK_SAFE_TOOLSETS,
+        WEBHOOK_READ_TOOLSET,
+        RESEARCH_TOOLSET,
+    ]
+
+
+class _Cfg:
+    def __init__(self, connectors):
+        self.connectors = connectors
+
+
+def _seat_surface(hermes, monkeypatch, fake_ctx, web: dict | None) -> set[str]:
+    """The webhook tool names on a seat whose WebSearch connector is ``web``.
+
+    The whole chain: translate emits the webhook list from the customer dict,
+    the research plugin registers (or does not) from the same connectors, and
+    the fake Hermes resolves the list against the toolsets the plugins
+    created. Nothing about web_research is assumed by the test itself.
+    """
+    from bootstrap import translate
+    from shared import customer_config
+    from tests.conftest import load_plugin
+
+    connectors = {
+        "Email": {
+            "adapter": "agentmail",
+            "backend": "mcp:agentmail",
+            "enabled": True,
+            "webhook_url": "https://hermes-smd.fly.dev/webhooks/agentmail",
+        }
+    }
+    if web is not None:
+        connectors["WebSearch"] = web
+    customer = {
+        "customer_id": "smd",
+        "connectors": connectors,
+        "webhook_triggers": [
+            {
+                "source": "agentmail",
+                "event_type": "message.received",
+                "skill": "inbox-triage",
+                "persona": "crane",
+            }
+        ],
+    }
+    monkeypatch.setenv("WEBHOOK_SECRET_AGENTMAIL", "shh")
+    persona = {"slug": "crane", "name": "Crane", "status": "active", "skills": []}
+    config = translate._persona_config(persona, customer, {})
+
+    monkeypatch.setattr(
+        customer_config.CustomerConfig,
+        "from_volume",
+        classmethod(lambda cls: _Cfg(connectors)),
+    )
+    load_plugin("hermes-smd-research").register(fake_ctx)
+    for name, entry in fake_ctx.tools.items():
+        hermes.setdefault(entry["toolset"], []).append(name)
+    register_webhook_read_toolset()
+    return resolve_webhook_tool_names(config)
+
+
+def test_a_sealed_reader_seat_offers_web_research_on_webhook_turns(hermes, monkeypatch, fake_ctx):
+    web = {"adapter": "brave", "backend": "native:brave", "enabled": True, "sealed_reader": True}
+    names = _seat_surface(hermes, monkeypatch, fake_ctx, web)
+    assert "web_research" in names
+    assert "read_file" in names
+
+
+@pytest.mark.parametrize(
+    "web",
+    [
+        None,
+        {"adapter": "brave", "backend": "native:brave", "enabled": True},
+        {"adapter": "brave", "backend": "native:brave", "enabled": True, "sealed_reader": False},
+    ],
+)
+def test_a_seat_without_the_sealed_reader_has_no_web_research(hermes, monkeypatch, fake_ctx, web):
+    names = _seat_surface(hermes, monkeypatch, fake_ctx, web)
+    assert "web_research" not in names
+    assert "read_file" in names
 
 
 def test_expected_tools_report_carries_both_sides(hermes):

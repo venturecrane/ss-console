@@ -140,6 +140,13 @@ describe.skipIf(!hasUv())('stage-web-connectors.sh, driven', () => {
     expect(out).toContain('STAGE BRAVE_SEARCH_API_KEY=brave')
   })
 
+  it('stages the Firecrawl key only for a native:firecrawl (WebExtract) seat', () => {
+    const { out } = run('connectors: {}\n', 'backend=native:firecrawl', { FIRECRAWL_API_KEY: 'fc' })
+    expect(out).toContain('STAGE FIRECRAWL_API_KEY=fc')
+    const none = run('connectors: {}\n', 'backend=native:brave-free', { FIRECRAWL_API_KEY: 'fc' })
+    expect(none.out).not.toContain('FIRECRAWL_API_KEY')
+  })
+
   it('a seat that binds none of these connectors stages nothing', () => {
     const { out, code } = run('connectors: {}\n', 'adapter=msgraph\nbackend=mcp:msgraph-mail', {
       WORDPRESS_APP_PASSWORD__EXAMPLE_FIRM: 'seat-pass',

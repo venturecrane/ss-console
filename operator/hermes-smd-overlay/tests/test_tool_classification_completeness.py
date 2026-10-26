@@ -644,6 +644,39 @@ def test_marketing_connector_tools_mirror_their_manifests() -> None:
             assert resolved.action_class.value == declared, f"{prefix}{tool}"
 
 
+def test_native_web_extract_is_read_fenced_and_not_a_source() -> None:
+    """web_extract (WebExtract capability) reads a public page: READ, fenced as
+    inbound content, and never a provenance source."""
+    from shared.action_classes import classify_tool
+    from shared.provenance import TENANT_SOURCE_READ_TOOLS
+
+    resolved = classify_tool("web_extract")
+    assert resolved.unmapped is False
+    assert resolved.action_class is ActionClass.READ
+    assert "web_extract" not in TENANT_SOURCE_READ_TOOLS
+    assert "web_extract" in load_plugin("hermes-smd-inbound")._FENCED_READ_TOOLS
+
+
+def test_sealed_reader_is_read_unfenced_by_design_and_not_a_source() -> None:
+    """web_research (ADR 0099): every tool the research plugin can register is
+    classified READ, never a provenance source, and decided on the fence: it is
+    unfenced by design because its output is code-validated summaries and the
+    turn it returns to is web_derived."""
+    from shared.action_classes import classify_tool
+    from shared.provenance import TENANT_SOURCE_READ_TOOLS
+    from tests.test_inbound_fence_completeness import UNFENCED_READ_BY_DESIGN
+
+    tools = load_plugin("hermes-smd-research").TOOLS
+    assert set(tools) == {"web_research"}
+    for name in tools:
+        resolved = classify_tool(name)
+        assert resolved.unmapped is False, name
+        assert resolved.action_class is ActionClass.READ, name
+        assert name not in TENANT_SOURCE_READ_TOOLS, name
+        assert name in UNFENCED_READ_BY_DESIGN, name
+        assert name not in load_plugin("hermes-smd-inbound")._FENCED_READ_TOOLS, name
+
+
 def test_no_marketing_connector_tool_is_a_send_or_publish() -> None:
     """A pending WordPress post waits for a person at the firm; nothing on these
     three servers transmits or publishes, so no tool may carry a send class."""

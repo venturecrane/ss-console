@@ -37,7 +37,7 @@ const MANIFEST_PATH = fileURLToPath(
 // separators) — independent of file formatting, so prettier here cannot break
 // it. MUST equal _PINNED_CONTENT_SHA256 in the overlay's
 // test_validator_parity_contract.py. Update in BOTH repos when fixture data changes.
-const PINNED_CONTENT_SHA256 = '3ce4605a309f3e6b877930f614323625235f878c1ca51df7f35df92ce9361155'
+const PINNED_CONTENT_SHA256 = '59c8618dc932a627e82b6782ada55254aeea4cfd3a336774316eab904dc5ba68'
 
 interface Fixture {
   name: string

@@ -447,8 +447,34 @@ def test_translate_emits_disabled_toolsets_fleet_default(tmp_path):
     for ts in ("browser", "session_search", "tts", "computer_use", "workspace"):
         assert ts in disabled
     # Load-bearing surfaces must never appear here: web is fenced-safe in
-    # client-verification-tracker, and skills/file/memory/todo are core.
+    # client-verification-tracker, and skills/file/memory/todo are core. The
+    # web assertion is ROLE-SCOPED (ADR 0099): only the marketing role drops
+    # the native web toolset (test_translate_marketing_role_disables_native_web).
     for ts in ("web", "skills", "file", "memory", "todo", "escalation", "jobs"):
+        assert ts not in disabled
+
+
+def test_translate_marketing_role_disables_native_web(tmp_path, monkeypatch):
+    """A marketing seat reads the web only through the sealed reader (ADR
+    0099), so its native ``web`` toolset is disabled; every other surface the
+    fleet-default test protects stays on."""
+    body = VALID_YAML.replace(
+        "customer_id:",
+        "seat:\n  kind: customer\n  product: operator\n  role: marketing\ncustomer_id:",
+        1,
+    )
+    assert "role: marketing" in body
+    monkeypatch.setenv("ROLES_DIR", str(Path(__file__).resolve().parents[2] / "roles"))
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, body)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
+    disabled = config["agent"]["disabled_toolsets"]
+    assert "web" in disabled
+    for ts in ("skills", "file", "memory", "todo", "escalation", "jobs"):
         assert ts not in disabled
 
 
@@ -1348,13 +1374,19 @@ def test_translate_materializes_native_web_search(tmp_path):
     config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
     # Named as the active native search backend; the provider reads its own key
     # (e.g. BRAVE_SEARCH_API_KEY) at runtime — not staged into config here.
-    assert config["web"] == {"search_backend": "brave-free"}
+    # keyless_fallback is false on every seat (see the next test).
+    assert config["web"] == {"search_backend": "brave-free", "keyless_fallback": False}
     # NOT wrapped as an MCP server — that redundant layer was removed.
     assert "brave" not in config.get("mcp_servers", {})
 
 
-def test_translate_omits_web_block_without_native_connector(tmp_path):
-    """No native web connector => no ``web`` block (configs stay byte-identical)."""
+def test_translate_closes_keyless_web_on_a_seat_without_web_connectors(tmp_path):
+    """No native web connector => the ``web`` block carries ONLY
+    ``keyless_fallback: false``. Pinned Hermes otherwise resolves web_search and
+    web_extract to anonymous public free tiers when no keyed backend answers, and
+    the ``web`` toolset is on every seat, so an unauthored seat could still send a
+    query or a URL to a third party (ADR 0070: web access is authored, never
+    imposed)."""
     customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, customer_yaml_body=VALID_YAML)
     translate_customer_yaml(
         customer_yaml_path=str(customer_yaml),
@@ -1362,7 +1394,46 @@ def test_translate_omits_web_block_without_native_connector(tmp_path):
         skills_dir=str(skills_dir),
     )
     config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
-    assert "web" not in config
+    assert config["web"] == {"keyless_fallback": False}
+
+
+def test_web_extract_connector_emits_extract_backend_only_with_its_key(monkeypatch):
+    """A ``WebExtract`` connector on ``native:firecrawl`` names the extract
+    backend only when FIRECRAWL_API_KEY is present: an explicitly selected,
+    unkeyed Firecrawl falls back to Firecrawl's anonymous cloud in pinned Hermes,
+    and keyless_fallback does not stop that path."""
+    from bootstrap.translate import _materialize_web_search
+
+    connectors = {
+        "WebSearch": {"adapter": "brave", "backend": "native:brave-free", "enabled": True},
+        "WebExtract": {"adapter": "firecrawl", "backend": "native:firecrawl", "enabled": True},
+    }
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "keyless_fallback": False,
+    }
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "extract_backend": "firecrawl",
+        "keyless_fallback": False,
+    }
+    # An extract provider this overlay does not wire is never named.
+    connectors["WebExtract"]["backend"] = "native:tavily"
+    assert "extract_backend" not in _materialize_web_search(connectors)
+    # A disabled WebExtract connector is ignored, and never becomes the search backend.
+    connectors["WebExtract"] = {"backend": "native:firecrawl", "enabled": False}
+    assert _materialize_web_search(connectors) == {
+        "search_backend": "brave-free",
+        "keyless_fallback": False,
+    }
+    # WebExtract alone does not select a search backend.
+    only = {"WebExtract": {"backend": "native:firecrawl", "enabled": True}}
+    assert _materialize_web_search(only) == {
+        "extract_backend": "firecrawl",
+        "keyless_fallback": False,
+    }
 
 
 # Smokeball — author-built stdio connector with required per-seat ENVIRONMENT and
@@ -1788,6 +1859,36 @@ def test_no_platform_toolsets_without_a_webhook_platform():
     config = _wh._persona_config(persona, {"customer_id": "smd"}, {})
     assert "platform_toolsets" not in config
     assert "platforms" not in config
+
+
+def _wh_customer_with_web(web: dict | None) -> dict:
+    connectors = dict(_WH_CUSTOMER["connectors"])
+    if web is not None:
+        connectors["WebSearch"] = web
+    return {"customer_id": "smd", **_WH_CUSTOMER, "connectors": connectors}
+
+
+def test_webhook_list_names_research_only_on_a_sealed_reader_seat(monkeypatch):
+    """ADR 0099. A seat authoring connectors.WebSearch.sealed_reader: true also
+    names the ``research`` toolset on the email channel, pinning web_research
+    where the firm's requests arrive. Every other seat's list is unchanged."""
+    from shared.webhook_read_surface import RESEARCH_TOOLSET, WEBHOOK_READ_TOOLSET
+
+    monkeypatch.setenv("WEBHOOK_SECRET_AGENTMAIL", "shh")
+    persona = {"slug": "crane", "name": "Crane", "status": "active", "skills": []}
+    base = ["web", "vision", "clarify", WEBHOOK_READ_TOOLSET]
+    sealed = {"adapter": "brave", "backend": "native:brave", "enabled": True, "sealed_reader": True}
+    cases = [
+        (sealed, [*base, RESEARCH_TOOLSET]),
+        (None, base),
+        ({**sealed, "sealed_reader": False}, base),
+        ({k: v for k, v in sealed.items() if k != "sealed_reader"}, base),
+        ({**sealed, "sealed_reader": "true"}, base),
+        ({**sealed, "enabled": False}, base),
+    ]
+    for web, expected in cases:
+        config = _wh._persona_config(persona, _wh_customer_with_web(web), {})
+        assert config["platform_toolsets"]["webhook"] == expected, web
 
 
 def test_no_platform_toolsets_when_the_webhook_secret_is_absent(monkeypatch):

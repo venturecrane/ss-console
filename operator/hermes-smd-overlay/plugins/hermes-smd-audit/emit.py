@@ -40,7 +40,7 @@ import re
 import time
 from typing import Any
 
-from shared import object_identity
+from shared import object_identity, search_egress
 from shared.action_classes import (
     BannedToolError,
     ToolClassification,
@@ -1002,6 +1002,10 @@ def emit_tool_event(
     digest = object_digest(args)
     if digest is not None:
         metadata["object_digest"] = digest
+    # Search egress (ADR 0099): the query's LENGTH and the screen's VERDICT,
+    # handed over by the trust gate under this call's id. Never the text and
+    # never a hash of it (a short query's hash is a dictionary lookup away).
+    metadata.update(search_egress.audit_fields(tool_name, tool_call_id or ""))
     procedure = skill_procedure(tool_name, args)
     if procedure is not None:
         metadata["skill_procedure"] = procedure

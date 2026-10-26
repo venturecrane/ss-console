@@ -684,6 +684,13 @@ def register_for(session_id: str) -> ProvenanceRegister:
     return reg
 
 
+def peek(session_id: str) -> ProvenanceRegister | None:
+    """The session's register WITHOUT creating one or touching the LRU (or
+    None). For the search-egress screen (ADR 0099), which asks "has this session
+    read the tenant's records?" and must not allocate by asking."""
+    return _registers.get(session_id) if session_id else None
+
+
 def record_seat_text(session_id: str, text: str) -> None:
     """Add the identifiers in a NON-seeding read result to the seat register.
 

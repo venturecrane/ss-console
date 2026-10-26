@@ -614,6 +614,17 @@ def _materialize_mcp_servers(connectors: dict[str, Any]) -> dict[str, Any]:
     return servers
 
 
+def _sealed_reader_authored(connectors: Any) -> bool:
+    """True iff ``connectors.WebSearch.sealed_reader`` is exactly ``true`` and the
+    connector is not disabled. The same rule ``shared.sealed_reader.enabled_in``
+    applies at plugin registration, so the webhook list names ``research`` on
+    exactly the seats where the tool exists."""
+    web = connectors.get("WebSearch") if isinstance(connectors, dict) else None
+    if not isinstance(web, dict) or web.get("enabled") is False:
+        return False
+    return web.get("sealed_reader") is True
+
+
 def _materialize_web_search(connectors: dict[str, Any]) -> dict[str, Any]:
     """Build the Hermes-native ``web`` block from ``connectors``.
 
@@ -624,16 +635,19 @@ def _materialize_web_search(connectors: dict[str, Any]) -> dict[str, Any]:
     by ``agent.web_search_registry``). The provider then exposes the native
     ``web_search`` tool (classified READ in :mod:`shared.action_classes`).
 
-    For the FIRST enabled connector whose ``backend`` is ``native:<provider>``
-    we emit ``{"search_backend": "<provider>"}``. Returns ``{}`` when no native
-    web connector is enabled, so configs for customers without web search stay
-    byte-identical.
+    For the FIRST enabled ``native:<provider>`` connector under any capability
+    but ``WebExtract`` we emit ``search_backend``; a ``WebExtract`` connector
+    (``native:firecrawl``) emits ``extract_backend``, and only when its key is
+    present at boot (see :data:`_EXTRACT_PROVIDER_KEYS`). Every seat gets
+    ``keyless_fallback: false``, connector or not (the comment at the return
+    says why), so the block is never empty.
 
     This SUPERSEDES the ``mcp:brave`` connector (ADR 0070 first cut): wrapping a
     native Hermes feature in an MCP server was the redundant layer. The key
     itself is a plain Fly secret (e.g. ``BRAVE_SEARCH_API_KEY`` for
     ``brave-free``) read by the provider — not staged into config here.
     """
+    block: dict[str, Any] = {}
     for capability, record in (connectors or {}).items():
         if not isinstance(record, dict) or not record.get("enabled"):
             continue
@@ -649,8 +663,59 @@ def _materialize_web_search(connectors: dict[str, Any]) -> dict[str, Any]:
                 backend,
             )
             continue
-        return {"search_backend": provider}
-    return {}
+        if capability == WEB_EXTRACT_CAPABILITY:
+            if "extract_backend" not in block and _extract_provider_keyed(capability, provider):
+                block["extract_backend"] = provider
+            continue
+        block.setdefault("search_backend", provider)
+    # EVERY seat, connector or not. Pinned Hermes resolves web_search and
+    # web_extract LAST to anonymous public free tiers (Exa, Parallel, Firecrawl,
+    # Keenable; agent/web_search_registry.py _KEYLESS_PREFERENCE) whenever no
+    # keyed backend answers, unless web.keyless_fallback is false. The `web`
+    # toolset is on every seat, so without this a seat that never authored web
+    # access could still send a query or a URL to a third party SMD has no terms
+    # with, which is the opposite of ADR 0070's posture (web access is authored
+    # per engagement, never imposed). A seat that authored WebSearch names its
+    # backend explicitly and is unaffected.
+    block["keyless_fallback"] = False
+    return block
+
+
+#: The capability whose ``native:<provider>`` backend selects ``web.extract_backend``.
+WEB_EXTRACT_CAPABILITY = "WebExtract"
+
+#: The key each extract provider needs. An extract provider is named in config
+#: ONLY when its key is present at boot: pinned Hermes's Firecrawl provider, when
+#: it is explicitly selected and has no key, falls back to Firecrawl's anonymous
+#: public cloud (plugins/web/firecrawl/provider.py, _get_direct_firecrawl_config),
+#: and keyless_fallback does not stop that path. Unknown providers are not wired.
+_EXTRACT_PROVIDER_KEYS: dict[str, str] = {
+    "firecrawl": "FIRECRAWL_API_KEY",
+}
+
+
+def _extract_provider_keyed(capability: str, provider: str) -> bool:
+    env = _EXTRACT_PROVIDER_KEYS.get(provider)
+    if env is None:
+        logger.warning(
+            "translate: connector %s names extract provider %r, which this overlay does not "
+            "wire; web extract NOT wired this boot",
+            capability,
+            provider,
+        )
+        return False
+    try:
+        get_secret(env)
+    except KeyError:
+        logger.warning(
+            "translate: connector %s (native:%s) needs %s, which is unset; web extract NOT "
+            "wired this boot (an unkeyed selection would route URLs to the anonymous cloud)",
+            capability,
+            provider,
+            env,
+        )
+        return False
+    return True
 
 
 # Inbound email/webhook handling: the prompt Hermes' native webhook adapter
@@ -1304,6 +1369,14 @@ _COUPLES_REFUSED_TOOLSETS = (
 )
 
 
+#: The marketing role (ADR 0098) reads the web only through the sealed reader
+#: (``web_research``, ADR 0099): the native ``web`` toolset hands the model raw
+#: page text and marks the turn unknown_external, which would undo the reader's
+#: point. So the native toolset comes off that role's menu.
+_MARKETING_ROLE = "marketing"
+_MARKETING_REFUSED_TOOLSETS = ("web",)
+
+
 def _space_mode(customer: dict[str, Any]) -> bool:
     """True iff the seat authors ``people:`` (ADR 0091 space mode). Same rule as
     ``shared.space.parse_space_config``: a present, non-null key."""
@@ -1477,7 +1550,14 @@ def _persona_config(
         # disagrees, because the config-only failure is otherwise silent.
         # NEVER the `file` toolset: write_file/patch/search_files on an
         # untrusted inbound turn is what the safe default exists to deny.
-        config["platform_toolsets"] = {"webhook": webhook_platform_toolsets()}
+        # ADR 0099: a seat authoring the sealed web reader also names its
+        # `research` toolset, pinning `web_research` onto the email channel
+        # where the firm's requests arrive. Absent everywhere else.
+        config["platform_toolsets"] = {
+            "webhook": webhook_platform_toolsets(
+                sealed_reader=_sealed_reader_authored(customer.get("connectors") or {})
+            )
+        }
 
     # Telegram: author the allowlist (and tuning) as reviewable config. The bot
     # token is a Fly secret that auto-enables the native polling platform; this
@@ -1551,6 +1631,10 @@ def _persona_config(
     # fence (shared/couples_surface.py).
     if _seat_role(customer) == _COUPLES_ROLE:
         for toolset in _COUPLES_REFUSED_TOOLSETS:
+            if toolset not in disabled_toolsets:
+                disabled_toolsets.append(toolset)
+    if _seat_role(customer) == _MARKETING_ROLE:
+        for toolset in _MARKETING_REFUSED_TOOLSETS:
             if toolset not in disabled_toolsets:
                 disabled_toolsets.append(toolset)
     # `max_turns` pins the v0.18 (v2026.7.1) per-turn tool-iteration budget of
