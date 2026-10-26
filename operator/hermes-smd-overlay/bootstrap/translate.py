@@ -614,6 +614,17 @@ def _materialize_mcp_servers(connectors: dict[str, Any]) -> dict[str, Any]:
     return servers
 
 
+def _sealed_reader_authored(connectors: Any) -> bool:
+    """True iff ``connectors.WebSearch.sealed_reader`` is exactly ``true`` and the
+    connector is not disabled. The same rule ``shared.sealed_reader.enabled_in``
+    applies at plugin registration, so the webhook list names ``research`` on
+    exactly the seats where the tool exists."""
+    web = connectors.get("WebSearch") if isinstance(connectors, dict) else None
+    if not isinstance(web, dict) or web.get("enabled") is False:
+        return False
+    return web.get("sealed_reader") is True
+
+
 def _materialize_web_search(connectors: dict[str, Any]) -> dict[str, Any]:
     """Build the Hermes-native ``web`` block from ``connectors``.
 
@@ -1539,7 +1550,14 @@ def _persona_config(
         # disagrees, because the config-only failure is otherwise silent.
         # NEVER the `file` toolset: write_file/patch/search_files on an
         # untrusted inbound turn is what the safe default exists to deny.
-        config["platform_toolsets"] = {"webhook": webhook_platform_toolsets()}
+        # ADR 0099: a seat authoring the sealed web reader also names its
+        # `research` toolset, pinning `web_research` onto the email channel
+        # where the firm's requests arrive. Absent everywhere else.
+        config["platform_toolsets"] = {
+            "webhook": webhook_platform_toolsets(
+                sealed_reader=_sealed_reader_authored(customer.get("connectors") or {})
+            )
+        }
 
     # Telegram: author the allowlist (and tuning) as reviewable config. The bot
     # token is a Fly secret that auto-enables the native polling platform; this

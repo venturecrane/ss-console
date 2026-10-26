@@ -1861,6 +1861,36 @@ def test_no_platform_toolsets_without_a_webhook_platform():
     assert "platforms" not in config
 
 
+def _wh_customer_with_web(web: dict | None) -> dict:
+    connectors = dict(_WH_CUSTOMER["connectors"])
+    if web is not None:
+        connectors["WebSearch"] = web
+    return {"customer_id": "smd", **_WH_CUSTOMER, "connectors": connectors}
+
+
+def test_webhook_list_names_research_only_on_a_sealed_reader_seat(monkeypatch):
+    """ADR 0099. A seat authoring connectors.WebSearch.sealed_reader: true also
+    names the ``research`` toolset on the email channel, pinning web_research
+    where the firm's requests arrive. Every other seat's list is unchanged."""
+    from shared.webhook_read_surface import RESEARCH_TOOLSET, WEBHOOK_READ_TOOLSET
+
+    monkeypatch.setenv("WEBHOOK_SECRET_AGENTMAIL", "shh")
+    persona = {"slug": "crane", "name": "Crane", "status": "active", "skills": []}
+    base = ["web", "vision", "clarify", WEBHOOK_READ_TOOLSET]
+    sealed = {"adapter": "brave", "backend": "native:brave", "enabled": True, "sealed_reader": True}
+    cases = [
+        (sealed, [*base, RESEARCH_TOOLSET]),
+        (None, base),
+        ({**sealed, "sealed_reader": False}, base),
+        ({k: v for k, v in sealed.items() if k != "sealed_reader"}, base),
+        ({**sealed, "sealed_reader": "true"}, base),
+        ({**sealed, "enabled": False}, base),
+    ]
+    for web, expected in cases:
+        config = _wh._persona_config(persona, _wh_customer_with_web(web), {})
+        assert config["platform_toolsets"]["webhook"] == expected, web
+
+
 def test_no_platform_toolsets_when_the_webhook_secret_is_absent(monkeypatch):
     """The platform fails closed without its signing secret; the toolset
     override must not outlive the platform it configures."""
