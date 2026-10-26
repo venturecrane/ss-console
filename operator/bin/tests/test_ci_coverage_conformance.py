@@ -438,6 +438,18 @@ def test_release_tick_installs_every_tool_a_seat_render_needs() -> None:
     assert names.index("Set up uv") < names.index("Tick"), "uv must be installed before the tick runs"
 
 
+def test_release_tick_checks_out_full_history_for_the_latest_resolution() -> None:
+    """`fleet release latest --tick` keeps only image releases whose commit is an
+    ancestor of main (cli._built_from_main, `git merge-base --is-ancestor`). On a
+    shallow clone any commit but main's head is missing, git exits 128, and every
+    tick halts as a tooling error once main has moved (run 40362697118)."""
+    cli = (OPERATOR_DIR / "bin/lib/fleet/cli.py").read_text(encoding="utf-8")
+    assert "--is-ancestor" in cli, "latest no longer walks history; drop this test with it"
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    checkout = next(s for s in wf["jobs"]["tick"]["steps"] if str(s.get("uses", "")).startswith("actions/checkout@"))
+    assert (checkout.get("with") or {}).get("fetch-depth") == 0, "the tick needs main's full history"
+
+
 def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
     """The tick reads the per-app Fly tokens, so it runs only in the protected
     environment, on main, one at a time, and on a schedule plus build completion."""
