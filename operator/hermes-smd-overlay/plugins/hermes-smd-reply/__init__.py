@@ -1483,7 +1483,7 @@ def _relay_draft(**kwargs: Any) -> None:
         )
         # Request cards: the opening of the first reply, seat-local only (the
         # audit row above carries digests, never words). Never raises.
-        request_index.record_reply_opening(origin.message_id, wire_text)
+        request_index.record_reply_opening(origin.message_id, wire_text, sent_message_id=sent_id)
         # (h) The reply is out: its working drafts (this one, and any held ones
         # it superseded in this turn) leave the Drafts folder. Never raises.
         _discard_drafts(_WORKING_DRAFTS.take(session_id, reply_key))
@@ -1737,7 +1737,9 @@ def _deliver_owed_act(session_id: str, *, pending: Any = _UNSET, origin: Any = _
             session_id=session_id,
         )
         request_index.record_reply_opening(
-            str(getattr(origin, "message_id", "") or ""), act_delivery.body_for(line)
+            str(getattr(origin, "message_id", "") or ""),
+            act_delivery.body_for(line),
+            sent_message_id=sent_id,
         )
         logger.warning(
             "hermes-smd-reply: act %s line was not sent by the turn; the seat delivered it (%s)",

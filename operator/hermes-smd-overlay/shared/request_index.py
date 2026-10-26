@@ -69,6 +69,19 @@ CREATE TABLE IF NOT EXISTS requests (
 )
 """
 _CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_requests_received ON requests(received_at)"
+#: One row per reply SENT, keyed by the sent message's id (2026-10-26). The
+#: ``requests`` row keeps only the FIRST reply's opening, so a later reply in
+#: the same thread (2026-10-26: an Operator corrected itself 50 minutes after
+#: its first answer) left no words anywhere SMD reads. This table is what a ``followup`` card quotes.
+#: Written for every send, including a reply to a message the index never saw.
+_CREATE_REPLIES_SQL = """
+CREATE TABLE IF NOT EXISTS replies (
+  sent_message_id TEXT PRIMARY KEY,
+  in_reply_to     TEXT,
+  sent_at         REAL NOT NULL,
+  opening         TEXT
+)
+"""
 #: Columns added after the first seats wrote this file (2026-10-22: the thread a
 #: message belongs to, and the requester's own opening words, so a follow-up on a
 #: HELD job can be carded with what the person said). CREATE IF NOT EXISTS does
@@ -112,6 +125,7 @@ def _connect(path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute(_CREATE_SQL)
     conn.execute(_CREATE_INDEX_SQL)
+    conn.execute(_CREATE_REPLIES_SQL)
     present = {row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
     for name, kind in _ADDED_COLUMNS:
         if name not in present:
@@ -152,6 +166,14 @@ def _custody(conn: sqlite3.Connection, now: float) -> None:
     )
     conn.execute(
         "DELETE FROM requests WHERE received_at < ?",
+        (now - ROW_RETENTION_DAYS * 86400.0,),
+    )
+    conn.execute(
+        "UPDATE replies SET opening=NULL WHERE sent_at < ? AND opening IS NOT NULL",
+        (now - TEXT_RETENTION_DAYS * 86400.0,),
+    )
+    conn.execute(
+        "DELETE FROM replies WHERE sent_at < ?",
         (now - ROW_RETENTION_DAYS * 86400.0,),
     )
 
@@ -254,11 +276,21 @@ def record_inbound(
         conn.close()
 
 
-def record_reply_opening(in_reply_to: object, body: object, *, path: str | None = None) -> bool:
+def record_reply_opening(
+    in_reply_to: object,
+    body: object,
+    *,
+    sent_message_id: object = None,
+    path: str | None = None,
+) -> bool:
     """Keep the opening of the FIRST reply to a request. A later reply never
-    overwrites it, and a reply to an unindexed message writes nothing. Returns
-    whether a row was updated; never raises."""
-    if not isinstance(in_reply_to, str) or not in_reply_to:
+    overwrites it, and a reply to an unindexed message writes nothing there.
+
+    With ``sent_message_id``, EVERY reply's opening is also kept in ``replies``
+    under that id, first or not, indexed request or not: what a ``followup``
+    card quotes. Returns whether the request row was updated; never raises."""
+    sent_id = sent_message_id if isinstance(sent_message_id, str) and sent_message_id else None
+    if (not isinstance(in_reply_to, str) or not in_reply_to) and sent_id is None:
         return False
     now = time.time()
     try:
@@ -267,14 +299,23 @@ def record_reply_opening(in_reply_to: object, body: object, *, path: str | None 
         logger.error("request_index: cannot open the request index", exc_info=True)
         return False
     try:
+        opening = reply_opening(body)
+        updated = 0
         with conn:
             _custody(conn, now)
-            cur = conn.execute(
-                "UPDATE requests SET reply_opening=?, opening_at=? "
-                "WHERE vendor_message_id=? AND opening_at IS NULL",
-                (reply_opening(body), now, in_reply_to),
-            )
-        return cur.rowcount == 1
+            if sent_id is not None:
+                conn.execute(
+                    "INSERT OR IGNORE INTO replies (sent_message_id, in_reply_to, sent_at, opening)"
+                    " VALUES (?, ?, ?, ?)",
+                    (sent_id, in_reply_to if isinstance(in_reply_to, str) else None, now, opening),
+                )
+            if isinstance(in_reply_to, str) and in_reply_to:
+                updated = conn.execute(
+                    "UPDATE requests SET reply_opening=?, opening_at=? "
+                    "WHERE vendor_message_id=? AND opening_at IS NULL",
+                    (opening, now, in_reply_to),
+                ).rowcount
+        return updated == 1
     except Exception:  # noqa: BLE001
         logger.error("request_index: record_reply_opening failed", exc_info=True)
         return False
@@ -379,6 +420,27 @@ def read_sender_requests(sender: str, since: float, *, path: str | None = None) 
     ]
 
 
+def read_reply_openings(since: float, *, path: str | None = None) -> dict[str, str | None]:
+    """sent_message_id -> the opening of that reply, for replies sent at or
+    after ``since``. READ-ONLY, same contract as :func:`read_requests`: ``{}``
+    when the file or the table does not exist yet (an image older than the
+    table wrote it), raises on a file that exists and cannot be read."""
+    target = path or db_path()
+    if not os.path.exists(target):
+        return {}
+    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5)
+    try:
+        conn.execute("PRAGMA busy_timeout=2000")
+        if not conn.execute("PRAGMA table_info(replies)").fetchall():
+            return {}
+        rows = conn.execute(
+            "SELECT sent_message_id, opening FROM replies WHERE sent_at >= ?", (since,)
+        ).fetchall()
+        return {str(r[0]): r[1] for r in rows}
+    finally:
+        conn.close()
+
+
 __all__ = [
     "DEFAULT_DB_PATH",
     "bare_sender",
@@ -387,6 +449,7 @@ __all__ = [
     "ROW_RETENTION_DAYS",
     "TEXT_RETENTION_DAYS",
     "db_path",
+    "read_reply_openings",
     "read_requests",
     "record_inbound",
     "record_reply_opening",

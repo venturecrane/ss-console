@@ -528,17 +528,26 @@ def test_every_reply_sent_site_records_the_reply_opening() -> None:
                     for kw in child.keywords
                 ):
                     assert func is not None, f"{path}: REPLY_SENT emitted outside a function"
-                    calls = {
-                        n.func.attr
-                        if isinstance(n.func, ast.Attribute)
-                        else getattr(n.func, "id", "")
+                    records = [
+                        n
                         for n in ast.walk(func)
                         if isinstance(n, ast.Call)
-                    }
-                    assert "record_reply_opening" in calls, (
+                        and (
+                            n.func.attr
+                            if isinstance(n.func, ast.Attribute)
+                            else getattr(n.func, "id", "")
+                        )
+                        == "record_reply_opening"
+                    ]
+                    assert records, (
                         f"{path}:{child.lineno} {func.name} emits REPLY_SENT without "
                         "record_reply_opening"
                     )
+                    # And keys the reply by its sent id, or a later reply on this
+                    # path is never carded as a follow-up (2026-10-26).
+                    assert all(
+                        any(kw.arg == "sent_message_id" for kw in n.keywords) for n in records
+                    ), f"{path}:{child.lineno} {func.name} records no sent_message_id"
                     sites.append(f"{path.name}:{func.name}")
                 visit(child, inner)
 
@@ -901,7 +910,7 @@ def test_record_inbound_keeps_the_thread_and_the_requesters_own_opening(tmp_path
     assert ri.record_inbound(
         vendor_message_id=VID,
         subject="Linda Curtis/matter number 200530",
-        sender="chris@firm.example",
+        sender="requester@firm.example",
         thread_ref="AAQkAG-conversation",
         body="Hi,\n\nJust leave it out of the chronology.\n\nCordially,",
         path=path,
@@ -1125,3 +1134,158 @@ def test_router_indexes_the_thread_and_the_persons_words(tmp_path, monkeypatch) 
     [row] = ri.read_requests(0)
     assert row["thread_ref"] == "thread-7"
     assert row["request_opening"] == "Just leave it out."
+
+
+# ---------------------------------------------------------------------------
+# Follow-up replies (2026-10-26): a reply no replied card counted is carded
+# ---------------------------------------------------------------------------
+
+
+def _sent(ledger: _Ledger, minutes_ago: float, sent_id: str, *, vid=VID, recipient=None) -> None:
+    ledger.row(
+        "REPLY_SENT",
+        minutes_ago,
+        in_reply_to=vid,
+        session_id="s1",
+        sent_message_id=sent_id,
+        recipient=recipient,
+    )
+
+
+def _decide_f(ledger, requests, *, done_at=None, openings=None) -> list[dict]:
+    conn = ledger.ro()
+    try:
+        return rc.decide(
+            requests, conn, set(done_at or {}), NOW, done_at=done_at or {}, openings=openings
+        )
+    finally:
+        conn.close()
+
+
+def _followups(cards) -> list[dict]:
+    return [c for c in cards if c["kind"] == "followup"]
+
+
+def test_a_reply_sent_after_the_replied_card_landed_is_carded_with_its_own_words(ledger) -> None:
+    """The 2026-10-26 case: first reply carded, a correction 50 minutes later was not."""
+    _sent(ledger, 60, "sent-1")
+    _sent(ledger, 10, "sent-2")
+    landed = {rc.card_key(VID, "replied"): _epoch(54)}
+    cards = _followups(
+        _decide_f(
+            ledger,
+            [_request(61)],
+            done_at=landed,
+            openings={
+                "sent-1": "first answer",
+                "sent-2": "Correction: both records are unreadable as filed.",
+            },
+        )
+    )
+    assert len(cards) == 1
+    card = cards[0]
+    assert card["card_key"] == rc.followup_key(VID, "sent-2")
+    assert card["reply_opening"] == "Correction: both records are unreadable as filed."
+    assert card["who"] == "paralegal@firm.example"
+    assert card["subject"] == "Pull the records"
+    assert card["minutes"] == 51
+    assert card["replies"] == 1 and card["job"] is None
+
+
+def test_the_first_reply_is_the_replied_cards_never_a_follow_up(ledger) -> None:
+    _sent(ledger, 60, "sent-1")
+    openings = {"sent-1": "first"}
+    # Before the replied card lands: the reply is that card's to count.
+    assert _followups(_decide_f(ledger, [_request(61)], openings=openings)) == []
+    # After it lands: the reply it counted is still not a follow-up.
+    landed = {rc.card_key(VID, "replied"): _epoch(54)}
+    assert _followups(_decide_f(ledger, [_request(61)], done_at=landed, openings=openings)) == []
+
+
+def test_a_follow_up_is_carded_once(ledger) -> None:
+    _sent(ledger, 60, "sent-1")
+    _sent(ledger, 10, "sent-2")
+    landed = {
+        rc.card_key(VID, "replied"): _epoch(54),
+        rc.followup_key(VID, "sent-2"): _epoch(5),
+    }
+    openings = {"sent-1": "a", "sent-2": "b"}
+    assert _followups(_decide_f(ledger, [_request(61)], done_at=landed, openings=openings)) == []
+
+
+def test_a_reply_to_a_message_the_index_never_held_is_carded_to_its_recipient(ledger) -> None:
+    _sent(ledger, 3, "sent-9", vid="note-scheduled:abc", recipient="admin@firm.example")
+    cards = _followups(_decide_f(ledger, [], openings={"sent-9": "Your weekly note"}))
+    assert len(cards) == 1
+    assert cards[0]["who"] == "admin@firm.example"
+    assert cards[0]["subject"] == "(no request on record)"
+    assert cards[0]["card_key"] == rc.followup_key("note-scheduled:abc", "sent-9")
+    assert cards[0]["minutes"] == 0
+    assert cards[0]["reply_opening"] == "Your weekly note"
+
+
+def test_replies_sent_before_the_index_recorded_them_are_never_backfilled(ledger) -> None:
+    """Rollout: a week of ledger replies must not mail SMD all at once."""
+    _sent(ledger, 10, "old-send", vid="unindexed")
+    assert _followups(_decide_f(ledger, [], openings={})) == []
+    # And a reader that could not look decides no follow-ups at all.
+    assert _followups(_decide_f(ledger, [], openings=None)) == []
+
+
+def test_record_reply_opening_keeps_every_reply_by_its_sent_id(tmp_path) -> None:
+    path = str(tmp_path / "requests.db")
+    ri.record_inbound(vendor_message_id=VID, sender="a@x.test", subject="s", path=path)
+    assert ri.record_reply_opening(VID, "Hi,\nfirst", sent_message_id="s1", path=path)
+    assert not ri.record_reply_opening(VID, "Hi,\nsecond", sent_message_id="s2", path=path)
+    assert not ri.record_reply_opening("unindexed", "third", sent_message_id="s3", path=path)
+    assert ri.read_reply_openings(0, path=path) == {"s1": "first", "s2": "second", "s3": "third"}
+    # The request row still holds only the FIRST reply's opening.
+    assert ri.read_requests(0, path=path)[0]["reply_opening"] == "first"
+
+
+def test_reply_openings_read_as_none_on_an_index_older_than_the_table(tmp_path) -> None:
+    path = tmp_path / "requests.db"
+    conn = sqlite3.connect(str(path))
+    conn.execute("CREATE TABLE requests (vendor_message_id TEXT PRIMARY KEY, received_at REAL)")
+    conn.commit()
+    conn.close()
+    assert ri.read_reply_openings(0, path=str(path)) == {}
+    assert ri.read_reply_openings(0, path=str(tmp_path / "absent.db")) == {}
+
+
+def test_custody_nulls_reply_openings_after_a_week_and_deletes_after_a_month(tmp_path) -> None:
+    path = str(tmp_path / "requests.db")
+    ri.record_reply_opening("v", "words", sent_message_id="s-old", path=path)
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE replies SET sent_at = ?", (time.time() - 8 * 86400,))
+    conn.commit()
+    conn.close()
+    ri.record_reply_opening("v2", "new", sent_message_id="s-new", path=path)
+    assert ri.read_reply_openings(0, path=path) == {"s-old": None, "s-new": "new"}
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "UPDATE replies SET sent_at = ? WHERE sent_message_id = 's-old'",
+        (time.time() - 31 * 86400,),
+    )
+    conn.commit()
+    conn.close()
+    ri.record_reply_opening("v3", "x", sent_message_id="s-3", path=path)
+    assert "s-old" not in ri.read_reply_openings(0, path=path)
+
+
+def test_the_leg_posts_a_follow_up_from_the_real_index(ledger) -> None:
+    """End to end on the seat half: the send site's index write, the reader,
+    decide, and the POST, with the 2026-10-26 shape (a later reply, its own words)."""
+    ri.record_inbound(vendor_message_id=VID, sender="requester@firm.example", subject="Re: x")
+    ri.record_reply_opening(VID, "Hi,\nThey look like scans.", sent_message_id="sent-1")
+    ri.record_reply_opening(VID, "Correction: both are locked.", sent_message_id="sent-2")
+    _sent(ledger, 60, "sent-1")
+    _sent(ledger, 2, "sent-2")
+    store = rc.CardStore()
+    store.mark_done(rc.card_key(VID, "replied"), _epoch(54))
+    poster = _Poster()
+    _leg(ledger, poster, store=store)
+    follow = [body for _u, _h, body, _t in poster.calls if body["kind"] == "followup"]
+    assert len(follow) == 1
+    assert follow[0]["reply_opening"] == "Correction: both are locked."
+    assert follow[0]["who"] == "requester@firm.example"

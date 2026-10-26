@@ -120,6 +120,7 @@ function outcome(row: CardRow): string {
   if (row.kind === 'held_reply') {
     return `REQUESTER WROTE on held ${row.job_lane ?? 'job'} job at +${row.minutes}m`
   }
+  if (row.kind === 'followup') return `later reply sent at +${row.minutes}m`
   return `${row.job_lane ?? 'job'} ${row.job_state ?? 'ended'} at +${row.minutes}m`
 }
 
@@ -147,6 +148,8 @@ export interface Summary {
   laneUnproven: number
   /** Messages a requester wrote on a held job (migration 0136): each is SMD's to act on. */
   heldReply: number
+  /** Replies sent after the first was carded, or with no request (migration 0141). */
+  laterReplies: number
   notEmailed: number
   stillUnanswered: number
 }
@@ -164,6 +167,7 @@ export function summarize(rows: readonly CardRow[]): Summary {
     jobDone: rows.filter((r) => r.kind === 'job_done').length,
     laneUnproven: rows.filter((r) => r.kind === 'lane_unproven').length,
     heldReply: rows.filter((r) => r.kind === 'held_reply').length,
+    laterReplies: rows.filter((r) => r.kind === 'followup').length,
     notEmailed: rows.filter((r) => r.status !== 'sent').length,
     stillUnanswered: alarms.filter((r) => !answered.has(requestIdOf(r.card_key))).length,
   }
@@ -177,7 +181,8 @@ export function renderReport(rows: readonly CardRow[], sinceLabel: string): stri
     '',
     `${s.requests} requests, ${s.cards} cards since ${sinceLabel}: ` +
       `${s.replied} replied, ${s.noReply} NO REPLY alarms, ${s.jobDone} job endings, ` +
-      `${s.laneUnproven} new kinds of ask, ${s.heldReply} requester messages on held jobs.`,
+      `${s.laneUnproven} new kinds of ask, ${s.heldReply} requester messages on held jobs, ` +
+      `${s.laterReplies} later replies sent.`,
     `Still unanswered (an alarm with no later reply card): ${s.stillUnanswered}.`,
     `Not emailed yet: ${s.notEmailed}.`,
   ].join('\n')

@@ -189,7 +189,7 @@ def run_sweep_once(
             },
         )
         # Request cards: a released reply is a first reply like any other.
-        request_index.record_reply_opening(row.message_id, row.send_text)
+        request_index.record_reply_opening(row.message_id, row.send_text, sent_message_id=sent_id)
         released += 1
 
     _purge(store)

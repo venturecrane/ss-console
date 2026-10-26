@@ -20,7 +20,11 @@ When a firm person emails an Operator seat, SMD (team@smd.services) gets:
   one hold question in the thread, "just leave it out", and SMD learned it an
   hour later from his forward to the Captain). The card carries the person's
   own opening words and the held job's id; the Operator cannot record a
-  decision on a held job, so the reader of this card does.
+  decision on a held job, so the reader of this card does;
+* a ``followup`` card for every reply SENT that no ``replied`` card counted:
+  a later reply in the same request, or a reply to a message the index never
+  held (2026-10-26: an Operator corrected itself in a second reply 50 minutes
+  after its first answer, and the only record SMD read showed the first). It quotes that reply's own opening.
 
 The seat decides; ss-console sends. This module is the seat half, hosted by the
 gate's heartbeat ticker (``shared.heartbeat``): :func:`decide` is the pure
@@ -123,6 +127,14 @@ def card_key(vendor_message_id: str, kind: str) -> str:
     return hashlib.sha256(vendor_message_id.encode("utf-8")).hexdigest() + ":" + kind
 
 
+def followup_key(in_reply_to: str, sent_message_id: str) -> str:
+    """One ``followup`` card per reply SENT that no ``replied`` card counted.
+    Keyed on the request hash (so the console groups it under its request)
+    plus a short hash of the sent message, so each later reply is its own card."""
+    sent = hashlib.sha256(sent_message_id.encode("utf-8")).hexdigest()[:16]
+    return card_key(in_reply_to, "followup") + f"-{sent}"
+
+
 def job_done_key(vendor_message_id: str, state: str, attempt: int) -> str:
     """One ``job_done`` card per job ENDING. A resumed job ends again (a new
     attempt, or a new state), and that ending is its own card; keyed on the
@@ -221,14 +233,26 @@ def _reply_rows(conn: sqlite3.Connection, horizon: str) -> list[dict]:
         " json_extract(metadata,'$.in_reply_to') AS in_reply_to,"
         " json_extract(metadata,'$.message_id') AS message_id,"
         " json_extract(metadata,'$.session_id') AS session_id,"
-        " json_extract(metadata,'$.held_for_release') AS held_for_release"
+        " json_extract(metadata,'$.held_for_release') AS held_for_release,"
+        " json_extract(metadata,'$.sent_message_id') AS sent_message_id,"
+        " json_extract(metadata,'$.recipient') AS recipient"
         " FROM audit_log"
         " WHERE action_type IN ('REPLY_SENT', 'REPLY_HELD', 'REPLY_FAILED')"
         " AND substr(ts,1,19) >= ?"
         " ORDER BY ts, id",
         (horizon,),
     ).fetchall()
-    keys = ("ts", "action_type", "matter_ref", "in_reply_to", "message_id", "session_id", "hfr")
+    keys = (
+        "ts",
+        "action_type",
+        "matter_ref",
+        "in_reply_to",
+        "message_id",
+        "session_id",
+        "hfr",
+        "sent_message_id",
+        "recipient",
+    )
     return [dict(zip(keys, row, strict=True)) for row in rows]
 
 
@@ -526,8 +550,14 @@ def decide(
     now: datetime,
     done_at: dict[str, float] | None = None,
     proofs: lane_proofs.Proofs | None = None,
+    openings: dict[str, str | None] | None = None,
 ) -> list[dict]:
     """The cards due now, oldest event first, as wire-shaped dicts.
+
+    ``openings`` (sent message id -> that reply's opening,
+    :func:`shared.request_index.read_reply_openings`) is both what a
+    ``followup`` card quotes and which replies may be carded at all; None
+    decides no ``followup`` cards.
 
     ``proofs`` (the seat's proven lanes, :func:`shared.lane_proofs.load`)
     turns on the lane_unproven cards; None decides the other kinds only.
@@ -543,10 +573,13 @@ def decide(
 
     now = now.astimezone(timezone.utc)
     held = _hold_cards(requests, audit_conn, proofs, done, now) if proofs is not None else []
-    if not requests:
-        return held
     horizon = _iso(now - LOOKBACK - timedelta(days=1))[:19]
     replies = _reply_rows(audit_conn, horizon)
+    if not requests:
+        return sorted(
+            held + _followup_cards(requests, replies, done, done_at or {}, openings),
+            key=lambda c: (c["event_at"], c["card_key"]),
+        )
     sent_by_vid: dict[str, list[dict]] = {}
     held_vids: set[str] = set()
     for row in replies:
@@ -641,10 +674,104 @@ def decide(
                 }
             )
     cards.extend(_held_reply_cards(requests, jobs, done))
+    cards.extend(_followup_cards(requests, replies, done, done_at or {}, openings))
     if proofs is not None:
         cards.extend(held)
         cards.extend(_in_turn_cards(requests, sent_by_vid, calls_by_session, proofs, done, now))
     cards.sort(key=lambda c: (c["event_at"], c["card_key"]))
+    return cards
+
+
+#: A replied card is decided only once its latest reply is :data:`QUIET` old,
+#: so every reply it counted was sent at least that long before it landed. A
+#: reply sent after (landing - this) was not counted. Half of QUIET leaves room
+#: for a slow POST without ever reaching back to a counted reply.
+_COUNTED_BEFORE = QUIET / 2
+
+
+def _followup_cards(
+    requests: list[dict],
+    replies: list[dict],
+    done: set[str],
+    done_at: dict[str, float],
+    openings: dict[str, str | None] | None,
+) -> list[dict]:
+    """One card per reply SENT that no ``replied`` card counted (2026-10-26).
+
+    A ``replied`` card counts the replies sent before it lands and is never
+    sent again, so a reply the Operator sends LATER in the same request (a
+    correction, a result, a second answer) reached the client and nobody at
+    SMD. That is how a session told the Captain a requester had not been told
+    something the Operator had told them in a second reply 50 minutes after
+    its first. Two cases, both carded at once (the reply has already gone):
+
+    * the reply answers an indexed request whose ``replied`` card has landed,
+      and was sent after that card was decided;
+    * the reply answers a message the index does not hold (a scheduled send, a
+      reply to an older thread): no ``replied`` card will ever count it.
+
+    A reply to an indexed request whose replied card has not landed is that
+    card's to count, and so is one whose card landed before landing times were
+    kept (no ``done_at``): never carded twice.
+    """
+    if openings is None:
+        return []
+    by_vid = {str(r["vendor_message_id"]): r for r in requests}
+    cards: list[dict] = []
+    for row in replies:
+        if row["action_type"] != "REPLY_SENT":
+            continue
+        sent_id = row.get("sent_message_id")
+        if not isinstance(sent_id, str) or sent_id not in openings:
+            # Only a reply the index recorded (every send since the replies
+            # table shipped). Nothing is backfilled from the ledger, so the
+            # rollout does not mail SMD a week of old replies at once.
+            continue
+        in_reply_to = row.get("in_reply_to")
+        if not isinstance(in_reply_to, str) or not in_reply_to:
+            in_reply_to = sent_id
+        sent_at = _parse_ts(row["ts"])
+        if sent_at is None:
+            continue
+        key = followup_key(in_reply_to, sent_id)
+        if key in done:
+            continue
+        req = by_vid.get(in_reply_to)
+        if req is not None:
+            landed = done_at.get(card_key(in_reply_to, "replied"))
+            if landed is None:
+                continue
+            if sent_at.timestamp() <= landed - _COUNTED_BEFORE.total_seconds():
+                continue
+            received = datetime.fromtimestamp(float(req["received_at"]), tz=timezone.utc)
+            base = {
+                "received_at": _iso(received),
+                "who": _clip(req.get("sender"), 160) or "(unknown sender)",
+                "subject": _clip(req.get("subject"), 200) or "(no subject)",
+            }
+        else:
+            received = sent_at
+            base = {
+                "received_at": _iso(sent_at),
+                "who": _clip(row.get("recipient"), 160) or "(unknown recipient)",
+                "subject": "(no request on record)",
+            }
+        cards.append(
+            {
+                "card_key": key,
+                "kind": "followup",
+                **base,
+                "event_at": _iso(sent_at),
+                "minutes": _minutes(received, sent_at),
+                "reply_opening": _clip((openings or {}).get(sent_id), 300),
+                "matter": _clip(row.get("matter_ref"), 60),
+                "tools": [],
+                "replies": 1,
+                "refused": 0,
+                "failed": 0,
+                "job": None,
+            }
+        )
     return cards
 
 
@@ -801,6 +928,13 @@ def send_due_cards(
         )
         # No early return on an empty index: a held scheduled run has no
         # request and still pages (the lane-proof gate).
+        try:
+            openings: dict[str, str | None] | None = request_index.read_reply_openings(
+                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+            )
+        except Exception:  # noqa: BLE001 — "could not look" decides no follow-ups, never "none"
+            logger.error("request_cards: cannot read the reply openings", exc_info=True)
+            openings = None
         proofs = lane_proofs.load(proofs_dir)
         if not audit_db_path or not os.path.exists(audit_db_path):
             # Without the ledger "no reply" cannot be told from "could not look".
@@ -814,7 +948,9 @@ def send_due_cards(
         conn = sqlite3.connect(f"file:{audit_db_path}?mode=ro", uri=True, timeout=5)
         try:
             conn.execute("PRAGMA busy_timeout=2000")
-            cards = decide(requests, conn, done, now, done_at=landed_at, proofs=proofs)
+            cards = decide(
+                requests, conn, done, now, done_at=landed_at, proofs=proofs, openings=openings
+            )
         finally:
             conn.close()
         started = monotonic_fn()

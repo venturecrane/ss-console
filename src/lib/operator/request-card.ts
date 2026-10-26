@@ -13,6 +13,10 @@
  * hold can ask it, or a chase, and in either case SMD's to act on, because the
  * Operator cannot record a decision on a held job. That card carries the
  * requester's own opening words (`request_opening`) and the held job's id.
+ * `followup` is every reply SENT that no `replied` card counted: a later reply
+ * in the same request, or one answering a message the seat has no request for
+ * (migration 0141, 2026-10-26: an Operator corrected itself in a second reply
+ * 50 minutes after its first answer, and the log said nothing).
  * ss-web turns each card into one plain-text email to SMD ops. The wire contract is fixed
  * by the seat side (hermes-smd-overlay `shared/request_cards.py`); change it
  * in both repos or neither.
@@ -32,6 +36,7 @@ export const CARD_KINDS = [
   'job_done',
   'lane_unproven',
   'held_reply',
+  'followup',
 ] as const
 export type CardKind = (typeof CARD_KINDS)[number]
 export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron', 'negotiation'] as const
@@ -43,9 +48,11 @@ export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 // A lane_unproven key carries its lane key: one card per request per lane (a
 // scheduled job's hash is of its job id; an in-turn first use's, of its lane).
 // A held_reply key hashes the FOLLOW-UP message, so each message the requester
-// writes on a held job is its own card.
+// writes on a held job is its own card. A followup key is the request hash plus
+// a short hash of the reply SENT: each later reply is its own card, grouped
+// under the request it answers.
 const CARD_KEY_RE =
-  /^[0-9a-f]{64}:(?:(replied|no_reply|held_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?|(lane_unproven):([a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?))$/
+  /^[0-9a-f]{64}:(?:(replied|no_reply|held_reply)|(job_done)(?::(?:delivered|failed|held)-[1-9]\d{0,3})?|(lane_unproven):([a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?)|(followup)-[0-9a-f]{16})$/
 const TOKEN_RE = /^[a-z0-9_:.-]{1,64}$/
 /** A lane key: the skill that queues the job, plus the drafting class. */
 const LANE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$/
@@ -202,7 +209,7 @@ function parseIdentity(body: Record<string, unknown>): Identity | { field: strin
   const key = body.card_key
   if (typeof key !== 'string') return { field: 'card_key' }
   const keyMatch = CARD_KEY_RE.exec(key)
-  if (!keyMatch || (keyMatch[1] ?? keyMatch[2] ?? keyMatch[3]) !== kind) {
+  if (!keyMatch || (keyMatch[1] ?? keyMatch[2] ?? keyMatch[3] ?? keyMatch[5]) !== kind) {
     return { field: 'card_key' }
   }
   const laneKey = keyMatch[4]
@@ -310,6 +317,8 @@ function cardHeadline(card: RequestCard): string {
         : `NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}`
     case 'held_reply':
       return `REQUESTER WROTE on held ${lane} job`
+    case 'followup':
+      return `later reply sent at +${card.minutes}m`
   }
 }
 
@@ -383,6 +392,13 @@ function outcomeLines(card: RequestCard): string[] {
       return [`Noticed: ${card.eventAt} (${card.minutes} min after the request)`]
     case 'held_reply':
       return heldReplyLines(card)
+    case 'followup':
+      return [
+        `Later reply sent: ${card.eventAt} (${card.minutes} min after the request)`,
+        'The Operator sent this after the first reply was carded, or in answer to a message',
+        'with no request on record. It is what the requester was told; read it before saying',
+        'what they have or have not been told.',
+      ]
   }
 }
 
