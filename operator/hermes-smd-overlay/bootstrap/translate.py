@@ -1692,6 +1692,14 @@ def _persona_config(
     config["tools"] = {"tool_search": {"enabled": "off"}}
     config["approvals"] = {"mode": "manual"}
     config["display"] = {"show_reasoning": False}
+    # cron.wrap_response: Hermes wraps every delivered cron result in a
+    #   "Cronjob Response: <job> (job_id: ...)" header and a "send me 'stop
+    #   reminder <job>'" footer (config_defaults.py, default True). On a seat
+    #   that is scheduler plumbing in a client's chat, and its instruction is
+    #   false: op-managed jobs are rematerialized at boot and the couples
+    #   settings own their schedules. The person receives only what the agent
+    #   wrote.
+    config["cron"] = {"wrap_response": False}
     title_generation = _title_generation_pin(customer)
     if title_generation:
         config["auxiliary"] = {"title_generation": title_generation}
