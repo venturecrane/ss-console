@@ -80,3 +80,20 @@ def test_rank_reads_court_events_and_overdue_money_tasks_by_the_firms_words(tmp_
     got = rank_mod.rank({"posture": "pre_demand"}, inv, f, today, set())
     assert got["priority"] == 1 and "Hearing" in got["reason"]
     assert [k["date"] for k in got["key_dates"]] == ["2026-10-01", "2026-11-02"]
+
+
+def test_a_matter_purged_from_the_lane_state_is_gone_from_every_file_there(tmp_path: Path):
+    from medchron.casefile import own_writes
+
+    st = tmp_path / "state"
+    state_mod.commit(st, kit.M1, {"review": {"number": "100001"}})
+    state_mod.commit(st, kit.M2, {"review": {"number": "100002"}})
+    state_mod.save_proposals(st, kit.JOB, {"1": {"matter_id": kit.M1}, "2": {"matter_id": kit.M2}})
+    own_writes.record(st, kit.JOB, kit.M1, "file", "up-1")
+    own_writes.record(st, kit.JOB, kit.M2, "file", "up-2")
+    assert state_mod.purge_matter(st, kit.M1, dry_run=True) == {"records": 1, "proposal_lines": 1, "own_writes": 1}
+    assert state_mod.load_prior(st, kit.M1) is not None  # a dry run removes nothing
+    state_mod.main(["purge", "--matter", kit.M1, "--state-dir", str(st)])
+    assert state_mod.load_prior(st, kit.M1) is None and state_mod.load_prior(st, kit.M2) is not None
+    assert list(state_mod.load_proposals(st, kit.JOB)) == ["2"]
+    assert own_writes.ids(st) == {"up-2"}

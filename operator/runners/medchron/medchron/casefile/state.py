@@ -132,8 +132,53 @@ def own_ids(state: Path) -> set[str]:
     return own_writes.ids(state)
 
 
+def purge_matter(state: Path, matter_id: str, dry_run: bool = False) -> dict[str, int]:
+    """Remove one matter from the lane's state ("gone means gone"): its
+    delivered record, its proposed lines in every job's proposals, and its rows
+    in the write journal. Counts what was (or, with ``dry_run``, would be) removed."""
+    out = {"records": 0, "proposal_lines": 0, "own_writes": 0}
+    rec = state / "records" / f"{matter_id}.json"
+    if rec.is_file():
+        out["records"] = 1
+        if not dry_run:
+            rec.unlink()
+    for p in sorted((state / "proposals").glob("*.json")) if (state / "proposals").is_dir() else []:
+        got = _read(p)
+        if not isinstance(got, dict):
+            continue
+        keep = {k: v for k, v in got.items() if not (isinstance(v, dict) and v.get("matter_id") == matter_id)}
+        out["proposal_lines"] += len(got) - len(keep)
+        if not dry_run and len(keep) != len(got):
+            _write(p, keep)
+    rows = own_writes.rows(state)
+    keep_rows = [r for r in rows if r.get("matter_id") != matter_id]
+    out["own_writes"] = len(rows) - len(keep_rows)
+    if not dry_run and out["own_writes"]:
+        (state / own_writes.NAME).write_text(
+            "".join(json.dumps(r, sort_keys=True) + "\n" for r in keep_rows), encoding="utf-8"
+        )
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m medchron.casefile.state purge --matter <id> [--state-dir D] [--dry-run]``."""
+    import argparse
+    import sys
+
+    ap = argparse.ArgumentParser(prog="medchron.casefile.state")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    pg = sub.add_parser("purge", help="remove one matter from the case file lane's state")
+    pg.add_argument("--matter", required=True)
+    pg.add_argument("--state-dir", default=None)
+    pg.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args(argv)
+    print(json.dumps(purge_matter(state_dir(args.state_dir), args.matter, dry_run=args.dry_run)), file=sys.stdout)
+    return 0
+
+
 __all__ = [
     "commit",
+    "purge_matter",
     "digest",
     "fingerprint",
     "load_prior",
@@ -142,3 +187,7 @@ __all__ = [
     "save_proposals",
     "state_dir",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
