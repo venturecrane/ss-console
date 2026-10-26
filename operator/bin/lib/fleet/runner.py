@@ -103,6 +103,9 @@ TRANSPORT_MARKERS: tuple[str, ...] = (
     "failed to start agent",
     "ssh: handshake failed",
     "unexpected eof",
+    # Go's net/http names a connection the server dropped mid-response as a bare
+    # EOF after the URL: `Get "https://api.machines.dev/...": EOF`.
+    '": eof',
     "temporary failure in name resolution",
     "no such host",
     "502 bad gateway",

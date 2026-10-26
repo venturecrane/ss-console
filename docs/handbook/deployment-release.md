@@ -300,7 +300,9 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   `--max-idle-wait` (30 minutes). Still busy: the seat is skipped as
   `waiting_idle`, never deployed mid-job. Queued work is not busy; the queue is
   on the volume and survives the restart. `--force-mid-job` skips the gate, and
-  says so loudly.
+  says so loudly. A probe or quiesce call that loses its connection to Fly is
+  retried, a poll apart, up to 3 times in a row; a connection that stays down,
+  or a probe that ran and failed, halts the seat as a tooling error.
 - **Record and snapshot.** The seat's current image and deployed fly.toml are
   recorded as its rollback target, and the volume is snapshotted. A release
   built with `--not-volume-forward-compatible` halts a failing seat instead of
