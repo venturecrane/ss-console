@@ -87,6 +87,26 @@ def test_an_update_whose_files_the_delivery_already_holds_is_delivered_already_c
     assert UO.wake_lines([o.to_dict()], "failed") == []
 
 
+def test_a_proof_run_stops_before_filing_the_records_review_and_says_what_it_would_file(
+    tmp_path: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """2026-10-25: proof 4 of a real update reached this ending at $0 and was
+    held, because the review's filing is a write and a proof refuses every
+    write. A proof run now stops here with the proof's verdict, the review
+    staged under out/ for SMD to read, nothing sent."""
+    from medchron import proof_mode
+
+    monkeypatch.setenv(proof_mode.PROOF_ENV, "1")
+    o, seat, model = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n2", "n3"])
+    assert o.outcome == proof_mode.OUTCOME and o.stage == "update_select", o
+    assert seat.sent == [] and seat.deleted == [] and model.calls == []
+    assert (data_root / "example-matter" / "out" / "alpha" / REVIEW).is_file()
+    assert "would file the records review" in (o.reason or "") and o.current is not None
+    from medchron import proof_run
+
+    assert proof_run.judge([o.to_dict()])[0] is True
+
+
 def test_the_daemon_wake_for_an_already_current_delivery_carries_the_counts(tmp_path: Path) -> None:
     from medchron import daemon as daemon_mod, verdict
 

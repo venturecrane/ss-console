@@ -39,6 +39,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .. import proof_mode
 from ..gates.foreign_identity import WITHHELD_REASONS
 from ..stages.base import read_json, read_jsonl
 from . import body as B, select as S
@@ -311,6 +312,14 @@ def end(sr: Any, st: Any, stage: str, code: int, out: Any) -> Any:
     from . import review_list
 
     doc = review_list.build(sr, rec["files"], {})
+    if proof_mode.active():
+        # A proof run stops before its one write (proof_mode): the review is
+        # staged under out/ for SMD to read, and the verdict says what would be filed.
+        note = f"proof run: already current; would file the records review {doc.name}: {line(summary(rec))}"[:480]
+        st.finish(stage, status="current", exit_code=code, dollars=out.dollars, pages=out.pages, note=note)
+        out.outcome, out.reason, out.current = proof_mode.OUTCOME, note, summary(rec)
+        sr.log(note)
+        return out
     filed, why = update_review_file.file(sr, doc)
     if filed is None:
         reason = f"update_held: the update found nothing to add, and its records review was not filed: {why}"[:480]
