@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from .job_ledger import JobLedgerWriter
     from .demand_verbs import DemandVerbs
     from .drafting_verbs import DraftingVerbs
+    from .casefile_verbs import CasefileVerbs
     from .litigation_verbs import LitigationVerbs
     from .negotiation_verbs import NegotiationVerbs
     from .medchron_verbs import MedchronVerbs
@@ -86,6 +87,8 @@ class BrokerContext(Protocol):
     def litigation(self) -> LitigationVerbs | None: ...
     @property
     def negotiation(self) -> NegotiationVerbs | None: ...
+    @property
+    def casefile(self) -> CasefileVerbs | None: ...
     @property
     def agentmail(self) -> AgentMailOps | None: ...
     @property

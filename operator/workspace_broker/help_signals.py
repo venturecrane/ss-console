@@ -40,6 +40,10 @@ LANE_UNPROVEN = "lane_unproven"
 
 #: One fixed statement per lane, written out whole.
 _SQL: dict[str, str] = {
+    "casefile": (
+        "SELECT state, reason, request_ref FROM casefile_jobs WHERE substr(updated_at,1,19) >= ?"
+        " AND (state IN ('held','failed') OR reason LIKE 'lane_unproven:%')"
+    ),
     "demand": (
         "SELECT state, reason, request_ref FROM demand_jobs WHERE substr(updated_at,1,19) >= ?"
         " AND (state IN ('held','failed') OR reason LIKE 'lane_unproven:%')"

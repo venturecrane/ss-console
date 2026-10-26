@@ -98,13 +98,27 @@ from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .transmit_verbs import dispatch_transmit
 
-KINDS = ("demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")
+KINDS = (
+    "casefile_job",
+    "demand_job",
+    "drafting_job",
+    "litigation_job",
+    "medchron_job",
+    "negotiation_job",
+    "note_job",
+    "message",
+)
 #: The job kinds: each binds on its own ledger with the same rules.
-JOB_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"})
+JOB_KINDS = frozenset(
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
+)
 #: The kinds whose ledger carries its own reply mark (``mark_replied``). The
 #: medchron ledger predates it; its once-only rests on the bound_replies claim.
-_LEDGER_MARKED_KINDS = frozenset({"demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"})
+_LEDGER_MARKED_KINDS = frozenset(
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"}
+)
 _NOUN = {
+    "casefile_job": "case file",
     "demand_job": "demand",
     "drafting_job": "drafting",
     "litigation_job": "litigation status",
@@ -281,6 +295,12 @@ def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
         return NoteLedger(str(broker.audit_db_path))
     if kind == "drafting_job":
         return _drafting_ledger(broker)
+    if kind == "casefile_job":
+        from .casefile_store import CasefileLedger
+
+        return CasefileLedger(
+            str(broker.audit_db_path), os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-medchron/casefile-queue"
+        )
     if kind == "demand_job":
         return _demand_ledger(broker)
     raise ValueError(f"{kind} has no ledger that marks its reply")
@@ -290,7 +310,8 @@ def _parse(raw: Any) -> tuple[str, str]:
     """(kind, identifier), where kind is a job kind, message or message_graph."""
     if not isinstance(raw, dict):
         raise BindingRefused(
-            "a reply binding names a demand, drafting, litigation status, negotiation, chronology or SMD note job, "
+            "a reply binding names a case file, demand, drafting, litigation status, negotiation, chronology or "
+            "SMD note job, "
             "or an email"
         )
     kind = raw.get("kind")
@@ -694,7 +715,35 @@ def reply_verb(
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     _settle_sent(broker, db_path, v, result)
+    _raise_casefile_lines(broker, v, session_id)
     return result
+
+
+def _raise_casefile_lines(broker: BrokerContext, v: Verified, session_id: str) -> None:
+    """A delivered case file job's numbered changes become casework lines on the
+    thread this reply went out on (``casefile_verbs.raise_lines``), so the
+    requester can approve them by number in that thread. The broker raises
+    them itself: the model never names a line. Never raises: the reply went."""
+    row = v.row or {}
+    if v.kind != "casefile_job" or row.get("state") != "delivered" or row.get("mode") != "full":
+        return
+    from .casefile_verbs import raise_lines
+
+    try:
+        raised = raise_lines(broker, v.job_id, v.conversation_id, session_id)
+    except Exception:  # noqa: BLE001 - the reply already went; a lost raise is logged and the lines stay proposed
+        logger.exception("could not raise the case file lines of %s", v.job_id)
+        return
+    if raised and broker.ledger is not None:
+        broker.ledger.append(
+            {
+                "action_type": "CASEFILE_LINES_PROPOSED",
+                "actor": "workspace-broker",
+                "actor_role": "broker",
+                "skill_name": "case-file-manager",
+                "metadata": json.dumps({"job_id": v.job_id, "lines": raised}, sort_keys=True, separators=(",", ":")),
+            }
+        )
 
 
 def _settle_sent(broker: BrokerContext, db_path: str, v: Verified, result: Any) -> None:

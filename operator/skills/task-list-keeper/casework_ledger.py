@@ -14,7 +14,7 @@ casework row authorizes a WRITE to the firm's record. They share the broker
 Record shape (one JSON object per line)::
 
     {"v":1,"ts":<iso, broker>,"id":<ulid, broker>,"skill":<str>,
-     "matter_id":<str>,"kind":<task|date>,"source_id":<Smokeball task/event id>,
+     "matter_id":<str>,"kind":<task|date|medicals>,"source_id":<Smokeball task/event id>,
      "item_key":<hex16>,"event":<EVENTS>,"session_id":<str|absent>,
      # raises (proposed|named|briefed):
      "n":<1..999>,"dispatch_ref":<hex32>,"thread_ref":<broker-stamped>,
@@ -59,8 +59,12 @@ from datetime import date, datetime, timedelta, timezone
 
 SCHEMA_VERSION = 1
 
-ITEM_KINDS: tuple[str, ...] = ("task", "date")
-_NAMESPACE: dict[str, str] = {"task": "__cm_task:", "date": "__cm_date:"}
+ITEM_KINDS: tuple[str, ...] = ("task", "date", "medicals")
+_NAMESPACE: dict[str, str] = {
+    "task": "__cm_task:",
+    "date": "__cm_date:",
+    "medicals": "__cm_medicals:",
+}
 
 RAISING_EVENTS: tuple[str, ...] = ("proposed", "named", "briefed")
 VERDICT_EVENTS: tuple[str, ...] = ("approved", "held")
@@ -83,10 +87,12 @@ WITNESSED_EVENTS: tuple[str, ...] = (*RAISING_EVENTS, "mentioned")
 #: deadline digest): it carries no evidence, is accepted on any class because
 #: its authority is the person and not the record, and is written only by the
 #: deadline-miss-escalator; approving it requires a named person (``decided_by``).
-ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step")
+#: ``add_row`` is a Case File Manager line: a Medicals row proposed from a bill
+#: whose text was read, applied by that lane's runner after a named approval.
+ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step", "add_row")
 LEVELS: tuple[str, ...] = ("surfaces", "prepares", "handles")
 #: The actions an approval turns into an update_task write (a step runs a skill).
-WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign")
+WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign", "add_row")
 #: The one routine that may raise a ``complete``: the digest a person answers.
 COMPLETE_SKILL = "deadline-miss-escalator"
 CLASSES: tuple[str, ...] = ("open", "done", "stale", "at_stake")
