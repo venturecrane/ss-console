@@ -77,6 +77,13 @@ lanes:
     label: litigation status list
     queue_minutes: 15
     run_minutes: 180
+  # The case file manager reads a caseload a matter at a time. No seat ledger
+  # measures it yet; the limits start at the demand lane's and are re-set from
+  # the first month of runs.
+  casefile:
+    label: case file
+    queue_minutes: 15
+    run_minutes: 360
   negotiation:
     label: negotiation watch
     queue_minutes: 15
