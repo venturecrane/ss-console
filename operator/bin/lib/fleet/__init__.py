@@ -18,7 +18,7 @@ Layout:
   d1, r2, fly  thin adapters over wrangler, the aws CLI and flyctl
   rings      ring membership (operator/fleet/rings.yaml) and holds
   waves      lease + ring iteration + halt, shared by image and skills releases
-  busy       the live busy gate (ssh probe that works on old images) + quiesce
+  busy       the live busy gate (Machines-API exec probe that works on old images) + quiesce
   preflight  per-seat checks before anything is touched
   rollout    one seat's image release: snapshot, deploy, smoke, read-back, rollback
   skills     one seat's skills release: capability gate, pointer, read-back

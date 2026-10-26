@@ -278,6 +278,40 @@ def test_app_exists_reads_not_found_as_no_and_anything_else_as_a_tooling_error()
         fly.app_exists("hermes-fleet")
 
 
+class MachineRunner(RecordingRunner):
+    """Answers `machines list` with one Machine and every other call with ``out``."""
+
+    def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
+        super().run(argv, input_text=input_text, timeout=timeout, cwd=cwd, env=env)
+        if argv[1:3] == ["machines", "list"]:
+            return Result(0, '[{"id": "6e8206d0f36d08", "state": "started"}]', "")
+        return Result(0, self.out, "")
+
+
+def test_a_seat_program_runs_by_machine_exec_with_the_source_intact() -> None:
+    # FALSIFIER: ship it over `fly ssh console` and CI needs a fresh WireGuard
+    # peer per run, which lost two of three busy probes on 2026-10-26.
+    import base64
+
+    runner = MachineRunner(out="SMD_BUSY_PROBE {}")
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
+    source = "import json\nARGS = json.loads(\"{\\\"a\\\": 'b c'}\")\nprint('x')\n"
+    fly.run_python("hermes-smd-staging", source, timeout=60)
+    argv, env = runner.calls[-1]
+    assert argv[:4] == ["fly", "machine", "exec", "6e8206d0f36d08"]
+    assert argv[5:] == ["-a", "hermes-smd-staging", "--timeout", "60"]
+    command = argv[4]
+    prefix, suffix = "python3 -I -c \"import base64;exec(base64.b64decode('", "'))\""
+    assert command.startswith(prefix) and command.endswith(suffix)
+    assert base64.b64decode(command[len(prefix) : -len(suffix)]).decode() == source
+    assert env == {"FLY_API_TOKEN": "FlyV1 fm2_seatsecretvalue,fm2_registrysecretvalue"}
+
+
+def test_no_fly_call_in_the_fleet_library_opens_an_ssh_tunnel() -> None:
+    src = Path(fly_module.__file__).read_text(encoding="utf-8")
+    assert '"ssh", "console"' not in src, "fleet calls run by `fly machine exec`; ssh needs a WireGuard peer"
+
+
 def test_no_fly_call_in_the_fleet_library_lists_the_whole_org() -> None:
     # CI holds only app-scoped tokens. An org-wide verb compiles, passes every
     # fake, and fails only in CI against Fly; this keeps the class out.

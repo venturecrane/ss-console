@@ -5,7 +5,7 @@ five hops (check, results file, heartbeat, fleet_status, fleet-alerts worker),
 each of which can break silently. After any change to the self-test this verb
 proves all five on smd-staging, end to end, with a REAL violation:
 
-  1. plant the violation (remote_selftest_plant.py, as root over ssh) and ask
+  1. plant the violation (remote_selftest_plant.py, as root by `fly machine exec`) and ask
      the seat's own self-test loop for a run (its root-only trigger),
   2. wait until the heartbeat shows that check failed,
   3. ask for a second run and wait for failed_streak >= 2 (an hourly failure
@@ -76,7 +76,7 @@ class SelftestPlant:
         self.sleep, self.clock = sleep, clock
 
     def _remote(self, seat: str, action: str) -> str:
-        res = self.fly.ssh_python(ids.app_name(seat), plant_source(action))
+        res = self.fly.run_python(ids.app_name(seat), plant_source(action))
         line = next((ln for ln in res.text.splitlines() if ln.startswith("SMD_SELFTEST_PLANT ")), "")
         if not line.startswith("SMD_SELFTEST_PLANT ok"):
             raise ToolingError(f"{action} on {seat}: {line or res.text.strip()[-300:] or 'no answer'}")

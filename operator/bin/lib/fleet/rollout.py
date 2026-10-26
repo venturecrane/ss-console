@@ -59,7 +59,7 @@ class ImagePlan:
     # False (``--no-ssh-fallback``, and always in ``--tick``): the deploy path
     # never runs the ssh boot smoke. A self-test that gives no verdict is a
     # tooling_error (halt, page), and a rollback is re-verified by the self-test
-    # on the rollback image. The busy gate's ssh probe is not the boot smoke and
+    # on the rollback image. The busy gate's exec probe is not the boot smoke and
     # still runs: it is what keeps a running job from being restarted.
     ssh_fallback: bool = True
 

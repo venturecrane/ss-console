@@ -22,6 +22,7 @@ a token value is never part of an argv, a log line or an error.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -248,17 +249,34 @@ class Fly:
         )
 
     # -- ssh --------------------------------------------------------------------------
-    def ssh_python(self, app: str, source: str, timeout: float = 90) -> Result:
-        """Run a Python program on the Machine as root, read from stdin (no quoting layers).
+    def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
+        """Run a Python program on the app's Machine as root, over the Machines API.
 
-        The program travels on stdin to ``python3 -I -`` with ``--pty=false``, so
-        nothing in it is re-parsed by a shell on either side. It runs under the
-        image's system python3, which every seat image has carried since the
-        first one, so this works on images older than any fleet tooling.
+        ``fly machine exec`` is an HTTPS call to the Machines API. It was ``fly
+        ssh console`` until 2026-10-26, and ssh needs a WireGuard tunnel into the
+        org: every GitHub runner minted a fresh peer that was often not ready in
+        time ("tunnel unavailable ... probing personal"), so two of three CI runs
+        that day lost the busy probe. exec needs no tunnel, accepts an app-scoped
+        deploy token, and runs as root (probed: vfy_01M5X52BH037Y1JBF4JWSJT8MT).
+
+        The program travels base64-encoded inside ``python3 -I -c``: base64 has no
+        quote, space or backslash, so the one quoting layer exec applies cannot
+        touch it. It runs under the image's system python3, which every seat image
+        has carried since the first one.
         """
+        encoded = base64.b64encode(source.encode("utf-8")).decode("ascii")
+        command = f"python3 -I -c \"import base64;exec(base64.b64decode('{encoded}'))\""
         return self._fly(
-            "ssh", "console", "-a", app, "--pty=false", "-C", "python3 -I -", timeout=timeout, input_text=source
-        )
+            "machine", "exec", self.machine_id(app), command, "-a", app, "--timeout", str(int(timeout)),
+            timeout=timeout + 30,
+        )  # fmt: skip
+
+    def machine_id(self, app: str) -> str:
+        """The id of the app's one Machine (a seat runs exactly one)."""
+        ids_ = [str(m.get("id")) for m in self.machines(app) if m.get("id")]
+        if not ids_:
+            raise ToolingError(f"{app} has no Machine to run a command on")
+        return ids_[0]
 
     # -- build -------------------------------------------------------------------------
     def build_push(self, config_path: str, label: str, ss_sha: str) -> Result:
