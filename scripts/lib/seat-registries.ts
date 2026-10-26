@@ -50,7 +50,7 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 `
 
 /** The bake when no seat in a ring authors one; rings.py's DEFAULT_BAKE_MINUTES. */
-export const DEFAULT_BAKE_MINUTES = 30
+export const DEFAULT_BAKE_MINUTES = 10
 
 /** Seats in ring order, ordered within a ring by the day each was authored, then slug. */
 function ringsOf(seats: Seat[]): Array<{ ring: number; seats: string[]; bake: number }> {

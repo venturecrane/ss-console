@@ -29,13 +29,13 @@
 rings:
   - ring: 0
     seats: [smd-staging]
-    bake_minutes: 30
+    bake_minutes: 10
   - ring: 1
     seats: [pilot-smokeball]
-    bake_minutes: 30
+    bake_minutes: 10
   - ring: 2
     seats: [scott, brokery, captain-mark]
-    bake_minutes: 30
+    bake_minutes: 10
   - ring: 3
     seats: [ashton-price]
     max_parallel: 1

@@ -15,7 +15,7 @@ from . import ids
 # Minutes every seat of a ring must have been done on a release, with no open
 # seat alarm, before the next ring takes it (ADR 0096). A ring's own value comes
 # from its seats' seat.yaml `bake_minutes`, rendered into rings.yaml.
-DEFAULT_BAKE_MINUTES = 30
+DEFAULT_BAKE_MINUTES = 10
 
 
 @dataclass
