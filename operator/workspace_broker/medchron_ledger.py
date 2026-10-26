@@ -49,7 +49,7 @@ from typing import Any
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
-from .medchron_coverage import parse_covered, union_coverage, validate_covered
+from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
 # module crossed the size ceiling, and the runner, the verbs and the tests all
@@ -839,11 +839,15 @@ class MedchronLedger:
         `covered_document_ids` / `uncovered_document_ids` are None (not empty)
         when the row carries no record at all, because "nothing was covered" and
         "nobody wrote down what was covered" lead an update to opposite actions.
+        `uncovered_reasons` is the record's `{uncovered id: reason token}`, or
+        None for a record written before reasons existed: the Operator words
+        why a file went unread from it, and never guesses.
         """
         out = {k: row.get(k) for k in PROJECTION}
         covered, uncovered = parse_covered(row.get("covered_json"))
         out["covered_document_ids"] = covered
         out["uncovered_document_ids"] = uncovered
+        out["uncovered_reasons"] = parse_why(row.get("covered_json"))
         return out
 
     # -- the runner's report ----------------------------------------------

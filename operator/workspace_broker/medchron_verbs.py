@@ -123,7 +123,9 @@ def _with_hold_class(job: dict[str, Any], lane: str) -> dict[str, Any]:
     return job
 
 
-_COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids")
+#: `uncovered_reasons` leaves list views too (counts only); the single-job
+#: read keeps it, which is where a follow-up about an unread file looks.
+_COVERAGE_KEYS = ("covered_json", "covered_document_ids", "uncovered_document_ids", "uncovered_reasons")
 
 
 def _counted(row: dict[str, Any]) -> dict[str, Any]:

@@ -31,6 +31,10 @@ artifacts and reports the same two sets, keyed by document id:
 An id in neither set would be an unexplained loss, which the coverage gate
 itself refuses to ship, so the two sets sum to every pulled document and the
 broker refuses a payload where they do not.
+
+Each uncovered id may also carry a reason TOKEN in ``why`` (``uncovered_why``),
+so a follow-up question about an unread file is answered from the record
+rather than guessed. Tokens, never names or text: the ledger holds ids only.
 """
 
 from __future__ import annotations
@@ -39,6 +43,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from . import uncovered_why as W
+from . import unopened
 from .gates.foreign_identity import WITHHELD_REASONS
 from .stages.base import read_json, read_jsonl
 from .stages.coverage import (
@@ -69,11 +75,28 @@ def _cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
     return {n for n, num in read_json(run_dir / "exhibit_map.json", {}).items() if num in cited_ex}
 
 
-def _orphan_names(slug_dir: Path) -> tuple[set[str], set[str]]:
-    """(every documented orphan, the ones withheld: at the firm's direction or by the identity rule)."""
+def _orphan_names(slug_dir: Path) -> tuple[dict[str, str], set[str]]:
+    """({documented orphan: its reason}, the ones withheld: at the firm's direction or by the identity rule)."""
     rows = (read_json(slug_dir / "orphans.json", {}) or {}).get("orphans") or []
     named = [o for o in rows if o.get("name")]
-    return {o["name"] for o in named}, {o["name"] for o in named if o.get("reason") in WITHHELD_REASONS}
+    reasons = {o["name"]: str(o.get("reason") or "") for o in named}
+    return reasons, {o["name"] for o in named if o.get("reason") in WITHHELD_REASONS}
+
+
+def _orphan_token(reason: str) -> str:
+    """The fixed token for an orphan's stated reason (``decisions.orphans``)."""
+    if reason == unopened.REASON:
+        return W.PASSWORD_PROTECTED
+    if reason.endswith("a type this review does not read"):
+        return W.NOT_PDF_OR_IMAGE
+    return W.NOT_EXPLAINED
+
+
+def _skip_token(reason: str) -> str:
+    """The fixed token for a unit row's ``compose_skip``: a contentless scan
+    (``transcript.contentless_reason``) carries almost no text; any other skip
+    is not one the record words."""
+    return W.NO_TEXT if reason.startswith("read in full;") else W.NOT_EXPLAINED
 
 
 def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
@@ -121,9 +144,11 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
 
     covered: set[str] = set()
     uncovered: set[str] = set()
+    why: dict[str, str] = {}
     for key in sorted(set(pulled) | failed):
         if key in failed:
             uncovered.add(key)
+            why[key] = W.RETRIEVAL_FAILED
             continue
         if key in cited or key in accounted:
             covered.add(key)
@@ -131,9 +156,11 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         row = by_name.get(key, pulled.get(key, {}))
         if row.get("compose_skip"):
             uncovered.add(key)
+            why[key] = _skip_token(str(row["compose_skip"]))
             continue
         if key in orphans:
             uncovered.add(key)
+            why[key] = _orphan_token(orphans[key])
             continue
         if billing_stem(key) in billing_names or key in billing_names:
             covered.add(key)
@@ -141,14 +168,13 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         if classify_name(key, rules) or (pulled.get(key, {}).get("ext") or "").lower() not in EXT_OK:
             covered.add(key)
             continue
-        disposition = said.get(key)
-        if disposition and disposition.startswith("composer:"):
-            uncovered.add(key)
-            continue
-        # A file the delivered document neither cites nor explains cannot ship
-        # (the coverage gate holds the run), so reaching here means the gate was
-        # bypassed. Treat it as uncovered: an update re-reads it.
+        # The composer read it and found nothing citable (``composer:``), or the
+        # delivered document neither cites nor explains it, which the coverage
+        # gate holds, so reaching here means the gate was bypassed. Either way
+        # it is uncovered and an update re-reads it; neither is a reason the
+        # record words for a reader.
         uncovered.add(key)
+        why[key] = W.NOT_EXPLAINED
 
     def ids(names: set[str]) -> list[str]:
         return sorted({id_of[n] for n in names if n in id_of})
@@ -158,10 +184,40 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     # decide either way, so the uncovered reading wins: re-reading is recoverable,
     # skipping a record is not.
     covered_ids = [i for i in covered_ids if i not in set(uncovered_ids)]
-    return {
+    out: dict[str, Any] = {
         "covered": covered_ids,
         "uncovered": uncovered_ids,
         "pulled": len(covered_ids) + len(uncovered_ids),
+    }
+    reasons = _why_by_id(slug_dir, {id_of[n]: t for n, t in why.items() if n in id_of}, uncovered_ids)
+    if reasons:
+        out["why"] = reasons
+    return out
+
+
+def _why_by_id(slug_dir: Path, why: dict[str, str], uncovered_ids: list[str]) -> dict[str, str]:
+    """Each uncovered document's token, keyed the way the uncovered set is
+    (``_as_matter_ids``). A locked PDF reads as password-protected whichever
+    path left it unread, unless its bytes never arrived. Two attachments of
+    one email with different tokens: the first in sorted id order wins; the
+    token words an answer, it decides nothing."""
+    locked = set(unopened.password_protected(slug_dir))
+    parent = _parents(slug_dir)
+    out: dict[str, str] = {}
+    for rid in sorted(why):
+        token = why[rid]
+        if rid in locked and token != W.RETRIEVAL_FAILED:
+            token = W.PASSWORD_PROTECTED
+        out.setdefault(parent.get(rid, rid), token)
+    return W.restricted(out, uncovered_ids)
+
+
+def _parents(slug_dir: Path) -> dict[str, str]:
+    """``{msgatt id: the email's id}`` for every folded attachment that recorded one."""
+    return {
+        str(r["id"]): str(r["container_id"])
+        for r in read_jsonl(slug_dir / "raw_manifest.jsonl")
+        if str(r.get("id") or "").startswith("msgatt-") and r.get("container_id")
     }
 
 
@@ -173,11 +229,7 @@ def _as_matter_ids(slug_dir: Path, ids: list[str]) -> list[str]:
     because no such document is on the matter. A row from before the email's
     id was recorded (``container_id``) keeps its own id; the update's pull
     resolves those (``stages/email_parents``)."""
-    parent = {
-        str(r["id"]): str(r["container_id"])
-        for r in read_jsonl(slug_dir / "raw_manifest.jsonl")
-        if str(r.get("id") or "").startswith("msgatt-") and r.get("container_id")
-    }
+    parent = _parents(slug_dir)
     return sorted({parent.get(i, i) for i in ids})
 
 
@@ -185,24 +237,27 @@ def covered_payload(slug_dir: Path, units: list[str], cfg: Any) -> dict[str, Any
     """The union across the units this job delivered, or None when the run left
     no coverage artifacts to read (nothing is guessed: the skill reports the
     record as unknown and submits no update)."""
-    covered: set[str] = set()
-    uncovered: set[str] = set()
-    seen = False
-    for unit in units:
-        if not (slug_dir / "units" / f"{unit}.json").is_file():
-            continue
-        seen = True
-        sets = covered_sets(slug_dir, unit, cfg)
-        covered |= set(sets["covered"])
-        uncovered |= set(sets["uncovered"])
-    if not seen:
+    records = [covered_sets(slug_dir, u, cfg) for u in units if (slug_dir / "units" / f"{u}.json").is_file()]
+    if not records:
         return None
+    return _union(records)
+
+
+def _union(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Several units' records as one: uncovered in ANY unit stays uncovered,
+    and each still-uncovered id keeps the first reason a unit gave it."""
+    covered = {str(x) for r in records for x in r.get("covered") or []}
+    uncovered = {str(x) for r in records for x in r.get("uncovered") or []}
     covered -= uncovered
-    return {
+    out: dict[str, Any] = {
         "covered": sorted(covered),
         "uncovered": sorted(uncovered),
         "pulled": len(covered) + len(uncovered),
     }
+    why = W.union([r.get("why") if isinstance(r.get("why"), dict) else None for r in records], uncovered)
+    if why:
+        out["why"] = why
+    return out
 
 
 def write_debug(path: Path, payload: dict[str, Any]) -> None:
@@ -218,24 +273,10 @@ def merge_covered(outcomes: list[dict[str, Any]]) -> dict[str, Any] | None:
     in an update is recoverable, and dropping a record from a litigation
     chronology is not.
     """
-    covered: set[str] = set()
-    uncovered: set[str] = set()
-    seen = False
-    for o in outcomes:
-        rec = o.get("covered") if isinstance(o, dict) else None
-        if not isinstance(rec, dict):
-            continue
-        seen = True
-        covered |= {str(x) for x in rec.get("covered") or []}
-        uncovered |= {str(x) for x in rec.get("uncovered") or []}
-    if not seen:
+    records = [o["covered"] for o in outcomes if isinstance(o, dict) and isinstance(o.get("covered"), dict)]
+    if not records:
         return None
-    covered -= uncovered
-    return {
-        "covered": sorted(covered),
-        "uncovered": sorted(uncovered),
-        "pulled": len(covered) + len(uncovered),
-    }
+    return _union(records)
 
 
 def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> dict[str, Any]:
