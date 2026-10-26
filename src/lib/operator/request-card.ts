@@ -39,7 +39,14 @@ export const CARD_KINDS = [
   'followup',
 ] as const
 export type CardKind = (typeof CARD_KINDS)[number]
-export const JOB_LANES = ['demand', 'drafting', 'litigation', 'medchron', 'negotiation'] as const
+export const JOB_LANES = [
+  'demand',
+  'drafting',
+  'litigation',
+  'medchron',
+  'negotiation',
+  'casefile',
+] as const
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 
 // `<sha256 of the request>:<kind>`. A job_done key may carry its job ENDING

@@ -216,6 +216,9 @@ describe('jobsQueued', () => {
       'demand,drafting'
     )
     expect(jobsQueued(['unknown_job_submit', 'litigation_job_submit'])).toBe('litigation')
+    // casefile_apply_submit is not a `<lane>_job_submit` tool: an APPLY queues
+    // under the casefile lane, but the turn's own submit names it.
+    expect(jobsQueued(['casefile_job_submit', 'casefile_apply_submit'])).toBe('casefile')
   })
 })
 
@@ -516,6 +519,24 @@ describe('POST /api/internal/operator-request-card', () => {
       expect(res.status, state).toBe(200)
     }
     const recorded = (await rows()).filter((r) => r.job_lane === 'litigation')
+    expect(recorded.map((r) => r.job_state).sort()).toEqual(['delivered', 'failed', 'held'])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('a casefile job card is recorded and sent for every terminal state (0141)', async () => {
+    // FALSIFIER: drop 'casefile' from JOB_LANES and the parse refuses it (400);
+    // drop migration 0141 and the job_lane CHECK rejects the INSERT.
+    for (const state of ['delivered', 'failed', 'held'] as const) {
+      const key = `${`c${state}`
+        .padEnd(64, '0')
+        .replace(/[^0-9a-f]/g, 'b')
+        .slice(0, 64)}:job_done`
+      const res = await post(
+        body({ card_key: key, kind: 'job_done', job: { lane: 'casefile', state, reason: null } })
+      )
+      expect(res.status, state).toBe(200)
+    }
+    const recorded = (await rows()).filter((r) => r.job_lane === 'casefile')
     expect(recorded.map((r) => r.job_state).sort()).toEqual(['delivered', 'failed', 'held'])
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
