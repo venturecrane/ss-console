@@ -82,7 +82,10 @@ def staged_fields(env: dict[str, Any], run_dir: Path, job_id: str) -> dict[str, 
 def delivered_same_matter(job: Any, slug: str) -> list[Path]:
     """The ``slug`` dirs of the delivered jobs the daemon named in
     ``job.yaml``, newest first, read by path (never by listing)."""
-    jobs = Path(job.install_root) / "jobs"
+    root = getattr(job, "install_root", None)
+    if not root:
+        return []
+    jobs = Path(root) / "jobs"
     return [sd for jid in getattr(job, "prior_delivered", None) or [] if (sd := jobs / jid / "data" / slug).is_dir()]
 
 

@@ -45,6 +45,7 @@ from . import body as B, select as S
 from .billing_page import BILLING
 from .locate import vendor_name
 from .medlegal import REASON as MEDLEGAL_REASON
+from ..stages.prior_reading import PREFIX as PRIOR_PREFIX
 from ..unopened import REASON as PASSWORD_REASON
 
 RECORD = "update_outcome.json"
@@ -73,6 +74,8 @@ NO_PAGE = "no_page_to_read"
 UNREADABLE = "unreadable"
 NOT_RETRIEVED = "not_retrieved"
 EMAIL = "email"
+#: The delivered run read it and recorded why it adds nothing (``prior_reading``).
+PRIOR = "read_for_the_delivered_chronology"
 #: Never proven nothing new: a file no rule accounts for, or one the update read.
 UNACCOUNTED = "unaccounted"
 SELECTED = "selected_to_read"
@@ -94,6 +97,7 @@ WORDING = {
     UNREADABLE: "could not be read as record pages",
     NOT_RETRIEVED: "could not be retrieved from the matter",
     EMAIL: "an email; its attachments were read as their own files",
+    PRIOR: "read for the delivered chronology, which recorded why it adds nothing",
     UNACCOUNTED: "not accounted for by this update",
     SELECTED: "selected to read",
 }
@@ -140,6 +144,8 @@ def _skipped(rid: str, sel: dict[str, Any]) -> tuple[str, str] | None:
             return UNREADABLE, "an image file the page transcription could not read; the next update reads it again"
         if why == PASSWORD_REASON:
             return UNREADABLE, PASSWORD_REASON
+        if why.startswith(PRIOR_PREFIX):
+            return PRIOR, why[len(PRIOR_PREFIX) :]
         return UNACCOUNTED, why
     return None
 
