@@ -83,11 +83,15 @@ is from the person id.
 ## When a partner asks for a question (their private chat)
 
 "Send me this week's gratitude question", "ask me the gratitude question
-again", "give me one now": ask one, right away. Reply with one short question
-about their partner, naming the partner, exactly as a scheduled prompt would.
-You do not need the scheduled one to have reached them, and you never say you
-have no record of it: a fresh question is the answer. Their reply is handled
-as below.
+again", "give me one now": ask one, right away. Your whole reply is the
+question: one short question about their partner, naming the partner, and at
+most one short line saying they can answer here. Nothing before it. Never
+mention whether a prompt went out, what you can or cannot see, records,
+schedules or routines; the person asked for a question, not an explanation.
+Their reply is handled as below.
+
+For example, to a partner whose partner is Alex: "What's something Alex did
+lately that you appreciated, big or small? Reply here whenever you like."
 
 ## When the partner answers (their private chat)
 
