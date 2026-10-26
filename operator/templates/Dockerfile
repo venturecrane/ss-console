@@ -553,6 +553,9 @@ RUN set -eu; \
 # The litigation status job (medchron/litigation/) ships in the same venv too:
 # striprtf (hash-pinned in medchron.txt) reads .rtf court papers, the apt
 # antiword above reads .doc, and its inputs come from vaults/<slug>/litigation/.
+# The case file manager (medchron/casefile/) ships in the same venv: it reads
+# with the litigation job's extractors and text cache, and its inputs come from
+# vaults/<slug>/casefile/ (casefile-firm.yaml and prompts/).
 COPY operator/runners/ /app/runners/
 # The pricing table the runner's cents cap and ledger price from, beside the
 # venv (NOT under /opt/smd, which is the establishment compilers' contract
@@ -565,7 +568,7 @@ RUN set -eu; \
     uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
       /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
     [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx"; \
+    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm"; \
     command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }; \
     chown -R root:root /opt/medchron; \
     chmod -R a+rX /opt/medchron
@@ -593,6 +596,10 @@ COPY operator/templates/entrypoint-drafting.sh /app/entrypoint-drafting.sh
 # The litigation status lane's twin (queue, job dirs, state dir, firm inputs
 # from vaults/<slug>/litigation/ and the broker's copy of its budget).
 COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
+# The case file manager's twin (queue, job dirs, state dir, firm inputs from
+# vaults/<slug>/casefile/ validated at boot, the broker's copy of its budget;
+# the text cache is the litigation lane's).
+COPY operator/templates/entrypoint-casefile.sh /app/entrypoint-casefile.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # A marketing seat's advertising-gate registers (ADR 0098) from

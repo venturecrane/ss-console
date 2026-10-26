@@ -437,6 +437,18 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     )
   })
 
+  it('imports the case file manager at build and ships its entrypoint', () => {
+    // FALSIFIER: drop the casefile modules from the build-time import smoke or
+    // the entrypoint COPY, and a seat boots a lane that cannot import, or whose
+    // queue and inputs were never made.
+    expect(DOCKERFILE_CODE).toContain(
+      'medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm'
+    )
+    expect(DOCKERFILE_CODE).toContain(
+      'COPY operator/templates/entrypoint-casefile.sh /app/entrypoint-casefile.sh'
+    )
+  })
+
   it('the requirements directory is copied into the image before any venv installs from it', () => {
     const copyAt = DOCKERFILE_CODE.indexOf('COPY operator/requirements/ /app/requirements/')
     const firstUse = DOCKERFILE_CODE.indexOf('/app/requirements/')

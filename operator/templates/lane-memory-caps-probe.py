@@ -13,7 +13,8 @@ reserve (the #2465 shape: a 1 GB guest went health-critical when a job and the
 gateway shared it). A cgroup a lane has not made yet counts at the cap the
 daemon WILL write: the authored machine.lane_memory_mb value when the
 customer.yaml authors one, else the code default read from the runner itself.
-The litigation and drafting lanes share the demand cgroup, so it counts once. A
+The litigation, casefile and drafting lanes share the demand cgroup, so it
+counts once. A
 lane that cannot run a job on this seat (no firm inputs staged) counts zero; a
 cgroup that already exists has run a job and always counts at its live limit.
 
@@ -34,7 +35,7 @@ from pathlib import Path
 import yaml
 
 GATEWAY_RESERVE_MIB = 512
-LANES_SHARING_DEMAND = ("demand", "drafting", "litigation")
+LANES_SHARING_DEMAND = ("demand", "drafting", "litigation", "casefile")
 
 
 def _root() -> str:

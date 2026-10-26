@@ -41,8 +41,16 @@ const LANE_FILES = {
   demand: code(readFileSync(resolve('operator/templates/entrypoint-demand.sh'), 'utf8')),
   drafting: code(readFileSync(resolve('operator/templates/entrypoint-drafting.sh'), 'utf8')),
   litigation: code(readFileSync(resolve('operator/templates/entrypoint-litigation.sh'), 'utf8')),
+  casefile: code(readFileSync(resolve('operator/templates/entrypoint-casefile.sh'), 'utf8')),
 } as const
-const LANES = ['demand', 'drafting', 'litigation'] as const
+const LANES = ['demand', 'drafting', 'litigation', 'casefile'] as const
+// The env each lane file exports its inputs dir under (the runner reads it).
+const INPUTS_ENV: Record<(typeof LANES)[number], string> = {
+  demand: 'MEDCHRON_DEMAND_INPUTS',
+  drafting: 'MEDCHRON_DRAFTING_INPUTS',
+  litigation: 'MEDCHRON_LITIGATION_INPUTS',
+  casefile: 'MEDCHRON_CASEFILE_INPUTS_DIR',
+}
 
 describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', () => {
   it('the helper retries the copy and distinguishes an absent prefix from an unreachable vault', () => {
@@ -71,7 +79,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
 
   it('is sourced before the lane files and shipped in the image', () => {
     expect(ENTRYPOINT).toMatch(
-      /for _lane in fetch-inputs demand drafting litigation [a-z -]*; do \. "\/app\/entrypoint-\$\{_lane\}\.sh"; done/
+      /for _lane in fetch-inputs demand drafting litigation casefile [a-z -]*; do \. "\/app\/entrypoint-\$\{_lane\}\.sh"; done/
     )
     expect(DOCKERFILE).toContain(
       'COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.sh'
@@ -84,7 +92,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   for (const lane of LANES) {
     it(`the ${lane} lane fetches through the helper and names an unfetchable vault as an error`, () => {
       const f = LANE_FILES[lane]
-      const V = `\\$\\{MEDCHRON_${lane.toUpperCase()}_INPUTS\\}`
+      const V = `\\$\\{${INPUTS_ENV[lane]}\\}`
       expect(f).toMatch(
         new RegExp(`if _fetch_lane_inputs ${lane} "${V}" ${lane}-firm\\.yaml; then`)
       )
@@ -97,7 +105,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   }
 
   it('boot smoke asserts each authored lane has its inputs on the seat, gated on the engagements checkout', () => {
-    expect(CHECKS).toMatch(/for _lane in demand drafting litigation; do/)
+    expect(CHECKS).toMatch(/for _lane in demand drafting litigation casefile; do/)
     // The expectation source is the transport's lane_authored. Over ssh it is
     // the working tree OR engagements origin/main (a stale shared checkout must
     // not turn a lane "absent"); behavior is pinned in

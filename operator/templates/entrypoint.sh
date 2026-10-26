@@ -280,7 +280,7 @@ mountpoint -q "${MEDCHRON_RUN_DIR}" \
   || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
 export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # The demand lane's (2026-10-06), the drafting lane's and the litigation status
-# lane's (2026-10-07) and the negotiation watch's (2026-10-09) queues, job dirs
+# lane's (2026-10-07), the case file manager's and the negotiation watch's (2026-10-09) queues, job dirs
 # and inputs: sourced, same shell, so their exports reach the broker launch and
 # the daemon below. One loop line: the ratchet holds this file. image-manifest
 # is not a lane: it publishes what this image can run (2026-10-13 A&P outage).
@@ -288,8 +288,8 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # lanes with firm inputs share (2026-10-14: one silent failed fetch left A&P's
 # litigation lane with no inputs for a whole release), so it is sourced first.
 # marketing is a marketing seat's advertising-gate registers (ADR 0098), root:hermes.
-# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,negotiation,marketing,lane-proofs,image-manifest}.sh
-for _lane in fetch-inputs demand drafting litigation negotiation marketing lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
+# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,casefile,negotiation,marketing,lane-proofs,image-manifest}.sh
+for _lane in fetch-inputs demand drafting litigation casefile negotiation marketing lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
 
 # The chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
@@ -539,7 +539,7 @@ launch_broker() {
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
     SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" \
-    SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" SMD_LITIGATION_QUEUE_DIR="${SMD_LITIGATION_QUEUE_DIR}" SMD_LITIGATION_FIRM_CONFIG="${SMD_LITIGATION_FIRM_CONFIG}" SMD_NEGOTIATION_QUEUE_DIR="${SMD_NEGOTIATION_QUEUE_DIR}" \
+    SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" SMD_LITIGATION_QUEUE_DIR="${SMD_LITIGATION_QUEUE_DIR}" SMD_LITIGATION_FIRM_CONFIG="${SMD_LITIGATION_FIRM_CONFIG}" SMD_CASEFILE_QUEUE_DIR="${SMD_CASEFILE_QUEUE_DIR}" SMD_CASEFILE_FIRM_CONFIG="${SMD_CASEFILE_FIRM_CONFIG}" SMD_NEGOTIATION_QUEUE_DIR="${SMD_NEGOTIATION_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_READ_CREDENTIAL_PATH="${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" \
