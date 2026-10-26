@@ -280,7 +280,7 @@ mountpoint -q "${MEDCHRON_RUN_DIR}" \
   || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
 export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # The demand lane's (2026-10-06), the drafting lane's and the litigation status
-# lane's (2026-10-07), the case file manager's and the negotiation watch's (2026-10-09) queues, job dirs
+# lane's (2026-10-07), the negotiation watch's (2026-10-09) and the case file manager's (2026-10-26) queues, job dirs
 # and inputs: sourced, same shell, so their exports reach the broker launch and
 # the daemon below. One loop line: the ratchet holds this file. image-manifest
 # is not a lane: it publishes what this image can run (2026-10-13 A&P outage).

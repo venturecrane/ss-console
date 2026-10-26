@@ -46,17 +46,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from . import casework_ledger, hold_class
+from . import casefile_casework as casework, casework_ledger, delivery_proof, hold_class
 from .broker_context import BrokerContext
 from .casefile_ledger import (
-    APPLIED_OUTCOMES,
     CLOSE_REF,
     CLOSED_REASON,
     COUNT_FIELDS,
@@ -72,7 +70,6 @@ from .casework_verbs import casework_ledger_path
 from .litigation_intake import initiation_allows
 from .litigation_verbs import month_window
 from .medchron_ledger import admins_from_customer_yaml
-from .recipient_policy import sender_key
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +86,7 @@ FIRM_CONFIG_ENV = "SMD_CASEFILE_FIRM_CONFIG"
 DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/casefile-broker-firm.yaml"
 FILE_TO_KEY = "file_to_matter_id"
 FOLDER_KEY = "folder_name"
+LIBRARY_NUMBER_KEY = "library_matter_number"
 VERBS = (
     "casefile_job_submit",
     "casefile_job_status",
@@ -233,6 +231,8 @@ class CasefileVerbs:
             if row is None:
                 return {"ok": True, "job": None}
             job = {**CasefileLedger.project(row), **({"row": row} if full else {})}
+            if full and row.get("mode") == "apply":
+                job["owned_lines"] = self._db.owned_lines(job_id)
             if job.get("state") == "held":  # the firm-safe token; the reason stays SMD's
                 job["hold_class"] = hold_class.classify("casefile", job.get("reason"))[0]
             return {"ok": True, "job": job}
@@ -298,10 +298,14 @@ class CasefileVerbs:
         return {"ok": True, "accepted": True, "job_id": job_id, "state": "queued", "mode": "full"}
 
     def _filing(self, settings: dict[str, Any]) -> tuple[str, str, str]:
-        library = _library_number(self.customer_yaml)
+        """(library number, library id or "", folder). The id is optional: a
+        seat may name the library matter by number only (``library_matter_number``,
+        else the authored operator matter's number), and the runner resolves it
+        to exactly one Open matter before anything is paid."""
+        library = str(settings.get(LIBRARY_NUMBER_KEY) or "").strip() or _library_number(self.customer_yaml)
         file_to = str(settings.get(FILE_TO_KEY) or "").strip()
         folder = str(settings.get(FOLDER_KEY) or "").strip()
-        if not (library and file_to and folder):
+        if not (library and folder):
             raise _Refused("where the caseload list is filed is not authored on this seat; nothing was queued")
         return library, file_to, folder
 
@@ -315,38 +319,22 @@ class CasefileVerbs:
         return month, cents
 
     # ---- apply ------------------------------------------------------------------------------
-    def approved_lines(self, thread_ref: str) -> tuple[str, list[dict[str, Any]]]:
-        """(source job id, the lines open to apply) on this thread: raised
-        there, approved there under a Named Administrator's key, not taken."""
-        rows = [r for r in self._db.lines_on_thread(thread_ref) if r["state"] == "raised"]
-        if not rows:
-            return "", []
-        source = rows[-1]["job_id"]
-        admins = {sender_key(a) for a in admins_from_customer_yaml(self.customer_yaml) or ()} - {None}
-        path = casework_ledger_path(self.broker) if self.broker is not None else casework_ledger.ledger_path()
-        states = casework_ledger.derive_state(casework_ledger.read_ledger(path))
-        out = []
-        for r in rows:
-            if r["job_id"] != source:
-                continue
-            key = casework_ledger.item_key(matter_id=r["matter_id"], kind=r["kind"], source_id=r["source_id"])
-            st = states.get(key)
-            d = st.decisions.get((thread_ref, int(r["n"]))) if st is not None else None
-            by = (d.decided_by or {}).get("key") if d is not None else None
-            if d is not None and d.verdict == "approved" and by in admins:
-                out.append({k: r[k] for k in ("n", "kind", "matter_id", "source_id", "sha256")})
-        return source, out
-
     def _apply(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
         if not from_gateway and peer_uid != 0:
             raise PermissionError("an apply is submitted from the approver's verified reply or by root")
         thread = str(request.get("thread_ref") or "")
         approver = str(request.get("approver") or "").strip().lower()
+        raw = request.get("numbers")
+        numbers = [n for n in raw if isinstance(n, int) and not isinstance(n, bool)] if isinstance(raw, list) else []
         if approver not in (admins_from_customer_yaml(self.customer_yaml) or ()):
             return _refusal("only a Named Administrator's approval is applied; nothing was queued")
-        source, lines = self.approved_lines(thread)
+        path = casework_ledger_path(self.broker) if self.broker is not None else casework_ledger.ledger_path()
+        source, lines, others = casework.approved_lines(self._db, path or "", thread, approver, numbers)
         if not lines:
-            return _refusal("nothing_approved: no approved change on that thread is open to apply")
+            return _refusal(
+                "nothing_approved: no change this reply approved is open to apply",
+                **({"approved_by_another": others} if others else {}),
+            )
         env = {
             "trigger": "request",
             "mode": "apply",
@@ -358,9 +346,19 @@ class CasefileVerbs:
         try:
             job_id = self._db.submit(validate_envelope(env))
         except (EnvelopeError, SubmitRefused) as exc:
-            return _refusal(str(exc))
+            # Approved lines that could not be queued are ours to look at: SMD
+            # is paged here, and the answer says so, so the reply may too.
+            paged = bool(
+                self.broker is not None
+                and delivery_proof.append_alert(
+                    self.broker, lane="casefile", job_id=source, code="stage_refused",
+                    detail=f"apply of {[ln['n'] for ln in lines]} not queued: {exc}",
+                )
+            )  # fmt: skip
+            return _refusal(str(exc), paged=paged)
         self._audit(APPLY_AUDIT_TYPE, {"job_id": job_id, "source_job_id": source, "lines": [ln["n"] for ln in lines]})
-        return {"ok": True, "accepted": True, "job_id": job_id, "lines": [ln["n"] for ln in lines]}
+        out = {"ok": True, "accepted": True, "job_id": job_id, "lines": [ln["n"] for ln in lines]}
+        return {**out, **({"approved_by_another": others} if others else {})}
 
     # ---- the runner's record, resume and close ---------------------------------------------------
     def _record(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -383,38 +381,9 @@ class CasefileVerbs:
         if "writes" in fields:
             meta["writes"] = fields["writes"][:500]
         self._audit(AUDIT_TYPES[state], meta)
-        if state == "delivered" and row["mode"] == "apply":
-            self._close_casework(row)
+        if state == "delivered" and row["mode"] == "apply" and self.broker is not None:
+            casework.close_lines(self.broker, self._db, row)
         return {"ok": True, "job": projected}
-
-    def _close_casework(self, row: dict[str, Any]) -> None:
-        """Each applied line's casework authorization, consumed: ``completed``
-        for a write the runner read back, ``write_failed`` for everything else."""
-        if self.broker is None:
-            return
-        path = casework_ledger_path(self.broker)
-        if not path:
-            return
-        outcomes = {int(o["n"]): o["outcome"] for o in json.loads(row.get("outcomes_json") or "[]")}
-        with self.broker._escalation_lock:
-            existing = casework_ledger.read_ledger(path)
-            for ln in self._db.lines(row["source_job_id"]):
-                if ln.get("apply_job_id") != row["id"] or ln["n"] not in outcomes:
-                    continue
-                ev = casework_event(ln, "completed" if outcomes[ln["n"]] in APPLIED_OUTCOMES else "write_failed")
-                if ev["event"] == "completed":
-                    ev["tool_call_id"] = f"casefile:{row['id']}:{ln['n']}"
-                else:
-                    ev["error"] = f"case file apply: {outcomes[ln['n']]}"
-                try:
-                    casework_ledger.validate_append(
-                        existing, ev, send_witness=lambda _e: True, audit_witness=lambda _e: True
-                    )
-                except ValueError:
-                    continue  # no open authorization (already consumed): nothing to close
-                stamped = casework_ledger.stamp_event(ev)
-                casework_ledger.append_line(path, stamped)
-                existing.append(stamped)
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         job_id, reason = str(request.get("job_id") or ""), str(request.get("reason") or "").strip()
@@ -423,6 +392,8 @@ class CasefileVerbs:
         row = self._db.read(job_id)
         if row is None or row["state"] != "failed" or row.get("close_ref"):
             raise ValueError(f"job {job_id} is not a failed, unclosed job; only that resumes")
+        if row["mode"] == "apply":
+            self._db.reclaim(job_id)  # the lines it released and no newer apply took
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         (self._db.queue_dir / f".resume-{job_id}.json").write_text(
             json.dumps({"job_id": job_id, "reason": reason[:500]}, sort_keys=True), encoding="utf-8"
@@ -449,88 +420,6 @@ class CasefileVerbs:
         return {"ok": True, "dry_run": False, "job": CasefileLedger.project(after), "audit": meta}
 
 
-def casework_event(line: dict[str, Any], event: str, **extra: Any) -> dict[str, Any]:
-    """One casework row for a case file line (the broker stamps ts and id)."""
-    return {
-        "event": event,
-        "skill": SKILL_NAME,
-        "kind": line["kind"],
-        "matter_id": line["matter_id"],
-        "source_id": line["source_id"],
-        "item_key": casework_ledger.item_key(
-            matter_id=line["matter_id"], kind=line["kind"], source_id=line["source_id"]
-        ),
-        **extra,
-    }
-
-
-def raise_lines(broker: BrokerContext, job_id: str, thread_ref: str, session_id: str) -> int:
-    """The bound reply for a delivered case file job just went out on
-    ``thread_ref``: every proposed line becomes a numbered ``proposed`` row on
-    the casework ledger, on that thread, so a reply there can approve it by
-    number. Returns the count raised. Never raises: the reply already went."""
-    verbs = getattr(broker, "casefile", None)
-    path = casework_ledger_path(broker)
-    if verbs is None or verbs.ledger is None or not path or not thread_ref:
-        return 0
-    dispatch = secrets.token_hex(16)
-    lines = verbs.ledger.mark_raised(job_id, thread_ref, dispatch)
-    raised = 0
-    with broker._escalation_lock:
-        existing = casework_ledger.read_ledger(path)
-        for ln in lines:
-            action = "close" if ln["kind"] == "task" else "add_row"
-            ev = casework_event(
-                ln, "proposed", n=int(ln["n"]), dispatch_ref=dispatch, thread_ref=thread_ref,
-                payload={"action": action, "class": "done" if action == "close" else "open",
-                         "reason": f"case file job {job_id} change {ln['n']}",
-                         "evidence": [f"job:{job_id}", f"sha:{ln['sha256'][:16]}"]},
-                **({"session_id": session_id} if session_id else {}),
-            )  # fmt: skip
-            try:
-                casework_ledger.validate_append(
-                    existing, ev, send_witness=lambda _e: True, audit_witness=lambda _e: True
-                )
-            except ValueError:
-                continue
-            stamped = casework_ledger.stamp_event(ev)
-            casework_ledger.append_line(path, stamped)
-            existing.append(stamped)
-            raised += 1
-    return raised
-
-
-def casefile_ledger_of(broker: BrokerContext) -> CasefileLedger:
-    """The ledger the reply binding reads (a read: the queue dir is never written)."""
-    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-medchron/casefile-queue"
-    return CasefileLedger(str(broker.audit_db_path), queue)
-
-
-def after_bound_reply(broker: BrokerContext, v: Any, session_id: str) -> None:
-    """A delivered case file job's bound reply just went out: its numbered
-    changes become casework lines on that reply's thread (``raise_lines``), so
-    the requester can approve them by number there. The broker raises them
-    itself; the model never names a line. Never raises: the reply went."""
-    row = getattr(v, "row", None) or {}
-    if getattr(v, "kind", "") != "casefile_job" or row.get("state") != "delivered" or row.get("mode") != "full":
-        return
-    try:
-        raised = raise_lines(broker, v.job_id, v.conversation_id, session_id)
-    except Exception:
-        logger.exception("could not raise the case file lines of %s", v.job_id)
-        return
-    if raised and broker.ledger is not None:
-        broker.ledger.append(
-            {
-                "action_type": "CASEFILE_LINES_PROPOSED",
-                "actor": "workspace-broker",
-                "actor_role": "broker",
-                "skill_name": SKILL_NAME,
-                "metadata": json.dumps({"job_id": v.job_id, "lines": raised}, sort_keys=True, separators=(",", ":")),
-            }
-        )
-
-
 def casefile_dispatch(
     broker: BrokerContext, action: str, request: dict[str, Any], pid: int, peer_uid: int | None
 ) -> dict[str, Any]:
@@ -540,12 +429,4 @@ def casefile_dispatch(
     return verbs.handle(action, request, peer_uid, from_gateway=pid == broker.gateway_pid)
 
 
-__all__ = [
-    "AUDIT_TYPES",
-    "VERBS",
-    "CasefileVerbs",
-    "after_bound_reply",
-    "casefile_dispatch",
-    "casefile_ledger_of",
-    "raise_lines",
-]
+__all__ = ["AUDIT_TYPES", "VERBS", "CasefileVerbs", "casefile_dispatch"]

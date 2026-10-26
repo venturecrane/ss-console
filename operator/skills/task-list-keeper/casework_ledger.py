@@ -37,7 +37,12 @@ The doors ``validate_append`` keeps shut, each refused by name:
 * a raise with no thread (the broker could not tie it to its own send);
 * a verdict with no raise on the same thread and number;
 * an outcome with no open authorization (an approved line or a
-  closed_by_record), or a ``completed`` with no successful update_task call;
+  closed_by_record), or a ``completed`` with no witnessed write: a successful
+  update_task call of its own session, or, for a Case File Manager line
+  (``tool_call_id`` ``casefile:<apply job>:<n>``), the broker's case file
+  ledger showing that apply job delivered with line ``n`` written and read back
+  (``workspace_broker/casefile_casework.py`` supplies that witness; the agent's
+  door never can, because no audit row names a ``casefile:`` id);
 * a ``step_ran`` that is not a date item's step at ``handles``, or that names
   no successful create_memo call of its own session (every prep routine files
   its ``[Operator]`` memo on the matter, so a step that left none did not run);
@@ -91,7 +96,9 @@ WITNESSED_EVENTS: tuple[str, ...] = (*RAISING_EVENTS, "mentioned")
 #: whose text was read, applied by that lane's runner after a named approval.
 ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step", "add_row")
 LEVELS: tuple[str, ...] = ("surfaces", "prepares", "handles")
-#: The actions an approval turns into an update_task write (a step runs a skill).
+#: The actions an approval turns into a write: an update_task call for close,
+#: complete and reassign; for the Case File Manager's ``close`` and ``add_row``
+#: lines, its runner's apply job (a step runs a skill).
 WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign", "add_row")
 #: The one routine that may raise a ``complete``: the digest a person answers.
 COMPLETE_SKILL = "deadline-miss-escalator"

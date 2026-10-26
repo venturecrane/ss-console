@@ -58,6 +58,8 @@ REPORT_FIELDS = (
     "lines",
     "line_outcomes",
     "writes",
+    # an apply that did not deliver: the lines it journaled a write for
+    "intents",
     "metrics",
     *COUNT_FIELDS,
 )
@@ -215,9 +217,13 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         return {**common, "apply": {**a, "approver": str(a["approver"]).strip().lower(), "lines": lines}}
     if set(req) != {*common, "scope", "file_to_matter_id", "file_to_matter_number", "folder_name"}:
         raise EnvelopeError("a full envelope carries the common keys, scope and the filing target")
-    mid, number, folder = req["file_to_matter_id"], req["file_to_matter_number"], req["folder_name"]
-    if not (isinstance(mid, str) and _UUID.match(mid) and isinstance(number, str) and _NUMBER.match(number)):
-        raise EnvelopeError("file_to_matter_id and file_to_matter_number must name the library matter")
+    mid, number, folder = req["file_to_matter_id"] or "", req["file_to_matter_number"], req["folder_name"]
+    # The id may be empty: the runner then resolves the number to exactly one
+    # Open matter before anything is paid, or holds library_unresolved.
+    if not (
+        isinstance(mid, str) and (not mid or _UUID.match(mid)) and isinstance(number, str) and _NUMBER.match(number)
+    ):
+        raise EnvelopeError("file_to_matter_number (and file_to_matter_id when authored) must name the library matter")
     if not (isinstance(folder, str) and _FOLDER.match(folder.strip())):
         raise EnvelopeError("folder_name must be the authored folder name")
     return {
@@ -284,6 +290,10 @@ def checked(state: str, fields: dict[str, Any]) -> dict[str, Any]:
         out["line_outcomes"] = checked_outcomes(fields["line_outcomes"])
     if "writes" in fields:
         out["writes"] = checked_writes(fields["writes"])
+    if "intents" in fields:
+        raw = fields["intents"]
+        if not (isinstance(raw, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in raw)):
+            raise ValueError("intents must be a list of line numbers")
     if "metrics" in fields and not isinstance(fields["metrics"], dict):
         raise ValueError("metrics must be an object")
     return out

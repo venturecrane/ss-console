@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Callable
 
@@ -42,7 +43,10 @@ from .outcome import CasefileHold, Verdict
 
 READBACK_WAITS = (1, 2, 3, 5, 8, 13)
 APPLIED = "applied.jsonl"
+#: A line whose write landed and read back (or whose record already showed it).
 DONE_OUTCOMES = ("completed", "written", "invoice_added", "already_complete", "already_present")
+#: A line whose write may or may not have landed: never reported as made.
+UNCERTAIN_OUTCOMES = ("readback_mismatch", "unknown_after_stop", "error", "link_not_visible")
 
 
 def _stamp(text: str | None) -> str | None:
@@ -135,7 +139,7 @@ class ApplyRun:
             return {"outcome": "already_complete"}
         if propose.task_snapshot(cur) != facts["snapshot"]:
             return {"outcome": "refused_changed"}
-        owner = str((cur.get("createdBy") or {}).get("id") or "")
+        owner = self._task_owner(cur, line.matter_id)
         if not owner or not staff:
             return {"outcome": "refused_no_staff"}
         if proof_mode.active():
@@ -153,9 +157,24 @@ class ApplyRun:
             is_completed=True, assignee_ids=None, staff_id=owner, stamp=lambda s: s,
         )  # fmt: skip
         body["completedByStaffId"] = staff
+        if cur.get("categories"):  # a full replace clears what it omits
+            body["categories"] = cur["categories"]
         self._note(line.n, intent="PUT")
         self.client.request("PUT", f"/tasks/{tid}", json=body)
         return self._task_readback(tid, line.n)
+
+    def _task_owner(self, cur: dict[str, Any], matter_id: str) -> str:
+        """The ``StaffId`` the full-replace PUT carries. Never the author
+        (``createdBy``): the task's current assignee stays its owner, and with
+        no assignee the matter's responsible staff member is (the staff
+        reassignment's rule). ``assigneeIds`` are re-sent unchanged by
+        ``merge_task_update``, so completing a task never reassigns it."""
+        for a in cur.get("assignees") or []:
+            sid = a.get("id") if isinstance(a, dict) else a
+            if isinstance(sid, str) and sid:
+                return sid
+        matter = self.client.get(f"/matters/{matter_id}")
+        return str(matter.get("personResponsibleStaffId") or "") if isinstance(matter, dict) else ""
 
     def _task_readback(self, tid: str, n: int) -> dict[str, Any]:
         for wait in READBACK_WAITS:
@@ -222,6 +241,23 @@ class ApplyRun:
             return {"outcome": "error"}
 
     def run(self) -> Verdict:
+        """Every ending carries the lines this job journaled (``intents``), so a
+        hold or a failure never frees a line whose write may have landed."""
+        try:
+            return self._run()
+        except CasefileHold as h:
+            return Verdict("held", stage="apply", mode="apply", reason=str(h), intents=self.intents())
+        except Exception as exc:  # noqa: BLE001 - a verdict, never a trace; the journal decides what was written
+            self.log(traceback.format_exc())
+            return Verdict(
+                "failed",
+                stage="apply",
+                mode="apply",
+                reason=f"unexpected: {type(exc).__name__}: {str(exc)[:300]}",
+                intents=self.intents(),
+            )
+
+    def _run(self) -> Verdict:
         a = self.job.apply
         assert a is not None
         proposals = state_mod.load_proposals(self.state, a.source_job_id)
@@ -252,23 +288,51 @@ class ApplyRun:
         return self._verdict(outcomes, writes)
 
     def _verdict(self, outcomes: list[dict[str, Any]], writes: list[dict[str, Any]]) -> Verdict:
+        """The verdict the outcomes support, never more.
+
+        * every line made, read back, or already so: delivered, read-back confirmed;
+        * some lines refused (the record changed since the proposal, or the
+          approver or the facts did not check out): delivered, read-back
+          confirmed for the lines made only, each refused line named;
+        * any line whose write may or may not have landed: HELD
+          ``readback_mismatch:`` (SMD is paged), never reported as made."""
         if proof_mode.active():
             return Verdict(proof_mode.OUTCOME, stage="apply", mode="apply", line_outcomes=outcomes)
-        ok = sum(1 for o in outcomes if o["outcome"] in DONE_OUTCOMES)
         dump_summary(self.data, outcomes)
+        unsure = [o["n"] for o in outcomes if o["outcome"] in UNCERTAIN_OUTCOMES]
+        if unsure:
+            return Verdict(
+                "held",
+                stage="apply",
+                mode="apply",
+                line_outcomes=outcomes,
+                writes=writes,
+                intents=self.intents(),
+                reason=f"readback_mismatch: changes {', '.join(map(str, unsure))} could not be confirmed in Smokeball",
+            )
+        made = sum(1 for o in outcomes if o["outcome"] in DONE_OUTCOMES)
+        proof: dict[str, Any] = (
+            {"readback": "confirmed", "rows": made} if made else {"readback": "confirmed", "nothing_to_file": True}
+        )
+        refused = [o["n"] for o in outcomes if o["outcome"] not in DONE_OUTCOMES]
+        if refused:
+            proof["not_made"] = refused
         return Verdict(
             "delivered",
             stage="report",
             mode="apply",
             line_outcomes=outcomes,
             writes=writes,
-            proof=({"readback": "confirmed", "rows": ok} if ok else {"readback": "confirmed", "nothing_to_file": True})
-            | {"review": "code_only", "review_cents": 0, "review_model": ""},
+            proof=proof | {"review": "code_only", "review_cents": 0, "review_model": ""},
         )
+
+    def intents(self) -> list[int]:
+        """Lines with a journaled write intent or outcome: never released to another apply."""
+        return sorted(n for n, r in self._journal().items() if r.get("intent") or r.get("outcome"))
 
 
 def dump_summary(data: Path, outcomes: list[dict[str, Any]]) -> None:
     (data / "apply-summary.json").write_text(json.dumps(outcomes, indent=1), encoding="utf-8")
 
 
-__all__ = ["ApplyRun", "DONE_OUTCOMES"]
+__all__ = ["ApplyRun", "DONE_OUTCOMES", "UNCERTAIN_OUTCOMES"]

@@ -111,11 +111,7 @@ def casefile_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
             "job_id": resp.get("job_id"),
             "state": resp.get("state"),
             # A factual ticket, no timing (the no-fabricated-content rule).
-            "message": (
-                f"Case file job {resp.get('job_id')} is queued on this Machine. Each file's File Status is "
-                "filed in the file and the ranked list in the library when it finishes, and the reply goes "
-                "to this thread."
-            ),
+            "message": f"Case file job {resp.get('job_id')} is queued on this Machine.",
         },
         ensure_ascii=False,
     )

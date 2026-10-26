@@ -61,6 +61,10 @@ YIELD_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid")
 CHILD_PID = "casefile-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0
+#: An apply line made and read back, or already so on the record (``casefile/apply.py``).
+DONE_OUTCOMES = ("completed", "written", "invoice_added", "already_complete", "already_present")
+#: The litigation inputs dir: the text cache key is that lane's (``casefile/run.cache_method_version``).
+LIT_INPUTS_ENV = "MEDCHRON_LITIGATION_INPUTS"
 COUNT_FIELDS = ("cents", "matters_total", "matters_read", "matters_current", "matters_held", "lines_proposed")
 _STAGE = re.compile(r"[a-z0-9_]{1,24}")
 
@@ -76,6 +80,15 @@ class CasefileBroker:
         return self.client._request(
             {"action": "casefile_job_record", "job_id": job_id, "state": state, "fields": fields}
         )
+
+    def owned_lines(self, job_id: str) -> set[int]:
+        """The line numbers an apply job holds now (root's status view). A
+        missing list raises: the lane defers rather than write unowned lines."""
+        job = self.client._request({"action": "casefile_job_status", "job_id": job_id}).get("job")
+        v = job.get("owned_lines") if isinstance(job, dict) else None
+        if not isinstance(v, list):
+            raise BrokerError("casefile_job_status carried no owned_lines; the apply cannot be scoped")
+        return {int(n) for n in v if isinstance(n, int)}
 
     def month_cents(self) -> int:
         """This Pacific month's case file spend. A missing value raises: the
@@ -154,6 +167,11 @@ class CasefileLane(DraftingLane):
             "per_job_cap_usd": float(firm.data["per_job_cap_usd"]),
             "monthly_budget_usd": float(firm.data["monthly_budget_usd"]),
         }
+        if doc.get("mode") == "apply" and isinstance(doc.get("apply"), dict):
+            # Only the lines the broker still holds for THIS job: a resumed apply
+            # never races a newer apply that took a line this one released.
+            owned = self.broker.owned_lines(job_id)
+            doc["apply"] = {**doc["apply"], "lines": [ln for ln in doc["apply"]["lines"] if ln.get("n") in owned]}
         (jd / "data").mkdir(exist_ok=True)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
@@ -195,6 +213,8 @@ class CasefileLane(DraftingLane):
             if value:
                 env[key] = str(value)
         env[YIELD_ENV] = ",".join(str(self.run_dir / p) for p in YIELD_PIDS)
+        if os.environ.get(LIT_INPUTS_ENV):
+            env[LIT_INPUTS_ENV] = os.environ[LIT_INPUTS_ENV]
         env.setdefault("MEDCHRON_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))
@@ -239,7 +259,7 @@ class CasefileLane(DraftingLane):
         for k in COUNT_FIELDS:
             fields[k] = int(v.get(k) or 0)
         fields["files"] = [f for f in v.get("files") or [] if isinstance(f, dict)]
-        for k in ("lines", "line_outcomes", "writes"):
+        for k in ("lines", "line_outcomes", "writes", "intents"):
             if isinstance(v.get(k), list):
                 fields[k] = [x for x in v[k] if isinstance(x, dict)]
         if isinstance(v.get("metrics"), dict):
@@ -287,11 +307,11 @@ class CasefileLane(DraftingLane):
             f"Outcome: {state}.",
         ]
         if mode == "apply":
-            done = sum(1 for o in outcomes if o.get("outcome") in ("completed", "written", "invoice_added"))
+            done = sum(1 for o in outcomes if o.get("outcome") in DONE_OUTCOMES)
             lines.append(f"Changes applied: {done} of {len(outcomes)}; numbers applied: "
-                         + (", ".join(str(int(o["n"])) for o in outcomes if o.get("outcome") in ("completed", "written", "invoice_added")) or "none")
+                         + (", ".join(str(int(o["n"])) for o in outcomes if o.get("outcome") in DONE_OUTCOMES) or "none")
                          + "; numbers not applied: "
-                         + (", ".join(str(int(o["n"])) for o in outcomes if o.get("outcome") not in ("completed", "written", "invoice_added")) or "none")
+                         + (", ".join(str(int(o["n"])) for o in outcomes if o.get("outcome") not in DONE_OUTCOMES) or "none")
                          + ".")  # fmt: skip
         else:
             lines.append(

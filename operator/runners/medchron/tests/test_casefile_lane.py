@@ -124,4 +124,19 @@ def test_a_live_client_child_holds_the_start_and_the_demand_lane_never_waits_on_
 
     src = (Path(drafting_lane.__file__).parent / "demand_lane.py").read_text()
     assert "casefile-child.pid" not in src  # a demand never waits on a case file job
-    assert "casefile-child.pid" not in litigation_lane.BUSY_PIDS
+    # The demand cgroup's other lanes wait on a running case file job (2026-10-26 review).
+    from medchron import negotiation_lane
+
+    assert "casefile-child.pid" in litigation_lane.BUSY_PIDS
+    assert "casefile-child.pid" in negotiation_lane.BUSY_PIDS
+
+
+def test_a_resumed_apply_runs_only_the_lines_the_broker_still_holds_for_it(tmp_path):
+    lane, client = _lane(tmp_path)
+    lines = [{"n": n, "kind": "task", "matter_id": "m", "source_id": f"t{n}", "sha256": "e" * 64} for n in (1, 2)]
+    _submit(lane, client, mode="apply", apply={"source_job_id": JOB, "approver": "a@firm.example",
+                                              "thread_ref": "t", "lines": lines})  # fmt: skip
+    client.rows[JOB] = {"state": "queued", "owned_lines": [1]}  # line 2 was taken by a newer apply
+    lane.tick()
+    job = json.loads((lane.run_dir / "casefile-jobs" / JOB / "job.json").read_text())
+    assert [ln["n"] for ln in job["apply"]["lines"]] == [1]

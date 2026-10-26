@@ -145,3 +145,51 @@ def test_a_proof_run_stops_before_the_first_write(env: dict, monkeypatch: pytest
     _r, v = _run(env, seat, kit.Scripted())
     assert v["verdict"] == "dry_run" and seat.uploads == 0
     assert state_mod.load_prior(env["state"], kit.M1) is None
+
+
+def test_the_library_matter_is_found_by_its_number_when_no_id_is_authored(env: dict) -> None:
+    seat = kit.CfSeat()
+    jd = kit.make_job(env["tmp"] / "job-n", file_to_matter_id="")
+    r = CasefileRun(jd, inputs_dir=str(env["inputs"]), pricing=env["pricing"], state_dir=env["state"],
+                    seat_factory=lambda: seat, client=kit.Scripted(), log=lambda m: None,
+                    today=lambda: dt.date(2026, 10, 26), readback_pause=0)  # fmt: skip
+    v = json.loads(r.run().to_json())
+    assert v["verdict"] == "delivered", v
+    assert any(f["name"].startswith("Case File Manager") for f in seat.files[kit.LIBRARY])
+
+
+def test_a_library_number_that_is_not_exactly_one_open_matter_holds_before_anything_is_paid(env: dict) -> None:
+    model = kit.Scripted()
+    jd = kit.make_job(env["tmp"] / "job-u", file_to_matter_id="", file_to_matter_number="NO-SUCH")
+    r = CasefileRun(jd, inputs_dir=str(env["inputs"]), pricing=env["pricing"], state_dir=env["state"],
+                    seat_factory=kit.CfSeat, client=model, log=lambda m: None, readback_pause=0)  # fmt: skip
+    v = json.loads(r.run().to_json())
+    assert v["verdict"] == "held" and v["reason"].startswith("library_unresolved:") and model.calls == []
+
+
+def test_a_hold_after_file_statuses_were_filed_reports_what_it_filed(env: dict) -> None:
+    seat = kit.CfSeat()
+    name = f"Case File Manager 2026-10-26 (Operator {kit.JOB[-6:]})"
+    seat.create_folder(kit.LIBRARY, "Case File Manager")
+    folder = seat.folders[kit.LIBRARY][-1]["id"]
+    seat.files[kit.LIBRARY].append(  # somebody else's file under this run's own name
+        {"id": "x-1", "name": name, "ext": ".xlsx", "size": 1, "folderId": folder,
+         "created": "", "modified": "", "deleted": False}
+    )  # fmt: skip
+    _r, v = _run(env, seat, kit.Scripted())
+    assert v["verdict"] == "held" and v["reason"].startswith("filing_refused:")
+    assert [f["role"] for f in v["files"]] == ["file_status", "file_status"]
+
+
+def test_the_text_cache_key_is_the_litigation_lanes_for_the_same_file(env: dict, monkeypatch) -> None:
+    import litigation_testkit as lit
+
+    from medchron.casefile import firm as cf_firm
+    from medchron.casefile.run import cache_method_version
+    from medchron.litigation import firm as lit_firm, textcache
+
+    models = {"read": "m-r", "verify": "m-v", "audit": "m-a", "transcription": "m-ocr"}
+    monkeypatch.setenv("MEDCHRON_LITIGATION_INPUTS", str(lit.make_inputs(env["tmp"] / "lit", models=models)))
+    ours = cache_method_version(cf_firm.load(env["inputs"]))
+    assert ours == textcache.method_version(lit_firm.load().model("transcription"))
+    assert ours != textcache.method_version(cf_firm.load(env["inputs"]).model("transcription"))

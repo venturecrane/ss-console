@@ -152,7 +152,14 @@ for (const [name, cfg] of Object.entries(SKILLS)) {
         } else {
           expect(w).toContain('Nothing is needed from you')
         }
-        if (cls === 'smd_finishing') {
+        if (cls === 'smd_finishing' && name === 'casefile') {
+          // 2026-10-26 (review of #3533): the case file lane promises no later
+          // message (nothing guarantees one after a hold); it says what is true
+          // now: SMD is paged for every one of its holds.
+          expect(w).toContain('SMD has been told and is finishing it')
+          expect(w).not.toMatch(/the next message you get/)
+          expect(w).toMatch(/not filed yet/)
+        } else if (cls === 'smd_finishing') {
           expect(w).toContain('SMD is finishing it')
           expect(w).toMatch(
             /the next message you get about this (list|chronology) will be the filed/

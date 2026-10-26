@@ -104,9 +104,10 @@ are we on 100123") is not this skill.
    pass who asked, the email's id, or the request's words: the tool takes all three
    from the email that opened this turn.
 3. **Reply once in the thread**, in one or two sentences, with only true statements:
-   - accepted: "Received. The files are being reviewed; each one with something new
-     gets a current File Status in the file, and I'll reply in this thread when the
-     ranked list is filed." No timing of any kind, no estimate, no "shortly".
+   - accepted: "Received. A review of these files is queued: each file with something
+     new gets a current File Status, and the caseload's ranked list is filed in the
+     firm's Operator Library." No timing of any kind, no estimate, no "shortly", and no
+     promise of a later message: whether one follows depends on how the job ends.
    - refused: relay the broker's sentence in plain words (the Case File Manager is
      not enabled on this seat, a review of the same caseload is already underway, the
      requester is not a Named Administrator). Nothing was queued; say so.
@@ -148,7 +149,7 @@ the `job_id` once (that call is what raises SMD's shortfall alert) and end the t
      `<matters_total>` files, `<matters_read>` read this run and `<matters_current>`
      already current with nothing new; each file read has a current File Status in
      its "File Status" folder; `<matters_held>` files could not be reviewed this time
-     and are named on the list (SMD is finishing them). When `<lines_proposed>` is
+     and are named on the list's "Not reviewed this run" sheet. When `<lines_proposed>` is
      above zero: the list's "Proposed changes" sheet numbers each change; to make
      them, reply in this thread with the numbers ("yes to 1, 3 and 4", or "yes to
      all"); nothing changes until then. An empty count is left out. Say that nothing
@@ -157,16 +158,25 @@ the `job_id` once (that call is what raises SMD's shortfall alert) and end the t
      and checked in Smokeball, by number, from the `Changes applied:` line; and, when
      any were not made, that those were left as they are because the file changed
      since they were proposed or the change did not check out, so nothing was
-     guessed; SMD has been told. Never a matter fact.
+     guessed. Never a matter fact. (A change whose write could not be confirmed never
+     reaches this step: such a job is held, and SMD is paged.)
    - **held**: worded by the wake's `Hold class:` line, never by the job's `reason`.
      The reason is SMD's technical record, and SMD already has it. **Never quote,
      paraphrase or summarize the reason, a check, a step or a code.** The same token comes back as `hold_class` on the job from `casefile_job_status`;
      when the two differ, the job's `hold_class` wins. Each class has fixed wording;
-     use it and add nothing:
-     - `smd_finishing` (our side): "The case file review is not filed yet, and
-       nothing new has been put in the firm's files. Nothing is needed from you; SMD
-       is finishing it, and the next message you get about this list will be the
-       filed list."
+     use it and add nothing. **The broker enforces this**: on a held job `reply_bind`
+     answers with the exact text as `held_wording`, chosen by what is true of the job
+     (a review that filed nothing, one that filed some File Statuses first, or an
+     apply), and the send refuses any other words. The reply's whole body is that text.
+     - `smd_finishing` (our side; SMD is paged for every one):
+       - a review that filed nothing: "The case file review is not filed yet, and
+         nothing new has been put in the firm's files. Nothing is needed from you; SMD
+         has been told and is finishing it."
+       - a review that filed some File Statuses first: "The case file review is not
+         finished: some files have a new File Status, and the ranked list is not filed
+         yet. Nothing is needed from you; SMD has been told and is finishing it."
+       - an apply: "The approved changes have not all been made. Nothing is needed
+         from you; SMD has been told and is looking at them."
      - `nothing_in_scope`: "No files were reviewed: none of the firm's Open or
        Pending matters fit this request. Nothing is needed from you."
      - `staff_unresolved` (a name the firm's staff list cannot settle): "Nothing was

@@ -29,6 +29,7 @@ SKILLS = Path(__file__).resolve().parents[2] / "skills"
 # refused its reply), so only litigation is pinned here.
 FILES = {
     "litigation": SKILLS / "litigation-status",
+    "casefile": SKILLS / "case-file-manager",
 }
 
 
@@ -58,7 +59,7 @@ def test_every_staff_why_is_in_the_litigation_skill(why: str) -> None:
 
 def test_every_class_resolves_to_wording_on_every_report() -> None:
     """A class with no entry falls back to smd_finishing; nothing raises."""
-    reports = {"litigation": ("status", "deadlines", "reassign")}
+    reports = {"litigation": ("status", "deadlines", "reassign"), "casefile": ("full", "partial", "apply")}
     for lane, names in reports.items():
         for cls in hold_class.CLASSES:
             for report in names:
@@ -69,3 +70,28 @@ def test_every_class_resolves_to_wording_on_every_report() -> None:
 def test_each_skill_says_the_broker_enforces_it(lane: str) -> None:
     held = _held_step((FILES[lane] / "SKILL.md").read_text(encoding="utf-8"))
     assert "The broker enforces this" in held and "`held_wording`" in held
+
+
+def _casefile_row(**over):
+    return {"state": "held", "reason": "all_matters_held: x", "mode": "full", **over}
+
+
+def test_a_casefile_hold_is_worded_by_what_is_true_of_the_job() -> None:
+    """A review that filed nothing, one that filed File Statuses before it held,
+    and an apply each get their own words; none says "nothing new" falsely."""
+    full = held_wording.allowed("casefile_job", _casefile_row())
+    filed = held_wording.allowed(
+        "casefile_job",
+        _casefile_row(delivery_json='{"files": [{"role": "file_status", "name": "x", "size": 1}]}'),
+    )
+    apply = held_wording.allowed("casefile_job", _casefile_row(mode="apply", reason="readback_mismatch: 1"))
+    assert "nothing new has been put in the firm's files" in full[0]
+    assert "nothing new" not in filed[0] and "some files have a new File Status" in filed[0]
+    assert "approved changes" in apply[0] and "review" not in apply[0]
+
+
+def test_a_held_casefile_reply_in_other_words_is_refused() -> None:
+    row = _casefile_row()
+    with pytest.raises(held_wording.HeldWordingRefused):
+        held_wording.check("casefile_job", row, "Your review stopped, want me to run it again?", "")
+    held_wording.check("casefile_job", row, held_wording.allowed("casefile_job", row)[0], "")

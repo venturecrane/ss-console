@@ -120,3 +120,38 @@ def test_a_proof_run_reads_again_and_writes_nothing(proposed, monkeypatch):
     got = _apply(proposed, [_task_line(proposed)])["verdict"]
     assert got["verdict"] == "dry_run" and got["line_outcomes"][0]["outcome"] == "would_complete"
     assert not [w for w in proposed["seat"].client.writes if w[0] == "PUT"]
+
+
+def test_a_write_that_does_not_read_back_holds_the_apply_and_is_never_reported_made(proposed, monkeypatch):
+    client = proposed["seat"].client
+    real = client.request
+
+    def lost(method, path, json=None, **kw):  # the PUT is accepted and never shows
+        if method == "PUT":
+            client.writes.append((method, path, json))
+            return {}
+        return real(method, path, json=json, **kw)
+
+    monkeypatch.setattr(client, "request", lost)
+    got = _apply(proposed, [_task_line(proposed)])["verdict"]
+    assert got["verdict"] == "held" and got["reason"].startswith("readback_mismatch:")
+    assert got["intents"] == [_task_line(proposed)["n"]] and "proof" not in got
+
+
+def test_a_refused_line_beside_another_is_named_and_nothing_is_claimed_made(proposed):
+    t = next(t for t in proposed["seat"].tasks if t["id"] == kit.TASK_OPEN)
+    t["subject"] = "Changed since the proposal"
+    med = next(ln for ln in proposed["lines"] if ln["kind"] == "medicals")
+    got = _apply(proposed, [_task_line(proposed), {**med, "sha256": "0" * 64}])["verdict"]
+    assert got["verdict"] == "delivered"
+    assert got["proof"]["readback"] == "confirmed" and got["proof"]["nothing_to_file"] is True
+    assert sorted(got["proof"]["not_made"]) == sorted([_task_line(proposed)["n"], med["n"]])
+
+
+def test_completing_a_task_keeps_its_assignee_as_owner_and_never_reassigns_it(proposed):
+    t = next(t for t in proposed["seat"].tasks if t["id"] == kit.TASK_OPEN)
+    t["assignees"] = [{"id": kit.STAFF_P}]
+    _apply(proposed, [_task_line(proposed)])
+    _method, _path, body = proposed["seat"].client.writes[-1]
+    assert body["staffId"] == kit.STAFF_P and body["assigneeIds"] == [kit.STAFF_P]
+    assert body["completedByStaffId"] == kit.STAFF_X

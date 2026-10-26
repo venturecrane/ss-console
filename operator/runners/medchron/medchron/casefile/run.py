@@ -55,6 +55,22 @@ class CasefileCache(textcache.TextCache):
         return super().put_text(sha, text, scanned_pages=scanned_pages, matter_id=matter_id)
 
 
+def cache_method_version(firm: Any) -> str:
+    """The text cache key the LITIGATION lane uses on this seat, so a page
+    either lane paid to read is one entry, never two. The key names the
+    transcription model that made a text; this lane transcribes nothing (a scan
+    page is marked, never cached), so it reads the model from the litigation
+    inputs staged beside its own, and its own config only on a seat with no
+    litigation lane."""
+    try:
+        from ..litigation import firm as lit_firm
+
+        model = lit_firm.load().model("transcription")
+    except Exception:  # noqa: BLE001 - no litigation inputs on this seat: this lane's own key
+        model = firm.model("transcription")
+    return textcache.method_version(model)
+
+
 def no_ocr(_png: bytes) -> str:
     """The extract's page reader for this job: a scan page is marked, not read."""
     return pack.SCAN_MARK
@@ -103,7 +119,7 @@ class CasefileRun(DeliverMixin, RunBase):
         self.no_ocr = no_ocr
         self.cache = CasefileCache(
             textcache_dir,
-            method_version=textcache.method_version(self.firm.model("transcription")),
+            method_version=cache_method_version(self.firm),
             job_id=self.job.job_id,
             log=log,
         )
@@ -158,10 +174,26 @@ class CasefileRun(DeliverMixin, RunBase):
     def _inventory(self) -> None:
         if self.job.mode != "full":
             raise CasefileHold(f"envelope_invalid: the {self.job.mode} kind is not available yet")
+        self._library()
         inv = inventory.build(self.seat, self.job, self.firm, self.data, self.log)
         dump(self.data / "inventory.json", inv)
         for mid, why in inv["held"].items():
             matter_mod.held(self, mid, "inventory", why)
+
+    def _library(self) -> str:
+        """The library matter's id: authored, or resolved from its number to
+        exactly one Open matter (fail closed), once per job."""
+        got = str(self.job.file_to_id or self._state().get("library_id") or "")
+        if got:
+            return got
+        from ..arrivals import open_matters
+
+        hits = [m["id"] for m in open_matters(self.seat, ["Open"]) if m["number"] == self.job.file_to_number]
+        if len(hits) != 1:
+            why = "matches no Open matter" if not hits else "matches more than one Open matter"
+            raise CasefileHold(f"library_unresolved: the library matter number {why}; nothing was read or filed")
+        self._put("library_id", hits[0])
+        return hits[0]
 
     def _screen(self) -> None:
         plan: dict[str, Any] = {}
@@ -231,7 +263,7 @@ class CasefileRun(DeliverMixin, RunBase):
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=self._current(), reason=f"limit: {hold.reason}")
         except CasefileHold as h:
-            v = Verdict("held", stage=self._current(), reason=str(h))
+            v = Verdict("held", stage=self._current(), reason=str(h), files=self._filed_so_far())
         except CasefileFailed as exc:
             v = Verdict("failed", stage=self._current(), reason=str(exc))
         except ReadIncomplete as exc:

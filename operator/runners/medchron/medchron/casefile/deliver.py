@@ -49,6 +49,7 @@ class DeliverMixin:
         def _json(self, name: str) -> Any: ...
         def _mfile(self, mid: str, name: str) -> Path: ...
         def prior(self, mid: str) -> dict[str, Any] | None: ...
+        def _library(self) -> str: ...
 
     # ---- rows --------------------------------------------------------------------
     def _row(self, m: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any] | None:
@@ -192,13 +193,13 @@ class DeliverMixin:
         wd.mkdir(parents=True, exist_ok=True)
         try:
             rec = lit_deliver.file_workbook(
-                self.seat, self.job.file_to_id, self.job.folder_name, self._xlsx(), wd, self.log, pause=self._pause()
+                self.seat, self._library(), self.job.folder_name, self._xlsx(), wd, self.log, pause=self._pause()
             )
         except LitigationHold as exc:
             raise CasefileHold(str(exc)) from exc
         except LitigationFailed as exc:
             raise CasefileFailed(str(exc)) from exc
-        own_writes.record(self.state, self.job.job_id, self.job.file_to_id, "file", rec["file_id"])
+        own_writes.record(self.state, self.job.job_id, self._library(), "file", rec["file_id"])
         dump(self.data / "delivered.json", rec)
 
     # ---- report ---------------------------------------------------------------------
@@ -228,6 +229,11 @@ class DeliverMixin:
                     "file_status": filed["file_id"],
                 },
             )
+
+    def _filed_so_far(self) -> list[dict[str, Any]]:
+        """What a held job already filed, read back: the broker's held wording
+        is chosen from it (a File Status in a matter is not "nothing new")."""
+        return self._filed() if (self.data / "rows.json").is_file() else []
 
     def _filed(self) -> list[dict[str, Any]]:
         out = []

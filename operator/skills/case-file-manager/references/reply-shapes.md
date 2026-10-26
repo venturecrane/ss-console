@@ -8,9 +8,9 @@ the ranked list hold the rest.
 
 ## REQUEST mode (a reply in the requester's thread)
 
-- **Accepted.** "Received. The files are being reviewed; each one with something
-  new gets a current File Status in the file, and I'll reply in this thread when
-  the ranked list is filed."
+- **Accepted.** "Received. A review of these files is queued: each file with
+  something new gets a current File Status, and the caseload's ranked list is filed
+  in the firm's Operator Library." No promise of a later message.
 - **Refused by the broker.** The broker's sentence in plain words, then "Nothing
   was queued."
 - **Not a Named Administrator.** A sentence naming the reservation and who at the
@@ -30,12 +30,20 @@ the ranked list hold the rest.
   outside the firm." Each count only when above zero.
 - **delivered, an apply.** A reply in the approver's thread: "Changes 1, 3 and 4
   are made in Smokeball and checked. Change 2 was left as it is because the file
-  changed since it was proposed, so nothing was guessed; SMD has been told."
+  changed since it was proposed, so nothing was guessed."
 - **held**, by the wake's `Hold class:` line, never by the job's reason:
-  - `smd_finishing` (our side, the default for any class not listed): "The case
-    file review is not filed yet, and nothing new has been put in the firm's
-    files. Nothing is needed from you; SMD is finishing it, and the next message
-    you get about this list will be the filed list."
+  - `smd_finishing` (our side, the default for any class not listed; SMD is paged
+    for every one), worded by what is true of the job:
+    - a review that filed nothing: "The case file review is not filed yet, and
+      nothing new has been put in the firm's files. Nothing is needed from you; SMD
+      has been told and is finishing it."
+    - a review that filed some File Statuses first: "The case file review is not
+      finished: some files have a new File Status, and the ranked list is not filed
+      yet. Nothing is needed from you; SMD has been told and is finishing it."
+    - an apply: "The approved changes have not all been made. Nothing is needed from
+      you; SMD has been told and is looking at them."
+  - The broker enforces every held wording: `reply_bind` returns it as
+    `held_wording`, and the send refuses any other words.
   - `nothing_in_scope`: "No files were reviewed: none of the firm's Open or
     Pending matters fit this request. Nothing is needed from you."
   - `staff_unresolved`: "Nothing was read: a name in the request does not match

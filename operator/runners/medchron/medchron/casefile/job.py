@@ -167,8 +167,9 @@ def _apply(raw: Any) -> Apply:
     if not (isinstance(thread, str) and 0 < len(thread) <= 512):
         raise CasefileJobError("apply.thread_ref is the thread the lines were raised on")
     lines = raw["lines"]
-    if not (isinstance(lines, list) and 0 < len(lines) <= MAX_LINES):
-        raise CasefileJobError("apply.lines is a non-empty list")
+    # Empty only when the lane scoped a resumed apply to the lines it still holds.
+    if not (isinstance(lines, list) and len(lines) <= MAX_LINES):
+        raise CasefileJobError("apply.lines is a list")
     parsed = tuple(_line(x) for x in lines)
     if len({ln.n for ln in parsed}) != len(parsed):
         raise CasefileJobError("apply.lines names a line number twice")
@@ -185,9 +186,12 @@ def _cap(data: dict[str, Any], key: str) -> float | None:
 
 
 def _filing(data: dict[str, Any]) -> tuple[str, str, str]:
-    fid, fnum = data.get("file_to_matter_id"), data.get("file_to_matter_number")
-    if not (isinstance(fid, str) and _UUID.match(fid) and isinstance(fnum, str) and _NUMBER.match(fnum)):
-        raise CasefileJobError("file_to_matter_id and file_to_matter_number must name the filing matter")
+    """The library matter: its number always, its id when the seat authored
+    one. With no id, the runner resolves the number to exactly one Open matter
+    before anything is paid (``run._library``), or holds ``library_unresolved``."""
+    fid, fnum = data.get("file_to_matter_id") or "", data.get("file_to_matter_number")
+    if not (isinstance(fid, str) and (not fid or _UUID.match(fid)) and isinstance(fnum, str) and _NUMBER.match(fnum)):
+        raise CasefileJobError("file_to_matter_number (and file_to_matter_id when given) must name the filing matter")
     folder = _str(data, "folder_name")
     if not _FOLDER.match(folder):
         raise CasefileJobError("folder_name must be one folder name (no slashes)")

@@ -45,6 +45,8 @@ REASON_CODES = (
     "rehearsal",
     "apply_refused",
     "nothing_approved",
+    # The library matter named by number is not exactly one Open matter.
+    "library_unresolved",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
@@ -78,6 +80,9 @@ class Verdict:
     #: An apply job's per-line outcomes and every write it made.
     line_outcomes: list[dict[str, Any]] = field(default_factory=list)
     writes: list[dict[str, Any]] = field(default_factory=list)
+    #: An apply that did not deliver: the line numbers with a journaled write
+    #: intent or outcome, which the broker never hands to another apply.
+    intents: list[int] = field(default_factory=list)
     #: ``{"stages": {stage: usage}, "matters": {matter_id: usage}}`` (``metrics.py``).
     metrics: dict[str, Any] = field(default_factory=dict)
 
@@ -95,7 +100,7 @@ class Verdict:
             "files": list(self.files),
             "folder_id": self.folder_id,
         }
-        for key in ("lines", "line_outcomes", "writes"):
+        for key in ("lines", "line_outcomes", "writes", "intents"):
             if getattr(self, key):
                 d[key] = list(getattr(self, key))
         if self.metrics:

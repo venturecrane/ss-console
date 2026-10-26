@@ -133,8 +133,10 @@ class CasefileLedger:
         The duplicate checks and the line claim run in one write transaction."""
         env = validate_envelope(envelope)
         apply = env.get("apply")
-        key = f"apply:{apply['source_job_id']}" if apply else scope_key(env["scope"])
         job_id, now = _ulid(), _iso_utc()
+        # An apply is keyed to itself: a second approval while one is queued
+        # is a new job, and the line claim below decides what each one takes.
+        key = f"apply:{job_id}" if apply else scope_key(env["scope"])
         conn = self._connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
@@ -157,7 +159,8 @@ class CasefileLedger:
                 "scope_key, scope_json, file_to_matter_id, envelope_digest, source_job_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id, now, now, "queued", env["trigger"], env["mode"], env["requester"], env["message_ref"], key,
-                    json.dumps(env.get("scope") or {"apply": True}, sort_keys=True), env.get("file_to_matter_id"),
+                    json.dumps(env.get("scope") or {"lines": [ln["n"] for ln in (apply or {}).get("lines") or []]}, sort_keys=True),
+                    env.get("file_to_matter_id") or None,
                     digest(env), apply["source_job_id"] if apply else None,
                 ),
             )  # fmt: skip
@@ -170,7 +173,8 @@ class CasefileLedger:
     @staticmethod
     def _claim(conn: sqlite3.Connection, apply: dict[str, Any], job_id: str, now: str) -> None:
         """Every line still ``raised`` moves to ``applying`` under this job, or
-        nothing is queued (another apply took one first)."""
+        nothing is queued (another apply took one first). This compare-and-set
+        is the one arbiter between two approvals of the same job's lines."""
         for ln in apply["lines"]:
             cur = conn.execute(
                 "UPDATE casefile_lines SET state='applying', apply_job_id=?, updated_at=? "
@@ -206,15 +210,60 @@ class CasefileLedger:
             if state == "delivered" and cur["mode"] == "apply" and f.get("line_outcomes"):
                 self._outcomes(conn, cur, now, f["line_outcomes"])
             if state in ("held", "failed") and cur["mode"] == "apply" and state != cur["state"]:
-                conn.execute(
-                    "UPDATE casefile_lines SET state='raised', apply_job_id=NULL, updated_at=? "
-                    "WHERE apply_job_id=? AND state='applying'",
-                    (now, job_id),
-                )
+                self._release(conn, cur, now, f)
             conn.commit()
             row = dict(conn.execute("SELECT * FROM casefile_jobs WHERE id=?", (job_id,)).fetchone())
             row["prev_state"] = cur["state"]
             return row
+        finally:
+            conn.close()
+
+    def _release(self, conn: sqlite3.Connection, cur: Any, now: str, f: dict[str, Any]) -> None:
+        """A held or failed apply: each line it reported an outcome for takes
+        that outcome; a line with a journaled write intent and no outcome stays
+        ``applying`` under this job (its write may have landed; only this job's
+        resume or SMD decides it); every other line goes back to ``raised`` for
+        a new approval."""
+        if f.get("line_outcomes"):
+            self._outcomes(conn, cur, now, f["line_outcomes"])
+        keep = {int(n) for n in f.get("intents") or [] if isinstance(n, int)}
+        for (n,) in conn.execute(
+            "SELECT n FROM casefile_lines WHERE apply_job_id=? AND state='applying'", (cur["id"],)
+        ).fetchall():
+            if n not in keep:
+                conn.execute(
+                    "UPDATE casefile_lines SET state='raised', apply_job_id=NULL, updated_at=? "
+                    "WHERE apply_job_id=? AND n=? AND state='applying'",
+                    (now, cur["id"], n),
+                )
+
+    def reclaim(self, job_id: str) -> list[int]:
+        """A failed apply resumed: the lines it released and no other apply has
+        taken since come back to it; returns every line it now holds."""
+        row = self.read(job_id)
+        if row is None:
+            return []
+        env = json.loads(row["scope_json"] or "{}")
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            for n in env.get("lines") or []:
+                conn.execute(
+                    "UPDATE casefile_lines SET state='applying', apply_job_id=?, updated_at=? "
+                    "WHERE job_id=? AND n=? AND state='raised'",
+                    (job_id, _iso_utc(), row["source_job_id"], n),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.owned_lines(job_id)
+
+    def owned_lines(self, job_id: str) -> list[int]:
+        """The line numbers this apply job holds (applying, or already ended under it)."""
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT n FROM casefile_lines WHERE apply_job_id=? ORDER BY n", (job_id,)).fetchall()
+            return [int(r["n"]) for r in rows]
         finally:
             conn.close()
 
@@ -270,9 +319,9 @@ class CasefileLedger:
     @staticmethod
     def _outcomes(conn: sqlite3.Connection, cur: Any, now: str, outcomes: list[dict[str, Any]]) -> None:
         for o in outcomes:
+            if o["outcome"] in ("error", "readback_mismatch", "unknown_after_stop", "link_not_visible"):
+                continue  # undecided: the line stays applying under this job until its resume or SMD
             state = "applied" if o["outcome"] in (*APPLIED_OUTCOMES, *NOTHING_TO_DO) else "refused"
-            if o["outcome"] in ("error", "readback_mismatch", "unknown_after_stop"):
-                state = "failed"
             conn.execute(
                 "UPDATE casefile_lines SET state=?, outcome=?, updated_at=? WHERE job_id=? AND n=? AND apply_job_id=?",
                 (state, o["outcome"], now, cur["source_job_id"], o["n"], cur["id"]),

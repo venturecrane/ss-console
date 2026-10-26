@@ -105,10 +105,15 @@ class MedchronBrokerClient:
         return self._request({"action": "casefile_job_status", "job_id": job_id})
 
     def casefile_apply(
-        self, thread_ref: str, approver: str, message_ref: str, request_text: str
+        self,
+        thread_ref: str,
+        approver: str,
+        message_ref: str,
+        request_text: str,
+        numbers: list[int],
     ) -> dict[str, Any]:
-        """Queue the apply of the lines approved on ``thread_ref``; the broker
-        builds the set. Called by the casework reply path, never a turn's tool."""
+        """Queue the apply of the lines this reply named (``numbers``) and
+        approved on ``thread_ref``; the broker builds the set. Called by the casework reply path, never a turn's tool."""
         return self._request(
             {
                 "action": "casefile_apply_submit",
@@ -116,6 +121,7 @@ class MedchronBrokerClient:
                 "approver": approver,
                 "message_ref": message_ref,
                 "request_text": request_text,
+                "numbers": list(numbers),
             }
         )
 

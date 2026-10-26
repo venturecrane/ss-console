@@ -1155,23 +1155,73 @@ def test_case_file_lines_are_handed_to_the_broker_never_queued_as_task_writes(tm
     broker: list = []
     asked: list = []
 
-    def apply(thread, origin):
-        asked.append((thread, origin.sender_address))
+    def apply(thread, origin, numbers):
+        asked.append((thread, origin.sender_address, numbers))
         return {"ok": True, "accepted": True, "job_id": "J", "lines": [1, 2]}
 
     out = _casefile_answer(path, broker, apply)
     assert out["status"] == "done"
     assert [(e["event"], e["n"]) for e in broker] == [("approved", 1), ("approved", 2)]
-    assert asked == [(THREAD, ATTORNEY)]
+    assert asked == [(THREAD, ATTORNEY, [1, 2])]  # only the numbers this reply named
     assert not CASEWORK_ACTS.pending(REPLY_SESSION)
-    assert "Making 1 and 2 now" in out["confirmation_text"]
+    text = out["confirmation_text"]
+    assert (
+        "Making 1 and 2 now." in text and "I'll reply" not in text
+    )  # no promise of a later message
 
 
-def test_a_case_file_apply_the_broker_refuses_is_said_never_claimed(tmp_path, rows):
+def test_a_refused_apply_claims_smd_was_told_only_when_the_broker_paged(tmp_path, rows):
     path = _ledger(tmp_path, [_casefile_row(1, "t-1")])
     _reply_origin("yes")
-    out = _casefile_answer(
-        path, [], lambda _t, _o: {"ok": True, "accepted": False, "reason": "nothing_approved"}
-    )
+    out = _casefile_answer(path, [], lambda *_a: {"ok": True, "accepted": False, "reason": "x"})
     assert "couldn't start 1" in out["confirmation_text"]
-    assert "Making" not in out["confirmation_text"]
+    assert (
+        "SMD has been told" not in out["confirmation_text"]
+        and "Making" not in out["confirmation_text"]
+    )
+    _reply_origin("yes")
+    out = _casefile_answer(
+        path, [], lambda *_a: {"ok": True, "accepted": False, "reason": "x", "paged": True}
+    )
+    assert "SMD has been told" in out["confirmation_text"]
+
+
+def test_a_second_yes_retries_an_approved_line_the_apply_never_took(tmp_path, rows):
+    approved = {
+        **_casefile_row(1, "t-1"),
+        "event": "approved",
+        "decided_by": {"name": "D", "key": "k" * 64},
+    }
+    approved.pop("dispatch_ref")
+    approved.pop("payload")
+    path = _ledger(tmp_path, [_casefile_row(1, "t-1"), approved])
+    _reply_origin("yes on 1")
+    asked: list = []
+    broker: list = []
+
+    def apply(thread, origin, numbers):
+        asked.append(numbers)
+        return {"ok": True, "accepted": True, "job_id": "J", "lines": [1]}
+
+    out = _casefile_answer(path, broker, apply)
+    assert broker == []  # no second verdict row
+    assert asked == [[1]] and "Making 1 now." in out["confirmation_text"]
+
+
+def test_a_line_another_admin_approved_is_left_for_their_reply(tmp_path, rows):
+    path = _ledger(tmp_path, [_casefile_row(1, "t-1"), _casefile_row(2, "t-2")])
+    _reply_origin("yes to all")
+    out = _casefile_answer(
+        path,
+        [],
+        lambda *_a: {
+            "ok": True,
+            "accepted": True,
+            "job_id": "J",
+            "lines": [1],
+            "approved_by_another": [2],
+        },
+    )
+    text = out["confirmation_text"]
+    assert "Making 1 now." in text and "approved by another administrator" in text
+    assert "couldn't start" not in text

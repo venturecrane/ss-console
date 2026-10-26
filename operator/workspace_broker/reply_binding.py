@@ -55,6 +55,13 @@ the recipient. So the broker, which the agent cannot steer, decides:
       the firm hears about a chronology only when it is delivered). A held
       chronology is refused its reply exactly as a failed job is; SMD was
       paged when it stopped;
+    - a Case File Manager job (2026-10-26): exactly the litigation status rules
+      for a REQUESTED job, on the case file ledger (``casefile_store``), a
+      reply in the requester's thread; it is never scheduled. One side effect:
+      once a delivered review's reply is sent and settled, the broker raises
+      that job's numbered changes on the casework ledger, on this reply's thread
+      (``casefile_casework.after_bound_reply``), so the requester can approve
+      them by number there; a held job's reply is its fixed wording (held_wording);
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -96,7 +103,7 @@ from .negotiation_ledger import subject as negotiation_subject
 from .note_ledger import NoteLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
-from .casefile_verbs import after_bound_reply, casefile_ledger_of
+from .casefile_casework import after_bound_reply, casefile_ledger_of
 from .reply_scheduled import scheduled_recipient_ok as _scheduled_recipient_ok
 from .transmit_verbs import dispatch_transmit
 

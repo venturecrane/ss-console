@@ -45,7 +45,7 @@ CASES = [
     ("casefile", "scope_unresolved: the request names someone no staff record carries", "staff_unresolved", None),
     ("casefile", "filing_refused: a File Status is already in the folder", "smd_finishing", "upload_held"),
     ("casefile", "all_matters_held: every matter in scope held at its gates", "smd_finishing", "gate_held"),
-    ("casefile", "nothing_approved: the approval named no proposed line", "smd_finishing", None),
+    ("casefile", "nothing_approved: the approval named no proposed line", "smd_finishing", "gate_held"),
     ("casefile", "read_incomplete: 2 matters could not be read", "smd_finishing", "gate_held"),
     ("casefile", "something_new: never seen", "smd_finishing", "gate_held"),
     (

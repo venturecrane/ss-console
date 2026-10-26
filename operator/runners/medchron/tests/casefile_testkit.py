@@ -193,6 +193,8 @@ class CfSeat:
              "personResponsibleStaffId": STAFF_R, "personAssistingStaffId": STAFF_P},
             {"id": M2, "number": "100002", "title": "Delta intake", "status": "Pending",
              "personResponsibleStaffId": STAFF_R, "personAssistingStaffId": STAFF_P},
+            # The firm's library matter, found by its number when no id is authored.
+            {"id": LIBRARY, "number": "OPS-LIBRARY", "title": "Operator Library", "status": "Open"},
         ]  # fmt: skip
         self.staff = [
             {"id": STAFF_P, "firstName": "Pat", "lastName": "Example", "email": "pat@firm.example"},

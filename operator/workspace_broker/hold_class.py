@@ -103,15 +103,15 @@ _LITIGATION = {
 #: The case file manager (lane ``casefile``). Any other code it emits
 #: (envelope_invalid, config_missing, inventory_unreadable, fetch_unfinished,
 #: disk_short, read_incomplete, readback_mismatch, stage_unfinished, limit,
-#: no_verdict, unexpected, rehearsal, apply_refused) is ours and pages
+#: no_verdict, unexpected, rehearsal, apply_refused, library_unresolved) is ours and pages
 #: ``gate_held``, the same default as litigation.
 _CASEFILE = {
     "scope_empty": (NOTHING_IN_SCOPE, None),
     "scope_unresolved": (STAFF_UNRESOLVED, None),
     "filing_refused": (SMD_FINISHING, "upload_held"),
     "all_matters_held": (SMD_FINISHING, "gate_held"),
-    # An APPLY with no approved line: nothing to write, nothing of ours broke.
-    "nothing_approved": (SMD_FINISHING, None),
+    # An APPLY that found no approved line to write: SMD looks at why.
+    "nothing_approved": (SMD_FINISHING, "gate_held"),
 }
 
 

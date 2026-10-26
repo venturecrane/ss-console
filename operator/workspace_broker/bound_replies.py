@@ -99,6 +99,16 @@ def release(db_path: str, key: str) -> None:
         conn.close()
 
 
+def outcome(db_path: str, key: str) -> str | None:
+    """The key's recorded outcome (claimed, sent, unknown), or None when unclaimed."""
+    conn = _connect(db_path)
+    try:
+        row = conn.execute("SELECT outcome FROM bound_replies WHERE binding_key=?", (key,)).fetchone()
+        return str(row[0]) if row else None
+    finally:
+        conn.close()
+
+
 def settle(db_path: str, key: str, outcome: str, located: bool | None = None) -> None:
     if outcome not in ("sent", "unknown"):
         raise ValueError(f"unknown bound reply outcome {outcome!r}")
@@ -113,4 +123,4 @@ def settle(db_path: str, key: str, outcome: str, located: bool | None = None) ->
         conn.close()
 
 
-__all__ = ["claim", "claimed", "claimed_for_graph_id", "release", "settle"]
+__all__ = ["claim", "claimed", "claimed_for_graph_id", "outcome", "release", "settle"]

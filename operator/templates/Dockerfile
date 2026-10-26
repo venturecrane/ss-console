@@ -584,7 +584,7 @@ COPY operator/contracts/ /app/contracts/
 # Bootstrap entrypoint
 COPY operator/templates/bootstrap.sh /app/bootstrap.sh
 COPY operator/templates/entrypoint.sh /app/entrypoint.sh
-# The retrying vault fetch the demand, drafting and litigation lanes' firm
+# The retrying vault fetch the demand, drafting, litigation and case file lanes' firm
 # inputs share (2026-10-14: a single silent failed fetch at boot left a lane
 # without inputs for a whole release). Sourced before the lane files.
 COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.sh
