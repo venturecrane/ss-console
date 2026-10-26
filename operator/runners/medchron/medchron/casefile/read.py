@@ -170,7 +170,8 @@ def read_matter(
         messages.append({"role": "assistant", "content": [_block_dict(b) for b in r.message.content or []]})
         rec = next((u for u in uses if u.get("name") == REVIEW_TOOL["name"]), None)
         if rec is not None:
-            record = rec.get("input") if isinstance(rec.get("input"), dict) else {}
+            raw = rec.get("input")
+            record: dict[str, Any] = raw if isinstance(raw, dict) else {}
             problems = check(record)
             last = ReadResult(record, problems, turn)
             if not problems or refusals <= 0 or final_turn:

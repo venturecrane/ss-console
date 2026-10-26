@@ -1257,10 +1257,10 @@ def test_any_authored_admin_may_receive_a_note_not_only_the_first(tmp_path: Path
 
 
 def test_the_authored_recipients_table_refuses_an_unknown_kind() -> None:
-    from workspace_broker import reply_binding
+    from workspace_broker import reply_scheduled
 
     with pytest.raises(ValueError):
-        reply_binding._authored_recipients("drafting_job", "/nonexistent.yaml")
+        reply_scheduled._authored_recipients("drafting_job", "/nonexistent.yaml")
 
 
 def test_a_reply_note_still_answers_in_her_thread_when_smd_note_authors_recipients(tmp_path: Path) -> None:

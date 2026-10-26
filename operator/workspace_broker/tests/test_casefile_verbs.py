@@ -231,8 +231,8 @@ def test_the_bound_reply_of_a_delivered_job_raises_its_lines_once_and_audits_it(
         kind="casefile_job", key=f"casefile_job:{job}:1:delivered", job_id=job, internet_message_id=REF,
         graph_message_id="g" * 20, sender=ADMIN, conversation_id=THREAD, row=row,
     )  # fmt: skip
-    reply_binding._raise_casefile_lines(seat["broker"], v, "sess-1")
-    reply_binding._raise_casefile_lines(seat["broker"], v, "sess-1")
+    reply_binding.after_bound_reply(seat["broker"], v, "sess-1")
+    reply_binding.after_bound_reply(seat["broker"], v, "sess-1")
     assert [ln["state"] for ln in seat["broker"].casefile.ledger.lines(job)] == ["raised", "raised"]
     assert audit_types(seat["db"]).count("CASEFILE_LINES_PROPOSED") == 1
 
@@ -244,3 +244,30 @@ def test_a_binding_names_the_casefile_kind_and_reads_its_ledger(seat, monkeypatc
     assert "casefile_job" in reply_binding.JOB_KINDS
     job = deliver_with_lines(seat)
     assert reply_binding.job_ledger(seat["broker"], "casefile_job").read(job)["state"] == "delivered"
+
+
+def test_casefile_job_resume_writes_the_marker_for_a_failed_job_only(seat) -> None:
+    b = seat["broker"]
+    job = submit(b)["job_id"]
+    call(b, "casefile_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    with pytest.raises(ValueError):
+        call(b, "casefile_job_resume", pid=1, uid=0, job_id=job, reason="fixed")
+    call(b, "casefile_job_record", pid=1, uid=0, job_id=job, state="failed", fields={"reason": "unexpected: x"})
+    assert call(b, "casefile_job_resume", pid=1, uid=0, job_id=job, reason="fixed the fetch")["queued"] is True
+    assert (seat["queue"] / f".resume-{job}.json").is_file()
+    assert "CASEFILE_JOB_RESUME_REQUESTED" in audit_types(seat["db"])
+
+
+def test_casefile_job_close_ends_a_held_job_once(seat) -> None:
+    b = seat["broker"]
+    job = submit(b)["job_id"]
+    call(b, "casefile_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    call(b, "casefile_job_record", pid=1, uid=0, job_id=job, state="held", fields={"reason": "filing_refused: x"})
+    ref = "01KTJ0BX0000000000000000ZZ"
+    assert call(b, "casefile_job_close", pid=1, uid=0, job_id=job, reason="SMD filed it", source_ref=ref, dry_run=True)[
+        "dry_run"
+    ]
+    got = call(b, "casefile_job_close", pid=1, uid=0, job_id=job, reason="SMD filed it", source_ref=ref)
+    assert got["job"]["state"] == "failed"
+    with pytest.raises(ValueError):
+        call(b, "casefile_job_close", pid=1, uid=0, job_id=job, reason="again", source_ref=ref)

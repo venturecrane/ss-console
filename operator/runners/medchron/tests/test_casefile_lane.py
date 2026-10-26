@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from casefile_testkit import JOB, envelope, make_inputs
-from medchron.casefile_lane import YIELD_ENV, CasefileBroker, CasefileLane
+from medchron.casefile_lane import CasefileBroker, CasefileLane
 
 RUNNER = """
 import json, os, sys, pathlib

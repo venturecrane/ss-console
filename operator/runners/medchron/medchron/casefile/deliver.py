@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .. import proof_mode
 from ..litigation import deliver as lit_deliver, fetch as fetch_mod
@@ -41,6 +41,14 @@ class DeliverMixin:
     readback_pause: float | None
 
     seat: Any
+
+    if TYPE_CHECKING:  # provided by the run (``run.CasefileRun`` / ``RunBase``); never defined here at runtime
+
+        def _matters(self) -> list[dict[str, Any]]: ...
+        def _plan(self) -> dict[str, Any]: ...
+        def _json(self, name: str) -> Any: ...
+        def _mfile(self, mid: str, name: str) -> Path: ...
+        def prior(self, mid: str) -> dict[str, Any] | None: ...
 
     # ---- rows --------------------------------------------------------------------
     def _row(self, m: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any] | None:

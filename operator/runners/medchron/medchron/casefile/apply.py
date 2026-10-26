@@ -143,8 +143,9 @@ class ApplyRun:
         from smokeball_connector.task_update import merge_task_update
 
         old = str(cur.get("note") or "")
+        source = self.job.apply.source_job_id if self.job.apply is not None else ""
         mark = (
-            f"[Operator] Completed on approval of change {line.n} (Case File Manager job {self.job.apply.source_job_id}). "
+            f"[Operator] Completed on approval of change {line.n} (Case File Manager job {source}). "
             f"Proof: {'; '.join(facts.get('proof_names') or [])[:300]}"
         )
         body, _ = merge_task_update(

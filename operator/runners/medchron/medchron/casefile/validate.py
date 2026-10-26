@@ -206,6 +206,11 @@ class _Checker:
             self.bad("unknown_id", f"{len(unknown)} id(s) are not on this matter: " + ", ".join(u[:8] for u in unknown))
 
 
+def _rows(rec: dict[str, Any], key: str) -> list[Any]:
+    got = rec.get(key)
+    return got if isinstance(got, list) else []
+
+
 def check(
     rec: Any, number: str, inv: dict[str, Any], meta: dict[str, Any], firm: Any, text_of: Callable[[str], Any]
 ) -> list[str]:
@@ -215,11 +220,11 @@ def check(
     c = _Checker(number, inv, meta, firm, text_of)
     c.shape(rec)
     seen: set[str] = set()
-    for i, t in enumerate(rec.get("open_tasks") if isinstance(rec.get("open_tasks"), list) else []):
+    for i, t in enumerate(_rows(rec, "open_tasks")):
         c.open_task(i, t, seen)
-    for i, t in enumerate(rec.get("done_tasks_checked") if isinstance(rec.get("done_tasks_checked"), list) else []):
+    for i, t in enumerate(_rows(rec, "done_tasks_checked")):
         c.done_task(i, t)
-    for i, m in enumerate(rec.get("medicals") if isinstance(rec.get("medicals"), list) else []):
+    for i, m in enumerate(_rows(rec, "medicals")):
         c.medical(i, m)
     c.rest(rec)
     c.ids(rec)

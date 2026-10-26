@@ -96,18 +96,11 @@ from .negotiation_ledger import subject as negotiation_subject
 from .note_ledger import NoteLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
+from .casefile_verbs import after_bound_reply, casefile_ledger_of
+from .reply_scheduled import scheduled_recipient_ok as _scheduled_recipient_ok
 from .transmit_verbs import dispatch_transmit
 
-KINDS = (
-    "casefile_job",
-    "demand_job",
-    "drafting_job",
-    "litigation_job",
-    "medchron_job",
-    "negotiation_job",
-    "note_job",
-    "message",
-)
+KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")  # fmt: skip
 #: The job kinds: each binds on its own ledger with the same rules.
 JOB_KINDS = frozenset(
     {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
@@ -238,39 +231,6 @@ def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
     return NegotiationLedger(str(broker.audit_db_path), queue)
 
 
-def _authored_recipients(kind: str, customer_path: Any) -> tuple[list[str], bool]:
-    """(that kind's skill's authored ``scheduled_recipients``, whether only the
-    FIRST entry may be reached). An explicit table that raises on any other
-    kind: the old ``else`` read negotiation-watch's list for anything that was
-    not litigation, which a note must never inherit (2026-10-16)."""
-    if kind == "litigation_job":
-        from . import litigation_intake as intake
-    elif kind == "negotiation_job":
-        from . import negotiation_intake as intake
-    elif kind == "note_job":
-        from .note_verbs import note_recipients
-
-        return note_recipients(customer_path) or [], False
-    else:
-        raise ValueError(f"{kind} has no authored scheduled recipients")
-    return intake.scheduled_recipients(intake.settings_of(intake.skill_entry(customer_path))), True
-
-
-def _scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> bool:
-    """The scheduled run's requester is still a Named Administrator AND an
-    authored ``scheduled_recipients`` entry of that kind's skill, read from the
-    live yaml: the FIRST entry for litigation and negotiation, any entry for a
-    new-message note."""
-    from .medchron_ledger import admins_from_customer_yaml
-
-    who = normalize_address(requester)
-    recipients, first_only = _authored_recipients(kind, broker.customer_path)
-    admins = admins_from_customer_yaml(str(broker.customer_path)) or ()
-    if not recipients or who not in admins:
-        return False
-    return recipients[0] == who if first_only else who in recipients
-
-
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-medchron/queue"
@@ -296,11 +256,7 @@ def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
     if kind == "drafting_job":
         return _drafting_ledger(broker)
     if kind == "casefile_job":
-        from .casefile_store import CasefileLedger
-
-        return CasefileLedger(
-            str(broker.audit_db_path), os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-medchron/casefile-queue"
-        )
+        return casefile_ledger_of(broker)
     if kind == "demand_job":
         return _demand_ledger(broker)
     raise ValueError(f"{kind} has no ledger that marks its reply")
@@ -715,35 +671,8 @@ def reply_verb(
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     _settle_sent(broker, db_path, v, result)
-    _raise_casefile_lines(broker, v, session_id)
+    after_bound_reply(broker, v, session_id)
     return result
-
-
-def _raise_casefile_lines(broker: BrokerContext, v: Verified, session_id: str) -> None:
-    """A delivered case file job's numbered changes become casework lines on the
-    thread this reply went out on (``casefile_verbs.raise_lines``), so the
-    requester can approve them by number in that thread. The broker raises
-    them itself: the model never names a line. Never raises: the reply went."""
-    row = v.row or {}
-    if v.kind != "casefile_job" or row.get("state") != "delivered" or row.get("mode") != "full":
-        return
-    from .casefile_verbs import raise_lines
-
-    try:
-        raised = raise_lines(broker, v.job_id, v.conversation_id, session_id)
-    except Exception:
-        logger.exception("could not raise the case file lines of %s", v.job_id)
-        return
-    if raised and broker.ledger is not None:
-        broker.ledger.append(
-            {
-                "action_type": "CASEFILE_LINES_PROPOSED",
-                "actor": "workspace-broker",
-                "actor_role": "broker",
-                "skill_name": "case-file-manager",
-                "metadata": json.dumps({"job_id": v.job_id, "lines": raised}, sort_keys=True, separators=(",", ":")),
-            }
-        )
 
 
 def _settle_sent(broker: BrokerContext, db_path: str, v: Verified, result: Any) -> None:

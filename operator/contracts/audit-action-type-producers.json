@@ -554,8 +554,8 @@
     },
     "CASEFILE_LINES_PROPOSED": {
       "side": "ss-console",
-      "producerFile": "operator/workspace_broker/reply_binding.py",
-      "reason": "A case file job's bound reply was sent; the broker appended its numbered proposed changes to the casework ledger. Job id, message ref and line count only."
+      "producerFile": "operator/workspace_broker/casefile_verbs.py",
+      "reason": "A case file job's bound reply was sent; the broker appended its numbered proposed changes to the casework ledger. Job id and line count only."
     },
     "CASEFILE_APPLY_SUBMITTED": {
       "side": "ss-console",

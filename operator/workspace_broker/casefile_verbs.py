@@ -44,6 +44,7 @@ Audit rows carry ids, counts and states, never the request text or a matter fact
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
@@ -72,6 +73,8 @@ from .litigation_intake import initiation_allows
 from .litigation_verbs import month_window
 from .medchron_ledger import admins_from_customer_yaml
 from .recipient_policy import sender_key
+
+logger = logging.getLogger(__name__)
 
 AUDIT_TYPES = {
     "queued": "CASEFILE_JOB_SUBMITTED",
@@ -251,7 +254,8 @@ class CasefileVerbs:
         admins = admins_from_customer_yaml(self.customer_yaml)
         if not admins:
             raise _Refused("the seat's administrator list cannot be read, so who may ask cannot be established")
-        settings = entry.get("settings") if isinstance(entry.get("settings"), dict) else {}
+        raw = entry.get("settings")
+        settings: dict[str, Any] = raw if isinstance(raw, dict) else {}
         return settings, admins
 
     def _submit(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
@@ -496,6 +500,37 @@ def raise_lines(broker: BrokerContext, job_id: str, thread_ref: str, session_id:
     return raised
 
 
+def casefile_ledger_of(broker: BrokerContext) -> CasefileLedger:
+    """The ledger the reply binding reads (a read: the queue dir is never written)."""
+    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-medchron/casefile-queue"
+    return CasefileLedger(str(broker.audit_db_path), queue)
+
+
+def after_bound_reply(broker: BrokerContext, v: Any, session_id: str) -> None:
+    """A delivered case file job's bound reply just went out: its numbered
+    changes become casework lines on that reply's thread (``raise_lines``), so
+    the requester can approve them by number there. The broker raises them
+    itself; the model never names a line. Never raises: the reply went."""
+    row = getattr(v, "row", None) or {}
+    if getattr(v, "kind", "") != "casefile_job" or row.get("state") != "delivered" or row.get("mode") != "full":
+        return
+    try:
+        raised = raise_lines(broker, v.job_id, v.conversation_id, session_id)
+    except Exception:
+        logger.exception("could not raise the case file lines of %s", v.job_id)
+        return
+    if raised and broker.ledger is not None:
+        broker.ledger.append(
+            {
+                "action_type": "CASEFILE_LINES_PROPOSED",
+                "actor": "workspace-broker",
+                "actor_role": "broker",
+                "skill_name": SKILL_NAME,
+                "metadata": json.dumps({"job_id": v.job_id, "lines": raised}, sort_keys=True, separators=(",", ":")),
+            }
+        )
+
+
 def casefile_dispatch(
     broker: BrokerContext, action: str, request: dict[str, Any], pid: int, peer_uid: int | None
 ) -> dict[str, Any]:
@@ -505,4 +540,12 @@ def casefile_dispatch(
     return verbs.handle(action, request, peer_uid, from_gateway=pid == broker.gateway_pid)
 
 
-__all__ = ["AUDIT_TYPES", "VERBS", "CasefileVerbs", "casefile_dispatch", "raise_lines"]
+__all__ = [
+    "AUDIT_TYPES",
+    "VERBS",
+    "CasefileVerbs",
+    "after_bound_reply",
+    "casefile_dispatch",
+    "casefile_ledger_of",
+    "raise_lines",
+]
