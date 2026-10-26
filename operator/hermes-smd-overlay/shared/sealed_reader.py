@@ -50,7 +50,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
-from xml.etree import ElementTree
+
+# The feed parser is stdlib ElementTree because defusedxml is not an overlay
+# dependency; youtube_feed refuses any DOCTYPE or ENTITY declaration before
+# parsing, the body is capped at 2 MB, and expat resolves no external entities.
+from xml.etree import ElementTree  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 
 from shared import safe_fetch
 from shared.reader_items import (
