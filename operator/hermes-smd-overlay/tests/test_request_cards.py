@@ -1176,7 +1176,10 @@ def test_a_reply_sent_after_the_replied_card_landed_is_carded_with_its_own_words
             ledger,
             [_request(61)],
             done_at=landed,
-            openings={"sent-1": "first answer", "sent-2": "Correction: both records are unreadable as filed."},
+            openings={
+                "sent-1": "first answer",
+                "sent-2": "Correction: both records are unreadable as filed.",
+            },
         )
     )
     assert len(cards) == 1
