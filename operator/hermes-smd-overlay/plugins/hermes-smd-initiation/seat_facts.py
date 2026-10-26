@@ -89,7 +89,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from . import help_guide
+from . import help_guide, marketing_facts
 
 logger = logging.getLogger(__name__)
 
@@ -938,6 +938,8 @@ def build_facts(
     home: str | None = None,
     sender: str | None = None,
     skill_roots_override: tuple[Path, ...] | None = None,
+    marketing_registers_loader: marketing_facts.RegistersLoader | None = None,
+    research_log: str | None = None,
 ) -> dict[str, Any]:
     """Assemble ``operator.seat.facts/v1``. Never raises.
 
@@ -1079,6 +1081,16 @@ def build_facts(
     except Exception as exc:  # noqa: BLE001
         facts["working_rules"] = _empty("working_rules")
         unreadable.append({"section": "working_rules", "reason": f"exposure unreadable ({exc})"})
+
+    # marketing (seat.role: marketing only; marketing_facts) --------------------
+    try:
+        if marketing_facts.is_marketing_seat(cfg):
+            facts[marketing_facts.SECTION] = marketing_facts.build(
+                cfg, registers_loader=marketing_registers_loader, research_log=research_log
+            )
+    except Exception as exc:  # noqa: BLE001
+        facts[marketing_facts.SECTION] = {"available": False, "reason": "unreadable", "admins": []}
+        unreadable.append({"section": "marketing", "reason": f"marketing unreadable ({exc})"})
 
     # help (depth "help" only) -------------------------------------------------
     if depth == DEPTH_HELP:

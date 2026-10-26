@@ -228,7 +228,12 @@ _SEAT_FACTS_DESCRIPTION = (
     "that section is what sets a firm's expectations before it discovers a "
     "refusal and reads it as a malfunction. Say those rules as the section "
     "reports them for THIS seat; two of them vary per seat, which is why they "
-    "are read rather than fixed. The result carries no run history, no client "
+    "are read rather than fixed. On a marketing seat a 'marketing' section "
+    "carries the firm's registers (names, cities, roster, disclosures, channel "
+    "flags), the exact addresses of the seat's administrators ('admins'), and "
+    "the month's research questions, for the marketing skills; it is not "
+    "something to recite when introducing yourself. "
+    "The result carries no run history, no client "
     "names, and no matter identifiers, and you must not add any."
 )
 
