@@ -76,6 +76,15 @@ const EXPECTED_VERBS = [
   'agentmail_send',
   'audit_append',
   'authorize',
+  // The case file job's request edge (casefile_verbs.py): submit, status and
+  // apply-submit gateway, agent or root; record, resume and close root only.
+  // Apply-submit queues the APPLY a person's numbered approval asked for.
+  'casefile_apply_submit',
+  'casefile_job_close',
+  'casefile_job_record',
+  'casefile_job_resume',
+  'casefile_job_status',
+  'casefile_job_submit',
   // Case-manager casework ledger: proposals, a person's verdicts, and the task
   // writes they authorize. Agent uid only, validated and stamped server-side.
   'casework_event_append',
