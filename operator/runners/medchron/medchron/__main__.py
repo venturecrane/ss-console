@@ -516,6 +516,9 @@ def main(argv: list[str] | None = None) -> int:
         "--offline", action="store_true", help="rehearsal: no seat; replay a copied job dir from its cached text"
     )
     lt.set_defaults(fn=_cmd_litigate)
+    from .casefile.cli import add_parser as _casefile_parser
+
+    _casefile_parser(sub)
     ng = sub.add_parser("negotiate", help="run one negotiation-watch job: new offer documents to Negotiation Details")
     ng.add_argument("job_dir")
     ng.add_argument("--pricing", default=None)
