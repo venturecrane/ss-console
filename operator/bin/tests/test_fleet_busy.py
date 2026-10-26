@@ -188,12 +188,12 @@ class _DroppingFly(FakeFly):
         self.text = text
         self.probe_calls = 0
 
-    def ssh_python(self, app: str, source: str, timeout: float = 90) -> Result:
+    def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
         if "SMD_QUIESCE" not in source:
             self.probe_calls += 1
             if self.probe_calls in self.drop_probe_calls:
                 return Result(1, "", self.text)
-        return super().ssh_python(app, source, timeout)
+        return super().run_python(app, source, timeout)
 
 
 def _gate(fly: FakeFly) -> busy.BusyGate:

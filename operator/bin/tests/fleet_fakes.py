@@ -267,7 +267,7 @@ class FakeFly:
             self.deploys.append((app, image, fh.read()))
         return self.deploy_results.pop(0) if self.deploy_results else Result(0, "deployed", "")
 
-    def ssh_python(self, app: str, source: str, timeout: float = 90) -> Result:
+    def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
         seat = app.removeprefix("hermes-")
         if seat in self.ssh_raises:
             raise ToolingError(f"ssh to {app} hung")

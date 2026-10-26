@@ -290,7 +290,9 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   since the seat's current image, for a lane the seat authors, is refused until
   its inputs are re-staged (`operator/bin/reprovision.sh <slug>`, then rerun
   with `--accept-lane-inputs`).
-- **Busy gate, read live over ssh.** A running job (a live job child, or a lane
+- **Busy gate, read live on the seat.** The probe runs as root through `fly
+  machine exec`, an HTTPS call with no WireGuard tunnel; until 2026-10-26 it
+  used ssh, and a fresh tunnel per GitHub run lost two of three probes. A running job (a live job child, or a lane
   heartbeat naming one), pending wakes, a heartbeat gone stale (over 5 minutes) while its daemon
   lives, a managed cron firing within 6 minutes (or fired within the last 2),
   or a store the probe could not read means busy
@@ -377,7 +379,7 @@ Two workflows run the release (ADR 0096).
     holds every ring after it.
   - each seat is verified by its own self-test, with no ssh boot smoke: no
     verdict is a tooling error that halts and pages. The busy gate still
-    probes over ssh, waiting up to 10 minutes; a seat still busy is left
+    probes the seat, waiting up to 10 minutes; a seat still busy is left
     `waiting_idle` and a later tick picks it up. A tick never passes
     `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
     the tick at preflight until a person re-stages the seat.

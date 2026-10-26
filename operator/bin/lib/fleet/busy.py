@@ -1,6 +1,6 @@
 """The busy gate: never restart a seat in the middle of a job.
 
-Read LIVE, over ssh, at the moment of decision, by the stdin-shipped
+Read LIVE, by `fly machine exec` (HTTPS, no tunnel), at the moment of decision, by the shipped
 remote_busy_probe.py (works on images that predate any fleet tooling). D1's
 heartbeat columns are a dashboard, not a gate: a heartbeat is minutes old by
 construction, and on images before the lane beat threads a running chronology's
@@ -139,7 +139,7 @@ class BusyGate:
         self.probe_source = (HERE / "remote_busy_probe.py").read_text(encoding="utf-8")
 
     def probe(self, seat: str) -> Verdict:
-        res = self.fly.ssh_python(ids.app_name(seat), self.probe_source)
+        res = self.fly.run_python(ids.app_name(seat), self.probe_source)
         if not res.ok and PROBE_MARK not in res.stdout:
             if looks_like_transport_failure(res):
                 raise TransportFailure(f"busy probe on {seat} failed (transport): {res.text.strip()[-300:]}")
@@ -148,7 +148,7 @@ class BusyGate:
 
     def quiesce(self, seat: str, reason: str) -> None:
         src = quiesce_source("set", self.holder, self.clock() + QUIESCE_TTL_S, reason)
-        res = self.fly.ssh_python(ids.app_name(seat), src)
+        res = self.fly.run_python(ids.app_name(seat), src)
         if "SMD_QUIESCE set" not in res.stdout and "SMD_QUIESCE no-run-dir" not in res.stdout:
             if not res.ok and looks_like_transport_failure(res):
                 raise TransportFailure(f"could not reach {seat} to write the quiesce marker: {res.text.strip()[-300:]}")
@@ -157,13 +157,13 @@ class BusyGate:
     def clear(self, seat: str) -> None:
         """Best effort: a new boot ignores an expired marker anyway."""
         try:
-            self.fly.ssh_python(ids.app_name(seat), quiesce_source("clear", self.holder))
+            self.fly.run_python(ids.app_name(seat), quiesce_source("clear", self.holder))
         except ToolingError:
             pass
 
     def clear_any_fleet(self, seat: str) -> str:
         """Remove a marker ANY fleet run left (reprovision clears after its deploy)."""
-        res = self.fly.ssh_python(ids.app_name(seat), quiesce_source("clear", self.holder, prefix=MARKER_PREFIX))
+        res = self.fly.run_python(ids.app_name(seat), quiesce_source("clear", self.holder, prefix=MARKER_PREFIX))
         return next((ln for ln in res.stdout.splitlines() if ln.startswith("SMD_QUIESCE")), "SMD_QUIESCE no answer")
 
     def _riding_transport(self, seat: str, what: str, call: Callable[[], Any], log: Callable[[str], None]) -> Any:
