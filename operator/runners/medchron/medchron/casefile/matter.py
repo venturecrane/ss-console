@@ -31,6 +31,8 @@ from .inventory import inv_of
 
 YIELD_ENV = "MEDCHRON_CASEFILE_YIELD_PIDS"
 YIELD_POLL_SECONDS = 15.0
+#: The wait between polls (a test replaces it).
+SLEEP: Callable[[float], Any] = time.sleep
 REVIEW = "review.json"
 HELD = "held.json"
 
@@ -55,7 +57,7 @@ def yield_pids() -> list[Path]:
 
 def wait_turn(
     pids: list[Path],
-    sleep: Callable[[float], Any] = time.sleep,
+    sleep: Callable[[float], Any] | None = None,
     check: Callable[[], Any] | None = None,
     log: Callable[[str], None] = print,
 ) -> float:
@@ -68,7 +70,7 @@ def wait_turn(
             told = True
         if check is not None:
             check()
-        sleep(YIELD_POLL_SECONDS)
+        (sleep or SLEEP)(YIELD_POLL_SECONDS)
         waited += YIELD_POLL_SECONDS
     return waited
 

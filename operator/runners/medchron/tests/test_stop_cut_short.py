@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 import pytest
 
+import test_casefile_lane as casefile_t
 import test_demand_lane as demand_t
 import test_drafting_lane as drafting_t
 import test_litigation_lane as litigation_t
@@ -93,10 +94,16 @@ def _litigation(tmp_path: Path) -> tuple[Any, Any, Callable[[], str], str]:
     return lane, client, lambda: litigation_t._submit(lane, client), "litigation-status"
 
 
+def _casefile(tmp_path: Path) -> tuple[Any, Any, Callable[[], str], str]:
+    lane, client = casefile_t._lane(tmp_path)
+    lane._stop_test_dict = {"caught": "caught_dict", "real_end": ("held_dict", "held")}
+    return lane, client, lambda: casefile_t._submit(lane, client), "case-file-manager"
+
+
 LANES = pytest.mark.parametrize(
     "make",
-    [_demand, _drafting, _chronology, _negotiation, _litigation],
-    ids=["demand", "drafting", "chronology", "negotiation", "litigation"],
+    [_demand, _drafting, _chronology, _negotiation, _litigation, _casefile],
+    ids=["demand", "drafting", "chronology", "negotiation", "litigation", "casefile"],
 )
 
 
@@ -181,7 +188,7 @@ def test_a_real_ending_reached_before_the_stop_is_recorded(tmp_path, make):
     assert _states(client)[-1] == ending
 
 
-@pytest.mark.parametrize("make", [_negotiation, _litigation], ids=["negotiation", "litigation"])
+@pytest.mark.parametrize("make", [_negotiation, _litigation, _casefile], ids=["negotiation", "litigation", "casefile"])
 def test_a_paged_failure_reached_before_the_stop_is_recorded_not_rerun(tmp_path, make):
     """FALSIFIER (review of #3256): a ``failed`` carrying review_held: is the
     work's own ending and pages SMD; re-running it on the next boot would spend

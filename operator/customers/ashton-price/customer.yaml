@@ -831,6 +831,31 @@ personas:
           # A comma-separated string (settings are scalars, ADR 0075). The
           # first entry receives the scheduled run; it must be in scope.admins.
           scheduled_recipients: 'christa@ashtonandprice.com'
+      # ---- the Case File Manager: BOUND ON REQUEST ONLY 2026-10-26 (case-file-manager) ----
+      # Increment 1 of the Case File Manager plan: a Named Administrator asks
+      # for a caseload (the files a person assists on) or named matters; the
+      # job reads each file, files a current File Status in it, files the
+      # ranked list in the Operator Library, and numbers the changes it
+      # proposes (a task the file proves done, a Medicals row from a bill whose
+      # text was read). A reply approving numbers is applied by the job after a
+      # fresh read; nothing changes without it. ON REQUEST only: there is NO
+      # cron row and scheduled is false (a standing schedule is the firm's yes,
+      # then the Captain's grid change). The lane holds every kind of job until
+      # its lane proof is accepted (case-file-manager.full / .apply). The
+      # per-job and monthly caps live in the firm's casefile-firm.yaml
+      # (engagements). Reserved to scope.admins.
+      - name: case-file-manager # admin-requested caseload review, queued as a job; never read in a turn
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: 'Case File Manager'
+          # The Operator Library matter's id, the same matter the litigation
+          # lane files to; the broker pairs it with the library number.
+          file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
       # ---- the negotiation watch: ENABLED 2026-10-09 (negotiation-watch) ----
       # LANE ACTIVATION RECORD. On 2026-10-09 the Operator filled the
       # Negotiation Details tab on the firm's open matters from every offer
