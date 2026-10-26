@@ -118,11 +118,23 @@ def test_the_daemon_wake_for_an_already_current_delivery_carries_the_counts(tmp_
     s["by_reason"] = {"billing_only": {"files": 1, "pages": 3}, "read_no_new_visit": {"files": 1, "pages": 9}}
     verdict.write(jd, json.dumps([{"unit": "alpha", "outcome": "delivered", "current": s}]))
     d.job_dir = lambda _j: jd  # type: ignore[method-assign]
-    text = d._compose_wake("J1", "delivered", {})
+    text = d._compose_wake("J1", "delivered", {"documents": 200, "pages": 472})
     assert "Update outcome: already_current. The delivered chronology is unchanged." in text
-    assert "files asked: 2; files accounted for: 2; by kind: billing_only 1 file(s) 3 page(s)" in text
+    assert "files named: 2, every one accounted for; by kind: billing_only 1 file(s) 3 page(s)" in text
     assert "Delivered folder id" not in text
-    assert "Update outcome" not in d._compose_wake("J1", "failed", {}, stage="update_select")
+    # The delivered package's totals never sit beside the update's tally (Pamplona 2026-10-26).
+    assert "Documents: 200" not in text and "spend cents: 0." in text
+    failed = d._compose_wake("J1", "failed", {"documents": 200, "pages": 472}, stage="update_select")
+    assert "Update outcome" not in failed and "Documents: 200; pages: 472" in failed
+
+
+def test_a_file_found_inside_a_named_one_is_counted_as_such_never_as_a_surplus() -> None:
+    s = {"kind": UO.KIND, "requested": 222, "files": 223, "by_reason": {"excluded_by_rule": {"files": 23, "pages": 0}}}
+    got = UO.line(s)
+    assert got.startswith("files named: 222, plus 1 found inside them, every one accounted for; by kind:")
+    assert "223" not in got
+    s["files"] = 222
+    assert "found inside" not in UO.line(s)
 
 
 # ---- case 4: every named file excluded (download) -----------------------------------

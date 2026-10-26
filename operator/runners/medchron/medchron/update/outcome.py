@@ -290,8 +290,14 @@ def summary(rec: dict[str, Any]) -> dict[str, Any]:
 
 
 def line(s: dict[str, Any]) -> str:
+    """The counts the reply is worded from. A file found inside a named one (an
+    email's attachment) is counted as such, never as a surplus: Pamplona's
+    first update (2026-10-26) read "files asked: 222; files accounted for:
+    223" and the reply told the attorney the counts did not reconcile."""
     kinds = "; ".join(f"{k} {v['files']} file(s) {v['pages']} page(s)" for k, v in s["by_reason"].items())
-    return f"files asked: {s['requested']}; files accounted for: {s['files']}; by kind: {kinds or 'none'}"
+    inside = max(0, int(s["files"]) - int(s["requested"]))
+    found = f", plus {inside} found inside them" if inside else ""
+    return f"files named: {s['requested']}{found}, every one accounted for; by kind: {kinds or 'none'}"
 
 
 def end(sr: Any, st: Any, stage: str, code: int, out: Any) -> Any:
@@ -364,6 +370,15 @@ def proof(run_dir: Path, filed: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def totals_line(fields: dict[str, Any], already_current: bool) -> str:
+    """The wake's totals. An already-current update's counts line is its only
+    tally: the delivered package's totals beside it read as a second,
+    disagreeing count (Pamplona 2026-10-26: "200 documents, 472 pages" against
+    "198 files, 583 pages", relayed to the attorney as unreconciled)."""
+    totals = "" if already_current else f"Documents: {fields.get('documents', 0)}; pages: {fields.get('pages', 0)}; "
+    return f"{totals}spend cents: {fields.get('cents', 0)}."
+
+
 def wake_lines(outcomes: list[Any], state: str) -> list[str]:
     """The DELIVER wake's lines for an already-current update the daemon
     recorded delivered: code-authored tokens and counts only, never a file
@@ -378,4 +393,26 @@ def wake_lines(outcomes: list[Any], state: str) -> list[str]:
     return []
 
 
-__all__ = ["KIND", "RECORD", "WORDING", "classify", "end", "load", "problem", "proof", "summary", "wake_lines", "write"]
+def wake_block(outcomes: list[Any], state: str, envelope: dict[str, Any]) -> list[str]:
+    """The update's lines in the DELIVER wake: none for a run; for an update,
+    the request line, then an already-current update's counts."""
+    if not isinstance(envelope.get("update"), dict):
+        return []
+    return ["Request: update into the delivered chronology.", *wake_lines(outcomes, state)]
+
+
+__all__ = [
+    "KIND",
+    "RECORD",
+    "WORDING",
+    "classify",
+    "end",
+    "load",
+    "problem",
+    "proof",
+    "summary",
+    "totals_line",
+    "wake_block",
+    "wake_lines",
+    "write",
+]
