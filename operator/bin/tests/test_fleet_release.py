@@ -561,3 +561,14 @@ def test_rollback_without_ssh_fallback_is_reverified_by_the_selftest(tmp_path) -
     # FALSIFIER: re-smoke with bash in this mode and FakeSmoke records a call.
     assert w.smoke.calls == []
     assert "self-test on the rollback image" in _details(w)["smd-staging"]
+
+
+def test_the_release_verifier_defaults_to_the_seat_self_test() -> None:
+    """Since 2026-10-26 a release is judged by the seat's own self-test unless
+    `--verify bash` is passed: the cross-check release agreed on every seat but
+    one, where the self-test was right. FALSIFIER: the old default "bash" fails."""
+    from bin.lib.fleet import cli
+
+    args = cli._parser().parse_args(["release", "img-202610260720-67b2d972"])
+    assert args.verify == "selftest"
+    assert cli._parser().parse_args(["release", "img-202610260720-67b2d972", "--verify", "bash"]).verify == "bash"
