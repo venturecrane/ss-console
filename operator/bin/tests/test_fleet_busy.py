@@ -15,7 +15,11 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from bin.lib.fleet import busy
+from bin.lib.fleet.runner import Result, ToolingError, looks_like_transport_failure
+from bin.tests.fleet_fakes import FakeFly
 
 HERE = Path(busy.__file__).resolve().parent
 
@@ -167,3 +171,78 @@ def test_quiesce_set_and_clear_only_its_own_marker(tmp_path: Path) -> None:
     (run / "quiesce").write_text(json.dumps({"by": "fleet:old-laptop", "until": 1}))
     out = _run_remote("remote_quiesce.py", tmp_path, prefix="\n".join(anyfleet.split("\n", 2)[:2]) + "\n")
     assert "cleared" in out and not (run / "quiesce").exists()
+
+
+# --- transport failures while waiting (captain-mark, 2026-10-26) -------------------
+
+FLY_API_EOF = 'Error: get app: Get "https://api.machines.dev/v1/apps/hermes-captain-mark": EOF'
+_BUSY = {"lanes": [], "children": [], "crons": [{"name": "slot", "next_in_s": 60}], "errors": []}
+
+
+class _DroppingFly(FakeFly):
+    """A FakeFly whose busy probes lose their connection on the listed call numbers."""
+
+    def __init__(self, drop_probe_calls: set[int], text: str = FLY_API_EOF) -> None:
+        super().__init__()
+        self.drop_probe_calls = drop_probe_calls
+        self.text = text
+        self.probe_calls = 0
+
+    def ssh_python(self, app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" not in source:
+            self.probe_calls += 1
+            if self.probe_calls in self.drop_probe_calls:
+                return Result(1, "", self.text)
+        return super().ssh_python(app, source, timeout)
+
+
+def _gate(fly: FakeFly) -> busy.BusyGate:
+    clock = [0.0]
+
+    def sleep(s: float) -> None:
+        clock[0] += s
+
+    return busy.BusyGate(fly, "test", sleep=sleep, clock=lambda: clock[0])
+
+
+def test_a_bare_fly_api_eof_is_a_transport_failure() -> None:
+    # FALSIFIER: drop the '": eof' marker and the exact error that halted ring 2
+    # reads as a seat failure instead of a dropped connection.
+    assert looks_like_transport_failure(Result(1, "", FLY_API_EOF))
+    assert not looks_like_transport_failure(Result(1, "", "Error: the release did not come up"))
+
+
+def test_a_dropped_connection_while_waiting_is_retried() -> None:
+    # Busy, then the next poll loses its connection once, then idle.
+    fly = _DroppingFly({2})
+    fly.probe_facts["captain-mark"] = [_BUSY, _facts(), _facts()]
+    log: list[str] = []
+    verdict = _gate(fly).wait_idle("captain-mark", 3600, log.append)
+    assert not verdict.busy
+    assert any("lost its connection" in line for line in log)
+    assert fly.probe_calls == 3
+
+
+def test_a_dropped_connection_on_the_first_probe_is_retried() -> None:
+    fly = _DroppingFly({1})
+    assert not _gate(fly).wait_idle("captain-mark", 3600, lambda _: None).busy
+    assert fly.probe_calls == 2
+
+
+def test_a_connection_that_stays_down_still_halts() -> None:
+    # FALSIFIER: retry forever (or swallow the error) and an unreachable seat is
+    # waited on to the cap and then read as merely busy, instead of halting.
+    fly = _DroppingFly(set(range(1, 100)))
+    with pytest.raises(busy.TransportFailure, match="attempts in a row"):
+        _gate(fly).wait_idle("captain-mark", 3600, lambda _: None)
+    assert fly.probe_calls == busy.TRANSPORT_ATTEMPTS
+
+
+def test_a_probe_that_answers_badly_halts_at_once() -> None:
+    # Only transport failures are retried: a probe that ran and failed is an
+    # answer about the seat.
+    fly = _DroppingFly({1}, text="Traceback (most recent call last): KeyError")
+    with pytest.raises(ToolingError) as caught:
+        _gate(fly).wait_idle("captain-mark", 3600, lambda _: None)
+    assert not isinstance(caught.value, busy.TransportFailure)
+    assert fly.probe_calls == 1

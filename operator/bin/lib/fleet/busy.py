@@ -48,6 +48,17 @@ CRON_AHEAD_S = 360.0
 CRON_BEHIND_S = 120.0
 QUIESCE_TTL_S = 1800.0
 POLL_S = 30.0
+# A wait can run for an hour of ssh calls; one of them losing its connection to
+# Fly's API says nothing about the seat (captain-mark, 2026-10-26: one
+# `api.machines.dev ... EOF` mid-wait halted ring 2). A transport failure is
+# retried this many times in a row, a poll apart, before it halts the release.
+# Anything else (the probe ran and answered nonsense, the marker was refused)
+# halts at once, and a failure that persists still halts.
+TRANSPORT_ATTEMPTS = 3
+
+
+class TransportFailure(ToolingError):
+    """The call never reached the seat: Fly's API, agent or ssh layer dropped it."""
 
 
 @dataclass
@@ -130,14 +141,17 @@ class BusyGate:
     def probe(self, seat: str) -> Verdict:
         res = self.fly.ssh_python(ids.app_name(seat), self.probe_source)
         if not res.ok and PROBE_MARK not in res.stdout:
-            kind = "transport" if looks_like_transport_failure(res) else f"rc={res.rc}"
-            raise ToolingError(f"busy probe on {seat} failed ({kind}): {res.text.strip()[-300:]}")
+            if looks_like_transport_failure(res):
+                raise TransportFailure(f"busy probe on {seat} failed (transport): {res.text.strip()[-300:]}")
+            raise ToolingError(f"busy probe on {seat} failed (rc={res.rc}): {res.text.strip()[-300:]}")
         return decide(parse_probe(res.stdout))
 
     def quiesce(self, seat: str, reason: str) -> None:
         src = quiesce_source("set", self.holder, self.clock() + QUIESCE_TTL_S, reason)
         res = self.fly.ssh_python(ids.app_name(seat), src)
         if "SMD_QUIESCE set" not in res.stdout and "SMD_QUIESCE no-run-dir" not in res.stdout:
+            if not res.ok and looks_like_transport_failure(res):
+                raise TransportFailure(f"could not reach {seat} to write the quiesce marker: {res.text.strip()[-300:]}")
             raise ToolingError(f"could not write the quiesce marker on {seat}: {res.text.strip()[-300:]}")
 
     def clear(self, seat: str) -> None:
@@ -152,19 +166,39 @@ class BusyGate:
         res = self.fly.ssh_python(ids.app_name(seat), quiesce_source("clear", self.holder, prefix=MARKER_PREFIX))
         return next((ln for ln in res.stdout.splitlines() if ln.startswith("SMD_QUIESCE")), "SMD_QUIESCE no answer")
 
+    def _riding_transport(self, seat: str, what: str, call: Callable[[], Any], log: Callable[[str], None]) -> Any:
+        """``call()``, retried through up to TRANSPORT_ATTEMPTS transport failures in a row."""
+        for attempt in range(1, TRANSPORT_ATTEMPTS + 1):
+            try:
+                return call()
+            except TransportFailure as exc:
+                if attempt == TRANSPORT_ATTEMPTS:
+                    raise TransportFailure(f"{exc} ({TRANSPORT_ATTEMPTS} attempts in a row)") from exc
+                log(f"{seat}: {what} lost its connection; retrying in {POLL_S:.0f}s ({attempt}/{TRANSPORT_ATTEMPTS})")
+                self.sleep(POLL_S)
+        raise AssertionError("unreachable")
+
     def wait_idle(self, seat: str, max_wait: float, log: Callable[[str], None]) -> Verdict:
         """Idle verdict, or the last busy verdict once ``max_wait`` has passed."""
-        verdict = self.probe(seat)
+
+        def probe() -> Verdict:
+            return self._riding_transport(seat, "busy probe", lambda: self.probe(seat), log)
+
+        def quiesce() -> None:
+            reason = f"fleet release by {self.holder}"
+            self._riding_transport(seat, "quiesce marker", lambda: self.quiesce(seat, reason), log)
+
+        verdict = probe()
         if not verdict.busy:
             return verdict
         log(f"{seat}: busy ({'; '.join(verdict.reasons)}); quiescing and waiting up to {max_wait:.0f}s")
-        self.quiesce(seat, f"fleet release by {self.holder}")
+        quiesce()
         deadline = self.clock() + max_wait
         while self.clock() < deadline:
             self.sleep(POLL_S)
-            verdict = self.probe(seat)
+            verdict = probe()
             if not verdict.busy:
                 log(f"{seat}: idle")
                 return verdict
-            self.quiesce(seat, f"fleet release by {self.holder}")  # keep the marker ahead of its expiry
+            quiesce()  # keep the marker ahead of its expiry
         return verdict
