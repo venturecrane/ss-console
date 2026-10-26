@@ -543,8 +543,9 @@ already_current.`): the update read what was asked and found nothing to
      step 3 says, with "already current, records review filed" in place of the
      folder and the ids the update named as covered. The reply is short
      and factual, worded from the wake's counts line alone: "The chronology
-     for matter <number> already includes these records. Of the <asked>
-     files named, none adds a visit:" then one line per kind the counts name,
+     for matter <number> already includes these records. Of the <named>
+     files named (and the <n> found inside them, when the counts line says
+     "plus <n> found inside them"), none adds a visit:" then one line per kind the counts name,
      with its file count, in these words: `billing_only` "billing pages
      only"; `read_no_new_visit` "read in full; no visit or finding the
      chronology does not already list"; `pages_already_delivered` "every page
@@ -559,12 +560,17 @@ already_current.`): the update read what was asked and found nothing to
      delivered chronology itself"; `deleted` "deleted on the matter";
      `read_for_the_delivered_chronology` "read for the delivered chronology,
      which recorded why each adds nothing (the review names the reason)";
-     `unreadable` "not readable as record pages"; `not_retrieved` "not
+     `unreadable` "could not be opened (password-protected or damaged; the
+     review names each)"; `not_retrieved` "not
      retrievable from the matter"; `email` "emails whose attachments were
      read as their own files". Then one sentence: "The records review filed
      beside the chronology lists each file, its pages, and what it is." No
      other words about it: no grade, no judgement of the records, nothing about
-     who did the work. Close with the allowance figures as above.
+     who did the work. The counts line is the update's only tally and it
+     reconciles by construction: never call a count unreconciled, never set it
+     against another figure, and never add a decision for the attorney (on
+     2026-10-26 a reply did all three and read as an unfinished job). Close
+     with the allowance figures as above.
    - **held**: nothing is sent, ever (the Captain, 2026-10-24: the firm hears
      about a chronology only when it is delivered). Bind nothing and draft
      nothing. The only held chronology that wakes this mode is

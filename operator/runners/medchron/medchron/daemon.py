@@ -448,20 +448,17 @@ class Daemon:
         except (OSError, ValueError):
             pass
         matter_no = (env.get("matter") or {}).get("number", "")
+        from .update import outcome as update_outcome
+
+        # Code-authored: an update INTO the delivered chronology says so, plus
+        # an already-current update's counts per reason.
+        upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env)
         lines = [
             f"Run the medical-chronology-maintainer skill's DELIVER mode for chronology job {job_id}.",
             f"Outcome: {state}. Matter number: {matter_no}.",
-            f"Documents: {fields.get('documents', 0)}; pages: {fields.get('pages', 0)}; "
-            f"spend cents: {fields.get('cents', 0)}.",
+            update_outcome.totals_line(fields, len(upd) > 1),
+            *upd,
         ]
-        if isinstance(env.get("update"), dict):
-            # Code-authored: the request was an update INTO the delivered
-            # chronology, so the reply says the chronology was updated.
-            lines.append("Request: update into the delivered chronology.")
-            # An update that found nothing new: its counts per reason, code-authored.
-            from .update import outcome as update_outcome
-
-            lines.extend(update_outcome.wake_lines(verdict_mod.read(self.job_dir(job_id), ""), state))
         if fields.get("folder_id"):
             lines.append(f"Delivered folder id: {fields['folder_id']}.")
         if state != "delivered":
