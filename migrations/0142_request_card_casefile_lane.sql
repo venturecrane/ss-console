@@ -1,4 +1,4 @@
--- 0141: the case file manager's jobs on request cards (job_lane 'casefile').
+-- 0142: the case file manager's jobs on request cards (job_lane 'casefile').
 --
 -- The casefile lane (skill case-file-manager) reads each matter in a caseload,
 -- files a current File Status in each, and sends a ranked list with numbered
@@ -9,19 +9,19 @@
 --
 -- SQLite cannot ALTER a CHECK, so this is a full-table rebuild (the 0123-0125
 -- and 0136 shape): identical columns including lane_key (0125) and jobs_queued
--- (0134), identical kind CHECK (0136, held_reply), identical PK and index,
+-- (0134), identical kind CHECK (0141, followup), identical PK and index,
 -- every row carried across. Every existing value stays valid throughout.
 --
 -- Ordering is safe: deploy.yml applies migrations before the worker deploys,
 -- and no seat posts a casefile card until the overlay ships the lane.
 --
--- Manual-only rollback at migrations/rollbacks/0141_request_card_casefile_lane_down.sql.
+-- Manual-only rollback at migrations/rollbacks/0142_request_card_casefile_lane_down.sql.
 
 CREATE TABLE operator_request_cards_new (
   customer_slug  TEXT NOT NULL,
   card_key       TEXT NOT NULL,
   kind           TEXT NOT NULL
-    CHECK (kind IN ('replied', 'no_reply', 'job_done', 'lane_unproven', 'held_reply')),
+    CHECK (kind IN ('replied', 'no_reply', 'job_done', 'lane_unproven', 'held_reply', 'followup')),
   received_at    TEXT NOT NULL,
   event_at       TEXT NOT NULL,
   minutes        INTEGER NOT NULL,

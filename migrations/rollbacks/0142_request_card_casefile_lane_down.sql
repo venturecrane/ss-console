@@ -1,4 +1,4 @@
--- Rollback for 0141: narrow job_lane back to
+-- Rollback for 0142: narrow job_lane back to
 -- ('demand', 'drafting', 'litigation', 'medchron', 'negotiation').
 -- NOT fail-soft. Every row with job_lane 'casefile' would violate the narrowed
 -- CHECK, so those rows are dropped here (their emails were already sent; the
@@ -11,7 +11,7 @@ CREATE TABLE operator_request_cards_old (
   customer_slug  TEXT NOT NULL,
   card_key       TEXT NOT NULL,
   kind           TEXT NOT NULL
-    CHECK (kind IN ('replied', 'no_reply', 'job_done', 'lane_unproven', 'held_reply')),
+    CHECK (kind IN ('replied', 'no_reply', 'job_done', 'lane_unproven', 'held_reply', 'followup')),
   received_at    TEXT NOT NULL,
   event_at       TEXT NOT NULL,
   minutes        INTEGER NOT NULL,

@@ -523,9 +523,9 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
-  it('a casefile job card is recorded and sent for every terminal state (0141)', async () => {
+  it('a casefile job card is recorded and sent for every terminal state (0142)', async () => {
     // FALSIFIER: drop 'casefile' from JOB_LANES and the parse refuses it (400);
-    // drop migration 0141 and the job_lane CHECK rejects the INSERT.
+    // drop migration 0142 and the job_lane CHECK rejects the INSERT.
     for (const state of ['delivered', 'failed', 'held'] as const) {
       const key = `${`c${state}`
         .padEnd(64, '0')
