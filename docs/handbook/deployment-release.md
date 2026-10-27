@@ -364,8 +364,12 @@ Two workflows run the release (ADR 0096).
   22, 37 and 52 minutes past every hour, when Deploy completes, and on manual
   dispatch (with an optional release id and a dry run that records nothing).
   Ticks never overlap. One tick takes the fleet lease, reads every seat's
-  rollout of the newest image release from D1, and advances at most one ring
-  (`operator/bin/lib/fleet/tick.py`):
+  rollout of the image releases still in flight from D1, and advances at most
+  one ring (`operator/bin/lib/fleet/tick.py`). Each ring takes the newest
+  release that has baked on the ring before it: the newest goes as far as its
+  own bakes allow, and while it waits, an older release that already passed the
+  earlier rings keeps moving, so a run of merges never starves the later rings.
+  A seat already on a newer release is never moved back to an older one:
   - a seat whose latest rollout is `rolled_back`, `failed` or `tooling_error`
     is a **standing halt**: nothing moves until a person acts, and the
     `rollout_failed` pager has already mailed. Finish it from a laptop with

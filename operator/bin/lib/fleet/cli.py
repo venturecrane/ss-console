@@ -65,6 +65,9 @@ from .tick import TICK_WAITING, Ticker
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
+# How many image releases a `latest` tick weighs at once (tick.Ticker.run_promoting).
+# More in flight than this and the oldest are left behind: newer ones carry them.
+IN_FLIGHT_MAX = 6
 
 
 def log(msg: str) -> None:
@@ -280,11 +283,37 @@ def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
         ctx.log("tick: the seat's self-test decides every seat (no ssh boot smoke in a tick)")
     holder = holder_id()
     roll = _image_rollout(ctx, holder)
-    plan = ImagePlan(release, meta.get("hermes_sha"), max_idle_wait=a.max_idle_wait, dry_run=a.dry_run,
-                     verify="selftest", selftest_capable=True, ssh_fallback=False)  # fmt: skip
-    return Ticker(ctx.store, ctx.log, ctx.clock).run(
-        ctx.rings(), release, lambda seat, ring: roll.run(seat, ring, plan), holder, dry_run=a.dry_run
-    )
+
+    def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
+        rel_meta = meta if rel["release_id"] == release["release_id"] else (
+            ctx.r2.get_json(image_key(rel["image_digest"], "release.json")) or {}
+        )  # fmt: skip
+        plan = ImagePlan(rel, rel_meta.get("hermes_sha"), max_idle_wait=a.max_idle_wait, dry_run=a.dry_run,
+                         verify="selftest", selftest_capable=True, ssh_fallback=False)  # fmt: skip
+        return lambda seat, ring: roll.run(seat, ring, plan)
+
+    ticker = Ticker(ctx.store, ctx.log, ctx.clock)
+    if a.release_id == "latest":
+        return ticker.run_promoting(ctx.rings(), _in_flight(ctx, release), do_seat_for, holder, dry_run=a.dry_run)
+    return ticker.run(ctx.rings(), release, do_seat_for(release), holder, dry_run=a.dry_run)
+
+
+def _in_flight(ctx: Ctx, newest: dict[str, Any]) -> list[dict[str, Any]]:
+    """The image releases a `latest` tick may move, newest first: built from main,
+    not yet completed, carrying the self-test, back to the newest completed one."""
+    out = [newest]
+    for rel in ctx.store.recent_releases(20):
+        if rel.get("kind") != "image" or rel["release_id"] == newest["release_id"]:
+            continue
+        if (rel.get("created_at") or "") > (newest.get("created_at") or ""):
+            continue
+        if rel.get("completed_last_ring_at"):
+            break
+        if _built_from_main(ctx, rel.get("ss_console_sha")) and _image_has_selftest(ctx, rel):
+            out.append(rel)
+        if len(out) >= IN_FLIGHT_MAX:
+            break
+    return out
 
 
 def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
