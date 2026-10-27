@@ -77,7 +77,10 @@ ADR 0007 exists to prevent.
    takes the newest release that has baked on the ring before it. A seat done
    on a newer release counts as done for an older one, so promotion never moves
    a seat backwards. A halt on the newest release still stops everything; a
-   halt on an older, superseded one only skips that release.
+   halt on an older, superseded one only skips that release. An older release
+   gives way when a newer one is already done on the ring before and so is at
+   most one bake away, which spares the ring a second restart minutes later; it
+   gives way for at most one bake, so a run of merges cannot starve it.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`
