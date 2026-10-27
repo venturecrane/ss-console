@@ -285,7 +285,11 @@ def test_failed_streak_counts_consecutive_failed_runs(seat: dict[str, Path], tmp
     assert _once(seat, "hourly", **over)["failed_streak"] == 0
 
 
-def test_crash_counter_writes_a_synthetic_warning(seat: dict[str, Path], tmp_path: Path) -> None:
+def test_crash_record_is_a_failure_and_keeps_the_failed_streak(seat: dict[str, Path], tmp_path: Path) -> None:
+    # FALSIFIER: record the crash as a warning (the code before 2026-10-27) and
+    # a failing verdict is overwritten with failed=0 on every restart, which
+    # resolves selftest_failing and passes a release (review SB-2).
+    _write(seat["root"] / "run/smd-selftest/results.json", json.dumps({"failed": 3, "failed_streak": 2, "checks": []}))
     checks = tmp_path / "crash"
     _write(checks / "seat-checks.sh", "exit 3\n")
     env = _env(
@@ -301,7 +305,43 @@ def test_crash_counter_writes_a_synthetic_warning(seat: dict[str, Path], tmp_pat
     assert done.returncode == 1
     doc = json.loads((seat["root"] / "run/smd-selftest/results.json").read_text())
     crash = _check(doc, "selftest-crashlooping")
-    assert crash["warn"] is True and "exited 3" in crash["detail"] and "restart 2" in crash["detail"]
+    assert crash["ok"] is False and crash["warn"] is False
+    assert "exited 3" in crash["detail"] and "restart 2" in crash["detail"]
+    # Two restarts, each a failed run on top of the two failed runs before.
+    assert doc["failed"] == 1 and doc["warned"] == 0 and doc["failed_streak"] == 4
+
+
+@pytest.mark.parametrize(
+    ("body", "detail"),
+    [
+        ('seat_checks() {\n  check "a" "true"\n  if then\n}\n', "could not source"),
+        (None, "could not source"),
+        ('check_list() { check "a" "true"; }\n', "defines no seat_checks"),
+        ("seat_checks() {\n  :\n}\n", "recorded no check"),
+    ],
+    ids=["syntax-error", "missing", "no-seat-checks-function", "empty"],
+)
+def test_a_check_list_that_does_not_load_is_a_failed_run(
+    seat: dict[str, Path], tmp_path: Path, body: str | None, detail: str
+) -> None:
+    # FALSIFIER: call seat_checks unconditionally after `source` (the code before
+    # 2026-10-27) and each of these writes total=0, failed=0, a pass (SB-3).
+    checks = tmp_path / "broken"
+    checks.mkdir()
+    if body is not None:
+        _write(checks / "seat-checks.sh", body)
+    doc = _once(seat, "boot", SMD_SELFTEST_CHECKS_DIR=str(checks))
+    assert doc["failed"] == 1 and doc["total"] == 1, doc
+    (only,) = doc["checks"]
+    assert only["id"].startswith("selftest-") and not only["ok"] and not only["warn"]
+    assert detail in only["detail"]
+
+
+def test_no_seat_check_uses_the_runners_reserved_prefix() -> None:
+    # The consumers read a run whose only checks are `selftest-*` as one in which
+    # no seat check ran; a seat check named that way would hide a real verdict.
+    text = (TEMPLATES / "seat-checks.sh").read_text()
+    assert '"selftest-' not in text and "'selftest-" not in text
 
 
 def _run_kind(seat: dict[str, Path]) -> str | None:

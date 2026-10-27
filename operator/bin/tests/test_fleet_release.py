@@ -447,6 +447,72 @@ def test_a_busy_seat_keeps_the_release_incomplete() -> None:
     assert not result.halted and not result.completed
 
 
+# -- the exit code of `fleet release --only` (review FL-1, 2026-10-27) -------------------
+# release-tick.yml reports rc 0 of an urgent one-seat release as "is on the release
+# and passed its self-test". FALSIFIER: return `1 if halted else 0` from
+# cli._summary (the code before 2026-10-27) and a seat that was still busy, or
+# held, and never deployed exits 0.
+
+
+class _CliCtx:
+    def __init__(self, w: World) -> None:
+        self.store, self.logs = w.store, w.logs
+
+    def log(self, msg: str) -> None:
+        self.logs.append(msg)
+
+    def rings(self) -> list[Ring]:
+        return RINGS
+
+
+def _cli_only(w: World, seat: str, *, dry_run: bool = False, **plan_kw) -> int:
+    import argparse
+
+    from bin.lib.fleet import cli
+
+    plan = ImagePlan(w.rel, "3" * 40, dry_run=dry_run, **plan_kw)
+    a = argparse.Namespace(dry_run=dry_run, only=seat, parallel=1)
+    return cli._run_waves(_CliCtx(w), a, w.rel, lambda s, r: w.roll.run(s, r, plan), "tester")  # type: ignore[arg-type]
+
+
+def _busy(w: World, seat: str) -> None:
+    w.fly.probe_facts[seat] = [
+        {"lanes": [], "children": [{"file": "negotiation-child.pid", "pid": "4286", "alive": True}],
+         "crons": [], "errors": []}
+    ]  # fmt: skip
+
+
+def test_only_a_seat_still_busy_after_the_idle_wait_exits_1() -> None:
+    w = World()
+    _busy(w, "ashton-price")
+    assert _cli_only(w, "ashton-price", max_idle_wait=60) == 1
+    assert w.store.states()["ashton-price"] == "waiting_idle"
+    assert "hermes-ashton-price" not in [a for a, _ in deployed_images(w)]
+    assert any("ashton-price is NOT on the release: it ended waiting_idle" in m for m in w.logs)
+
+
+def test_only_a_held_seat_exits_1() -> None:
+    w = World()
+    w.store.hold("ashton-price", "client asked", "captain")
+    assert _cli_only(w, "ashton-price") == 1
+    assert w.store.states()["ashton-price"] == "skipped_held"
+    assert any("NOT on the release: it ended skipped_held" in m for m in w.logs)
+
+
+def test_only_a_seat_that_ends_done_exits_0() -> None:
+    w = World()
+    assert _cli_only(w, "ashton-price") == 0
+    assert w.store.states()["ashton-price"] == "done"
+    assert any("ashton-price is done on the release" in m for m in w.logs)
+
+
+def test_only_dry_run_of_a_busy_seat_keeps_exit_0() -> None:
+    # A dry run decides nothing and records nothing; its exit is unchanged.
+    w = World()
+    _busy(w, "ashton-price")
+    assert _cli_only(w, "ashton-price", dry_run=True, max_idle_wait=60) == 0
+
+
 # -- --verify: who decides a seat, the boot smoke or the seat's own self-test --------
 
 
