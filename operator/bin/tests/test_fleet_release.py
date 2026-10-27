@@ -285,6 +285,22 @@ def test_lane_inputs_unchanged_passes() -> None:
     assert w.store.states()["smd-staging"] == "done"
 
 
+def test_a_lane_new_on_this_release_passes_without_acceptance() -> None:
+    w = _lane_world()
+    w.r2.put_json("vaults/smd-staging/casefile/casefile-firm.yaml", {})
+    w.r2.put_json(image_key(DIGEST, "lane-inputs.json"), {"medchron": "new", "casefile": "c1"})
+    w.r2.put_json(image_key(OLD_DIGEST, "lane-inputs.json"), {"medchron": "new"})
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "done"
+
+
+def test_a_current_image_with_no_lane_digests_still_refuses() -> None:
+    w = _lane_world()
+    w.r2.delete(image_key(OLD_DIGEST, "lane-inputs.json"))
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "failed"
+
+
 def test_ssh_hang_during_the_gate_is_a_tooling_error_not_a_deploy() -> None:
     w = World()
     w.fly.ssh_raises.add("smd-staging")
