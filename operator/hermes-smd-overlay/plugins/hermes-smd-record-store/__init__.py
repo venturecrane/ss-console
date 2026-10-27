@@ -367,7 +367,11 @@ def _visible_in_space(
             continue
         owner = record_store.owner_space(text, policy)
         if owner is not None and owner in readable:
-            out.append({**row, "owner": owner})
+            author = (record_store.read_frontmatter(text).get(AUTHOR_KEY) or "").strip()
+            if owner == space_mod.SHARED and author:
+                out.append({**row, "owner": owner, AUTHOR_KEY: author})
+            else:
+                out.append({**row, "owner": owner})
     return out
 
 
@@ -425,7 +429,46 @@ def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
     if stamp and isinstance(kwargs.get("args"), dict) and isinstance(args.get("content"), str):
         # Provenance: a record kept on a turn that read outside content says so.
         args["content"] = space_taint.stamp_from_web(args["content"])
+    if tool_name == TOOL_WRITE and isinstance(kwargs.get("args"), dict):
+        _stamp_shared_author(args, kwargs.get("session_id"))
     return None
+
+
+#: Frontmatter key naming who put a shared record there, stamped by the seat.
+AUTHOR_KEY = "from"
+
+
+def _stamp_shared_author(args: dict[str, Any], session_id: Any) -> None:
+    """A shared record written from a person's own chat carries ``from: <id>``,
+    set by the seat from the turn's space and never by the model. Without it a
+    shared note is nobody's: on 2026-10-27 Scott's gratitude note was filed as
+    shared under Laurie's id, and when he asked to send it to her the model found
+    no note of his and asked him to say it again."""
+    content = args.get("content")
+    if not isinstance(content, str):
+        return
+    in_space_mode, current = _space_view(session_id)
+    if not in_space_mode or current is None or not current.private or not current.person_id:
+        return
+    store = args.get("store")
+    policy = record_store.authored_policies().get(store) if isinstance(store, str) else None
+    if policy is None or not policy.private:
+        return
+    if record_store.target_space(policy, content) != space_mod.SHARED:
+        return
+    args["content"] = _set_frontmatter(content, AUTHOR_KEY, current.person_id)
+
+
+def _set_frontmatter(content: str, key: str, value: str) -> str:
+    """``content`` with ``key: value`` in its frontmatter, replacing any value
+    already there."""
+    lines = content.split("\n")
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                head = [h for h in lines[1:i] if h.split(":", 1)[0].strip() != key]
+                return "\n".join([lines[0], *head, f"{key}: {value}", *lines[i:]])
+    return f"---\n{key}: {value}\n---\n{content}"
 
 
 def _tainted_write_allowed(args: dict[str, Any], session_id: Any) -> bool:

@@ -105,12 +105,20 @@ lately that you appreciated, big or small? Reply here whenever you like."
 3. Ask once whether they want their partner to hear it: you can send it to
    them now, or put it on this week's shared check-in agenda (or they can
    tell them themselves).
-4. "Share it with her", "send it to him", "tell Laurie": send it now with
+4. "Share it with her", "send it to him", "tell Laurie", "can you share my
+   gratitude response with her?": send it now with
    `partner_message_send` (skill `partner-messages`), their note in their own
    words, written to the partner ("you", not "she"). Also write
    `shared-<date>-<id>.md` only if they asked for the agenda too. Confirm in
    one line that it reached their partner. Never explain what a skill or
    your instructions say; just do it.
+
+   Which note: the one in this chat's conversation if it is there; otherwise
+   their most recent note in `gratitude`, which is a `note-*` record you can
+   read here, or a `shared-*` record whose listing shows `from:` their id (the
+   seat stamps who filed it). Send that one. Never ask them to say it again
+   when one of these holds it, and never say what you could or could not find.
+
 5. If they want it on the agenda, write `shared-<date>-<id>.md` with
    `owner: shared` and their words, unchanged or shortened only as they ask,
    and tell them it is on the agenda.
