@@ -370,7 +370,9 @@ Two workflows run the release (ADR 0096).
   own bakes allow, and while it waits, an older release that already passed the
   earlier rings keeps moving, so a run of merges never starves the later rings.
   An older release gives way, for at most one bake, to a newer one already done
-  on the ring before, so a ring is not restarted twice in a few minutes.
+  on the ring before, so a ring is not restarted twice in a few minutes. One
+  tick moves every ring that has a release ready, so staging taking each new
+  merge never keeps the client ring waiting.
   A seat already on a newer release is never moved back to an older one:
   - a seat whose latest rollout is `rolled_back`, `failed` or `tooling_error`
     is a **standing halt**: nothing moves until a person acts, and the

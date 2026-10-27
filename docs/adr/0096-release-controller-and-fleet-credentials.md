@@ -80,7 +80,10 @@ ADR 0007 exists to prevent.
    halt on an older, superseded one only skips that release. An older release
    gives way when a newer one is already done on the ring before and so is at
    most one bake away, which spares the ring a second restart minutes later; it
-   gives way for at most one bake, so a run of merges cannot starve it.
+   gives way for at most one bake, so a run of merges cannot starve it. A tick
+   moves every ring that has a release ready (one release per ring), not only
+   the first: with one ring per tick the newest release, ready for ring 0 after
+   every merge, took every tick while the client ring waited.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`

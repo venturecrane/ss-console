@@ -204,15 +204,33 @@ def test_a_run_of_merges_faster_than_the_bake_does_not_starve_the_later_rings(tm
     assert _promote(w, 0, [a]) == TICK_PROGRESS
     assert _promote(w, 20, [b, a]) == TICK_PROGRESS
     assert _promote(w, 40, [c, b, a]) == TICK_PROGRESS
+    assert _done_releases(w, "pilot-smokeball") == []
+    # At 60, D takes ring 0, and A, eligible for ring 1 for one full bake while
+    # every newer release is still on ring 0, takes the pilot in the same tick.
+    # FALSIFIER: restart-at-ring-0, or wait for the next newer release with no
+    # bound, and the pilot never moves while merges keep landing.
     assert _promote(w, 60, [d, c, b, a]) == TICK_PROGRESS
     assert _done_releases(w, "smd-staging") == [r["release_id"] for r in (a, b, c, d)]
-    assert _done_releases(w, "pilot-smokeball") == []
-    # A has been eligible for ring 1 for one full bake and every newer release is
-    # still on ring 0. FALSIFIER: restart-at-ring-0, or wait for the next newer
-    # release with no bound, and the pilot never moves while merges keep landing.
-    assert _promote(w, 61, [d, c, b, a]) == TICK_PROGRESS
     assert _done_releases(w, "pilot-smokeball") == [a["release_id"]]
     assert any("baked on the earlier rings" in line for line in w.logs)
+
+
+def test_one_tick_moves_every_ring_that_has_a_release_ready(tmp_path) -> None:
+    # 2026-10-26 evening: the client ring sat ready for its release while three
+    # ticks in a row went to staging, because each tick moved one ring and the
+    # newest release (ready for ring 0 after every merge) always came first.
+    w = _tick_world(tmp_path)
+    a = w.rel
+    for minute in (0, 31, 62):  # A through rings 0, 1, 2
+        assert _promote(w, minute, [a]) == TICK_PROGRESS
+    b = _release_n(w, 2)
+    before = len(w.fly.deploys)
+    # FALSIFIER: one ring per tick and B's staging deploy is all this tick does.
+    assert _promote(w, 93, [b, a]) == TICK_PROGRESS
+    apps = [app for app, _, _ in w.fly.deploys[before:]]
+    assert apps == ["hermes-smd-staging", "hermes-ashton-price"], apps
+    assert _done_releases(w, "ashton-price") == [a["release_id"]]
+    assert _done_releases(w, "smd-staging")[-1] == b["release_id"]
 
 
 def test_a_seat_done_on_a_newer_release_is_never_pending_for_an_older_one() -> None:
