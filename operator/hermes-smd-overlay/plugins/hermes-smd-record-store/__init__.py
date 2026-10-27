@@ -206,6 +206,13 @@ def _read_handler(args: dict[str, Any], **kwargs: Any) -> str:
         text = record_store.read_record(str(args.get("store") or ""), str(args.get("name") or ""))
     except record_store.RecordStoreError as exc:
         raise RuntimeError(str(exc)) from exc
+    in_space_mode, current = _space_view(kwargs.get("session_id"))
+    if in_space_mode and current is not None and current.person_id:
+        author = (record_store.read_frontmatter(text).get(AUTHOR_KEY) or "").strip()
+        if author == current.person_id:
+            # As in the listing: shown ``from: p2``, the model took Scott's own
+            # note for Laurie's in half of replayed turns (2026-10-27).
+            text = _set_frontmatter(text, AUTHOR_KEY, "you")
     return json.dumps(
         {"store": args.get("store"), "name": args.get("name"), "content": text},
         ensure_ascii=False,
