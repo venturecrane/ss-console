@@ -217,8 +217,20 @@ def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_r
 
 
 def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
-    """Whether ``sha`` is in this checkout's history (CI checks out main)."""
+    """Whether ``sha`` is in this checkout's history (CI checks out main).
+
+    A commit this clone has never seen is not on main: the tick checks out main
+    with full history, so main's commits are all present, and an image built
+    from an unpushed or hotfix commit names one that is absent. merge-base exits
+    128 on such a commit, which halted every tick for an hour on 2026-10-26 once
+    `latest` began weighing several releases (one was a drill image built from a
+    local commit). So presence is asked first; 128 after that is still a tooling
+    error (a broken clone), never a guess.
+    """
     if not sha or not ids.SHA_RE.match(sha):
+        return False
+    present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
+    if present.rc != 0:
         return False
     res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", sha, "HEAD"], timeout=60)
     if res.rc not in (0, 1):

@@ -248,14 +248,21 @@ def test_cli_tick_refuses_force_and_lane_acceptance() -> None:
 
 
 class AncestorRunner:
-    """Answers `git merge-base --is-ancestor <sha> HEAD`: 0 for shas on main, 1 otherwise."""
+    """A clone, as git answers about it. `cat-file -e <sha>^{commit}`: 0 when the
+    commit is in the clone. `merge-base --is-ancestor <sha> HEAD`: 0 on main, 1
+    present but not on main, 128 when the clone has never seen it (real git)."""
 
-    def __init__(self, on_main: set[str]) -> None:
+    def __init__(self, on_main: set[str], elsewhere: set[str] | None = None) -> None:
         self.on_main = on_main
+        self.present = on_main | (elsewhere or set())
 
     def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
-        assert argv[:2] == ["git", "-C"] and "--is-ancestor" in argv
-        return Result(0 if argv[-2] in self.on_main else 1, "", "")
+        assert argv[:2] == ["git", "-C"]
+        if "cat-file" in argv:
+            return Result(0 if argv[-1].split("^")[0] in self.present else 128, "", "")
+        assert "--is-ancestor" in argv
+        sha = argv[-2]
+        return Result(0 if sha in self.on_main else 1 if sha in self.present else 128, "", "")
 
 
 def test_cli_tick_refuses_an_image_without_the_selftest() -> None:
@@ -276,9 +283,28 @@ def test_latest_is_the_newest_image_built_from_main_never_a_hotfix_lane_image() 
     ctx = cli.Ctx(cli.REPO, AncestorRunner({w.rel["ss_console_sha"]}), w.store, w.r2, w.fly)  # type: ignore[arg-type]
     # FALSIFIER: take the newest image row and the hotfix image rolls to every ring.
     assert cli._image_release(ctx, "latest")["release_id"] == w.rel["release_id"]
-    ctx.runner = AncestorRunner(set())  # type: ignore[assignment]
+    ctx.runner = AncestorRunner(set(), {w.rel["ss_console_sha"], "9" * 40})  # type: ignore[assignment]
     with pytest.raises(cli.Refusal, match="built from main"):
         cli._image_release(ctx, "latest")
+
+
+def test_an_image_from_a_commit_the_clone_never_saw_is_not_from_main_and_not_an_error() -> None:
+    # 2026-10-26: a drill image built from a local, unpushed commit sat among the
+    # recent releases. Weighing releases in flight reached it, merge-base exited
+    # 128, and every tick halted as a tooling error for an hour.
+    # FALSIFIER: drop the cat-file presence check and this raises ToolingError.
+    w = World()
+    drill = dict(w.rel, release_id="img-202610230900-88888888", ss_console_sha="8" * 40)
+    newest = dict(w.rel, release_id="img-202610231000-77777777", ss_console_sha="7" * 40,
+                  created_at="2026-10-23T10:00:00Z")  # fmt: skip
+    w.rel["created_at"] = "2026-10-23T08:00:00Z"
+    drill["created_at"] = "2026-10-23T09:00:00Z"
+    w.store.releases = {r["release_id"]: r for r in (newest, drill, w.rel)}
+    w.r2.put_json(image_key(DIGEST, "image-capabilities.json"), {"selftest": True})
+    ctx = cli.Ctx(cli.REPO, AncestorRunner({"7" * 40, w.rel["ss_console_sha"]}), w.store, w.r2, w.fly)  # type: ignore[arg-type]
+    assert cli._image_release(ctx, "latest")["release_id"] == newest["release_id"]
+    in_flight = [r["release_id"] for r in cli._in_flight(ctx, newest)]
+    assert in_flight == [newest["release_id"], w.rel["release_id"]]  # the drill image is skipped, quietly
 
 
 # -- Fly tokens: per app, never printed ------------------------------------------------------
