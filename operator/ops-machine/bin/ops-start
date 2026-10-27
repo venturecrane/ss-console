@@ -34,7 +34,11 @@ cd "$HOME/dev/ss-console" || exit 1
 # laptop, and over Remote Control this side sees it under an auto-title
 # (proven 2026-10-22).
 name="ops-$slug"
-channel="Laptop sessions can message you over Remote Control; reply with SendMessage to the address each message came from (its from attribute), never to a name written in a task. Send verdicts, codes and verify IDs only, never record text, names or amounts from client files."
+# 2026-10-27: SendMessage from a laptop never reached a workspace session (two
+# sends to ops-ashton-price-61703 bounced while it ran), so the laptop now types
+# into this session's window with `ops-handoff <client> --say`, and the outbox
+# file is this side's only way back.
+channel="Laptop sessions message you by typing into this session; their messages start with [from the laptop, msg ...]. Act on them like the Captain's own words. You cannot message a laptop session: anything for it goes in your outbox file, appended, never overwritten. Write verdicts, codes and verify IDs only, never record text, names or amounts from client files."
 
 # One handoff, one file, one session. ops-handoff writes each task to its own
 # ~/inbox/pending-<stamp>-<id>.md and names it when it opens a window, so two
@@ -60,7 +64,7 @@ if [ -n "$task" ] && [ -s "$task" ]; then
   # session, which is the address ops-handoff printed on the laptop.
   id=$(basename "$task" .md | sed -n 's/^pending-[0-9T]*-\([0-9A-Za-z]*\)$/\1/p')
   name="ops-$slug-${id:-$$}"
-  contact=" Your session name is $name; the laptop session that handed this over messages you there. When you finish (or stop), send the verdict and any verify IDs to every session that messaged you about this task. If a send fails, carry on; the outbox file is the record."
+  contact=" Your session name is $name; the laptop session that handed this over can type messages into this session. When you finish (or stop), the outbox file is how it hears back."
   /opt/ops/bin/claude --name "$name" --remote-control "$name" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file.$contact $channel"
 else
   /opt/ops/bin/claude --name "$name" --remote-control "$name"

@@ -45,6 +45,7 @@ case "$*" in
   *"cat > ~/inbox/pending-"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); cat > "${inbox}/$f" ;;
   *"wc -c"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); wc -c < "${inbox}/$f" ;;
   *"tmux has-session"*) [ "\${TMUX_RUNNING:-0}" = 1 ] && echo opened ;;
+  *"sh -s"*) cat > "${home}/say.sh"; echo "\${SAY_RESULT:-1}" ;;
   *) : ;;
 esac
 exit 0
@@ -159,6 +160,51 @@ describe('ops-handoff', () => {
     expect(all.filter((t) => t.includes('first task'))).toHaveLength(1)
     expect(all.filter((t) => t.includes('second task'))).toHaveLength(1)
     expect(all.every((t) => (t.match(/## Handed over/g) ?? []).length === 1)).toBe(true)
+  })
+
+  describe('--say (the laptop-to-workspace channel, 2026-10-27)', () => {
+    // SendMessage over Remote Control never reached a workspace session; the
+    // laptop now types into the session's window and reads it back by a tag.
+    const say = (env: Record<string, string> = {}, text = 'hold the filing') =>
+      handoff(['ap', '--say', 'ops-ashton-price-61703', text], env)
+
+    it('types the message into the window running that session name, then submits it', () => {
+      expect(say()).toContain('delivered to ops-ashton-price-61703')
+      const script = fs.readFileSync(path.join(home, 'say.sh'), 'utf8')
+      expect(script).toContain("s='ops-ashton-price-61703'")
+      expect(script).toContain('grep -q -- "--name $s "')
+      expect(script).toMatch(/send-keys -t "main:\$w" -l "\$m".*send-keys -t "main:\$w" Enter/)
+      // The message travels base64-encoded and carries the read-back tag.
+      const b64 = script.match(/printf %s '([A-Za-z0-9+/=]+)'/)?.[1] ?? ''
+      const msg = Buffer.from(b64, 'base64').toString('utf8')
+      expect(msg).toMatch(/^\[from the laptop, msg \d{6}-\d+\] hold the filing/)
+    })
+
+    it('flattens newlines so a multi-line message is one submission', () => {
+      say({}, 'line one\nline two')
+      const script = fs.readFileSync(path.join(home, 'say.sh'), 'utf8')
+      const b64 = script.match(/printf %s '([A-Za-z0-9+/=]+)'/)?.[1] ?? ''
+      expect(Buffer.from(b64, 'base64').toString('utf8')).not.toContain('\n')
+    })
+
+    it('fails, and says nothing was sent, when no window runs that session', () => {
+      expect(() => say({ SAY_RESULT: 'none' })).toThrow(/nothing was sent/)
+    })
+
+    it('fails when the message cannot be read back on the screen', () => {
+      expect(() => say({ SAY_RESULT: '0' })).toThrow(/not delivered/)
+    })
+
+    it('refuses a session name that is not an ops session, sending nothing', () => {
+      expect(() => handoff(['ap', '--say', "x'; rm -rf ~; '", 'hi'])).toThrow()
+      expect(fs.existsSync(path.join(home, 'say.sh'))).toBe(false)
+    })
+
+    it('a fresh handoff tells the laptop agent to use --say, not SendMessage', () => {
+      const out = handoff(['ap', 'check the facilities'])
+      expect(out).toMatch(/ops-handoff ap --say ops-ashton-price-\d+/)
+      expect(out).not.toContain('SendMessage')
+    })
   })
 
   it('refuses an unknown flag rather than sending it as the task', () => {
