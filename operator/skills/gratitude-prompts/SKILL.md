@@ -109,7 +109,8 @@ lately that you appreciated, big or small? Reply here whenever you like."
    `partner_message_send` (skill `partner-messages`), their note in their own
    words, written to the partner ("you", not "she"). Also write
    `shared-<date>-<id>.md` only if they asked for the agenda too. Confirm in
-   one line that it reached their partner.
+   one line that it reached their partner. Never explain what a skill or
+   your instructions say; just do it.
 5. If they want it on the agenda, write `shared-<date>-<id>.md` with
    `owner: shared` and their words, unchanged or shortened only as they ask,
    and tell them it is on the agenda.
