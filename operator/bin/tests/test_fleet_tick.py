@@ -351,6 +351,24 @@ def test_latest_is_the_newest_image_built_from_main_never_a_hotfix_lane_image() 
         cli._image_release(ctx, "latest")
 
 
+def test_the_in_flight_window_reaches_the_release_ready_for_the_client_ring() -> None:
+    # 2026-10-26: the release ready for ring 3 was the 7th newest of those in
+    # flight and the window held 6, so a tick skipped the client seat.
+    # FALSIFIER: set IN_FLIGHT_MAX back to 6 and the oldest release drops out.
+    w = World()
+    w.r2.put_json(image_key(DIGEST, "image-capabilities.json"), {"selftest": True})
+    rels = [
+        dict(w.rel, release_id=f"img-2026102309{n:02d}-{str(n % 10) * 8}", ss_console_sha=f"{n % 10}" * 40,
+             created_at=f"2026-10-23T09:{n:02d}:00Z")
+        for n in range(1, 9)
+    ]  # fmt: skip
+    w.store.releases = {r["release_id"]: r for r in reversed(rels)}  # newest first
+    on_main = {r["ss_console_sha"] for r in rels}
+    ctx = cli.Ctx(cli.REPO, AncestorRunner(on_main), w.store, w.r2, w.fly)  # type: ignore[arg-type]
+    in_flight = cli._in_flight(ctx, rels[-1])
+    assert [r["release_id"] for r in in_flight] == [r["release_id"] for r in reversed(rels)]
+
+
 def test_an_image_from_a_commit_the_clone_never_saw_is_not_from_main_and_not_an_error() -> None:
     # 2026-10-26: a drill image built from a local, unpushed commit sat among the
     # recent releases. Weighing releases in flight reached it, merge-base exited

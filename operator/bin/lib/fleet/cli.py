@@ -66,8 +66,11 @@ from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
 # How many image releases a `latest` tick weighs at once (tick.Ticker.run_promoting).
-# More in flight than this and the oldest are left behind: newer ones carry them.
-IN_FLIGHT_MAX = 6
+# The real bound is the newest completed release (older ones are moot); this cap
+# only limits a tick's reads. It was 6, and on 2026-10-26 seven merges in two
+# hours pushed the one release ready for the client ring (1e696594) out of the
+# window for a tick. 20 covers a full working day of merges at that pace.
+IN_FLIGHT_MAX = 20
 
 
 def log(msg: str) -> None:
@@ -314,7 +317,8 @@ def _in_flight(ctx: Ctx, newest: dict[str, Any]) -> list[dict[str, Any]]:
     """The image releases a `latest` tick may move, newest first: built from main,
     not yet completed, carrying the self-test, back to the newest completed one."""
     out = [newest]
-    for rel in ctx.store.recent_releases(20):
+    # Skills releases share the table, so read well past the cap of images.
+    for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
         if rel.get("kind") != "image" or rel["release_id"] == newest["release_id"]:
             continue
         if (rel.get("created_at") or "") > (newest.get("created_at") or ""):
