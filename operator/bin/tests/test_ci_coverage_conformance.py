@@ -39,7 +39,9 @@ from __future__ import annotations
 
 import configparser
 import importlib.util
+import json
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -564,4 +566,138 @@ def test_build_seat_image_job_builds_at_the_merge_from_the_protected_environment
     assert (build.get("env") or {}).get("FLY_REGISTRY_TOKEN") == "${{ secrets.FLY_REGISTRY_TOKEN }}"
     assert not any(k.startswith("FLY_DEPLOY_TOKEN__") for k in build.get("env") or {}), (
         "the build touches the registry app only; it never holds a seat token"
+    )
+
+
+# -- every file the seat image copies is on the image-path list ---------------------------
+
+BUILD_PY_PATH = OPERATOR_DIR / "bin" / "lib" / "fleet" / "build.py"
+FLEET_TOML_DIR = OPERATOR_DIR / ".rendered" / "_fleet"
+
+
+def _image_dockerfile() -> Path:
+    """The Dockerfile `fleet build` hands Fly, resolved from build.py's generated
+    fly.toml (written to operator/.rendered/_fleet/), so the test parses the file
+    the seat image is actually built from rather than a path typed in here."""
+    m = re.search(r'^\s*dockerfile\s*=\s*"([^"]+)"', BUILD_PY_PATH.read_text(encoding="utf-8"), re.MULTILINE)
+    assert m, "build.py's BUILD_TOML no longer names a dockerfile; update this test with it"
+    path = (FLEET_TOML_DIR / m.group(1)).resolve()
+    assert path.is_file(), f"the image Dockerfile {path} does not exist"
+    return path
+
+
+def _image_path_patterns() -> list[str]:
+    """deploy.yml's build-seat-image list: the substrate list minus its .github/
+    lines (`grep -v '^\\.github/'`), so a workflow-only change never builds."""
+    return [p for p in _detect.load_patterns(PATHS_FILE) if not p.startswith(".github/")]
+
+
+def _dockerfile_context_sources(dockerfile: Path) -> list[str]:
+    """Every build-context source of every COPY/ADD instruction. Continuation
+    lines are joined; `--from=<stage>` copies read another stage, not the
+    context, and are skipped; flags (`--chmod=`, `--chown=`) are dropped; both
+    the shell form and the JSON-array form are parsed; the last operand is the
+    destination."""
+    logical: list[str] = []
+    buf = ""
+    for raw in dockerfile.read_text(encoding="utf-8").splitlines():
+        line = raw.rstrip()
+        if not buf and (not line.strip() or line.lstrip().startswith("#")):
+            continue
+        if line.endswith("\\"):
+            buf += line[:-1] + " "
+            continue
+        logical.append(buf + line)
+        buf = ""
+    if buf:
+        logical.append(buf)
+
+    sources: list[str] = []
+    for instr in logical:
+        parts = instr.strip().split(None, 1)
+        if len(parts) < 2 or parts[0].upper() not in {"COPY", "ADD"}:
+            continue
+        rest = parts[1].strip()
+        flags: list[str] = []
+        while rest.startswith("--"):
+            flag, _, rest = rest.partition(" ")
+            flags.append(flag)
+            rest = rest.strip()
+        if any(f.startswith("--from=") for f in flags):
+            continue
+        operands = json.loads(rest) if rest.startswith("[") else shlex.split(rest)
+        assert len(operands) >= 2, f"cannot parse {instr!r}"
+        sources.extend(operands[:-1])
+    return sources
+
+
+def _context_files(source: str) -> list[str]:
+    """The repo-relative files a COPY source pulls from the build context (the
+    repo root). A directory source yields every file under it."""
+    hits = sorted(REPO_ROOT.glob(source.rstrip("/"))) if any(c in source for c in "*?[") else [REPO_ROOT / source]
+    out: list[str] = []
+    for hit in hits:
+        if hit.is_dir():
+            for f in hit.rglob("*"):
+                rel = f.relative_to(REPO_ROOT)
+                if f.is_file() and not IGNORED_PARTS.intersection(rel.parts):
+                    out.append(rel.as_posix())
+        elif hit.is_file():
+            out.append(hit.relative_to(REPO_ROOT).as_posix())
+    return out
+
+
+def test_dockerfile_source_parser_reads_every_copy_shape(tmp_path: Path) -> None:
+    """The parser is the whole guard, so pin the shapes it must read."""
+    df = tmp_path / "Dockerfile"
+    df.write_text(
+        "FROM x AS a\n"
+        "COPY --from=a /src/ /opt/\n"
+        "COPY --chmod=0755 operator/one.sh /app/\n"
+        "COPY operator/two/ \\\n    /app/two/\n"
+        "ADD operator/three.txt operator/four.txt /app/\n"
+        'COPY ["operator/five.json", "/app/"]\n'
+        'COPY --chown=1:1 ["operator/six.json", "/app/"]\n'
+        "# COPY operator/commented/ /nowhere/\n"
+        "RUN echo COPY operator/not-an-instruction /x\n",
+        encoding="utf-8",
+    )
+    assert _dockerfile_context_sources(df) == [
+        "operator/one.sh",
+        "operator/two/",
+        "operator/three.txt",
+        "operator/four.txt",
+        "operator/five.json",
+        "operator/six.json",
+    ]
+
+
+def test_every_file_the_seat_image_copies_is_on_the_image_path_list() -> None:
+    """deploy.yml's build-seat-image job builds a seat image only when a merge
+    touches a path on the image list, and operator-substrate runs its suites on
+    the same list. A file the Dockerfile COPYs that no pattern matches can change
+    on main with no image built and no suite run, and no seat runs the change
+    until some unrelated substrate merge. Found 2026-10-27: operator/roles/ (the
+    ADR 0093 role policy layer) and operator/npm/clio-mcp/ were both copied into
+    the image and both off the list. Every context file every COPY/ADD reaches
+    must match, by the detect script's own matcher."""
+    dockerfile = _image_dockerfile()
+    patterns = _image_path_patterns()
+    sources = _dockerfile_context_sources(dockerfile)
+    assert sources, f"parsed no COPY/ADD sources from {dockerfile}"
+
+    missing_sources: list[str] = []
+    uncovered: dict[str, list[str]] = {}
+    for source in sources:
+        files = _context_files(source)
+        if not files:
+            missing_sources.append(source)
+            continue
+        off = [f for f in files if not any(_matches(p, f) for p in patterns)]
+        if off:
+            uncovered[source] = off[:5]
+    assert not missing_sources, f"{dockerfile.name} copies sources that do not exist in the tree: {missing_sources}"
+    assert not uncovered, (
+        "these seat-image COPY sources reach files no image-path pattern in "
+        f".github/operator-substrate-paths.txt matches (add a `dir/**` entry): {uncovered}"
     )
