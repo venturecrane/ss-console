@@ -158,6 +158,85 @@ def test_a_tick_waits_while_another_rollout_holds_the_fleet_lease(tmp_path) -> N
     assert w.fly.deploys == [] and w.store.rollouts == {}
 
 
+# -- promotion across releases in flight (`latest`) -----------------------------------------
+# 2026-10-26: five merges in four hours each restarted the controller at ring 0;
+# the pilot went three hours without a release and the client seat got nothing
+# from the controller. A later ring takes the newest release baked on the ring
+# before it.
+
+
+def _two_releases(w: World) -> tuple[dict, dict]:
+    older = w.rel
+    newer = {**older, "release_id": "img-202610190100-22222222"}
+    w.store.insert_release(newer)
+    return older, newer
+
+
+def _promote(w: World, minutes_after_done: float, candidates: list[dict]) -> int:
+    w.clock.t = T0 + minutes_after_done * 60
+    w.store.now_iso = datetime.fromtimestamp(w.clock.t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w.roll.run(s, r, plan)
+
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    return ticker.run_promoting(RINGS, candidates, do_seat_for, "h")
+
+
+def _done_releases(w: World, seat: str) -> list[str]:
+    return [r["release_id"] for r in w.store.rollouts.values() if r["customer_slug"] == seat and r["state"] == "done"]
+
+
+def test_a_newer_release_does_not_starve_the_later_rings(tmp_path) -> None:
+    w = _tick_world(tmp_path)
+    older, newer = _two_releases(w)
+    assert _promote(w, 0, [older]) == TICK_PROGRESS  # older takes ring 0
+    # A merge lands: the newest release takes ring 0 first.
+    assert _promote(w, 31, [newer, older]) == TICK_PROGRESS
+    assert _done_releases(w, "smd-staging") == [older["release_id"], newer["release_id"]]
+    # Newest is baking on ring 0. FALSIFIER: restart-at-ring-0 waits here, and the
+    # pilot never moves while merges keep landing.
+    assert _promote(w, 41, [newer, older]) == TICK_PROGRESS
+    assert _done_releases(w, "pilot-smokeball") == [older["release_id"]]
+    assert any("baked on the earlier rings" in line for line in w.logs)
+
+
+def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:
+    w = _tick_world(tmp_path)
+    older, newer = _two_releases(w)
+    _promote(w, 0, [older])  # staging on older
+    # The pilot never took older: it was pushed straight to the newer release
+    # (an urgent one-seat run).
+    w.clock.t = T0 + 20 * 60
+    w.store.now_iso = datetime.fromtimestamp(w.clock.t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    w.roll.run("pilot-smokeball", 1, ImagePlan(newer, "3" * 40, verify="selftest", selftest_capable=True,
+                                               ssh_fallback=False))  # fmt: skip
+    assert _promote(w, 25, [newer, older]) == TICK_PROGRESS  # newer takes staging
+    before = len(w.fly.deploys)
+    # Newer is baking on staging; older baked there long ago and looks at ring 1.
+    # FALSIFIER: drop overlay_newer and older counts the pilot as pending and
+    # deploys it backwards onto the older image.
+    _promote(w, 40, [newer, older])
+    apps = [app for app, _, _ in w.fly.deploys[before:]]
+    assert "hermes-pilot-smokeball" not in apps, apps
+    assert _done_releases(w, "pilot-smokeball") == [newer["release_id"]]
+
+
+def test_a_halt_on_the_newest_release_stops_everything(tmp_path) -> None:
+    w = _tick_world(tmp_path)
+    older, newer = _two_releases(w)
+    _promote(w, 0, [older])
+    for seat in w.store.status:
+        w.store.status[seat] = {**fresh_status(), "selftest_json": selftest_json(failed_count=1, failed=["x"])}
+    assert _promote(w, 31, [newer, older]) == TICK_HALT  # newest fails on staging and rolls back
+    for seat in w.store.status:
+        w.store.status[seat] = {**fresh_status(), "selftest_json": selftest_json()}
+    # FALSIFIER: let an older release move while the newest stands halted.
+    assert _promote(w, 90, [newer, older]) == TICK_HALTED_STANDING
+    assert _done_releases(w, "pilot-smokeball") == []
+
+
 def test_cli_tick_refuses_force_and_lane_acceptance() -> None:
     w = World()
     ctx = cli.Ctx(cli.REPO, None, w.store, w.r2, w.fly, log=lambda m: None)  # type: ignore[arg-type]

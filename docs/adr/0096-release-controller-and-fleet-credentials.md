@@ -69,6 +69,16 @@ ADR 0007 exists to prevent.
    before every seat, in every mode, so a hold set mid-release stops the next
    seat it covers.
 
+   **Amended 2026-10-26: promotion across releases in flight.** As first built,
+   `latest` meant only the newest release, so every merge restarted the
+   controller at ring 0; five merges in four hours left the pilot three hours
+   stale and the client seat untouched by the controller. A `latest` tick now
+   weighs every image release still in flight, newest first, and each ring
+   takes the newest release that has baked on the ring before it. A seat done
+   on a newer release counts as done for an older one, so promotion never moves
+   a seat backwards. A halt on the newest release still stops everything; a
+   halt on an older, superseded one only skips that release.
+
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`
    is at least that ring's `bake_minutes` old, and no `selftest_failing`,

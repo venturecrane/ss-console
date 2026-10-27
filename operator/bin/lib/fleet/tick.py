@@ -96,6 +96,22 @@ def bake_gate(
     return None
 
 
+def overlay_newer(rows: dict[str, dict[str, Any]], newer: list[dict[str, dict[str, Any]]]) -> dict[str, dict[str, Any]]:
+    """An older release's rows, with every seat already done on a NEWER release counted as done.
+
+    Promotion never moves a seat backwards: a seat done on something newer is
+    not pending for an older release, and a halt it once had on the older one
+    is superseded. A seat done on THIS release keeps its own row, so its bake is
+    measured from when it took this release, not from a later redeploy.
+    """
+    merged = {seat: dict(row) for seat, row in rows.items()}
+    for newer_rows in newer:
+        for seat, row in newer_rows.items():
+            if row.get("state") == "done" and (merged.get(seat) or {}).get("state") != "done":
+                merged[seat] = dict(row)
+    return merged
+
+
 def plan_tick(
     rings: list[Ring],
     latest: dict[str, dict[str, Any]],
@@ -179,11 +195,83 @@ class Ticker:
         finally:
             lease.__exit__(None, None, None)
 
+    def run_promoting(
+        self,
+        rings: list[Ring],
+        candidates: list[dict[str, Any]],
+        do_seat_for: Callable[[dict[str, Any]], Callable[[str, int], SeatOutcome]],
+        holder: str,
+        *,
+        dry_run: bool = False,
+    ) -> int:
+        """`latest`: one step across every release still in flight, newest first.
+
+        With one release in flight this is :meth:`run`. With several (merges
+        landing faster than a release crosses the rings), restarting at ring 0
+        for each would starve the later rings: on 2026-10-26 five merges in four
+        hours left the pilot three hours stale and the client seat untouched by
+        the controller. So each ring takes the NEWEST release that has baked on
+        the ring before it: the newest goes as far as its own bakes allow, and
+        while it waits, an older release that already proved itself on the
+        earlier rings moves on. A seat already done on a newer release is never
+        moved back (:func:`overlay_newer`). A halt on the newest release stops
+        everything, as before; a halt on an older one only skips that release.
+        """
+        newest = candidates[0]["release_id"]
+        if dry_run:
+            for i, (rel, plan) in enumerate(self._plans(rings, candidates)):
+                self.log(f"tick {rel['release_id']} (dry run, nothing deployed or recorded): {plan.reason}")
+                if plan.code == TICK_PROGRESS or (i == 0 and plan.code == TICK_HALTED_STANDING):
+                    return plan.code
+            return TICK_WAITING
+        lease = Lease(self.store, holder, newest)
+        try:
+            lease.__enter__()
+        except Refusal as exc:
+            self.log(f"tick {newest}: waiting: {exc}")
+            return TICK_WAITING
+        try:
+            for i, (rel, plan) in enumerate(self._plans(rings, candidates)):
+                self.log(f"tick {rel['release_id']}: {plan.reason}")
+                if plan.code == TICK_HALTED_STANDING:
+                    if i == 0:
+                        return plan.code
+                    continue  # superseded on the seats that matter; never blocks the newest
+                if plan.code == TICK_PROGRESS:
+                    if i:
+                        self.log(f"tick {rel['release_id']}: the newest release that has baked on the earlier rings")
+                    return self._advance(rings, rel, plan, do_seat_for(rel), holder, lease)
+            return self._complete(rings, candidates[0], TICK_WAITING)
+        finally:
+            lease.__exit__(None, None, None)
+
+    def _plans(self, rings: list[Ring], candidates: list[dict[str, Any]]):
+        newer: list[dict[str, dict[str, Any]]] = []
+        for rel in candidates:
+            rows = self.store.release_latest(rel["release_id"])
+            now = datetime.fromtimestamp(self.clock(), timezone.utc)
+            yield (
+                rel,
+                plan_tick(
+                    rings,
+                    overlay_newer(rows, newer),
+                    self.store.holds(),
+                    lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
+                    now,
+                ),
+            )
+            newer.append(rows)
+
     def _step(self, rings: list[Ring], release: dict[str, Any], do_seat: Callable[[str, int], SeatOutcome],
               holder: str, lease: Lease) -> int:  # fmt: skip
         rid = release["release_id"]
         plan = self.plan(rings, release)
         self.log(f"tick {rid}: {plan.reason}")
+        return self._advance(rings, release, plan, do_seat, holder, lease)
+
+    def _advance(self, rings: list[Ring], release: dict[str, Any], plan: TickPlan,
+                 do_seat: Callable[[str, int], SeatOutcome], holder: str, lease: Lease) -> int:  # fmt: skip
+        rid = release["release_id"]
         if plan.code != TICK_PROGRESS or plan.ring is None or not plan.seats:
             return self._complete(rings, release, plan.code)
         ring = Ring(plan.ring.number, list(plan.seats), plan.ring.max_parallel, plan.ring.bake_minutes)
