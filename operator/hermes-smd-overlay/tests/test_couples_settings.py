@@ -572,6 +572,35 @@ def test_a_reprovision_rematerializes_the_slots_and_keeps_the_couples_routines(
     assert stored() == before
 
 
+def test_a_persons_routine_joins_their_own_dm_conversation(seat):
+    """captain-mark, 2026-10-26: asked "send me this week's gratitude question
+    again", the agent had never seen the routine's message, because a cron run
+    is its own session. A person's slot delivered to their Telegram DM now asks
+    Hermes to write the delivery into that DM's conversation; the shared slot
+    and email deliveries do not. FALSIFIER: drop ``attach_to_session`` from the
+    slot job or from the create_job kwargs."""
+    from bootstrap.cron_materialize import materialize_cron
+
+    store = _Store()
+    customer = seat_doc()
+    for person in customer["people"]:
+        person["channel"] = "telegram"
+    materialize_cron(customer, lambda slug: store, stage_slot_gate=lambda *a: ".smd-couples/x.py")
+    by_name = {j["name"]: j for j in store.jobs}
+    person_jobs = [j for n, j in by_name.items() if "@person:" in n]
+    assert person_jobs and all(str(j["deliver"]).startswith("telegram:") for j in person_jobs)
+    assert all(j.get("attach_to_session") is True for j in person_jobs)
+    shared = by_name["op-managed:mark:weekly-checkin-agenda@shared"]
+    assert "attach_to_session" not in shared
+
+    emailed = seat_doc()
+    for person in emailed["people"]:
+        person["channel"] = "email"
+    store = _Store()
+    materialize_cron(emailed, lambda slug: store, stage_slot_gate=lambda *a: ".smd-couples/x.py")
+    assert not any(j.get("attach_to_session") for j in store.jobs)
+
+
 def test_an_authored_cron_entry_for_a_conversational_skill_is_refused(seat):
     from bootstrap import validate
     from bootstrap.cron_materialize import CronMaterializeError, materialize_cron
