@@ -43,6 +43,30 @@ def test_judge_fails_on_a_failed_check_naming_it() -> None:
     assert got is not None and got.cls == "fail" and "retired-skills-absent" in got.detail
 
 
+@pytest.mark.parametrize(
+    "over",
+    [
+        # A crash record from an image before 2026-10-27: one warning, failed 0.
+        {"run_kind": "hourly", "total": 1, "warned_count": 1, "warned": ["selftest-crashlooping"]},
+        # A check list that would not load: nothing ran at all.
+        {"total": 0},
+        # Only the runner's own records, both warned.
+        {"total": 2, "warned_count": 2, "warned": ["selftest-crashlooping", "selftest-no-checks"]},
+    ],
+)
+def test_judge_fails_a_run_in_which_no_seat_check_ran(over: dict) -> None:
+    # FALSIFIER: drop _selftest_hollow and a crashed or empty self-test on the
+    # release image passes the release (the 2026-10-27 review, SB-2/SB-3).
+    got = _judge(_row(**over))
+    assert got is not None and got.cls == "fail", got
+    assert "no seat check" in got.detail or "no checks" in got.detail
+
+
+def test_judge_still_passes_a_real_run_that_also_carries_a_runner_warning() -> None:
+    got = _judge(_row(total=74, warned_count=1, warned=["selftest-crashlooping"]))
+    assert got is not None and got.cls == "pass"
+
+
 def test_judge_fails_on_the_wrong_hermes() -> None:
     got = _judge(_row(hermes_sha="4" * 40))
     assert got is not None and got.cls == "fail" and "Hermes" in got.detail

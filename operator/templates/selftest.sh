@@ -267,9 +267,20 @@ run_once() { # <boot|hourly>
   read_enabled_skills || true
   # The staged-scripts program reads its data root from this variable.
   if [ -n "${SEAT_ROOT}" ]; then export SMD_SMOKE_DATA_ROOT="${SEAT_ROOT}/opt/data"; fi
+  # A check list that cannot be loaded ran nothing, and a run of nothing must
+  # never read as a pass: before 2026-10-27 a seat-checks.sh with a syntax
+  # error (or none at all) still called seat_checks and wrote total=0,
+  # failed=0, which every consumer read as green. Each way the list fails to
+  # load is recorded as a FAILED check under a selftest-* id that says why.
   # shellcheck source=seat-checks.sh
-  source "${CHECKS_DIR}/seat-checks.sh"
-  seat_checks
+  if ! source "${CHECKS_DIR}/seat-checks.sh"; then
+    check_broken "selftest-checks-unloadable" "could not source ${CHECKS_DIR}/seat-checks.sh (missing or a syntax error); no seat check ran"
+  elif ! declare -F seat_checks >/dev/null; then
+    check_broken "selftest-checks-unloadable" "${CHECKS_DIR}/seat-checks.sh defines no seat_checks; no seat check ran"
+  else
+    seat_checks
+    [ -s "${RECORDS}" ] || check_broken "selftest-no-checks" "seat_checks ran and recorded no check"
+  fi
   write_results "${started}" "$(now_iso)" || rc=1
   rm -f "${RECORDS}"
   log "${RUN_KIND} run finished (results $([ "${rc}" -eq 0 ] && echo written || echo NOT written))"
@@ -327,13 +338,18 @@ loop() {
   done
 }
 
-# The crash path: the loop died. A synthetic WARN reaches the results file so
-# a crash-looping self-test is seen, and the restart backs off exponentially.
+# The crash path: the loop died, so no seat check finished. The record that
+# replaces results.json is a FAILED check, never a warning: before 2026-10-27
+# it was a WARN with failed=0, which overwrote a failing verdict with a clean
+# one, rewrote a fresh finished_at on every restart (so the heartbeat's
+# three-hour loop-dead bound never fired), resolved selftest_failing and
+# passed a release. failed_streak carries on from the run it replaces. The
+# restart backs off exponentially.
 record_crash() { # <restarts> <exit code>
   install -d -m 0755 "${RUN_DIR}" || return 1
   RECORDS="$(mktemp "${RUN_DIR}/.records.XXXXXX")" || return 1
   RUN_KIND="hourly"
-  record "selftest-crashlooping" 0 1 "the self-test loop exited $2; restart $1"
+  record "selftest-crashlooping" 0 0 "the self-test loop exited $2 before its checks finished; restart $1"
   write_results "$(now_iso)" "$(now_iso)"
   rm -f "${RECORDS}"
 }

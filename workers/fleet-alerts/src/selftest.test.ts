@@ -92,6 +92,26 @@ describe('selftest_failing', () => {
     expect(s?.detail).toContain('passed')
   })
 
+  it('a run in which no seat check ran pages on its first reading, never resolves', () => {
+    // FALSIFIER: drop hollow() and a crashed loop's record (one WARN, failed 0,
+    // rewritten fresh on every restart by images before 2026-10-27) resolves
+    // the page, as does a check list that would not load (total 0).
+    const crash = state(
+      verdict({ total: 1, warned_count: 1, warned: ['selftest-crashlooping'], failed_streak: 0 })
+    )
+    expect(crash?.active).toBe(true)
+    expect(crash?.detail).toContain('selftest-crashlooping')
+    expect(crash?.detail).not.toContain('passed')
+    const empty = state(verdict({ total: 0 }))
+    expect(empty?.active).toBe(true)
+    expect(empty?.detail).toContain('ran no checks')
+  })
+
+  it('a real run that also carries a runner warning still resolves', () => {
+    const s = state(verdict({ total: 74, warned_count: 1, warned: ['selftest-crashlooping'] }))
+    expect(s?.active).toBe(false)
+  })
+
   it('names the ids it was given and says how many more there were', () => {
     const s = state(failing({ run_kind: 'boot', failed_count: 40, failed: ['a', 'b'] }))
     expect(s?.detail).toContain('a, b and 38 more')

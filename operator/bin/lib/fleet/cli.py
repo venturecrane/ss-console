@@ -23,7 +23,8 @@
   fleet with-seat-lease SLUG -- CMD ...               run CMD holding SLUG's seat lease
                                                       (exit = CMD's; 4 if another holder deploys SLUG)
 
-Exit codes: 0 success; 1 a seat failed / was refused / rollout halted; 2 usage;
+Exit codes: 0 success; 1 a seat failed / was refused / rollout halted, or the
+--only seat did not end done (still busy after the idle wait, or held); 2 usage;
 3 tooling error (nothing decided); 4 refused before anything ran (lease held,
 unknown release, source guard). A tick adds 5 (waiting: bake running, lease
 held by another rollout, nothing to do) and 6 (an earlier halt stands; a person
@@ -202,7 +203,17 @@ def cmd_artifacts(ctx: Ctx, a: argparse.Namespace) -> int:
     return 0
 
 
-def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_run: bool) -> int:
+def _summary(
+    ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_run: bool, only: str | None = None
+) -> int:
+    """Log the outcomes and return the exit code.
+
+    Under ``--only`` the one seat asked for is the whole question, so the exit is
+    0 only when that seat ended ``done``. A seat still busy after the idle wait
+    (``waiting_idle``) or held (``skipped_held``) halts nothing, and before
+    2026-10-27 that exited 0, which release-tick.yml reports as "is on the
+    release and passed its self-test" about a seat that was never deployed.
+    """
     for o in outcomes:
         ctx.log(f"  {o.seat:<18} {o.state:<14} {o.detail}")
     # A dry run reads no completion (it records nothing), so it must not claim
@@ -210,13 +221,21 @@ def _summary(ctx: Ctx, outcomes: list[Any], halted: bool, completed: bool, dry_r
     # seat" of a release that was done on every seat.
     if dry_run:
         ctx.log("dry run: nothing deployed, nothing recorded")
-    elif halted:
+        return 1 if halted else 0
+    if halted:
         ctx.log("HALTED")
-    else:
-        ctx.log(
-            "release done on every seat" if completed else "finished; release not yet done on every seat (fleet status)"
-        )
-    return 1 if halted else 0
+        return 1
+    if only is not None:
+        mine = [o for o in outcomes if o.seat == only]
+        state = mine[-1].state if mine else "not reached"
+        if state != "done":
+            ctx.log(f"{only} is NOT on the release: it ended {state} (fleet status)")
+            return 1
+        ctx.log(f"{only} is done on the release")
+    ctx.log(
+        "release done on every seat" if completed else "finished; release not yet done on every seat (fleet status)"
+    )
+    return 0
 
 
 def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
@@ -405,7 +424,7 @@ def _run_waves(
     if result.completed and not release.get("completed_last_ring_at"):
         ctx.store.mark_completed(release["release_id"])
         ctx.log(f"{release['release_id']}: every seat is done; release marked completed")
-    return _summary(ctx, result.outcomes, result.halted, result.completed, a.dry_run)
+    return _summary(ctx, result.outcomes, result.halted, result.completed, a.dry_run, a.only)
 
 
 def cmd_busy(ctx: Ctx, a: argparse.Namespace) -> int:

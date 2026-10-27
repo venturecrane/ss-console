@@ -174,9 +174,14 @@ jobs:
             rc=$?
             set -e
             case "$rc" in
-              0) echo "::notice::urgent release: $SEAT is on $RELEASE and passed its self-test" ;;
+              0)
+                if [ -n "$DRY_RUN" ]; then
+                  echo "::notice::urgent release (dry run): nothing deployed to $SEAT; the log shows what would run"
+                else
+                  echo "::notice::urgent release: $SEAT is on $RELEASE and passed its self-test"
+                fi ;;
               4) echo "::error::urgent release: refused before anything ran (another rollout holds $SEAT, or the release is unknown); see the log" ;;
-              *) echo "::error::urgent release: exit $rc on $SEAT (1 = the seat failed, was refused, rolled back or is still busy); see the log" ;;
+              *) echo "::error::urgent release: exit $rc; $SEAT is not on $RELEASE (1 = the seat failed, was refused or rolled back, is still busy after the idle wait, or is held; 3 = a tooling error decided nothing); see the log" ;;
             esac
             exit "$rc"
           fi

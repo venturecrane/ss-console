@@ -11,7 +11,12 @@
  * THE DECISION, the tool-failing tri-state with one asymmetry:
  *   selftest_json NULL            push nothing (hold: no run yet, or an image
  *                                 without the self-test).
- *   failed_count === 0            push inactive (resolves).
+ *   failed_count === 0            push inactive (resolves), UNLESS the run is
+ *                                 hollow: zero checks, or only the runner's own
+ *                                 `selftest-*` records (a crashed loop, a check
+ *                                 list that would not load). That is ACTIVE on
+ *                                 its first reading, like stale: no seat check
+ *                                 ran, and silence must never read as health.
  *   failed_count > 0, run_kind boot or stale
  *                                 push ACTIVE on this first reading. A boot run
  *                                 is the one the image judges strictly (busy
@@ -45,8 +50,12 @@ export interface SelftestVerdict {
   failed_streak: number
   total: number
   failed: string[]
+  warned: string[]
   image_ref: string | null
 }
+
+/** The self-test runner's own records (operator/templates/selftest.sh); no seat check carries it. */
+const SYNTHETIC_PREFIX = 'selftest-'
 
 function nonNegInt(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
@@ -85,16 +94,42 @@ export function parseSelftestVerdict(json: string | null | undefined): SelftestV
     failed_streak: streak,
     total,
     failed,
+    // Optional: a verdict without the list is still a verdict (the counts decide).
+    warned: ids(r.warned) ?? [],
     image_ref: typeof r.image_ref === 'string' ? r.image_ref : null,
   }
 }
 
+/**
+ * Why a verdict with no failed check still proves nothing, or null: a run of
+ * zero checks, or one whose only checks are the runner's own `selftest-*`
+ * records. Before 2026-10-27 a crashed loop wrote one WARN (failed 0), fresh on
+ * every restart, and this resolved the page. Current gates ship such a run as
+ * failed; this closes it for a seat whose gate predates that.
+ */
+function hollow(v: SelftestVerdict): string | null {
+  if (v.failed_count > 0) return null
+  if (v.total === 0) return 'ran no checks'
+  const synthetic = [...v.failed, ...v.warned].filter((id) => id.startsWith(SYNTHETIC_PREFIX))
+  return v.total <= synthetic.length ? `ran no seat check (only ${synthetic.join(', ')})` : null
+}
+
 function pages(v: SelftestVerdict): boolean {
+  if (hollow(v) !== null) return true
   if (v.failed_count === 0) return false
   return v.run_kind !== 'hourly' || v.failed_streak >= SELFTEST_HOURLY_STREAK
 }
 
 function detail(slug: string, v: SelftestVerdict): string {
+  const why = hollow(v)
+  if (why !== null) {
+    return (
+      `the ${v.run_kind} self-test at ${v.finished_at} ${why}, so it proves nothing about the seat. ` +
+      `Image: ${v.image_ref ?? 'not reported'}. ` +
+      `The loop's log is on the seat: fly ssh console -a hermes-${slug} -C "cat /run/smd-selftest/results.json". ` +
+      'Auto-resolves on the next run in which the seat checks ran clean.'
+    )
+  }
   if (v.failed_count === 0) {
     return `the ${v.run_kind} self-test at ${v.finished_at} passed (${v.total} checks, ${v.warned_count} warning(s))`
   }

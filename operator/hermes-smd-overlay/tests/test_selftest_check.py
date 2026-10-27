@@ -103,6 +103,46 @@ def test_a_stale_file_is_a_failure_not_health(tmp_path: Path) -> None:
     assert got is not None and got["failed"] == [sc.LOOP_DEAD] and got["run_kind"] == "stale"
 
 
+@pytest.mark.parametrize(
+    ("checks", "want"),
+    [
+        # The crash record an image before 2026-10-27 wrote: one WARN, failed 0.
+        (
+            [{"id": "selftest-crashlooping", "ok": False, "warn": True, "detail": "exited 1"}],
+            ["selftest-crashlooping"],
+        ),
+        # The crash record as written now: a failure.
+        (
+            [{"id": "selftest-crashlooping", "ok": False, "warn": False, "detail": "exited 1"}],
+            ["selftest-crashlooping"],
+        ),
+        # A check list that would not load, from an image that wrote nothing for it.
+        ([], ["selftest-no-checks"]),
+    ],
+)
+def test_a_run_in_which_no_seat_check_ran_is_a_failure(
+    tmp_path: Path, checks: list, want: list
+) -> None:
+    # FALSIFIER: drop the hollow-run branch in summarize and a crashed loop's
+    # record, rewritten fresh on every restart, ships as a clean run: the
+    # loop-dead bound never fires and a release on that image passes.
+    got = _read(_put(tmp_path, _results(checks=checks, failed=0, failed_streak=0)))
+    assert got is not None
+    assert got["failed"] == want and got["failed_count"] == len(want)
+    assert got["run_kind"] == "stale" and got["failed_streak"] >= 1 and got["warned"] == []
+    # Identity stays, so the release judge fails the seat instead of waiting.
+    assert got["image_ref"] == "registry.fly.io/hermes-fleet:rel-11111111-202610230000"
+
+
+def test_a_real_run_beside_a_runner_record_is_judged_on_its_checks(tmp_path: Path) -> None:
+    checks = [
+        {"id": "customer-yaml-present", "ok": True, "warn": False, "detail": ""},
+        {"id": "selftest-crashlooping", "ok": False, "warn": True, "detail": ""},
+    ]
+    got = _read(_put(tmp_path, _results(checks=checks, failed_streak=0)))
+    assert got is not None and got["run_kind"] == "hourly" and got["failed_count"] == 0
+
+
 def test_no_file_holds_early_and_fails_once_the_machine_is_older_than_the_bound(
     tmp_path: Path,
 ) -> None:

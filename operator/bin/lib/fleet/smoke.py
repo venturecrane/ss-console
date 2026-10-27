@@ -136,6 +136,8 @@ def judge_skills_row(row: dict[str, Any] | None, since: datetime, version: str) 
 # ---------------------------------------------------------------------------
 
 SELFTEST_WINDOW_S = 20 * 60
+# The self-test runner's own records (operator/templates/selftest.sh); no seat check carries it.
+SELFTEST_SYNTHETIC_PREFIX = "selftest-"
 STARTED_WAIT_S = 60
 
 
@@ -162,6 +164,28 @@ def _selftest_is_the_release_run(
     return not overlay or (row.get("version") == overlay and doc.get("version") == overlay)
 
 
+def _selftest_hollow(doc: dict[str, Any]) -> str | None:
+    """Why a verdict with no failed check still proves nothing, or None.
+
+    A run of zero checks, or one whose only checks are the runner's own
+    ``selftest-*`` records (the loop crashed, the check list would not load), ran
+    no seat check. Before 2026-10-27 a crash record (one warning, failed 0) on
+    the release image passed the release. The heartbeat now ships such a run as
+    failed; this refuses it from a seat whose gate predates that.
+    """
+    try:
+        total = int(doc.get("total") or 0)
+    except (TypeError, ValueError):
+        return "reported an unreadable check count"
+    if total <= 0:
+        return "ran no checks"
+    named = [i for i in (doc.get("failed") or []) + (doc.get("warned") or []) if isinstance(i, str)]
+    synthetic = [i for i in named if i.startswith(SELFTEST_SYNTHETIC_PREFIX)]
+    if total <= len(synthetic):
+        return "ran no seat check (only " + ", ".join(synthetic[:5]) + ")"
+    return None
+
+
 def judge_selftest_row(
     row: dict[str, Any] | None, since: datetime, release: dict[str, Any], expected_hermes_sha: str | None
 ) -> Check | None:
@@ -179,6 +203,9 @@ def judge_selftest_row(
             "fail",
             f"self-test ({doc.get('run_kind')} run at {doc.get('finished_at')}) failed: " + "; ".join(failed[:10]),
         )
+    hollow = _selftest_hollow(doc)
+    if hollow:
+        return Check("fail", f"self-test ({doc.get('run_kind')} run at {doc.get('finished_at')}) {hollow}")
     return Check(
         "pass",
         f"self-test ({doc.get('run_kind')} run at {doc.get('finished_at')}) passed {doc.get('total')} checks"

@@ -28,6 +28,14 @@ the same way: our blindness pages rather than reading as health. No file inside
 the first ``STALE_SECONDS`` of uptime (the boot run waits for the gateway
 supervisor to arm) is ``None``: nothing to say yet, the console holds.
 
+A run in which no seat check ran is a FAILURE too, also with run_kind
+``stale``: a file whose checks are only the runner's own ``selftest-*`` records
+(the loop crashed, or the check list would not load) or that has no checks at
+all. Its ids ship as failed, ``selftest-no-checks`` when there are none, even
+when an older image wrote the crash record as a warning. Before 2026-10-27 a
+crash record (one WARN, failed=0, rewritten fresh on every restart) shipped as
+a clean run, so the loop-dead bound above never fired and a release passed.
+
 Read with the same discipline as ``gateway_loop_check``: never through a link,
 never a FIFO, at most ``READ_CAP_BYTES``.
 """
@@ -54,6 +62,9 @@ ID_RE = re.compile(r"^[a-z0-9-]{1,80}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 LOOP_DEAD = "selftest-loop-dead"
 UNREADABLE = "selftest-results-unreadable"
+NO_CHECKS = "selftest-no-checks"
+# The runner's own records carry this prefix; no seat check may (seat-checks.sh).
+SYNTHETIC_PREFIX = "selftest-"
 RUN_KINDS = frozenset({"boot", "hourly"})
 
 
@@ -128,12 +139,51 @@ def _string(value: object, limit: int = 300) -> str | None:
     )
 
 
+def _is_seat_check(c: object) -> bool:
+    """A check from the seat list, not one of the runner's own ``selftest-*`` records."""
+    return not (
+        isinstance(c, dict)
+        and isinstance(c.get("id"), str)
+        and c["id"].startswith(SYNTHETIC_PREFIX)
+    )
+
+
+def _hollow(checks: list, doc: dict, finished: float) -> dict:
+    """A run in which no seat check ran: a failure that names why, never a pass.
+
+    The runner's own records (``selftest-crashlooping`` when the loop died,
+    ``selftest-checks-unloadable`` when the list would not load) are shipped as
+    failed whether the file marked them failed or, as images before 2026-10-27
+    did for a crash, only warned. A run with no check at all ships
+    ``selftest-no-checks``. Identity is kept, so a release judge reading it on
+    the release image fails the seat rather than waiting forever.
+    """
+    ids_ = _ids(checks, lambda c: True) or [NO_CHECKS]
+    hermes = doc.get("hermes_sha")
+    return {
+        "v": 1,
+        "run_kind": "stale",
+        "finished_at": _iso(finished),
+        "version": _string(doc.get("version")),
+        "image_ref": _string(doc.get("image_ref")),
+        "hermes_sha": hermes if isinstance(hermes, str) and SHA_RE.match(hermes) else None,
+        "total": len(checks),
+        "failed_count": len(ids_),
+        "warned_count": 0,
+        "failed_streak": max(1, int(doc.get("failed_streak") or 0)),
+        "failed": ids_[:MAX_IDS],
+        "warned": [],
+    }
+
+
 def summarize(doc: dict, now: float) -> dict:
     """The heartbeat object for one parsed results document."""
     finished = _epoch(doc.get("finished_at"))
     if finished is None or now - finished > STALE_SECONDS:
         return _synthetic(LOOP_DEAD, now)
     checks = doc.get("checks") if isinstance(doc.get("checks"), list) else []
+    if not any(_is_seat_check(c) for c in checks):
+        return _hollow(checks, doc, finished)
     failed, warned = _ids(checks, _is_failed), _ids(checks, _is_warned)
     hermes = doc.get("hermes_sha")
     return {
@@ -179,6 +229,7 @@ def read_selftest(
 __all__ = [
     "LOOP_DEAD",
     "MAX_IDS",
+    "NO_CHECKS",
     "RESULTS_PATH",
     "STALE_SECONDS",
     "UNREADABLE",
