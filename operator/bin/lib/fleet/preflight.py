@@ -83,6 +83,12 @@ def check_lanes(
         have = (current or {}).get(lane)
         if want and have and want == have:
             continue
+        if want and not have and isinstance(current, dict) and current:
+            # A lane the current image recorded other lanes' digests beside but
+            # never ran (casefile, 2026-10-26): no old-schema input can be read
+            # by the new image, and its inputs were validated when staged.
+            notes.append(f"lane {lane}: new on this release; staged inputs taken as they are")
+            continue
         why = (
             "the seat's current image recorded no lane-input digests"
             if not have

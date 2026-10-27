@@ -382,7 +382,9 @@ Two workflows run the release (ADR 0096).
     probes the seat, waiting up to 10 minutes; a seat still busy is left
     `waiting_idle` and a later tick picks it up. A tick never passes
     `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
-    the tick at preflight until a person re-stages the seat.
+    the tick at preflight until a person re-stages the seat. A lane that is
+    new on the release (the seat's current image recorded other lanes'
+    digests but not this one) passes with a note: no old-schema input exists.
   - every judged seat writes a `live_state` row to the verify ledger and its id
     lands in the rollout's detail (`verify row: vfy_...`); a failed write is a
     note there, never a failed release.
