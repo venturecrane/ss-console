@@ -324,3 +324,20 @@ def leak_scan(xlsx: Path) -> list[tuple[str, str, str]]:
     finally:
         wb.close()
     return out
+
+
+def leak_gate(xlsx: Path, record: Path, stats: dict[str, Any]) -> None:
+    """Scan one built workbook and record its stats with what was found; a
+    leak deletes the file and fails the run (resumable, ``leak_found``). The
+    list and its one-sheet-per-case copy both pass through here."""
+    from .outcome import LitigationFailed
+    from .tools import dump
+
+    leaks = leak_scan(xlsx)
+    dump(record, {**stats, "leaks": leaks})
+    if leaks:
+        xlsx.unlink(missing_ok=True)
+        raise LitigationFailed(
+            f"leak_found: the built workbook carries internal text in {len(leaks)} cells: "
+            + "; ".join(f"{c} {w}" for c, w, _ in leaks)[:300]
+        )

@@ -38,6 +38,7 @@ from . import (
     gates,
     inventory,
     job as job_mod,
+    percase,
 )
 from . import carry, manifest, parity, passes, read, review as review_mod, seedcheck, textcache, update, vocab
 from .progress import Progress
@@ -62,6 +63,8 @@ STAGES = (
     "report",
 )
 
+#: The verdict's role for the one-sheet-per-case copy (``percase.py``).
+PER_CASE_ROLE = "per_case_workbook"
 #: The court-paper columns a person may name. A request that names one of
 #: these and no discovery is a court-only list.
 _COURT_WORDS = re.compile(r"\b(complaint|summons|serv(ed|ice)|answer(s|ed)?|default)\b", re.I)
@@ -434,14 +437,19 @@ class LitigationRun(RunBase):
             discovery=not self._court_only(),
             tagged=self._tagged(),
         )
-        leaks = gates.leak_scan(self._out())
-        dump(self.data / "book.json", {**stats, "leaks": leaks})
-        if leaks:
-            self._out().unlink(missing_ok=True)
-            raise LitigationFailed(
-                f"leak_found: the built workbook carries internal text in {len(leaks)} cells: "
-                + "; ".join(f"{c} {w}" for c, w, _ in leaks)[:300]
-            )
+        gates.leak_gate(self._out(), self.data / "book.json", stats)
+        self._build_per_case()
+
+    def _per_case_out(self) -> Path:
+        return percase.path_for(self._out())
+
+    def _build_per_case(self) -> None:
+        """The one-sheet-per-case copy (``percase.py``), from the same final
+        values, under the same leak gate as the list."""
+        stats = percase.build_per_case(
+            self._json("final.json"), self._per_case_out(), self.today, tagged=self._tagged()
+        )
+        gates.leak_gate(self._per_case_out(), self.data / "book-percase.json", stats)
 
     def _tagged(self) -> tuple[list[str], list[list[Any]]] | None:
         """A people scope's "Litigated files tagged on" (header, rows), built
@@ -452,18 +460,30 @@ class LitigationRun(RunBase):
         who = list(self._json("inventory.json").get("people") or [])
         return book.tagged_header(len(who) > 1), book.tagged_rows(self._json("final.json"), self._matters(), who)
 
+    def _ensure_per_case(self) -> None:
+        """A job whose book stage ran before the per-case copy existed builds
+        it on resume, through the same leak gate."""
+        if self._out().is_file() and not self._per_case_out().is_file():
+            self._build_per_case()
+
     def _review(self) -> None:
-        status = review_mod.run(
-            self.data, self.job.job_dir, self._out(), self._json("final.json"), self._matters(), tagged=self._tagged()
-        )
+        self._ensure_per_case()
+        args = (self.data, self.job.job_dir, self._out(), self._json("final.json"), self._matters())
+        status = review_mod.run(*args, tagged=self._tagged(), per_case=self._per_case_out())
         self._put("review_status", status)
 
     def _file(self) -> None:
         pause = deliver.READBACK_PAUSE_SECONDS if self.readback_pause is None else self.readback_pause
-        rec = deliver.file_workbook(
-            self.seat, self.job.file_to_id, self.job.folder_name, self._out(), self.data, self.log, pause=pause
-        )
+        args = (self.seat, self.job.file_to_id, self.job.folder_name)
+        rec = deliver.file_workbook(*args, self._out(), self.data, self.log, pause=pause)
         dump(self.data / "filed.json", rec)
+        # The per-case copy only after the list itself is filed and read back:
+        # a held or refused list files neither.
+        self._ensure_per_case()
+        rec = deliver.file_workbook(
+            *args, self._per_case_out(), self.data, self.log, pause=pause, record="delivery-percase.json"
+        )
+        dump(self.data / "filed-percase.json", rec)
 
     def _flags_new(self) -> int:
         n = 0
@@ -521,40 +541,28 @@ class LitigationRun(RunBase):
             ),
         ):
             if name == "file" and proof_mode.active():  # a proof run stops here (proof_mode.py)
-                out = self._out()
                 return Verdict(
                     proof_mode.OUTCOME,
                     stage="file",
-                    files=[{"role": "workbook", "name": out.name, "size": out.stat().st_size}],
+                    files=[
+                        {"role": role, "name": out.name, "size": out.stat().st_size}
+                        for role, out in (("workbook", self._out()), (PER_CASE_ROLE, self._per_case_out()))
+                    ],
                 )
             self._stage(name, fn)
             if name == "inventory" and not self._matters():
                 raise LitigationHold("scope_empty: no open litigation matters are in this job's scope")
         filed = self._json("filed.json")
+        both = (("workbook", filed), (PER_CASE_ROLE, self._json("filed-percase.json")))
         return Verdict(
             "delivered",
             stage="report",
-            files=[
-                {
-                    "role": "workbook",
-                    "name": filed["name"],
-                    "size": filed["size"],
-                    "sha256": filed["sha256"],
-                    "file_id": filed["file_id"],
-                }
-            ],
+            files=[{"role": role, **{k: f[k] for k in ("name", "size", "sha256", "file_id")}} for role, f in both],
             folder_id=filed["folder_id"],
             flags_new=int(self._state().get("flags_new") or 0),
             proof={
                 "readback": "confirmed",
-                "files": [
-                    {
-                        "name": filed["name"],
-                        "file_id": filed["file_id"],
-                        "size": filed["size"],
-                        "sha256": filed["sha256"],
-                    }
-                ],
+                "files": [{k: f[k] for k in ("name", "file_id", "size", "sha256")} for _, f in both],
                 "review": str(self._state().get("review_status") or "code_only"),
                 "review_cents": 0,
                 "review_model": "",

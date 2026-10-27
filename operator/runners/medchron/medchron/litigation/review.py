@@ -17,6 +17,9 @@ on the firm's matter says what the data it was built from says.
   sort that lost a row, a truncated save);
 * a people-scoped list's "Litigated files tagged on" tab agrees row for row
   with the rows built from the data, and no other list carries the tab;
+* the one-sheet-per-case copy (``percase.py``, 2026-10-27) has one tab per
+  case and every All defendants row exactly once with the same values, so the
+  copy filed beside the list never disagrees with it;
 * no cell carries the system's own words or a sentinel (``proof.checks``; the
   gates' ``leak_scan`` covers internal process wording and ids, this covers
   the shared system vocabulary every lane now refuses).
@@ -34,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from ..proof import checks, review as proof_review
-from . import book
+from . import book, percase
 
 CASE_NOTES = "Case notes"
 ALL_DEFENDANTS = "All defendants"
@@ -46,9 +49,9 @@ def _norm(v: Any) -> str:
     return str(v).strip()
 
 
-def read_sheets(xlsx: bytes) -> dict[str, list[list[str]]]:
-    """Every sheet's data rows (header dropped), every cell as text, from the
-    file's BYTES (never the in-memory workbook the build held)."""
+def read_sheets(xlsx: bytes, *, header: bool = False) -> dict[str, list[list[str]]]:
+    """Every sheet's data rows (row 1 dropped unless ``header``), every cell
+    as text, from the file's BYTES (never the in-memory workbook the build held)."""
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(xlsx), read_only=True, data_only=True)
@@ -56,7 +59,7 @@ def read_sheets(xlsx: bytes) -> dict[str, list[list[str]]]:
     try:
         for ws in wb.worksheets:
             rows = [[_norm(c) for c in row] for row in ws.iter_rows(values_only=True)]
-            out[ws.title] = rows[1:]
+            out[ws.title] = rows if header else rows[1:]
     finally:
         wb.close()
     return out
@@ -121,11 +124,12 @@ def _rows(got: list[list[str]] | None, finals: list[dict[str, Any]]) -> list[pro
     return out
 
 
-def _vocabulary(sheets: dict[str, list[list[str]]]) -> list[proof_review.Finding]:
-    """No system wording or sentinel in any cell of any tab."""
+def _vocabulary(sheets: dict[str, list[list[str]]], first: int = 2) -> list[proof_review.Finding]:
+    """No system wording or sentinel in any cell of any tab; ``first`` is the
+    sheet row the first given row sits on."""
     out: list[proof_review.Finding] = []
     for title, rows in sheets.items():
-        for i, r in enumerate(rows, start=2):
+        for i, r in enumerate(rows, start=first):
             for cell in r:
                 hits = checks.system_vocabulary(cell) + checks.sentinels(cell)
                 if hits:
@@ -185,6 +189,17 @@ def findings(
     )
 
 
+def _per_case(xlsx: bytes, finals: list[dict[str, Any]]) -> list[proof_review.Finding]:
+    """The one-sheet-per-case copy: agrees with the data, and no system
+    wording in any cell (its title row included)."""
+    try:
+        problems = percase.check(xlsx, finals)
+        sheets = {f"{t} (per case)": rows for t, rows in read_sheets(xlsx, header=True).items()}
+    except Exception as exc:  # noqa: BLE001 - an unreadable workbook is the finding
+        return [proof_review.code(proof_review.MUST, "per_case", f"the per-case workbook does not open: {exc}"[:300])]
+    return [proof_review.code(proof_review.MUST, "per_case", p) for p in problems] + _vocabulary(sheets, first=1)
+
+
 def run(
     data: Path,
     job_dir: Path,
@@ -193,14 +208,19 @@ def run(
     in_scope: list[dict[str, Any]],
     *,
     tagged: tuple[list[str], list[list[Any]]] | None = None,
+    per_case: Path | None = None,
 ) -> str:
     """Review, record and decide. Returns ``code_only`` or ``released``;
-    raises ``LitigationFailed`` (``review_held: ...``) on a hold."""
+    raises ``LitigationFailed`` (``review_held: ...``) on a hold. ``per_case``,
+    the one-sheet-per-case copy, is re-read too: one tab per case, every
+    defendant row once with the main list's values (``percase.check``)."""
     from .outcome import LitigationFailed
 
-    if not xlsx.is_file():
+    if not xlsx.is_file() or (per_case is not None and not per_case.is_file()):
         raise LitigationFailed("stage_unfinished: review: the built workbook is not on disk; the book stage reruns")
     fs = findings(xlsx.read_bytes(), finals, in_scope, tagged)
+    if per_case is not None:
+        fs += _per_case(per_case.read_bytes(), finals)
     proof_review.save(data, fs, model="", lane="litigation")
     # The code review is re-run on every attempt, so a redo needs nothing
     # forgotten; consuming it here would forget the record just saved and

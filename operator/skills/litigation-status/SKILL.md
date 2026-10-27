@@ -265,7 +265,10 @@ any case.
    attorney's caseload, no flag's content. Those live in the workbook, filed in the
    firm's library, and the email is the pointer to it:
    - **delivered**: the litigation status list is filed in the firm's Operator Library,
-     folder "Litigation Status", as the file named exactly as the job row names it; it
+     folder "Litigation Status", as the file named exactly as the job row names it
+     (when the job row's `files` also lists a `per_case_workbook`, add that the same
+     list, one sheet per case for printing, is filed beside it, named exactly as that
+     row names it); it
      covers `<matters_total>` matters, `<matters_reread>` of them re-read because their
      files changed since the last list, and it carries `<flags_new>` new flags for
      review. An empty count is left out, never announced as "none". Say that nothing

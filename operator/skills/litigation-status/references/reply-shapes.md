@@ -33,7 +33,8 @@ not move (never a name or a date with them).
 
 - **delivered, requested.** A reply in the requester's thread: "The litigation
   status list is filed in the firm's Operator Library, folder Litigation
-  Status, as <file name>. It covers 64 matters; 7 were re-read because their
+  Status, as <file name>, with the same list one sheet per case beside it, as
+  <per-case file name>. It covers 64 matters; 7 were re-read because their
   files changed since the last list, and it carries 3 new flags for review.
   Nothing has been sent to anyone outside the firm."
 - **delivered, the deadlines report.** A reply in the requester's thread:

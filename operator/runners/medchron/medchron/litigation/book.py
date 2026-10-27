@@ -266,13 +266,28 @@ def _show(v: Any) -> str:
     return str(v)
 
 
+def case_notes_order(ms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The Case notes tab's order (the per-case list's tab order too)."""
+    return sorted(ms, key=lambda m: (m.get("responsible") or "", str(m.get("number"))))
+
+
+def case_notes_text(m: dict[str, Any]) -> str:
+    """One matter's Case notes cell, before ``clean``."""
+    detail = (m.get("case_status") or {}).get("detail") or ""
+    role = "The firm represents the defense in this matter." if m.get("firm_role") == "defense" else ""
+    return " | ".join(x for x in (role, detail, _flags(m, "matter_flags"), m.get("notes") or "") if x)
+
+
+def not_filed_text(m: dict[str, Any]) -> str:
+    """One not-filed matter's "Where it stands" cell, before ``clean``."""
+    return " | ".join(x for x in (m.get("notes") or "", _flags(m, "matter_flags")) if x)
+
+
 def _notes_sheets(wb: Any, ms: list[dict[str, Any]]) -> None:
     """Case notes and Not filed."""
     notes = []
-    for m in sorted(ms, key=lambda m: (m.get("responsible") or "", str(m.get("number")))):
-        detail = (m.get("case_status") or {}).get("detail") or ""
-        role = "The firm represents the defense in this matter." if m.get("firm_role") == "defense" else ""
-        text = " | ".join(x for x in (role, detail, _flags(m, "matter_flags"), m.get("notes") or "") if x)
+    for m in case_notes_order(ms):
+        text = case_notes_text(m)
         notes.append(
             [
                 m.get("responsible") or "",
@@ -295,7 +310,7 @@ def _notes_sheets(wb: Any, ms: list[dict[str, Any]]) -> None:
             m.get("responsible") or "",
             m.get("number"),
             m.get("case_name") or m.get("title") or "",
-            " | ".join(x for x in (m.get("notes") or "", _flags(m, "matter_flags")) if x),
+            not_filed_text(m),
         ]
         for m in ms
         if _status(m) == vocab.NOT_FILED
