@@ -38,6 +38,14 @@ operator/templates/**
 # dependency is pinned and every pin is hashed.
 operator/requirements/**
 operator/skills/**
+# 2026-10-27 review: the seat image COPYs these two trees too (the ADR 0093
+# role policy layer, read at runtime by shared/policy_profile.py, and the
+# clio-mcp npm manifest + lockfile). Without them a role-only change or a
+# clio-mcp dependency bump merged with no image built and no suite run.
+# test_every_file_the_seat_image_copies_is_on_the_image_path_list holds every
+# COPY/ADD source of operator/templates/Dockerfile to this list.
+operator/roles/**
+operator/npm/**
 operator/verticals/**
 operator/migrations/**
 operator/workspace_broker/**
