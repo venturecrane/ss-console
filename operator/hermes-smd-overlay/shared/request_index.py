@@ -14,7 +14,8 @@ the reply opening live ONLY here and in the transient card email. So custody is
 this module's job, done on every write rather than by a sweeper that could
 stop:
 
-* the text columns (``sender``, ``subject``, ``reply_opening``) are nulled on
+* the text columns (``sender``, ``subject``, the openings, and since
+  2026-10-27 the whole ``request_text`` and ``reply_text``) are nulled on
   rows older than :data:`TEXT_RETENTION_DAYS`, which is longer than any card
   can wait (a card retries for a day);
 * the rows themselves are deleted after :data:`ROW_RETENTION_DAYS`.
@@ -54,6 +55,12 @@ SENDER_MAX = 160
 SUBJECT_MAX = 200
 #: The opening is cut to about this many characters at a word boundary.
 OPENING_CHARS = 240
+#: The whole message (the request, or a reply) is kept up to about this many
+#: characters, paragraphs intact, so a card can say what was asked and what was
+#: answered rather than the first line of each (Captain, 2026-10-27: a card must
+#: clearly state what the request is, who made it, and the Operator's response).
+#: Same custody as the openings: nulled after TEXT_RETENTION_DAYS.
+TEXT_CHARS = 4000
 
 _CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS requests (
@@ -65,7 +72,9 @@ CREATE TABLE IF NOT EXISTS requests (
   reply_opening       TEXT,
   opening_at          REAL,
   thread_ref          TEXT,
-  request_opening     TEXT
+  request_opening     TEXT,
+  request_text        TEXT,
+  reply_text          TEXT
 )
 """
 _CREATE_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_requests_received ON requests(received_at)"
@@ -79,7 +88,8 @@ CREATE TABLE IF NOT EXISTS replies (
   sent_message_id TEXT PRIMARY KEY,
   in_reply_to     TEXT,
   sent_at         REAL NOT NULL,
-  opening         TEXT
+  opening         TEXT,
+  text            TEXT
 )
 """
 #: Columns added after the first seats wrote this file (2026-10-22: the thread a
@@ -92,7 +102,14 @@ CREATE TABLE IF NOT EXISTS replies (
 #: columns against what the file has (``read_requests``), because the gate reads
 #: this file read-only from another process and a read that names a column the
 #: writer has not added yet fails every card on the seat (Sentry SMD-OPERATOR-2S).
-_ADDED_COLUMNS = (("thread_ref", "TEXT"), ("request_opening", "TEXT"))
+_ADDED_COLUMNS = (
+    ("thread_ref", "TEXT"),
+    ("request_opening", "TEXT"),
+    ("request_text", "TEXT"),
+    ("reply_text", "TEXT"),
+)
+#: The same for the ``replies`` table (2026-10-27: the whole text of each reply).
+_ADDED_REPLY_COLUMNS = (("text", "TEXT"),)
 #: Every column a reader returns, in SELECT order. The one list the writer's
 #: schema and the reader's projection share: a column missing from the file
 #: reads as None.
@@ -106,9 +123,18 @@ _READ_COLUMNS = (
     "opening_at",
     "thread_ref",
     "request_opening",
+    "request_text",
+    "reply_text",
 )
 #: The text columns custody nulls after TEXT_RETENTION_DAYS.
-_TEXT_COLUMNS = ("sender", "subject", "reply_opening", "request_opening")
+_TEXT_COLUMNS = (
+    "sender",
+    "subject",
+    "reply_opening",
+    "request_opening",
+    "request_text",
+    "reply_text",
+)
 
 
 def db_path() -> str:
@@ -130,6 +156,10 @@ def _connect(path: str) -> sqlite3.Connection:
     for name, kind in _ADDED_COLUMNS:
         if name not in present:
             conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {kind}")
+    present = {row[1] for row in conn.execute("PRAGMA table_info(replies)").fetchall()}
+    for name, kind in _ADDED_REPLY_COLUMNS:
+        if name not in present:
+            conn.execute(f"ALTER TABLE replies ADD COLUMN {name} {kind}")
     return conn
 
 
@@ -147,10 +177,13 @@ def converge(*, path: str | None = None) -> bool:
         conn = _connect(target)
         try:
             present = {row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+            in_replies = {row[1] for row in conn.execute("PRAGMA table_info(replies)").fetchall()}
             conn.commit()
         finally:
             conn.close()
-        return all(name in present for name, _kind in _ADDED_COLUMNS)
+        return all(name in present for name, _kind in _ADDED_COLUMNS) and all(
+            name in in_replies for name, _kind in _ADDED_REPLY_COLUMNS
+        )
     except Exception:  # noqa: BLE001 — a boot never fails on the card index
         logger.error("request_index: could not converge %s", target, exc_info=True)
         return False
@@ -169,7 +202,8 @@ def _custody(conn: sqlite3.Connection, now: float) -> None:
         (now - ROW_RETENTION_DAYS * 86400.0,),
     )
     conn.execute(
-        "UPDATE replies SET opening=NULL WHERE sent_at < ? AND opening IS NOT NULL",
+        "UPDATE replies SET opening=NULL, text=NULL"
+        " WHERE sent_at < ? AND (opening IS NOT NULL OR text IS NOT NULL)",
         (now - TEXT_RETENTION_DAYS * 86400.0,),
     )
     conn.execute(
@@ -223,6 +257,42 @@ def reply_opening(body: object) -> str | None:
     return cut.rstrip(" ,;:") + "..."
 
 
+def message_text(body: object) -> str | None:
+    """The whole of a message after its salutation line, paragraphs kept, cut at
+    a word boundary near :data:`TEXT_CHARS` with an ellipsis. ``None`` for an
+    empty or non-string body.
+
+    The same salutation rule as :func:`reply_opening`. Within a line,
+    whitespace collapses and non-printing characters drop; runs of blank lines
+    become one, so the card reads as the message did."""
+    if not isinstance(body, str):
+        return None
+    lines = [
+        " ".join("".join(ch for ch in line if ch.isprintable()).split())
+        for line in body.splitlines()
+    ]
+    while lines and not lines[0]:
+        lines.pop(0)
+    if lines:
+        first = lines[0]
+        if _SALUTATION_RE.match(first) or (len(first) <= 60 and first.endswith(",")):
+            lines.pop(0)
+    kept: list[str] = []
+    for line in lines:
+        if line or (kept and kept[-1]):
+            kept.append(line)
+    text = "\n".join(kept).strip()
+    if not text:
+        return None
+    if len(text) <= TEXT_CHARS:
+        return text
+    cut = text[:TEXT_CHARS]
+    space = max(cut.rfind(" "), cut.rfind("\n"))
+    if space > TEXT_CHARS // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:\n") + "..."
+
+
 def record_inbound(
     *,
     vendor_message_id: object,
@@ -256,7 +326,8 @@ def record_inbound(
             _custody(conn, now)
             cur = conn.execute(
                 "INSERT OR IGNORE INTO requests (vendor_message_id, internet_message_id, "
-                "received_at, sender, subject, thread_ref, request_opening) VALUES (?,?,?,?,?,?,?)",
+                "received_at, sender, subject, thread_ref, request_opening, request_text)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (
                     vendor_message_id[:512],
                     (internet_message_id[:512] if isinstance(internet_message_id, str) else "")
@@ -266,6 +337,7 @@ def record_inbound(
                     _clean(subject, SUBJECT_MAX),
                     _clean(thread_ref, 512),
                     reply_opening(body),
+                    message_text(body),
                 ),
             )
         return cur.rowcount == 1
@@ -300,20 +372,28 @@ def record_reply_opening(
         return False
     try:
         opening = reply_opening(body)
+        text = message_text(body)
         updated = 0
         with conn:
             _custody(conn, now)
             if sent_id is not None:
                 conn.execute(
-                    "INSERT OR IGNORE INTO replies (sent_message_id, in_reply_to, sent_at, opening)"
-                    " VALUES (?, ?, ?, ?)",
-                    (sent_id, in_reply_to if isinstance(in_reply_to, str) else None, now, opening),
+                    "INSERT OR IGNORE INTO replies"
+                    " (sent_message_id, in_reply_to, sent_at, opening, text)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (
+                        sent_id,
+                        in_reply_to if isinstance(in_reply_to, str) else None,
+                        now,
+                        opening,
+                        text,
+                    ),
                 )
             if isinstance(in_reply_to, str) and in_reply_to:
                 updated = conn.execute(
-                    "UPDATE requests SET reply_opening=?, opening_at=? "
+                    "UPDATE requests SET reply_opening=?, reply_text=?, opening_at=? "
                     "WHERE vendor_message_id=? AND opening_at IS NULL",
-                    (opening, now, in_reply_to),
+                    (opening, text, now, in_reply_to),
                 ).rowcount
         return updated == 1
     except Exception:  # noqa: BLE001
@@ -441,6 +521,28 @@ def read_reply_openings(since: float, *, path: str | None = None) -> dict[str, s
         conn.close()
 
 
+def read_reply_texts(since: float, *, path: str | None = None) -> dict[str, str | None]:
+    """sent_message_id -> the whole text of that reply, for replies sent at or
+    after ``since``; None for a reply written before the column existed.
+    READ-ONLY, the same contract as :func:`read_reply_openings`, and it projects
+    against what the file HAS: the writer may not have added ``text`` yet."""
+    target = path or db_path()
+    if not os.path.exists(target):
+        return {}
+    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True, timeout=5)
+    try:
+        conn.execute("PRAGMA busy_timeout=2000")
+        present = {row[1] for row in conn.execute("PRAGMA table_info(replies)").fetchall()}
+        if "text" not in present:
+            return {}
+        rows = conn.execute(
+            "SELECT sent_message_id, text FROM replies WHERE sent_at >= ?", (since,)
+        ).fetchall()
+        return {str(r[0]): r[1] for r in rows}
+    finally:
+        conn.close()
+
+
 __all__ = [
     "DEFAULT_DB_PATH",
     "bare_sender",
@@ -449,7 +551,9 @@ __all__ = [
     "ROW_RETENTION_DAYS",
     "TEXT_RETENTION_DAYS",
     "db_path",
+    "message_text",
     "read_reply_openings",
+    "read_reply_texts",
     "read_requests",
     "record_inbound",
     "record_reply_opening",
