@@ -468,8 +468,41 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     expect(operands(commands[overlay])).toEqual(['/app/overlay-src'])
     const flat = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
     const overlayAt = flat.indexOf('--no-deps /app/overlay-src')
-    const checkAt = flat.indexOf('uv pip check --python /opt/hermes/.venv/bin/python')
-    expect(checkAt, 'no uv pip check over the Hermes venv').toBeGreaterThan(overlayAt)
+    const checkAt = flat.search(
+      /python3 -I \/app\/requirements\/hermes_pip_check\.py\s+\/opt\/hermes\/\.venv\/bin\/python\s+\/app\/requirements\/hermes-security\.txt/
+    )
+    expect(checkAt, 'no hermes_pip_check.py over the Hermes venv').toBeGreaterThan(overlayAt)
+  })
+
+  /**
+   * DP-1 (2026-10-27 code review): Hermes' lock pins certifi with compromised
+   * emSign intermediates and urllib3 2.7.0. hermes-security.txt overrides
+   * exactly those, hash-locked, into the Hermes venv after `uv sync`; the
+   * check that follows tolerates only hermes-agent's own certifi pin.
+   */
+  it('the Hermes venv gets hermes-security.txt hash-locked after uv sync and before the check', () => {
+    const idx = (re: RegExp) => commands.findIndex((c) => re.test(c))
+    const security = idx(/-r\s+\/app\/requirements\/hermes-security\.txt/)
+    const overlayDeps = idx(/-r\s+\/app\/requirements\/hermes-overlay\.txt/)
+    expect(security, 'hermes-security.txt is never installed').toBeGreaterThan(-1)
+    expect(commands[security]).toMatch(/--python \/opt\/hermes\/\.venv\/bin\/python/)
+    expect(commands[security]).toMatch(/--no-config/)
+    expect(commands[security]).toMatch(/--require-hashes/)
+    expect(commands[security]).toMatch(/--no-deps/)
+    expect(security).toBeLessThan(overlayDeps)
+    const flat = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
+    expect(flat.indexOf('uv sync --frozen')).toBeLessThan(
+      flat.indexOf('-r /app/requirements/hermes-security.txt')
+    )
+    // No bare `uv pip check` over the Hermes venv survives beside the
+    // tolerant one: it would fail the build on the certifi override.
+    expect(flat).not.toMatch(/uv pip check --python \/opt\/hermes\/\.venv\/bin\/python/)
+    const pinned = readFileSync(resolve('operator/requirements/hermes-security.txt'), 'utf8')
+    const names = [...pinned.matchAll(/^([a-z0-9][a-z0-9._-]*)==/gm)].map((m) => m[1]).sort()
+    expect(names, 'hermes-security.txt overrides only certifi and urllib3').toEqual([
+      'certifi',
+      'urllib3',
+    ])
   })
 
   it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {

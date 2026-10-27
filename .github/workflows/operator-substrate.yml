@@ -222,8 +222,9 @@ jobs:
       # the exact version pydantic==2.13.5 requires (#2760, which broke every
       # seat build until #2787, then #2812, #2897, #2932), and the failure
       # surfaced only at a reprovision. Fails closed: a file that does not
-      # resolve fails the job. hermes-overlay.txt is --no-deps because its
-      # closure is the Hermes venv's (the image runs `uv pip check` there).
+      # resolve fails the job. hermes-overlay.txt and hermes-security.txt are
+      # --no-deps because their closure is the Hermes venv's (the image runs
+      # hermes_pip_check.py, a `uv pip check`, there).
       - name: Every hash-locked requirements file installs
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator/requirements
@@ -233,7 +234,7 @@ jobs:
           checked=0
           for f in *.txt; do
             deps=()
-            [ "$f" = "hermes-overlay.txt" ] && deps=(--no-deps)
+            case "$f" in hermes-overlay.txt|hermes-security.txt) deps=(--no-deps) ;; esac
             echo "== ${f} =="
             uv pip install --python /tmp/reqcheck/bin/python --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
             checked=$((checked + 1))
@@ -360,12 +361,12 @@ jobs:
       # build's `uv pip check` is the first thing that notices. compile.sh
       # derives that file from the overlay's pyproject and Hermes' lock; a diff
       # here means the pins were not regenerated.
-      - name: hermes-overlay.txt is current (compile.sh no-diff)
+      - name: hermes-overlay.txt and hermes-security.txt are current (compile.sh no-diff)
         if: steps.changes.outputs.relevant == 'true'
         run: |
           set -euo pipefail
           operator/requirements/compile.sh
-          git diff --exit-code -- operator/requirements/hermes-overlay.txt
+          git diff --exit-code -- operator/requirements/hermes-overlay.txt operator/requirements/hermes-security.txt
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'

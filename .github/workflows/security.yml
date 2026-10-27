@@ -362,6 +362,13 @@ jobs:
   # time-boxed allowlist at .github/pip-audit-allowlist.json with the same
   # rules as the npm one, and exits 2 (never green) when pip-audit itself
   # cannot run.
+  #
+  # Since 2026-10-27 (code review DP-1) it also audits the Hermes gateway
+  # venv: Hermes' uv.lock at the Dockerfile's HERMES_UPSTREAM_SHA, fetched from
+  # upstream and exported with uv for the extras the image syncs, with
+  # operator/requirements/hermes-security.txt applied. Before that, nothing
+  # audited the largest venv on every seat. Hence uv below; a fetch or export
+  # failure exits 2.
   pip-audit:
     name: pip audit (seat image Python)
     runs-on: ubuntu-latest
@@ -374,10 +381,13 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
       - name: Install pip-audit
         run: python3 -m pip install --quiet pip-audit==2.10.1
 
-      - name: Audit the pinned seat-image requirements
+      - name: Audit the pinned seat-image requirements and the Hermes venv
         run: python3 operator/bin/pip_audit_gate.py
 
   summary:
