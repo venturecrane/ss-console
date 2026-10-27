@@ -33,9 +33,18 @@ batch still processing; a rerun composes the chunk again rather than taking a
 surviving sibling part for the whole. Exit 1 is left for a chunk with no
 output and no recorded reason, which only a defect produces.
 
+A split is recorded before any part is sent (chunk-XX.parts), and a chunk is
+composed only when every part it recorded has a map: a part whose batch is
+still processing, or whose turn never came because the runner was killed, is
+a part still missing, not a chunk done. The open pieces are persisted
+(compose-queue.json) at each step, so a rerun resumes exactly those pieces on
+the same tier and attempt; a batched piece keeps its custom_id, so the doorway
+collects the claimed batch rather than submitting and paying for it again.
+
 Outputs under runs/<unit>/: chunk-XX.txt, chunk-XX.sha, map-XX.md (map-XX-k.md
-for parts), usage.jsonl (per call: tokens, stop, sha, window), and when a page
-went unread, unread_pages.json.
+for parts, chunk-XX-k.txt their text, chunk-XX.parts the split record),
+compose-queue.json while work is open, usage.jsonl (per call: tokens, stop,
+sha, window), and when a page went unread, unread_pages.json.
 """
 
 from __future__ import annotations
@@ -110,13 +119,51 @@ def failed_marker(d: Path, i: int) -> Path:
     return d / f"chunk-{i:02d}.failed"
 
 
+def parts_record(d: Path, i: int) -> Path:
+    """The parts chunk `i` was split into: {"expected": [part numbers the
+    whole is made of], "next": the next free part number}. Written when a
+    split is decided, BEFORE any part is sent, so a part whose map never
+    arrived (its batch still processing, the runner killed between parts) is
+    a part the chunk is still missing, never a part nobody knew about."""
+    return d / f"chunk-{i:02d}.parts"
+
+
+def read_parts(d: Path, i: int) -> dict[str, Any] | None:
+    rec = read_json(parts_record(d, i), None)
+    if not isinstance(rec, dict) or not isinstance(rec.get("expected"), list):
+        return None
+    return rec
+
+
+def _covered(d: Path, stem: str, depth: int = 0) -> bool:
+    """A piece (`03` or `03-2`) has a non-trivial map, or repair set its
+    truncated map aside and every part repair recorded for it is covered."""
+    m = d / f"map-{stem}.md"
+    if m.is_file() and m.stat().st_size > 100:
+        return True
+    rec = d / f"repair-{stem}.json"
+    if depth > 8 or not ((d / f"map-{stem}.md.truncated").exists() and rec.is_file()):
+        return False
+    nums = read_json(rec, [])
+    c = stem.split("-", 1)[0]
+    return bool(nums) and all(_covered(d, f"{c}-{n}", depth + 1) for n in nums)
+
+
 def produced(d: Path, i: int) -> bool:
+    """Chunk `i` is composed: its whole map, or a map for EVERY part its
+    split recorded. A part map on disk is not evidence of the whole: before
+    2026-10-27 a split chunk counted as composed when the maps that existed
+    were non-trivial, so a part still in a processing batch was skipped on
+    every rerun and its pages were never composed."""
     if failed_marker(d, i).exists():
         return False  # a part errored: the parts that composed are not the whole
-    whole, parts = outputs_for(d, i)
-    if whole.is_file() and whole.stat().st_size > 100:
+    if _covered(d, f"{i:02d}"):
         return True
-    return bool(parts) and all(p.stat().st_size > 100 for p in parts)
+    rec = read_parts(d, i)
+    if rec is None:
+        return False  # part maps with no record of what the whole is made of prove nothing
+    expected = rec["expected"]
+    return bool(expected) and all(_covered(d, f"{i:02d}-{n}") for n in expected)
 
 
 def recorded_sha(d: Path, i: int) -> str | None:
@@ -128,9 +175,46 @@ def recorded_sha(d: Path, i: int) -> str | None:
 
 
 def clear_outputs(d: Path, i: int) -> None:
+    """Everything chunk `i` produced, about to be composed again from its
+    whole: maps, the split record, part texts, and repair's set-asides."""
     whole, parts = outputs_for(d, i)
-    for p in [whole, *parts]:
+    for p in [whole, *parts, parts_record(d, i)]:
         p.unlink(missing_ok=True)
+    pat = re.compile(rf"(chunk-{i:02d}-\d+\.txt|map-{i:02d}(-\d+)?\.md\.truncated|repair-{i:02d}(-\d+)?\.json)$")
+    for p in d.iterdir():
+        if pat.match(p.name):
+            p.unlink()
+
+
+#: The pieces of composition work still open in this unit, so a rerun resumes
+#: them exactly where they stopped: the same tier and the same attempt, so the
+#: same batch custom_id, which the doorway finds claimed and collects rather
+#: than submitting (and paying for) again.
+QUEUE = "compose-queue.json"
+
+
+def read_queue(d: Path) -> list[dict[str, Any]]:
+    rows = read_json(d / QUEUE, [])
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def queued_chunks(d: Path, i: int) -> list["Chunk"]:
+    """Chunk `i`'s open pieces from the queue, each with its text read back
+    from disk; a piece whose text is gone or changed voids the resume."""
+    out = []
+    for r in read_queue(d):
+        if r.get("i") != i:
+            continue
+        c = Chunk(i, "", part=r.get("part"), budget=int(r.get("budget", REFUSAL_ATTEMPTS)))
+        src = d / c.chunk_name
+        if not src.is_file():
+            return []
+        c.text = src.read_text(encoding="utf-8")
+        if sha(c.text) != r.get("sha"):
+            return []
+        c.tier, c.attempts = str(r.get("tier", "composition")), int(r.get("attempts", 0))
+        out.append(c)
+    return out
 
 
 def clear_unread(d: Path, i: int) -> None:
@@ -199,7 +283,6 @@ class _Composer:
         self.truncated: list[str] = []
         self.refused: list[str] = []
         self.emptied: list[str] = []
-        self.next_part: dict[int, int] = {}
         #: An API error outlived its retries, or a batch is still processing.
         self.infra = False
 
@@ -269,13 +352,49 @@ class _Composer:
         return self.handle(c, r, None)
 
     def _subs(self, c: Chunk, parts: list[str], budget: int = REFUSAL_ATTEMPTS) -> list[Chunk]:
+        """Split `c` into numbered parts, recording them in the chunk's parts
+        record before any is sent: the split piece leaves the expected set
+        and its parts join it, so `produced` asks for every leaf."""
+        rec = read_parts(self.d, c.i) or {"expected": [], "next": 1}
+        on_disk = [
+            int(m.group(1)) for p in self.d.iterdir() if (m := re.match(rf"chunk-{c.i:02d}-(\d+)\.txt$", p.name))
+        ]
+        n = max([int(rec.get("next", 1)), *(k + 1 for k in on_disk)])
         subs = []
         for p in parts:
-            self.next_part[c.i] = self.next_part.get(c.i, 0) + 1
-            sub = Chunk(c.i, p, part=self.next_part[c.i], budget=budget)
+            sub = Chunk(c.i, p, part=n, budget=budget)
             (self.d / sub.chunk_name).write_text(p, encoding="utf-8")
             subs.append(sub)
+            n += 1
+        expected = [k for k in rec["expected"] if k != c.part] + [s.part for s in subs]
+        parts_record(self.d, c.i).write_text(json.dumps({"expected": expected, "next": n}), encoding="utf-8")
         return subs
+
+    def save_queue(self, open_pieces: list[Chunk]) -> None:
+        """Persist the open work, so a rerun after a batch still processing or
+        a killed runner resumes exactly these pieces and nothing else."""
+        rows = []
+        for c in open_pieces:
+            src = self.d / c.chunk_name
+            if not src.is_file():
+                src.write_text(c.text, encoding="utf-8")
+            rows.append(
+                {
+                    "i": c.i,
+                    "part": c.part,
+                    "tier": c.tier,
+                    "attempts": c.attempts,
+                    "budget": c.budget,
+                    "sha": sha(c.text),
+                }
+            )
+        q = self.d / QUEUE
+        if rows:
+            tmp = q.with_name(q.name + ".tmp")
+            tmp.write_text(json.dumps(rows, indent=1), encoding="utf-8")
+            tmp.replace(q)
+        else:
+            q.unlink(missing_ok=True)
 
     def _give_up(self, c: Chunk, reason: str) -> list[Chunk]:
         """A piece holding several files is sent one file at a time; a single
@@ -325,14 +444,17 @@ class _Composer:
     def run_serial(self, todo: list[Chunk]) -> None:
         queue = list(todo)
         while queue:
+            self.save_queue(queue)
             c = queue.pop(0)
             state = self.compose_one(c)
             nxt = self.after(c, state)
+            queue[0:0] = nxt
+            self.save_queue(queue)
             if state in ("refused", "error") and nxt and nxt[0] is c:
                 time.sleep(10 * max(c.attempts, 1))
-            queue[0:0] = nxt
             if state == "ok":
                 time.sleep(1)
+        self.save_queue([])
 
     def run_batched(self, todo: list[Chunk]) -> None:
         """One batch per tier per round for the whole unit. The id carries the
@@ -342,10 +464,14 @@ class _Composer:
         pending = list(todo)
         while pending:
             nxt: list[Chunk] = []
+            handled: set[int] = set()
+            self.save_queue(pending)
 
             def on_result(item: llm.Item, r: llm.Result | None, err: str | None) -> None:
                 c = item.meta["chunk"]
                 nxt.extend(self.after(c, self.handle(c, r, err)))
+                handled.add(id(c))
+                self.save_queue(nxt + [p for p in pending if id(p) not in handled])
 
             for tier in ("composition", "judgment"):
                 batch = [c for c in pending if c.tier == tier]
@@ -372,10 +498,15 @@ class _Composer:
                     batch_dir=self.d,
                 )
                 if s.timed_out:
+                    # The queue already holds every open piece: this round's
+                    # follow-ups, the items still processing (attempt
+                    # unchanged, so their custom_id resumes the claimed
+                    # batch), and any tier not yet submitted.
                     self.infra = True
                     self.sr.log(f"compose: {len(s.timed_out)} chunk(s) in a batch still processing; rerun resumes it")
                     return
             pending = nxt
+        self.save_queue([])
 
 
 def run(sr: StageRun) -> int:
@@ -396,7 +527,13 @@ def run(sr: StageRun) -> int:
     todo: list[Chunk] = []
     for i, ch in enumerate(chunks, 1):
         h = sha(ch)
-        if produced(d, i) and recorded_sha(d, i) == h:
+        same = recorded_sha(d, i) == h
+        if produced(d, i) and same:
+            continue
+        resumed = queued_chunks(d, i) if same and not failed_marker(d, i).exists() else []
+        if resumed:
+            sr.log(f"chunk {i}: resuming {[c.label for c in resumed]} where the last run left them")
+            todo.extend(resumed)
             continue
         if produced(d, i):
             sr.log(f"chunk {i}: input changed since its map file; recomposing")

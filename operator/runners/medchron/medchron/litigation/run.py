@@ -489,7 +489,15 @@ class LitigationRun(RunBase):
                 "two_pass": False,
                 "read": (self._plan().get(mid) or {}).get("mode") or "full",
             }
-            manifest.commit(self.state, mid, keep, inventory.files_of(self.data, mid))
+            files = inventory.files_of(self.data, mid)
+            # A court-only list did not read discovery: its papers stay
+            # unconsumed for the next list that asks (``manifest.commit``).
+            hold = (
+                manifest.files_for_groups(files, self.firm, self.today, [vocab.GROUP_DISCOVERY])
+                if self._court_only()
+                else set()
+            )
+            manifest.commit(self.state, mid, keep, files, hold=hold)
         self._put("flags_new", flags)
 
     def _walk(self) -> Verdict:

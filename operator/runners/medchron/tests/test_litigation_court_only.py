@@ -112,3 +112,39 @@ def test_a_full_request_still_reads_discovery_and_shows_its_tab(tmp_path):
     assert v.verdict == "delivered", v.reason
     assert set(manifest.load_prior(tmp_path / "state", M1)["fields_read"]) == set(vocab.GROUPS)
     assert "Discovery" in load_workbook(r._out()).sheetnames
+
+
+def test_a_discovery_paper_a_court_only_list_skipped_is_read_by_the_next_full_list(tmp_path):
+    """2026-10-27 review, MC-1: the court-only list committed the matter's whole
+    file list to the manifest, so a discovery paper that arrived before it was
+    no longer new to the next list and was never read for discovery."""
+    from medchron.litigation import inventory
+    from medchron_testkit import make_pdf
+
+    assert _run(tmp_path, "Send me a fresh litigation status list.").run().verdict == "delivered"
+    state = tmp_path / "state"
+    rfp = (
+        "f-d1",
+        "Request for Production Delta.pdf",
+        make_pdf(["REQUEST FOR PRODUCTION, SET ONE"]),
+        "2026-10-01T10:00:00",
+    )
+    r = LitigationRun(
+        make_job(tmp_path / "job2", request_text=REQUEST),
+        inputs_dir=str(make_inputs(tmp_path / "inputs2")),
+        pricing=str(tmp_path / "pricing.json"),
+        state_dir=state,
+        seat_factory=lambda: LitSeat({M1: [*matter_docs(), rfp]}),
+        client=ScriptedLit(),
+        log=lambda m: None,
+        today=lambda: TODAY,
+        readback_pause=0.0,
+    )
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    assert "f-d1" not in manifest.load_manifest(state, M1), "the skipped discovery paper is not consumed"
+    assert "f-c1" in manifest.load_manifest(state, M1), "the papers it did read are"
+
+    files = inventory.files_of(r.data, M1)
+    nxt = manifest.plan_matter(files, manifest.load_prior(state, M1), manifest.load_manifest(state, M1), r.firm, TODAY)
+    assert "f-d1" in nxt["trigger_files"] and vocab.GROUP_DISCOVERY in nxt["read_groups"], nxt
