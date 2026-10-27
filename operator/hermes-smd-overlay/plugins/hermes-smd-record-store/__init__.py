@@ -369,7 +369,11 @@ def _visible_in_space(
         if owner is not None and owner in readable:
             author = (record_store.read_frontmatter(text).get(AUTHOR_KEY) or "").strip()
             if owner == space_mod.SHARED and author:
-                out.append({**row, "owner": owner, AUTHOR_KEY: author})
+                # "you" for the asker's own: on 2026-10-27 the listing said
+                # ``from: p2`` to Scott, who is p2, and the model still asked
+                # him to say his note again. An id means nothing to it.
+                mine = current is not None and author == current.person_id
+                out.append({**row, "owner": owner, AUTHOR_KEY: "you" if mine else author})
             else:
                 out.append({**row, "owner": owner})
     return out

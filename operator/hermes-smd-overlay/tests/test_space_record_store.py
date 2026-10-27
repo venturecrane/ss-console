@@ -301,6 +301,9 @@ def test_shared_record_from_a_dm_is_stamped_with_the_writer(seat, monkeypatch):
     assert args["content"].count("from:") == 1
     seat["plugin"]._write_handler(args, session_id="s")
     rows = json.loads(seat["plugin"]._list_handler({"store": "notes"}, session_id="s"))["records"]
+    assert {r["name"]: r.get("from") for r in rows}["s-p1.md"] == "you"
+    telegram_dm(monkeypatch, A_TG)
+    rows = json.loads(seat["plugin"]._list_handler({"store": "notes"}, session_id="s"))["records"]
     assert {r["name"]: r.get("from") for r in rows}["s-p1.md"] == "p2"
 
 
