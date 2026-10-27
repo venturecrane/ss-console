@@ -41,7 +41,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -116,18 +115,24 @@ def apply_overrides(export: str, overrides: dict[str, str]) -> str:
 
 def fetch_hermes_export(sha: str, extras: list[str], work: Path) -> str:
     """``uv export`` of Hermes' lock at ``sha`` with ``extras``, exactly as compile.sh exports it."""
-    uv = shutil.which("uv")
-    if uv is None:
-        print("uv is not installed (needed to export Hermes' uv.lock)", file=sys.stderr)
+    uv, curl = shutil.which("uv"), shutil.which("curl")
+    if uv is None or curl is None:
+        print("uv and curl are needed to fetch and export Hermes' uv.lock", file=sys.stderr)
         raise SystemExit(2)
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise ValueError(f"not a 40-hex sha: {sha!r}")
     for path in ("pyproject.toml", "uv.lock"):
+        # The same fetch compile.sh makes, with the same tool.
         url = HERMES_RAW.format(sha=sha, path=path)
-        try:
-            with urllib.request.urlopen(url, timeout=60) as resp:  # noqa: S310 - https URL to the fixed upstream raw host, sha from the Dockerfile
-                (work / path).write_bytes(resp.read())
-        except OSError as exc:
-            print(f"could not fetch {url}: {exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+        got = subprocess.run(  # noqa: S603 - list argv from shutil.which, no shell; the URL is a fixed host plus a 40-hex sha
+            [curl, "-fsSL", "--max-time", "120", "-o", str(work / path), url],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if got.returncode != 0:
+            print(f"could not fetch {url}: {got.stderr.strip()}", file=sys.stderr)
+            raise SystemExit(2)
     argv = [uv, "export", "--frozen", "--no-hashes", "--no-emit-project", "--no-header", "--no-annotate"]
     for extra in extras:
         argv += ["--extra", extra]
