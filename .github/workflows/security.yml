@@ -369,6 +369,14 @@ jobs:
   # operator/requirements/hermes-security.txt applied. Before that, nothing
   # audited the largest venv on every seat. Hence uv below; a fetch or export
   # failure exits 2.
+  #
+  # Python 3.14, the Hermes venv's interpreter (Hermes v0.22.5 promotion,
+  # ss-console#3564). pip-audit skips every requirement whose environment
+  # marker is false on the interpreter it runs on, and Hermes v0.22 supports
+  # only 3.14, so an audit from 3.13 can read a 3.14-marked export as seven
+  # packages and report it clean. The gate also refuses (exit 2) a Hermes audit
+  # covering fewer than HERMES_MIN_AUDITED packages. The other files it reads
+  # carry no python_version markers, so 3.14 audits them identically.
   pip-audit:
     name: pip audit (seat image Python)
     runs-on: ubuntu-latest
@@ -379,7 +387,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0

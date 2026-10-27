@@ -53,8 +53,9 @@ SKIP_DIR_NAMES = frozenset({"__pycache__", "node_modules", "site-packages", ".gi
 # Whole subtrees never walked. /opt/data is the volume mount (the baked copy is
 # shadowed at runtime); /app/skills is delivered by the skills artifact, not
 # the image; /opt/hermes is the upstream source, of which a skill may only
-# name the venv's bin (walked separately below).
-SKIP_SUBTREES = ("/opt/data", "/app/skills", "/opt/hermes")
+# name the venv's bin (walked separately below); /opt/python3.14 is the Hermes
+# venv's interpreter (Hermes v0.22.5 promotion), never a skill's citation.
+SKIP_SUBTREES = ("/opt/data", "/app/skills", "/opt/hermes", "/opt/python3.14")
 EXTRA_TREES = ("/opt/hermes/.venv/bin",)
 
 VERB_ROW = re.compile(r'\bVerb\(\s*"([a-z0-9_]+)"')

@@ -26,9 +26,13 @@ Exit codes: 0 clean (or every finding allowlisted and unexpired); 1 findings;
 2 pip-audit, uv, or the Hermes lock fetch could not run (never silently green:
 a scanner that cannot run is a HOLD, the send-reconciler lesson).
 
-Run locally (needs network, pip-audit and uv on PATH)::
+Run it on Python 3.14, the Hermes venv's interpreter: pip-audit drops every
+requirement whose marker is false where it runs, and the gate exits 2 when the
+Hermes set it can see is smaller than ``HERMES_MIN_AUDITED``.
 
-    uvx --from pip-audit==2.10.1 --with uv python3 operator/bin/pip_audit_gate.py
+Run locally (needs network, Python 3.14, pip-audit and uv on PATH)::
+
+    uvx --python 3.14 --from pip-audit==2.10.1 --with uv python3 operator/bin/pip_audit_gate.py
     (or: pip install pip-audit==2.10.1 uv && python3 operator/bin/pip_audit_gate.py)
 """
 
@@ -50,6 +54,16 @@ DOCKERFILE = REPO / "operator" / "templates" / "Dockerfile"
 HERMES_OVERRIDES = REQUIREMENTS / "hermes-security.txt"
 HERMES_RAW = "https://raw.githubusercontent.com/NousResearch/hermes-agent/{sha}/{path}"
 HERMES_LABEL = "hermes-venv"
+
+#: The fewest Hermes-venv packages an audit may cover and still count (Hermes
+#: v0.22.5 promotion, ss-console#3564). v0.22.5's export names 130 lines and
+#: pip-audit audits 117 of them on Linux/3.14 (the rest are Windows and
+#: emscripten-only). Hermes v0.22 supports only Python 3.14, and pip-audit drops
+#: every requirement whose environment marker is false on the interpreter it
+#: runs on: an export carrying ``python_version >= '3.14'`` markers, audited from
+#: 3.13, audits seven packages and reports "No known vulnerabilities found". A
+#: count below this floor is that silent green, so the gate exits 2.
+HERMES_MIN_AUDITED = 100
 
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\;]+)")
 
@@ -113,6 +127,24 @@ def apply_overrides(export: str, overrides: dict[str, str]) -> str:
     return "\n".join(out) + "\n"
 
 
+def live_pin_count(text: str, environment: dict[str, str] | None = None) -> int:
+    """How many ``name==version`` lines in ``text`` apply on this interpreter (or ``environment``).
+
+    A line with no marker applies; a line with one applies when the marker
+    evaluates true. This is the set pip-audit will actually read.
+    """
+    from packaging.markers import Marker
+
+    count = 0
+    for line in text.splitlines():
+        if not _PIN.match(line):
+            continue
+        _, sep, marker = line.partition(";")
+        if not sep or Marker(marker.strip()).evaluate(environment):
+            count += 1
+    return count
+
+
 def fetch_hermes_export(sha: str, extras: list[str], work: Path) -> str:
     """``uv export`` of Hermes' lock at ``sha`` with ``extras``, exactly as compile.sh exports it."""
     uv, curl = shutil.which("uv"), shutil.which("curl")
@@ -144,7 +176,7 @@ def fetch_hermes_export(sha: str, extras: list[str], work: Path) -> str:
     return proc.stdout
 
 
-def audit(requirements: Path, *, label: str | None = None, hashed: bool = True) -> list[dict]:
+def audit(requirements: Path, *, label: str | None = None, hashed: bool = True, min_audited: int = 0) -> list[dict]:
     exe = shutil.which("pip-audit")
     if exe is None:
         print("pip-audit is not installed", file=sys.stderr)
@@ -180,6 +212,15 @@ def audit(requirements: Path, *, label: str | None = None, hashed: bool = True) 
         print(f"pip-audit could not scan {label or requirements.name}:", file=sys.stderr)
         print(proc.stderr.strip() or proc.stdout.strip(), file=sys.stderr)
         raise SystemExit(2) from None
+    audited = len(report.get("dependencies", []))
+    if audited < min_audited:
+        print(
+            f"pip-audit audited {audited} package(s) in {label or requirements.name}, fewer than the "
+            f"{min_audited} the gate requires: it is running on an interpreter the set's markers "
+            "exclude, or the export is empty. That is not a clean result.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
     findings: list[dict] = []
     for dep in report.get("dependencies", []):
         for vuln in dep.get("vulns", []) or []:
@@ -202,12 +243,24 @@ def audit_hermes_venv(work: Path) -> list[dict]:
     export = fetch_hermes_export(sha, extras, work)
     overrides = pins(HERMES_OVERRIDES.read_text(encoding="utf-8")) if HERMES_OVERRIDES.is_file() else {}
     effective = work / "hermes-effective.txt"
-    effective.write_text(apply_overrides(export, overrides), encoding="utf-8")
+    effective_text = apply_overrides(export, overrides)
+    effective.write_text(effective_text, encoding="utf-8")
+    live = live_pin_count(effective_text)
     print(
         f"pip-audit: Hermes venv = uv.lock @ {sha[:12]} (extras {', '.join(extras)}), "
-        f"{len(pins(export))} packages, {len(overrides)} override(s) from hermes-security.txt"
+        f"{len(pins(export))} packages, {live} apply on Python "
+        f"{sys.version_info.major}.{sys.version_info.minor}, "
+        f"{len(overrides)} override(s) from hermes-security.txt"
     )
-    return audit(effective, label=f"{HERMES_LABEL}@{sha[:12]}", hashed=False)
+    if live < HERMES_MIN_AUDITED:
+        print(
+            f"only {live} of the Hermes venv's pins apply on this interpreter "
+            f"(Python {sys.version_info.major}.{sys.version_info.minor}); the gate needs "
+            f"{HERMES_MIN_AUDITED}. Run it on the Hermes venv's Python (3.14).",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return audit(effective, label=f"{HERMES_LABEL}@{sha[:12]}", hashed=False, min_audited=HERMES_MIN_AUDITED)
 
 
 def main() -> int:

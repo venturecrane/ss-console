@@ -109,8 +109,14 @@ def test_thinking_off_on_a_current_claude_model_is_adaptive_low(adapter, model):
 @_hermes_only
 def test_the_pinned_hermes_still_renders_disabled_without_the_overlay(adapter):
     """Guards the guard: if upstream stops sending "disabled", the mapping is
-    dead weight and should be removed, not left passing for the wrong reason."""
-    bare = adapter._thinking_kwargs.__wrapped__({"enabled": False}, "claude-opus-5-5", 64)
+    dead weight and should be removed, not left passing for the wrong reason.
+
+    Probed on claude-haiku-5-5, the model every Claude seat titles on
+    (translate's _TITLE_GENERATION_MODEL). At v2026.9.14 this read
+    claude-opus-5-5; v0.22.5 lists Opus 5.5 as mandatory-thinking and OMITS the
+    thinking key for it (so it thinks at its default), and gives Sonnet 5.5
+    ``between_tools``, but still sends ``disabled`` to Haiku 5.5 and Opus 5."""
+    bare = adapter._thinking_kwargs.__wrapped__({"enabled": False}, "claude-haiku-5-5", 64)
     assert bare == {"thinking": {"type": "disabled"}}
 
 
@@ -150,6 +156,11 @@ _KNOWN_NON_ANTHROPIC_DISABLE_SITES = {
     ("plugins/model-providers/minimax/__init__.py", "build_api_kwargs_extras"),
     # The "actual" relay provider's chat_completions effort "none".
     ("plugins/model-providers/actual/__init__.py", "build_api_kwargs_extras"),
+    # Since v0.22.5: DeepSeek's chat_completions effort "none"/"disabled", and
+    # Z.AI (GLM) extra_body thinking off. Both are their own OpenAI-compatible
+    # wires, never Anthropic's.
+    ("plugins/model-providers/deepseek/__init__.py", "build_api_kwargs_extras"),
+    ("plugins/model-providers/zai/__init__.py", "build_api_kwargs_extras"),
 }
 
 

@@ -215,7 +215,10 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
       # Every hash-locked requirements file installs, the way the image
-      # installs it: the seat interpreter (3.13), --no-config, --require-hashes.
+      # installs it: the seat interpreter, --no-config, --require-hashes. That
+      # is 3.13 (Debian 13's python3) for every venv but the Hermes one, and
+      # 3.14 for the two files installed into the Hermes venv, which runs on
+      # /opt/python3.14 since the Hermes v0.22.5 promotion (#3564).
       # Until 2026-09-25 no CI job installed these files at all; the venvs
       # below resolved each pyproject's ranges instead. So a pin set that could
       # never install was green: four Dependabot PRs moved pydantic-core past
@@ -231,12 +234,14 @@ jobs:
         run: |
           set -euo pipefail
           uv venv --python 3.13 /tmp/reqcheck
+          uv venv --python 3.14 /tmp/reqcheck314
           checked=0
           for f in *.txt; do
             deps=()
-            case "$f" in hermes-overlay.txt|hermes-security.txt) deps=(--no-deps) ;; esac
+            py=/tmp/reqcheck/bin/python
+            case "$f" in hermes-overlay.txt|hermes-security.txt) deps=(--no-deps); py=/tmp/reqcheck314/bin/python ;; esac
             echo "== ${f} =="
-            uv pip install --python /tmp/reqcheck/bin/python --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
+            uv pip install --python "$py" --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
             checked=$((checked + 1))
           done
           [ "$checked" -gt 0 ] || { echo "::error::no requirements files found"; exit 1; }
@@ -318,14 +323,21 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
-      # The seat interpreter (Debian 13 ships 3.13), not the 3.11 the standalone
-      # repo tested on. ruff is pinned to the same version as the substrate job.
+      # The interpreter the overlay runs on in the seat: the Hermes venv's,
+      # 3.14 since the Hermes v0.22.5 promotion (#3564; 3.13 before it, the
+      # 3.11 the standalone repo tested on before that). ruff is pinned to the
+      # same version as the substrate job.
       - name: Install the overlay with its dev extras
         if: steps.changes.outputs.relevant == 'true'
         run: |
           set -euo pipefail
-          uv venv --python 3.13 /tmp/overlayv
-          uv pip install --python /tmp/overlayv/bin/python -e "./operator/hermes-smd-overlay[dev]" ruff==0.15.17
+          uv venv --python 3.14 /tmp/overlayv
+          # ruamel.yaml and psutil: the tests that import the pinned Hermes
+          # source (HERMES_AGENT_SRC, below) need them since v0.22.5, which
+          # reads YAML through ruamel (hermes_yaml.py) and imports psutil from
+          # tools/file_tools.py. Versions are the ones v0.22.5's uv.lock pins.
+          uv pip install --python /tmp/overlayv/bin/python -e "./operator/hermes-smd-overlay[dev]" ruff==0.15.17 \
+            ruamel.yaml==0.18.16 psutil==7.2.2
 
       - name: ruff check + format (overlay)
         if: steps.changes.outputs.relevant == 'true'
@@ -428,12 +440,12 @@ jobs:
       # uv's cache, keyed on the Hermes sha and the seat interpreter: Hermes'
       # dependency closure is what is slow to resolve, and it moves only with
       # the sha. Not pruned, so the built wheels survive between runs.
-      - name: Set up uv (cache hermes-deps-<sha>-py3.13)
+      - name: Set up uv (cache hermes-deps-<sha>-py3.14)
         if: steps.changes.outputs.relevant == 'true'
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           enable-cache: true
-          cache-suffix: hermes-deps-${{ steps.pin.outputs.sha }}-py3.13
+          cache-suffix: hermes-deps-${{ steps.pin.outputs.sha }}-py3.14
           cache-dependency-glob: operator/hermes-smd-overlay/pyproject.toml
           prune-cache: false
 
@@ -452,7 +464,7 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: |
           set -euo pipefail
-          uv venv --python 3.13 /tmp/e2ev
+          uv venv --python 3.14 /tmp/e2ev
           uv pip install --python /tmp/e2ev/bin/python -e "${HERMES_AGENT_SRC}[mcp,anthropic]"
           uv pip install --python /tmp/e2ev/bin/python -e "./operator/hermes-smd-overlay[e2e]"
 

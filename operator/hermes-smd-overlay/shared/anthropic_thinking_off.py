@@ -7,8 +7,13 @@ and any ``auxiliary.<task>`` or main turn configured ``reasoning_effort: none``
 request funnels through ``agent/anthropic_adapter.py`` ``_thinking_kwargs``
 (called from ``build_anthropic_kwargs``), which renders thinking-off as
 ``thinking: {"type": "disabled"}`` for every adaptive Claude model outside a
-hard-coded mandatory list that names only ``claude-fable`` (pinned Hermes
-v2026.9.14).
+hard-coded mandatory list that names only ``claude-fable`` (Hermes v2026.9.14).
+At v0.22.5 the list also names ``claude-opus-5-5`` (thinking-off is then
+omitted, so the model thinks at its default), Sonnet 5.5 gets
+``{"type": "between_tools"}``, and every other adaptive Claude model still gets
+``disabled``; the seam (``_thinking_kwargs(reasoning_config, model,
+effective_max_tokens)``) and ``_supports_adaptive_thinking`` are unchanged, so
+this wrapper still decides thinking-off for every adaptive Claude model.
 
 The current API does not take that. ``disabled`` is a 400 on Claude Opus 5.5
 and Claude Sonnet 5.5 at every effort, and on Fable 5/5.1; on Claude Opus 5
