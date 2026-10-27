@@ -106,6 +106,20 @@ def test_broker_inputs_are_pinned() -> None:
     assert inputs <= set(pinned), f"broker.in names {sorted(inputs - set(pinned))} unpinned"
 
 
+def test_hermes_security_overrides_are_exactly_the_inputs() -> None:
+    # hermes-security.txt moves Hermes-locked packages for named advisories
+    # (DP-1, 2026-10-27). It must pin every package hermes-security.in names
+    # and nothing else: an extra pin would move a Hermes-locked version no
+    # advisory asked for, and a missing one would leave the advisory open.
+    inputs = {
+        _normalize(re.split(r"[<>=~!]", line.strip(), maxsplit=1)[0])
+        for line in (REQUIREMENTS / "hermes-security.in").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    assert inputs, "hermes-security.in names nothing"
+    assert set(_pinned(REQUIREMENTS / "hermes-security.txt")) == inputs
+
+
 @pytest.mark.parametrize("requirements", sorted(REQUIREMENTS.glob("*.txt")), ids=lambda p: p.name)
 def test_every_pin_is_exact_and_hashed(requirements: Path) -> None:
     text = requirements.read_text(encoding="utf-8")

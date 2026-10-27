@@ -1,0 +1,31 @@
+# Security overrides for the Hermes gateway venv (/opt/hermes/.venv).
+#
+# Each line moves ONE package that Hermes' own uv.lock (at the Dockerfile's
+# HERMES_UPSTREAM_SHA) installs, to the release that fixes a named advisory.
+# Everything else in that venv stays exactly at the version Hermes locked.
+# compile.sh resolves this file together with the rest of Hermes' locked set,
+# so a line here cannot pick a version some other Hermes package refuses;
+# the image installs the result (hermes-security.txt) with --require-hashes
+# right after `uv sync`, and hermes_pip_check.py then proves the venv is
+# consistent.
+#
+# Admission rule: an override is near zero-risk to Hermes or it does not go
+# here. A fix that changes an API Hermes calls, or that Hermes exact-pins on
+# purpose (PyJWT), is a Hermes promotion (move HERMES_UPSTREAM_SHA through its
+# own rehearsal), and its advisories sit in .github/pip-audit-allowlist.json
+# until that promotion lands. pip_audit_gate.py audits the venv's effective
+# set (Hermes' lock with these overrides applied), so nothing in it is unseen.
+#
+# Remove a line once Hermes' lock at HERMES_UPSTREAM_SHA carries the fix.
+
+# certifi 2026.5.20 -> fix: PYSEC-2026-4320 / GHSA-6q48-6c7w-9gw2 (critical).
+# The bundle still trusts emSign roots whose intermediate CA keys were
+# compromised; httpx (and so the Anthropic SDK) verifies TLS against it.
+# certifi is a CA data bundle with no API surface. hermes-agent exact-pins
+# certifi==2026.5.20, so hermes_pip_check.py tolerates that one requirement,
+# and only while the installed version is the pin below.
+certifi>=2026.10.19
+
+# urllib3 2.7.0 -> fix: PYSEC-2026-4175 / -4176 / -4177 (high). In-major
+# release; hermes-agent declares urllib3>=2.7.0,<3, which 2.8 satisfies.
+urllib3>=2.8.0

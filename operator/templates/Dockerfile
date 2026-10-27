@@ -273,6 +273,29 @@ RUN uv pip install --no-cache-dir --no-deps --python /opt/hermes/.venv/bin/pytho
 # afterwards with --no-deps (a path cannot carry a hash).
 COPY operator/requirements/ /app/requirements/
 
+# ---------- Security overrides for the Hermes venv ----------
+# Hermes' uv.lock at HERMES_UPSTREAM_SHA is installed exactly (the `uv sync
+# --frozen` above), with these exceptions and no others. hermes-security.txt
+# moves two Hermes-locked packages to the release that fixes a named advisory
+# (2026-10-27 code review, DP-1), each near zero-risk to Hermes:
+#   certifi 2026.5.20 -> the pin in the file: PYSEC-2026-4320, emSign roots
+#     with compromised intermediate CA keys. A CA data bundle, no API surface;
+#     httpx (and so the Anthropic SDK) verifies TLS against it.
+#   urllib3 2.7.0 -> 2.8.x: PYSEC-2026-4175/4176/4177. In-major; Hermes
+#     declares urllib3>=2.7.0,<3.
+# Every other Hermes-locked version stays where Hermes put it; the advisories
+# still open in that set are visible to pip_audit_gate.py (it audits this
+# venv's effective set, Hermes' lock with these overrides applied) and are
+# time-boxed in .github/pip-audit-allowlist.json until a Hermes promotion
+# carries the fix. compile.sh resolves the file against the rest of Hermes'
+# locked set, so no other Hermes package refuses these versions;
+# hermes-agent's own exact pin on certifi is the one requirement the move
+# leaves unmet, and hermes_pip_check.py (the overlay step below) tolerates
+# that one by name and fails on anything else. --no-config: this runs in
+# /opt/hermes, whose [tool.uv] overrides cannot carry a hash.
+RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
+      --no-config --require-hashes --no-deps -r /app/requirements/hermes-security.txt
+
 # ---------- hermes-smd overlay (plugins + CLI) ----------
 # Pip-install the overlay from the build context (operator/hermes-smd-overlay/,
 # ADR 0095: one repository for the seat runtime; until 2026-10-22 this was a
@@ -287,23 +310,27 @@ COPY operator/requirements/ /app/requirements/
 #   1. the overlay's third-party dependencies that Hermes' own lock does not
 #      already install, hash-locked in hermes-overlay.txt (compile.sh derives
 #      it from operator/hermes-smd-overlay/pyproject.toml, constrained to Hermes'
-#      uv.lock at HERMES_UPSTREAM_SHA, so no Hermes-locked version moves).
+#      uv.lock at HERMES_UPSTREAM_SHA with the security overrides above
+#      applied, so no Hermes-locked version moves beyond those two).
 #      --no-config for the same reason as the broker venv below: this runs in
 #      /opt/hermes, whose [tool.uv] overrides cannot carry a hash;
 #   2. the overlay itself, a path install, --no-deps. Its build backend
 #      (setuptools, wheel) resolves from PyPI under build isolation, exactly as
 #      the Hermes install above does; `--no-build-isolation` for both is the
 #      filed follow-up;
-#   3. `uv pip check`, which fails the BUILD, not a seat, if any requirement
-#      the overlay (or anything else in the venv) declares is unmet. That is
-#      the backstop for an overlay that grows a dependency before compile.sh
+#   3. `uv pip check` through hermes_pip_check.py, which fails the BUILD, not
+#      a seat, if any requirement the overlay (or anything else in the venv)
+#      declares is unmet. It tolerates exactly one: hermes-agent's exact pin on
+#      certifi, while the installed certifi is hermes-security.txt's pin. That
+#      is the backstop for an overlay that grows a dependency before compile.sh
 #      is re-run; the `overlay` CI job runs compile.sh and fails on a diff.
 COPY operator/hermes-smd-overlay/ /app/overlay-src/
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-overlay.txt \
  && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-deps /app/overlay-src \
- && uv pip check --python /opt/hermes/.venv/bin/python \
+ && python3 -I /app/requirements/hermes_pip_check.py \
+      /opt/hermes/.venv/bin/python /app/requirements/hermes-security.txt \
  && rm -rf /app/overlay-src
 
 # ---------- Workspace capability broker ----------
