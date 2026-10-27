@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from shared import couples_slots, cron_space
+from shared import space as space_mod
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,11 @@ class _DesiredJob:
     # A couples slot (shared.couples_slots): its pre-run script is the
     # conversation-settings gate, staged by ``stage_slot_gate``, not a skill script.
     slot_gate: bool = False
+    # Hermes' per-job ``attach_to_session``: the delivered text is also written
+    # into the target chat's conversation. Hermes mirrors an explicit
+    # ``platform:chat_id`` target ONLY with this set (cron/scheduler_delivery.py
+    # ``_target_mirror_eligible``); the global ``cron.mirror_delivery`` never does.
+    attach_to_session: bool = False
 
 
 class CronStore(Protocol):
@@ -273,6 +279,15 @@ def _slot_jobs(pslug: str, slots: list[tuple[str, str]], space_cfg: Any) -> list
                 space=space,
                 deliver=deliver,
                 slot_gate=True,
+                # A person's routine lands in that person's own Telegram DM, so
+                # its text joins that DM's conversation: asked "send it again",
+                # or answered later, the agent knows what it asked. Same space
+                # as the delivery, so nothing crosses partners.
+                attach_to_session=bool(
+                    space
+                    and space.startswith(space_mod.person_key(""))
+                    and (deliver or "").startswith("telegram:")
+                ),
             )
         )
     return out
@@ -404,6 +419,8 @@ def materialize_cron(
             }
             if job.deliver is not None:
                 kwargs["deliver"] = job.deliver
+            if job.attach_to_session:
+                kwargs["attach_to_session"] = True
             ref = staged_refs.get((pslug, job.name))
             if ref is not None:
                 # no_agent stays False: when the gate wakes the agent it runs the
