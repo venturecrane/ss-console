@@ -115,8 +115,8 @@ lately that you appreciated, big or small? Reply here whenever you like."
 
    Which note: the one in this chat's conversation if it is there; otherwise
    their most recent note in `gratitude`, which is a `note-*` record you can
-   read here, or a `shared-*` record whose listing shows `from:` their id (the
-   seat stamps who filed it). Send that one. Never ask them to say it again
+   read here, or a `shared-*` record whose listing shows `from: you` (the seat
+   stamps who filed it). Read it with `record_store_read` and send its words. Never ask them to say it again
    when one of these holds it, and never say what you could or could not find.
 
 5. If they want it on the agenda, write `shared-<date>-<id>.md` with

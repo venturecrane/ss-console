@@ -81,8 +81,8 @@
       "adapterPath": "operator/roles/couples/persona.md",
       "overlayPath": "tests/fixtures/roles/couples/persona.md",
       "syncNote": "The couples role persona (ss#3282). The seat image ships it at /app/roles/couples/persona.md and the overlay's translate renders it verbatim into SOUL.md; the overlay's tests/test_role_persona.py proves the persona and each of its safety rules arrive word for word by reading a byte copy. Paired so an edit on either side fails CI until both copies move together; the overlay half is a byte copy, so both hashes are equal. Current text: either partner acts alone, an assistant not a mediator, pictures and voice messages, and the partner_message_send bullet (ADR 0097).",
-      "sha256": "23d1a65f748dbb2ee0d23dd8c77226c974961c6adae7b40f1865155dba114d9f",
-      "overlaySha256": "23d1a65f748dbb2ee0d23dd8c77226c974961c6adae7b40f1865155dba114d9f"
+      "sha256": "09ec02d5c77c1073a7264e99138b3f8b2024289bb3398005fb0fd5fcbbc8bf6c",
+      "overlaySha256": "09ec02d5c77c1073a7264e99138b3f8b2024289bb3398005fb0fd5fcbbc8bf6c"
     },
     {
       "adapterPath": "operator/customers/_couples-template/customer.yaml",
