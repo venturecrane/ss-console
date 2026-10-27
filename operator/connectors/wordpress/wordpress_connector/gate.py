@@ -7,7 +7,7 @@ The checker is ``advertising_gate_check.py``, shipped root-owned in the image at
 this connector's venv never has to carry the checker's dependencies and the
 checker the seat runs is exactly the file the image shipped.
 
-Interface (owned by the checker): ``--item <file> --channel <channel>
+Interface (owned by the checker): ``--item <file> --channel blog
 --registers <yaml> --json``. Exit 0 pass, 1 block, 2 usage or IO. JSON
 ``{"verdict": "pass"|"block", "findings": [{"rule", "severity", "span",
 "message"}]}`` with severity ``BLOCK`` or ``FLAG``. FLAG findings alone still
@@ -32,6 +32,11 @@ from typing import Any
 DEFAULT_GATE = "/app/operator/templates/drafting/advertising_gate_check.py"
 DEFAULT_REGISTERS = "/var/lib/smd-config/marketing/marketing-firm.yaml"
 GATE_TIMEOUT_SECONDS = 60
+# Every write this connector makes is a WordPress post, which is a blog post.
+# The channel is fixed here, never taken from the model: the checker's lighter
+# channels (note, social) drop the blog BLOCK rules, so a caller-chosen channel
+# would let a blog post past rules written for blog posts.
+CHANNEL = "blog"
 
 
 @dataclass
@@ -81,8 +86,8 @@ def _clean_findings(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
-def run_gate(text: str, channel: str = "blog") -> GateResult:
-    """Run the checker over ``text``. Never raises: every failure is a refusal."""
+def run_gate(text: str) -> GateResult:
+    """Run the checker over ``text`` as a blog post. Never raises: every failure is a refusal."""
     gate = _gate_path()
     if not Path(gate).is_file():
         return GateResult(False, f"advertising gate checker is absent at {gate}; refusing the write (fail closed)")
@@ -98,7 +103,7 @@ def run_gate(text: str, channel: str = "blog") -> GateResult:
                     "--item",
                     item,
                     "--channel",
-                    channel,
+                    CHANNEL,
                     "--registers",
                     _registers_path(),
                     "--json",

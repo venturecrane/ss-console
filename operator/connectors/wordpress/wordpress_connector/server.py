@@ -382,7 +382,6 @@ def create_pending_post(
     categories: list[int] | None = None,
     tags: list[int] | None = None,
     featured_media: int | None = None,
-    channel: str = "blog",
 ) -> Any:
     """Create a blog post IN PENDING STATUS for a person at the firm to review
     and publish. This never publishes: the status is fixed to pending and cannot
@@ -391,7 +390,9 @@ def create_pending_post(
     "reason", "findings"}`` with nothing created. On success returns ``{id,
     status: "pending", title, link, edit_url, gate: {verdict, flags}}``; list
     every FLAG for the reviewer. ``categories`` / ``tags`` are ids from
-    list_categories / list_tags; ``featured_media`` is an id from upload_media."""
+    list_categories / list_tags; ``featured_media`` is an id from upload_media.
+    The gate always runs the blog rule set: a WordPress post is a blog post, so
+    there is no channel to choose."""
     if not (title or "").strip() or not (content_html or "").strip():
         raise ValueError("title and content_html are required")
     body: dict[str, Any] = {"title": title, "content": content_html, "status": "pending"}
@@ -405,7 +406,7 @@ def create_pending_post(
         body["tags"] = tgs
     if featured_media:
         body["featured_media"] = int(featured_media)
-    result = gate.run_gate(_gate_text(title, excerpt, content_html), channel or "blog")
+    result = gate.run_gate(_gate_text(title, excerpt, content_html))
     if not result.passed:
         return _refusal(result.reason, result.findings)
     client = _get_client()
@@ -424,7 +425,6 @@ def update_pending_post(
     categories: list[int] | None = None,
     tags: list[int] | None = None,
     featured_media: int | None = None,
-    channel: str = "blog",
 ) -> Any:
     """Revise a post this connector's user wrote that is still pending or
     draft. Refuses any post that is published, scheduled or private, and any
@@ -460,7 +460,7 @@ def update_pending_post(
     new_title = title if title is not None else _rendered(current.get("title"))
     new_content = content_html if content_html is not None else _rendered(current.get("content"))
     new_excerpt = excerpt if excerpt is not None else _rendered(current.get("excerpt"))
-    result = gate.run_gate(_gate_text(new_title, new_excerpt, new_content), channel or "blog")
+    result = gate.run_gate(_gate_text(new_title, new_excerpt, new_content))
     if not result.passed:
         return _refusal(result.reason, result.findings)
 
