@@ -61,11 +61,15 @@ def file_workbook(
     *,
     tries: int = READBACK_TRIES,
     pause: float = READBACK_PAUSE_SECONDS,
+    record: str = "delivery.json",
 ) -> dict[str, Any]:
-    """``{folder_id, file_id, name, size, sha256}`` once read back and equal."""
+    """``{folder_id, file_id, name, size, sha256}`` once read back and equal.
+    ``record`` names this file's own send record: each workbook a job files
+    (the list, then its one-sheet-per-case copy) keeps its own, so a resume
+    never resends either."""
     blob = local.read_bytes()
     sha, name = hashlib.sha256(blob).hexdigest(), local.name
-    rec_path = data / "delivery.json"
+    rec_path = data / record
     rec: dict[str, Any] = json.loads(rec_path.read_text(encoding="utf-8")) if rec_path.is_file() else {}
     if rec.get("sha256") and rec["sha256"] != sha:
         raise LitigationFailed(
