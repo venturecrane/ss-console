@@ -256,12 +256,24 @@ class Ticker:
         reset it, since each release keeps its own rows), so the ring waits for
         it. Otherwise the ring would restart twice in minutes for nothing, as the
         pilot did on 2026-10-26 (1e696594 at 02:36Z, a48c6148 at 02:57Z).
+
+        A tick advances EVERY ring that has a release ready, one release per ring,
+        not only the first it finds. Each ring is a different set of seats, and
+        the newest release, always ready for ring 0 while merges flow, would
+        otherwise take every tick: on 2026-10-26 the client ring sat ready for
+        its release while three ticks in a row went to staging.
         """
         newest = candidates[0]["release_id"]
         tag = " (dry run, nothing deployed or recorded)" if dry_run else ""
         if dry_run:
-            rel, plan = self._choose(rings, candidates, tag)
-            return plan.code
+            taken: set[int] = set()
+            code = TICK_WAITING
+            while True:
+                rel, plan = self._choose(rings, candidates, tag, taken)
+                if plan.code != TICK_PROGRESS or plan.ring is None:
+                    return code if taken else plan.code
+                taken.add(plan.ring.number)
+                code = TICK_PROGRESS
         lease = Lease(self.store, holder, newest)
         try:
             lease.__enter__()
@@ -269,17 +281,26 @@ class Ticker:
             self.log(f"tick {newest}: waiting: {exc}")
             return TICK_WAITING
         try:
-            rel, plan = self._choose(rings, candidates, tag)
-            if plan.code == TICK_PROGRESS:
-                return self._advance(rings, rel, plan, do_seat_for(rel), holder, lease)
-            if plan.code == TICK_HALTED_STANDING:
-                return plan.code
-            return self._complete(rings, candidates[0], TICK_WAITING)
+            taken = set()
+            while True:
+                rel, plan = self._choose(rings, candidates, tag, taken)
+                if plan.code == TICK_PROGRESS and plan.ring is not None:
+                    taken.add(plan.ring.number)
+                    if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease) == TICK_HALT:
+                        return TICK_HALT
+                    continue
+                if taken:
+                    return TICK_PROGRESS
+                if plan.code == TICK_HALTED_STANDING:
+                    return plan.code
+                return self._complete(rings, candidates[0], TICK_WAITING)
         finally:
             lease.__exit__(None, None, None)
 
-    def _choose(self, rings: list[Ring], candidates: list[dict[str, Any]], tag: str) -> tuple[dict[str, Any], TickPlan]:
-        """The one release and step this tick takes, or why none (logged either way)."""
+    def _choose(
+        self, rings: list[Ring], candidates: list[dict[str, Any]], tag: str, taken: set[int]
+    ) -> tuple[dict[str, Any], TickPlan]:
+        """The next release and ring this tick advances (a ring in ``taken`` already moved), or why none."""
         newer: list[tuple[str, dict[str, dict[str, Any]]]] = []
         for i, rel in enumerate(candidates):
             rid = rel["release_id"]
@@ -293,6 +314,9 @@ class Ticker:
                 lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
                 now,
             )
+            if plan.code == TICK_PROGRESS and plan.ring is not None and plan.ring.number in taken:
+                newer.append((rid, rows))
+                continue  # that ring already moved this tick
             self.log(f"tick {rid}{tag}: {plan.reason}")
             if plan.code == TICK_HALTED_STANDING and i == 0:
                 return rel, plan
