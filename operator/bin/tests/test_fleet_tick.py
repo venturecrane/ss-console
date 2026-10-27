@@ -27,6 +27,7 @@ from bin.lib.fleet.tick import (
     TICK_PROGRESS,
     TICK_WAITING,
     Ticker,
+    overlay_newer,
     plan_tick,
 )
 from bin.tests.fleet_fakes import DIGEST, fresh_status, selftest_json
@@ -188,18 +189,62 @@ def _done_releases(w: World, seat: str) -> list[str]:
     return [r["release_id"] for r in w.store.rollouts.values() if r["customer_slug"] == seat and r["state"] == "done"]
 
 
-def test_a_newer_release_does_not_starve_the_later_rings(tmp_path) -> None:
+def _release_n(w: World, n: int) -> dict:
+    rel = {**w.rel, "release_id": f"img-20261019{n:02d}00-{str(n) * 8}"}
+    w.store.insert_release(rel)
+    return rel
+
+
+def test_a_run_of_merges_faster_than_the_bake_does_not_starve_the_later_rings(tmp_path) -> None:
+    # Merges every 20 minutes against a 30-minute bake: each new release takes
+    # ring 0 first and is always still baking there.
+    w = _tick_world(tmp_path)
+    a = w.rel
+    b, c, d = _release_n(w, 2), _release_n(w, 3), _release_n(w, 4)
+    assert _promote(w, 0, [a]) == TICK_PROGRESS
+    assert _promote(w, 20, [b, a]) == TICK_PROGRESS
+    assert _promote(w, 40, [c, b, a]) == TICK_PROGRESS
+    assert _promote(w, 60, [d, c, b, a]) == TICK_PROGRESS
+    assert _done_releases(w, "smd-staging") == [r["release_id"] for r in (a, b, c, d)]
+    assert _done_releases(w, "pilot-smokeball") == []
+    # A has been eligible for ring 1 for one full bake and every newer release is
+    # still on ring 0. FALSIFIER: restart-at-ring-0, or wait for the next newer
+    # release with no bound, and the pilot never moves while merges keep landing.
+    assert _promote(w, 61, [d, c, b, a]) == TICK_PROGRESS
+    assert _done_releases(w, "pilot-smokeball") == [a["release_id"]]
+    assert any("baked on the earlier rings" in line for line in w.logs)
+
+
+def test_a_seat_done_on_a_newer_release_is_never_pending_for_an_older_one() -> None:
+    # FALSIFIER: drop overlay_newer and the older release plans the pilot as
+    # pending, which would deploy it backwards onto the older image.
+    now = datetime(2026, 10, 23, 2, 0, tzinfo=timezone.utc)
+    older_rows = {"smd-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}}
+    newer_rows = {"pilot-smokeball": {"state": "done", "finished_at": "2026-10-23T00:20:00Z"}}
+    merged = overlay_newer(older_rows, [newer_rows])
+    plan = plan_tick(RINGS, merged, {}, lambda seats: [], now)
+    assert plan.code == TICK_PROGRESS and plan.ring is not None and plan.ring.number == 2
+    assert "pilot-smokeball" not in (plan.seats or [])
+    # A seat done on the older release keeps its own finish time for the bake.
+    own = overlay_newer({"smd-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}},
+                        [{"smd-staging": {"state": "done", "finished_at": "2026-10-23T01:59:00Z"}}])  # fmt: skip
+    assert own["smd-staging"]["finished_at"] == "2026-10-23T00:00:00Z"
+
+
+def test_an_older_release_gives_way_to_a_newer_one_about_to_reach_the_ring(tmp_path) -> None:
+    # 2026-10-26: the pilot took 1e696594 at 02:36Z and a48c6148 at 02:57Z, two
+    # restarts in 21 minutes, because the older release moved while the newer
+    # one was already done on staging and minutes from its bake.
     w = _tick_world(tmp_path)
     older, newer = _two_releases(w)
-    assert _promote(w, 0, [older]) == TICK_PROGRESS  # older takes ring 0
-    # A merge lands: the newest release takes ring 0 first.
-    assert _promote(w, 31, [newer, older]) == TICK_PROGRESS
-    assert _done_releases(w, "smd-staging") == [older["release_id"], newer["release_id"]]
-    # Newest is baking on ring 0. FALSIFIER: restart-at-ring-0 waits here, and the
-    # pilot never moves while merges keep landing.
-    assert _promote(w, 41, [newer, older]) == TICK_PROGRESS
-    assert _done_releases(w, "pilot-smokeball") == [older["release_id"]]
-    assert any("baked on the earlier rings" in line for line in w.logs)
+    _promote(w, 0, [older])  # older on staging
+    _promote(w, 31, [newer, older])  # newer on staging; older eligible since minute 30
+    # FALSIFIER: drop the give-way rule and the pilot takes older here.
+    assert _promote(w, 41, [newer, older]) == TICK_WAITING
+    assert _done_releases(w, "pilot-smokeball") == []
+    assert any("comes next" in line for line in w.logs)
+    assert _promote(w, 62, [newer, older]) == TICK_PROGRESS  # newer baked: it goes, once
+    assert _done_releases(w, "pilot-smokeball") == [newer["release_id"]]
 
 
 def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:

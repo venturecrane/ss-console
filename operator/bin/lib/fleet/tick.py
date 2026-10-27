@@ -112,6 +112,39 @@ def overlay_newer(rows: dict[str, dict[str, Any]], newer: list[dict[str, dict[st
     return merged
 
 
+def _newer_done_on_ring_before(
+    rings: list[Ring],
+    ring: Ring | None,
+    newer: list[tuple[str, dict[str, dict[str, Any]]]],
+    own: dict[str, dict[str, Any]],
+    now: datetime,
+) -> str | None:
+    """A newer release to wait for instead of moving an older one into ``ring``, if any.
+
+    One that is already done on every seat of the ring before (its own rows),
+    and only while the older release has been eligible for less than that
+    ring's bake: a run of merges faster than the bake would otherwise defer
+    every older release to the next newer one forever, which is the starvation
+    promotion exists to end. So waiting costs at most one bake.
+    """
+    if ring is None:
+        return None
+    before = [r for r in rings if r.seats and r.number < ring.number]
+    if not before:
+        return None
+    prev = before[-1]
+    finished = [_done_at(own, s) for s in prev.seats]
+    if not finished or any(t is None for t in finished):
+        return None
+    eligible_for = (now - max(t for t in finished if t is not None)).total_seconds() / 60.0 - prev.bake_minutes
+    if eligible_for >= prev.bake_minutes:
+        return None
+    for rid, rows in newer:
+        if all((rows.get(s) or {}).get("state") == "done" for s in prev.seats):
+            return rid
+    return None
+
+
 def plan_tick(
     rings: list[Ring],
     latest: dict[str, dict[str, Any]],
@@ -216,14 +249,19 @@ class Ticker:
         earlier rings moves on. A seat already done on a newer release is never
         moved back (:func:`overlay_newer`). A halt on the newest release stops
         everything, as before; a halt on an older one only skips that release.
+
+        An older release never moves into a ring that a newer one is about to
+        reach: when a newer release is already done on the ring before it, its
+        bake finishes within that ring's bake_minutes (a later merge does not
+        reset it, since each release keeps its own rows), so the ring waits for
+        it. Otherwise the ring would restart twice in minutes for nothing, as the
+        pilot did on 2026-10-26 (1e696594 at 02:36Z, a48c6148 at 02:57Z).
         """
         newest = candidates[0]["release_id"]
+        tag = " (dry run, nothing deployed or recorded)" if dry_run else ""
         if dry_run:
-            for i, (rel, plan) in enumerate(self._plans(rings, candidates)):
-                self.log(f"tick {rel['release_id']} (dry run, nothing deployed or recorded): {plan.reason}")
-                if plan.code == TICK_PROGRESS or (i == 0 and plan.code == TICK_HALTED_STANDING):
-                    return plan.code
-            return TICK_WAITING
+            rel, plan = self._choose(rings, candidates, tag)
+            return plan.code
         lease = Lease(self.store, holder, newest)
         try:
             lease.__enter__()
@@ -231,36 +269,43 @@ class Ticker:
             self.log(f"tick {newest}: waiting: {exc}")
             return TICK_WAITING
         try:
-            for i, (rel, plan) in enumerate(self._plans(rings, candidates)):
-                self.log(f"tick {rel['release_id']}: {plan.reason}")
-                if plan.code == TICK_HALTED_STANDING:
-                    if i == 0:
-                        return plan.code
-                    continue  # superseded on the seats that matter; never blocks the newest
-                if plan.code == TICK_PROGRESS:
-                    if i:
-                        self.log(f"tick {rel['release_id']}: the newest release that has baked on the earlier rings")
-                    return self._advance(rings, rel, plan, do_seat_for(rel), holder, lease)
+            rel, plan = self._choose(rings, candidates, tag)
+            if plan.code == TICK_PROGRESS:
+                return self._advance(rings, rel, plan, do_seat_for(rel), holder, lease)
+            if plan.code == TICK_HALTED_STANDING:
+                return plan.code
             return self._complete(rings, candidates[0], TICK_WAITING)
         finally:
             lease.__exit__(None, None, None)
 
-    def _plans(self, rings: list[Ring], candidates: list[dict[str, Any]]):
-        newer: list[dict[str, dict[str, Any]]] = []
-        for rel in candidates:
-            rows = self.store.release_latest(rel["release_id"])
+    def _choose(self, rings: list[Ring], candidates: list[dict[str, Any]], tag: str) -> tuple[dict[str, Any], TickPlan]:
+        """The one release and step this tick takes, or why none (logged either way)."""
+        newer: list[tuple[str, dict[str, dict[str, Any]]]] = []
+        for i, rel in enumerate(candidates):
+            rid = rel["release_id"]
+            rows = self.store.release_latest(rid)
+            merged = overlay_newer(rows, [r for _, r in newer])
             now = datetime.fromtimestamp(self.clock(), timezone.utc)
-            yield (
-                rel,
-                plan_tick(
-                    rings,
-                    overlay_newer(rows, newer),
-                    self.store.holds(),
-                    lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
-                    now,
-                ),
+            plan = plan_tick(
+                rings,
+                merged,
+                self.store.holds(),
+                lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
+                now,
             )
-            newer.append(rows)
+            self.log(f"tick {rid}{tag}: {plan.reason}")
+            if plan.code == TICK_HALTED_STANDING and i == 0:
+                return rel, plan
+            if plan.code == TICK_PROGRESS:
+                if not i:
+                    return rel, plan
+                coming = _newer_done_on_ring_before(rings, plan.ring, newer, merged, now)
+                if coming is None:
+                    self.log(f"tick {rid}{tag}: the newest release that has baked on the earlier rings")
+                    return rel, plan
+                self.log(f"tick {rid}{tag}: not taken; {coming} is already done on the ring before and comes next")
+            newer.append((rid, rows))
+        return candidates[0], TickPlan(TICK_WAITING, "nothing to advance this tick")
 
     def _step(self, rings: list[Ring], release: dict[str, Any], do_seat: Callable[[str, int], SeatOutcome],
               holder: str, lease: Lease) -> int:  # fmt: skip
