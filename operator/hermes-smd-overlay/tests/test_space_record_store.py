@@ -288,6 +288,13 @@ def test_owner_space_normalizes(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
+def test_a_read_by_a_stale_name_points_back_to_the_listing(seat, monkeypatch):
+    """FALSIFIER: raise the bare RecordStoreError text in _read_handler."""
+    telegram_dm(monkeypatch, B_TG)
+    with pytest.raises(RuntimeError, match="call record_store_list"):
+        seat["plugin"]._read_handler({"store": "notes", "name": "gone.md"}, session_id="s")
+
+
 def test_shared_record_from_a_dm_is_stamped_with_the_writer(seat, monkeypatch):
     """FALSIFIER: drop the ``_stamp_shared_author`` call in on_pre_tool_call."""
     telegram_dm(monkeypatch, B_TG)
