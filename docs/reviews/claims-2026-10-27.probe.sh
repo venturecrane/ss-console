@@ -415,6 +415,14 @@ p=M._plan(files,prior,M.load_manifest(st,'m'),['f1'],dt.date(2026,10,27),{'f1':'
 print(p['trigger_files'], V.GROUP_DISCOVERY in p['read_groups'])" 2>/dev/null | tail -1)
 check MC1 FIXED exact "['f1'] True" "$MC1" "#3558 a court-only list holds back the discovery paper it skipped"
 
+# DP1 (#3565): the gateway venv carries patched certifi and urllib3 over Hermes'
+# lock, and the audit gate reads Hermes' lock (the other 12 advisories are
+# allowlisted to 2026-11-10 pending a Hermes promotion, #3564).
+check DP1  FIXED at-least 1 "$(c -E '^certifi==2026\.1[0-2]\.' operator/requirements/hermes-security.txt)" "#3565 the gateway venv's certifi is past the emSign fix (2026.10.18)"
+check DP1b FIXED at-least 1 "$(c -E '^urllib3==2\.(8|9|[1-9][0-9])\.' operator/requirements/hermes-security.txt)" "#3565 the gateway venv's urllib3 is 2.8 or later"
+check DP1c FIXED at-least 1 "$(c 'hermes-security.txt' operator/templates/Dockerfile)" "#3565 the image installs the override file into the Hermes venv"
+check DP1d FIXED at-least 1 "$(c 'Hermes venv' operator/bin/pip_audit_gate.py)" "#3565 the audit gate reads Hermes' lock, not only our requirements"
+
 echo
 echo "  $pass closed · $still_open still open · $regressed regressed · $drift changed"
 [ "$regressed" -eq 0 ] || exit 1
