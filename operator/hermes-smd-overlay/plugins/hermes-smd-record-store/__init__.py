@@ -196,6 +196,11 @@ def _list_handler(args: dict[str, Any], **kwargs: Any) -> str:
     )
 
 
+_READ_MISS_HINT = (
+    "Names change; call record_store_list on this store now and read the record it shows."
+)
+
+
 def _read_handler(args: dict[str, Any], **kwargs: Any) -> str:
     # Defense in depth: the pre_tool_call fence already judged this read; on a
     # shared seat the handler judges it again rather than trust hook order.
@@ -205,7 +210,10 @@ def _read_handler(args: dict[str, Any], **kwargs: Any) -> str:
     try:
         text = record_store.read_record(str(args.get("store") or ""), str(args.get("name") or ""))
     except record_store.RecordStoreError as exc:
-        raise RuntimeError(str(exc)) from exc
+        # A name remembered from earlier in the session can be stale: on
+        # 2026-10-27 the model read a renamed note by its old name, got "no
+        # record", and asked Scott to say it again instead of looking.
+        raise RuntimeError(f"{exc}. {_READ_MISS_HINT}") from exc
     in_space_mode, current = _space_view(kwargs.get("session_id"))
     if in_space_mode and current is not None and current.person_id:
         author = (record_store.read_frontmatter(text).get(AUTHOR_KEY) or "").strip()
