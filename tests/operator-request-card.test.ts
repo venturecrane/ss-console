@@ -6,7 +6,7 @@
  * the properties below are the ones the seat depends on: auth fails closed, a
  * card is marked sent only when Resend accepted it, a re-post after a send is
  * a duplicate and not a second email, a failed send is a 502 the seat retries,
- * and no card text (sender, subject, reply opening, matter) reaches D1.
+ * and no card text (sender, name, subject, request, reply, matter) reaches D1.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +23,10 @@ import { POST } from '../src/pages/api/internal/operator-request-card'
 import {
   cardSubject,
   cardText,
+  phoenixTime,
+  toolLabel,
+} from '../src/lib/operator/request-card-email'
+import {
   cleanText,
   jobsQueued,
   parseRequestCard,
@@ -326,7 +330,7 @@ describe('the email', () => {
     const text = cardText(SLUG, card)
     for (const s of [
       `Job: medchron ${HELD} is HELD (identity).`,
-      'Requester wrote:',
+      'WHAT THEY WROTE (on the held job)',
       WROTE,
       'record the',
       'decision on the seat',
@@ -339,6 +343,86 @@ describe('the email', () => {
     expect(cardText(SLUG, parsed(heldReplyBody({ request_opening: null })))).toContain(
       '(no words in the message)'
     )
+  })
+
+  it('says who asked, what they asked, the reply, and what the Operator did (Captain, 2026-10-27)', () => {
+    const request = 'Can you redo the litigation list?\n\nOne sheet per case, please.'
+    const reply = 'I cannot change that layout from here.\n\nI have asked SMD to look at it.'
+    const card = parsed({
+      who: 'chris@firm.example',
+      who_name: 'Chris Price',
+      request_text: request,
+      reply_text: reply,
+      tools: [
+        'mcp_msgraph_mail_read_message',
+        'operations_request',
+        'mcp_msgraph_mail_send',
+        'litigation_job_submit',
+      ],
+      actions: [
+        { tool: 'mcp_msgraph_mail_read_message', class: 'read', count: 2 },
+        { tool: 'operations_request', class: 'internal_write', count: 1 },
+        { tool: 'mcp_msgraph_mail_send', class: 'external_send_internal', count: 1 },
+        { tool: 'litigation_job_submit', class: 'internal_write', count: 1 },
+      ],
+    })
+    const text = cardText(SLUG, card)
+    const at = (s: string) => text.indexOf(s)
+    // The four questions, each under its heading, in reading order.
+    expect(at('WHO ASKED')).toBe(0)
+    expect(at('WHAT THEY ASKED')).toBeGreaterThan(at('WHO ASKED'))
+    expect(at("THE OPERATOR'S REPLY")).toBeGreaterThan(at('WHAT THEY ASKED'))
+    expect(at('WHAT THE OPERATOR DID')).toBeGreaterThan(at("THE OPERATOR'S REPLY"))
+    expect(text).toContain('  Chris Price <chris@firm.example>')
+    // The whole messages, paragraphs kept, never the 300-character opening.
+    expect(text).toContain('  Can you redo the litigation list?\n\n  One sheet per case, please.')
+    expect(text).toContain(
+      '  I cannot change that layout from here.\n\n  I have asked SMD to look at it.'
+    )
+    expect(text).not.toContain(OPENING)
+    // Work grouped by what each tool can do; sends first, reads last.
+    expect(at('Sent:')).toBeLessThan(at('Recorded or drafted (nothing sent):'))
+    expect(at('Recorded or drafted (nothing sent):')).toBeLessThan(at('Looked up:'))
+    expect(text).toContain(
+      '  - Microsoft 365: mail read message x2 [mcp_msgraph_mail_read_message]'
+    )
+    expect(text).toContain('  - operations request [operations_request]')
+    expect(text).toContain('Started a job: litigation')
+    expect(text).not.toContain('Tools run (')
+    // Arizona time, never UTC.
+    expect(text).toContain('Received Tue, Oct 6, 8:00 AM MST')
+    expect(text).not.toContain('2026-10-06T15:00')
+    expect(text).not.toMatch(new RegExp(String.fromCharCode(0x2014)))
+  })
+
+  it('a card from an older seat still reads: openings and the raw tool list', () => {
+    const text = cardText(SLUG, parsed())
+    expect(text).toContain(`  ${WHO}`)
+    expect(text).toContain(`  ${OPENING}`)
+    expect(text).toContain('Tools run (2): smokeball_get_matter, smokeball_list_documents')
+    expect(text).toContain('(the seat did not record the words of this message)')
+  })
+
+  it('the wire refuses a malformed action list and accepts none', () => {
+    expect(parsed({ actions: null }).actions).toBeNull()
+    for (const actions of [
+      'read',
+      [{ tool: 'BAD TOOL', class: 'read', count: 1 }],
+      [{ tool: 'x', class: 'sudo', count: 1 }],
+      [{ tool: 'x', class: 'read', count: 0 }],
+    ]) {
+      const r = parseRequestCard(body({ actions }))
+      expect(r.ok === false && r.field).toBe('actions')
+    }
+    expect(parseRequestCard(body({ who_name: 7 })).ok).toBe(false)
+    expect(parseRequestCard(body({ request_text: 7 })).ok).toBe(false)
+  })
+
+  it('tool labels are mechanical and Arizona time has no daylight shift', () => {
+    expect(toolLabel('mcp_smokeball_create_task')).toBe('Smokeball: create task')
+    expect(toolLabel('mcp_unknownsrv_do_thing')).toBe('mcp unknownsrv do thing')
+    expect(phoenixTime('2026-07-01T19:00:00Z')).toBe('Wed, Jul 1, 12:00 PM MST')
+    expect(phoenixTime('2026-12-01T19:00:00Z')).toBe('Tue, Dec 1, 12:00 PM MST')
   })
 
   it('names a matter only when the seat named one (no law-firm line on other seats)', () => {
@@ -642,7 +726,24 @@ describe('POST /api/internal/operator-request-card', () => {
       })
     )
     const dump = JSON.stringify(await rows())
-    for (const mark of ['UNIQUESUBJECTMARK', 'UNIQUEOPENINGMARK', 'UNIQUEMATTERMARK', 'pat@firm']) {
+    await post(
+      body({
+        card_key: `${HASH}:no_reply`,
+        kind: 'no_reply',
+        who_name: 'Pat UNIQUENAMEMARK',
+        request_text: 'Pull the records UNIQUEREQUESTMARK',
+        reply_text: 'Here they are UNIQUEREPLYMARK',
+      })
+    )
+    for (const mark of [
+      'UNIQUESUBJECTMARK',
+      'UNIQUEOPENINGMARK',
+      'UNIQUEMATTERMARK',
+      'UNIQUENAMEMARK',
+      'UNIQUEREQUESTMARK',
+      'UNIQUEREPLYMARK',
+      'pat@firm',
+    ]) {
       expect(dump).not.toContain(mark)
     }
     const cols = await db

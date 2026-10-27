@@ -2,9 +2,11 @@
 
 When a firm person emails an Operator seat, SMD (team@smd.services) gets:
 
-* a ``replied`` card once the Operator has answered and gone quiet: who, the
-  subject, the opening of the first reply, the matter, the tools that ran, how
-  many calls were refused or failed, and the minutes to first reply;
+* a ``replied`` card once the Operator has answered and gone quiet: who (and
+  the firm's authored name for them), the subject, the request's own words,
+  the first reply in full, the matter, the tools that ran with each one's
+  action class and call count, how many calls were refused or failed, and the
+  minutes to first reply;
 * a ``no_reply`` alarm when nothing has answered the request within
   :data:`NO_REPLY_AFTER` and nothing else is already handling it;
 * a ``job_done`` card when a demand, drafting, litigation status, case file or chronology job the request started
@@ -37,7 +39,9 @@ duplicate, so the seat treats ANY 200 as done.
 The three reads, all read-only:
 
 * ``shared.request_index`` (agent-written): the requests, with the only text a
-  card carries (sender, subject, reply opening). Only requests indexed there are
+  card carries (sender, subject, the request and reply openings and whole
+  texts). The sender's NAME is not text from the index: it is the firm's
+  authored ``users[].full_name``, looked up per tick. Only requests indexed there are
   carded; nothing is backfilled from the ledger.
 * ``audit_log``: ``REPLY_SENT`` / ``REPLY_HELD`` / ``REPLY_FAILED`` rows joined
   on the inbound's vendor message id, and the per-call rows of the replying
@@ -70,6 +74,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from shared import lane_proofs, request_index
+from shared.action_classes import TOOL_ACTION_CLASS_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +105,9 @@ _TOOL_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")
 _TOOL_BAD_RE = re.compile(r"[^a-z0-9_:.-]")
 _REASON_HEAD_RE = re.compile(r"^[a-z0-9_.-]+")
 _MAX_TOOLS = 40
+#: The whole request and reply a card carries (request_index.TEXT_CHARS plus the
+#: ellipsis). ss-console caps at the same number.
+_TEXT_MAX = request_index.TEXT_CHARS + 3
 
 _CARDS_SQL = """
 CREATE TABLE IF NOT EXISTS cards (
@@ -438,11 +446,15 @@ def _held_rows(conn: sqlite3.Connection) -> list[dict]:
 
 
 def _base(req: dict) -> dict:
+    """The fields every card about an indexed request carries: when, who, the
+    subject, and (2026-10-27) the person's own words, so the card says what was
+    asked rather than only its subject line."""
     received = datetime.fromtimestamp(float(req["received_at"]), tz=timezone.utc)
     return {
         "received_at": _iso(received),
         "who": _clip(req.get("sender"), 160) or "(unknown sender)",
         "subject": _clip(req.get("subject"), 200) or "(no subject)",
+        "request_text": _clip(req.get("request_text"), _TEXT_MAX),
     }
 
 
@@ -538,6 +550,16 @@ def _tool_token(value: object) -> str | None:
     return token if _TOOL_TOKEN_RE.match(token) else None
 
 
+def _action_class(tool: str) -> str:
+    """The trust gate's action class for ``tool`` (``read``, ``internal_write``,
+    ``external_send``...), or ``unmapped``: what the card groups the work by,
+    so SMD reads what the Operator looked up apart from what it changed or
+    sent. The static map only; a send's recipient axis is resolved per call at
+    the gate and is not reconstructed here."""
+    mapped = TOOL_ACTION_CLASS_MAP.get(tool)
+    return mapped.value if mapped is not None else "unmapped"
+
+
 def _reason_token(value: object) -> str | None:
     """The leading word of a job's reason, as a closed token. The free text after
     it (which can name a document) never leaves the seat."""
@@ -567,8 +589,17 @@ def decide(
     done_at: dict[str, float] | None = None,
     proofs: lane_proofs.Proofs | None = None,
     openings: dict[str, str | None] | None = None,
+    texts: dict[str, str | None] | None = None,
+    name_of: Callable[[str], str | None] | None = None,
 ) -> list[dict]:
     """The cards due now, oldest event first, as wire-shaped dicts.
+
+    ``texts`` (sent message id -> that reply's whole text,
+    :func:`shared.request_index.read_reply_texts`) is what a ``followup`` card
+    quotes in full. ``name_of`` maps an address to the firm's AUTHORED name for
+    that person (``CustomerConfig.authored_person_name``, never the email's
+    display name); every card's ``who_name`` comes from it, and None (or no
+    authored user) sends no name rather than a guess.
 
     ``openings`` (sent message id -> that reply's opening,
     :func:`shared.request_index.read_reply_openings`) is both what a
@@ -592,9 +623,12 @@ def decide(
     horizon = _iso(now - LOOKBACK - timedelta(days=1))[:19]
     replies = _reply_rows(audit_conn, horizon)
     if not requests:
-        return sorted(
-            held + _followup_cards(requests, replies, done, done_at or {}, openings),
-            key=lambda c: (c["event_at"], c["card_key"]),
+        return _named(
+            sorted(
+                held + _followup_cards(requests, replies, done, done_at or {}, openings, texts),
+                key=lambda c: (c["event_at"], c["card_key"]),
+            ),
+            name_of,
         )
     sent_by_vid: dict[str, list[dict]] = {}
     held_vids: set[str] = set()
@@ -627,11 +661,7 @@ def decide(
     for req in requests:
         vid = str(req["vendor_message_id"])
         received = datetime.fromtimestamp(float(req["received_at"]), tz=timezone.utc)
-        base = {
-            "received_at": _iso(received),
-            "who": _clip(req.get("sender"), 160) or "(unknown sender)",
-            "subject": _clip(req.get("subject"), 200) or "(no subject)",
-        }
+        base = _base(req)
         job = jobs.get(str(req.get("internet_message_id") or "")) or jobs.get(vid)
         sent = sent_by_vid.get(vid, [])
 
@@ -690,11 +720,27 @@ def decide(
                 }
             )
     cards.extend(_held_reply_cards(requests, jobs, done))
-    cards.extend(_followup_cards(requests, replies, done, done_at or {}, openings))
+    cards.extend(_followup_cards(requests, replies, done, done_at or {}, openings, texts))
     if proofs is not None:
         cards.extend(held)
         cards.extend(_in_turn_cards(requests, sent_by_vid, calls_by_session, proofs, done, now))
     cards.sort(key=lambda c: (c["event_at"], c["card_key"]))
+    return _named(cards, name_of)
+
+
+def _named(cards: list[dict], name_of: Callable[[str], str | None] | None) -> list[dict]:
+    """Each card's ``who_name``: the firm's authored name for ``who``, or None.
+
+    One place, after every kind is decided, so no card kind can be built
+    without it. A lookup that raises costs the name, never the card."""
+    for card in cards:
+        name = None
+        if name_of is not None:
+            try:
+                name = name_of(card["who"])
+            except Exception:  # noqa: BLE001 — a name is never worth a card
+                logger.warning("request_cards: authored-name lookup failed", exc_info=True)
+        card["who_name"] = _clip(name, 120)
     return cards
 
 
@@ -711,6 +757,7 @@ def _followup_cards(
     done: set[str],
     done_at: dict[str, float],
     openings: dict[str, str | None] | None,
+    texts: dict[str, str | None] | None = None,
 ) -> list[dict]:
     """One card per reply SENT that no ``replied`` card counted (2026-10-26).
 
@@ -760,17 +807,14 @@ def _followup_cards(
             if sent_at.timestamp() <= landed - _COUNTED_BEFORE.total_seconds():
                 continue
             received = datetime.fromtimestamp(float(req["received_at"]), tz=timezone.utc)
-            base = {
-                "received_at": _iso(received),
-                "who": _clip(req.get("sender"), 160) or "(unknown sender)",
-                "subject": _clip(req.get("subject"), 200) or "(no subject)",
-            }
+            base = _base(req)
         else:
             received = sent_at
             base = {
                 "received_at": _iso(sent_at),
                 "who": _clip(row.get("recipient"), 160) or "(unknown recipient)",
                 "subject": "(no request on record)",
+                "request_text": None,
             }
         cards.append(
             {
@@ -780,6 +824,7 @@ def _followup_cards(
                 "event_at": _iso(sent_at),
                 "minutes": _minutes(received, sent_at),
                 "reply_opening": _clip((openings or {}).get(sent_id), 300),
+                "reply_text": _clip((texts or {}).get(sent_id), _TEXT_MAX),
                 "matter": _clip(row.get("matter_ref"), 60),
                 "tools": [],
                 "replies": 1,
@@ -881,11 +926,14 @@ def _replied_card(req, vid, base, sent, calls_by_session, now, heartbeat) -> dic
     if now - latest < QUIET:
         return None
     tools: list[str] = []
+    counts: dict[str, int] = {}
     refused = failed = 0
     for index, call in enumerate(calls):
         token = _tool_token(call.tool)
         if token and token not in tools and len(tools) < _MAX_TOOLS:
             tools.append(token)
+        if token in tools:
+            counts[token] = counts.get(token, 0) + 1
         verdict = heartbeat._classify_call(call, calls, index)
         if verdict is None:
             continue
@@ -902,8 +950,12 @@ def _replied_card(req, vid, base, sent, calls_by_session, now, heartbeat) -> dic
         "event_at": _iso(first_at),
         "minutes": _minutes(received, first_at),
         "reply_opening": _clip(req.get("reply_opening"), 300),
+        "reply_text": _clip(req.get("reply_text"), _TEXT_MAX),
         "matter": _clip(matter, 60),
         "tools": tools,
+        "actions": [
+            {"tool": t, "class": _action_class(t), "count": counts.get(t, 1)} for t in tools
+        ],
         "replies": len(sent),
         "refused": refused,
         "failed": failed,
@@ -914,6 +966,20 @@ def _replied_card(req, vid, base, sent, calls_by_session, now, heartbeat) -> dic
 # ---------------------------------------------------------------------------
 # The leg
 # ---------------------------------------------------------------------------
+
+
+def _authored_names() -> Callable[[str], str | None] | None:
+    """The seat's ``users[].full_name`` lookup, read fresh each tick (ADR 0044),
+    or None when the config cannot be read: the cards then carry no names,
+    never a guessed one. Logged as a warning, because an unreadable config is
+    already paged by everything else that reads it."""
+    try:
+        from shared.customer_config import CustomerConfig
+
+        return CustomerConfig.from_volume().authored_person_name
+    except Exception:  # noqa: BLE001 — a name is never worth the leg
+        logger.warning("request_cards: cannot read the seat's authored names", exc_info=True)
+        return None
 
 
 def send_due_cards(
@@ -928,6 +994,7 @@ def send_due_cards(
     now_fn: Callable[[], float] = time.time,
     monotonic_fn: Callable[[], float] = time.monotonic,
     proofs_dir: str | None = None,
+    name_of: Callable[[str], str | None] | None = None,
 ) -> int:
     """POST every due card, within the per-tick bounds. Returns how many landed.
 
@@ -951,6 +1018,13 @@ def send_due_cards(
         except Exception:  # noqa: BLE001 — "could not look" decides no follow-ups, never "none"
             logger.error("request_cards: cannot read the reply openings", exc_info=True)
             openings = None
+        try:
+            texts: dict[str, str | None] | None = request_index.read_reply_texts(
+                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+            )
+        except Exception:  # noqa: BLE001 — a follow-up card without its text is still a card
+            logger.warning("request_cards: cannot read the reply texts", exc_info=True)
+            texts = None
         proofs = lane_proofs.load(proofs_dir)
         if not audit_db_path or not os.path.exists(audit_db_path):
             # Without the ledger "no reply" cannot be told from "could not look".
@@ -965,7 +1039,15 @@ def send_due_cards(
         try:
             conn.execute("PRAGMA busy_timeout=2000")
             cards = decide(
-                requests, conn, done, now, done_at=landed_at, proofs=proofs, openings=openings
+                requests,
+                conn,
+                done,
+                now,
+                done_at=landed_at,
+                proofs=proofs,
+                openings=openings,
+                texts=texts,
+                name_of=name_of if name_of is not None else _authored_names(),
             )
         finally:
             conn.close()

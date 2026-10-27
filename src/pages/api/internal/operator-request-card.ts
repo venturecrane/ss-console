@@ -32,12 +32,8 @@ import { env } from 'cloudflare:workers'
 import { errorResponse, isRecord, jsonResponse } from '../../../lib/api/helpers'
 import { failedResponse } from '../../../lib/api/failures'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
-import {
-  markCardAttempt,
-  parseRequestCard,
-  recordCard,
-  sendCardEmail,
-} from '../../../lib/operator/request-card'
+import { markCardAttempt, parseRequestCard, recordCard } from '../../../lib/operator/request-card'
+import { sendCardEmail } from '../../../lib/operator/request-card-email'
 
 export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.DB)

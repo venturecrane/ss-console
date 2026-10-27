@@ -17,12 +17,13 @@
  * in the same request, or one answering a message the seat has no request for
  * (migration 0141, 2026-10-26: an Operator corrected itself in a second reply
  * 50 minutes after its first answer, and the log said nothing).
- * ss-web turns each card into one plain-text email to SMD ops. The wire contract is fixed
+ * ss-web turns each card into one plain-text email to SMD ops (rendered and
+ * sent by `request-card-email.ts`). The wire contract is fixed
  * by the seat side (hermes-smd-overlay `shared/request_cards.py`); change it
  * in both repos or neither.
  *
- * ADR 0052 s5: the card's text fields (who, subject, reply_opening, matter)
- * reach the email and nothing else. `recordCard` takes the parsed card and
+ * ADR 0052 s5: the card's text fields (who, who_name, subject, request_text,
+ * reply_opening, reply_text, matter) reach the email and nothing else. `recordCard` takes the parsed card and
  * writes only its numbers, kinds and keys, and
  * tests/operator-request-card.test.ts asserts no text lands in D1.
  *
@@ -64,13 +65,16 @@ const TOKEN_RE = /^[a-z0-9_:.-]{1,64}$/
 /** A lane key: the skill that queues the job, plus the drafting class. */
 const LANE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$/
 const JOB_ID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/
-const LANE_WHY = ['never_proven', 'revoked', 'unreadable'] as const
+export const LANE_WHY = ['never_proven', 'revoked', 'unreadable'] as const
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/
 
 const CAP_WHO = 160
 const CAP_SUBJECT = 200
 const CAP_OPENING = 300
 const CAP_MATTER = 60
+/** The seat's request_index.TEXT_CHARS plus its ellipsis. */
+const CAP_TEXT = 4003
+const CAP_NAME = 120
 const MAX_TOOLS = 40
 /** A year of minutes; anything larger is a seat clock bug, not a wait. */
 const MAX_MINUTES = 525_600
@@ -95,6 +99,33 @@ export interface CardLane {
   why: (typeof LANE_WHY)[number]
 }
 
+/**
+ * The trust gate's action classes (overlay `shared/action_classes.py`), plus
+ * `unmapped` for a tool the static map does not name. What the email groups
+ * the Operator's work by: what it looked up apart from what it changed or sent.
+ */
+export const ACTION_CLASSES = [
+  'read',
+  'internal_write',
+  'external_send',
+  'external_send_internal',
+  'external_send_client',
+  'external_send_vendor',
+  'external_send_as_staff',
+  'commitment',
+  'destructive',
+  'code_execution',
+  'refused',
+  'unmapped',
+] as const
+export type ActionClassName = (typeof ACTION_CLASSES)[number]
+
+export interface CardAction {
+  tool: string
+  actionClass: ActionClassName
+  count: number
+}
+
 export interface RequestCard {
   cardKey: string
   kind: CardKind
@@ -102,12 +133,20 @@ export interface RequestCard {
   eventAt: string
   minutes: number
   who: string
+  /** The firm's authored name for `who` (users[].full_name); null when none is authored. */
+  whoName: string | null
   subject: string
+  /** The requester's own words in full, as the seat indexed them. */
+  requestText: string | null
   replyOpening: string | null
+  /** The reply in full; the email prefers it to the opening. */
+  replyText: string | null
   /** The requester's own opening words; a held_reply card's reason to exist. */
   requestOpening: string | null
   matter: string | null
   tools: string[]
+  /** Each tool with its action class and call count; null from a seat that sends none. */
+  actions: CardAction[] | null
   replies: number
   refused: number
   failed: number
@@ -133,6 +172,47 @@ const UNSAFE_CHARS_RE = new RegExp(
 export function cleanText(value: string, cap: number): string {
   const flat = value.replace(UNSAFE_CHARS_RE, ' ').replace(/\s+/g, ' ').trim()
   return flat.length > cap ? flat.slice(0, cap) : flat
+}
+
+/**
+ * A block of message text: the same unsafe characters removed, but line breaks
+ * kept (runs of blank lines collapse to one), so a request or reply reads as
+ * it was written. Capped like cleanText.
+ */
+export function cleanBlock(value: string, cap: number): string {
+  const lines = value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(UNSAFE_CHARS_RE, ' ').replace(/\s+/g, ' ').trim())
+  const kept: string[] = []
+  for (const line of lines) {
+    if (line.length > 0 || (kept.length > 0 && kept[kept.length - 1] !== '')) kept.push(line)
+  }
+  const flat = kept.join('\n').trim()
+  return flat.length > cap ? flat.slice(0, cap) : flat
+}
+
+function parseOptionalBlock(v: unknown, cap: number): string | null | undefined {
+  if (v === null || v === undefined) return null
+  if (typeof v !== 'string') return undefined
+  const text = cleanBlock(v, cap)
+  return text.length > 0 ? text : null
+}
+
+/** null when the seat sent none (an older image), undefined for a malformed list. */
+function parseActions(v: unknown): CardAction[] | null | undefined {
+  if (v === null || v === undefined) return null
+  if (!Array.isArray(v) || v.length > MAX_TOOLS) return undefined
+  const out: CardAction[] = []
+  for (const item of v) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return undefined
+    const a = item as Record<string, unknown>
+    if (typeof a.tool !== 'string' || !TOKEN_RE.test(a.tool)) return undefined
+    const actionClass = ACTION_CLASSES.find((c) => c === a.class)
+    if (!actionClass || !isCount(a.count, MAX_COUNT) || a.count === 0) return undefined
+    out.push({ tool: a.tool, actionClass, count: a.count })
+  }
+  return out
 }
 
 function isCount(v: unknown, max: number): v is number {
@@ -230,8 +310,11 @@ function parseIdentity(body: Record<string, unknown>): Identity | { field: strin
 
 interface Content {
   who: string
+  whoName: string | null
   subject: string
+  requestText: string | null
   replyOpening: string | null
+  replyText: string | null
   requestOpening: string | null
   matter: string | null
 }
@@ -248,10 +331,21 @@ function parseContent(body: Record<string, unknown>): Content | { field: string 
   if (requestOpening === undefined) return { field: 'request_opening' }
   const matter = parseOptionalText(body.matter, CAP_MATTER)
   if (matter === undefined) return { field: 'matter' }
+  // The three below are absent on every card a seat posted before 2026-10-27;
+  // null and absent read alike, and the email falls back to the openings.
+  const whoName = parseOptionalText(body.who_name, CAP_NAME)
+  if (whoName === undefined) return { field: 'who_name' }
+  const requestText = parseOptionalBlock(body.request_text, CAP_TEXT)
+  if (requestText === undefined) return { field: 'request_text' }
+  const replyText = parseOptionalBlock(body.reply_text, CAP_TEXT)
+  if (replyText === undefined) return { field: 'reply_text' }
   return {
     who,
+    whoName,
     subject: cleanText(body.subject, CAP_SUBJECT),
+    requestText,
     replyOpening,
+    replyText,
     requestOpening,
     matter,
   }
@@ -265,6 +359,8 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
   if ('field' in content) return { ok: false, field: content.field }
   const tools = parseTools(body.tools)
   if (!tools) return { ok: false, field: 'tools' }
+  const actions = parseActions(body.actions)
+  if (actions === undefined) return { ok: false, field: 'actions' }
   for (const f of ['replies', 'refused', 'failed'] as const) {
     if (!isCount(body[f], MAX_COUNT)) return { ok: false, field: f }
   }
@@ -288,196 +384,13 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
       ...identity,
       ...content,
       tools,
+      actions,
       replies: body.replies as number,
       refused: body.refused as number,
       failed: body.failed as number,
       job,
       lane,
     },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// The email
-// ---------------------------------------------------------------------------
-
-const SUBJECT_EXCERPT = 70
-
-function subjectExcerpt(subject: string): string {
-  if (subject.length === 0) return '(no subject)'
-  return subject.length > SUBJECT_EXCERPT ? `${subject.slice(0, SUBJECT_EXCERPT - 3)}...` : subject
-}
-
-/** The subject's middle: what happened, without the seat or the request's subject. */
-function cardHeadline(card: RequestCard): string {
-  const lane = card.job?.lane ?? 'job'
-  switch (card.kind) {
-    case 'replied':
-      return `request: first reply in ${card.minutes}m`
-    case 'no_reply':
-      return `NO REPLY after ${card.minutes}m`
-    case 'job_done':
-      return `${lane} job ${card.job?.state ?? 'ended'}`
-    case 'lane_unproven':
-      return card.lane?.heldJob
-        ? `NEW KIND OF ASK, job waiting: ${card.lane.key}`
-        : `NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}`
-    case 'held_reply':
-      return `REQUESTER WROTE on held ${lane} job`
-    case 'followup':
-      return `later reply sent at +${card.minutes}m`
-  }
-}
-
-export function cardSubject(slug: string, card: RequestCard): string {
-  return `[SMD Ops] ${slug} ${cardHeadline(card)}: ${subjectExcerpt(card.subject)}`
-}
-
-/**
- * What a held_reply card asks of SMD. The Operator has already answered the
- * requester in plain words and cannot act on a held job (no email talks a seat
- * past a hold); the person reading this email is the one who records the
- * decision on the seat.
- */
-function heldReplyLines(card: RequestCard): string[] {
-  const job = card.job
-  const reason = job?.reason ? ` (${job.reason})` : ''
-  const id = job?.id ? ` ${job.id}` : ''
-  return [
-    `Written: ${card.eventAt} (${card.minutes} min after the request it answers)`,
-    `Job: ${job?.lane ?? 'unknown'}${id} is HELD${reason}.`,
-    'The requester wrote again in the thread of a request whose job is held. If the hold',
-    "was the firm's question, their words below are its answer: read them, record the",
-    'decision on the seat, and resume the job. The Operator has acknowledged the message',
-    'and will not act on it; nothing goes to the requester until the job delivers.',
-  ]
-}
-
-const LANE_WHY_TEXT: Record<(typeof LANE_WHY)[number], string> = {
-  never_proven: 'it has never been proven on this seat',
-  revoked: 'its proof was revoked',
-  unreadable: "the seat could not read its proven-lane record (see the seat's lane-proof status)",
-}
-
-function laneLines(slug: string, card: RequestCard): string[] {
-  const lane = card.lane
-  if (!lane) return []
-  const head = `Lane: ${lane.key} is not proven on this seat: ${LANE_WHY_TEXT[lane.why]}.`
-  if (!lane.heldJob) {
-    return [
-      head,
-      'An in-turn ask: the Operator answered it in the turn (nothing is held). Read that answer;',
-      "once it is right, add the skill to the seat's lane-proofs.yaml with its evidence.",
-    ]
-  }
-  return [
-    head,
-    `The ${lane.jobLane} job ${lane.heldJob} is QUEUED and will not run until the lane is proven.`,
-    'The requester has the acknowledgement the Operator already sent; nothing more goes out.',
-    `Prove it: operator/bin/lane-proof.sh ${slug} dry-run ${lane.heldJob} --wait 3600`,
-    'Runbook: docs/runbooks/operator/lane-proof.md',
-  ]
-}
-
-function outcomeLines(card: RequestCard): string[] {
-  switch (card.kind) {
-    case 'replied':
-      return [`First reply: ${card.eventAt} (${card.minutes} min after the request)`]
-    case 'no_reply':
-      return [
-        `NO REPLY: nothing has answered this request after ${card.minutes} min (checked ${card.eventAt}).`,
-        'No reply went out, no queued job claims it, and the seat is not holding a reply for it.',
-      ]
-    case 'job_done': {
-      const job = card.job
-      const reason = job?.reason ? ` (${job.reason})` : ''
-      return [
-        `Job: ${job?.lane ?? 'unknown'} ${job?.state ?? 'ended'}${reason} at ${card.eventAt}, ${card.minutes} min after the request`,
-      ]
-    }
-    case 'lane_unproven':
-      return [`Noticed: ${card.eventAt} (${card.minutes} min after the request)`]
-    case 'held_reply':
-      return heldReplyLines(card)
-    case 'followup':
-      return [
-        `Later reply sent: ${card.eventAt} (${card.minutes} min after the request)`,
-        'The Operator sent this after the first reply was carded, or in answer to a message',
-        'with no request on record. It is what the requester was told; read it before saying',
-        'what they have or have not been told.',
-      ]
-  }
-}
-
-/** The plain-text body. SMD ops only; this text never reaches a client or D1. */
-export function cardText(slug: string, card: RequestCard): string {
-  const lines = [
-    `Seat: ${slug}`,
-    `From: ${card.who}`,
-    `Subject: ${card.subject.length > 0 ? card.subject : '(no subject)'}`,
-    `Received: ${card.receivedAt}`,
-    ...outcomeLines(card),
-    ...laneLines(slug, card),
-    // Only when the seat named one. "Matter: none named" is law-firm vocabulary
-    // and read as noise on every non-legal seat (Brokery, 2026-10-16).
-    ...(card.matter ? [`Matter: ${card.matter}`] : []),
-  ]
-  if (card.kind === 'held_reply') {
-    lines.push('', 'Requester wrote:', `  ${card.requestOpening ?? '(no words in the message)'}`)
-  }
-  if (card.replyOpening) lines.push('', 'Reply opening:', `  ${card.replyOpening}`)
-  lines.push(
-    '',
-    `Tools run (${card.tools.length}): ${card.tools.length > 0 ? card.tools.join(', ') : 'none'}`,
-    `Replies sent: ${card.replies}. Refused: ${card.refused}. Failed: ${card.failed}.`,
-    '',
-    `Card: ${card.cardKey}`,
-    'List recent requests from a terminal: .claude/bin/requests',
-    ''
-  )
-  return lines.join('\n')
-}
-
-export interface CardMailEnv {
-  RESEND_API_KEY?: string
-  ALERT_TO_EMAIL?: string
-  ALERT_FROM_EMAIL?: string
-}
-
-const DEFAULT_TO = 'team@smd.services'
-const DEFAULT_FROM = 'SMD Services Ops <team@smd.services>'
-
-/**
- * Send one card. `Idempotency-Key` is `<slug>:<card_key>`, so two racing
- * retries of the same card are one email at Resend. No key configured is a
- * failure, not a dev-mode success: a card reported sent that never left would
- * be the silent loss this table exists to prevent.
- */
-export async function sendCardEmail(
-  mailEnv: CardMailEnv,
-  slug: string,
-  card: RequestCard
-): Promise<{ ok: boolean; detail?: string }> {
-  if (!mailEnv.RESEND_API_KEY) return { ok: false, detail: 'RESEND_API_KEY unset' }
-  try {
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${mailEnv.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': `${slug}:${card.cardKey}`,
-      },
-      body: JSON.stringify({
-        from: mailEnv.ALERT_FROM_EMAIL || DEFAULT_FROM,
-        to: [mailEnv.ALERT_TO_EMAIL || DEFAULT_TO],
-        subject: cardSubject(slug, card),
-        text: cardText(slug, card),
-      }),
-    })
-    if (!resp.ok) return { ok: false, detail: `resend ${resp.status}` }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, detail: err instanceof Error ? err.message : String(err) }
   }
 }
 
