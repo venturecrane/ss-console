@@ -7,10 +7,11 @@
 #
 # The workspace session that takes the task is named ops-<slug>-<id> (ops-start
 # reads the id off the file name), and this prints that name. The laptop session
-# opens the conversation with SendMessage to it; the workspace replies to the
-# address the message came from. It cannot work the other way: a laptop
-# session's ListAgents name (ss-console-03) exists only on that laptop, and over
-# Remote Control the workspace sees it under an auto-title (proven 2026-10-22).
+# talks to it with `ops-handoff <client> --say <session> "<message>"`, which
+# types into that session's window, and reads what it did with --results.
+# SendMessage over Remote Control does not reach workspace sessions (two sends
+# bounced 2026-10-27), and the workspace cannot address a laptop session at all,
+# so the outbox file is its only way back.
 #
 # If a workspace session is already running (tmux "main" exists), the task opens
 # at once in a new window of it, so the Captain switches windows rather than
@@ -20,8 +21,14 @@
 # (~/outbox, newest last), so a laptop session sees what happened without the
 # Captain copying it across. Outcomes only; documents never leave ~/work.
 set -uo pipefail
-usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results'
-[ -n "${1:-}" ] && [ -n "${2:-}" ] && [ $# -eq 2 ] || { echo "$usage"; exit 2; }
+usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results | ops-handoff <client> --say <session> "<message>"'
+say_to='' say_text=''
+if [ "${2:-}" = "--say" ]; then
+  [ $# -eq 4 ] && [ -n "$4" ] && [[ "$3" =~ ^ops-[a-z0-9-]+$ ]] || { echo "$usage"; exit 2; }
+  say_to="$3" say_text="$4"
+else
+  [ -n "${1:-}" ] && [ -n "${2:-}" ] && [ $# -eq 2 ] || { echo "$usage"; exit 2; }
+fi
 client="$1" task="$2"
 reg="$HOME/.claude/smd-ops-workspaces.json"
 app=$(jq -r --arg a "$client" '.workspaces | to_entries[] | select(.key==$a or (.value.aliases // [] | index($a))) | .value.app' "$reg" | head -1)
@@ -31,6 +38,35 @@ if [ "$task" = "--results" ]; then
   fly ssh console -a "$app" -u ops --pty=false \
     -C "sh -c 'ls -tr ~/outbox/*.md 2>/dev/null | while read f; do echo \"== \$(basename \$f)\"; cat \"\$f\"; echo; done'" </dev/null 2>/dev/null
   exit 0
+fi
+if [ "$task" = "--say" ]; then
+  # ops-handoff <client> --say <session> "<message>": type a message into a
+  # running workspace session, as if the Captain had typed it there. This is the
+  # laptop-to-workspace channel. SendMessage over Remote Control never reached a
+  # workspace session (2026-10-27: ops-ashton-price-61703 was live with
+  # --remote-control and absent from the laptop's ListAgents, so two sends
+  # bounced and the Captain was handed the job of relaying). The session is
+  # found by the --name ops-start gave it, the text is typed literally (newlines
+  # flattened, since Enter submits), and delivery is read back from the pane by
+  # a tag, so "sent" means it is on that session's screen. Only the tag count
+  # comes back here; the pane can show client text and none of it leaves.
+  OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" >/dev/null || exit 1
+  tag="[from the laptop, msg $(date -u +%H%M%S)-$$]"
+  msg=$(printf '%s %s' "$tag" "$say_text" | tr '\r\n' '  ' | base64 | tr -d '\n')
+  got=$(printf '%s\n' \
+    "s='$say_to'; m=\$(printf %s '$msg' | base64 -d); tag='$tag'; w=" \
+    'for p in $(tmux list-panes -s -t main -F "#{window_index}:#{pane_pid}" 2>/dev/null); do' \
+    '  ps -o args= -p "${p#*:}" --ppid "${p#*:}" 2>/dev/null | grep -q -- "--name $s " && w=${p%%:*}' \
+    'done' \
+    '[ -n "$w" ] || { echo none; exit 0; }' \
+    'tmux send-keys -t "main:$w" -l "$m" && sleep 1 && tmux send-keys -t "main:$w" Enter && sleep 2' \
+    'tmux capture-pane -p -J -t "main:$w" -S -400 | grep -cF "$tag"' |
+    fly ssh console -a "$app" -u ops --pty=false -C "sh -s" 2>/dev/null | tr -d '\r' | tail -1)
+  case "$got" in
+    none) echo "no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
+    ''|0) echo "typed into $say_to but could not read the message back on its screen; treat it as not delivered" >&2; exit 1 ;;
+    *) echo "delivered to $say_to (read back on its screen). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
+  esac
 fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
 # Each handoff is its own file, so two handed over at once become two sessions.
@@ -54,9 +90,9 @@ opened=$(fly ssh console -a "$app" -u ops --pty=false \
   -C "sh -c 'tmux has-session -t main 2>/dev/null && tmux new-window -t main -n task \"/opt/ops/bin/ops-start \$HOME/inbox/$file\" && echo opened'" </dev/null 2>/dev/null | tr -d '\r' | tail -1)
 if [ "$opened" = "opened" ]; then
   echo "Handed over to $app and opened in a new window there (tmux window \"task\")."
-  echo "Tell the Captain: switch to the task window in the $app terminal to approve its steps."
+  echo "It runs on its own there; the Captain has nothing to do in that terminal unless it stops on a permission."
 else
   echo "Handed over to $app. Tell the Captain: type \`ops $client\` to continue there."
 fi
-echo "Its session is $session. Once it is open, message it with SendMessage to $session; it replies to you and sends its verdict to you when done."
+echo "Its session is $session. Talk to it yourself, never through the Captain: ops-handoff $client --say $session \"<message>\". Its outcome lands in its outbox: ops-handoff $client --results."
 exit 0

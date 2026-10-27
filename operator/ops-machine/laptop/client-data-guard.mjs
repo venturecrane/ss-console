@@ -166,8 +166,8 @@ try {
       `Client documents are opened only in that client's ops workspace.\n` +
       `Do not run it here. Instead:\n` +
       `  1. hand the task over: ops-handoff ${alias} "<the task, one paragraph, everything the next session needs>"\n` +
-      `  2. tell the Captain, in one line, what ops-handoff printed (switch to the task window, or type \`ops ${alias}\`).\n` +
-      `  3. once it is open, message the session name ops-handoff printed with SendMessage; it replies to you.\n` +
+      `  2. if ops-handoff says no session was running, tell the Captain to type \`ops ${alias}\`; otherwise it is already running and he has nothing to do.\n` +
+      `  3. talk to it yourself: ops-handoff ${alias} --say <session name it printed> "<message>"; read its outcome with ops-handoff ${alias} --results.\n` +
       `Known workspaces: ${known}.\n` +
       `Break-glass only (workspace down, client waiting): SS_ALLOW_CLIENT_DATA_ON_LAPTOP="<reason>" (audited); ` +
       `then offboard the laptop again (operator/ops-machine/laptop-offboard.py).\n`
