@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -96,10 +97,16 @@ def names_for_ids(obj: Any, meta: dict[str, Any]) -> Any:
     if isinstance(obj, str):
         return UUID.sub(name, obj)
     if isinstance(obj, dict):
-        return {k: names_for_ids(v, meta) for k, v in obj.items()}
+        # An id field keeps its uuid: the print-out matches task ids against the
+        # proposed changes, and a renamed id never matches.
+        return {k: v if _is_id_key(k) else names_for_ids(v, meta) for k, v in obj.items()}
     if isinstance(obj, list):
         return [names_for_ids(v, meta) for v in obj]
     return obj
+
+
+def _is_id_key(key: Any) -> bool:
+    return str(key) == "id" or str(key).endswith(("_id", "_ids"))
 
 
 def table(headers: list[str], rows: list[list[str]]) -> str:
@@ -160,6 +167,30 @@ def _medicals(rec: dict[str, Any], med_lines: dict[int, int]) -> str:
     return "<h2>Medicals</h2>\n" + table(["Provider", "Service", "Charge", "Status", "Note"], rows) if rows else ""
 
 
+INSURANCE_SIDES = (("first_party", "Client's own policy"), ("third_party", "Other side"))
+
+
+def _insurance(rec: dict[str, Any]) -> str:
+    ins = rec.get("insurance") or {}
+    rows = []
+    for key, side in INSURANCE_SIDES:
+        for p in ins.get(key) or []:
+            source = "Layout only, no document in the file" if p.get("layout_only") else "From the file"
+            rows.append(
+                [
+                    e(side),
+                    e(p.get("carrier")),
+                    e(p.get("claim_no")),
+                    e(p.get("adjuster")),
+                    e(p.get("limits")),
+                    e(source),
+                ]
+            )
+    if not rows:
+        return ""
+    return "<h2>Insurance</h2>\n" + table(["Policy", "Carrier", "Claim", "Adjuster", "Limits", "Source"], rows)
+
+
 def _lists(rec: dict[str, Any]) -> str:
     parts = []
     orders = [[e(o.get("facility")), e(o.get("note"))] for o in rec.get("records_to_order") or []]
@@ -205,6 +236,7 @@ def render_html(
         _open_tasks(rec, plan.get("tasks") or {}, plan.get("verdicts") or {}),
         _done(rec),
         _medicals(rec, plan.get("medicals") or {}),
+        _insurance(rec),
         _lists(rec),
     ]
     body = "\n".join(p for p in parts if p)
@@ -238,19 +270,21 @@ def print_pdf(html_path: Path, pdf_path: Path, *, timeout: int = 120) -> None:
     exe = chrome()
     if not exe or not os.access(exe, os.X_OK):
         raise CasefileFailed("stage_unfinished: book: no Chromium the runner can run was found for the PDF")
-    profile = html_path.parent / ".chrome-profile"
-    cmd = [
-        exe,
-        "--headless",
-        "--no-sandbox",
-        "--disable-gpu",
-        "--no-pdf-header-footer",
-        f"--user-data-dir={profile}",
-        f"--print-to-pdf={pdf_path}",
-        html_path.resolve().as_uri(),
-    ]
-    # argv is this module's own: the browser path above, flags, and job-local paths.
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603 - argv built here from the resolved browser path and job-local files, no shell
+    # The browser profile lives outside the output folder: left in it, it filled
+    # the job's artifact listing and pushed File Status files off it.
+    with tempfile.TemporaryDirectory(prefix="casefile-chrome-") as profile:
+        cmd = [
+            exe,
+            "--headless",
+            "--no-sandbox",
+            "--disable-gpu",
+            "--no-pdf-header-footer",
+            f"--user-data-dir={profile}",
+            f"--print-to-pdf={pdf_path}",
+            html_path.resolve().as_uri(),
+        ]
+        # argv is this module's own: the browser path above, flags, and job-local paths.
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603 - argv built here from the resolved browser path and job-local files, no shell
     if proc.returncode != 0 or not pdf_path.is_file() or pdf_path.stat().st_size == 0:
         raise CasefileFailed(f"stage_unfinished: book: Chromium did not print the File Status (exit {proc.returncode})")
 
