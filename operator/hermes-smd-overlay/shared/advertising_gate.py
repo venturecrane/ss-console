@@ -62,9 +62,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_GATE_PATH = "/app/operator/templates/drafting/advertising_gate_check.py"
 GATE_PATH_ENV = "SMD_ADVERTISING_GATE_PATH"
 
-#: The firm's authored registers, staged as a root-owned lane input.
-DEFAULT_REGISTERS = "/var/lib/smd-config/marketing/marketing-firm.yaml"
-REGISTERS_ENV = "SMD_MARKETING_REGISTERS"
+#: The firm's authored registers, staged as a root-owned lane input. Defined
+#: once, in policy_profile, because their presence is also the marketing mark a
+#: faulted policy read falls back on.
+DEFAULT_REGISTERS = policy_profile.MARKETING_REGISTERS_DEFAULT
+REGISTERS_ENV = policy_profile.MARKETING_REGISTERS_ENV
 
 #: The audit reason and the reply-hold reason.
 REASON = "advertising_gate"
@@ -118,7 +120,7 @@ def enabled(policy: policy_profile.Policy | None = None) -> bool:
     """True when this seat's role turns the gate on. False on every other seat."""
     try:
         p = policy if policy is not None else policy_profile.current()
-    except Exception:  # noqa: BLE001 - current() never raises; off only when no role asks
+    except Exception:  # noqa: BLE001 - current() never raises; it keeps a faulted marketing seat on
         return False
     return p.advertising_gate is not None
 
@@ -128,7 +130,7 @@ def _gate_path() -> str:
 
 
 def registers_path() -> str:
-    return os.environ.get(REGISTERS_ENV) or DEFAULT_REGISTERS
+    return policy_profile.marketing_registers_path()
 
 
 def _load_checker() -> ModuleType:

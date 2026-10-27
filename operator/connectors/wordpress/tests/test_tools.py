@@ -345,3 +345,33 @@ def test_real_checker_blocks_a_guarantee_and_writes_nothing(wp: FakeWP, monkeypa
     assert out["status"] == "refused", out
     assert any(f["severity"] == "BLOCK" for f in out["findings"]), out
     assert wp.writes == []
+
+
+# The audit's proof text (10-27 review, WB-1): BLOCK on the blog rules
+# (R-06/R-09/R-14/R-41), PASS on the lighter ``note`` rules.
+_AD_PROOF = "We are the best personal injury lawyers in California and we recovered $2 million for a client last year."
+
+
+@pytest.mark.parametrize("tool", ["create_pending_post", "update_pending_post"])
+def test_post_writes_take_no_channel(tool: str) -> None:
+    # A WordPress post is a blog post. A model-chosen channel ("note") ran the
+    # checker's lighter rule set and let a blog post past the blog BLOCK rules.
+    surface = {t.name: t for t in server.server.tool_surface()}
+    assert "channel" not in surface[tool].input_schema["properties"], tool
+    extra: dict[str, Any] = {"id": 12} if tool == "update_pending_post" else {"content_html": "<p>b</p>"}
+    with pytest.raises(TypeError):
+        getattr(server, tool)(title="t", channel="note", **extra)
+
+
+@pytest.mark.skipif(not _REAL_GATE.is_file(), reason="advertising_gate_check.py not in this tree yet")
+def test_real_checker_blocks_the_audit_ad_on_both_write_paths(wp: FakeWP, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SMD_ADVERTISING_GATE_PYTHON", raising=False)
+    monkeypatch.setenv("SMD_ADVERTISING_GATE", str(_REAL_GATE))
+    monkeypatch.setenv("SMD_MARKETING_REGISTERS", str(_EXAMPLE_REGISTERS))
+    created = server.create_pending_post(title="Our results", content_html=f"<p>{_AD_PROOF}</p>")
+    updated = server.update_pending_post(id=12, content_html=f"<p>{_AD_PROOF}</p>")
+    for out in (created, updated):
+        assert out["status"] == "refused", out
+        blocked = {f["rule"] for f in out["findings"] if f["severity"] == "BLOCK"}
+        assert {"R-06", "R-09", "R-14", "R-41"} <= blocked, out
+    assert wp.writes == []

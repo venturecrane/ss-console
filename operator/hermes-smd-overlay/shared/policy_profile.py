@@ -53,11 +53,35 @@ one send (``provenance.self_described_dates``); dates in free text stay checked.
 runs the California attorney-advertising gate
 (``operator/templates/drafting/advertising_gate_check.py``) over every send and
 draft the seat makes. Absent means off, which is every seat but a law-firm
-marketing seat. Because turning it off is the looser direction, a role that
-DECLARES the key keeps the gate on through every fault: an unknown or garbled
-value resolves to ``ca-law-firm``, and so does a role whose policy block is
-malformed elsewhere (the fallback carries the gate). It needs no rationale or
-adr to be valid, since it loosens nothing, though a role should cite both.
+marketing seat. It needs no rationale or adr to be valid, since it loosens
+nothing, though a role should cite both.
+
+Turning it off is the looser direction, so a fault on a marketing seat keeps it
+ON. Exactly what each fault resolves to:
+
+* the role file was read and its policy block is malformed (an unknown or
+  garbled ``advertising_gate`` value, an unknown key, a bad identifier or
+  checklist knob, an uncited loosening): the gate is ON when the block
+  declares the key at all. The fallback carries it.
+* the role is known but its file cannot be used (``no_role_file``,
+  ``unreadable``, ``wrong_manifest``): the gate is ON when the role is in
+  :data:`ADVERTISING_ROLES` (the roles whose shipped role.yaml declares the
+  key; ``tests/test_advertising_gate_faults.py`` pins the two to agree) or the
+  seat carries a marketing mark (below).
+* the role is not known (``config_unreadable``, ``bad_role_slug``): the gate is
+  ON when the seat carries a marketing mark.
+
+A MARKETING MARK is seat-local state that no customer.yaml or role.yaml read
+produces, written by ``operator/templates/entrypoint-marketing.sh`` at boot:
+the firm's registers at :func:`marketing_registers_path`, or the lane state
+file ``${SMD_LANE_INPUTS_STATE_DIR:-/run/smd-lanes}/marketing.inputs``. The
+entrypoint fetches the registers, and records the fetch's state, only when the
+boot customer.yaml selects ``marketing`` or cannot be evaluated, and it removes
+them on a seat whose customer.yaml parsed to another role. ``/run`` is a tmpfs,
+so the state file is this boot's. A couples seat or another firm's seat carries
+neither, so a fault there leaves the gate OFF (with no registers, an ON gate
+would block every send that seat makes). A mark whose probe raises counts as
+present: only a marketing seat has the directory a refused probe implies.
 
 ``verify_by_month_day``: a written date (with a year) verifies when its month
 and day equal a recurring date read THIS session from the seat's record store
@@ -109,6 +133,18 @@ PROFILE_VALUES: frozenset[str] = frozenset({PROFILE_PARALEGAL, PROFILE_HOUSEHOLD
 #: The advertising gate (ADR 0098). Closed set; absent is off.
 ADVERTISING_CA_LAW_FIRM = "ca-law-firm"
 ADVERTISING_VALUES: frozenset[str] = frozenset({ADVERTISING_CA_LAW_FIRM})
+
+#: Roles whose shipped role.yaml declares ``advertising_gate``. Read ONLY when a
+#: fault stops the role file being read, so a known marketing role keeps the gate
+#: on. tests/test_advertising_gate_faults.py pins it to operator/roles/*/role.yaml.
+ADVERTISING_ROLES: frozenset[str] = frozenset({"marketing"})
+
+#: The marketing seat's registers (the advertising gate reads them; the
+#: entrypoint stages them only on a marketing seat) and the boot's lane state dir.
+MARKETING_REGISTERS_DEFAULT = "/var/lib/smd-config/marketing/marketing-firm.yaml"
+MARKETING_REGISTERS_ENV = "SMD_MARKETING_REGISTERS"
+LANE_STATE_DIR_DEFAULT = "/run/smd-lanes"
+LANE_STATE_DIR_ENV = "SMD_LANE_INPUTS_STATE_DIR"
 
 #: What seat facts and the audit row call the identifier posture.
 MODE_BLOCK = "block"
@@ -240,6 +276,34 @@ def _load_cfg() -> Any:
     return CustomerConfig.from_volume()
 
 
+def marketing_registers_path() -> str:
+    """Where the advertising gate reads the firm's registers on this seat."""
+    return os.environ.get(MARKETING_REGISTERS_ENV) or MARKETING_REGISTERS_DEFAULT
+
+
+def _marketing_marked() -> bool:
+    """True when this seat carries a marketing mark (see the module docstring).
+
+    Reads no customer.yaml and no role.yaml, so it answers when those faulted.
+    A probe that raises counts as marked.
+    """
+    state_dir = os.environ.get(LANE_STATE_DIR_ENV) or LANE_STATE_DIR_DEFAULT
+    for mark in (Path(marketing_registers_path()), Path(state_dir) / "marketing.inputs"):
+        try:
+            if mark.exists():
+                return True
+        except Exception:  # noqa: BLE001 - cannot evaluate never reads as "not a marketing seat"
+            return True
+    return False
+
+
+def _fault_advertising(role: str | None) -> str | None:
+    """The gate a faulted read keeps: ON for a known gated role or a marked seat."""
+    if role in ADVERTISING_ROLES or _marketing_marked():
+        return ADVERTISING_CA_LAW_FIRM
+    return None
+
+
 def _fallback(
     role: str | None, cause: str, detail: str, lever: bool, advertising: str | None = None
 ) -> Policy:
@@ -355,28 +419,60 @@ def resolve_role_policy(role: str | None, raw: Any, *, lever: bool = False) -> P
 
 
 def current(cfg: Any = None, *, roles_dir_override: str | None = None) -> Policy:
-    """This seat's policy, read now. Never raises; any fault is the platform default."""
+    """This seat's policy, read now. Never raises.
+
+    A fault is the platform default for the identifier gate and the checklist
+    (the stricter side), and keeps the advertising gate ON for a seat that could
+    be a marketing seat (:func:`_fault_advertising`; the module docstring has
+    what each fault resolves to).
+    """
     lever = lever_set()
     try:
         if cfg is None:
             cfg = _load_cfg()
         seat = _seat_block(cfg)
     except Exception as exc:  # noqa: BLE001 - an unreadable config is a strict seat
-        return _fallback(None, "config_unreadable", f"customer.yaml unreadable ({exc})", lever)
+        return _fallback(
+            None,
+            "config_unreadable",
+            f"customer.yaml unreadable ({exc})",
+            lever,
+            _fault_advertising(None),
+        )
     role = seat.get("role") if isinstance(seat, dict) else None
     if role is None or role == "":
         return Policy(lever=lever)
     if not isinstance(role, str) or not _ROLE_RE.match(role):
-        return _fallback(None, "bad_role_slug", "seat.role is not a role slug", lever)
+        return _fallback(
+            None, "bad_role_slug", "seat.role is not a role slug", lever, _fault_advertising(None)
+        )
     path = roles_dir(roles_dir_override) / role / "role.yaml"
     try:
         manifest = yaml.safe_load(path.read_text())
     except FileNotFoundError:
-        return _fallback(role, f"{role}:no_role_file", f"{path} does not exist", lever)
+        return _fallback(
+            role,
+            f"{role}:no_role_file",
+            f"{path} does not exist",
+            lever,
+            _fault_advertising(role),
+        )
     except Exception as exc:  # noqa: BLE001 - unreadable or invalid YAML
-        return _fallback(role, f"{role}:unreadable", f"{path} unreadable ({exc})", lever)
+        return _fallback(
+            role,
+            f"{role}:unreadable",
+            f"{path} unreadable ({exc})",
+            lever,
+            _fault_advertising(role),
+        )
     if not isinstance(manifest, dict) or manifest.get("role") != role:
-        return _fallback(role, f"{role}:wrong_manifest", f"{path} does not declare role", lever)
+        return _fallback(
+            role,
+            f"{role}:wrong_manifest",
+            f"{path} does not declare role",
+            lever,
+            _fault_advertising(role),
+        )
     return resolve_role_policy(role, manifest.get("policy"), lever=lever)
 
 
