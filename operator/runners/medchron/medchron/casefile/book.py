@@ -160,6 +160,30 @@ def _medicals(rec: dict[str, Any], med_lines: dict[int, int]) -> str:
     return "<h2>Medicals</h2>\n" + table(["Provider", "Service", "Charge", "Status", "Note"], rows) if rows else ""
 
 
+INSURANCE_SIDES = (("first_party", "Client's own policy"), ("third_party", "Other side"))
+
+
+def _insurance(rec: dict[str, Any]) -> str:
+    ins = rec.get("insurance") or {}
+    rows = []
+    for key, side in INSURANCE_SIDES:
+        for p in ins.get(key) or []:
+            source = "Layout only, no document in the file" if p.get("layout_only") else "From the file"
+            rows.append(
+                [
+                    e(side),
+                    e(p.get("carrier")),
+                    e(p.get("claim_no")),
+                    e(p.get("adjuster")),
+                    e(p.get("limits")),
+                    e(source),
+                ]
+            )
+    if not rows:
+        return ""
+    return "<h2>Insurance</h2>\n" + table(["Policy", "Carrier", "Claim", "Adjuster", "Limits", "Source"], rows)
+
+
 def _lists(rec: dict[str, Any]) -> str:
     parts = []
     orders = [[e(o.get("facility")), e(o.get("note"))] for o in rec.get("records_to_order") or []]
@@ -205,6 +229,7 @@ def render_html(
         _open_tasks(rec, plan.get("tasks") or {}, plan.get("verdicts") or {}),
         _done(rec),
         _medicals(rec, plan.get("medicals") or {}),
+        _insurance(rec),
         _lists(rec),
     ]
     body = "\n".join(p for p in parts if p)
