@@ -25,8 +25,18 @@ Two economies from the lanes before this one:
   document on the matter already carries is listed as "same content as
   [doc N]" and its text is not packed twice.
 * **Reuse the paid read.** With a prior delivered record (``state.py``) the
-  pack carries that record and the text of only the documents new or changed
-  since it; the rest stay in the listing, one ``fetch_doc`` away.
+  pack is proportional to the change: the header, that record (its document
+  ids as ``[doc N]``), every open task, and only the completed tasks, events
+  and memos dated on or after the record's delivery; the listing names only
+  the documents new or changed since it and the documents the record cites,
+  and carries the text of only the new or changed ones. Every other document
+  is one ``list_files`` / ``fetch_doc`` away. The layouts stay whole: they are
+  a few thousand characters on the largest matter, and a Medicals row or a
+  closure is judged against them.
+
+A listing row is ``[doc N] | folder | name | date | state``: no document id.
+The model cites ``[doc N]``; code turns it back into the id
+(``recheck.resolve``), so the 36-character id is never paid for per row.
 
 Scanned bills are not transcribed in this job (a predictable price): a scan's
 pages carry ``SCAN_MARK`` and the listing says so.
@@ -40,6 +50,7 @@ from typing import Any
 
 from ..litigation import fetch as fetch_mod
 from ..litigation.manifest import file_date, full_name
+from .recheck import UUID, to_refs
 
 #: What extract writes for a page with no text layer (``run.no_ocr``). Never
 #: written to the shared text cache (``run.CasefileCache``).
@@ -173,7 +184,7 @@ def _extracted(data: Any, mid: str) -> dict[str, Any]:
     return {str(r.get("file_id")): r for r in read_jsonl(fetch_mod.matter_dir(data, mid) / "extracted.jsonl")}
 
 
-def _header(inv: dict[str, Any], prior: dict[str, Any] | None) -> list[str]:
+def _header(inv: dict[str, Any], prior: dict[str, Any] | None, by_id: dict[str, int] | None = None) -> list[str]:
     m, d = inv.get("matter") or {}, inv.get("detail") or {}
     mt = (d.get("matterType") or {}).get("name") if isinstance(d.get("matterType"), dict) else d.get("matterType")
     lines = [
@@ -190,7 +201,8 @@ def _header(inv: dict[str, Any], prior: dict[str, Any] | None) -> list[str]:
     if prior is not None:
         lines += [
             f"## PRIOR REVIEW RECORD (delivered {prior.get('delivered_at')}; update it, do not start over)",
-            json.dumps(prior.get("review"), ensure_ascii=False),
+            "Answer with record_review_patch: only what changed. Documents are cited as [doc N].",
+            json.dumps(to_refs(prior.get("review"), by_id or {}), ensure_ascii=False),
             "",
         ]
     return lines
@@ -224,17 +236,43 @@ def _task_line(t: dict[str, Any], done: bool) -> str:
     return " | ".join(parts)
 
 
-def _activity(inv: dict[str, Any]) -> list[str]:
+#: The dates that place an item in time, per kind: every one present is
+#: compared, so an edit after creation counts as a change.
+TASK_DATES = ("completedDate", "lastUpdated", "createdDate", "dueDate", "dueDateOnly")
+EVENT_DATES = ("startTime", "start", "lastUpdated", "createdDate")
+MEMO_DATES = ("dateCreated", "createdDate", "lastUpdated", "updatedDate")
+
+
+def changed_since(item: dict[str, Any], keys: tuple[str, ...], since: str | None) -> bool:
+    """True with no prior record; else True when any of the item's dates is on
+    or after the record's delivery (for an event: still to come), or when it
+    carries no date at all (an item that cannot be placed is shown, not hidden)."""
+    if since is None:
+        return True
+    ds = [str(item.get(k) or "")[:10] for k in keys if str(item.get(k) or "")[:10]]
+    return not ds or max(ds) >= since
+
+
+def _activity(inv: dict[str, Any], since: str | None = None) -> list[str]:
+    done = [t for t in inv.get("tasks_done") or [] if changed_since(t, TASK_DATES, since)]
+    events = [e for e in inv.get("events") or [] if changed_since(e, EVENT_DATES, since)]
+    memos = [m for m in inv.get("memos") or [] if changed_since(m, MEMO_DATES, since)]
+
+    def head(name: str, shown: int, total: int) -> str:
+        if since is None or shown == total:
+            return f"## {name} ({total})"
+        return f"## {name} ({shown} of {total}; the rest are unchanged since {since} and the prior record covers them)"
+
     lines = [f"## OPEN TASKS ({len(inv.get('tasks_open') or [])})"]
     lines += [_task_line(t, False) for t in inv.get("tasks_open") or []]
-    lines += ["", f"## COMPLETED TASKS ({len(inv.get('tasks_done') or [])})"]
-    lines += [_task_line(t, True) for t in inv.get("tasks_done") or []]
-    lines += ["", f"## EVENTS ({len(inv.get('events') or [])})"]
-    for e in inv.get("events") or []:
+    lines += ["", head("COMPLETED TASKS", len(done), len(inv.get("tasks_done") or []))]
+    lines += [_task_line(t, True) for t in done]
+    lines += ["", head("EVENTS", len(events), len(inv.get("events") or []))]
+    for e in events:
         start = str(e.get("startTime") or e.get("start") or "")[:10]
         lines.append(f"- {start} | {e.get('subject')!r} | {str(e.get('description') or '')[:120]!r}")
-    lines += ["", f"## MEMOS ({len(inv.get('memos') or [])})"]
-    for m in inv.get("memos") or []:
+    lines += ["", head("MEMOS", len(memos), len(inv.get("memos") or []))]
+    for m in memos:
         when = str(m.get("dateCreated") or m.get("createdDate") or "")[:10]
         lines.append(f"- {when} | {m.get('title')!r} | {' '.join(str(m.get('text') or '').split())[:400]}")
     return [*lines, ""]
@@ -264,8 +302,12 @@ def build(ctx: Any, inv: dict[str, Any], firm: Any, prior: dict[str, Any] | None
     meta: dict[str, Any] = {}
     for r in rows:
         meta[r["id"]] = {**r, "n": ctx.by_id.get(r["id"]), "state": doc_state(r["id"], pulled, extracted, texts)}
-    lines = [*_header(inv, prior), *_layouts(inv, firm), "", *_activity(inv)]
-    lines += _listing(rows, meta, dumps, int(firm.pack("listing_rows_cap")))
+    since = (str(prior.get("delivered_at") or "")[:10] or "0000-00-00") if prior is not None else None
+    lines = [*_header(inv, prior, ctx.by_id), *_layouts(inv, firm), "", *_activity(inv, since)]
+    if prior is None:
+        lines += _listing(rows, meta, dumps, int(firm.pack("listing_rows_cap")))
+    else:
+        lines += _recheck_listing(rows, meta, dumps, prior, changed)
     readable = [r for r in rows if is_readable(meta[r["id"]]["state"]) and (changed is None or r["id"] in changed)]
     readable.sort(key=lambda r: (priority(r, firm), r["date"]))
     budgets = {r["id"]: budget_for(r, firm) for r in readable}
@@ -290,7 +332,7 @@ def build(ctx: Any, inv: dict[str, Any], firm: Any, prior: dict[str, Any] | None
         text = re.sub(r"\n{3,}", "\n\n", texts[r["id"]]).strip()
         if len(text) > cut:
             text = text[:cut] + f"\n[truncated at {cut} chars of {len(text)}: fetch_doc reads the rest]"
-        lines += [f"### [doc {meta[r['id']]['n']}] {r['id']} | {r['folder']} | {r['name']} | {r['date']}", text, ""]
+        lines += [f"### [doc {meta[r['id']]['n']}] | {r['folder']} | {r['name']} | {r['date']}", text, ""]
     return {"text": "\n".join(lines), "meta": meta, "readable": len(readable), "packed": len(packed), "scale": scale}
 
 
@@ -301,19 +343,61 @@ def _listing(rows: list[dict[str, Any]], meta: dict[str, Any], dumps: set[str], 
     for folder in sorted(dumps):
         n = sum(1 for r in viewer if r["folder"] == folder)
         out.append(f"- disc dump {folder} | {n} viewer files (not read; not proof of anything)")
-    out.append("doc | id | folder | name | date | state")
+    out.append(LISTING_HEAD)
     used = 0
     for r in listed:
-        st = meta[r["id"]]["state"]
-        if st.startswith("duplicate:"):
-            twin = meta.get(st.split(":", 1)[1], {}).get("n")
-            st = f"same content as [doc {twin}]"
-        line = f"[doc {meta[r['id']]['n']}] | {r['id']} | {r['folder']} | {r['name']} | {r['date']} | {st}"
+        line = listing_row(r, meta)
         used += len(line)
         if used > rows_cap:
             out.append(f"(listing cut at {rows_cap} characters: list_files searches every name)")
             break
         out.append(line)
+    return [*out, ""]
+
+
+LISTING_HEAD = "doc | folder | name | date | state (cite a document as [doc N])"
+
+
+def listing_row(r: dict[str, Any], meta: dict[str, Any]) -> str:
+    st = meta[r["id"]]["state"]
+    if st.startswith("duplicate:"):
+        twin = meta.get(st.split(":", 1)[1], {}).get("n")
+        st = f"same content as [doc {twin}]"
+    return f"[doc {meta[r['id']]['n']}] | {r['folder']} | {r['name']} | {r['date']} | {st}"
+
+
+def cited_ids(review: Any) -> set[str]:
+    """Every id inside a stored record, lowercased (documents among them)."""
+    return {u.lower() for u in UUID.findall(json.dumps(review, default=str))}
+
+
+def _recheck_listing(
+    rows: list[dict[str, Any]],
+    meta: dict[str, Any],
+    dumps: set[str],
+    prior: dict[str, Any],
+    changed: set[str] | None,
+) -> list[str]:
+    """Only the documents new or changed since the prior record and those it
+    cites: the record already holds what the rest showed."""
+    cited = cited_ids(prior.get("review"))
+    new = {str(x).lower() for x in changed or set()}
+    listed = [
+        r for r in rows if not (r["folder"] in dumps and r["ext"] not in TEXT_TYPES) and r["id"].lower() in new | cited
+    ]
+    live = {r["id"].lower() for r in rows}
+    gone = cited & {str(k).lower() for k in prior.get("manifest") or {}} - live
+    out = [
+        f"## DOCUMENT LISTING ({len(listed)} of {len(rows)} documents: the ones new or changed since the prior "
+        "review, and the ones the prior record cites. list_files and fetch_doc reach every other document)",
+        LISTING_HEAD,
+        *[listing_row(r, meta) + (" | NEW OR CHANGED" if r["id"].lower() in new else "") for r in listed],
+    ]
+    if gone:
+        out.append(
+            f"- {len(gone)} documents the prior record cites are no longer on the matter (the record still shows "
+            "each as a bare id): drop or replace those citations"
+        )
     return [*out, ""]
 
 

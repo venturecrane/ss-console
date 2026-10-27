@@ -107,6 +107,12 @@ class _MatterHeld(RuntimeError):
         self.why = why
 
 
+def cited_live(inv: dict[str, Any], prior: dict[str, Any] | None) -> set[str]:
+    """The live documents of this matter a prior record cites, by their ids."""
+    cited = pack.cited_ids((prior or {}).get("review"))
+    return {str(f["id"]) for f in inv.get("files") or [] if not f.get("deleted") and str(f["id"]).lower() in cited}
+
+
 def context(run: Any, mid: str, inv: dict[str, Any]) -> read.CasefileContext:
     return read.CasefileContext(
         mid,
@@ -124,10 +130,14 @@ def _review(run: Any, m: dict[str, Any], plan: dict[str, Any]) -> None:
     mid = m["id"]
     inv = inv_of(run.data, mid)
     changed = set(plan["changed"]) if plan.get("changed") is not None else None
-    _fetch(run, mid, inv, changed)
+    prior = run.prior(mid) if plan["mode"] == "delta" else None
+    # A re-check also pulls the text of every document the prior record cites
+    # (a closure's proof, a Medicals row's bill): the merged record is checked
+    # exactly as a whole one, so those proofs are read in this run. Code reads
+    # them (the shared text cache, else a download); none is packed or paid.
+    _fetch(run, mid, inv, changed | cited_live(inv, prior) if changed is not None and prior else changed)
     _extract(run, mid)
     ctx = context(run, mid, inv)
-    prior = run.prior(mid) if plan["mode"] == "delta" else None
     built = pack.build(ctx, inv, run.firm, prior, changed)
 
     def text_of(fid: str) -> str | None:
@@ -137,7 +147,9 @@ def _review(run: Any, m: dict[str, Any], plan: dict[str, Any]) -> None:
         refresh(run, mid, built["meta"])  # a document the reader opened since the pack was built is read now
         return validate.check(rec, str(m["number"]), inv, built["meta"], run.firm, text_of)
 
-    result = read.read_matter(run.doorway, run.firm, ctx, built["text"], check)
+    result = read.read_matter(
+        run.doorway, run.firm, ctx, built["text"], check, prior.get("review") if prior is not None else None
+    )
     if result.problems:
         raise _MatterHeld("validate", "; ".join(result.problems)[:300])
     todo = audit.items(result.record, inv, built["meta"], text_of, int(run.firm.get("audit_doc_chars")))
@@ -150,6 +162,8 @@ def _review(run: Any, m: dict[str, Any], plan: dict[str, Any]) -> None:
     stats = {k: built[k] for k in ("readable", "packed", "scale")} | {
         "chars": len(built["text"]),
         "turns": result.turns,
+        "answer": result.answer,
+        "patch_refused": result.patch_refused,
     }
     dump(run._mfile(mid, "meta.json"), built["meta"])
     dump(

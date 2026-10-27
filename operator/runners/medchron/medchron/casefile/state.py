@@ -115,10 +115,12 @@ def fingerprint(inv: dict[str, Any], own: set[str] | None = None) -> str:
     events = sorted(
         [str(e.get("id")), str(e.get("startTime") or e.get("start") or ""), str(e.get("subject") or "")]
         for e in inv.get("events") or []
+        if str(e.get("id")) not in mine
     )
     memos = sorted(
         [str(m.get("id")), str(m.get("dateCreated") or m.get("createdDate") or ""), str(m.get("title") or "")]
         for m in inv.get("memos") or []
+        if str(m.get("id")) not in mine
     )
     layouts = sorted(
         [str(k), digest(v.get("values"))] for k, v in (inv.get("layouts") or {}).items() if isinstance(v, dict)
@@ -130,6 +132,28 @@ def fingerprint(inv: dict[str, Any], own: set[str] | None = None) -> str:
 
 def own_ids(state: Path) -> set[str]:
     return own_writes.ids(state)
+
+
+def _stamp(f: dict[str, Any]) -> str:
+    return str(f.get("modified") or f.get("created") or "")
+
+
+def changed_docs(inv: dict[str, Any], manifest: dict[str, Any], own: set[str]) -> dict[str, Any]:
+    """What changed in the DOCUMENTS since a delivered record's manifest, the
+    Operator's own files left out: ``new`` (ids added or re-saved, sorted) and
+    ``any`` (also true when a document the manifest held is gone). A matter
+    whose documents did not change needs no read."""
+    every = {str(f["id"]): f for f in inv.get("files") or [] if f.get("id")}
+    live = {fid: f for fid, f in every.items() if not f.get("deleted")}
+    new = sorted(fid for fid, f in live.items() if fid not in own and manifest.get(fid) != _stamp(f))
+    # Gone: no longer listed, or deleted since (a manifest also holds entries
+    # that were already deleted when it was written; those are not a change).
+    gone = [
+        fid
+        for fid in manifest
+        if fid not in live and fid not in own and (fid not in every or manifest[fid] != _stamp(every[fid]))
+    ]
+    return {"new": new, "any": bool(new or gone)}
 
 
 def purge_matter(state: Path, matter_id: str, dry_run: bool = False) -> dict[str, int]:

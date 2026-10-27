@@ -37,6 +37,8 @@ The schema::
     chunk_chars:               int >= 5000  one fetch_doc page (20000)
     audit_doc_chars:           int >= 2000  one proof document's text in the audit (40000)
     full_reread_days:          int >= 1     a prior record older than this is read whole (30)
+    bulk_recheck_docs:         int >= 1     more changed documents than this is a bulk upload,
+                                            read whole rather than re-checked (200)
     validate_retries:          int 0..3     record_review retries on a refused record (2)
     timezone:                  IANA name
 
@@ -114,6 +116,7 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "chunk_chars": ("int5000", 20000),
     "audit_doc_chars": ("int2000", 40000),
     "full_reread_days": ("int1", 30),
+    "bulk_recheck_docs": ("int1", 200),
     "validate_retries": ("retries", 2),
     "timezone": ("str", "America/Los_Angeles"),
 }

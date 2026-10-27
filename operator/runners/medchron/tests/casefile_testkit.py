@@ -282,9 +282,32 @@ class CfSeat:
         return {"fileId": fid}
 
 
+NAMES = {
+    DOC_REPORT: "Police report.pdf",
+    DOC_BILL: "Clinic bill.pdf",
+    DOC_SCAN: "Imaging bill.pdf",
+    DOC_M2: "Intake.pdf",
+}
+
+
+def doc_n(pack: str, doc_id: str, name: str | None = None) -> int | None:
+    """The ``[doc N]`` a listing row gives a document (found by its name: the
+    listing carries no ids), or None when the pack does not list it."""
+    nm = name or NAMES.get(doc_id)
+    if nm is None:
+        return None
+    m = re.search(r"\[doc (\d+)\] \| [^|\n]* \| " + re.escape(nm) + r" \|", pack)
+    return int(m.group(1)) if m else None
+
+
+def cite(pack: str, doc_id: str) -> str:
+    """How a reader cites a document: ``[doc N]`` when listed, else its id."""
+    n = doc_n(pack, doc_id)
+    return f"[doc {n}]" if n is not None else doc_id
+
+
 def review_for(number: str, pack: str) -> dict[str, Any]:
     """A record a careful reader would write from the synthetic pack."""
-    ids = set(re.findall(r"\| ([0-9a-f-]{36}) \|", pack))
     base: dict[str, Any] = {
         "number": number,
         "matter_id": M1 if number == "100001" else M2,
@@ -313,14 +336,15 @@ def review_for(number: str, pack: str) -> dict[str, Any]:
     if number == "100001":
         base["open_tasks"] = [
             {"task_id": TASK_OPEN, "subject": "Request police report", "action": "mark_complete",
-             "why": "Proof: police report names the client.", "proof_doc_ids": [DOC_REPORT]},
+             "why": "Proof: police report names the client.", "proof_doc_ids": [cite(pack, DOC_REPORT)]},
             {"task_id": TASK_MONEY, "subject": "Confirm lien amount", "action": "leave_open", "why": "Money."},
         ]  # fmt: skip
         base["done_tasks_checked"] = [{"task_id": TASK_DONE, "subject": "Send intake letter", "check": "not_found"}]
-        if DOC_BILL in ids:
+        if doc_n(pack, DOC_BILL) is not None:
             base["medicals"] = [
                 {"provider": "Exampletown Clinic", "service_start": "2026-01-13", "service_end": "2026-01-13",
-                 "charge": 1250.0, "source_doc_id": DOC_BILL, "page": 1, "existing_row": False, "note": "Itemized."}
+                 "charge": 1250.0, "source_doc_id": cite(pack, DOC_BILL), "page": 1, "existing_row": False,
+                 "note": "Itemized."}
             ]  # fmt: skip
     else:
         base["open_tasks"] = [
@@ -339,8 +363,10 @@ class Scripted:
     or a ``mutate``d record first to see the validator refuse it; the audit
     answers ``verdict`` for every closure."""
 
-    def __init__(self, review_fn: Any = review_for, verdict: str = "confirmed", mutate: Any = None) -> None:
-        self.review_fn, self.verdict, self.mutate = review_fn, verdict, mutate
+    def __init__(
+        self, review_fn: Any = review_for, verdict: str = "confirmed", mutate: Any = None, patch_fn: Any = None
+    ) -> None:
+        self.review_fn, self.verdict, self.mutate, self.patch_fn = review_fn, verdict, mutate, patch_fn
         self.calls: list[dict[str, Any]] = []
         self.messages = SimpleNamespace(stream=self._stream, create=self._msg)
 
@@ -357,19 +383,20 @@ class Scripted:
             return SimpleNamespace(content=[use], stop_reason="tool_use", usage=usage)
         pack = first_text(params)
         number = re.search(r"# MATTER (\S+):", pack).group(1)
+        if self.patch_fn is not None and "PRIOR REVIEW RECORD" in pack:
+            patch = self.patch_fn(number, pack, len(params["messages"]))
+            if patch is not None:  # None: this turn answers with the whole record
+                use = {"type": "tool_use", "id": f"p{len(self.calls)}", "name": "record_review_patch", "input": patch}
+                return SimpleNamespace(content=[use], stop_reason="tool_use", usage=usage)
         rec = self.review_fn(number, pack)
         opened = json.dumps(params["messages"][1:])
         cited = [d for t in rec.get("open_tasks") or [] for d in t.get("proof_doc_ids") or []]
         cited += [m["source_doc_id"] for m in rec.get("medicals") or [] if m.get("source_doc_id")]
         for d in cited:
-            n = re.search(r"\[doc (\d+)\] \| " + d, pack)
-            if n and f"### [doc {n.group(1)}]" not in pack and f"[doc {n.group(1)}]" not in opened:
-                use = {
-                    "type": "tool_use",
-                    "id": f"f{len(self.calls)}",
-                    "name": "fetch_doc",
-                    "input": {"doc": int(n.group(1))},
-                }
+            ref = re.fullmatch(r"\[doc (\d+)\]", str(d))
+            n = int(ref.group(1)) if ref else doc_n(pack, str(d))
+            if n is not None and f"### [doc {n}]" not in pack and f"[doc {n}]" not in opened:
+                use = {"type": "tool_use", "id": f"f{len(self.calls)}", "name": "fetch_doc", "input": {"doc": n}}
                 return SimpleNamespace(content=[use], stop_reason="tool_use", usage=usage)
         if self.mutate is not None and len(params["messages"]) == 1:
             rec = self.mutate(rec)
