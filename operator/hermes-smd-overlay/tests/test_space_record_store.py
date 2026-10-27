@@ -281,3 +281,41 @@ def test_owner_space_normalizes(tmp_path: Path):
     assert record_store.owner_space(_rec("a@x.com"), policy) is None
     assert record_store.target_space(record_store.StorePolicy(root=tmp_path), "x") == "shared"
     assert record_store.target_space(policy, _rec("p1")) == "person:p1"
+
+
+# ---------------------------------------------------------------------------
+# A shared record says who filed it (2026-10-27: a note filed under the wrong id)
+# ---------------------------------------------------------------------------
+
+
+def test_shared_record_from_a_dm_is_stamped_with_the_writer(seat, monkeypatch):
+    """FALSIFIER: drop the ``_stamp_shared_author`` call in on_pre_tool_call."""
+    telegram_dm(monkeypatch, B_TG)
+    content = _rec("shared").replace("owner: shared", "owner: shared\nfrom: p1")
+    args = {"store": "notes", "name": "s-p1.md", "content": content}
+    assert (
+        seat["plugin"].on_pre_tool_call(tool_name="record_store_write", session_id="s", args=args)
+        is None
+    )
+    assert record_store.read_frontmatter(args["content"])["from"] == "p2"
+    assert args["content"].count("from:") == 1
+    seat["plugin"]._write_handler(args, session_id="s")
+    rows = json.loads(seat["plugin"]._list_handler({"store": "notes"}, session_id="s"))["records"]
+    assert {r["name"]: r.get("from") for r in rows}["s-p1.md"] == "p2"
+
+
+def test_private_and_group_writes_are_not_stamped(seat, monkeypatch):
+    telegram_dm(monkeypatch, A_TG)
+    own = {"store": "notes", "name": "a3.md", "content": _rec("p1")}
+    assert (
+        seat["plugin"].on_pre_tool_call(tool_name="record_store_write", session_id="s", args=own)
+        is None
+    )
+    assert "from:" not in own["content"]
+    telegram_group(monkeypatch, A_TG)
+    grp = {"store": "notes", "name": "g3.md", "content": _rec("shared")}
+    assert (
+        seat["plugin"].on_pre_tool_call(tool_name="record_store_write", session_id="s", args=grp)
+        is None
+    )
+    assert "from:" not in grp["content"]
