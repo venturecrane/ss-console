@@ -465,7 +465,15 @@ jobs:
         run: |
           set -euo pipefail
           uv venv --python 3.14 /tmp/e2ev
-          uv pip install --python /tmp/e2ev/bin/python -e "${HERMES_AGENT_SRC}[mcp,anthropic]"
+          # Since v0.22 Hermes' lock overrides exact pins its own dependencies
+          # declare (browser-harness pins pillow==12.3.0, the lock resolves
+          # 13.0.0). `uv pip install` re-resolves and does not read the
+          # project's [tool.uv] overrides, so they are passed back from the
+          # lock's [manifest], as Hermes' own installer does (pm/pip_check.py).
+          python3 -I operator/requirements/hermes_pip_check.py --lock-overrides \
+            "${HERMES_AGENT_SRC}/uv.lock" > /tmp/hermes-lock-overrides.txt
+          uv pip install --python /tmp/e2ev/bin/python --overrides /tmp/hermes-lock-overrides.txt \
+            -e "${HERMES_AGENT_SRC}[mcp,anthropic]"
           uv pip install --python /tmp/e2ev/bin/python -e "./operator/hermes-smd-overlay[e2e]"
 
       - name: Real-dispatch harness (pytest tests_e2e)
