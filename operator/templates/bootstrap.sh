@@ -576,6 +576,25 @@ else
   log "Hermes timezone: unset (business_hours.timezone unauthored) — cron + clock run in UTC"
 fi
 
+# A seat a couple shares (ADR 0091) has one shared Telegram chat; it is the
+# platform's home channel. Without one the gateway opens every new conversation
+# in either partner's chat with a "No home channel is set ... type /sethome"
+# notice (seen by Scott on captain-mark, 2026-10-27). Every couples routine
+# names its own delivery chat, so nothing private is routed by this.
+SHARED_TELEGRAM_CHAT="$(/opt/hermes/.venv/bin/python3 - "${CUSTOMER_YAML}" <<'PY'
+import sys
+import yaml
+
+data = yaml.safe_load(open(sys.argv[1])) or {}
+spaces = data.get("spaces") if isinstance(data.get("spaces"), dict) else {}
+print(str(spaces.get("shared_telegram_chat") or "").strip() if data.get("people") else "")
+PY
+)" || SHARED_TELEGRAM_CHAT=""
+if [ -n "${SHARED_TELEGRAM_CHAT}" ]; then
+  export TELEGRAM_HOME_CHANNEL="${SHARED_TELEGRAM_CHAT}"
+  log "Telegram home channel: the couple's shared chat"
+fi
+
 # ============================================================================
 # Step 7: hermes-smd bootstrap (customer.yaml -> per-profile config)
 # ============================================================================
