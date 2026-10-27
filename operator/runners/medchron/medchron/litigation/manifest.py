@@ -362,6 +362,36 @@ def _plan(
     return seedcheck.attach(out, fresh, soft)
 
 
-def commit(state: Path, matter_id: str, result: dict[str, Any], files: list[dict[str, Any]]) -> None:
+def files_for_groups(
+    files: list[dict[str, Any]], firm: LitigationFirm, today: dt.date, groups: list[str] | tuple[str, ...]
+) -> set[str]:
+    """The ids a read is handed (``select``) whose class can change any of
+    ``groups`` (``CLASS_GROUPS``): the files a run that skipped those groups
+    did not read for them."""
+    want = set(groups)
+    return {fid for fid, c in select(files, firm, today) if want & set(CLASS_GROUPS.get(c, vocab.GROUPS))}
+
+
+def commit(
+    state: Path,
+    matter_id: str,
+    result: dict[str, Any],
+    files: list[dict[str, Any]],
+    hold: set[str] | frozenset[str] = frozenset(),
+) -> None:
+    """Store the delivered result and advance the manifest to ``files``.
+
+    ``hold`` names files this run did not read for every group they can
+    change (a court-only list skips discovery). Their manifest entry stays
+    the prior one, absent when the prior had none, so the next list that asks
+    still sees them as new or changed and reads them. Advancing past them
+    (2026-10-27 review, MC-1) left a discovery paper that arrived before a
+    court-only list unread for discovery on every later list, and the stale
+    discovery values went out with no flag."""
+    now = current_manifest(files)
+    if hold:
+        prior = load_manifest(state, matter_id)
+        now = {k: v for k, v in now.items() if k not in hold}
+        now.update({k: prior[k] for k in hold if k in prior})
     _atomic(state / "matters" / f"{matter_id}.json", result)
-    _atomic(state / "manifest" / f"{matter_id}.json", current_manifest(files))
+    _atomic(state / "manifest" / f"{matter_id}.json", now)
