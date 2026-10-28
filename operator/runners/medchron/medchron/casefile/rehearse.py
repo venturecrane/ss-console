@@ -98,6 +98,7 @@ class RehearsalRun(CasefileRun):
                 "matters": len(per),
                 "to_read": len(measured),
                 "already_current": sum(1 for p in per.values() if p.get("mode") == "current"),
+                "reranked_in_code": sum(1 for p in per.values() if p.get("mode") == "rerank"),
                 "pack_chars": sum(p["pack_chars"] for p in measured),
                 "projected_input_tokens": sum(p["projected_input_tokens"] for p in measured),
             },

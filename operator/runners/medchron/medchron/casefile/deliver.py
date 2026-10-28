@@ -24,7 +24,16 @@ from .. import proof_mode
 from ..litigation import deliver as lit_deliver, fetch as fetch_mod
 from ..litigation.outcome import LitigationFailed, LitigationHold
 from ..litigation.tools import dump
-from . import book, matter as matter_mod, own_writes, propose, rank as rank_mod, state as state_mod, workbook
+from . import (
+    book,
+    matter as matter_mod,
+    own_writes,
+    propose,
+    rank as rank_mod,
+    recheck,
+    state as state_mod,
+    workbook,
+)
 from .inventory import inv_of
 from .outcome import CasefileFailed, CasefileHold, Verdict
 
@@ -54,14 +63,25 @@ class DeliverMixin:
     # ---- rows --------------------------------------------------------------------
     def _row(self, m: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any] | None:
         mid = m["id"]
-        if plan["mode"] == "current":
+        if plan["mode"] in ("current", "rerank"):
             prior = self.prior(mid) or {}
             when = str(prior.get("delivered_at") or "")[:10]
-            return {
-                "review": prior.get("review") or {},
-                "fresh": False,
-                "status_word": f"Already current (nothing new since {when})",
-            }
+            word = (
+                f"Already current (nothing new since {when})"
+                if plan["mode"] == "current"
+                else f"Current (re-ranked; no document changed since {when})"
+            )
+            row = {"review": prior.get("review") or {}, "fresh": False, "status_word": word}
+            if plan["mode"] == "rerank":
+                # The closures and rows the prior job proposed stay proposed (its
+                # proposals are still approvable), so the rank still counts them.
+                lines = state_mod.load_proposals(self.state, str(prior.get("job_id") or ""))
+                row["prior_lines"] = [
+                    {"kind": ln.get("kind"), "source_id": ln.get("source_id")}
+                    for ln in lines.values()
+                    if isinstance(ln, dict) and ln.get("matter_id") == mid
+                ]
+            return row
         got = matter_mod.load_review(self, mid)
         if got is None:
             return None
@@ -101,10 +121,19 @@ class DeliverMixin:
                 med, skipped = propose.medicals_lines(r["review"], inv, meta, self.firm, self._text_of(mid))
                 lines += med
                 dump(self._mfile(mid, "lines.json"), {"lines": lines, "medicals_skipped": skipped})
-            r["rank"] = rank_mod.rank(r["review"], inv, self.firm, self.today, own, len(lines))
+            proposed = len(lines) if r["fresh"] else self._still_proposed(r.get("prior_lines") or [], inv)
+            r["rank"] = rank_mod.rank(r["review"], inv, self.firm, self.today, own, proposed)
             rows.append(r)
         rows.sort(key=rank_mod.order_key)
         dump(self.data / "rows.json", rows)
+
+    @staticmethod
+    def _still_proposed(prior_lines: list[dict[str, Any]], inv: dict[str, Any]) -> int:
+        """The prior job's lines for a re-ranked matter that are still open: a
+        closure whose task is no longer open (closed since, by the firm or on
+        an approval) no longer waits on anyone."""
+        open_ids = {str(t.get("id")) for t in inv.get("tasks_open") or []}
+        return sum(1 for ln in prior_lines if ln.get("kind") != "task" or str(ln.get("source_id")) in open_ids)
 
     def _json_m(self, mid: str, name: str) -> Any:
         p = self._mfile(mid, name)
@@ -217,7 +246,7 @@ class DeliverMixin:
                 {
                     "review": r["review"],
                     "rank": r["rank"],
-                    "fingerprint": state_mod.fingerprint(inv, state_mod.own_ids(self.state)),
+                    "fingerprint": state_mod.fingerprint(inv, state_mod.own_ids(self.state) | recheck.stamped_ids(inv)),
                     "manifest": {
                         str(f["id"]): str(f.get("modified") or f.get("created") or "")
                         for f in inv["files"]

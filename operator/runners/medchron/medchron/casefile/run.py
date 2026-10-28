@@ -37,7 +37,16 @@ from ..litigation.runbase import RunBase
 from ..litigation.tools import ReadIncomplete, dump
 from ..litigation.workers import in_parallel
 from ..llm import Doorway
-from . import firm as firm_mod, inventory, job as job_mod, matter as matter_mod, metrics, pack, state as state_mod
+from . import (
+    firm as firm_mod,
+    inventory,
+    job as job_mod,
+    matter as matter_mod,
+    metrics,
+    pack,
+    recheck,
+    state as state_mod,
+)
 from .deliver import DeliverMixin
 from .outcome import REASON, CasefileFailed, CasefileHold, Verdict
 
@@ -196,30 +205,37 @@ class CasefileRun(DeliverMixin, RunBase):
         return hits[0]
 
     def _screen(self) -> None:
+        """Each matter's mode: ``current`` (nothing changed, $0), ``rerank``
+        (only tasks, events, memos, layouts or staff changed: its stored record
+        is re-ranked in code against today, $0), ``delta`` (a document changed:
+        read with the prior record, answered as a patch), ``whole`` or
+        ``held``. More than ``bulk_recheck_docs`` changed documents is a bulk
+        upload and is read ``whole`` (counted as ``bulk``). The Operator's own writes are never a change: the lane's
+        write journal, plus every task, event and memo carrying the Operator's
+        provenance stamp (``recheck.stamped_ids``)."""
         plan: dict[str, Any] = {}
-        own = state_mod.own_ids(self.state)
+        journal = state_mod.own_ids(self.state)
         for m in self._matters():
             mid = m["id"]
             if self._mfile(mid, matter_mod.HELD).is_file():
                 plan[mid] = {"mode": "held"}
                 continue
             inv = inventory.inv_of(self.data, mid)
+            own = journal | recheck.stamped_ids(inv)
             fp = state_mod.fingerprint(inv, own)
             prior = self.prior(mid)
             plan[mid] = {"mode": "whole", "changed": None, "fingerprint": fp}
             if prior is None:
                 continue
             age = (self.today - dt.date.fromisoformat(str(prior.get("delivered_at") or "1970-01-01")[:10])).days
-            if prior.get("fingerprint") == fp:
+            if prior.get("fingerprint") in (fp, state_mod.fingerprint(inv, journal)):
                 plan[mid]["mode"] = "current"
             elif age < int(self.firm.get("full_reread_days")):
-                manifest = prior.get("manifest") or {}
-                changed = [
-                    str(f["id"])
-                    for f in inv["files"]
-                    if manifest.get(str(f["id"])) != str(f.get("modified") or f.get("created") or "")
-                ]
-                plan[mid].update(mode="delta", changed=sorted(set(changed) - own))
+                changed = state_mod.changed_docs(inv, prior.get("manifest") or {}, own)
+                if len(changed["new"]) > int(self.firm.get("bulk_recheck_docs")):
+                    plan[mid]["bulk"] = len(changed["new"])  # a bulk upload: a re-check would pack a whole read
+                else:
+                    plan[mid].update(mode="delta" if changed["any"] else "rerank", changed=changed["new"])
         dump(self.data / "plan.json", plan)
 
     def _paid(self) -> None:
@@ -286,9 +302,28 @@ class CasefileRun(DeliverMixin, RunBase):
         v.matters_total = len(self._matters())
         if (self.data / "plan.json").is_file():
             plan = self._plan()
-            v.matters_current = sum(1 for p in plan.values() if p["mode"] == "current")
+            v.matters_current = sum(1 for p in plan.values() if p["mode"] in ("current", "rerank"))
             v.matters_read = sum(1 for mid in plan if self._mfile(mid, matter_mod.REVIEW).is_file())
+            v.metrics["recheck"] = self._recheck_counts(plan)
         v.matters_held = sum(1 for m in self._matters() if self._mfile(m["id"], matter_mod.HELD).is_file())
+
+    def _recheck_counts(self, plan: dict[str, Any]) -> dict[str, int]:
+        """The re-check paths this run took, by matter: unchanged (``current``),
+        re-ranked in code with no call (``reranked_in_code``), a bulk upload read
+        whole (``bulk_full_read``), and per read how its record came (``patch``,
+        ``full``) and how many patches were refused for the whole record
+        (``patch_refused``)."""
+        out = {k: 0 for k in ("current", "reranked_in_code", "bulk_full_read", "patch", "full", "patch_refused")}
+        for mid, p in plan.items():
+            out["current"] += p["mode"] == "current"
+            out["reranked_in_code"] += p["mode"] == "rerank"
+            out["bulk_full_read"] += bool(p.get("bulk"))
+            got = matter_mod.load_review(self, mid) if p["mode"] in ("whole", "delta") else None
+            if got is not None:
+                stats = got.get("pack") or {}
+                out["patch" if stats.get("answer") == "patch" else "full"] += 1
+                out["patch_refused"] += int(stats.get("patch_refused") or 0)
+        return out
 
 
 __all__ = ["STAGES", "CasefileCache", "CasefileRun", "no_ocr"]
