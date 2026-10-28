@@ -291,11 +291,50 @@ seat does not queue a second full run on a delivered matter.
 2. **Read the identity fields off the record, never guess them.** Each client
    unit's full name and surname come from the matter's client contacts; the date of
    birth comes from the contact record. The incident date comes from an authored
-   matter field or intake document read this turn. Any of these missing: ask the
-   requester for it in the reply and stop; a guessed DOB or incident date poisons
-   the runner's own gates. On a joint matter (two or more clients), each client
-   needs the top-level document folder that holds their records (`list_folders`);
-   unclear, ask.
+   matter field or intake document read this turn. A missing name or incident
+   date: ask the requester for it in the reply and stop; a guessed DOB or incident
+   date poisons the runner's own gates. On a joint matter (two or more clients),
+   each client needs the top-level document folder that holds their records
+   (`list_folders`); unclear, ask.
+
+   **A contact with no date of birth is not a question for the firm yet: the
+   date is almost always in the file.** Find it there, then have the requester
+   confirm it (2026-10-27: a chronology was held asking a paralegal for two
+   dates that the police report, the intake sheets and every page header of the
+   records carried).
+   - **Where to read.** Use `read_document` on the matter's own documents. A
+     date counts only when it is LABELED as a date of birth ("DOB", "D.O.B.",
+     "Date of Birth", "Birth Date", "Birthdate") on a page that names that client
+     by first and last name. On a joint matter where the clients share a
+     surname, the date counts only beside that client's FIRST name; a date
+     beside the surname alone belongs to nobody.
+   - **Bounded.** Rank the files by name and folder: the client's own medical
+     record files first (their page headers are typed), then the police or
+     accident report, then the firm's intake sheet. Read at most four documents
+     per client, and stop once two documents agree.
+   - **Quote, never compute.** Write each date exactly as the document writes
+     it, and name the documents it came from. A date read only through a scan
+     (`extraction` is `vision`) is labeled a machine transcription. A date with
+     an `[illegible]` digit, or a two-digit year, is not used. Two documents
+     that disagree, or one document only: say so.
+   - **Confirm, then submit.** Never submit on a date read from a document
+     alone. Reply with each client's date and its documents, ask the requester
+     to confirm, and stop. On the turn where they confirm, read the date again
+     from a document you named (your own earlier email is not a source) and
+     submit. A date the requester writes in their own reply is submitted
+     without a second confirmation when it matches the documents, or when no
+     document carried one. When it differs from a date the client's own
+     records carry, do not submit: the runner checks every page against the
+     date it is given, so a date the records contradict sets the client's own
+     records aside as someone else's. Reply with both dates and the documents,
+     ask which is right, and stop.
+   - **A promise in the thread is a request.** When the thread already says
+     the dates are in the file and that you will send them (your own reply or
+     an SMD note), the requester's next reply, quoted or not, whatever it says,
+     asks for those dates: send them as above. Do not ask them for the dates.
+   - **Ask the requester only when no document carries a usable date** after
+     the bounded search, and say which documents you read.
+
 3. **Report the selection as prose before submitting.** From
    `get_files_on_matter` (paged to the end -- see Inputs; a capped page is not
    the set) + `list_folders`, tell the requester what will be read and
