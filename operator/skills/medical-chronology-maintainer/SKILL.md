@@ -321,8 +321,13 @@ seat does not queue a second full run on a delivered matter.
      alone. Reply with each client's date and its documents, ask the requester
      to confirm, and stop. On the turn where they confirm, read the date again
      from a document you named (your own earlier email is not a source) and
-     submit. A date the requester writes in their own reply is theirs: it
-     overrides the documents and is submitted without a second confirmation.
+     submit. A date the requester writes in their own reply is submitted
+     without a second confirmation when it matches the documents, or when no
+     document carried one. When it differs from a date the client's own
+     records carry, do not submit: the runner checks every page against the
+     date it is given, so a date the records contradict sets the client's own
+     records aside as someone else's. Reply with both dates and the documents,
+     ask which is right, and stop.
    - **A promise in the thread is a request.** When the thread already says
      the dates are in the file and that you will send them (your own reply or
      an SMD note), the requester's next reply, quoted or not, whatever it says,
