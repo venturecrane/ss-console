@@ -1,0 +1,23 @@
+-- 0143: a shortfall alert names the request it was serving.
+--
+-- The gap (Captain, 2026-10-27, reading an A&P page): "I cannot tell what
+-- happened or what the next steps should be." The email showed a UTC time, a
+-- class, a tool name and the code "error", and nothing tied it to the person
+-- who was waiting.
+--
+-- The seat now sends `request_at` on each shortfall event (overlay
+-- shared/heartbeat.count_shortfalls): when the request the failing work was
+-- serving reached the seat. That time finds the request's card in team@, and
+-- the card is where who asked and what they wrote live. ADR 0052: the
+-- request's text is never persisted, so this column holds a timestamp, never
+-- a sender, a subject or a message id.
+--
+-- NULL when nothing links the event to a request (a scheduled run, an older
+-- seat image, an index the beat could not read).
+--
+-- Additive. deploy.yml applies migrations before it deploys the fleet-alerts
+-- Worker, so the Worker that writes this never runs against a table without it.
+--
+-- Manual-only rollback at migrations/rollbacks/0143_operator_shortfall_request_at_down.sql.
+
+ALTER TABLE operator_shortfalls ADD COLUMN request_at TEXT;

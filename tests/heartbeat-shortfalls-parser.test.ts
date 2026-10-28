@@ -5,6 +5,8 @@
  * closed shape the seat promises: a known class, identifier-shaped tool and
  * routine, a code from the closed vocabulary, a stable key, and a zoned
  * timestamp. Prose (a client's name in a refusal sentence) must not survive.
+ * Since 2026-10-27 (0143) an event may also carry `request_at`, the time of
+ * the request it was serving: a timestamp, never the request's text.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -55,6 +57,24 @@ describe('shortfalls at ingest', () => {
       beat({ shortfalls_json: Array.from({ length: 21 }, () => ev()) }).shortfallsJson
     ).toBeNull()
     expect(beat({}).shortfallsJson).toBeNull()
+  })
+
+  it('keeps the time of the request an event was serving (0143)', () => {
+    const parsed = JSON.parse(
+      beat({ shortfalls_json: [ev({ request_at: '2026-10-28T00:54:43Z' })] }).shortfallsJson ?? '[]'
+    )
+    expect(parsed[0].request_at).toBe('2026-10-28T00:54:43.000Z')
+  })
+
+  it('a malformed request time costs the link, never the event, and text never rides', () => {
+    const parsed = JSON.parse(
+      beat({
+        shortfalls_json: [
+          ev({ request_at: 'yesterday', who: 'attorney@firm.example', subject: 'Doe file' }),
+        ],
+      }).shortfallsJson ?? '[]'
+    )
+    expect(parsed).toEqual([{ ...ev(), ts: '2026-10-01T15:37:33.000Z' }])
   })
 
   it('reads the count and zoned marker, and holds an absent count', () => {

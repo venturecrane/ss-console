@@ -832,13 +832,20 @@ def _zoned_ts(value: object) -> str:
     return text if _ZONED_TS_RE.search(text) else text + "Z"
 
 
-def _shortfall_event(*, ts, cls, tool, routine, code, key) -> dict:
-    """One wire-shaped event: exactly the six contract keys, all bounded.
+#: Internal join hint an event carries until ``_attach_requests`` resolves it;
+#: never on the wire.
+_JOIN = "_join"
+
+
+def _shortfall_event(*, ts, cls, tool, routine, code, key, join=None) -> dict:
+    """One wire-shaped event: the six contract keys, all bounded.
 
     ``ts`` is zoned ISO-8601 (``_zoned_ts``); ``tool`` is never empty;
-    ``routine`` is ``None`` when nothing names one.
+    ``routine`` is ``None`` when nothing names one. ``join`` is the internal
+    hint (``("session", id)``, ``("message", id)`` or ``("job", id)``) that
+    ``_attach_requests`` turns into ``request_at``, then removes.
     """
-    return {
+    event = {
         "ts": _zoned_ts(ts),
         "class": cls,
         "tool": _clip(tool) or "unknown_tool",
@@ -846,6 +853,9 @@ def _shortfall_event(*, ts, cls, tool, routine, code, key) -> dict:
         "code": _safe_code(code),
         "key": _clip(key, 128),
     }
+    if join and isinstance(join[1], str) and join[1]:
+        event[_JOIN] = join
+    return event
 
 
 #: The per-call columns ``_CallRow`` is built from, in its field order. Shared
@@ -876,7 +886,9 @@ CALL_ROW_SELECT = (
 )
 
 
-def count_shortfalls(conn: sqlite3.Connection, now: datetime) -> ShortfallFacts:
+def count_shortfalls(
+    conn: sqlite3.Connection, now: datetime, requests: list[dict] | None = None
+) -> ShortfallFacts:
     """Every time in the trailing day the Operator could not give a person what
     they asked for. THE PURE QUERY: the ticker and the retro-falsifier
     (``tests/tools/shortfalls_retro.py``) both call exactly this.
@@ -971,6 +983,7 @@ def count_shortfalls(conn: sqlite3.Connection, now: datetime) -> ShortfallFacts:
                 ),
                 code=code,
                 key=_event_key(cls, call.row_id),
+                join=("session", call.session_id),
             )
         )
     for event in _partial_events(conn, calls, cutoff):
@@ -982,6 +995,8 @@ def count_shortfalls(conn: sqlite3.Connection, now: datetime) -> ShortfallFacts:
     for event in _proof_events(conn, horizon, cutoff):
         tally["failed"] += 1
         events.append(event)
+
+    _attach_requests(conn, events, requests, horizon)
 
     # Ordered by INSTANT (the fixed-width prefix), not by spelling: ``Z`` and
     # ``+00:00`` rows sort differently as strings.
@@ -1132,6 +1147,7 @@ def _reply_events(
                 ),
                 code=_reply_code(action_type, reason),
                 key=_event_key("failed", row_id),
+                join=("message", message_id),
             )
         )
     return out
@@ -1153,14 +1169,16 @@ def _proof_events(conn: sqlite3.Connection, horizon: str, cutoff: str) -> list[d
     Items. It is the only alert path a root process can feed without the agent:
     a lost wake is exactly the turn that never runs a status shim.
 
-    Only ``lane`` and ``code`` are read, and each only through a closed
-    vocabulary. The row's ``detail`` and ``job_id`` are never selected, so
-    neither can reach the wire: SMD reads the detail on the seat's own ledger.
+    ``lane`` and ``code`` are read only through a closed vocabulary. The row's
+    ``detail`` is never selected, so it cannot reach the wire (ADR 0052: a
+    description of the work is never persisted, and the beat lands in D1); its
+    ``job_id`` is read only to join to the request, and never rides either.
     """
     rows = conn.execute(
         "SELECT id, ts,"
         " json_extract(metadata,'$.lane') AS lane,"
-        " json_extract(metadata,'$.code') AS code"
+        " json_extract(metadata,'$.code') AS code,"
+        " json_extract(metadata,'$.job_id') AS job_id"
         " FROM audit_log"
         " WHERE action_type = 'DELIVERY_PROOF_FAILED'"
         " AND substr(ts,1,19) >= ? AND substr(ts,1,19) <= ?"
@@ -1168,7 +1186,7 @@ def _proof_events(conn: sqlite3.Connection, horizon: str, cutoff: str) -> list[d
         (horizon, cutoff),
     ).fetchall()
     out: list[dict] = []
-    for row_id, ts, lane, code in rows:
+    for row_id, ts, lane, code, job_id in rows:
         lane_text = lane.strip() if isinstance(lane, str) else ""
         out.append(
             _shortfall_event(
@@ -1178,6 +1196,7 @@ def _proof_events(conn: sqlite3.Connection, horizon: str, cutoff: str) -> list[d
                 routine=None,
                 code=_proof_code(code),
                 key=_event_key("failed", row_id),
+                join=("job", job_id),
             )
         )
     return out
@@ -1194,6 +1213,15 @@ _ERROR_PHRASES: tuple[tuple[str, str], ...] = (
     ("timed out", "timeout"),
     ("timeout", "timeout"),
     ("connection refused", "connection_refused"),
+    # 2026-10-27: an A&P page read "job_status ... error" for "no such job",
+    # and SMD could not tell a lookup miss from a broken tool.
+    ("no such job", "no_such_job"),
+    ("not found", "not_found"),
+    ("permission denied", "permission_denied"),
+    ("forbidden", "forbidden"),
+    ("rate limit", "rate_limited"),
+    ("too many requests", "rate_limited"),
+    ("unauthorized", "unauthorized"),
 )
 
 
@@ -1231,6 +1259,8 @@ def _retried_ok(call: _CallRow, calls: list[_CallRow], index: int) -> bool:
     """
     if not call.session_id:
         return False
+    if call.tool == "job_status" and _lane_status_answered(call, calls):
+        return True
     for later in calls[index + 1 :]:
         if (
             later.session_id == call.session_id
@@ -1241,6 +1271,128 @@ def _retried_ok(call: _CallRow, calls: list[_CallRow], index: int) -> bool:
         ):
             return True
     return False
+
+
+def _lane_status_answered(call: _CallRow, calls: list[_CallRow]) -> bool:
+    """The generic ``job_status`` (chronologies) failed, and a lane's own
+    ``<lane>_job_status`` returned ok in the same session.
+
+    A&P 2026-10-28 01:03Z: a case-file DELIVER turn read the job with
+    ``casefile_job_status`` (ok), then also asked ``job_status``, which knows
+    only chronology jobs and said "no such job". The reply went out 10 seconds
+    later and SMD was paged "could not give someone what they asked for" for a
+    request that was answered. The two calls name different tools, so the
+    same-tool retry rule could never see the recovery. Either order counts:
+    the lane tool answered the question the generic one could not.
+    """
+    return any(
+        other.session_id == call.session_id
+        and isinstance(other.tool, str)
+        and other.tool != "job_status"
+        and other.tool.endswith("_job_status")
+        and other.outcome == "ok"
+        and other.trust_decision != "refuse"
+        for other in calls
+    )
+
+
+def _request_by_session(conn: sqlite3.Connection, horizon: str) -> dict[str, str]:
+    """session id -> the inbound message id that session replied to (or whose
+    reply it held), from the reply rows. First reply row wins."""
+    rows = conn.execute(
+        "SELECT json_extract(metadata,'$.session_id'),"
+        " json_extract(metadata,'$.in_reply_to'),"
+        " json_extract(metadata,'$.message_id')"
+        " FROM audit_log"
+        " WHERE action_type IN ('REPLY_SENT', 'REPLY_HELD', 'REPLY_FAILED')"
+        " AND substr(ts,1,19) >= ?"
+        " ORDER BY ts, id",
+        (horizon,),
+    ).fetchall()
+    out: dict[str, str] = {}
+    for session_id, in_reply_to, message_id in rows:
+        vid = in_reply_to if isinstance(in_reply_to, str) and in_reply_to else message_id
+        if isinstance(session_id, str) and session_id and isinstance(vid, str) and vid:
+            out.setdefault(session_id, vid)
+    return out
+
+
+def _request_by_job(conn: sqlite3.Connection, job_ids: set[str]) -> dict[str, str]:
+    """job id -> its ``request_ref``, across every job lane this seat runs. A
+    lane table the seat does not have is not an error."""
+    from shared import request_cards
+
+    out: dict[str, str] = {}
+    if not job_ids:
+        return out
+    for lane in request_cards.JOB_LANES:
+        try:
+            rows = request_cards._lane_rows(conn, lane, "0000-00-00T00:00:00")
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                continue
+            raise
+        for row in rows:
+            ref, job_id = row[0], row[-1]
+            if job_id in job_ids and isinstance(ref, str) and ref:
+                out[str(job_id)] = ref
+    return out
+
+
+def _attach_requests(
+    conn: sqlite3.Connection,
+    events: list[dict],
+    requests: list[dict] | None,
+    horizon: str,
+) -> None:
+    """Turn each event's join hint into ``request_at``: when the request the
+    failing work was serving reached the seat (2026-10-27).
+
+    The alert used to say only "job_status failed: error", and SMD could not
+    tell whose request it was (Captain: "I cannot tell what happened or what
+    the next steps should be"). Who asked and what they wrote are on that
+    request's card in team@, the one place ADR 0052 lets that text live; this
+    is the TIME that finds the card, metadata only. No sender, subject or
+    message id rides, and the beat lands in D1.
+
+    ``requests`` are :func:`shared.request_index.read_requests` rows; None
+    (the index could not be read) attaches nothing. Every hint is removed
+    whatever happens, so none can reach the wire. A lookup that fails costs
+    the link, never the event.
+    """
+    try:
+        if not requests:
+            return
+        by_vid: dict[str, dict] = {}
+        for req in requests:
+            for ref in (req.get("vendor_message_id"), req.get("internet_message_id")):
+                if isinstance(ref, str) and ref:
+                    by_vid.setdefault(ref, req)
+        hinted = [e for e in events if _JOIN in e]
+        if not hinted:
+            return
+        sessions = (
+            _request_by_session(conn, horizon)
+            if any(e[_JOIN][0] == "session" for e in hinted)
+            else {}
+        )
+        jobs = _request_by_job(conn, {e[_JOIN][1] for e in hinted if e[_JOIN][0] == "job"})
+        for event in hinted:
+            kind, ref = event[_JOIN]
+            vid = {"session": sessions, "job": jobs}.get(kind, {}).get(ref, ref)
+            req = by_vid.get(vid)
+            if req is None:
+                continue
+            try:
+                at = datetime.fromtimestamp(float(req.get("received_at")), tz=timezone.utc)
+            except (TypeError, ValueError, OverflowError, OSError):
+                continue
+            event["request_at"] = at.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    except Exception:  # noqa: BLE001 — the request link is never worth the event
+        logger.warning("heartbeat: shortfall request lookup failed", exc_info=True)
+    finally:
+        for event in events:
+            event.pop(_JOIN, None)
 
 
 def _page_ranges(raw: object) -> list[tuple[int, int]]:
@@ -1349,6 +1501,20 @@ def _partial_events(conn: sqlite3.Connection, calls: list[_CallRow], cutoff: str
     return out
 
 
+def _shortfall_requests() -> list[dict] | None:
+    """The indexed requests a shortfall can name (the window plus a day, so a
+    failure late in a long job still finds the request that started it). None
+    when the index cannot be read: the events still go, without names."""
+    try:
+        from shared import request_index
+
+        horizon = time.time() - (SHORTFALL_WINDOW_HOURS + 24) * 3600
+        return request_index.read_requests(horizon)
+    except Exception:  # noqa: BLE001 — names are never worth the shortfall read
+        logger.debug("heartbeat: request index unavailable for shortfalls", exc_info=True)
+        return None
+
+
 def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
@@ -1422,7 +1588,7 @@ def read_audit_facts(db_path: str | None) -> AuditLedgerFacts:
         # look" omits all three fields, and is never reported as zero.
         shortfalls: ShortfallFacts | None = None
         try:
-            shortfalls = count_shortfalls(conn, datetime.now(timezone.utc))
+            shortfalls = count_shortfalls(conn, datetime.now(timezone.utc), _shortfall_requests())
         except (sqlite3.Error, ValueError, TypeError) as exc:
             logger.debug("heartbeat: shortfall read unavailable: %s", exc)
         return AuditLedgerFacts(
