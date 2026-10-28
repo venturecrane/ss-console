@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from .broker_client import BrokerClient
 from .daemon import Daemon
+from .skill_load import load_line
 
 logger = logging.getLogger("medchron.note")
 
@@ -41,7 +42,7 @@ def wake_task(note_id: str, *, new_message: bool = False) -> str:
     new-message note (no request email) carries ``Trigger: scheduled.``, the
     overlay's only mark that a wake may bind one new email
     (``shared/turn_sources.WAKE_TRIGGER``; the negotiation lane's line)."""
-    task = f"Run the {SKILL} skill's DELIVER mode for note job {note_id}.\nKind: note."
+    task = f"Run the {SKILL} skill's DELIVER mode for note job {note_id}.\n{load_line(SKILL)}\nKind: note."
     return task + "\nTrigger: scheduled." if new_message else task
 
 

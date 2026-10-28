@@ -21,6 +21,7 @@ import pytest
 from medchron import note_by_smd as nbs
 from medchron import note_lane
 from medchron.proof import watch as proof_watch
+from medchron.skill_load import load_line
 
 NOTE = "01M4NXTEAAAAAAAAAAAAAAAAAA"
 GID = "AAMkNOTEANCHORMESSAGE0001="
@@ -231,7 +232,8 @@ def test_the_live_run_records_and_queues_the_wake_and_never_posts(tmp_path: Path
     st = lane._daemon_state(NOTE)
     task = st["wake"]["task"]
     assert st["state"] == "delivered" and st["wake"]["pending"] is True and st["finished_at"] == 0.0
-    assert task == f"Run the smd-note skill's DELIVER mode for note job {NOTE}.\nKind: note."
+    load = load_line("smd-note")
+    assert task == f"Run the smd-note skill's DELIVER mode for note job {NOTE}.\n{load}\nKind: note."
     assert WAKE_JOB.search(task).groups() == ("note", NOTE)
     assert lane._wakes_pending() == [NOTE] and "reply_watch" not in st
     assert json.loads((lane.job_dir(NOTE) / "envelope.json").read_text())["requested_by"] == REQUESTER

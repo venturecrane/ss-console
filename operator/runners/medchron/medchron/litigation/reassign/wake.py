@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ...skill_load import load_line
+
 _NAME = re.compile(r"[A-Za-z][A-Za-z .'’-]{0,79}")
 _NUMBER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,31}")
 _STAGE = re.compile(r"[a-z0-9_]{1,24}")
@@ -53,6 +55,7 @@ def compose(
     statuses = [s for s in d.get("statuses") or [] if s in ("Open", "Pending", "Closed")]
     lines = [
         f"Run the {skill} skill's DELIVER mode for litigation job {job_id}.",
+        load_line(skill),
         "Kind: litigation. Report: reassign.",
         f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
         f"Outcome: {state}.",

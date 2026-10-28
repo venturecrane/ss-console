@@ -45,6 +45,7 @@ from . import child as child_mod, config as config_mod, job as job_mod, lane_pro
 from . import resume as resume_mod, retention
 from . import rewake, verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
+from .skill_load import load_line
 from .stages import vision_seed
 
 logger = logging.getLogger("medchron.daemon")
@@ -455,6 +456,7 @@ class Daemon:
         upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env)
         lines = [
             f"Run the medical-chronology-maintainer skill's DELIVER mode for chronology job {job_id}.",
+            load_line("medical-chronology-maintainer"),
             f"Outcome: {state}. Matter number: {matter_no}.",
             update_outcome.totals_line(fields, len(upd) > 1),
             *upd,

@@ -42,6 +42,7 @@ from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .proof import watch as proof_watch
+from .skill_load import load_line
 from .drafting_lane import DraftingLane
 
 logger = logging.getLogger("medchron.negotiation")
@@ -122,6 +123,7 @@ def wake_task(job_id: str, outcome: str, stage: str = "") -> str:
     matter, a name or a figure; the notice row holds those."""
     lines = [
         f"Run the {SKILL} skill's DELIVER mode for negotiation job {job_id}.",
+        load_line(SKILL),
         "Kind: negotiation.",
         "Trigger: scheduled.",
         f"Outcome: {outcome}.",

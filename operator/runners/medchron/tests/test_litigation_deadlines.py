@@ -21,6 +21,7 @@ from litigation_testkit import JOB, LIBRARY, M1, M2, STAFF_A, STAFF_B, LitSeat, 
 from medchron.litigation.deadlines import book, run as run_mod
 from medchron.litigation.deadlines.pull import in_scope
 from medchron.litigation import job as job_mod
+from medchron.skill_load import load_line
 
 TODAY = dt.date(2026, 3, 10)
 M3 = "33333333-3333-4333-8333-333333333333"
@@ -330,6 +331,7 @@ def test_the_deadlines_wake_carries_counts_and_the_composed_file_names_only(tmp_
     task = lane._daemon_state(JOB)["wake"]["task"]
     assert task.splitlines() == [
         f"Run the litigation-status skill's DELIVER mode for litigation job {JOB}.",
+        load_line("litigation-status"),
         "Kind: litigation. Report: deadlines.",
         "Trigger: request.",
         "Outcome: delivered.",

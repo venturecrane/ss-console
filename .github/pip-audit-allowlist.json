@@ -180,6 +180,7 @@
     "PYSEC-2026-4323": "brotlicffi==1.2.0.2 (Hermes-locked, fix 1.2.1.0). REACHABLE on HTTP responses: decodes brotli-encoded bodies for aiohttp; Hermes never imports it directly. Remediation: Hermes promotion to an upstream whose lock carries the fix.",
     "PYSEC-2026-4326": "pillow==12.3.0 (Hermes-locked, fix 13.0.0). REACHABLE: the vision tools decode inbound image bytes (tools/vision_tools_image_prep.py Image.open); Hermes exact-pins Pillow==12.3.0. Remediation: Hermes promotion to an upstream whose lock carries the fix.",
     "PYSEC-2026-4327": "pillow==12.3.0 (Hermes-locked, fix 13.0.0). REACHABLE: the vision tools decode inbound image bytes (tools/vision_tools_image_prep.py Image.open); Hermes exact-pins Pillow==12.3.0. Remediation: Hermes promotion to an upstream whose lock carries the fix.",
-    "PYSEC-2026-4328": "pillow==12.3.0 (Hermes-locked, fix 13.0.0). REACHABLE: the vision tools decode inbound image bytes (tools/vision_tools_image_prep.py Image.open); Hermes exact-pins Pillow==12.3.0. Remediation: Hermes promotion to an upstream whose lock carries the fix."
+    "PYSEC-2026-4328": "pillow==12.3.0 (Hermes-locked, fix 13.0.0). REACHABLE: the vision tools decode inbound image bytes (tools/vision_tools_image_prep.py Image.open); Hermes exact-pins Pillow==12.3.0. Remediation: Hermes promotion to an upstream whose lock carries the fix.",
+    "PYSEC-2026-4332": "pillow==12.3.0 (Hermes-locked, fix 13.0.0). REACHABLE: the vision tools decode inbound image bytes (tools/vision_tools_image_prep.py Image.open); Hermes exact-pins Pillow==12.3.0. Remediation: Hermes promotion to an upstream whose lock carries the fix."
   }
 }
