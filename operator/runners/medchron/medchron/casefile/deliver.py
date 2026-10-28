@@ -38,6 +38,8 @@ from .inventory import inv_of
 from .outcome import CasefileFailed, CasefileHold, Verdict
 
 STATUS_READ = "Read this run"
+#: The litigation filing's refusal for a name another send already put in the folder.
+NAME_TAKEN = "is already in the folder and this run did not send it"
 
 
 class DeliverMixin:
@@ -189,23 +191,41 @@ class DeliverMixin:
             if not r["fresh"] or self._mfile(mid, "filed.json").is_file():
                 continue
             try:
-                rec = lit_deliver.file_workbook(
-                    self.seat,
-                    mid,
-                    folder,
-                    self._pdf(r),
-                    fetch_mod.matter_dir(self.data, mid),
-                    self.log,
-                    pause=self._pause(),
-                )
+                rec = self._file_one(mid, folder, self._pdf(r))
             except LitigationHold as exc:
-                dump(self._mfile(mid, "filed.json"), {"refused": str(exc)[:300]})
-                continue
+                if NAME_TAKEN not in str(exc):
+                    dump(self._mfile(mid, "filed.json"), {"refused": str(exc)[:300]})
+                    continue
+                # An earlier job filed this matter's File Status today under the
+                # same name: this run's update files beside it under its own name.
+                try:
+                    rec = self._file_one(mid, folder, self._same_day_copy(r))
+                except LitigationHold as again:
+                    dump(self._mfile(mid, "filed.json"), {"refused": str(again)[:300]})
+                    continue
             except LitigationFailed as exc:
                 raise CasefileFailed(str(exc)) from exc
             own_writes.record(self.state, self.job.job_id, mid, "folder", rec["folder_id"])
             own_writes.record(self.state, self.job.job_id, mid, "file", rec["file_id"])
             dump(self._mfile(mid, "filed.json"), rec)
+
+    def _file_one(self, mid: str, folder: str, pdf: Path) -> dict[str, Any]:
+        return lit_deliver.file_workbook(
+            self.seat, mid, folder, pdf, fetch_mod.matter_dir(self.data, mid), self.log, pause=self._pause()
+        )
+
+    def _same_day_copy(self, r: dict[str, Any]) -> Path:
+        src = self._pdf(r)
+        dst = src.with_name(f"{src.stem} (Operator {self.job.job_id[-6:]}){src.suffix}")
+        if not dst.is_file():
+            dst.write_bytes(src.read_bytes())
+        return dst
+
+    def filing_refused(self) -> int:
+        """Matters read this run whose File Status was refused, so their review
+        was not committed and the next job reads them again."""
+        rows = self._json("rows.json") if (self.data / "rows.json").is_file() else []
+        return sum(1 for r in rows if r["fresh"] and self._json_m(r["matter_id"], "filed.json").get("refused"))
 
     # ---- the caseload workbook -------------------------------------------------------
     def _xlsx(self) -> Path:

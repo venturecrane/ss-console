@@ -193,3 +193,19 @@ def test_the_text_cache_key_is_the_litigation_lanes_for_the_same_file(env: dict,
     ours = cache_method_version(cf_firm.load(env["inputs"]))
     assert ours == textcache.method_version(lit_firm.load().model("transcription"))
     assert ours != textcache.method_version(cf_firm.load(env["inputs"]).model("transcription"))
+
+
+def test_a_second_job_the_same_day_files_its_update_under_its_own_name(env: dict) -> None:
+    seat = kit.CfSeat()
+    _r, first = _run(env, seat, kit.Scripted())
+    assert first["verdict"] == "delivered", first
+    # A later job the same day whose screen sees the matter changed (state cleared
+    # so it reads again): the File Status name it would use is already filed.
+    import shutil
+
+    shutil.rmtree(env["state"])
+    _r2, v = _run(env, seat, kit.Scripted(), job="01KTJ0BX0000000000000000C2")
+    assert v["verdict"] == "delivered", v
+    assert v["metrics"]["filing_refused"] == 0
+    names = sorted(f["name"] for f in v["files"] if f["role"] == "file_status")
+    assert names and all(n.endswith("(Operator 0000C2).pdf") for n in names), names
