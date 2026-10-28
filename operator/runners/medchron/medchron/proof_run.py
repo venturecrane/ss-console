@@ -189,7 +189,9 @@ def _artifacts(jd: Path) -> list[dict[str, Any]]:
 
 
 def _spend_cents(items: list[dict[str, Any]]) -> int:
-    cents = sum(int(round(float(i.get("dollars") or 0) * 100)) for i in items)
+    # A chronology's per-unit ``dollars`` is the JOB's whole spend so far
+    # (driver.Budget reads every unit's ledger): taken once, never summed.
+    cents = max((int(round(float(i.get("dollars") or 0) * 100)) for i in items), default=0)
     return cents + sum(int(i.get("cents") or 0) for i in items)
 
 

@@ -211,9 +211,13 @@ def settle(d: Any, job_id: str, outcomes: list[Any], state: str, fields: dict[st
         # Every hold pages SMD here, with the technical reason, under the
         # hold's own code (proof/holds.py). On the chronology lane this page is
         # the only notice anyone gets: the firm hears nothing until delivery.
+        # A page-allowance hold carries the figures SMD decides it on and
+        # the two commands that decide it (``allowance.py``).
+        from .. import allowance
+
         code = holds.classify(d.LANE, reason)[1]
         if code is not None:
-            alert(d, job_id, code, reason)
+            alert(d, job_id, code, allowance.on_hold(d, job_id, outcomes, reason) or reason)
     return state, fields
 
 
