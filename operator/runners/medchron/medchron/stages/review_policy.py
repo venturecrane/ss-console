@@ -69,8 +69,17 @@ left). Each settles by deletion or disclosure, never by a written word:
     not a stop for a person to clear; replayed on Pamplona's recorded
     review, 4 of its 18 were this class.
 
-Code integrity findings (an empty chronology, a cited exhibit not delivered)
-are never touched: they hold.
+6.  Last (``review_settle.flag_residual``, 2026-10-28, the Captain: a joint chronology
+    held on one provider heading after every other gate passed, the third
+    chronology stopped this way): every MUST-FIX still left on checks 2 to 4
+    is flagged for the attorney in the Review Notes and the chronology is
+    delivered. A finding about wording, a summary line or a disagreement is
+    never a stop. A provider heading the reviewer quotes whole and that names
+    no provider becomes the firm's "(provider not stated in the record)".
+
+Code integrity findings (an empty chronology, a cited exhibit not delivered,
+an entry dated after today) and a check 1 finding the page's identifiers did
+not settle (another person's records) are never touched: they hold.
 Nothing here invents client text: steps 1-3b and 5 only delete or re-grade,
 and step 4's sentences are the update lane's grounded, audited corrections.
 """
@@ -427,9 +436,12 @@ def settle(
     """Every step in order. ``doc`` is the full build's ``final-chronology.md``
     (None on an update, which has its own repair before this review and only
     gets steps 1 and 2)."""
+    from . import review_settle
+
     kept, dropped = wording_and_notes(found)
     out = Outcome(kept, dropped)
     if doc is None or not doc.is_file():
+        review_settle.flag_residual(out, {})
         return out
     stats: dict[str, int] = dict.fromkeys(
         (
@@ -441,6 +453,7 @@ def settle(
             "system_scrubbed",
             "differ_disclosed",
             "differ_flagged",
+            "residual_flagged",
         ),
         0,
     )
@@ -466,8 +479,6 @@ def settle(
         _sync_entries(sr, out.deleted_lines)
         stats["summary_deleted"] = len(out.deleted_lines)
         sr.log(f"review: {len(out.deleted_lines)} summary line(s) no entry supports, deleted")
-    from . import review_settle
-
     review_settle.scrub_system(sr, doc, out, stats)
     pend = [k for k, f in enumerate(out.findings) if _repairable(f)]
     before_rounds = {str(check_no(out.findings[k])): 0 for k in pend}
@@ -487,6 +498,7 @@ def settle(
             out.repaired += 1
         out.changed = out.changed or after != before
     review_settle.disclose_differ(sr, doc, out, stats)
+    review_settle.flag_residual(out, stats)
     _record(sr, out, pend, before_rounds, stats)
     return out
 

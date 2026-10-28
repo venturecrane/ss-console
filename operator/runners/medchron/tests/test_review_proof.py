@@ -94,12 +94,15 @@ def test_a_clean_chronology_passes_on_the_strongest_tier_with_no_notes_file(job_
     )
 
 
-def test_this_chunk_in_the_chronology_holds(job_dir, firm_config_path, data_root):
-    """eng#226: "this chunk" reached a firm in a delivered chronology."""
+def test_this_chunk_in_the_chronology_never_reaches_the_firm(job_dir, firm_config_path, data_root):
+    """eng#226: "this chunk" reached a firm in a delivered chronology. It is
+    the entry's only sentence here, so the words alone go (2026-10-28) and the
+    entry, its citation and the delivery stay."""
     doc = DOC.replace("Continue therapy.", "Continue therapy as noted in this chunk.")
     sr, log = _package(job_dir, firm_config_path, data_root, doc)
-    assert _review(sr, FakeDoorway(CLEAN)) == 2
-    assert log[-1].startswith("review_held:") and "this chunk" in log[-1]
+    assert _review(sr, FakeDoorway(CLEAN)) == 0, log
+    text = review.docx_text(sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx")
+    assert "this chunk" not in text and "Continue therapy as noted. (Exhibit 1 - p. 3)" in text
 
 
 def test_an_entry_dated_after_today_holds(job_dir, firm_config_path, data_root):
@@ -117,15 +120,31 @@ def test_a_citation_to_an_exhibit_not_delivered_holds(job_dir, firm_config_path,
     assert "Exhibit 2" in log[-1]
 
 
-def test_a_model_must_fix_on_a_hold_check_holds(job_dir, firm_config_path, data_root):
-    """A model MUST-FIX on a hold check the policy cannot settle holds (a
-    check 4 whose quote names no single line and no entry)."""
+HOLD1 = "| MUST-FIX | 1 another person's records | the summary may carry another person's visits | Medical Summary |"
+
+
+def test_a_model_must_fix_no_rule_settles_is_flagged_for_the_attorney_and_delivered(
+    job_dir, firm_config_path, data_root
+):
+    """2026-10-28: a check 4 whose quote names no single line and no entry
+    is no longer a stop. It is flagged in the Review Notes and the chronology
+    is filed unedited."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     row = (
         '| MUST-FIX | 4 summary with no entry | the reference "Exhibit 1 - p. 2" has no support | Treatment Timeline |'
     )
-    assert _review(sr, FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")) == 2
-    assert log[-1].startswith("review_held:") and "no support" in log[-1]
+    assert _review(sr, FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")) == 0, log
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    notes = review.docx_text(sr.slug_dir / "out" / "alpha" / _manifest_names(sr)[1])
+    assert "flagged for the attorney" in notes and "no support" in notes
+
+
+def test_a_model_check1_no_page_settles_still_holds(job_dir, firm_config_path, data_root):
+    """Falsifier: another person's records, cited to no entry, still holds."""
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    assert _review(sr, FakeDoorway(f"{HOLD1}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")) == 2
+    assert log[-1].startswith("review_held:")
 
 
 def _three_pages(sr: StageRun, p3: str) -> None:
@@ -222,15 +241,17 @@ def test_a_check4_summary_line_no_entry_supports_is_deleted_and_re_rendered(job_
     assert _settle_review(sr, d) == 0 and d.calls == []
 
 
-def test_a_check4_quote_that_names_no_single_summary_line_holds(job_dir, firm_config_path, data_root):
+def test_a_check4_quote_that_names_no_single_summary_line_is_flagged_and_nothing_deleted(
+    job_dir, firm_config_path, data_root
+):
     """Deletion only when the quote names exactly one line; otherwise MUST,
     and a finding that names no entry cannot be repaired either."""
     sr, log = _package(job_dir, firm_config_path, data_root)
     row = (
         '| MUST-FIX | 4 summary with no entry | the reference "Exhibit 1 - p. 2" has no support | Treatment Timeline |'
     )
-    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 2
-    assert log[-1].startswith("review_held:")
+    assert _settle_review(sr, FakeDoorway(_verdict(row))) == 0, log
+    assert proof_review.load(sr.slug_dir / "runs" / "alpha")["must_fix"] == 0
     assert "| Example Clinic | 01/20/2026" in (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
 
 
@@ -328,9 +349,8 @@ def test_an_audit_gate_drop_is_listed_in_the_review_notes(job_dir, firm_config_p
 def test_a_held_review_is_not_paid_twice_and_smds_release_files_it_with_the_findings(
     job_dir, firm_config_path, data_root
 ):
-    doc = DOC.replace("Continue therapy.", "Continue therapy as noted in this chunk.")
-    sr, log = _package(job_dir, firm_config_path, data_root, doc)
-    d = FakeDoorway(CLEAN)
+    sr, log = _package(job_dir, firm_config_path, data_root)
+    d = FakeDoorway(f"{HOLD1}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE")
     assert _review(sr, d) == 2
     assert _review(sr, d) == 2 and len(d.calls) == 1, "a resume holds again from the record, unpaid"
     (job_dir / proof_review.RELEASE_MARKER).write_text(json.dumps({"reason": "attorney asked for it as is"}))
@@ -338,15 +358,12 @@ def test_a_held_review_is_not_paid_twice_and_smds_release_files_it_with_the_find
     rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
     assert proof_review.status(rec) == "released" and rec["released_reason"] == "attorney asked for it as is"
     notes = review.docx_text(sr.slug_dir / "out" / "alpha" / _manifest_names(sr)[1])
-    assert "graded must-fix, released by SMD" in notes and "this chunk" in notes
+    assert "graded must-fix, released by SMD" in notes and "another person's visits" in notes
 
 
 def test_a_redo_marker_reviews_afresh_once_per_request(job_dir, firm_config_path, data_root):
     sr, log = _package(job_dir, firm_config_path, data_root)
-    row = (
-        '| MUST-FIX | 4 summary with no entry | the reference "Exhibit 1 - p. 2" has no support | Treatment Timeline |'
-    )
-    d = FakeDoorway(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE", CLEAN)
+    d = FakeDoorway(f"{HOLD1}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE", CLEAN)
     assert _review(sr, d) == 2
     (job_dir / proof_review.REDO_MARKER).write_text("{}")
     assert _review(sr, d) == 0 and len(d.calls) == 2, "the redo paid for a fresh review"
@@ -464,7 +481,7 @@ class _HoldingReviewer(_NoNetwork):
     def stream(self, **kw):
         if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
             self.calls.append(kw)
-            row = "| MUST-FIX | 3 system language | a heading reads as the system's | Medical Summary |"
+            row = HOLD1
             return _Stream(_text_msg(f"{row}\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
         return super().stream(**kw)
 
