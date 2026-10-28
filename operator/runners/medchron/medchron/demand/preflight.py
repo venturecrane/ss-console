@@ -25,6 +25,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import unopened
 from ..stages.extract import docx_text, glyph_junk, not_english
 from .firm import DemandFirm
 
@@ -52,6 +53,7 @@ def _pdf_pages(path: Path) -> list[dict[str, Any]]:
 
     out = []
     with pymupdf.open(str(path)) as doc:
+        unopened.refuse_locked(doc)
         for i, page in enumerate(doc, 1):
             text = page.get_text() or ""
             has_image = bool(page.get_images(full=False))
@@ -90,6 +92,11 @@ def extract_one(row: dict[str, Any], text_dir: Path) -> dict[str, Any]:
         else:
             rec.update(pages=0, transcribe=[], unextractable=f"no extractor for {ext or 'this file'}")
             return rec
+    except unopened.Locked:
+        # The reason the chronology names a locked file with, never the
+        # reader's "document closed or encrypted".
+        rec.update(pages=0, transcribe=[], unextractable=unopened.REASON)
+        return rec
     except Exception as exc:  # noqa: BLE001 - one broken file is one row, named
         rec.update(pages=0, transcribe=[], unextractable=f"{type(exc).__name__}: {str(exc)[:120]}")
         return rec

@@ -35,6 +35,7 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import unopened
 from ..deadline import is_transient
 from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
@@ -83,6 +84,12 @@ class ExtractFailure(RuntimeError):
     def __init__(self, problem: str) -> None:
         self.problem = problem
         super().__init__(problem)
+
+
+#: The failure code of a PDF locked with a password (``unopened``). Without it
+#: a locked attachment raised out of its email and the whole email, body and
+#: every other attachment, became one unreadable file.
+PASSWORD = "pdf_password"
 
 
 def _pages(texts: list[str]) -> str:
@@ -152,6 +159,8 @@ def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
             _release()
             raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
         try:
+            if unopened.locked(doc):
+                raise ExtractFailure(f"{PASSWORD}: {unopened.REASON}")
             texts = [pg.get_text() or "" for pg in doc]
             picks = ocr_pages(texts)
             if picks and ocr is None:

@@ -93,7 +93,7 @@ def render_doc(path: str) -> tuple[dict[int, str], int, bool]:
     import pymupdf
 
     doc = pymupdf.open(path)
-    if doc.needs_pass and not doc.authenticate(""):
+    if unopened.locked(doc):
         try:
             n = len(doc)
         except Exception:  # noqa: BLE001 - a locked file may not report its pages

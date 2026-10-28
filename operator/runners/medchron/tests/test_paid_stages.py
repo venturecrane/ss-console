@@ -13,7 +13,7 @@ from medchron import config as config_mod, decisions, job as job_mod, llm, unope
 from medchron.stages import billing as billing_stage, units as units_stage, vision as vision_stage
 from medchron.stages import transcript
 from medchron.stages.base import StageRun
-from medchron_testkit import FakeSeat, make_pdf
+from medchron_testkit import FakeSeat, make_locked_pdf, make_pdf
 
 PROSE = "Patient seen in clinic today for follow up of neck pain after the collision. " * 8
 
@@ -290,16 +290,9 @@ def test_a_clean_billing_run_writes_an_empty_gap_list(job_dir: Path, firm_config
 
 # ---- a password-protected billing document -------------------------------------------
 def locked_pdf(pages: int = 1) -> bytes:
-    """A real PDF that will not open without its user password: pymupdf
-    reports needs_pass and an empty password does not authenticate."""
-    import pymupdf
-
-    doc = pymupdf.open()
-    for _ in range(pages):
-        doc.new_page()
-    data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
-    doc.close()
-    return data
+    """A real PDF that will not open without its user password (the shared
+    ``make_locked_pdf`` fixture)."""
+    return make_locked_pdf(pages)
 
 
 def _named(calls: list[dict]) -> set[str]:
