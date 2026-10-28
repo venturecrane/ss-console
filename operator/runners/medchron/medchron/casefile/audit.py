@@ -91,7 +91,13 @@ def items(
 def decided_in_code(item: dict[str, Any], firm: Any) -> dict[str, Any] | None:
     subj = str(item.get("subject") or "")
     if firm.at_stake_rx.search(subj) or any(p.fullmatch(subj.strip()) for p in firm.statute_rx):
-        return {"task_id": item["task_id"], "verdict": "refuted", "reason": "money, a court date or a statute"}
+        # ``by: rule`` lets the print-out say a firm rule kept it open, not a failed reading.
+        return {
+            "task_id": item["task_id"],
+            "verdict": "refuted",
+            "reason": "money, a court date or a statute",
+            "by": "rule",
+        }
     return None
 
 

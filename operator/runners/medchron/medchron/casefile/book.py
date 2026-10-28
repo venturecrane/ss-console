@@ -121,6 +121,8 @@ def _open_tasks(rec: dict[str, Any], lines: dict[str, int], verdicts: dict[str, 
         tid, action = str(t.get("task_id") or ""), t.get("action")
         if action == "mark_complete" and tid in lines:
             what = f"Mark complete: proposed, change {lines[tid]}, awaiting approval"
+        elif action == "mark_complete" and (verdicts.get(tid) or {}).get("by") == "rule":
+            what = "Leave open: tasks about money, a court date or a statute stay with the firm"
         elif action == "mark_complete":
             v = verdicts.get(tid) or {}
             what = f"Leave open: a second reading did not confirm the proof ({v.get('verdict') or 'unsure'})"
@@ -191,7 +193,27 @@ def _insurance(rec: dict[str, Any]) -> str:
     return "<h2>Insurance</h2>\n" + table(["Policy", "Carrier", "Claim", "Adjuster", "Limits", "Source"], rows)
 
 
-def _lists(rec: dict[str, Any]) -> str:
+def questions_kept(rec: dict[str, Any], verdicts: dict[str, Any]) -> list[Any]:
+    """The reader's questions, less any asking the firm to confirm closing a task a firm rule keeps open.
+
+    The reader may propose closing a money task and ask the firm to confirm it;
+    code refuses that closure, so the question would ask for something that is
+    never on offer."""
+    kept_open = [
+        str(t.get("subject") or "").strip().lower()
+        for t in rec.get("open_tasks") or []
+        if (verdicts.get(str(t.get("task_id") or "")) or {}).get("by") == "rule"
+    ]
+    kept_open = [s for s in kept_open if s]
+
+    def offers_refused(q: Any) -> bool:
+        text = str(q).lower()
+        return "clos" in text and any(s in text for s in kept_open)
+
+    return [q for q in rec.get("questions") or [] if not offers_refused(q)]
+
+
+def _lists(rec: dict[str, Any], verdicts: dict[str, Any]) -> str:
     parts = []
     orders = [[e(o.get("facility")), e(o.get("note"))] for o in rec.get("records_to_order") or []]
     if orders:
@@ -204,7 +226,7 @@ def _lists(rec: dict[str, Any]) -> str:
     ]
     if letters:
         parts.append("<h2>Letters</h2>\n" + table(["Letter", "Status", "Missing"], letters))
-    qs = rec.get("questions") or []
+    qs = questions_kept(rec, verdicts)
     if qs:
         parts.append("<h2>Questions</h2>\n<ol>\n" + "".join(f"<li>{e(q)}</li>\n" for q in qs) + "</ol>\n")
     return "\n".join(parts)
@@ -237,7 +259,7 @@ def render_html(
         _done(rec),
         _medicals(rec, plan.get("medicals") or {}),
         _insurance(rec),
-        _lists(rec),
+        _lists(rec, plan.get("verdicts") or {}),
     ]
     body = "\n".join(p for p in parts if p)
     return f'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>File Status {e(number)} {e(asof)}</title><style>{CSS}</style></head>\n<body>\n{body}\n</body></html>\n'

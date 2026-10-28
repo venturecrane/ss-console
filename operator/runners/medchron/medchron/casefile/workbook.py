@@ -21,6 +21,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from . import book
 from .rank import LABEL
 
 POSTURE_WORDS = {
@@ -126,7 +127,10 @@ def build(path: Path, rows: list[dict[str, Any]], lines: list[dict[str, Any]], h
     needs = [
         [str(r["number"]), LABEL[r["rank"]["priority"]], str(x.get("finding") if isinstance(x, dict) else x)]
         for r in rows
-        for x in [*(r["review"].get("time_sensitive") or []), *(r["review"].get("questions") or [])]
+        for x in [
+            *(r["review"].get("time_sensitive") or []),
+            *book.questions_kept(r["review"], r.get("verdicts") or {}),
+        ]
     ]
     _plain(wb, "Needs you", ["Matter", "Priority", "What"], needs, [10, 13, 90], "Nothing is waiting on you.")
     orders = [
