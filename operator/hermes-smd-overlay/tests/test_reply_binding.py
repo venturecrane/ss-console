@@ -932,6 +932,38 @@ def test_an_unknown_mode_binds_nothing(lane, trigger) -> None:
     assert mod.binding.SESSION_BINDINGS.get(WAKE) is None
 
 
+def _casefile_wake(mod, trigger: str) -> None:
+    # The lane's own wake (ss-console casefile_lane.py).
+    mod.on_pre_llm_call(
+        session_id=WAKE,
+        sender_id="webhook:handoff",
+        user_message=(
+            f"Run the case-file-manager skill's DELIVER mode for casefile job {JOB}.\n"
+            "Kind: casefile.\nMode: recheck.\n"
+            f"Trigger: {trigger}.\n"
+        ),
+    )
+
+
+def test_a_scheduled_casefile_wake_binds_its_new_message(lane) -> None:
+    """The weekday re-check has no request email: the broker binds it
+    ``new_message``. FALSIFIER: leave casefile_job out of SCHEDULED_KINDS and
+    every scheduled list is filed but emailed to nobody (pilot 10-28)."""
+    mod, _d1, _broker, _ = lane
+    _casefile_wake(mod, trigger="scheduled")
+    assert mod.binding.TURN_SOURCES.scheduled(WAKE) is True
+    # record_from_result answers only a refusal; None is a recorded binding.
+    assert mod.binding.record_from_result(WAKE, _new_message_verdict("casefile_job")) is None
+    assert mod.binding.SESSION_BINDINGS.get(WAKE) is not None
+
+
+def test_a_requested_casefile_wake_still_refuses_a_new_message(lane) -> None:
+    mod, _d1, _broker, _ = lane
+    _casefile_wake(mod, trigger="request")
+    out = json.loads(mod.binding.record_from_result(WAKE, _new_message_verdict("casefile_job")))
+    assert out["bound"] is False and "scheduled run's own wake" in out["reason"]
+
+
 def test_the_scheduled_trigger_is_read_only_from_the_handoff_route(lane) -> None:
     mod, _d1, _broker, _ = lane
     _litigation_wake(mod, trigger="scheduled", sender="webhook:agentmail")
