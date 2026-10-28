@@ -227,6 +227,11 @@ def _normalize_agentmail(payload: dict) -> InboundMessage | None:
     provider_refs = {"inbox_id": inbox_id, "message_id": message_id}
     if thread_ref:
         provider_refs["thread_id"] = thread_ref
+    # AgentMail's message_id IS the RFC 2822 Message-ID ("<...@...>"): carry it
+    # as the internet_message_id every request lane keys its job on, as Graph
+    # does. Without it no emailed request could queue on an AgentMail seat.
+    if "@" in message_id:
+        provider_refs["internet_message_id"] = message_id
 
     return InboundMessage(
         provider=PROVIDER_AGENTMAIL,
