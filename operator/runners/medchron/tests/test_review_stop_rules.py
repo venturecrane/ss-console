@@ -72,11 +72,18 @@ def test_system_words_the_cited_page_prints_verbatim_are_a_note_not_a_hold(job_d
     assert pol["system_words_on_record"] == 1
 
 
-def test_system_words_no_cited_page_prints_still_hold(job_dir, firm_config_path, data_root):
+def test_system_words_no_cited_page_prints_are_flagged_and_filed(job_dir, firm_config_path, data_root):
+    """Not on the page, and the entry's only paragraph: no deletion would
+    leave the sentence whole, so it is filed as written and flagged for the
+    attorney in the Review Notes (2026-10-28), never a stop."""
     sr, log = _package(job_dir, firm_config_path, data_root, DOC.replace("Continue therapy.", AUDITOR))
     _pages(sr, "Patient: Alpha Example. Plan: continue therapy.")
-    assert _settle_review(sr, FakeDoorway(CLEAN)) == 2
-    assert log[-1].startswith("review_held:") and "the auditor" in log[-1]
+    assert _settle_review(sr, FakeDoorway(CLEAN)) == 0, log
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    assert any(
+        f["finding"].startswith("flagged for the attorney") and "the auditor" in f["finding"] for f in rec["findings"]
+    )
 
 
 # ---- row 12 ----------------------------------------------------------------------
