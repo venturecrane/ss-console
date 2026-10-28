@@ -170,9 +170,14 @@ def test_disabled_skills_reconciler_launched_with_r2_key_scrubbed() -> None:
     same fix shape as the webhook-gate launch, whose test sits above this one.
     This guard fails if the launch reverts to a bare fork."""
     lines = _code_lines(_BOOTSTRAP)
-    loop_idx = _first_index(lines, r'while \[ "\$\{_ticks\}" -lt 60 \]')
+    loop_idx = _first_index(lines, r'while \[ "\$\{_ticks\}" -lt 450 \]')
     assert loop_idx != -1, "could not find the disabled-skills reconciler loop"
-    window = "\n".join(lines[max(0, loop_idx - 6) : loop_idx])
+    # The launch line and the loop's own variable setup, nothing above them.
+    launch_idx = max(
+        (i for i in range(max(0, loop_idx - 8), loop_idx) if re.search(r"\bbash -c '", lines[i])),
+        default=max(0, loop_idx - 6),
+    )
+    window = "\n".join(lines[launch_idx:loop_idx])
     assert re.search(r"env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c", window), (
         "the disabled-skills reconciler must be launched via "
         "`env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c …` — an exec "
@@ -183,6 +188,52 @@ def test_disabled_skills_reconciler_launched_with_r2_key_scrubbed() -> None:
     assert "(" not in window.replace("$((", "").replace("))", ""), (
         "a `(` immediately before the reconciler loop suggests the launch "
         "reverted to a forked subshell — the exact ss#2420 leak shape."
+    )
+
+
+def test_disabled_skills_reconciler_is_anchored_to_the_gateway_start() -> None:
+    """The disabled-skills reconciler must cover the gateway's OWN skill sync.
+
+    Hermes' `gateway run` re-copies every bundled skill missing from
+    .bundled_manifest as its first step, so a disabled skill comes back seconds
+    after the exec. The ss#2230 loop was launched at the Step 7b.1 guard with a
+    120s window measured from there; every later boot step (the #3581 pm_state
+    purge and state.db opens among them) ate into that window before the gateway
+    started, and on 2026-10-28 pilot-smokeball failed disabled-skills-pruned
+    and rolled back (fleet_rollouts ro-940f1fc729bd). The loop must therefore
+    launch after every pre-gateway step, immediately before the exec, and must
+    not exit until the gateway's loop heartbeat (written only after the sync)
+    is newer than the loop's own start marker."""
+    lines = _code_lines(_BOOTSTRAP)
+    loop_idx = _first_index(lines, r'while \[ "\$\{_ticks\}" -lt \d+ \]')
+    gateway_idx = _first_index(lines, r"\bexec\b.*\bhermes\b.*\bgateway\s+run\b")
+    assert loop_idx != -1, "could not find the disabled-skills reconciler loop"
+    assert gateway_idx != -1, "could not find the `exec ... hermes ... gateway run` line"
+    for step, pattern in (
+        ("the pm_state purge/check", r"-m bootstrap\.pm_state check"),
+        ("the state.db open of every state.db", r"-m bootstrap\.state_db_open"),
+        ("the TMPDIR export", r"^export TMPDIR="),
+    ):
+        step_idx = _first_index(lines, pattern)
+        assert step_idx != -1, f"could not find {step} in bootstrap.sh"
+        assert step_idx < loop_idx < gateway_idx, (
+            f"the disabled-skills reconciler must launch AFTER {step} and before the "
+            "gateway exec: its window has to start with the gateway, not with bootstrap's "
+            "clock (2026-10-28 pilot-smokeball rollback)."
+        )
+    # Nothing but the reconciler's own launch, the start log and the exec may sit
+    # between the loop and the gateway.
+    between = [line for line in lines[loop_idx:gateway_idx] if line.strip()]
+    assert not any(re.search(r"\bdie\b|/opt/hermes/.venv/bin/python3 -m|\bfor _", line) for line in between), (
+        "a boot step sits between the reconciler launch and the gateway exec"
+    )
+    body = "\n".join(lines[loop_idx:gateway_idx])
+    assert re.search(r'"\$\{_hb\}" -nt "\$4"', body), (
+        "the reconciler must wait for the gateway heartbeat to be newer than its start "
+        "marker before its clean streak can end it"
+    )
+    assert re.search(r'"\$\{_gateway_seen\}" -eq 1 \] && \[ "\$\{_clean_streak\}" -ge 3', body), (
+        "the reconciler may exit only on a clean streak AFTER the gateway was seen"
     )
 
 
