@@ -17,7 +17,6 @@ import base64
 import json
 import re
 import secrets
-import subprocess
 import sys
 import tempfile
 import time
@@ -27,6 +26,7 @@ from typing import Any
 import yaml
 
 from bin.lib.boot_harness import fixture, judge
+from bin.lib.boot_harness.stream import ANSI, LogStream, machine_lines
 from bin.lib.fleet.build import dockerfile_arg
 from bin.lib.fleet.runner import CommandRunner, Runner, ToolingError
 
@@ -376,43 +376,6 @@ def cmd_observe(args: argparse.Namespace) -> int:
     out = Path(args.out_dir or tempfile.mkdtemp(prefix="boot-harness-"))
     out.mkdir(parents=True, exist_ok=True)
     return _observe(CommandRunner(), args, args.machine, out)
-
-
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
-
-
-class LogStream:
-    """`fly logs` streamed to a file for the whole run.
-
-    `fly logs --no-tail` returns only the last ~100 buffered lines; on the first
-    calibration run that cut off everything before the gateway's exit, including
-    its cause. The harness app holds only harness Machines, so the app stream is
-    this run's log. Started BEFORE `fly machine run`, so the first boot line is kept.
-    """
-
-    def __init__(self, app: str, path: Path) -> None:
-        self.path = path
-        self._fh = path.open("w", encoding="utf-8")
-        self._proc = subprocess.Popen(  # noqa: S603 - fixed argv, never a shell
-            ["fly", "logs", "-a", app], stdout=self._fh, stderr=subprocess.STDOUT, text=True
-        )
-
-    def close(self) -> str:
-        time.sleep(5)  # let the last lines arrive
-        self._proc.terminate()
-        try:
-            self._proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self._proc.kill()
-        self._fh.close()
-        return ANSI.sub("", self.path.read_text(encoding="utf-8", errors="replace"))
-
-
-def machine_lines(log: str, machine: str) -> str:
-    """Only this Machine's lines: the app stream replays buffered lines of earlier
-    harness Machines, and the first calibration run judged those as this boot's."""
-    tag = f"[{machine}]"
-    return "\n".join(ln for ln in log.splitlines() if tag in ln)
 
 
 def _boot_round(runner: Runner, args: argparse.Namespace, machine: str) -> tuple[float | None, dict[str, Any] | None]:
