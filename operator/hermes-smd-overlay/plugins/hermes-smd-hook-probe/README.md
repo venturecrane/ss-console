@@ -8,16 +8,16 @@ Unlike the four production sibling plugins (`hermes-smd-audit`, `hermes-smd-trus
 
 ## Hooks attached
 
-All six hooks the SMD overlay depends on, at Hermes pinned ref `v0.22.5` (commit `bf0203a794a07aac3ff764972ab9087baa4e4f4e`), re-verified 2026-10-27 at the v0.22.5 promotion (ss-console#3564). `docs/hook-surface.md` carries the full citations and the v2026.5.16 sites they replaced.
+All six hooks the SMD overlay depends on, at Hermes pinned ref `v2026.5.16` (commit `a91a57fa5a13d516c38b07a141a9ce8a3daabeb0`).
 
-| Hook | Firing site (Hermes v0.22.5) | Kwargs |
+| Hook | Firing site (Hermes v2026.5.16) | Kwargs |
 |---|---|---|
-| `pre_tool_call` | `hermes_cli/plugins.py:1956-1960`, via `_dispatch_pre_tool_call_hooks` from `model_tools.py:779` and `agent/tool_executor.py:675` | `tool_name, args, task_id, session_id, tool_call_id, turn_id, api_request_id, middleware_trace` |
-| `post_tool_call` | `model_tools.py:687-692` | `tool_name, args, result, task_id, session_id, tool_call_id, duration_ms` |
-| `pre_llm_call` | `agent/turn_context.py:799-852` | `session_id, user_message, conversation_history, is_first_turn, model, platform, sender_id` |
-| `post_llm_call` | `agent/turn_finalizer.py:457-470` | `session_id, user_message, assistant_response, conversation_history, model, platform` |
-| `transform_tool_result` | `model_tools.py:858-860` | `tool_name, args, result, task_id, session_id, tool_call_id, duration_ms` |
-| `on_session_end` | `agent/turn_finalizer.py:798` (primary) + `hermes_cli/cli_shutdown.py:196-216` (safety net) | `session_id, completed, interrupted, model, platform` |
+| `pre_tool_call` | `hermes_cli/plugins.py:1419-1426` from `model_tools.py:778` | `tool_name, args, task_id, session_id, tool_call_id` |
+| `post_tool_call` | `model_tools.py:826-836` | `tool_name, args, result, task_id, session_id, tool_call_id, duration_ms` |
+| `pre_llm_call` | `run_agent.py:12447-12457` | `session_id, user_message, conversation_history, is_first_turn, model, platform, sender_id` |
+| `post_llm_call` | `run_agent.py:15901-15910` | `session_id, user_message, assistant_response, conversation_history, model, platform` |
+| `transform_tool_result` | `model_tools.py:847-857` | `tool_name, args, result, task_id, session_id, tool_call_id, duration_ms` |
+| `on_session_end` | `run_agent.py:16016-16024` (primary) + `cli.py:13831-13839` (safety net) | `session_id, completed, interrupted, model, platform` |
 
 ## What it does
 
@@ -43,9 +43,7 @@ The probe is observer-only. Every callback returns `None` and wraps its body in 
 ## Install
 
 ```bash
-# The overlay pack is a directory under $HERMES_HOME/plugins (a seat's
-# bootstrap.sh copies it there from the image); Hermes discovers it, then:
-hermes plugins enable hermes-smd-overlay
+hermes plugins install venturecrane/hermes-smd-overlay --enable
 hermes plugins enable hermes-smd-hook-probe
 ```
 

@@ -23,7 +23,7 @@ _BASE = dedent(
     vertical: mixed
     fly_region: lax
     model: claude-sonnet-4-6
-    hermes_ref: v0.22.5
+    hermes_ref: v2026.9.14
     personas:
       - slug: agent-crane
         status: active

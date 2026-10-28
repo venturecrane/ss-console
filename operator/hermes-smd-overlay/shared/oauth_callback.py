@@ -161,7 +161,7 @@ def exchange_code(
             "redirect_uri": redirect_uri,
         }
     )
-    # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (3.14 in the Hermes venv, #3564; CERT_REQUIRED + check_hostname); the host is a module-constant Smokeball auth host selected by region, never caller input
+    # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (3.13); the host is a module-constant Smokeball auth host selected by region, never caller input
     conn = http.client.HTTPSConnection(host, 443, timeout=timeout)
     try:
         conn.request(
