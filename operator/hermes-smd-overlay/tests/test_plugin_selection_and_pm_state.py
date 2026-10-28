@@ -103,13 +103,31 @@ def test_purge_removes_only_a_recorded_selection_and_its_store(tmp_path, capsys)
     assert pm_state.main(["x", "check", str(root)]) == 0
 
 
-def test_purge_leaves_a_store_with_no_selection_and_check_still_fails(tmp_path):
-    # Precise by design: a store with nothing selected was not left by the failure
-    # we know, so the boot refuses (check) instead of deleting what it cannot explain.
-    (tmp_path / "tools").mkdir()
-    assert pm_state.purge(tmp_path) == []
-    assert (tmp_path / "tools").exists()
+def test_a_tools_only_volume_is_purged_and_then_passes_check(tmp_path, capsys):
+    # A store with no selection (an interrupted boot, or a selection removed by
+    # hand, as on smd-staging) is still harmful: cron runs pre_run scripts on its
+    # Python. Leaving it for check to refuse would fail every boot closed, a crash
+    # loop. FALSIFIER: keep tools unless a selection went with it, and check fails.
+    (tmp_path / "tools" / "cpython-3.14" / "bin").mkdir(parents=True)
+    (tmp_path / "installs" / "ffffffffffffffff" / "bootstrap").mkdir(parents=True)
     assert pm_state.main(["x", "check", str(tmp_path)]) == 1
+    assert pm_state.main(["x", "purge", str(tmp_path)]) == 0
+    assert "with no selection recorded" in capsys.readouterr().out
+    assert not (tmp_path / "tools").exists()
+    assert (tmp_path / "installs" / "ffffffffffffffff").exists(), "no selection there: not ours to delete"
+    assert pm_state.main(["x", "check", str(tmp_path)]) == 0
+
+
+def test_a_tools_symlink_is_unlinked_not_followed(tmp_path):
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    (target / "keep").write_text("x")
+    (tmp_path / "root").mkdir()
+    (tmp_path / "root" / "tools").symlink_to(target)
+    pm_state.purge(tmp_path / "root")
+    assert not (tmp_path / "root" / "tools").is_symlink()
+    assert (target / "keep").exists()
+    assert pm_state.main(["x", "check", str(tmp_path / "root")]) == 0
 
 
 def test_unreadable_facts_count_as_a_selection(tmp_path):

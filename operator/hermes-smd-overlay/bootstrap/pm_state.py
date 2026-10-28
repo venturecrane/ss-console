@@ -25,9 +25,12 @@ Nothing in the seat image writes there.
 
 ``purge`` removes exactly the state a failed v0.22 boot left: each
 ``installs/<key>`` whose facts.json records a venv (or cannot be read, which
-Hermes also refuses to boot past: ``_recorded_venv`` raises), and ``tools`` only
-when such a selection was removed alongside it. It prints every path it
-removes. ``check`` is the fail-closed assertion bootstrap.sh runs before the
+Hermes also refuses to boot past: ``_recorded_venv`` raises), and ``tools``
+whenever it exists. A bare store is harmful on its own (cron runs pre_run
+scripts on its Python), and a volume can hold one without a selection: an
+interrupted boot, or a selection removed by hand. Refusing to boot on it
+instead would crash-loop the seat, because nothing else ever removes it. It
+prints every path it removes. ``check`` is the fail-closed assertion bootstrap.sh runs before the
 gateway exec and seat-checks.sh runs after: no recorded venv in any facts.json,
 and no ``tools`` store.
 
@@ -86,12 +89,13 @@ def purge(root: Path) -> list[str]:
         shutil.rmtree(key_dir)
         removed.append(f"{key_dir} ({reason})")
     tools = root / "tools"
-    if selections and (tools.exists() or tools.is_symlink()):
+    if tools.exists() or tools.is_symlink():
         if tools.is_dir() and not tools.is_symlink():
             shutil.rmtree(tools)
         else:
             tools.unlink()
-        removed.append(f"{tools} (the package manager store that built it)")
+        why = "the package-manager store" + (" that built it" if selections else ", with no selection recorded")
+        removed.append(f"{tools} ({why})")
     return removed
 
 
