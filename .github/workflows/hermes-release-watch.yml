@@ -7,7 +7,7 @@
 # habit: it opens a tracking issue when NousResearch/hermes-agent ships a tag
 # different from the one the fleet is pinned to, so the pin can never silently
 # rot again. Promotion stays a deliberate, staged human decision (see
-# docs/runbooks/operator/hermes-v0.18-upgrade-plan.md). Build the pipeline the
+# docs/runbooks/operator/hermes-v0.22-upgrade-plan.md, the latest). Build the pipeline the
 # day seat count actually demands it, not before.
 name: hermes-release-watch
 
@@ -43,7 +43,7 @@ jobs:
           # Read it with retries, then from a SECOND endpoint, before giving up.
           # Run #6 (2026-08-17) died on one bad second: a single `gh api` call came
           # back empty, the job exited 1, and a weekly signal became a critical
-          # alert for a GitHub hiccup. The identical call returns v2026.9.14 today.
+          # alert for a GitHub hiccup. The identical call returned the fleet pin that day.
           #
           # This still fails loudly when upstream is genuinely unreadable — a
           # renamed repo, a revoked token, a changed response shape — because that
@@ -108,7 +108,7 @@ jobs:
           printf '%s\n' \
             "Upstream **$LATEST_TAG** has shipped; the SMD Operator fleet is blessed at **$BLESSED_TAG**." \
             "" \
-            "This is a signal, not an auto-upgrade. Evaluate and promote deliberately per the staged runbook \`docs/runbooks/operator/hermes-v0.18-upgrade-plan.md\` (hook-surface diff, build, boot-smoke, staged rollout, bless)." \
+            "This is a signal, not an auto-upgrade. Evaluate and promote deliberately per the staged runbook \`docs/runbooks/operator/hermes-v0.22-upgrade-plan.md\` (hook-surface diff, defaults diff, build, self-test, staged rollout, bless)." \
             "" \
             "- Release notes: $REL_URL" \
             "- All tags: https://github.com/NousResearch/hermes-agent/tags" \

@@ -170,3 +170,45 @@ def test_one_outage_reaches_sentry_once_not_every_sweep():
     assert levels.count(logging.ERROR) == 1
     assert levels[1] == logging.ERROR
     assert all(lvl == logging.WARNING for i, lvl in enumerate(levels) if i != 1)
+
+
+def test_session_db_open_failure_retries_instead_of_killing_the_worker(caplog):
+    """#3564: v0.22.5's first open of an empty v2026.9.14 state.db raised in the
+    worker thread and the seat ran with no durable-job worker. FALSIFIER: let the
+    exception escape and this raises instead of returning the fourth open."""
+    import sqlite3
+
+    from shared import job_worker_runtime as rt
+
+    attempts: list[int] = []
+    slept: list[float] = []
+
+    class Flaky:
+        def __init__(self) -> None:
+            attempts.append(1)
+            if len(attempts) < 4:
+                raise sqlite3.OperationalError("no such savepoint: fts_align_empty")
+
+    with caplog.at_level(logging.INFO, logger=rt.logger.name):
+        db = rt._open_session_db(Flaky, sleep=slept.append)
+    assert isinstance(db, Flaky) and len(attempts) == 4
+    assert slept == [2.0, 5.0, 15.0]
+    levels = [r.levelno for r in caplog.records if "SessionDB open failed" in r.message]
+    assert levels == [logging.WARNING, logging.WARNING, logging.ERROR]
+    assert any("opened after 3 failed attempt(s)" in r.message for r in caplog.records)
+
+
+def test_session_db_retry_backoff_caps_at_a_minute():
+    from shared import job_worker_runtime as rt
+
+    slept: list[float] = []
+    n = {"i": 0}
+
+    class Flaky:
+        def __init__(self) -> None:
+            n["i"] += 1
+            if n["i"] <= 8:
+                raise RuntimeError("down")
+
+    rt._open_session_db(Flaky, sleep=slept.append)
+    assert slept == [2.0, 5.0, 15.0, 30.0, 60.0, 60.0, 60.0, 60.0]

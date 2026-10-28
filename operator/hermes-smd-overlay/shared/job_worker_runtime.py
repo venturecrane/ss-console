@@ -170,8 +170,8 @@ def _overlay_table_cents(
     """Price the segment from the overlay's own Anthropic table, or None when the
     model is not in it.
 
-    Hermes' bundled price table lags new models (the pinned v2026.9.14 does not
-    price claude-sonnet-5-5, the A&P main model since 2026-10-13), and
+    Hermes' bundled price table lags new models (v2026.9.14 did not price
+    claude-sonnet-5-5, the A&P main model since 2026-10-13), and
     ``shared/anthropic_pricing.json`` is the table SMD keeps current for exactly
     that reason. It carries input/output rates only, so cache buckets use
     Anthropic's multipliers on the input rate: reads at 0.1x, writes at 2x (the
@@ -197,7 +197,7 @@ def _cost_dollars(cost: Any) -> float | None:
     """Dollar amount from whatever ``estimate_usage_cost`` returned, or None when
     the shape carries no usable figure.
 
-    The pinned Hermes (v2026.9.14, agent/usage_pricing.py ``CostResult``) returns
+    Hermes (agent/usage_pricing.py ``CostResult``, v2026.9.14 and v0.22.5) returns
     a frozen dataclass whose ``amount_usd`` is a ``Decimal`` -- or ``None`` when
     the route is unpriced (status ``"unknown"``). A dict (``{"total": ...}``) and
     a bare number are accepted for older/other shapes. Anything else is None, and
@@ -511,6 +511,44 @@ def _build_cost_breaker():
         return None
 
 
+SESSION_DB_RETRY_S = (2.0, 5.0, 15.0, 30.0, 60.0)
+
+
+def _open_session_db(session_db_cls: Any, sleep: Any = time.sleep) -> Any:
+    """Open the gateway's SessionDB, retrying instead of letting the worker thread die.
+
+    Hermes v0.22.5's first open of an empty v2026.9.14 state.db raised
+    ``no such savepoint: fts_align_empty`` on smd-staging's restored volume
+    (ss-console#3564); the raise ended this daemon thread with nothing but a
+    thread traceback, and the seat ran with no durable-job worker until the next
+    restart. bootstrap/state_db_open.py now takes that first open before the
+    gateway exec, so this is insurance, not the fix: any future first-open
+    failure (a migration, a lock held by a dying process) costs a retry and a
+    logged line, never the worker. Retries back off to one a minute and never
+    stop; the first failure warns and the third escalates to error, once.
+    """
+    attempt = 0
+    while True:
+        try:
+            db = session_db_cls()
+            if attempt:
+                logger.info("smd-job-worker: SessionDB opened after %d failed attempt(s)", attempt)
+            return db
+        except Exception as exc:  # noqa: BLE001 - the worker must come up
+            attempt += 1
+            delay = SESSION_DB_RETRY_S[min(attempt, len(SESSION_DB_RETRY_S)) - 1]
+            level = logging.ERROR if attempt == 3 else logging.WARNING
+            logger.log(
+                level,
+                "smd-job-worker: SessionDB open failed (attempt %d: %s: %s); retrying in %.0fs",
+                attempt,
+                type(exc).__name__,
+                exc,
+                delay,
+            )
+            sleep(delay)
+
+
 def _worker_loop() -> None:
     from shared.job_ledger_client import BrokerJobClient
     from shared.job_segment import make_run_segment
@@ -530,7 +568,7 @@ def _worker_loop() -> None:
 
     from hermes_state import SessionDB  # lazy: Hermes-only
 
-    session_db = SessionDB()
+    session_db = _open_session_db(SessionDB)
     client = BrokerJobClient()
     worker_id = f"gw-{os.getpid()}"
     run_segment = make_run_segment(

@@ -862,12 +862,18 @@ mkdir -p "${HERMES_HOME}/plugins"
 # a root-owned volume file would break a later hermes-user write (the
 # .skills_prompt_snapshot.json FATAL we hit).
 replace_dir_tolerant "${OVERLAY_PACK}" "${OVERLAY_PLUGIN_DIR}"
-# Enable in the root home the same way the profile home is enabled below: a
-# failure is a boot failure, not a `|| true`. The former swallow dated from the
-# build-time `hermes plugins install` doing the enabling; the pack is a plain
-# COPY now, so this line is the only root-home enable there is.
-/opt/hermes/.venv/bin/hermes plugins enable hermes-smd-overlay >/dev/null \
-  || die "failed to enable hermes-smd-overlay in the root Hermes home — refusing to launch an ungoverned gateway"
+# Select the overlay in the root home's config.yaml by writing the keys, NOT by
+# `hermes plugins enable` (ss-console#3564). From Hermes v0.22 `enable` runs the
+# package manager's admission, which records a dependency generation under
+# /opt/data/installs; every later hermes process then drops the image venv's
+# site-packages and the gateway boots without yaml, aiohttp or the overlay (the
+# reverted #3567). It also ran every overlay register() in a CLI process the
+# broker refuses. bootstrap/plugin_selection.py writes what `enable` wrote that
+# a seat needs (plugins.enabled, the allow_tool_override: false grant) plus
+# security.allow_lazy_installs: false, idempotently, and re-reads the file; a
+# failure is a boot failure, not a `|| true`.
+/opt/hermes/.venv/bin/python3 -m bootstrap.plugin_selection "${HERMES_HOME}/config.yaml" \
+  || die "failed to select hermes-smd-overlay in the root Hermes home config — refusing to launch an ungoverned gateway"
 [ -f "${OVERLAY_PLUGIN_DIR}/__init__.py" ] \
   || die "overlay fan-out __init__.py missing after refresh — refusing to launch an ungoverned gateway"
 log "Overlay refreshed on the volume (fan-out register present)"
@@ -875,16 +881,29 @@ log "Overlay refreshed on the volume (fan-out register present)"
 # `hermes -p <profile>` rewrites HERMES_HOME to the profile directory before
 # importing Hermes modules. Plugin discovery therefore scans the profile's
 # plugins directory, not the root volume directory refreshed above. Materialize
-# the same pinned pack into the active profile and enable it in that profile's
+# the same pinned pack into the active profile and select it in that profile's
 # config so force-discovery from the gateway process can load it.
 PROFILE_OVERLAY_PLUGIN_DIR="${PROFILE_HERMES_HOME}/plugins/hermes-smd-overlay"
 mkdir -p "${PROFILE_HERMES_HOME}/plugins"
 replace_dir_tolerant "${OVERLAY_PACK}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
 [ -f "${PROFILE_OVERLAY_PLUGIN_DIR}/__init__.py" ] \
   || die "profile overlay fan-out missing (${PROFILE_OVERLAY_PLUGIN_DIR}) — refusing to launch an ungoverned gateway"
-/opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" plugins enable hermes-smd-overlay >/dev/null \
-  || die "failed to enable hermes-smd-overlay in active profile ${ACTIVE_PROFILE}"
-log "Overlay materialized + enabled in active profile"
+# translate already wrote the selection into every persona config; this re-reads
+# the active one and fails the boot unless it holds (no `plugins enable`, above).
+/opt/hermes/.venv/bin/python3 -m bootstrap.plugin_selection "${PROFILE_HERMES_HOME}/config.yaml" \
+  || die "failed to select hermes-smd-overlay in active profile ${ACTIVE_PROFILE}"
+log "Overlay materialized + selected in active profile"
+
+# Re-assert the authored webhook tool surface (Hermes v0.22.5 promotion, #3564).
+# Since v0.22 `plugins enable` appends the enabled plugin's toolset to every
+# SAVED platform_toolsets list (hermes_cli/plugins_cmd.py _toggle_plugin_toolset).
+# bootstrap no longer runs `enable`, so on a clean boot this finds the list
+# already equal and writes nothing; it stays as the guard that a wider surface
+# on an untrusted inbound turn never ships (shared/webhook_read_surface.py,
+# ss-console#2145), whatever touched the file.
+/opt/hermes/.venv/bin/python3 -m bootstrap.webhook_toolsets "${CUSTOMER_YAML}" "${PROFILE_HERMES_HOME}/config.yaml" \
+  || die "platform_toolsets.webhook in ${ACTIVE_PROFILE} does not equal the authored list — refusing to launch"
+log "Webhook tool surface equals the authored list"
 
 # ---------- Seed the gateway-startup ACTIVATION GATE onto the volume ----------
 # The overlay's LIVE governance gate is a HookRegistry handler
@@ -1057,6 +1076,50 @@ fi
 # dead-man ping target; an agent holding it could spoof liveness at healthchecks.io.
 # Neither has any use in the agent; the gate keeps its inherited copies.
 unset OPERATOR_RUNTIME_READ_KEY MACHINE_HEARTBEAT_KEY HEALTHCHECKS_PING_URL
-log "Launching Hermes gateway for profile '${ACTIVE_PROFILE}' (overlay plugins enabled)..."
+
+# ---------- The gateway runs on the image venv, not a package-manager env (#3564) ----------
+# From Hermes v0.22 every hermes process starts by swapping onto the dependency
+# generation recorded in /opt/data/installs/<key>/facts.json, if there is one,
+# dropping the image venv's site-packages (pm/environments.py
+# activate_dependencies). The key is the same for every image and the root is
+# this volume, so a selection a failed v0.22 boot committed (smd-staging, the
+# reverted #3567) would keep every later gateway off yaml, aiohttp and the
+# overlay. Remove exactly that state, logging each path, then assert none is
+# left: a gateway that would swap environments is not one we launch.
+# seat-checks.sh hermes-pm-state-clean asserts the same after boot.
+/opt/hermes/.venv/bin/python3 -m bootstrap.pm_state purge "${HERMES_HOME}" \
+  || die "failed to remove a recorded Hermes dependency environment under ${HERMES_HOME}"
+/opt/hermes/.venv/bin/python3 -m bootstrap.pm_state check "${HERMES_HOME}" \
+  || die "a Hermes dependency environment is still recorded under ${HERMES_HOME} — refusing to launch a gateway that would run off the image venv"
+
+# ---------- The first open of each state.db happens here, not in the gateway (#3564) ----------
+# Hermes v0.22.5's first open of an EMPTY v2026.9.14 state.db raises
+# `no such savepoint: fts_align_empty` (hermes_state_schema.py
+# _migrate_misaligned_fts_source: executescript COMMITs inside its savepoint);
+# the second open completes at the current schema. In the gateway that first
+# open is the overlay job worker's, so the seat's first v0.22 boot came up
+# with no durable-job worker (boot harness, restored smd-staging volume).
+# bootstrap/state_db_open.py opens each existing state.db once in a throwaway
+# isolated interpreter (imports hermes_state only, never hermes_bootstrap),
+# retries exactly that error once, and fails the boot unless the schema is the
+# image's and, after a migration, integrity_check is ok. A missing state.db is
+# skipped: Hermes creates it at the current schema, where there is no race.
+for _state_db in "${HERMES_HOME}"/profiles/*/state.db "${HERMES_HOME}/state.db"; do
+  [ -f "${_state_db}" ] || continue
+  HERMES_HOME="$(dirname "${_state_db}")" /opt/hermes/.venv/bin/python3 -I -m bootstrap.state_db_open "${_state_db}" \
+    || die "Hermes could not open ${_state_db} at the image's schema — refusing to launch a gateway whose job worker would fail on it"
+done
+unset _state_db
+
+# Temp files stay off the volume (#3564). From v0.22 every hermes process points
+# TMPDIR/TMP/TEMP at <profile home>/cache/scratch on /opt/data unless the
+# variable is already set (hermes_constants.apply_scratch_tmp_env: "a temp var
+# the user set is respected"), and that scratch is pruned only after 24 h idle.
+# A turn's temporary copy of a client document would then outlive the process
+# and the Machine, on the volume. v2026.9.14 wrote temp files to /tmp, the
+# Machine's root filesystem, not the volume; setting the variables keeps it
+# there.
+export TMPDIR=/tmp TMP=/tmp TEMP=/tmp
+log "Launching Hermes gateway for profile '${ACTIVE_PROFILE}' (overlay plugins selected)..."
 
 exec /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" gateway run

@@ -200,6 +200,47 @@ PY
 PLUGINS_CHECK
 )"
 
+# ---------- Step 7a: the overlay is SELECTED in config, and no dependency env is recorded (#3564) ----------
+# From Hermes v0.22 `hermes plugins enable` runs the package manager's admission,
+# which records a dependency generation in /opt/data/installs/<key>/facts.json;
+# every hermes process then drops the image venv's site-packages and the gateway
+# runs without yaml, aiohttp or the overlay (the reverted #3567). bootstrap.sh
+# writes the selection into config.yaml instead (bootstrap/plugin_selection.py)
+# and purges + asserts the PM state before the gateway exec (bootstrap/pm_state.py).
+# These read both back after boot, so anything that later commits an
+# environment (a stray `enable`, a lazy install) fails the self-test. The PM
+# check runs bootstrap/pm_state.py itself from the image's overlay pack, so the
+# boot gate and this check share one predicate. pm_state.py is stdlib-only, so it
+# runs as a script on any python.
+check_script "hermes-pm-state-clean" "$(seat_prog <<'PM_STATE_CHECK'
+"$R/opt/hermes/.venv/bin/python3" "$R/app/overlay-pack/bootstrap/pm_state.py" check "$R/opt/data"
+PM_STATE_CHECK
+)"
+check_script "hermes-overlay-selected-in-config" "$(seat_prog <<'SELECTION_CHECK'
+"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data" <<'PY'
+import glob, sys, yaml
+root = sys.argv[1]
+K = "hermes-smd-overlay"
+paths = [root + "/config.yaml"] + sorted(glob.glob(root + "/profiles/*/config.yaml"))
+bad = []
+for p in paths:
+    try:
+        c = yaml.safe_load(open(p)) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        bad.append(f"{p}: {exc.__class__.__name__}")
+        continue
+    pl = c.get("plugins") if isinstance(c.get("plugins"), dict) else {}
+    if K not in (pl.get("enabled") or []) or K in (pl.get("disabled") or []):
+        bad.append(f"{p}: {K} not in plugins.enabled")
+    if ((c.get("security") or {}).get("allow_lazy_installs")) is not False:
+        bad.append(f"{p}: security.allow_lazy_installs is not false")
+if len(paths) < 2:
+    bad.append("no profile config.yaml")
+sys.exit("; ".join(bad) if bad else 0)
+PY
+SELECTION_CHECK
+)"
+
 # ---------- Step 7b: the running Hermes IS the pinned Hermes ----------
 # Hermes v0.18.0 -> v0.20.4 promotion (ss-console#2444). Every check above passes
 # identically on 0.18 and 0.20, so until now boot-smoke could not tell a promoted
@@ -353,6 +394,44 @@ check "gateway-liveness-files-readable-by-gate" "setpriv --reuid=hermes --regid=
 # box the first beat can land well after this step runs. Same idea as the
 # --wait-gateway-s flag the R2 strip probe below uses.
 check "gateway-loop-heartbeat-fresh" "n=0; while [ \$n -lt 36 ]; do for f in ${SEAT_ROOT}/opt/data/profiles/*/state/gateway.heartbeat; do [ -f \$f ] || continue; [ \$(( \$(date -u +%s) - \$(stat -c %Y \$f) )) -lt 120 ] && exit 0; done; n=\$((n+1)); sleep 5; done; exit 1"
+
+# ---------- Step 11c.1: the gateway decided to stay standalone (Hermes v0.22.5, #3564) ----------
+# From v0.22 one gateway per host multiplexes every profile by default. A
+# multiplexing gateway arms a fail-closed secret scope (agent/secret_scope.py):
+# an unscoped secret read raises instead of falling back to os.environ, which
+# is where every Fly secret on a seat lives, and it would bring up the other
+# personas' adapters and a /p/<profile>/ ingress no seat authored. translate
+# writes gateway.standalone: true into every persona profile's config.yaml, and
+# Hermes' boot decision (hermes_cli/gateway_multiplex_mode.py
+# resolve_multiplex_mode) then refuses to multiplex with STANDALONE_PROFILE_REASON.
+# log_multiplex_decision logs it ("This gateway stays standalone: <reason>.")
+# and records the reason in the launching profile's gateway_state.json as
+# multiplex_standalone_reason. This reads that record back, for every profile
+# whose gateway heartbeat is fresh (the live gateway; the check above has
+# already waited for it), and requires the exact reason string: any other
+# reason, or none, means the gateway decided for a different cause or is
+# multiplexing. No single quotes: this is a check_script program run by sh.
+check_script "gateway-multiplex-standalone" "$(seat_prog <<'MULTIPLEX_CHECK'
+"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data/profiles" <<'PY'
+import glob, json, os, sys, time
+WANT = "this profile is standalone (gateway.standalone: true); it serves only itself"
+live = []
+for beat in sorted(glob.glob(sys.argv[1] + "/*/state/gateway.heartbeat")):
+    if time.time() - os.stat(beat).st_mtime < 120:
+        live.append(os.path.dirname(os.path.dirname(beat)))
+if not live:
+    sys.exit("no profile has a fresh gateway heartbeat")
+for home in live:
+    try:
+        with open(home + "/gateway_state.json", encoding="utf-8") as fh:
+            reason = (json.load(fh) or {}).get("multiplex_standalone_reason")
+    except (OSError, ValueError) as exc:
+        sys.exit(f"{home}/gateway_state.json: {exc.__class__.__name__}")
+    if reason != WANT:
+        sys.exit(f"{os.path.basename(home)}: multiplex_standalone_reason={reason!r}, want the gateway.standalone guard")
+PY
+MULTIPLEX_CHECK
+)"
 
 # ---------- Step 11d: the loop-watchdog budget is sized to this seat (#2789) ----------
 # Hermes arms its event-loop liveness watchdog before the startup plugin crawl

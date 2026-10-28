@@ -16,9 +16,13 @@
 # from the output: the image installs them afterwards with `--no-deps`, because
 # a local path cannot carry a hash and hash-checking mode refuses a mixed file.
 #
-# Resolution targets the seat image's interpreter and platform (Debian 13 ships
-# python3 3.13; x86_64 Linux), never the workstation's, so a wheel that exists
-# only for macOS never ends up pinned.
+# Resolution targets the seat image's interpreters and platform, never the
+# workstation's, so a wheel that exists only for macOS never ends up pinned:
+# PY (Debian 13's python3, 3.13) for the broker, connector and runner venvs, and
+# HERMES_PY (the /opt/python3.14 interpreter the Dockerfile copies in) for the
+# two files installed into the Hermes venv. Hermes v0.22 supports only Python
+# 3.14 (its uv.lock's supported-markers are python_full_version >= '3.14'), so a
+# Hermes-venv file resolved at 3.13 would describe a venv the image never builds.
 #
 # Run it whenever a pyproject under operator/ changes its dependencies, or to
 # take a routine currency bump; commit the result. bin/tests/test_requirements_pins.py
@@ -36,6 +40,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OPERATOR="$(cd "${HERE}/.." && pwd)"
 PY=3.13
+HERMES_PY=3.14
 PLATFORM=linux
 # Compile from the repo root with repo-relative inputs, so the "# via" annotations
 # uv writes name the same path whoever runs this and from wherever: uv relativises
@@ -122,6 +127,15 @@ cp "${OVERLAY_PYPROJECT}" "${work}/overlay/pyproject.toml"
   --no-header --no-annotate --extra all --extra messaging --extra anthropic) \
   > "${work}/hermes-installed.txt"
 
+# Hermes' own [tool.uv] override-dependencies, as uv.lock's [manifest] records
+# them. Since v0.22 its lock overrides exact pins Hermes' dependencies declare
+# (browser-harness pins pillow==12.3.0; the lock holds Pillow 13.0.0), so its
+# locked set, read back as plain requirements, conflicts with itself unless the
+# same overrides are applied. Both compiles below resolve against that set, so
+# both take them. A source override (URL, path, git) has no requirement-line
+# form and fails here, as it does in Hermes' own pm/pip_check.py.
+python3 -I "${HERE}/hermes_pip_check.py" --lock-overrides "${work}/hermes/uv.lock" > "${work}/hermes-lock-overrides.txt"
+
 no_emit=()
 while IFS= read -r name; do
   no_emit+=(--no-emit-package "${name}")
@@ -153,8 +167,9 @@ while IFS= read -r name; do
 done < <(sed -n 's/^\([A-Za-z0-9][A-Za-z0-9._-]*\)==.*/\1/p' "${work}/hermes-rest.txt")
 (cd "${work}" && uv pip compile hermes-security.in hermes-rest.txt \
   "${rest_no_emit[@]}" \
+  --override hermes-lock-overrides.txt \
   --generate-hashes \
-  --python-version "${PY}" \
+  --python-version "${HERMES_PY}" \
   --python-platform "${PLATFORM}" \
   --no-header \
   --no-annotate \
@@ -178,9 +193,10 @@ sed -n 's/^\([a-z0-9][a-z0-9._-]*==[^ ]*\).*/\1/p' "${HERE}/hermes-security.txt"
 # relative path overlay/pyproject.toml, not this machine's temp directory.
 (cd "${work}" && uv pip compile overlay/pyproject.toml \
   -c hermes-effective.txt \
+  --override hermes-lock-overrides.txt \
   "${no_emit[@]}" \
   --generate-hashes \
-  --python-version "${PY}" \
+  --python-version "${HERMES_PY}" \
   --python-platform "${PLATFORM}" \
   --no-header \
   --quiet \

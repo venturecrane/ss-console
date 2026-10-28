@@ -393,7 +393,16 @@ def test_translate_pins_upstream_defaults_that_flipped_in_v0_20(tmp_path):
     # A delivered routine is only what the agent wrote: no "Cronjob Response"
     # header, no "stop reminder" footer (captain-mark, 2026-10-26).
     assert config["cron"] == {"wrap_response": False}
-    assert list(config)[-5:] == ["tools", "approvals", "display", "cron", "auxiliary"]
+    assert list(config)[-8:] == [
+        "tools",
+        "approvals",
+        "display",
+        "cron",
+        "auxiliary",
+        "plugins",
+        "sessions",
+        "security",
+    ]
 
 
 def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
@@ -429,8 +438,76 @@ def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
     config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
     assert config["gateway"]["loop_watchdog"] is True
     assert config["gateway"]["loop_watchdog_max_strikes"] in (6, 12)
-    # Still appended before the three pin-only keys.
-    assert list(config)[-6:] == ["gateway", "tools", "approvals", "display", "cron", "auxiliary"]
+    # Still appended before the pin-only keys.
+    assert list(config)[-9:] == [
+        "gateway",
+        "tools",
+        "approvals",
+        "display",
+        "cron",
+        "auxiliary",
+        "plugins",
+        "sessions",
+        "security",
+    ]
+
+
+def test_translate_pins_upstream_defaults_that_changed_in_v0_22(tmp_path):
+    """Hermes v0.22.5 (#3564) changed four defaults the seats never authored:
+    a named-profile gateway multiplexes every profile unless its profile says
+    gateway.standalone (and multiplexing reads secrets from a fail-closed scope,
+    not os.environ); every plugin load gets a 10s deadline; ended-session
+    pruning is off and asks a home channel when the disk runs low; and a
+    provider outage parks the turn behind status lines. Each is pinned to the
+    v2026.9.14 behaviour. FALSIFIER: drop any pin and its assertion fails; the
+    gateway pin MERGES into the loop-watchdog block rather than replacing it."""
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    config = yaml.safe_load((hermes_home / "profiles" / "marcus" / "config.yaml").read_text())
+    assert config["gateway"]["standalone"] is True
+    assert config["gateway"]["loop_watchdog"] is True, (
+        "the standalone pin clobbered the watchdog block"
+    )
+    assert config["plugins"]["load_timeout_seconds"] == 0
+    assert config["sessions"] == {"auto_prune": True}
+    assert config["agent"]["auto_recovery_cycles"] == 0
+    assert config["agent"]["max_turns"] == 90
+
+
+def test_translate_selects_the_overlay_without_plugins_enable(tmp_path):
+    """#3564 re-promotion: bootstrap no longer runs `hermes plugins enable`
+    (from v0.22 it commits a package-manager environment that strips the image
+    venv off sys.path). translate writes the selection the v0.22.5 loader reads
+    (plugins.enabled, hermes_cli/plugins_discovery.py gate_manifest), the
+    allow_tool_override: false grant v2026.9.14's non-interactive enable wrote,
+    and security.allow_lazy_installs: false, into EVERY persona profile.
+    FALSIFIER: drop any key, or let two personas share one mutable block."""
+    from bootstrap import plugin_selection
+
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    configs = sorted((hermes_home / "profiles").glob("*/config.yaml"))
+    assert configs
+    for path in configs:
+        config = yaml.safe_load(path.read_text())
+        assert config["plugins"] == {
+            "load_timeout_seconds": 0,
+            "enabled": ["hermes-smd-overlay"],
+            "entries": {"hermes-smd-overlay": {"allow_tool_override": False}},
+        }
+        assert config["security"] == {"allow_lazy_installs": False}
+        assert plugin_selection.problems(config, str(path)) == []
+        assert "&id" not in path.read_text(), "a shared mutable block was dumped as a YAML alias"
+    # The module constants are never mutated by a translate run.
+    assert plugin_selection.OVERLAY_SELECTION["enabled"] == ["hermes-smd-overlay"]
 
 
 def test_translate_emits_disabled_toolsets_fleet_default(tmp_path):

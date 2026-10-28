@@ -34,20 +34,22 @@
 # ever disagree with the image. customer.yaml no longer carries hermes_ref for
 # the image to obey; provision-customer.sh and `fleet build` pass no Hermes
 # build-args, and boot-smoke's hermes-sha-matches-pin reads these lines. The
-# shape is v{YYYY}.{M}.{D}@{40-hex-sha}. We clone NousResearch/hermes-agent
+# shape is {upstream release tag}@{40-hex-sha}. Upstream's tags were dated
+# (v2026.9.14) through the 0.21 line and are semver (v0.22.5) since; nothing
+# parses the tag, only the sha is asserted. We clone NousResearch/hermes-agent
 # directly; the venturecrane/hermes-agent fork was retired by ADR 0024.
 #
 # HERMES_REF is the full pin string, retained for provenance and logging.
-ARG HERMES_REF=v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d
+ARG HERMES_REF=v0.22.5@bf0203a794a07aac3ff764972ab9087baa4e4f4e
 
 # Upstream date-tag to clone (the part before '@').
-ARG HERMES_UPSTREAM_TAG=v2026.9.14
+ARG HERMES_UPSTREAM_TAG=v0.22.5
 
 # Upstream commit SHA (the part after '@'). The post-clone assertion verifies
 # the cloned HEAD matches this exactly; any divergence (upstream re-tag, stale
 # pin) fails the build. This is the integrity check proving we ship unmodified
 # upstream Hermes.
-ARG HERMES_UPSTREAM_SHA=345cd2b057a452236de401d3534b8502a7465e8d
+ARG HERMES_UPSTREAM_SHA=bf0203a794a07aac3ff764972ab9087baa4e4f4e
 
 # The hermes-smd overlay (plugin pack + the `hermes-smd` CLI + the importable
 # `shared` policy core) is this repo's operator/hermes-smd-overlay/, built from the
@@ -83,15 +85,36 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
 # pins its toolchain to Node 26 everywhere and, as of v2026.8.18, ships
 # `.npmrc engine-strict=true` with `engines.node >=22.22.0` — so `npm install`
 # over the Hermes tree hard-fails on the apt Node (vfy_01M0DP257XDYJ0Z04V1ZF57G2X:
-# seat had v20.19.2 / npm 9.2.0). We copy node + npm from the official image
-# exactly the way upstream's own Dockerfile does at that tag (its `node_source`
-# stage, same digest), so the runtime matches what Hermes is built and tested
-# against. The `engines.npm` range (`<11.10.0 || >=11.17.0`) is satisfied by
-# construction: upstream builds its published image from this digest under
-# engine-strict. Bumping the Node major is a one-line change to this FROM; the
-# next digest bump re-checks that npm range. Node is needed at RUNTIME too:
-# `@oktopeak/clio-mcp` (below) is a Node stdio MCP server the gateway launches.
-FROM node:26-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS node_source
+# seat had v20.19.2 / npm 9.2.0). We copy node + npm from the official image.
+# Node is needed at RUNTIME too: `@oktopeak/clio-mcp` (below) is a Node stdio
+# MCP server the gateway launches.
+#
+# Pinned 2026-10-28 (ss-console#3564): node:26.12.1-bookworm-slim index digest
+# 88e48077..., NODE_VERSION 26.12.1 in the linux/amd64 config blob, bundled npm
+# 11.20.0 (nodejs.org/dist/index.json). That bump fixes CVE-2026-111497 (a
+# high-severity Brotli-decoder RCE in Node < 26.12.1; the previous digest
+# 9e6f9357... was 26.5.1). npm 11.20.0 satisfies Hermes' `engines.npm`
+# range `<11.10.0 || >=11.17.0` (v0.22.5 package.json), and the image build
+# prints `node --version` / `npm --version`.
+# Upstream: v0.22.5 (bf0203a7) has no `node_source` stage any more. Its image
+# takes Node from its package manager's lock (pm/lock.json: node v26.12.1,
+# npm 12.0.2). So we now DELIBERATELY diverge in how we get Node (the official
+# image's binaries, pinned by digest), at the same Node version; npm differs
+# (11.20.0 vs 12.0.2) and both satisfy the engines range. Every digest bump
+# re-checks the engines.npm range and this comparison.
+FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS node_source
+# Python 3.14 source stage for the Hermes venv (Hermes v0.22.5 promotion,
+# ss-console#3564). Hermes v0.22 supports only 3.14: its uv.lock's
+# supported-markers are python_full_version >= '3.14', and Debian 13 ships 3.13.
+# The interpreter is copied from the official image (same Debian 13 trixie, so
+# the same glibc and the same apt libssl/libsqlite3 its extension modules link
+# against), pinned by index digest so a rebuild gets the same bytes. It is NOT
+# a uv-managed download: that lands under /root (mode 0700) and the non-root
+# uids cannot execute it (the rc=126 crash-loop recorded at ENV UV_PYTHON below).
+# The image builds python3.14 with --enable-shared and RUNPATH $ORIGIN/../lib,
+# so bin/ + lib/ relocate to /opt/python3.14 as a unit; the runtime stage checks
+# with ldd that every library they need resolves on this base.
+FROM python:3.14.10-slim-trixie@sha256:fa99b65193ea9dbde3fc2367f43d3a2907571ce2a15213a86f0053e1d49d8456 AS python314_source
 FROM debian:13.4
 
 # LAYER CACHE ORDER IS LOAD-BEARING (fleet release, 2026-10-19). Every RUN after
@@ -113,9 +136,14 @@ ENV PATH="/opt/data/.local/bin:/usr/lib/postgresql/17/bin:${PATH}"
 # /root/.local/share/uv (mode 0700), and symlinked venv pythons into it. The
 # non-root broker uid then got `Permission denied` executing its own venv
 # python (rc=126 crash-loop; the pilot seat went down and was restored by
-# image-ref rollback). UV_PYTHON outranks .python-version, so this keeps all
-# venvs on Debian 13's python3 (3.13 — inside requires-python >=3.11,<3.14),
-# exactly what the v0.18 seats ran and what upstream's published image runs.
+# image-ref rollback). UV_PYTHON outranks .python-version, so this keeps the
+# venvs that name no interpreter (the workspace broker, the connectors, the
+# medchron runner) on Debian 13's python3, 3.13. The one exception is the
+# Hermes venv: since v0.22 Hermes runs only on 3.14 (its tree's
+# .python-version says 3.14), so its `uv sync` passes an explicit --python for
+# /opt/python3.14 (the python314_source stage above, world-readable, never
+# under /root), which outranks this variable, and --no-python-downloads so a
+# missing interpreter fails the build instead of fetching a managed one.
 ENV UV_PYTHON=/usr/bin/python3
 
 # ---------- System packages ----------
@@ -132,7 +160,15 @@ RUN apt-get update \
       docker-cli tini ca-certificates util-linux \
       postgresql-17 postgresql-client-17 redis-server awscli \
       poppler-utils fonts-dejavu-core antiword \
+      libssl3t64 libsqlite3-0 libffi8 libbz2-1.0 liblzma5 libzstd1 zlib1g \
+      libreadline8t64 libncursesw6 libtinfo6 libuuid1 libgdbm6t64 libdb5.3t64 \
  && rm -rf /var/lib/apt/lists/*
+# The libssl3t64 ... libdb5.3t64 line (Hermes v0.22.5 promotion, ss-console#3564):
+# every shared library the /opt/python3.14 interpreter's extension modules link
+# (read from the python:3.14.10-slim-trixie ELF headers, _tkinter excepted).
+# Most arrive anyway as dependencies of the packages above; naming them makes
+# the interpreter's needs explicit, and the ldd check after its COPY fails the
+# build on any that does not resolve.
 # antiword (2026-10-09): the negotiation watch reads offer letters saved as
 # legacy Word .doc with it (the build asserts it).
 # poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
@@ -175,6 +211,28 @@ COPY --from=node_source /usr/local/lib/node_modules/npm /usr/local/lib/node_modu
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
  && node --version && npm --version
+
+# Python 3.14 for the Hermes venv, from the python314_source stage (see the
+# stage comment above): the interpreter binary, its shared library and stdlib,
+# and its headers (a package with no 3.14 wheel would build against them).
+# /opt/python3.14 is root-owned and world-readable and executable, because the
+# hermes uid (10000) runs the gateway on it. The checks fail the BUILD rather
+# than a seat: every library the interpreter and its extension modules need
+# resolves (_tkinter excepted; no Tk is installed and nothing imports it), and
+# the hermes uid can execute it and import the modules the gateway uses.
+COPY --from=python314_source /usr/local/bin/python3.14 /opt/python3.14/bin/python3.14
+COPY --from=python314_source /usr/local/lib/ /opt/python3.14/lib/
+COPY --from=python314_source /usr/local/include/python3.14/ /opt/python3.14/include/python3.14/
+RUN chown -R root:root /opt/python3.14 \
+ && chmod -R a+rX /opt/python3.14 \
+ && missing="$(ldd /opt/python3.14/bin/python3.14 /opt/python3.14/lib/libpython3.14.so.1.0 \
+      $(ls /opt/python3.14/lib/python3.14/lib-dynload/*.so | grep -v _tkinter) 2>&1 | grep 'not found' || true)" \
+ && { [ -z "$missing" ] || { echo "FATAL: /opt/python3.14 needs libraries this image lacks:" >&2; echo "$missing" >&2; exit 1; }; } \
+ && setpriv --reuid=10000 --regid=10000 --clear-groups /opt/python3.14/bin/python3.14 -I -c \
+      "import sys, ssl, sqlite3, ctypes, lzma, bz2, zlib, decimal, uuid, compression.zstd; \
+assert sys.version_info[:2] == (3, 14), sys.version; \
+assert sys.prefix == '/opt/python3.14', sys.prefix; \
+print('python3.14 OK for uid 10000:', sys.version.split()[0], ssl.OPENSSL_VERSION, 'sqlite', sqlite3.sqlite_version)"
 
 WORKDIR /opt/hermes
 
@@ -242,7 +300,22 @@ RUN npm ci --prefer-offline --no-audit \
 # build_anthropic_client with ImportError — observed live on the pilot seat's
 # first 0.20.4 rehearsal turn. bedrock/azure/matrix/otlp/hindsight stay out:
 # no seat consumes them.
-RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic
+# `--python /opt/python3.14/...` and `--no-python-downloads` (Hermes v0.22.5
+# promotion, ss-console#3564): Hermes v0.22 runs only on 3.14; see ENV UV_PYTHON
+# above. The checks after it prove the venv is the 3.14 one, and that the three
+# things the gateway's network and session layers rest on work in it: sqlite
+# with FTS5 (state.db's session search), an OpenSSL default verify path that
+# exists (v0.22 verifies TLS against the OS store, agent/ssl_verify.py), and an
+# importable certifi.
+RUN uv sync --frozen --no-python-downloads --python /opt/python3.14/bin/python3.14 --no-install-project --extra all --extra messaging --extra anthropic \
+ && /opt/hermes/.venv/bin/python -I -c \
+      "import os, sqlite3, ssl, sys, certifi; \
+assert sys.version_info[:2] == (3, 14), sys.version; \
+db = sqlite3.connect(':memory:'); db.execute('CREATE VIRTUAL TABLE t USING fts5(x)'); \
+paths = ssl.get_default_verify_paths(); \
+assert (paths.cafile and os.path.isfile(paths.cafile)) or (paths.capath and os.path.isdir(paths.capath)), paths; \
+assert os.path.isfile(certifi.where()), certifi.where(); \
+print('hermes venv OK:', sys.version.split()[0], 'fts5', paths.openssl_capath, certifi.where())"
 RUN cd web && npm run build && cd ../ui-tui && npm run build
 # --python is explicit because ENV UV_PYTHON (above) would otherwise aim this
 # bare `uv pip` at the SYSTEM interpreter (PEP 668 refusal on Debian); an
@@ -276,22 +349,21 @@ COPY operator/requirements/ /app/requirements/
 # ---------- Security overrides for the Hermes venv ----------
 # Hermes' uv.lock at HERMES_UPSTREAM_SHA is installed exactly (the `uv sync
 # --frozen` above), with these exceptions and no others. hermes-security.txt
-# moves two Hermes-locked packages to the release that fixes a named advisory
-# (2026-10-27 code review, DP-1), each near zero-risk to Hermes:
-#   certifi 2026.5.20 -> the pin in the file: PYSEC-2026-4320, emSign roots
-#     with compromised intermediate CA keys. A CA data bundle, no API surface;
-#     httpx (and so the Anthropic SDK) verifies TLS against it.
-#   urllib3 2.7.0 -> 2.8.x: PYSEC-2026-4175/4176/4177. In-major; Hermes
-#     declares urllib3>=2.7.0,<3.
-# Every other Hermes-locked version stays where Hermes put it; the advisories
-# still open in that set are visible to pip_audit_gate.py (it audits this
-# venv's effective set, Hermes' lock with these overrides applied) and are
-# time-boxed in .github/pip-audit-allowlist.json until a Hermes promotion
-# carries the fix. compile.sh resolves the file against the rest of Hermes'
-# locked set, so no other Hermes package refuses these versions;
-# hermes-agent's own exact pin on certifi is the one requirement the move
-# leaves unmet, and hermes_pip_check.py (the overlay step below) tolerates
-# that one by name and fails on anything else. --no-config: this runs in
+# moves one Hermes-locked package to the release that fixes a named advisory
+# (the admission rule is hermes-security.in's header):
+#   brotlicffi 1.2.0.2 -> 1.2.1.0: PYSEC-2026-4323 / GHSA-9v8h-qqgm-4m35, an
+#     out-of-bounds write in the Brotli decoder, reachable through aiohttp's
+#     `br` response decoding. A patch release of a binding; no API change.
+# (The certifi and urllib3 overrides of 2026-10-27, DP-1, were removed at the
+# v0.22.5 promotion: its lock carries certifi 2026.10.19 and urllib3 2.8.0.)
+# Every other Hermes-locked version stays where Hermes put it, and
+# pip_audit_gate.py audits this venv's effective set (Hermes' lock with these
+# overrides applied) with an empty allowlist. compile.sh resolves the file
+# against the rest of Hermes' locked set, so no other Hermes package refuses
+# this version; hermes-agent's own exact pin on brotlicffi is the one
+# requirement the move leaves unmet, and hermes_pip_check.py (the overlay step
+# below) tolerates that one by name, plus the mismatches Hermes' own uv.lock
+# overrides record, and fails on anything else. --no-config: this runs in
 # /opt/hermes, whose [tool.uv] overrides cannot carry a hash.
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-security.txt
@@ -310,8 +382,10 @@ RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
 #   1. the overlay's third-party dependencies that Hermes' own lock does not
 #      already install, hash-locked in hermes-overlay.txt (compile.sh derives
 #      it from operator/hermes-smd-overlay/pyproject.toml, constrained to Hermes'
-#      uv.lock at HERMES_UPSTREAM_SHA with the security overrides above
-#      applied, so no Hermes-locked version moves beyond those two).
+#      uv.lock at HERMES_UPSTREAM_SHA with the security override above and
+#      Hermes' own lock overrides applied, so no Hermes-locked version moves).
+#      Since v0.22.5 this file also carries PyYAML: Hermes moved to ruamel.yaml
+#      and no longer installs it, and the overlay imports `yaml`;
 #      --no-config for the same reason as the broker venv below: this runs in
 #      /opt/hermes, whose [tool.uv] overrides cannot carry a hash;
 #   2. the overlay itself, a path install, --no-deps. Its build backend
@@ -320,8 +394,11 @@ RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
 #      filed follow-up;
 #   3. `uv pip check` through hermes_pip_check.py, which fails the BUILD, not
 #      a seat, if any requirement the overlay (or anything else in the venv)
-#      declares is unmet. It tolerates exactly one: hermes-agent's exact pin on
-#      certifi, while the installed certifi is hermes-security.txt's pin. That
+#      declares is unmet. It tolerates only hermes-agent's exact pin on each
+#      package hermes-security.txt overrides (while the installed version is
+#      that file's pin), and the mismatches Hermes' own uv.lock records as
+#      overrides (browser-harness's pillow==12.3.0 against the locked 13.0.0),
+#      the rule Hermes' installer applies (pm/pip_check.py). That
 #      is the backstop for an overlay that grows a dependency before compile.sh
 #      is re-run; the `overlay` CI job runs compile.sh and fails on a diff.
 COPY operator/hermes-smd-overlay/ /app/overlay-src/
@@ -330,7 +407,7 @@ RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
  && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-deps /app/overlay-src \
  && python3 -I /app/requirements/hermes_pip_check.py \
-      /opt/hermes/.venv/bin/python /app/requirements/hermes-security.txt \
+      /opt/hermes/.venv/bin/python /app/requirements/hermes-security.txt /opt/hermes/uv.lock \
  && rm -rf /app/overlay-src
 
 # ---------- Workspace capability broker ----------
@@ -398,10 +475,12 @@ RUN cd /opt/clio-mcp && npm ci --omit=dev --no-audit --no-fund \
 # build instead of shipping a Machine with no live governance gate.
 #
 # No `hermes plugins install` here any more (2026-10-22): Hermes discovers a
-# plugin as a directory under $HERMES_HOME/plugins, and bootstrap.sh enables it
-# in the root and profile homes at boot. Proven on smd-staging from a scratch
-# home with no prior install: `plugins enable` writes plugins.enabled and
-# `plugins list` shows the pack enabled. The install step's scan opt-out
+# plugin as a directory under $HERMES_HOME/plugins, and the boot selects it in
+# the root and profile homes by writing plugins.enabled into config.yaml
+# (bootstrap/plugin_selection.py; translate for every persona). Not `hermes
+# plugins enable`: from v0.22 that runs package-manager admission, which
+# commits a dependency env on the volume that strips this venv from every later
+# hermes process (#3564, the reverted #3567). The install step's scan opt-out
 # (plugins.scan_on_install) went with it; nothing scans a pack it did not clone.
 #
 # FAIL-CLOSED: a `|| echo "WARN ...; continuing"` once swallowed an install

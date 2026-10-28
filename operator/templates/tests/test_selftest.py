@@ -39,6 +39,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES = REPO_ROOT / "operator" / "templates"
+PM_STATE = REPO_ROOT / "operator" / "hermes-smd-overlay" / "bootstrap" / "pm_state.py"
 SELFTEST = TEMPLATES / "selftest.sh"
 HERMES = "3" * 40
 
@@ -74,6 +75,18 @@ exec "$@"
 """
 
 
+# What Hermes v0.22.5 records in the launching profile's gateway_state.json when
+# gateway.standalone: true keeps it single-profile (STANDALONE_PROFILE_REASON,
+# hermes_cli/gateway_multiplex_mode.py).
+STANDALONE_REASON = "this profile is standalone (gateway.standalone: true); it serves only itself"
+STANDALONE_STATE = {"gateway_state": "running", "multiplex_standalone_reason": STANDALONE_REASON}
+# What bootstrap/plugin_selection.py writes into the root and every profile config (#3564).
+SELECTED_CONFIG = (
+    "plugins:\n  enabled: [hermes-smd-overlay]\n  entries:\n    hermes-smd-overlay: {allow_tool_override: false}\n"
+    "security:\n  allow_lazy_installs: false\n"
+)
+
+
 def _write(path: Path, text: str, mode: int = 0o644) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
@@ -102,6 +115,13 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     _write(root / "app/retired-skills.txt", "# retired\nold-tracker\n")
     (root / "opt/data/skills").mkdir(parents=True)
     _write(root / "opt/data/profiles/operator/state/gateway.heartbeat", "beat\n")
+    _write(root / "opt/data/profiles/operator/gateway_state.json", json.dumps(STANDALONE_STATE))
+    _write(root / "opt/data/config.yaml", SELECTED_CONFIG)
+    _write(root / "opt/data/profiles/operator/config.yaml", SELECTED_CONFIG)
+    # What a clean v0.22 boot leaves: boot-maintenance records, no venv selection.
+    _write(root / "opt/data/installs/0123456789abcdef/bootstrap/operator.json", "{}")
+    # The real predicate: seat-checks runs the image's bootstrap/pm_state.py as a script.
+    _write(root / "app/overlay-pack/bootstrap/pm_state.py", PM_STATE.read_text())
     _write(root / "run/smd-gateway-liveness/state", "armed")
     _write(root / "app/agentmail-webhook-secret-probe.py", "raise SystemExit(0)\n")
     return {"root": root, "shims": shims}
@@ -382,3 +402,63 @@ def test_trigger_runs_only_when_root_placed_it(seat: dict[str, Path], tmp_path: 
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+def test_the_gateway_must_record_the_standalone_guard(seat: dict[str, Path]) -> None:
+    # Hermes v0.22.5 promotion (#3564). FALSIFIER: a gateway that multiplexes
+    # (no guard reason) or stayed standalone for another cause fails the check;
+    # a missing record fails it too. Only the gateway.standalone reason passes.
+    state = seat["root"] / "opt/data/profiles/operator/gateway_state.json"
+    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is True
+    state.write_text(json.dumps({"gateway_state": "running", "multiplex_standalone_reason": None}))
+    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
+    state.write_text(json.dumps({"gateway_state": "running", "multiplex_standalone_reason": "only one profile exists"}))
+    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
+    state.unlink()
+    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
+
+
+def test_a_stale_heartbeat_profile_is_not_judged_and_no_live_gateway_fails(seat: dict[str, Path]) -> None:
+    beat = seat["root"] / "opt/data/profiles/operator/state/gateway.heartbeat"
+    old = time.time() - 3600
+    os.utime(beat, (old, old))
+    found = _check(_once(seat, "hourly"), "gateway-multiplex-standalone")
+    assert found["ok"] is False
+    assert "no profile has a fresh gateway heartbeat" in found["detail"]
+
+
+def test_a_recorded_dependency_environment_fails_the_self_test(seat: dict[str, Path]) -> None:
+    # #3564 re-promotion. FALSIFIER: the state `hermes plugins enable` left on
+    # smd-staging (a facts.json naming a venv generation, plus the PM store)
+    # must fail; facts.json with no venv entry, or none at all, passes.
+    installs = seat["root"] / "opt/data/installs/0123456789abcdef"
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(installs / "facts.json", json.dumps({"packages": {"python": {"entry": "cpython"}}}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(
+        installs / "facts.json", json.dumps({"packages": {"venv": {"environment": str(installs / "environments/g1")}}})
+    )
+    found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
+    assert found["ok"] is False and "selects" in found["detail"]
+    # One predicate with the boot gate: a non-dict `packages` and an empty
+    # `packages.venv` select nothing in pm_state, so the self-test agrees.
+    _write(installs / "facts.json", json.dumps({"packages": ["venv"]}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(installs / "facts.json", json.dumps({"packages": {"venv": {}}}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    (installs / "facts.json").unlink()
+    (seat["root"] / "opt/data/tools").mkdir()
+    found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
+    assert found["ok"] is False and "tools exists" in found["detail"]
+
+
+def test_the_overlay_must_be_selected_in_every_config(seat: dict[str, Path]) -> None:
+    profile = seat["root"] / "opt/data/profiles/operator/config.yaml"
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is True
+    profile.write_text(SELECTED_CONFIG.replace("allow_lazy_installs: false", "allow_lazy_installs: true"))
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
+    profile.write_text(SELECTED_CONFIG.replace("[hermes-smd-overlay]", "[]"))
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
+    (seat["root"] / "opt/data/config.yaml").unlink()
+    profile.write_text(SELECTED_CONFIG)
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
