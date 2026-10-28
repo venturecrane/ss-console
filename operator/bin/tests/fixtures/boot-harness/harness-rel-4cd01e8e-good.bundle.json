@@ -1,0 +1,624 @@
+{
+  "collected_at": 1793160474.468465,
+  "uptime_s": 234.67,
+  "hermes_sha": "345cd2b057a452236de401d3534b8502a7465e8d",
+  "selftest": {
+    "checks": [
+      {
+        "detail": "",
+        "id": "customer-yaml-present",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-dir-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-agent-readable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-dir-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-absent-from-agent-volume",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-profiles-dir",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "no-unauthored-profile-homes",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "retired-skills-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "checked: 0 staged script(s)",
+        "id": "staged-scripts-current",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "omitted-skills-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-plugins-installed",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-sha-matches-pin",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "curator-disabled",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "disabled-skills-pruned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "matter-mixing-fence",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-db-owner-is-broker",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-dir-setgid-2750",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-db-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agent-state-owner-is-hermes",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "broker-respawn-supervised",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "broker-socket-answers-health",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-liveness-supervisor-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-liveness-supervisor-armed",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-liveness-files-readable-by-gate",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-loop-heartbeat-fresh",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-loop-watchdog-budget-authored",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "overlay-pack-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "overlay-pack-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "activation-handler-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "r2-account-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-send-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-webhook-read-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-webhook-secret-matches-vendor",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-send-credential-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-read-app-cannot-send-on-send-as-seat",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-read-app-cannot-read-staff-mailbox",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "identifier-gate-lever",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-uid-exists",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-daemon-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-daemon-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-memory-cap-present",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-textcache-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-broker-config-matches-runner",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-broker-config-matches-runner",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "lane-memory-caps-leave-gateway-reserve",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "note-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "note-jobs-dir-root-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; runner refuses jobs by design, so the config-perm, token, controls, and gate-refusal checks are skipped",
+        "id": "medchron-firm-config-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the demand lane defers jobs by design",
+        "id": "demand-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the drafting lane defers jobs by design",
+        "id": "drafting-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the litigation lane defers jobs by design",
+        "id": "litigation-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the casefile lane defers jobs by design",
+        "id": "casefile-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not a marketing seat; no advertising-gate registers are expected",
+        "id": "marketing-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      }
+    ],
+    "expected_hermes_sha": "345cd2b057a452236de401d3534b8502a7465e8d",
+    "failed": 0,
+    "failed_streak": 0,
+    "finished_at": "2026-10-28T04:07:45Z",
+    "hermes_sha": "345cd2b057a452236de401d3534b8502a7465e8d",
+    "image_ref": "registry.fly.io/hermes-fleet:rel-4cd01e8e-202610280041@sha256:fd05edb58a4604a95277d597f54ddd7aa487e12d9118c21d71401c83fcd443df",
+    "run_kind": "boot",
+    "schema_version": 1,
+    "started_at": "2026-10-28T04:07:44Z",
+    "total": 79,
+    "version": "4cd01e8e9f59cda79b26b7f8e0d2fbb41e9c9a15",
+    "warned": 0
+  },
+  "gateway_processes": [
+    "/opt/hermes/.venv/bin/python /opt/hermes/.venv/bin/hermes -p crane gateway run"
+  ],
+  "gateway": {
+    "pid": 1354,
+    "cmdline": "/opt/hermes/.venv/bin/python /opt/hermes/.venv/bin/hermes -p crane gateway run",
+    "multiplex_reasons": {
+      "/opt/data/profiles/crane/gateway_state.json": null
+    },
+    "started_epoch": 1793160430.42,
+    "env_present": [
+      "HERMES_HOME",
+      "SMD_GATEWAY_PID"
+    ],
+    "smd_gateway_pid_matches": true,
+    "resolved": {
+      "shared": "/opt/hermes/.venv/lib/python3.13/site-packages/shared/__init__.py",
+      "anthropic": "/opt/hermes/.venv/lib/python3.13/site-packages/anthropic/__init__.py",
+      "aiohttp": "/opt/hermes/.venv/lib/python3.13/site-packages/aiohttp/__init__.py",
+      "brotlicffi_version": "1.2.0.2"
+    }
+  },
+  "plugins_enabled": {
+    "/opt/data/profiles/crane/config.yaml": [
+      "hermes-smd-overlay"
+    ]
+  },
+  "filesystem": {
+    "opt_data_entries": [
+      ".bash_logout",
+      ".bashrc",
+      ".cache",
+      ".install_id.lock",
+      ".local",
+      ".profile",
+      ".smd",
+      ".smd-root",
+      ".smokeball-mcp",
+      "SOUL.md",
+      "agent-state.db",
+      "audio_cache",
+      "audit",
+      "auth.lock",
+      "backups",
+      "config.yaml",
+      "cron",
+      "held_replies.db",
+      "held_replies.db-shm",
+      "held_replies.db-wal",
+      "honcho",
+      "hooks",
+      "image_cache",
+      "install_id",
+      "kanban",
+      "kanban.db",
+      "kanban.db.dispatch.lock",
+      "kanban.db.init.lock",
+      "logs",
+      "medchron",
+      "memories",
+      "pairing",
+      "plugins",
+      "profiles",
+      "requests.db",
+      "sessions",
+      "shared-state.db",
+      "skills",
+      "smd",
+      "tmp-deliverable",
+      "voice"
+    ],
+    "opt_data_tools": false,
+    "opt_data_installs": false,
+    "install_facts_venv_keys": {}
+  },
+  "imports": {
+    "aiohttp_yaml_in_venv": {
+      "rc": 0,
+      "detail": ""
+    },
+    "shared": {
+      "rc": 0,
+      "detail": ""
+    },
+    "shared.selfcheck": {
+      "rc": 0,
+      "detail": ""
+    },
+    "bootstrap": {
+      "rc": 0,
+      "detail": ""
+    },
+    "bootstrap.validate": {
+      "rc": 0,
+      "detail": ""
+    },
+    "plugins": {
+      "rc": 0,
+      "detail": ""
+    }
+  },
+  "http": {
+    "gate_health": 200,
+    "adapter_unsigned_handoff": 401
+  },
+  "cron": {
+    "planted": true,
+    "persona": "crane",
+    "fired": true,
+    "child": {
+      "at": 1793160519,
+      "executable": "/opt/hermes/.venv/bin/python",
+      "version": "3.13.5",
+      "env_present": [
+        "HERMES_HOME",
+        "PATH"
+      ]
+    },
+    "job": ".180933+00:00\", \"finished_at\": \"2026-10-28T04:08:39.219682+00:00\", \"error\": null, \"delivery_outcome\": \"suppressed\", \"scheduled_instant\": \"2026-10-28T04:08:00+00:00\"}}\ncron/executions.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python3) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n"
+  },
+  "logs": {
+    "/opt/data/logs/agent.log": "",
+    "/opt/data/logs/errors.log": "",
+    "/opt/data/profiles/crane/logs/agent.log": "2026-10-28 04:07:26,476 INFO hermes_cli.plugins: Plugin 'browser-browser-use' registered browser provider: browser-use\n2026-10-28 04:07:26,479 INFO hermes_cli.plugins: Plugin 'browser-browserbase' registered browser provider: browserbase\n2026-10-28 04:07:26,482 INFO hermes_cli.plugins: Plugin 'browser-firecrawl' registered browser provider: firecrawl\n2026-10-28 04:07:26,728 INFO hermes_cli.plugins: Plugin 'deepinfra' registered image_gen provider: deepinfra\n2026-10-28 04:07:26,731 INFO hermes_cli.plugins: Plugin 'fal' registered image_gen provider: fal\n2026-10-28 04:07:26,734 INFO hermes_cli.plugins: Plugin 'krea' registered image_gen provider: krea\n2026-10-28 04:07:26,737 INFO hermes_cli.plugins: Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai\n2026-10-28 04:07:26,739 INFO hermes_cli.plugins: Plugin 'openai' registered image_gen provider: openai\n2026-10-28 04:07:26,742 INFO hermes_cli.plugins: Plugin 'openai-codex' registered image_gen provider: openai-codex\n2026-10-28 04:07:26,747 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: openrouter\n2026-10-28 04:07:26,748 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: nous\n2026-10-28 04:07:26,752 INFO hermes_cli.plugins: Plugin 'xai' registered image_gen provider: xai\n2026-10-28 04:07:26,807 INFO hermes_cli.plugins: Plugin 'deepinfra' registered video_gen provider: deepinfra\n2026-10-28 04:07:26,811 INFO hermes_cli.plugins: Plugin 'fal' registered video_gen provider: fal\n2026-10-28 04:07:26,815 INFO hermes_cli.plugins: Plugin 'openrouter' registered video_gen provider: openrouter\n2026-10-28 04:07:26,818 INFO hermes_cli.plugins: Plugin 'xai' registered video_gen provider: xai\n2026-10-28 04:07:26,826 INFO hermes_cli.plugins: Plugin 'web-brave-free' registered web provider: brave-free\n2026-10-28 04:07:26,829 INFO hermes_cli.plugins: Plugin 'web-ddgs' registered web provider: ddgs\n2026-10-28 04:07:26,831 INFO hermes_cli.plugins: Plugin 'web-exa' registered web provider: exa\n2026-10-28 04:07:26,848 INFO hermes_cli.plugins: Plugin 'web-firecrawl' registered web provider: firecrawl\n2026-10-28 04:07:26,851 INFO hermes_cli.plugins: Plugin 'web-keenable' registered web provider: keenable\n2026-10-28 04:07:26,856 INFO hermes_cli.plugins: Plugin 'web-parallel' registered web provider: parallel\n2026-10-28 04:07:26,859 INFO hermes_cli.plugins: Plugin 'web-perplexity' registered web provider: perplexity\n2026-10-28 04:07:26,862 INFO hermes_cli.plugins: Plugin 'web-searxng' registered web provider: searxng\n2026-10-28 04:07:26,868 INFO hermes_cli.plugins: Plugin 'web-tavily' registered web provider: tavily\n2026-10-28 04:07:26,875 INFO hermes_cli.plugins: Plugin 'web-xai' registered web provider: xai\n2026-10-28 04:07:28,155 INFO hermes_cli.plugin_capabilities: capability_check plugin=hermes-smd-overlay capability=tools.override decision=deny checked_by=plugin_capability_granted evidence=not granted\n2026-10-28 04:07:28,178 INFO hermes_plugins.hermes_smd_audit: hermes-smd-audit registered (customer=boot-harness audit_binding=/opt/data/audit/audit.db state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:28,178 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.\n2026-10-28 04:07:28,179 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-audit\n2026-10-28 04:07:28,181 INFO hermes_plugins.hermes_smd_space_gate: hermes-smd-space-gate registered (inert unless people: is authored)\n2026-10-28 04:07:28,181 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-space-gate\n2026-10-28 04:07:28,248 INFO hermes_plugins.hermes_smd_trust: hermes-smd-trust registered: pre_tool_call + post_tool_call + pre_llm_call + smd_send_message\n2026-10-28 04:07:28,248 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-trust\n2026-10-28 04:07:28,262 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice: runtime bound customer=boot-harness r2=LocalVaultSampleReader\n2026-10-28 04:07:28,262 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice registered and ACTIVE (customer=boot-harness)\n2026-10-28 04:07:28,262 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-voice\n2026-10-28 04:07:28,270 INFO hermes_plugins.hermes_smd_memory_mirror: hermes-smd-memory-mirror registered (on_session_end); Honcho lane unconfigured \u2014 mirror inactive by design (ADR 0016 Phase 2 deferred; ADR 0048 lane table)\n2026-10-28 04:07:28,270 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-memory-mirror\n2026-10-28 04:07:28,285 INFO hermes_plugins.hermes_smd_calendar: hermes-smd-calendar: no calendar skill authored on this seat; no tools\n2026-10-28 04:07:28,285 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-calendar\n2026-10-28 04:07:28,292 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned\n2026-10-28 04:07:28,295 INFO hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router registered (customer=boot-harness, routing_table_size=0, table read live per dispatch)\n2026-10-28 04:07:28,295 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-webhook-router\n2026-10-28 04:07:28,297 INFO hermes_plugins.hermes_smd_inbound: hermes-smd-inbound registered: pre_llm_call + transform_tool_result (ADR 0027 quarantine chokepoints; OP-P0-4 read fencing + taint-gate)\n2026-10-28 04:07:28,297 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-inbound\n2026-10-28 04:07:28,298 INFO hermes_plugins.hermes_smd_hook_probe: hermes-smd-hook-probe registered (all six hooks armed)\n2026-10-28 04:07:28,298 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-hook-probe\n2026-10-28 04:07:28,299 INFO hermes_plugins.hermes_smd_workspace: hermes-smd-workspace registered 18 mediated tools\n2026-10-28 04:07:28,299 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-workspace\n2026-10-28 04:07:28,306 INFO hermes_plugins.hermes_smd_mail_attachments: hermes-smd-mail-attachments: no enabled Email connector on this seat; registering no attachment tools\n2026-10-28 04:07:28,306 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-mail-attachments\n2026-10-28 04:07:28,314 INFO hermes_plugins.hermes_smd_record_store: hermes-smd-record-store: no record store authored on this seat; no tools\n2026-10-28 04:07:28,314 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-record-store\n2026-10-28 04:07:28,318 INFO hermes_plugins.hermes_smd_voice_notes: hermes-smd-voice-notes: no enabled Email connector on this seat; no tool\n2026-10-28 04:07:28,318 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-voice-notes\n2026-10-28 04:07:28,338 INFO hermes_plugins.hermes_smd_reply: hermes-smd-reply registered (infra_ready=True, customer=boot-harness); replies gated on the live organization roster (scope.inbound_allow_from); held replies reported to the agent at transform_tool_result\n2026-10-28 04:07:28,338 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-reply\n2026-10-28 04:07:28,353 INFO hermes_plugins.hermes_smd_initiation: hermes-smd-initiation registered: pre_llm_call authority injection + operator_seat_facts (ss#2222 gate 3 \u2014 authored initiation disposition for rostered senders; card rows 1+7 \u2014 grounded self-description on the mail channel)\n2026-10-28 04:07:28,354 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-initiation\n2026-10-28 04:07:28,362 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory: runtime bound customer=boot-harness store=active\n2026-10-28 04:07:28,362 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory registered and ACTIVE (customer=boot-harness state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:28,362 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-peer-memory\n2026-10-28 04:07:28,364 INFO hermes_plugins.hermes_smd_mcp_result_sink: hermes-smd-mcp-result-sink registered (captures [[mcp-cid:*]] turns \u2192 /run/smd-mcp)\n2026-10-28 04:07:28,364 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-mcp-result-sink\n2026-10-28 04:07:28,365 INFO hermes_plugins.hermes_smd_jobs: hermes-smd-jobs registered 4 durable-job tools\n2026-10-28 04:07:28,366 INFO shared.job_worker_runtime: hermes-smd-jobs: worker thread started\n2026-10-28 04:07:28,366 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-jobs\n2026-10-28 04:07:28,398 INFO hermes_plugins.hermes_smd_escalation: hermes-smd-escalation registered 7 ledger tools\n2026-10-28 04:07:28,399 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-escalation\n2026-10-28 04:07:28,408 INFO hermes_plugins.hermes_smd_corrections: hermes-smd-corrections registered correction_capture + taint refusal\n2026-10-28 04:07:28,408 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-corrections\n2026-10-28 04:07:28,411 INFO hermes_plugins.hermes_smd_connector_health: hermes-smd-connector-health registered (per-server call outcomes \u2192 /run/smd-connector-health/ledger.json)\n2026-10-28 04:07:28,414 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-connector-health\n2026-10-28 04:07:28,436 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage: thinking-off mapped to adaptive/low on adaptive Claude models\n2026-10-28 04:07:28,436 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage registered (meter=/opt/data/agent-state.db)\n2026-10-28 04:07:28,437 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-usage\n2026-10-28 04:07:28,449 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-group-audience\n2026-10-28 04:07:28,451 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-space-delivery\n2026-10-28 04:07:28,457 INFO hermes_plugins.hermes_smd_couples_settings: hermes-smd-couples-settings: no people on this seat; no tools\n2026-10-28 04:07:28,457 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-couples-settings\n2026-10-28 04:07:28,468 INFO hermes_plugins.hermes_smd_partner_messages: hermes-smd-partner-messages: no people on this seat; no tool\n2026-10-28 04:07:28,470 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-partner-messages\n2026-10-28 04:07:28,486 INFO hermes_plugins.hermes_smd_research: hermes-smd-research: sealed_reader not authored; no tool\n2026-10-28 04:07:28,494 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-research\n2026-10-28 04:07:28,496 INFO hermes_plugins.hermes_smd_drafting: hermes-smd-drafting registered: smd_deliver_draft\n2026-10-28 04:07:28,496 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-drafting\n2026-10-28 04:07:28,514 INFO hermes_plugins.hermes_smd_establishment: hermes-smd-establishment registered establish_stage_document, establish_propose, establish_pending, establish_submit, establish_status + admin gate + nudge + read capture\n2026-10-28 04:07:28,514 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-establishment\n2026-10-28 04:07:28,520 WARNING hermes_state: state.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:28,525 INFO hermes_plugins.hermes_smd_medchron: hermes-smd-medchron registered 3 chronology-package, 3 demand, 3 drafting, 2 litigation, 1 negotiation, 1 note and 2 case file tools\n2026-10-28 04:07:28,525 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-medchron\n2026-10-28 04:07:28,526 INFO hermes_smd.overlay: hermes-smd-overlay registered 30 sub-plugin(s): hermes-smd-audit, hermes-smd-space-gate, hermes-smd-trust, hermes-smd-voice, hermes-smd-memory-mirror, hermes-smd-calendar, hermes-smd-webhook-router, hermes-smd-inbound, hermes-smd-hook-probe, hermes-smd-workspace, hermes-smd-mail-attachments, hermes-smd-record-store, hermes-smd-voice-notes, hermes-smd-reply, hermes-smd-initiation, hermes-smd-peer-memory, hermes-smd-mcp-result-sink, hermes-smd-jobs, hermes-smd-escalation, hermes-smd-corrections, hermes-smd-connector-health, hermes-smd-usage, hermes-smd-group-audience, hermes-smd-space-delivery, hermes-smd-couples-settings, hermes-smd-partner-messages, hermes-smd-research, hermes-smd-drafting, hermes-smd-establishment, hermes-smd-medchron\n2026-10-28 04:07:28,751 INFO shared.job_worker_runtime: smd-job-worker: cost breaker armed (customer=boot-harness)\n2026-10-28 04:07:28,751 INFO shared.job_worker_runtime: smd-job-worker: ready (worker_id=gw-1354); sweeping every 15.0s\n2026-10-28 04:07:29,117 INFO hermes_cli.plugins: Plugin discovery complete: 59 found, 53 enabled\n2026-10-28 04:07:32,200 INFO tools.tirith_security: tirith not found \u2014 downloading latest release for x86_64-unknown-linux-gnu...\n2026-10-28 04:07:32,219 INFO gateway.control_socket: Gateway control socket listening at /opt/data/profiles/crane/gateway.sock\n2026-10-28 04:07:32,409 INFO gateway.run: Starting Hermes Gateway...\n2026-10-28 04:07:32,409 INFO gateway.run: Session storage: /opt/data/profiles/crane/sessions\n2026-10-28 04:07:32,411 INFO gateway.run: Agent budget: max_iterations=90 (agent.max_turns from config.yaml, or HERMES_MAX_ITERATIONS from .env, or default 500)\n2026-10-28 04:07:32,412 INFO gateway.run: Secret redaction: ENABLED (tool output, logs, and chat responses are scrubbed before delivery)\n2026-10-28 04:07:32,412 INFO gateway.run: Active profile: crane\n2026-10-28 04:07:32,422 WARNING gateway.run: No env user allowlists configured. Messaging platforms default to pairing/allowlist policies and will deny unknown senders unless you configure platform allowlists (e.g., TELEGRAM_ALLOWED_USERS=your_id) or explicitly opt in with GATEWAY_ALLOW_ALL_USERS=true plus dm_policy/group_policy: open on the platform.\n2026-10-28 04:07:32,457 INFO gateway.run: Connecting to webhook...\n2026-10-28 04:07:32,473 INFO run_agent: No .env file found. Using system environment variables.\n2026-10-28 04:07:32,485 INFO gateway.platforms.webhook: [webhook] Listening on * (all interfaces, IPv4+IPv6):8644 \u2014 routes: handoff\n2026-10-28 04:07:32,489 INFO gateway.run: \u2713 webhook connected\n2026-10-28 04:07:33,393 WARNING hermes_state: shared-state.db (hosted_rooms): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:33,403 WARNING hermes_state: shared-state.db (room policy checkpoint): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:33,448 INFO gateway.run: 1 hook(s) loaded\n2026-10-28 04:07:33,450 INFO hermes_smd.sentry: sentry: disabled (no SENTRY_DSN) for component=gateway\n2026-10-28 04:07:33,488 INFO tools.tirith_security: cosign not on PATH \u2014 installing tirith with SHA-256 verification only (install cosign for full supply chain verification)\n2026-10-28 04:07:33,640 INFO hermes_cli.plugins: Plugin 'browser-browser-use' registered browser provider: browser-use\n2026-10-28 04:07:33,647 INFO hermes_cli.plugins: Plugin 'browser-browserbase' registered browser provider: browserbase\n2026-10-28 04:07:33,654 INFO hermes_cli.plugins: Plugin 'browser-firecrawl' registered browser provider: firecrawl\n2026-10-28 04:07:33,793 INFO hermes_cli.plugins: Plugin 'deepinfra' registered image_gen provider: deepinfra\n2026-10-28 04:07:33,802 INFO hermes_cli.plugins: Plugin 'fal' registered image_gen provider: fal\n2026-10-28 04:07:33,816 INFO hermes_cli.plugins: Plugin 'krea' registered image_gen provider: krea\n2026-10-28 04:07:33,832 INFO hermes_cli.plugins: Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai\n2026-10-28 04:07:33,840 INFO hermes_cli.plugins: Plugin 'openai' registered image_gen provider: openai\n2026-10-28 04:07:33,844 INFO hermes_cli.plugins: Plugin 'openai-codex' registered image_gen provider: openai-codex\n2026-10-28 04:07:33,857 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: openrouter\n2026-10-28 04:07:33,858 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: nous\n2026-10-28 04:07:33,861 INFO hermes_cli.plugins: Plugin 'xai' registered image_gen provider: xai\n2026-10-28 04:07:33,863 INFO hermes_cli.plugins: Plugin 'deepinfra' registered video_gen provider: deepinfra\n2026-10-28 04:07:33,867 INFO hermes_cli.plugins: Plugin 'fal' registered video_gen provider: fal\n2026-10-28 04:07:33,873 INFO hermes_cli.plugins: Plugin 'openrouter' registered video_gen provider: openrouter\n2026-10-28 04:07:33,881 INFO hermes_cli.plugins: Plugin 'xai' registered video_gen provider: xai\n2026-10-28 04:07:33,882 INFO hermes_cli.plugins: Plugin 'web-brave-free' registered web provider: brave-free\n2026-10-28 04:07:33,884 INFO hermes_cli.plugins: Plugin 'web-ddgs' registered web provider: ddgs\n2026-10-28 04:07:33,885 INFO hermes_cli.plugins: Plugin 'web-exa' registered web provider: exa\n2026-10-28 04:07:33,886 INFO hermes_cli.plugins: Plugin 'web-firecrawl' registered web provider: firecrawl\n2026-10-28 04:07:33,886 INFO hermes_cli.plugins: Plugin 'web-keenable' registered web provider: keenable\n2026-10-28 04:07:33,887 INFO hermes_cli.plugins: Plugin 'web-parallel' registered web provider: parallel\n2026-10-28 04:07:33,888 INFO hermes_cli.plugins: Plugin 'web-perplexity' registered web provider: perplexity\n2026-10-28 04:07:33,889 INFO hermes_cli.plugins: Plugin 'web-searxng' registered web provider: searxng\n2026-10-28 04:07:33,890 INFO hermes_cli.plugins: Plugin 'web-tavily' registered web provider: tavily\n2026-10-28 04:07:33,891 INFO hermes_cli.plugins: Plugin 'web-xai' registered web provider: xai\n2026-10-28 04:07:34,763 INFO hermes_cli.plugin_capabilities: capability_check plugin=hermes-smd-overlay capability=tools.override decision=deny checked_by=plugin_capability_granted evidence=not granted\n2026-10-28 04:07:34,766 INFO hermes_plugins.hermes_smd_audit: hermes-smd-audit registered (customer=boot-harness audit_binding=/opt/data/audit/audit.db state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:34,767 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.\n2026-10-28 04:07:34,768 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-audit\n2026-10-28 04:07:34,768 INFO hermes_plugins.hermes_smd_space_gate: hermes-smd-space-gate registered (inert unless people: is authored)\n2026-10-28 04:07:34,768 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-space-gate\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_trust: hermes-smd-trust registered: pre_tool_call + post_tool_call + pre_llm_call + smd_send_message\n2026-10-28 04:07:34,769 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-trust\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice: runtime bound customer=boot-harness r2=LocalVaultSampleReader\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice registered and ACTIVE (customer=boot-harness)\n2026-10-28 04:07:34,770 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-voice\n2026-10-28 04:07:34,770 INFO hermes_plugins.hermes_smd_memory_mirror: hermes-smd-memory-mirror registered (on_session_end); Honcho lane unconfigured \u2014 mirror inactive by design (ADR 0016 Phase 2 deferred; ADR 0048 lane table)\n2026-10-28 04:07:34,770 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-memory-mirror\n2026-10-28 04:07:34,773 INFO hermes_plugins.hermes_smd_calendar: hermes-smd-calendar: no calendar skill authored on this seat; no tools\n2026-10-28 04:07:34,773 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-calendar\n2026-10-28 04:07:34,778 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned\n2026-10-28 04:07:34,781 INFO hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router registered (customer=boot-harness, routing_table_size=0, table read live per dispatch)\n2026-10-28 04:07:34,782 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-webhook-router\n2026-10-28 04:07:34,782 INFO hermes_plugins.hermes_smd_inbound: hermes-smd-inbound registered: pre_llm_call + transform_tool_result (ADR 0027 quarantine chokepoints; OP-P0-4 read fencing + taint-gate)\n2026-10-28 04:07:34,782 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-inbound\n2026-10-28 04:07:34,783 INFO hermes_plugins.hermes_smd_hook_probe: hermes-smd-hook-probe registered (all six hooks armed)\n2026-10-28 04:07:34,783 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-hook-probe\n2026-10-28 04:07:34,783 INFO hermes_plugins.hermes_smd_workspace: hermes-smd-workspace registered 18 mediated tools\n2026-10-28 04:07:34,783 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-workspace\n2026-10-28 04:07:34,787 INFO hermes_plugins.hermes_smd_mail_attachments: hermes-smd-mail-attachments: no enabled Email connector on this seat; registering no attachment tools\n2026-10-28 04:07:34,787 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-mail-attachments\n2026-10-28 04:07:34,791 INFO hermes_plugins.hermes_smd_record_store: hermes-smd-record-store: no record store authored on this seat; no tools\n2026-10-28 04:07:34,791 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-record-store\n2026-10-28 04:07:34,795 INFO hermes_plugins.hermes_smd_voice_notes: hermes-smd-voice-notes: no enabled Email connector on this seat; no tool\n2026-10-28 04:07:34,795 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-voice-notes\n2026-10-28 04:07:34,801 INFO hermes_plugins.hermes_smd_reply: hermes-smd-reply registered (infra_ready=True, customer=boot-harness); replies gated on the live organization roster (scope.inbound_allow_from); held replies reported to the agent at transform_tool_result\n2026-10-28 04:07:34,802 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-reply\n2026-10-28 04:07:34,803 INFO hermes_plugins.hermes_smd_initiation: hermes-smd-initiation registered: pre_llm_call authority injection + operator_seat_facts (ss#2222 gate 3 \u2014 authored initiation disposition for rostered senders; card rows 1+7 \u2014 grounded self-description on the mail channel)\n2026-10-28 04:07:34,803 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-initiation\n2026-10-28 04:07:34,806 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory: runtime bound customer=boot-harness store=active\n2026-10-28 04:07:34,806 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory registered and ACTIVE (customer=boot-harness state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:34,806 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-peer-memory\n2026-10-28 04:07:34,810 INFO hermes_plugins.hermes_smd_mcp_result_sink: hermes-smd-mcp-result-sink registered (captures [[mcp-cid:*]] turns \u2192 /run/smd-mcp)\n2026-10-28 04:07:34,810 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-mcp-result-sink\n2026-10-28 04:07:34,814 INFO hermes_plugins.hermes_smd_jobs: hermes-smd-jobs registered 4 durable-job tools\n2026-10-28 04:07:34,814 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-jobs\n2026-10-28 04:07:34,814 INFO hermes_plugins.hermes_smd_escalation: hermes-smd-escalation registered 7 ledger tools\n2026-10-28 04:07:34,815 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-escalation\n2026-10-28 04:07:34,815 INFO hermes_plugins.hermes_smd_corrections: hermes-smd-corrections registered correction_capture + taint refusal\n2026-10-28 04:07:34,815 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-corrections\n2026-10-28 04:07:34,817 INFO hermes_plugins.hermes_smd_connector_health: hermes-smd-connector-health registered (per-server call outcomes \u2192 /run/smd-connector-health/ledger.json)\n2026-10-28 04:07:34,817 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-connector-health\n2026-10-28 04:07:34,818 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage: thinking-off mapped to adaptive/low on adaptive Claude models\n2026-10-28 04:07:34,818 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage registered (meter=/opt/data/agent-state.db)\n2026-10-28 04:07:34,818 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-usage\n2026-10-28 04:07:34,821 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-group-audience\n2026-10-28 04:07:34,825 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-space-delivery\n2026-10-28 04:07:34,829 INFO hermes_plugins.hermes_smd_couples_settings: hermes-smd-couples-settings: no people on this seat; no tools\n2026-10-28 04:07:34,830 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-couples-settings\n2026-10-28 04:07:34,830 INFO hermes_plugins.hermes_smd_partner_messages: hermes-smd-partner-messages: no people on this seat; no tool\n2026-10-28 04:07:34,830 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-partner-messages\n2026-10-28 04:07:34,834 INFO hermes_plugins.hermes_smd_research: hermes-smd-research: sealed_reader not authored; no tool\n2026-10-28 04:07:34,834 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-research\n2026-10-28 04:07:34,834 INFO hermes_plugins.hermes_smd_drafting: hermes-smd-drafting registered: smd_deliver_draft\n2026-10-28 04:07:34,834 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-drafting\n2026-10-28 04:07:34,837 INFO hermes_plugins.hermes_smd_establishment: hermes-smd-establishment registered establish_stage_document, establish_propose, establish_pending, establish_submit, establish_status + admin gate + nudge + read capture\n2026-10-28 04:07:34,837 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-establishment\n2026-10-28 04:07:34,838 INFO hermes_plugins.hermes_smd_medchron: hermes-smd-medchron registered 3 chronology-package, 3 demand, 3 drafting, 2 litigation, 1 negotiation, 1 note and 2 case file tools\n2026-10-28 04:07:34,838 INFO hermes_smd.overlay: overlay fan-out: registered hermes-smd-medchron\n2026-10-28 04:07:34,838 INFO hermes_smd.overlay: hermes-smd-overlay registered 30 sub-plugin(s): hermes-smd-audit, hermes-smd-space-gate, hermes-smd-trust, hermes-smd-voice, hermes-smd-memory-mirror, hermes-smd-calendar, hermes-smd-webhook-router, hermes-smd-inbound, hermes-smd-hook-probe, hermes-smd-workspace, hermes-smd-mail-attachments, hermes-smd-record-store, hermes-smd-voice-notes, hermes-smd-reply, hermes-smd-initiation, hermes-smd-peer-memory, hermes-smd-mcp-result-sink, hermes-smd-jobs, hermes-smd-escalation, hermes-smd-corrections, hermes-smd-connector-health, hermes-smd-usage, hermes-smd-group-audience, hermes-smd-space-delivery, hermes-smd-couples-settings, hermes-smd-partner-messages, hermes-smd-research, hermes-smd-drafting, hermes-smd-establishment, hermes-smd-medchron\n2026-10-28 04:07:35,340 INFO hermes_cli.plugins: Plugin discovery complete: 59 found, 53 enabled\n2026-10-28 04:07:36,306 INFO hermes_plugins.hermes_smd_trust.enforce: trust-decision tool=email_send persona=crane action_class=banned decision=refuse reason=autonomous email send is forbidden (ADR 0035)\n2026-10-28 04:07:36,308 INFO hermes_plugins.hermes_smd_hook_probe: {\"event\": \"hermes_smd_hook_probe\", \"hook_name\": \"pre_tool_call\", \"sequence\": 1, \"timestamp_iso\": \"2026-10-28T04:07:36.308618+00:00\", \"kwargs_digest\": {\"tool_name\": \"str\", \"args\": \"dict\", \"task_id\": \"str\", \"session_id\": \"str\", \"tool_call_id\": \"str\", \"turn_id\": \"str\", \"api_request_id\": \"str\", \"middleware_trace\": \"list\", \"telemetry_schema_version\": \"str\"}, \"kwargs_seen\": [\"api_request_id\", \"args\", \"middleware_trace\", \"session_id\", \"task_id\", \"telemetry_schema_version\", \"tool_call_id\", \"tool_name\", \"turn_id\"]}\n2026-10-28 04:07:36,335 INFO hermes_plugins.hermes_smd_audit: interactive cost meter: breaker armed (customer=boot-harness)\n2026-10-28 04:07:36,342 WARNING tools.registry: check_fn _a2a_tools_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,343 INFO hermes_plugins.hermes_smd_hook_probe: {\"event\": \"hermes_smd_hook_probe\", \"hook_name\": \"post_llm_call\", \"sequence\": 2, \"timestamp_iso\": \"2026-10-28T04:07:36.342997+00:00\", \"kwargs_digest\": {\"session_id\": \"str\", \"user_message\": \"str\", \"assistant_response\": \"str\", \"model\": \"str\", \"platform\": \"str\", \"telemetry_schema_version\": \"str\"}, \"kwargs_seen\": [\"assistant_response\", \"model\", \"platform\", \"session_id\", \"telemetry_schema_version\", \"user_message\"]}\n2026-10-28 04:07:36,358 WARNING tools.registry: check_fn check_browser_back_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,360 WARNING tools.registry: check_fn _browser_cdp_check returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,373 WARNING tools.registry: check_fn check_browser_click_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,380 WARNING tools.registry: check_fn check_browser_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,381 WARNING tools.registry: check_fn _browser_dialog_check returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,663 INFO tools.tirith_security: tirith installed to /opt/data/profiles/crane/bin/tirith (SHA-256 only)\n2026-10-28 04:07:37,251 WARNING tools.registry: check_fn check_browser_navigate_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,257 WARNING tools.registry: check_fn check_browser_press_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,259 WARNING tools.registry: check_fn check_browser_scroll_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,264 WARNING tools.registry: check_fn check_browser_snapshot_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,265 WARNING tools.registry: check_fn check_browser_type_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_web_api_key returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_browser_vision_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,282 WARNING tools.registry: check_fn check_computer_use_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,283 WARNING tools.registry: check_fn check_discord_tool_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,284 WARNING tools.registry: check_fn _check_feishu returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,285 WARNING tools.registry: check_fn _check_ha_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,291 WARNING tools.registry: check_fn check_image_generation_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,306 WARNING tools.registry: check_fn _connectors_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,309 WARNING tools.registry: check_fn check_react_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,313 WARNING tools.registry: check_fn _check_spotify_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,319 INFO tools.lazy_deps: Lazy-installing edge-tts==7.2.7 for feature 'tts.edge'\n2026-10-28 04:07:37,425 INFO hermes_smd.overlay.activation: webhook read-surface check passed: read_file is offered on webhook turns (config half + toolset registration both live)\n2026-10-28 04:07:37,428 INFO hermes_smd.overlay.activation: webhook expected-tools check passed: ['medchron_allowance', 'medchron_job_submit', 'operator_help_signals', 'operator_seat_facts'] offered on webhook turns\n2026-10-28 04:07:37,429 INFO hermes_smd.overlay.activation: SMD overlay ACTIVE + AUDITING on the live gateway: 10 hook type(s) in the live singleton, trust gate fired on banned 'email_send', audit row written (before=0 after=1) | cost breaker: PROVEN | webhook read surface: resolved | couples surface: not applicable | unknown-DM drop: not applicable (no people: authored) \u2014 each gate's outcome above is what was observed on THIS boot, not a claim about what the gate would do.\n2026-10-28 04:07:37,429 INFO gateway.run: Gateway running with 1 platform(s)\n2026-10-28 04:07:37,529 WARNING tools.registry: check_fn check_tts_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,778 INFO gateway.run: Channel directory built: 0 target(s)\n2026-10-28 04:07:37,779 INFO agent.auxiliary_client: Vision auto-detect: using main provider anthropic (claude-sonnet-5-5)\n2026-10-28 04:07:37,781 INFO agent.credential_pool: credential pool: no available entries (all exhausted or empty)\n2026-10-28 04:07:37,782 WARNING tools.registry: check_fn check_video_generation_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,783 INFO agent.credential_pool: credential pool: no available entries (all exhausted or empty)\n2026-10-28 04:07:37,783 WARNING tools.registry: check_fn check_x_search_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,784 WARNING tools.registry: check_fn _check_xai_video_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,814 WARNING tools.registry: check_fn _check_yuanbao returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:38,171 INFO gateway.run: Turn machinery warmed in 5.7s (96 tool schema(s) materialized)\n2026-10-28 04:07:38,786 WARNING hermes_state: state.db (delivery_ledger): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:38,792 INFO gateway.run: Press Ctrl+C to stop\n2026-10-28 04:07:38,799 INFO gateway.run: Gateway housekeeping started (interval=60s)\n2026-10-28 04:07:38,799 INFO cron.scheduler_provider: In-process cron scheduler started (interval=60s)\n2026-10-28 04:07:38,807 WARNING hermes_state: cron/executions.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:38,809 INFO gateway.run: kanban dispatcher: holding singleton dispatcher lock (/opt/data/kanban/.dispatcher.lock)\n2026-10-28 04:07:38,972 INFO gateway.run: kanban dispatcher: kanban.max_in_progress unset; using memory-derived default max_in_progress=7 (set kanban.max_in_progress in config.yaml to override)\n2026-10-28 04:07:38,979 INFO hermes_cli.mem_trim: memory trim: reason=messaging gateway housekeeping malloc_trim=1 rss_kib=326308->287436 rss_anon_kib=294260->255388 threads=21 duration_ms=167.7\n2026-10-28 04:07:43,973 INFO gateway.run: kanban dispatcher: embedded in gateway (interval=60.0s)\n2026-10-28 04:07:43,991 WARNING hermes_state: kanban.db (kanban.db): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:55,628 WARNING gateway.platforms.webhook: [webhook] Invalid signature for route handoff\n2026-10-28 04:07:55,629 INFO aiohttp.access: 127.0.0.1 [28/Oct/2026:04:07:55 +0000] \"POST /webhooks/handoff HTTP/1.1\" 401 199 \"-\" \"-\"\n2026-10-28 04:08:39,145 INFO hermes_cli.mem_trim: memory trim: reason=messaging gateway housekeeping malloc_trim=1 rss_kib=294000->286544 rss_anon_kib=261876->254420 threads=21 duration_ms=163.5\n2026-10-28 04:08:39,208 INFO cron.scheduler: Job 'op-managed:boot-harness-cron-probe' (ID: 6dd00ec85ed0): wakeAgent=false, skipping agent run\n2026-10-28 04:08:39,213 INFO cron.scheduler: Job '6dd00ec85ed0': agent returned [SILENT] \u2014 skipping delivery\n",
+    "/opt/data/profiles/crane/logs/errors.log": "2026-10-28 04:07:28,178 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.\n2026-10-28 04:07:28,292 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned\n2026-10-28 04:07:28,520 WARNING hermes_state: state.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:32,422 WARNING gateway.run: No env user allowlists configured. Messaging platforms default to pairing/allowlist policies and will deny unknown senders unless you configure platform allowlists (e.g., TELEGRAM_ALLOWED_USERS=your_id) or explicitly opt in with GATEWAY_ALLOW_ALL_USERS=true plus dm_policy/group_policy: open on the platform.\n2026-10-28 04:07:33,393 WARNING hermes_state: shared-state.db (hosted_rooms): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:33,403 WARNING hermes_state: shared-state.db (room policy checkpoint): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:34,767 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.\n2026-10-28 04:07:34,778 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned\n2026-10-28 04:07:36,342 WARNING tools.registry: check_fn _a2a_tools_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,358 WARNING tools.registry: check_fn check_browser_back_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,360 WARNING tools.registry: check_fn _browser_cdp_check returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,373 WARNING tools.registry: check_fn check_browser_click_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,380 WARNING tools.registry: check_fn check_browser_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:36,381 WARNING tools.registry: check_fn _browser_dialog_check returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,251 WARNING tools.registry: check_fn check_browser_navigate_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,257 WARNING tools.registry: check_fn check_browser_press_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,259 WARNING tools.registry: check_fn check_browser_scroll_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,264 WARNING tools.registry: check_fn check_browser_snapshot_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,265 WARNING tools.registry: check_fn check_browser_type_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_web_api_key returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_browser_vision_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,282 WARNING tools.registry: check_fn check_computer_use_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,283 WARNING tools.registry: check_fn check_discord_tool_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,284 WARNING tools.registry: check_fn _check_feishu returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,285 WARNING tools.registry: check_fn _check_ha_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,291 WARNING tools.registry: check_fn check_image_generation_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,306 WARNING tools.registry: check_fn _connectors_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,309 WARNING tools.registry: check_fn check_react_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,313 WARNING tools.registry: check_fn _check_spotify_available returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,529 WARNING tools.registry: check_fn check_tts_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,782 WARNING tools.registry: check_fn check_video_generation_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,783 WARNING tools.registry: check_fn check_x_search_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,784 WARNING tools.registry: check_fn _check_xai_video_requirements returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:37,814 WARNING tools.registry: check_fn _check_yuanbao returned False; dependent tools will be unavailable this turn\n2026-10-28 04:07:38,786 WARNING hermes_state: state.db (delivery_ledger): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:38,807 WARNING hermes_state: cron/executions.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:43,991 WARNING hermes_state: kanban.db (kanban.db): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:07:55,628 WARNING gateway.platforms.webhook: [webhook] Invalid signature for route handoff\n",
+    "/opt/data/profiles/crane/logs/gateway-exit-diag.log": "{\"ts\": \"2026-10-28T04:07:30.100510+00:00\", \"tag\": \"gateway.start\", \"pid\": 1354, \"python\": \"3.13.5\", \"platform\": \"linux\", \"replace\": false, \"argv\": [\"/opt/hermes/.venv/bin/hermes\", \"gateway\", \"run\"], \"stdin_is_tty\": false, \"console_window_attached\": null, \"detached\": false, \"breakaway\": null, \"absorb_windows_console_controls\": false}\n",
+    "/opt/data/profiles/crane/logs/gateway.log": "2026-10-28 04:07:32,219 INFO gateway.control_socket: Gateway control socket listening at /opt/data/profiles/crane/gateway.sock\n2026-10-28 04:07:32,409 INFO gateway.run: Starting Hermes Gateway...\n2026-10-28 04:07:32,409 INFO gateway.run: Session storage: /opt/data/profiles/crane/sessions\n2026-10-28 04:07:32,411 INFO gateway.run: Agent budget: max_iterations=90 (agent.max_turns from config.yaml, or HERMES_MAX_ITERATIONS from .env, or default 500)\n2026-10-28 04:07:32,412 INFO gateway.run: Secret redaction: ENABLED (tool output, logs, and chat responses are scrubbed before delivery)\n2026-10-28 04:07:32,412 INFO gateway.run: Active profile: crane\n2026-10-28 04:07:32,422 WARNING gateway.run: No env user allowlists configured. Messaging platforms default to pairing/allowlist policies and will deny unknown senders unless you configure platform allowlists (e.g., TELEGRAM_ALLOWED_USERS=your_id) or explicitly opt in with GATEWAY_ALLOW_ALL_USERS=true plus dm_policy/group_policy: open on the platform.\n2026-10-28 04:07:32,457 INFO gateway.run: Connecting to webhook...\n2026-10-28 04:07:32,485 INFO gateway.platforms.webhook: [webhook] Listening on * (all interfaces, IPv4+IPv6):8644 \u2014 routes: handoff\n2026-10-28 04:07:32,489 INFO gateway.run: \u2713 webhook connected\n2026-10-28 04:07:33,448 INFO gateway.run: 1 hook(s) loaded\n2026-10-28 04:07:34,766 INFO hermes_plugins.hermes_smd_audit: hermes-smd-audit registered (customer=boot-harness audit_binding=/opt/data/audit/audit.db state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:34,767 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.\n2026-10-28 04:07:34,768 INFO hermes_plugins.hermes_smd_space_gate: hermes-smd-space-gate registered (inert unless people: is authored)\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_trust: hermes-smd-trust registered: pre_tool_call + post_tool_call + pre_llm_call + smd_send_message\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice: runtime bound customer=boot-harness r2=LocalVaultSampleReader\n2026-10-28 04:07:34,769 INFO hermes_plugins.hermes_smd_voice: hermes-smd-voice registered and ACTIVE (customer=boot-harness)\n2026-10-28 04:07:34,770 INFO hermes_plugins.hermes_smd_memory_mirror: hermes-smd-memory-mirror registered (on_session_end); Honcho lane unconfigured \u2014 mirror inactive by design (ADR 0016 Phase 2 deferred; ADR 0048 lane table)\n2026-10-28 04:07:34,773 INFO hermes_plugins.hermes_smd_calendar: hermes-smd-calendar: no calendar skill authored on this seat; no tools\n2026-10-28 04:07:34,778 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned\n2026-10-28 04:07:34,781 INFO hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router registered (customer=boot-harness, routing_table_size=0, table read live per dispatch)\n2026-10-28 04:07:34,782 INFO hermes_plugins.hermes_smd_inbound: hermes-smd-inbound registered: pre_llm_call + transform_tool_result (ADR 0027 quarantine chokepoints; OP-P0-4 read fencing + taint-gate)\n2026-10-28 04:07:34,783 INFO hermes_plugins.hermes_smd_hook_probe: hermes-smd-hook-probe registered (all six hooks armed)\n2026-10-28 04:07:34,783 INFO hermes_plugins.hermes_smd_workspace: hermes-smd-workspace registered 18 mediated tools\n2026-10-28 04:07:34,787 INFO hermes_plugins.hermes_smd_mail_attachments: hermes-smd-mail-attachments: no enabled Email connector on this seat; registering no attachment tools\n2026-10-28 04:07:34,791 INFO hermes_plugins.hermes_smd_record_store: hermes-smd-record-store: no record store authored on this seat; no tools\n2026-10-28 04:07:34,795 INFO hermes_plugins.hermes_smd_voice_notes: hermes-smd-voice-notes: no enabled Email connector on this seat; no tool\n2026-10-28 04:07:34,801 INFO hermes_plugins.hermes_smd_reply: hermes-smd-reply registered (infra_ready=True, customer=boot-harness); replies gated on the live organization roster (scope.inbound_allow_from); held replies reported to the agent at transform_tool_result\n2026-10-28 04:07:34,803 INFO hermes_plugins.hermes_smd_initiation: hermes-smd-initiation registered: pre_llm_call authority injection + operator_seat_facts (ss#2222 gate 3 \u2014 authored initiation disposition for rostered senders; card rows 1+7 \u2014 grounded self-description on the mail channel)\n2026-10-28 04:07:34,806 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory: runtime bound customer=boot-harness store=active\n2026-10-28 04:07:34,806 INFO hermes_plugins.hermes_smd_peer_memory: hermes-smd-peer-memory registered and ACTIVE (customer=boot-harness state_binding=/opt/data/agent-state.db)\n2026-10-28 04:07:34,810 INFO hermes_plugins.hermes_smd_mcp_result_sink: hermes-smd-mcp-result-sink registered (captures [[mcp-cid:*]] turns \u2192 /run/smd-mcp)\n2026-10-28 04:07:34,814 INFO hermes_plugins.hermes_smd_jobs: hermes-smd-jobs registered 4 durable-job tools\n2026-10-28 04:07:34,814 INFO hermes_plugins.hermes_smd_escalation: hermes-smd-escalation registered 7 ledger tools\n2026-10-28 04:07:34,815 INFO hermes_plugins.hermes_smd_corrections: hermes-smd-corrections registered correction_capture + taint refusal\n2026-10-28 04:07:34,817 INFO hermes_plugins.hermes_smd_connector_health: hermes-smd-connector-health registered (per-server call outcomes \u2192 /run/smd-connector-health/ledger.json)\n2026-10-28 04:07:34,818 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage: thinking-off mapped to adaptive/low on adaptive Claude models\n2026-10-28 04:07:34,818 INFO hermes_plugins.hermes_smd_usage: hermes-smd-usage registered (meter=/opt/data/agent-state.db)\n2026-10-28 04:07:34,829 INFO hermes_plugins.hermes_smd_couples_settings: hermes-smd-couples-settings: no people on this seat; no tools\n2026-10-28 04:07:34,830 INFO hermes_plugins.hermes_smd_partner_messages: hermes-smd-partner-messages: no people on this seat; no tool\n2026-10-28 04:07:34,834 INFO hermes_plugins.hermes_smd_research: hermes-smd-research: sealed_reader not authored; no tool\n2026-10-28 04:07:34,834 INFO hermes_plugins.hermes_smd_drafting: hermes-smd-drafting registered: smd_deliver_draft\n2026-10-28 04:07:34,837 INFO hermes_plugins.hermes_smd_establishment: hermes-smd-establishment registered establish_stage_document, establish_propose, establish_pending, establish_submit, establish_status + admin gate + nudge + read capture\n2026-10-28 04:07:34,838 INFO hermes_plugins.hermes_smd_medchron: hermes-smd-medchron registered 3 chronology-package, 3 demand, 3 drafting, 2 litigation, 1 negotiation, 1 note and 2 case file tools\n2026-10-28 04:07:36,306 INFO hermes_plugins.hermes_smd_trust.enforce: trust-decision tool=email_send persona=crane action_class=banned decision=refuse reason=autonomous email send is forbidden (ADR 0035)\n2026-10-28 04:07:36,308 INFO hermes_plugins.hermes_smd_hook_probe: {\"event\": \"hermes_smd_hook_probe\", \"hook_name\": \"pre_tool_call\", \"sequence\": 1, \"timestamp_iso\": \"2026-10-28T04:07:36.308618+00:00\", \"kwargs_digest\": {\"tool_name\": \"str\", \"args\": \"dict\", \"task_id\": \"str\", \"session_id\": \"str\", \"tool_call_id\": \"str\", \"turn_id\": \"str\", \"api_request_id\": \"str\", \"middleware_trace\": \"list\", \"telemetry_schema_version\": \"str\"}, \"kwargs_seen\": [\"api_request_id\", \"args\", \"middleware_trace\", \"session_id\", \"task_id\", \"telemetry_schema_version\", \"tool_call_id\", \"tool_name\", \"turn_id\"]}\n2026-10-28 04:07:36,335 INFO hermes_plugins.hermes_smd_audit: interactive cost meter: breaker armed (customer=boot-harness)\n2026-10-28 04:07:36,343 INFO hermes_plugins.hermes_smd_hook_probe: {\"event\": \"hermes_smd_hook_probe\", \"hook_name\": \"post_llm_call\", \"sequence\": 2, \"timestamp_iso\": \"2026-10-28T04:07:36.342997+00:00\", \"kwargs_digest\": {\"session_id\": \"str\", \"user_message\": \"str\", \"assistant_response\": \"str\", \"model\": \"str\", \"platform\": \"str\", \"telemetry_schema_version\": \"str\"}, \"kwargs_seen\": [\"assistant_response\", \"model\", \"platform\", \"session_id\", \"telemetry_schema_version\", \"user_message\"]}\n2026-10-28 04:07:37,429 INFO gateway.run: Gateway running with 1 platform(s)\n2026-10-28 04:07:37,778 INFO gateway.run: Channel directory built: 0 target(s)\n2026-10-28 04:07:38,171 INFO gateway.run: Turn machinery warmed in 5.7s (96 tool schema(s) materialized)\n2026-10-28 04:07:38,792 INFO gateway.run: Press Ctrl+C to stop\n2026-10-28 04:07:38,799 INFO gateway.run: Gateway housekeeping started (interval=60s)\n2026-10-28 04:07:38,809 INFO gateway.run: kanban dispatcher: holding singleton dispatcher lock (/opt/data/kanban/.dispatcher.lock)\n2026-10-28 04:07:38,972 INFO gateway.run: kanban dispatcher: kanban.max_in_progress unset; using memory-derived default max_in_progress=7 (set kanban.max_in_progress in config.yaml to override)\n2026-10-28 04:07:43,973 INFO gateway.run: kanban dispatcher: embedded in gateway (interval=60.0s)\n2026-10-28 04:07:55,628 WARNING gateway.platforms.webhook: [webhook] Invalid signature for route handoff\n",
+    "/opt/data/profiles/crane/logs/gateway_faulthandler.log": ""
+  }
+}

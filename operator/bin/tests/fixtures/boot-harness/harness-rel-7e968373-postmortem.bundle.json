@@ -1,0 +1,602 @@
+{
+  "collected_at": 1793161270.6333196,
+  "uptime_s": 626.88,
+  "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+  "selftest": {
+    "checks": [
+      {
+        "detail": "",
+        "id": "customer-yaml-present",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-dir-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-agent-readable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-dir-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "customer-yaml-absent-from-agent-volume",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-profiles-dir",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "no-unauthored-profile-homes",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "retired-skills-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "checked: 0 staged script(s)",
+        "id": "staged-scripts-current",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "omitted-skills-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-plugins-installed",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "hermes-sha-matches-pin",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "curator-disabled",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "disabled-skills-pruned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "matter-mixing-fence",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-db-owner-is-broker",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-dir-setgid-2750",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "audit-db-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agent-state-owner-is-hermes",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "broker-respawn-supervised",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "exit 1:     import socket,os,json,sys; p=os.environ.get('SMD_WORKSPACE_BROKER_SOCKET') or '/run/smd-workspace-broker/broker.sock'; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(5); s.connect(p); s.sendall(b'{\"action\":\"health\"}'+bytes([10])); r=json.loads(s.recv(65536).decode()); s",
+        "id": "broker-socket-answers-health",
+        "ok": false,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-liveness-supervisor-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "exit 1: supervisor-state=inert",
+        "id": "gateway-liveness-supervisor-armed",
+        "ok": false,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-liveness-files-readable-by-gate",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "exit 1: ",
+        "id": "gateway-loop-heartbeat-fresh",
+        "ok": false,
+        "warn": false
+      },
+      {
+        "detail": "exit 1: no profile has a fresh gateway heartbeat",
+        "id": "gateway-multiplex-standalone",
+        "ok": false,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "gateway-loop-watchdog-budget-authored",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "overlay-pack-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "overlay-pack-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "activation-handler-not-agent-writable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "r2-account-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-send-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-webhook-read-key-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "agentmail-webhook-secret-matches-vendor",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-send-credential-stripped-from-agent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-read-app-cannot-send-on-send-as-seat",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "msgraph-read-app-cannot-read-staff-mailbox",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "identifier-gate-lever",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-uid-exists",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-daemon-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-daemon-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-memory-cap-present",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "medchron-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "demand-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "drafting-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-textcache-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "litigation-broker-config-matches-runner",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-lane-idle",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "casefile-broker-config-matches-runner",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "lane-memory-caps-leave-gateway-reserve",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-queue-root-owned",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-jobs-dir-root-owned-child-traversable",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "negotiation-state-dir-child-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "note-lane-ticking",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "",
+        "id": "note-jobs-dir-root-only",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; runner refuses jobs by design, so the config-perm, token, controls, and gate-refusal checks are skipped",
+        "id": "medchron-firm-config-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the demand lane defers jobs by design",
+        "id": "demand-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the drafting lane defers jobs by design",
+        "id": "drafting-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the litigation lane defers jobs by design",
+        "id": "litigation-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not authored for this seat; the casefile lane defers jobs by design",
+        "id": "casefile-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      },
+      {
+        "detail": "not a marketing seat; no advertising-gate registers are expected",
+        "id": "marketing-firm-inputs-absent",
+        "ok": true,
+        "warn": false
+      }
+    ],
+    "expected_hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+    "failed": 4,
+    "failed_streak": 2,
+    "finished_at": "2026-10-28T04:35:05Z",
+    "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+    "image_ref": "registry.fly.io/hermes-fleet:rel-7e968373-202610280245@sha256:0325e37b95d540419477c12f94464a6992364610214aa014ede8630026d814ca",
+    "run_kind": "boot",
+    "schema_version": 1,
+    "started_at": "2026-10-28T04:29:04Z",
+    "total": 80,
+    "version": "7e9683738ab37ee40693b1e7db6d3cc7915956e3",
+    "warned": 0
+  },
+  "gateway_processes": [],
+  "gateway": {
+    "pid": null
+  },
+  "plugins_enabled": {
+    "/opt/data/profiles/crane/config.yaml": [
+      "hermes-smd-overlay"
+    ]
+  },
+  "filesystem": {
+    "opt_data_entries": [
+      ".bash_logout",
+      ".bashrc",
+      ".local",
+      ".profile",
+      ".smd",
+      ".smd-root",
+      ".smokeball-mcp",
+      "SOUL.md",
+      "agent-state.db",
+      "audio_cache",
+      "audit",
+      "backups",
+      "cache",
+      "config.yaml",
+      "cron",
+      "held_replies.db",
+      "held_replies.db-shm",
+      "held_replies.db-wal",
+      "honcho",
+      "hooks",
+      "image_cache",
+      "installs",
+      "logs",
+      "medchron",
+      "memories",
+      "pairing",
+      "plugins",
+      "profiles",
+      "requests.db",
+      "sessions",
+      "skills",
+      "tmp-deliverable",
+      "tools",
+      "voice"
+    ],
+    "opt_data_tools": true,
+    "opt_data_installs": true,
+    "install_facts_venv_keys": {
+      "/opt/data/installs/351f81cc06284494/facts.json": [
+        "packages.venv"
+      ]
+    }
+  },
+  "imports": {
+    "aiohttp_yaml_in_venv": {
+      "rc": 0,
+      "detail": ""
+    },
+    "shared": {
+      "rc": 0,
+      "detail": ""
+    },
+    "shared.selfcheck": {
+      "rc": 0,
+      "detail": ""
+    },
+    "bootstrap": {
+      "rc": 0,
+      "detail": ""
+    },
+    "bootstrap.validate": {
+      "rc": 0,
+      "detail": ""
+    },
+    "plugins": {
+      "rc": 0,
+      "detail": ""
+    }
+  },
+  "http": {
+    "gate_health": 200,
+    "adapter_unsigned_handoff": "ConnectionRefusedError: [Errno 111] Connection refused"
+  },
+  "cron": {
+    "planted": true,
+    "persona": "crane",
+    "fired": false,
+    "child": null,
+    "job": "unverified\": null, \"last_failure\": null, \"failure_streak\": 0, \"deliver\": \"local\", \"origin\": null, \"enabled_toolsets\": null, \"workdir\": null, \"latest_execution\": null}\ncron/executions.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python3) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n"
+  },
+  "logs": {
+    "/opt/data/logs/agent.log": "",
+    "/opt/data/logs/errors.log": "",
+    "/opt/data/profiles/crane/logs/agent.log": "2026-10-28 04:15:06,114 INFO hermes_cli.plugins: Plugin 'browser-browser-use' registered browser provider: browser-use\n2026-10-28 04:15:06,116 INFO hermes_cli.plugins: Plugin 'browser-browserbase' registered browser provider: browserbase\n2026-10-28 04:15:06,117 INFO hermes_cli.plugins: Plugin 'browser-firecrawl' registered browser provider: firecrawl\n2026-10-28 04:15:06,202 INFO hermes_cli.plugins: Plugin 'default' registered delegation provider: default\n2026-10-28 04:15:06,209 INFO hermes_cli.plugins: Plugin 'deepinfra' registered image_gen provider: deepinfra\n2026-10-28 04:15:06,210 INFO hermes_cli.plugins: Plugin 'fal' registered image_gen provider: fal\n2026-10-28 04:15:06,215 INFO hermes_cli.plugins: Plugin 'krea' registered image_gen provider: krea\n2026-10-28 04:15:06,217 INFO hermes_cli.plugins: Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai\n2026-10-28 04:15:06,219 INFO hermes_cli.plugins: Plugin 'openai' registered image_gen provider: openai\n2026-10-28 04:15:06,221 INFO hermes_cli.plugins: Plugin 'openai-codex' registered image_gen provider: openai-codex\n2026-10-28 04:15:06,228 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: openrouter\n2026-10-28 04:15:06,228 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: nous\n2026-10-28 04:15:06,232 INFO hermes_cli.plugins: Plugin 'xai' registered image_gen provider: xai\n2026-10-28 04:15:06,561 INFO hermes_cli.plugins: Plugin 'deepinfra' registered video_gen provider: deepinfra\n2026-10-28 04:15:06,566 INFO hermes_cli.plugins: Plugin 'fal' registered video_gen provider: fal\n2026-10-28 04:15:06,570 INFO hermes_cli.plugins: Plugin 'openrouter' registered video_gen provider: openrouter\n2026-10-28 04:15:06,573 INFO hermes_cli.plugins: Plugin 'xai' registered video_gen provider: xai\n2026-10-28 04:15:06,578 INFO hermes_cli.plugins: Plugin 'web-brave-free' registered web provider: brave-free\n2026-10-28 04:15:06,581 INFO hermes_cli.plugins: Plugin 'web-ddgs' registered web provider: ddgs\n2026-10-28 04:15:06,583 INFO hermes_cli.plugins: Plugin 'web-exa' registered web provider: exa\n2026-10-28 04:15:06,592 INFO hermes_cli.plugins: Plugin 'web-firecrawl' registered web provider: firecrawl\n2026-10-28 04:15:06,594 INFO hermes_cli.plugins: Plugin 'web-keenable' registered web provider: keenable\n2026-10-28 04:15:06,595 INFO hermes_cli.plugins: Plugin 'web-openai-native' registered web provider: openai-native\n2026-10-28 04:15:06,597 INFO hermes_cli.plugins: Plugin 'web-parallel' registered web provider: parallel\n2026-10-28 04:15:06,600 INFO hermes_cli.plugins: Plugin 'web-perplexity' registered web provider: perplexity\n2026-10-28 04:15:06,601 INFO hermes_cli.plugins: Plugin 'web-searxng' registered web provider: searxng\n2026-10-28 04:15:06,603 INFO hermes_cli.plugins: Plugin 'web-tavily' registered web provider: tavily\n2026-10-28 04:15:06,606 INFO hermes_cli.plugins: Plugin 'web-xai' registered web provider: xai\n2026-10-28 04:15:06,610 INFO hermes_cli.plugin_capabilities: capability_check plugin=hermes-smd-overlay capability=tools.override decision=deny checked_by=plugin_capability_granted evidence=not granted\n2026-10-28 04:15:06,612 WARNING hermes_cli.plugins: Failed to load plugin 'hermes-smd-overlay': No module named 'yaml'\n2026-10-28 04:15:06,612 INFO hermes_cli.plugins: Plugin discovery complete: 63 found, 58 enabled\n2026-10-28 04:15:09,967 INFO gateway.host_attach: Profile 'crane' is standalone by config; starting beside the host multiplexer\n2026-10-28 04:15:10,030 INFO hermes_cli.plugins: Plugin 'browser-browser-use' registered browser provider: browser-use\n2026-10-28 04:15:10,038 INFO hermes_cli.plugins: Plugin 'browser-browserbase' registered browser provider: browserbase\n2026-10-28 04:15:10,055 INFO hermes_cli.plugins: Plugin 'browser-firecrawl' registered browser provider: firecrawl\n2026-10-28 04:15:10,503 INFO hermes_cli.plugins: Plugin 'default' registered delegation provider: default\n2026-10-28 04:15:10,531 INFO hermes_cli.plugins: Plugin 'deepinfra' registered image_gen provider: deepinfra\n2026-10-28 04:15:10,540 INFO hermes_cli.plugins: Plugin 'fal' registered image_gen provider: fal\n2026-10-28 04:15:10,557 INFO hermes_cli.plugins: Plugin 'krea' registered image_gen provider: krea\n2026-10-28 04:15:10,565 INFO hermes_cli.plugins: Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai\n2026-10-28 04:15:10,575 INFO hermes_cli.plugins: Plugin 'openai' registered image_gen provider: openai\n2026-10-28 04:15:10,581 INFO hermes_cli.plugins: Plugin 'openai-codex' registered image_gen provider: openai-codex\n2026-10-28 04:15:10,608 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: openrouter\n2026-10-28 04:15:10,609 INFO hermes_cli.plugins: Plugin 'openrouter' registered image_gen provider: nous\n2026-10-28 04:15:10,618 INFO hermes_cli.plugins: Plugin 'xai' registered image_gen provider: xai\n2026-10-28 04:15:10,903 INFO hermes_cli.plugins: Plugin 'deepinfra' registered video_gen provider: deepinfra\n2026-10-28 04:15:10,909 INFO hermes_cli.plugins: Plugin 'fal' registered video_gen provider: fal\n2026-10-28 04:15:10,913 INFO hermes_cli.plugins: Plugin 'openrouter' registered video_gen provider: openrouter\n2026-10-28 04:15:10,917 INFO hermes_cli.plugins: Plugin 'xai' registered video_gen provider: xai\n2026-10-28 04:15:10,924 INFO hermes_cli.plugins: Plugin 'web-brave-free' registered web provider: brave-free\n2026-10-28 04:15:10,927 INFO hermes_cli.plugins: Plugin 'web-ddgs' registered web provider: ddgs\n2026-10-28 04:15:10,929 INFO hermes_cli.plugins: Plugin 'web-exa' registered web provider: exa\n2026-10-28 04:15:10,941 INFO hermes_cli.plugins: Plugin 'web-firecrawl' registered web provider: firecrawl\n2026-10-28 04:15:10,943 INFO hermes_cli.plugins: Plugin 'web-keenable' registered web provider: keenable\n2026-10-28 04:15:10,945 INFO hermes_cli.plugins: Plugin 'web-openai-native' registered web provider: openai-native\n2026-10-28 04:15:10,947 INFO hermes_cli.plugins: Plugin 'web-parallel' registered web provider: parallel\n2026-10-28 04:15:10,950 INFO hermes_cli.plugins: Plugin 'web-perplexity' registered web provider: perplexity\n2026-10-28 04:15:10,952 INFO hermes_cli.plugins: Plugin 'web-searxng' registered web provider: searxng\n2026-10-28 04:15:10,954 INFO hermes_cli.plugins: Plugin 'web-tavily' registered web provider: tavily\n2026-10-28 04:15:10,958 INFO hermes_cli.plugins: Plugin 'web-xai' registered web provider: xai\n2026-10-28 04:15:11,005 INFO hermes_cli.plugin_capabilities: capability_check plugin=hermes-smd-overlay capability=tools.override decision=deny checked_by=plugin_capability_granted evidence=not granted\n2026-10-28 04:15:11,007 WARNING hermes_cli.plugins: Failed to load plugin 'hermes-smd-overlay': No module named 'yaml'\n2026-10-28 04:15:11,007 INFO hermes_cli.plugins: Plugin discovery complete: 63 found, 58 enabled\n2026-10-28 04:15:11,463 WARNING hermes_cli.gateway_multiplex_mode: This gateway stays standalone: this profile is standalone (gateway.standalone: true); it serves only itself. It serves only the launching profile.\n2026-10-28 04:15:11,478 INFO gateway.host_attach: Profile 'crane' is standalone by config; starting beside the host multiplexer\n2026-10-28 04:15:11,517 INFO gateway.host_attach: Profile 'crane' is standalone by config; starting beside the host multiplexer\n2026-10-28 04:15:11,819 WARNING hermes_cli.gateway_multiplex_mode: This gateway stays standalone: this profile is standalone (gateway.standalone: true); it serves only itself. It serves only the launching profile.\n2026-10-28 04:15:12,045 WARNING hermes_state: state.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:12,307 INFO gateway.control_socket: Gateway control socket listening at /opt/data/profiles/crane/gateway.sock\n2026-10-28 04:15:12,721 INFO gateway.run: Starting Hermes Gateway...\n2026-10-28 04:15:12,722 INFO gateway.run: Session storage: /opt/data/profiles/crane/sessions\n2026-10-28 04:15:12,728 INFO gateway.run: Agent budget: max_iterations=90 (agent.max_turns from config.yaml, else the HERMES_MAX_ITERATIONS bridge)\n2026-10-28 04:15:12,728 INFO gateway.run: Secret redaction: ENABLED (tool output, logs, and chat responses are scrubbed before delivery)\n2026-10-28 04:15:12,729 INFO gateway.run: Active profile: crane\n2026-10-28 04:15:12,811 WARNING gateway.run: Webhook: aiohttp not installed\n2026-10-28 04:15:12,811 WARNING gateway.run: No adapter available for webhook\n2026-10-28 04:15:12,820 WARNING gateway.run: No adapter could be created for any of the 1 configured platform(s). Check that required dependencies are installed and credentials are set. Gateway will continue for cron job execution; platforms whose plugin may still register are queued for background retry.\n2026-10-28 04:15:12,934 WARNING hermes_state: shared-state.db (hosted_rooms): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:12,936 INFO run_agent: No .env file found. Using system environment variables.\n2026-10-28 04:15:12,992 WARNING hermes_state: shared-state.db (room policy checkpoint): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:13,123 INFO gateway.run: 1 hook(s) loaded\n2026-10-28 04:15:13,132 WARNING hermes_smd.overlay.activation: sentry: gateway init skipped (import/init error)\nTraceback (most recent call last):\n  File \"/opt/data/profiles/crane/hooks/smd-overlay-activation/handler.py\", line 529, in _handle_inner\n    from shared.sentry_init import init_sentry\nModuleNotFoundError: No module named 'shared'\n",
+    "/opt/data/profiles/crane/logs/errors.log": "2026-10-28 04:15:06,612 WARNING hermes_cli.plugins: Failed to load plugin 'hermes-smd-overlay': No module named 'yaml'\n2026-10-28 04:15:11,007 WARNING hermes_cli.plugins: Failed to load plugin 'hermes-smd-overlay': No module named 'yaml'\n2026-10-28 04:15:11,463 WARNING hermes_cli.gateway_multiplex_mode: This gateway stays standalone: this profile is standalone (gateway.standalone: true); it serves only itself. It serves only the launching profile.\n2026-10-28 04:15:11,819 WARNING hermes_cli.gateway_multiplex_mode: This gateway stays standalone: this profile is standalone (gateway.standalone: true); it serves only itself. It serves only the launching profile.\n2026-10-28 04:15:12,045 WARNING hermes_state: state.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:12,811 WARNING gateway.run: Webhook: aiohttp not installed\n2026-10-28 04:15:12,811 WARNING gateway.run: No adapter available for webhook\n2026-10-28 04:15:12,820 WARNING gateway.run: No adapter could be created for any of the 1 configured platform(s). Check that required dependencies are installed and credentials are set. Gateway will continue for cron job execution; platforms whose plugin may still register are queued for background retry.\n2026-10-28 04:15:12,934 WARNING hermes_state: shared-state.db (hosted_rooms): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:12,992 WARNING hermes_state: shared-state.db (room policy checkpoint): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) \u2014 using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.\n2026-10-28 04:15:13,132 WARNING hermes_smd.overlay.activation: sentry: gateway init skipped (import/init error)\nTraceback (most recent call last):\n  File \"/opt/data/profiles/crane/hooks/smd-overlay-activation/handler.py\", line 529, in _handle_inner\n    from shared.sentry_init import init_sentry\nModuleNotFoundError: No module named 'shared'\n",
+    "/opt/data/profiles/crane/logs/gateway-exit-diag.log": "{\"ts\": \"2026-10-28T04:15:11.419915+00:00\", \"tag\": \"gateway.start\", \"pid\": 2039, \"python\": \"3.14.10\", \"platform\": \"linux\", \"replace\": false, \"argv\": [\"/opt/hermes/.venv/bin/hermes\", \"gateway\", \"run\"], \"stdin_is_tty\": false, \"console_window_attached\": null, \"detached\": false, \"breakaway\": null, \"absorb_windows_console_controls\": false}\n",
+    "/opt/data/profiles/crane/logs/gateway.log": "2026-10-28 04:15:12,307 INFO gateway.control_socket: Gateway control socket listening at /opt/data/profiles/crane/gateway.sock\n2026-10-28 04:15:12,721 INFO gateway.run: Starting Hermes Gateway...\n2026-10-28 04:15:12,722 INFO gateway.run: Session storage: /opt/data/profiles/crane/sessions\n2026-10-28 04:15:12,728 INFO gateway.run: Agent budget: max_iterations=90 (agent.max_turns from config.yaml, else the HERMES_MAX_ITERATIONS bridge)\n2026-10-28 04:15:12,728 INFO gateway.run: Secret redaction: ENABLED (tool output, logs, and chat responses are scrubbed before delivery)\n2026-10-28 04:15:12,729 INFO gateway.run: Active profile: crane\n2026-10-28 04:15:12,811 WARNING gateway.run: Webhook: aiohttp not installed\n2026-10-28 04:15:12,811 WARNING gateway.run: No adapter available for webhook\n2026-10-28 04:15:12,820 WARNING gateway.run: No adapter could be created for any of the 1 configured platform(s). Check that required dependencies are installed and credentials are set. Gateway will continue for cron job execution; platforms whose plugin may still register are queued for background retry.\n2026-10-28 04:15:13,123 INFO gateway.run: 1 hook(s) loaded\n",
+    "/opt/data/profiles/crane/logs/gateway_faulthandler.log": "",
+    "/harness/boot.log": "fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"\n[2026-10-28T04:10:59Z] [entrypoint] WARN: R2 fetch failed; using existing root-owned customer.yaml\n[2026-10-28T04:11:06Z] [entrypoint] No medchron-firm.yaml in the vault for boot-harness; the chronology runner will refuse jobs\n[2026-10-28T04:11:12Z] [entrypoint] WARN: demand inputs fetch attempt 1/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url\"\n[2026-10-28T04:11:24Z] [entrypoint] WARN: demand inputs fetch attempt 2/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url\"\n[2026-10-28T04:11:40Z] [entrypoint] WARN: demand inputs fetch attempt 3/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url\"\n[2026-10-28T04:11:45Z] [entrypoint] ERROR: the demand firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the demand lane will defer demand jobs until a restart fetches them\n[2026-10-28T04:11:51Z] [entrypoint] WARN: drafting inputs fetch attempt 1/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url\"\n[2026-10-28T04:12:03Z] [entrypoint] WARN: drafting inputs fetch attempt 2/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url\"\n[2026-10-28T04:12:19Z] [entrypoint] WARN: drafting inputs fetch attempt 3/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url\"\n[2026-10-28T04:12:24Z] [entrypoint] ERROR: the drafting firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the drafting lane will defer drafting jobs until a restart fetches them\n[2026-10-28T04:12:31Z] [entrypoint] WARN: litigation inputs fetch attempt 1/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url\"\n[2026-10-28T04:12:42Z] [entrypoint] WARN: litigation inputs fetch attempt 2/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url\"\n[2026-10-28T04:12:59Z] [entrypoint] WARN: litigation inputs fetch attempt 3/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url\"\n[2026-10-28T04:13:04Z] [entrypoint] ERROR: the litigation firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the litigation lane will defer litigation jobs until a restart fetches them\n[2026-10-28T04:13:10Z] [entrypoint] WARN: casefile inputs fetch attempt 1/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url\"\n[2026-10-28T04:13:22Z] [entrypoint] WARN: casefile inputs fetch attempt 2/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url\"\n[2026-10-28T04:13:38Z] [entrypoint] WARN: casefile inputs fetch attempt 3/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url\"\n[2026-10-28T04:13:43Z] [entrypoint] ERROR: the casefile firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the casefile lane will defer casefile jobs until a restart fetches them\n[2026-10-28T04:13:49Z] [entrypoint] No lane-proofs.yaml for boot-harness: every job waits for a proof run\nupload failed: ./image-manifest.json to s3://smd-customer-config/vaults/boot-harness/image-manifest.json Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/image-manifest.json\"\n[2026-10-28T04:13:56Z] [entrypoint] WARN: could not publish the image manifest; CI will refuse config that adds a skill until a boot publishes it\n[2026-10-28T04:14:02Z] [entrypoint] No medchron-controls/ in the vault for boot-harness; the chronology runner will refuse the classify stage of every job\n[2026-10-28T04:14:02Z] [entrypoint] Gateway process forked and held (pid 2212) until the boot gates pass\n[2026-10-28T04:14:02Z] [entrypoint] AGENTMAIL_SEND_API_KEY unset; broker transmit verbs stay fail-closed\n[2026-10-28T04:14:02Z] [entrypoint] MSGRAPH_SEND_CLIENT_SECRET unset; broker msgraph verbs stay fail-closed\n[2026-10-28T04:14:02Z] [entrypoint] MSGRAPH_CLIENT_SECRET unset; broker msgraph reply verb stays fail-closed\n2026-10-28 04:14:03,154 ERROR __main__ spec_applier: preference boot fetch failed (list_pref_keys: could not list s3://smd-customer-config/vaults/boot-harness/preferences/: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fpreferences%2F&encoding-type=url\"); keeping the installed preference tree\n2026-10-28 04:14:03,156 ERROR __main__ spec_applier: boot fetch failed (pull_specs: could not read s3://smd-customer-config/vaults/boot-harness/output-classes.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/output-classes.json\"); keeping the installed spec tree\n[2026-10-28T04:14:03Z] [entrypoint] authored-spec boot fetch complete (/var/lib/smd-config/specs)\n2026-10-28 04:14:03,498 ERROR __main__ skills_applier: boot fetch failed (could not read s3://smd-customer-config/vaults/boot-harness/skills-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/skills-pointer.json\"); keeping current\n[2026-10-28T04:14:03Z] [entrypoint] skills release boot fetch complete (/var/lib/smd-skills/current)\n[2026-10-28T04:14:03Z] [entrypoint] Root skills applier launched (uid 0; polls this seat's skills pointer)\n[2026-10-28T04:14:03Z] [entrypoint] Workspace broker started as uid 10001; dropping gateway to hermes\n[2026-10-28T04:14:03Z] [entrypoint] Root config applier launched (uid 0; polls R2 for live customer.yaml changes)\n[2026-10-28T04:14:03Z] [entrypoint] Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from /run/smd-medchron/queue)\n2026-10-28 04:14:03,820 INFO __main__ skills_applier: poll loop started (slug=boot-harness root=/var/lib/smd-skills interval=15.0s)\n2026-10-28 04:14:03,828 INFO __main__ skills_applier: no readable skills pointer (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/skills-pointer.json\")\n[2026-10-28T04:14:03Z] [entrypoint] Root authored-spec applier launched (uid 0; polls R2 for live spec changes)\n2026-10-28 04:14:04,087 INFO medchron.daemon medchron daemon up: run_dir=/run/smd-medchron poll=5.0s\n2026-10-28 04:14:04,094 INFO medchron.demand demand lane up: queue=/run/smd-medchron/demand-queue jobs=/run/smd-medchron/demand-jobs\n2026-10-28 04:14:04,094 INFO __main__ applier: poll loop started (slug=boot-harness bucket=smd-customer-config volume=/var/lib/smd-config/customer.yaml interval=15.0s)\n2026-10-28 04:14:04,096 INFO medchron.drafting drafting lane up: queue=/run/smd-medchron/drafting-queue jobs=/run/smd-medchron/drafting-jobs\n2026-10-28 04:14:04,107 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:14:04,108 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:14:04,109 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:14:04,109 INFO __main__ applier: seeded change-cache from current R2 ETag=None (volume config present)\n2026-10-28 04:14:04,112 INFO medchron.litigation litigation lane up: queue=/run/smd-medchron/litigation-queue jobs=/run/smd-medchron/litigation-jobs\n2026-10-28 04:14:04,112 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:14:04,139 INFO medchron.negotiation negotiation lane up: queue=/run/smd-medchron/negotiation-queue jobs=/run/smd-medchron/negotiation-jobs\n2026-10-28 04:14:04,140 INFO medchron.note note lane up: jobs=/run/smd-medchron/note-jobs\n2026-10-28 04:14:04,147 INFO medchron.casefile case file lane up: queue=/run/smd-medchron/casefile-queue jobs=/run/smd-medchron/casefile-jobs\n[2026-10-28T04:14:04Z] [entrypoint] Root establishment intake launched (uid 0; polls /var/lib/smd-establish-spool/runs for admin-instructed voice/shape submissions)\n[2026-10-28T04:14:04Z] [entrypoint] Root gateway liveness supervisor forked (uid 0; watches the Hermes loop heartbeat and kills container main 2212 so Fly replaces the Machine; stale>240s, max 3 kill(s)/3600s)\n[2026-10-28T04:14:04Z] [selftest] Root self-test started (uid 0; boot run once the gateway supervisor arms, then every 3600s; /run/smd-selftest/results.json)\n[2026-10-28T04:14:04Z] [entrypoint] Cross-machine isolation boot check PASSED (ADR 0009 / SEC-22)\n[2026-10-28T04:14:04Z] [entrypoint] Authored-spec tree ownership check PASSED (ss ADR 0083)\n[2026-10-28T04:14:04Z] [entrypoint] Supervisor: gateway released (pid 2212); the entrypoint stays as its supervisor\n[2026-10-28T04:14:04Z] [bootstrap] Starting bootstrap for customer: boot-harness\n[2026-10-28T04:14:04Z] [bootstrap] Hermes SHA: bf0203a794a07aac3ff764972ab9087baa4e4f4e\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: ANTHROPIC_API_KEY present\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: R2_ACCESS_KEY_ID present\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: R2_BUCKET_CONFIG present\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: R2_SECRET_ACCESS_KEY present\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: R2_SKILL_BODIES_BUCKET present\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: SMD_D1_AUDIT_BINDING present\n[2026-10-28T04:14:04Z] [bootstrap] env check: AGENTMAIL_API_KEY not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: AGENTMAIL_SEND_API_KEY not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: GOOGLE_CLIENT_SECRET_JSON not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: GOOGLE_SERVICE_ACCOUNT_JSON not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: GOOGLE_TOKEN_JSON not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: HONCHO_API_KEY not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_CLIENT_ID not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_CLIENT_SECRET not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_MAILBOX not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_SEND_CLIENT_ID not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_SEND_CLIENT_SECRET not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_SEND_TENANT_ID not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: MSGRAPH_TENANT_ID not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: R2_ENDPOINT_URL present (optional)\n[2026-10-28T04:14:04Z] [bootstrap] env check: R2_SKILL_BODIES_ACCESS_KEY_ID not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: R2_SKILL_BODIES_SECRET_ACCESS_KEY not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: SMD_AUDIT_BROKER_SOCKET present (optional)\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: SMD_D1_AGENT_STATE_BINDING present (optional)\n[2026-10-28T04:14:04Z] [bootstrap] env check: SMD_D1_OBSERVATIONS_BINDING not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: SMD_GATEWAY_PID present (optional)\n[2026-10-28T04:14:04Z] [bootstrap] env check OK: SMD_SPEC_DIR present (optional)\n[2026-10-28T04:14:04Z] [bootstrap] env check: SMD_VOICE_VAULT_DIR not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: SMOKEBALL_OAUTH_STATE_KEY not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: TELEGRAM_ALLOWED_USERS not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] env check: TELEGRAM_BOT_TOKEN not set (default will apply)\n[2026-10-28T04:14:04Z] [bootstrap] Using root-owned customer.yaml: /var/lib/smd-config/customer.yaml\n2026-10-28 04:14:04,494 INFO __main__ spec_applier: poll loop started (slug=boot-harness bucket=smd-customer-config spec_dir=/var/lib/smd-config/specs interval=30.0s)\n2026-10-28 04:14:04,499 INFO __main__ spec_applier: no readable spec object at s3://smd-customer-config/vaults/boot-harness/output-classes.json (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/output-classes.json\"); the seat serves whatever is already installed\n2026-10-28 04:14:04,574 INFO __main__ establish_intake: LAUNCHED (slug=boot-harness spool=/var/lib/smd-establish-spool spec_dir=/var/lib/smd-config/specs poll=5.0s compilers=ok)\n[2026-10-28T04:14:10Z] [entrypoint] Supervisor: gateway exited on its own (1); exiting with its code\n2026-10-28 04:14:19,116 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:14:34,119 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:14:34Z] [entrypoint] GATEWAY LIVENESS: argv at /proc/2212/cmdline does not name hermes yet \u2014 bootstrap has not reached its gateway exec (30s into a 900s startup grace). NOT inert: re-checking every 30s, and if argv still does not resolve at the end of the grace this becomes an INERT page.\n2026-10-28 04:14:49,124 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:14:54,468 WARNING medchron.daemon heartbeat write failed: [Errno 2] No such file or directory: '/run/smd-medchron/.litigation-heartbeat.tmp' -> '/run/smd-medchron/litigation-heartbeat.json'\n2026-10-28 04:14:54,469 WARNING medchron.daemon heartbeat write failed: [Errno 2] No such file or directory: '/run/smd-medchron/.casefile-heartbeat.tmp' -> '/run/smd-medchron/casefile-heartbeat.json'\n2026-10-28 04:15:04,127 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:15:19,131 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:15:34,135 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:15:49,139 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:16:04,144 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:16:19,148 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:16:34,151 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:16:49,155 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:04,159 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:19,163 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:34,167 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:49,171 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:04,176 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:19,180 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:34,184 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:49,188 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:04,192 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:19:04,192 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:19:04,193 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:19,197 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:34,201 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:19:34Z] [entrypoint] GATEWAY LIVENESS: argv at /proc/2212/cmdline does not name hermes yet \u2014 bootstrap has not reached its gateway exec (330s into a 900s startup grace). NOT inert: re-checking every 30s, and if argv still does not resolve at the end of the grace this becomes an INERT page.\n2026-10-28 04:19:49,205 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:04,209 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:19,213 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:34,217 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:49,222 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:04,226 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:19,230 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:34,234 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:49,238 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:04,243 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:19,246 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:34,250 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:49,254 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:04,259 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:19,263 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:34,267 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:49,271 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:04,275 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:24:04,276 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:24:04,277 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:19,281 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:34,285 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:24:34Z] [entrypoint] GATEWAY LIVENESS: argv at /proc/2212/cmdline does not name hermes yet \u2014 bootstrap has not reached its gateway exec (630s into a 900s startup grace). NOT inert: re-checking every 30s, and if argv still does not resolve at the end of the grace this becomes an INERT page.\n2026-10-28 04:24:49,289 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:04,293 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:19,297 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:34,301 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:49,305 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:04,308 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:19,312 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:34,316 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:49,319 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:04,323 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:19,327 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:34,331 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:49,337 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:04,341 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:19,344 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:34,348 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:49,352 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:29:04Z] [selftest] the gateway supervisor did not arm in 900s; running the boot checks anyway (they will say why)\n2026-10-28 04:29:04,356 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:29:04,356 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:29:04,357 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:29:19,361 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:29:34,365 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:29:34Z] [entrypoint] GATEWAY LIVENESS: cannot resolve the gateway profile from /proc/2212/cmdline after 930s (startup grace 900s); supervisor is INERT and this seat has no automatic recovery\n2026-10-28 04:29:49,370 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:04,374 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:19,378 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:34,381 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:49,387 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:04,391 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:19,395 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:34,399 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:49,403 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:04,407 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:19,412 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:34,416 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:49,420 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:04,424 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:19,428 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:34,432 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:49,437 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:04,441 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:34:04,441 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:34:04,442 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:19,446 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:34,450 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:34:34Z] [entrypoint] GATEWAY LIVENESS: cannot resolve the gateway profile from /proc/2212/cmdline after 1230s (startup grace 900s); supervisor is INERT and this seat has no automatic recovery\n2026-10-28 04:34:49,454 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:04,457 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:35:05Z] [selftest] boot run finished (results written)\n2026-10-28 04:35:10,509 WARNING medchron.daemon heartbeat write failed: [Errno 2] No such file or directory: '/run/smd-medchron/.litigation-heartbeat.tmp'\n2026-10-28 04:35:19,461 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:34,466 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:49,470 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:50,522 WARNING medchron.daemon heartbeat write failed: [Errno 2] No such file or directory: '/run/smd-medchron/.litigation-heartbeat.tmp'\n2026-10-28 04:36:04,474 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:19,478 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:34,483 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:49,487 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:04,491 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:19,495 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:34,499 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:49,503 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:38:04,507 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n2026-10-28 04:16:02,371 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n2026-10-28 04:16:17,375 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)\n[ensure-disabled-skills] done; 0 artifact(s) updated\n2026-10-28 04:16:32,378 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:16:47,382 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:02,386 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:17,391 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:32,395 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:17:47,399 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:02,403 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:17,407 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:32,410 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:18:47,414 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:02,418 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:19:02,419 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:19:02,420 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:17,424 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:19:32,427 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:19:32Z] [entrypoint] GATEWAY LIVENESS: argv at /proc/2039/cmdline does not name hermes yet \u2014 bootstrap has not reached its gateway exec (330s into a 900s startup grace). NOT inert: re-checking every 30s, and if argv still does not resolve at the end of the grace this becomes an INERT page.\n2026-10-28 04:19:47,432 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:02,436 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:17,440 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:32,443 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:20:47,447 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:02,452 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:17,456 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:32,460 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:21:47,464 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:02,468 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:17,472 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:32,476 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:22:47,480 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:02,484 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:17,487 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:32,491 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:23:47,495 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:02,499 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:24:02,500 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:24:02,501 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:17,504 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:24:32,508 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:24:32Z] [entrypoint] GATEWAY LIVENESS: argv at /proc/2039/cmdline does not name hermes yet \u2014 bootstrap has not reached its gateway exec (630s into a 900s startup grace). NOT inert: re-checking every 30s, and if argv still does not resolve at the end of the grace this becomes an INERT page.\n2026-10-28 04:24:47,511 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:02,515 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:17,519 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:32,523 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:25:47,527 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:02,531 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:17,535 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:32,539 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:26:47,543 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:02,547 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:17,550 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:32,557 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:27:47,561 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:02,565 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:17,569 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:32,574 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:28:47,578 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:29:02Z] [selftest] the gateway supervisor did not arm in 900s; running the boot checks anyway (they will say why)\n2026-10-28 04:29:02,582 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:29:02,582 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:29:02,583 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:29:02Z] [entrypoint] GATEWAY LIVENESS: cannot resolve the gateway profile from /proc/2039/cmdline after 900s (startup grace 900s); supervisor is INERT and this seat has no automatic recovery\n2026-10-28 04:29:17,587 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:29:32,591 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:29:47,595 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:02,599 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:17,603 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:32,607 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:30:47,614 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:02,618 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:17,622 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:32,626 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:31:47,630 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:02,634 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:17,638 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:32,641 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:32:47,645 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:02,648 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:17,652 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:32,657 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:33:47,660 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:02,664 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json\"); keeping the last spec\n2026-10-28 04:34:02,665 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]\n2026-10-28 04:34:02,666 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:34:02Z] [entrypoint] GATEWAY LIVENESS: cannot resolve the gateway profile from /proc/2039/cmdline after 1200s (startup grace 900s); supervisor is INERT and this seat has no automatic recovery\n2026-10-28 04:34:17,669 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:32,673 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:34:47,677 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:02,681 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n[2026-10-28T04:35:04Z] [selftest] boot run finished (results written)\n2026-10-28 04:35:11,261 INFO hermes_smd.webhook_gate gate 127.0.0.1 - \"GET /health HTTP/1.1\" 200 -\n2026-10-28 04:35:17,686 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:32,690 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:35:47,694 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:02,698 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:17,702 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:32,706 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:36:47,710 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:02,714 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:17,719 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:32,722 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:47,726 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n2026-10-28 04:37:50,558 WARNING medchron.daemon heartbeat write failed: [Errno 2] No such file or directory: '/run/smd-medchron/.litigation-heartbeat.tmp'\n2026-10-28 04:38:02,730 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: \"http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml\"); will retry\n"
+  }
+}
