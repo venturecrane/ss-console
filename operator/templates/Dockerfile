@@ -89,7 +89,7 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
 # Node is needed at RUNTIME too: `@oktopeak/clio-mcp` (below) is a Node stdio
 # MCP server the gateway launches.
 #
-# Pinned 2026-10-28 (ss-console#3564): node:26-bookworm-slim index digest
+# Pinned 2026-10-28 (ss-console#3564): node:26.12.1-bookworm-slim index digest
 # 88e48077..., NODE_VERSION 26.12.1 in the linux/amd64 config blob, bundled npm
 # 11.20.0 (nodejs.org/dist/index.json). That bump fixes CVE-2026-111497 (a
 # high-severity Brotli-decoder RCE in Node < 26.12.1; the previous digest
@@ -102,7 +102,7 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
 # image's binaries, pinned by digest), at the same Node version; npm differs
 # (11.20.0 vs 12.0.2) and both satisfy the engines range. Every digest bump
 # re-checks the engines.npm range and this comparison.
-FROM node:26-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS node_source
+FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS node_source
 # Python 3.14 source stage for the Hermes venv (Hermes v0.22.5 promotion,
 # ss-console#3564). Hermes v0.22 supports only 3.14: its uv.lock's
 # supported-markers are python_full_version >= '3.14', and Debian 13 ships 3.13.
