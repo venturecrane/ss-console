@@ -656,46 +656,11 @@ log "Removing customer-disabled bundled skills from profile catalogs..."
   || die "Failed to enforce persona skills_disabled entries"
 log "Disabled skill guard passed"
 
-# Hermes' gateway startup sync can rehydrate bundled skill directories after
-# this preflight guard runs. Keep a reconciler alive during gateway startup so
-# disabled bundled skills are removed again after that sync without mutating
-# the overlay's profile `skills` list shape.
-#
-# ss#2230: the original fixed 6×5s window was a losing race by construction —
-# on 2026-08-10 a clean reprovision failed boot smoke because the rehydration
-# landed after the 30s window and nothing re-pruned. Converge instead: re-prune
-# every 5s until the --check pass comes back clean on three consecutive probes,
-# but never exit before 120s of coverage (a clean streak in the first seconds
-# only proves the sync has not STARTED yet — exiting on it would re-create the
-# race), under a 300s ceiling. A rehydration later than 300s would still win;
-# boot smoke's own --check step remains the arbiter either way (Law 12 — the
-# gate can still fail, and did, which is how this defect was found).
-# SEC-23, corrected (ss#2420): run the converge loop in an EXEC'd shell with the
-# account-wide R2 key scrubbed. The original `( ... ) &` fork carried the key in
-# /proc/<pid>/environ for its whole 120-300s life REGARDLESS of the `unset`
-# inside it — a fork is never exec'd, so its environ stays the exec-time
-# snapshot (the same mechanism the webhook-gate launch below documents). That
-# lingering fork is what the r2-account-key-strip probe caught on every cold
-# boot, misread four times as a gateway-up race. `env -u … bash -c` EXECs,
-# rebuilding a fresh environ without the key; ensure-disabled-skills.py
-# operates on local HERMES_HOME skill dirs and never needs R2.
-env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c '
-  _clean_streak=0
-  _ticks=0
-  while [ "${_ticks}" -lt 60 ]; do
-    _ticks=$((_ticks + 1))
-    sleep 5
-    /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py "$1" "$2" \
-      || true
-    if /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py --check "$1" "$2" \
-      > /dev/null 2>&1; then
-      _clean_streak=$((_clean_streak + 1))
-      [ "${_clean_streak}" -ge 3 ] && [ "${_ticks}" -ge 24 ] && break
-    else
-      _clean_streak=0
-    fi
-  done
-' _ "${CUSTOMER_YAML}" "${HERMES_HOME}" &
+# The gateway's own startup sync puts disabled bundled skills back AFTER this
+# guard. The reconciler that removes them again is launched immediately before
+# the gateway exec, at the end of this file, so its window is measured from the
+# gateway's start rather than from here (ss#2230, and the 2026-10-28 pilot
+# rollout below).
 
 # Step 7c: fail closed if Telegram would run without an allowlist (ADR 0033).
 # TELEGRAM_BOT_TOKEN alone auto-enables Hermes' Telegram platform, and the pinned
@@ -1120,6 +1085,76 @@ unset _state_db
 # Machine's root filesystem, not the volume; setting the variables keeps it
 # there.
 export TMPDIR=/tmp TMP=/tmp TEMP=/tmp
+# ---------- Disabled skills: converge AFTER the gateway's own skill sync ----------
+# Hermes' gateway re-copies every bundled skill missing from .bundled_manifest
+# as the first step of `gateway run` (v0.22.5 gateway/run_bootstrap.py
+# _start_gateway_configure_logging -> tools.skills_sync.sync_skills; v2026.9.14
+# did the same at gateway/run.py:4900). ensure-disabled-skills.py removes a
+# disabled skill's manifest line along with its directory, so that sync puts it
+# back on every boot ("removed 4 disabled skill artifact(s)" in every harness
+# boot log, seconds after the gateway exec). Something must prune again after
+# the sync, and keep pruning until the sync has certainly happened.
+#
+# ss#2230 replaced a fixed 30s window with a converge loop, but launched it at
+# the Step 7b.1 guard and gave it 120s of coverage measured from THERE. Every
+# step since then runs inside that 120s before the gateway even starts, and
+# #3581 added the pm_state purge and a state.db open of every state.db to that
+# span. On 2026-10-28 pilot-smokeball failed its self-test disabled-skills-pruned
+# check on img-202610281643-2eac405e and rolled back (fleet_rollouts
+# ro-940f1fc729bd): a boot whose gateway reached its sync after the loop's
+# clean streak had already let it exit leaves the skill visible to the agent
+# until the next boot.
+#
+# So the window is anchored to the gateway, not to bootstrap's clock:
+#   * the loop launches here, as the last thing before the exec;
+#   * it does not exit until the gateway's loop heartbeat
+#     (<profile home>/state/gateway.heartbeat, written by run_startup only
+#     after the sync has returned) is newer than the loop's own start marker,
+#     and the --check pass has then come back clean three times running;
+#   * it probes every 2s, so a skill the sync restored is gone within one
+#     tick, and runs the enforce pass only when --check finds residue;
+#   * a 900s ceiling matches the entrypoint's startup grace: a gateway that has
+#     not started by then is the supervisor's problem, and boot smoke's own
+#     --check stays the arbiter (Law 12).
+# Each pass that removes something says so on the boot log, and the loop logs
+# its exit, so a boot log shows the last prune landing after the sync.
+#
+# SEC-23, corrected (ss#2420): EXEC'd with the account-wide R2 key scrubbed.
+# A `( ... ) &` fork keeps its exec-time environ in /proc/<pid>/environ for
+# life regardless of any inner `unset`. The key is already unset above; the
+# `env -u` is the belt that holds if that ever moves.
+_SKILLS_CONVERGE_MARK="$(mktemp /tmp/smd-skills-converge.XXXXXX)"
+env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c '
+  _hb="$3/state/gateway.heartbeat"
+  _clean_streak=0
+  _gateway_seen=0
+  _ticks=0
+  while [ "${_ticks}" -lt 450 ]; do
+    _ticks=$((_ticks + 1))
+    sleep 2
+    if [ "${_gateway_seen}" -eq 0 ] && [ "${_hb}" -nt "$4" ]; then
+      _gateway_seen=1
+      _clean_streak=0
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [bootstrap] disabled-skill converge: gateway heartbeat seen after $((_ticks * 2))s; its skill sync has run"
+    fi
+    if /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py --check "$1" "$2" \
+      > /dev/null 2>&1; then
+      _clean_streak=$((_clean_streak + 1))
+      if [ "${_gateway_seen}" -eq 1 ] && [ "${_clean_streak}" -ge 3 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [bootstrap] disabled-skill converge: clean after the gateway sync; reconciler exiting after $((_ticks * 2))s"
+        rm -f "$4"
+        exit 0
+      fi
+    else
+      _clean_streak=0
+      /opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py "$1" "$2" || true
+    fi
+  done
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [bootstrap] disabled-skill converge: 900s ceiling reached (gateway seen: ${_gateway_seen}); boot smoke --check is the arbiter"
+  rm -f "$4"
+' _ "${CUSTOMER_YAML}" "${HERMES_HOME}" "${HERMES_HOME}/profiles/${ACTIVE_PROFILE}" "${_SKILLS_CONVERGE_MARK}" &
+unset _SKILLS_CONVERGE_MARK
+
 log "Launching Hermes gateway for profile '${ACTIVE_PROFILE}' (overlay plugins selected)..."
 
 exec /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" gateway run

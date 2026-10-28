@@ -331,9 +331,10 @@ describe('Operator Machine profile guards', () => {
       'the reconciler must probe with --check until the prune has converged'
     ).toBe(true)
     expect(
-      BOOTSTRAP.includes('[ "${_ticks}" -ge 24 ]'),
-      'the reconciler must not exit on an early clean streak — a clean check before ' +
-        'the gateway sync starts proves nothing (the 2026-08-10 race)'
+      BOOTSTRAP.includes('[ "${_gateway_seen}" -eq 1 ] && [ "${_clean_streak}" -ge 3 ]'),
+      'the reconciler must not exit on a clean streak until the gateway heartbeat shows ' +
+        'its skill sync has run — a clean check before the sync proves nothing ' +
+        '(the 2026-08-10 race, and the 2026-10-28 pilot rollback)'
     ).toBe(true)
     expect(
       BOOTSTRAP.includes('for _ in 1 2 3 4 5 6'),
