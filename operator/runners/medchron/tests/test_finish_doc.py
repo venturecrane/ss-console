@@ -978,6 +978,42 @@ def test_the_worksheet_names_each_unread_billing_page_as_not_totalled(
     assert "Example Clinic ledger" in text and "p. 2" in text
 
 
+def test_a_password_protected_bill_reaches_the_worksheet_as_pages_not_read(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The billing stage's record for a locked bill, carried through every
+    reader of it: the unit file is not skipped as fully captured, the chart
+    names its pages as failed, and the worksheet lists them under Pages Not
+    Read with every total labelled a floor."""
+    import pymupdf
+
+    from medchron.stages import billing as billing_stage, units as units_stage
+
+    sr = _sr(job_dir, firm, data_root, client=Scripted(lambda p, n: pytest.fail("a locked bill is never sent")))
+    _doc(sr, DOC_3)
+    _ledger_with(sr, "$1,800.00", "Total Charges $1,800.00")
+    locked = pymupdf.open()
+    locked.new_page()
+    p = sr.slug_dir / "raw" / "locked statement.pdf"
+    p.write_bytes(locked.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="x", owner_pw="y"))
+    locked.close()
+    spec = json.loads((sr.slug_dir / "billing_docs.json").read_text())
+    spec["docs"].append({"id": "b2", "name": "locked statement", "path": str(p)})
+    (sr.slug_dir / "billing_docs.json").write_text(json.dumps(spec))
+    assert billing_stage.run(sr) == 0  # the ledger is done already; only the locked bill is new
+    units = {"alpha": [{"name": "locked statement", "ext": ".pdf", "pages": 1}]}
+    assert units_stage.mark_compose_skips(sr.slug_dir, units, print) == []
+    assert "compose" not in units["alpha"][0], "an unread file is never marked fully captured"
+    assert billing_chart.run(sr) == 0
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["failed_pages"] == [["locked statement", 1]]
+    assert chart["grand_total"] == 1800.0, "the readable ledger still counts; nothing is invented for the locked one"
+    assert billing_docx.run(sr) == 0
+    text = _worksheet_text(sr)
+    assert "Pages Not Read" in text and "a floor" in text and "not totalled" in text
+    assert "locked statement" in text and "p. 1" in text
+
+
 # ---- stop audit row 28: a clinician-named spine and facility-labelled bills ----
 CLINICIAN_DOC = (
     "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n"

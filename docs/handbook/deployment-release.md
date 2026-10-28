@@ -493,7 +493,7 @@ already covers it.
 
 ### Hotfix lanes
 
-Two lanes, depending on what the seat runs.
+Three lanes, depending on what the seat runs and what main holds.
 
 - **A seat on a folded image** (built after ADR 0095): an ordinary PR, then
   `fleet build` and `fleet release <id> --only <seat>` (or the rings). There is
@@ -509,6 +509,22 @@ Two lanes, depending on what the seat runs.
   `fleet release <id> --only ashton-price`. Record the lane in the release
   notes. The lane closes when `ashton-price` runs a folded image; the standalone
   repo is then archived.
+- **A seat on a folded image while main holds a change that seat must not get
+  yet** (a promotion under a `fleet hold`, say). The fix lands on main as an
+  ordinary PR first. Then branch `hotfix/<what>` off the commit the seat's image
+  was built from (`fleet status` names the release), cherry-pick the squash
+  commit, push the branch, and build it with
+  `SS_ALLOW_DIVERGENT_SOURCE=1 operator/bin/fleet build`. That image is never
+  `latest` (`_image_release` in `operator/bin/lib/fleet/cli.py` takes only
+  images built from main), so the controller cannot roll it to other rings.
+  With the seat idle (`fleet busy <seat>`), release it in one chained command
+  so the hold always comes back, even when the release fails:
+  `fleet unhold <seat> && fleet release <id> --only <seat>; fleet hold <seat> --reason "<the hold's reason, verbatim>"`.
+  Read back `fleet status` (the hotfix image, a green heartbeat, held again)
+  and record the lane in the release notes. The lane closes at the held
+  change's promotion, and that promotion must use a main build that contains
+  the fix: promoting an image built before the fix merged would take the fix
+  back off the seat.
 
 ### The overlay cutover
 

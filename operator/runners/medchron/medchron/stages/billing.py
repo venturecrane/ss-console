@@ -35,7 +35,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from .. import llm
+from .. import llm, unopened
 from .base import StageRun, append_jsonl, read_json, read_jsonl
 
 PAGES_PER_CALL = 3
@@ -77,22 +77,51 @@ OVERRIDE: this page carries too many line items to list. Set "line_items" to
 date range. Add "line_items_omitted": true."""
 
 
-def render_doc(path: str) -> tuple[dict[int, str], int]:
+def render_doc(path: str) -> tuple[dict[int, str], int, bool]:
     """Every page rendered SERIALLY before any call fans out: rendering under
     concurrency once returned None for 166 cited pages and the caller dropped
-    them. Workers then do network I/O only."""
+    them. Workers then do network I/O only.
+
+    The third value is True for a file locked with a password: nothing is
+    rendered, and the caller records every page as a gap (``unopened``). A
+    locked bill once crashed this render ("document closed or encrypted") and
+    failed a whole job after its earlier paid stages had run. Its page count
+    is never allowed below 1, so a count that reads as 0, or not at all, still
+    leaves the file named."""
     import base64
 
     import pymupdf
 
     doc = pymupdf.open(path)
+    if doc.needs_pass and not doc.authenticate(""):
+        try:
+            n = len(doc)
+        except Exception:  # noqa: BLE001 - a locked file may not report its pages
+            n = 1
+        doc.close()
+        return {}, max(n, 1), True
     n = len(doc)
     imgs = {
         p: base64.standard_b64encode(doc[p - 1].get_pixmap(dpi=RENDER_DPI).tobytes("png")).decode()
         for p in range(1, n + 1)
     }
     doc.close()
-    return imgs, n
+    return imgs, n, False
+
+
+def locked_record(name: str, n: int) -> dict[str, Any]:
+    """A password-protected document as an extraction row: every page a
+    FAILED_PAGE gap, no usage, no model call. ``locked`` makes the gap's
+    reason the password one."""
+    pages = list(range(1, n + 1))
+    return {
+        "file": name,
+        "pages": n,
+        "chunks": [{"FAILED_PAGE": p} for p in pages],
+        "usage": [],
+        "failures": pages,
+        "locked": True,
+    }
 
 
 def range_messages(imgs: dict[int, str], name: str, start: int, end: int, totals_only: bool = False) -> list[dict]:
@@ -268,19 +297,24 @@ def run(sr: StageRun) -> int:
             sr.log(f"[{i}/{len(todo)}] skip (done) {t['name'][:56]}")
             continue
         pending.append((i, t))
+    total = len(todo or [])
     # The page count is what the render measured, never a field off the spec:
     # billing_docs.json carries {id, name, path} and nothing else.
     if "billing" not in sr.doorway.batch_stages:
         for i, t in pending:
-            imgs, n = render_doc(t["path"])
-            sr.log(f"[{i}/{len(todo)}] {n:>3}pp  {t['name'][:56]}")
-            finish(i, t, reader.read_doc(t["name"], imgs, n))
+            imgs, n, locked = render_doc(t["path"])
+            sr.log(f"[{i}/{len(todo)}] {n:>3}pp  {t['name'][:56]}" + (LOCKED_NOTE if locked else ""))
+            finish(i, t, locked_record(t["name"], n) if locked else reader.read_doc(t["name"], imgs, n))
     else:
         groups: list[list] = []
         group: list = []
         size = 0
         for i, t in pending:
-            imgs, n = render_doc(t["path"])
+            imgs, n, locked = render_doc(t["path"])
+            if locked:
+                sr.log(f"[{i}/{total}] {n:>3}pp  {t['name'][:56]}{LOCKED_NOTE}")
+                finish(i, t, locked_record(t["name"], n))
+                continue
             b = sum(len(v) for v in imgs.values())
             if group and size + b > GROUP_B64_BUDGET:
                 groups.append(group)
@@ -309,6 +343,8 @@ def run(sr: StageRun) -> int:
     return 0
 
 
+LOCKED_NOTE = "   password-protected: not read, every page named as a gap"
+
 GAP_REASON = (
     "the page could not be read: a three-page read, a single-page read with a larger budget, "
     "and a totals-only read all returned nothing usable"
@@ -322,11 +358,14 @@ def write_gaps(sr: StageRun, records: list[dict[str, Any]]) -> list[dict[str, An
     gaps: list[dict[str, Any]] = []
     seen: set[tuple[str, int]] = set()
     for r in records:
+        # One phrasing for a locked file everywhere the firm reads it: the
+        # extract stage's Limitations line uses the same words.
+        reason = unopened.REASON if r.get("locked") else GAP_REASON
         for p in r.get("failures") or []:
             key = (str(r.get("file")), int(p))
             if key not in seen:
                 seen.add(key)
-                gaps.append({"file": key[0], "page": key[1], "reason": GAP_REASON})
+                gaps.append({"file": key[0], "page": key[1], "reason": reason})
     body = json.dumps(gaps, indent=1)
     (sr.slug_dir / "billing_gaps.json").write_text(body, encoding="utf-8")
     if sr.job.joint:
