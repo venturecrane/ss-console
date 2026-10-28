@@ -113,9 +113,9 @@ hermes_sha="$(sed -n 's/^ARG HERMES_UPSTREAM_SHA=\([0-9a-f]\{40\}\)$/\1/p' "${DO
 work="$(mktemp -d)"
 trap 'rm -f "${overrides}"; rm -rf "${work}"' EXIT
 mkdir -p "${work}/hermes" "${work}/overlay"
-curl -fsSL -o "${work}/hermes/pyproject.toml" \
+curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/pyproject.toml" \
   "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/pyproject.toml"
-curl -fsSL -o "${work}/hermes/uv.lock" \
+curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/uv.lock" \
   "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/uv.lock"
 # The overlay's pyproject from this tree (ADR 0095), copied so the "# via"
 # annotation keeps reading overlay/pyproject.toml whoever runs this.

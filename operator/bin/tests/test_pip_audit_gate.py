@@ -221,3 +221,25 @@ def test_live_hermes_lock_at_the_pin_carries_the_advisory_the_override_closes(tm
     after = {f["package"] for f in gate.audit(effective, label="effective", hashed=False)}
     assert "brotlicffi" not in after, after
     assert len(gate.pins(export)) >= gate.HERMES_MIN_AUDITED
+
+
+def test_the_hermes_lock_fetch_retries_a_rate_limited_response(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """raw.githubusercontent.com answers 429 under load; one 429 must not fail the gate (2026-10-27)."""
+    seen: list[list[str]] = []
+
+    def fake_run(argv, *a, **k):
+        seen.append(list(argv))
+        return subprocess.CompletedProcess(argv, 1, "", "stop here")
+
+    monkeypatch.setattr(gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(gate.shutil, "which", lambda name: f"/usr/bin/{name}")
+    with pytest.raises(SystemExit):
+        gate.fetch_hermes_export("0" * 40, ["all"], tmp_path)
+    assert seen and seen[0][0] == "/usr/bin/curl"
+    assert "--retry" in seen[0], seen[0]
+
+
+def test_compile_sh_retries_both_hermes_fetches() -> None:
+    src = (Path(__file__).resolve().parents[2] / "requirements" / "compile.sh").read_text()
+    fetches = [ln for ln in src.splitlines() if ln.startswith("curl ") and "/hermes/" in ln]
+    assert len(fetches) == 2 and all("--retry" in ln for ln in fetches), fetches
