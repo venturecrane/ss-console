@@ -757,16 +757,22 @@ personas:
       # any client seat runs it. No cron row. The library matter is named by
       # its number; the job resolves it to exactly one Open matter on this
       # tenant before anything is paid, or holds library_unresolved.
+      # Scheduled (2026-10-28): lets the pilot prove case-file-manager.recheck
+      # through the real scheduled submit. No cron row: the pre_run is run by
+      # hand for the proof. The caseload is the tenant's one staff member, set
+      # as Person Assisting on the test matters for the proof.
       - name: case-file-manager
         version: pending
         initiation:
           manual: true
-          scheduled: false
+          scheduled: true
           webhook: false
         enabled: true
         settings:
           folder_name: 'Case File Manager'
           library_matter_number: '2026-OPS-LIBRARY'
+          scheduled_caseloads: 'Scott Durgan'
+          scheduled_recipients: 'ss-probe-admin@agentmail.to'
     # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
     # bespoke pre_run decides whether a deadline needs the ladder; the other
     # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
