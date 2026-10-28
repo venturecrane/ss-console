@@ -164,13 +164,6 @@ def machine_run_argv(
         argv += _env_args(dummy) + (["--entrypoint", "/bin/sleep", "--", "infinity"] if hold else [])
         return argv
     argv += ["--file-local", f"/opt/data/customer.yaml={fixture_path}"]
-    # A seat's voice-vault mirror exists before its first failed sync; the harness
-    # volume is fresh and its R2 is dead. Without this directory bootstrap.sh's
-    # failed-sync branch (`_voice_prev_n="$(find .../voice/cohort ... | wc -l)"`
-    # under `set -euo pipefail`) exits 1 with no log line: found by the first
-    # calibration run of rel-4cd01e8e-202610280041. A seat defect too (a fresh
-    # seat whose first voice fetch fails dies the same way), reported, not fixed here.
-    argv += ["--file-local", f"/opt/data/voice/cohort/.harness={fixture_path.parent / 'empty'}"]
     argv += _env_args(dummy)
     if hold:
         # Debug only: the Machine idles instead of booting, so a person can run
@@ -318,7 +311,6 @@ def _prepare(args: argparse.Namespace, runner: Runner) -> tuple[list[str], dict[
     fx = out / "customer.yaml"
     guest, source = SIZES[getattr(args, "size", "2x-4096")]
     fx.write_text(fixture.render(OPERATOR, source, bool(getattr(args, "keep_routines", False))), encoding="utf-8")
-    (out / "empty").write_text("", encoding="utf-8")
     # Random suffix: two runs started in the same second collided on the name.
     name = f"boot-harness-{int(time.time())}-{secrets.token_hex(3)}"
     hold = bool(getattr(args, "hold", False) or getattr(args, "postmortem", False))
