@@ -340,7 +340,12 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
     contact_id = _create_provider_contact(client, bill.provider)
     if contact_id is None:
         return _refused(f"{bill.provider} is not in the firm's contacts and could not be added; nothing was written")
-    return {**_link_and_fill(client, bill, item_id, path, rows, contact_id), "contact_created": True}
+    # The created contact's id rides every result, so a caller can journal it as its own write.
+    return {
+        **_link_and_fill(client, bill, item_id, path, rows, contact_id),
+        "contact_created": True,
+        "contact_id": contact_id,
+    }
 
 
 def _create_provider_contact(client: Any, provider: str) -> str | None:

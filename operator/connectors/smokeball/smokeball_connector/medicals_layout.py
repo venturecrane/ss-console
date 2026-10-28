@@ -158,8 +158,10 @@ def compose_note(
     read = "read from a scan" if source.get("from_scan") else "read from the document's text"
     span = service_start if service_start == service_end else f"{service_start} to {service_end}"
     account = f" Account {account_number}." if account_number else ""
+    # Where the bill came from: the mail room's split scan, or a document already in the matter.
+    where = "in the matter's documents" if source.get("origin") == "matter" else f"{pages} of the scanned mail"
     text = (
-        f"From {source['file_name']} ({pages} of the scanned mail), {read}: {provider_name} billed "
+        f"From {source['file_name']} ({where}), {read}: {provider_name} billed "
         f"{charge} for service {span}.{account} Check the figure against the bill before relying on it."
     )
     return stamp(text) or text

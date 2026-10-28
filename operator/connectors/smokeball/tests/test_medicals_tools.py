@@ -257,6 +257,9 @@ def test_a_provider_with_no_contact_is_added_then_linked(tenant: _Tenant) -> Non
     out = _add(provider_name="Northside Imaging Center")
     assert out["status"] == "written", out
     assert out["contact_created"] is True
+    # The new contact's id rides the result, so a caller journals it as its own write
+    # (the 10-28 pilot proof: the Case File Manager's apply never could).
+    assert out["contact_id"] == "c-new-0"
     create, link, _patch = tenant.writes()
     assert create[1] == "/contacts" and create[2] == {"company": {"name": "Northside Imaging Center"}}
     assert link[2]["contactId"] == "c-new-0"
@@ -503,3 +506,29 @@ def test_a_further_bill_from_a_provider_on_the_tab_is_its_own_line(tenant: _Tena
     again = _add(charge="2000.00")
     assert again["status"] == "already_present" and again["existing"]["line"] == 1
     assert len(tenant.writes()) == 1, "the same bill is never keyed twice"
+
+
+def _note(source: dict[str, Any]) -> str:
+    from decimal import Decimal
+
+    from smokeball_connector.medicals_layout import compose_note
+
+    return compose_note(
+        provider_name="Example Imaging",
+        charge=Decimal("412.00"),
+        service_start="2026-10-05",
+        service_end="2026-10-05",
+        account_number="",
+        source=source,
+        stamp=lambda t: t,
+    )
+
+
+def test_a_note_from_a_matter_document_never_says_scanned_mail() -> None:
+    """A Case File Manager row comes from a bill already in the matter, not the
+    mail room's split scan. FALSIFIER: the old note said "(pages 1-1 of the
+    scanned mail)" on every row, an untrue sentence on the firm's tab."""
+    matter = _note({"file_name": "Bill.pdf", "first_page": 1, "last_page": 1, "origin": "matter"})
+    assert "scanned mail" not in matter and "in the matter's documents" in matter
+    mail = _note({"file_name": "Mail.pdf", "first_page": 2, "last_page": 3, "from_scan": True})
+    assert "(pages 2-3 of the scanned mail)" in mail
