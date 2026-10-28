@@ -9,7 +9,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from medchron import config as config_mod, decisions, job as job_mod
+from medchron import config as config_mod, decisions, job as job_mod, llm, unopened
 from medchron.stages import billing as billing_stage, units as units_stage, vision as vision_stage
 from medchron.stages import transcript
 from medchron.stages.base import StageRun
@@ -288,6 +288,139 @@ def test_a_clean_billing_run_writes_an_empty_gap_list(job_dir: Path, firm_config
     assert json.loads((sr.slug_dir / "billing_gaps.json").read_text()) == []
 
 
+# ---- a password-protected billing document -------------------------------------------
+def locked_pdf(pages: int = 1) -> bytes:
+    """A real PDF that will not open without its user password: pymupdf
+    reports needs_pass and an empty password does not authenticate."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for _ in range(pages):
+        doc.new_page()
+    data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
+    doc.close()
+    return data
+
+
+def _named(calls: list[dict]) -> set[str]:
+    """The document each call was about, off its instruction text."""
+    return {c["messages"][0]["content"][0]["text"].split("\n", 1)[0] for c in calls}
+
+
+def _assert_locked_gap(sr: StageRun, name: str, pages: int) -> dict:
+    recs = {r["file"]: r for r in map(json.loads, (sr.slug_dir / "billing_extract.jsonl").read_text().splitlines())}
+    rec = recs[name]
+    want = list(range(1, pages + 1))
+    assert rec["locked"] is True and rec["pages"] == pages and rec["failures"] == want
+    assert rec["chunks"] == [{"FAILED_PAGE": p} for p in want], "no amount is invented for a locked page"
+    assert rec["usage"] == [], "a locked document is never sent to the model"
+    gaps = json.loads((sr.slug_dir / "billing_gaps.json").read_text())
+    assert [(g["file"], g["page"], g["reason"]) for g in gaps if g["file"] == name] == [
+        (name, p, unopened.REASON) for p in want
+    ]
+    return recs
+
+
+def test_a_password_protected_bill_is_a_named_gap_and_the_rest_are_read(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A billing PDF locked with a real password once crashed the stage on
+    render ("document closed or encrypted") and failed the whole job after the
+    earlier paid stages had run. It is a file that could not be opened: every
+    page is a named gap with the password reason, nothing is sent to the
+    model for it, and every other bill is still read."""
+    client = Scripted(lambda p: _msg(json.dumps(BILL)))
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, client, log=log)
+    _billing_docs(sr, {"Example Clinic bill": make_pdf([""]), "locked statement": locked_pdf(2)})
+    assert billing_stage.run(sr) == 0
+    recs = _assert_locked_gap(sr, "locked statement", 2)
+    assert recs["Example Clinic bill"]["failures"] == [] and recs["Example Clinic bill"]["chunks"][0] == BILL
+    assert _named(client.calls) == {"Document: Example Clinic bill"}
+    assert any("password-protected" in line for line in log), log
+    # A rerun skips both: the locked record is a finished extraction.
+    client.calls.clear()
+    assert billing_stage.run(sr) == 0 and client.calls == []
+    assert len(json.loads((sr.slug_dir / "billing_gaps.json").read_text())) == 2
+
+
+def test_a_password_protected_bill_stays_out_of_the_batch(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = Scripted(lambda p: _msg(json.dumps(BILL)))
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    submitted: list[str] = []
+
+    def batch_call(stage, items, on_result, **kw):
+        assert stage == "billing"
+        for it in items:
+            submitted.append(it.meta["name"])
+            on_result(it, NS(text=json.dumps(BILL), usage=Usage()), None)
+        return llm.BatchSummary(ok=[it.custom_id for it in items])
+
+    monkeypatch.setattr(sr.doorway, "batch_stages", frozenset({"billing"}))
+    monkeypatch.setattr(sr.doorway, "batch_call", batch_call)
+    _billing_docs(sr, {"locked statement": locked_pdf(1), "Example Clinic bill": make_pdf(["", ""])})
+    assert billing_stage.run(sr) == 0
+    assert submitted == ["Example Clinic bill"], "the locked document is never in a batch"
+    recs = _assert_locked_gap(sr, "locked statement", 1)
+    assert recs["Example Clinic bill"]["failures"] == [] and client.calls == []
+
+
+@pytest.mark.parametrize("count", ["zero", "raises"])
+def test_a_locked_bill_with_no_readable_page_count_is_still_named(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch, count: str
+) -> None:
+    """A locked file whose page count reads as 0, or not at all, would
+    otherwise produce zero failures and vanish from every disclosure."""
+    import pymupdf
+
+    def length(self) -> int:
+        if count == "raises":
+            raise ValueError("document closed or encrypted")
+        return 0
+
+    client = Scripted(lambda p: _msg(json.dumps(BILL)))
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    _billing_docs(sr, {"locked statement": locked_pdf(3)})
+    monkeypatch.setattr(pymupdf.Document, "__len__", length)
+    assert billing_stage.run(sr) == 0
+    _assert_locked_gap(sr, "locked statement", 1)
+    assert client.calls == []
+
+
+def test_a_joint_matter_names_the_locked_bill_once_in_each_units_limitations(
+    tmp_path: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The extract stage already lists a password-protected file among the
+    documents that could not be read. The billing gap for the same file must
+    not name it a second time, in either unit's section."""
+    from medchron_testkit import job_yaml
+
+    from medchron.stages import limitations
+
+    jd = tmp_path / "joint-job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True), encoding="utf-8")
+    sr = _sr(jd, firm_config_path, data_root, Scripted(lambda p: _msg(json.dumps(BILL))))
+    _billing_docs(sr, {"locked statement": locked_pdf(2)})
+    assert billing_stage.run(sr) == 0
+
+    def once_per_unit() -> None:
+        for unit in ("alpha", "beta"):
+            assert json.loads((sr.slug_dir / f"billing_gaps-{unit}.json").read_text())
+            text = "\n".join(limitations.section(sr.slug_dir, unit, print))
+            assert text.count('"locked statement') == 1, text
+            assert text.count(unopened.REASON) == 1, text
+
+    once_per_unit()  # only the billing stage saw the password: named there, once
+    with (sr.slug_dir / "extracted.jsonl").open("w") as fh:
+        fh.write(
+            json.dumps({"id": "L1", "name": "locked statement.pdf", "error": "File has not been decrypted"}) + "\n"
+        )
+    once_per_unit()  # the extract stage named it too: the billing line steps aside
+
+
 # ---- build_units --------------------------------------------------------------------
 def _extracted(sr: StageRun, rows: list[dict]) -> None:
     sr.slug_dir.mkdir(parents=True, exist_ok=True)
@@ -444,8 +577,15 @@ def test_token_hit_survives_underscore_joins() -> None:
 def test_render_doc_returns_base64_per_page(tmp_path: Path, dpi: int) -> None:
     p = tmp_path / "x.pdf"
     p.write_bytes(make_pdf(["", ""]))
-    imgs, n = billing_stage.render_doc(str(p))
+    imgs, n, locked = billing_stage.render_doc(str(p))
     assert n == 2 and set(imgs) == {1, 2} and all(isinstance(v, str) and len(v) > 100 for v in imgs.values())
+    assert locked is False
+
+
+def test_render_doc_reports_a_password_protected_file_without_rendering_it(tmp_path: Path) -> None:
+    p = tmp_path / "locked.pdf"
+    p.write_bytes(locked_pdf(2))
+    assert billing_stage.render_doc(str(p)) == ({}, 2, True)
 
 
 # -- read, but carrying nothing -----------------------------------------------

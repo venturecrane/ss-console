@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import Callable
 
+from .. import unopened
 from .base import read_json
 
 
@@ -216,15 +217,28 @@ def _billing_rows(d: Path, unit: str | None, name: str, log: Callable[[str], Non
     return sorted(out)
 
 
+def _stem(name: str) -> str:
+    """The name billing_docs.json uses for a file (``units.billing_stem``)."""
+    return name[:-4] if name.lower().endswith((".pdf", ".doc")) else name
+
+
 def _billing_lines(d: Path, unit: str | None, log: Callable[[str], None]) -> list[str]:
     o: list[str] = []
     gaps = _billing_rows(d, unit, "billing_gaps.json", log)
-    if gaps:
+    # A password-protected bill is one file that could not be opened, not a
+    # list of unread pages. The unread-documents list above already names it
+    # when the extract stage recorded the password (``unopened``); otherwise
+    # it is named here once, with the same words.
+    named = {_stem(n) for n in unopened.password_protected(d).values()}
+    locked = sorted({f for f, _, r in gaps if r == unopened.REASON and _stem(f) not in named})
+    gaps = [g for g in gaps if g[2] != unopened.REASON]
+    if gaps or locked:
         o += [
             "",
             "The following billing pages were identified but could not be read, and no amount from them appears "
             "in the billing summary:\n",
         ]
+        o += [f'* "{f}" - {unopened.REASON}' for f in locked]
         o += [f'* "{f}" - p. {p}' + (f" ({r})" if r else "") for f, p, r in gaps]
     dropped = _billing_rows(d, unit, "billing_dropped_rows.json", log)
     if dropped:
