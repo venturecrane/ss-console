@@ -172,7 +172,12 @@ def test_disabled_skills_reconciler_launched_with_r2_key_scrubbed() -> None:
     lines = _code_lines(_BOOTSTRAP)
     loop_idx = _first_index(lines, r'while \[ "\$\{_ticks\}" -lt 450 \]')
     assert loop_idx != -1, "could not find the disabled-skills reconciler loop"
-    window = "\n".join(lines[max(0, loop_idx - 6) : loop_idx])
+    # The launch line and the loop's own variable setup, nothing above them.
+    launch_idx = max(
+        (i for i in range(max(0, loop_idx - 8), loop_idx) if re.search(r"\bbash -c '", lines[i])),
+        default=max(0, loop_idx - 6),
+    )
+    window = "\n".join(lines[launch_idx:loop_idx])
     assert re.search(r"env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c", window), (
         "the disabled-skills reconciler must be launched via "
         "`env -u R2_ACCESS_KEY_ID -u R2_SECRET_ACCESS_KEY bash -c …` — an exec "
