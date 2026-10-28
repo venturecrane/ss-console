@@ -261,6 +261,11 @@ describe('Operator Machine profile guards', () => {
     expect(tmp).toBeGreaterThan(-1)
     expect(gateway).toBeGreaterThan(check)
     expect(gateway).toBeGreaterThan(tmp)
+    // The first open of each state.db is taken before the gateway, isolated (#3564).
+    const preopen = BOOTSTRAP_CODE.indexOf('python3 -I -m bootstrap.state_db_open "${_state_db}"')
+    expect(preopen, 'bootstrap.sh must pre-open every state.db').toBeGreaterThan(-1)
+    expect(gateway).toBeGreaterThan(preopen)
+    expect(BOOTSTRAP_CODE).toMatch(/-m bootstrap\.state_db_open "\$\{_state_db\}" \\\n\s*\|\| die/)
     expect(BOOTSTRAP_CODE).toMatch(
       /-m bootstrap\.pm_state check "\$\{HERMES_HOME\}" \\\n\s*\|\| die/
     )

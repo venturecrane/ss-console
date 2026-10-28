@@ -1092,6 +1092,25 @@ unset OPERATOR_RUNTIME_READ_KEY MACHINE_HEARTBEAT_KEY HEALTHCHECKS_PING_URL
 /opt/hermes/.venv/bin/python3 -m bootstrap.pm_state check "${HERMES_HOME}" \
   || die "a Hermes dependency environment is still recorded under ${HERMES_HOME} — refusing to launch a gateway that would run off the image venv"
 
+# ---------- The first open of each state.db happens here, not in the gateway (#3564) ----------
+# Hermes v0.22.5's first open of an EMPTY v2026.9.14 state.db raises
+# `no such savepoint: fts_align_empty` (hermes_state_schema.py
+# _migrate_misaligned_fts_source: executescript COMMITs inside its savepoint);
+# the second open completes at the current schema. In the gateway that first
+# open is the overlay job worker's, so the seat's first v0.22 boot came up
+# with no durable-job worker (boot harness, restored smd-staging volume).
+# bootstrap/state_db_open.py opens each existing state.db once in a throwaway
+# isolated interpreter (imports hermes_state only, never hermes_bootstrap),
+# retries exactly that error once, and fails the boot unless the schema is the
+# image's and, after a migration, integrity_check is ok. A missing state.db is
+# skipped: Hermes creates it at the current schema, where there is no race.
+for _state_db in "${HERMES_HOME}"/profiles/*/state.db "${HERMES_HOME}/state.db"; do
+  [ -f "${_state_db}" ] || continue
+  HERMES_HOME="$(dirname "${_state_db}")" /opt/hermes/.venv/bin/python3 -I -m bootstrap.state_db_open "${_state_db}" \
+    || die "Hermes could not open ${_state_db} at the image's schema — refusing to launch a gateway whose job worker would fail on it"
+done
+unset _state_db
+
 # Temp files stay off the volume (#3564). From v0.22 every hermes process points
 # TMPDIR/TMP/TEMP at <profile home>/cache/scratch on /opt/data unless the
 # variable is already set (hermes_constants.apply_scratch_tmp_env: "a temp var
