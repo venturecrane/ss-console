@@ -106,7 +106,10 @@ def _real(tmp_path: Path, db: Path) -> subprocess.CompletedProcess:
     env = {"PATH": os.environ.get("PATH", ""), "HERMES_HOME": str(db.parent), "HOME": str(tmp_path)}
     return subprocess.run(  # noqa: S603 - the repo's own module against a tmp copy
         [sys.executable, "-I", "-c", code, _HERMES_SRC, str(OVERLAY), str(db)],
-        env=env, capture_output=True, text=True, timeout=300,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
     )
 
 
@@ -116,9 +119,16 @@ def _hermes_open(db: Path) -> str:
         "try:\n    SessionDB(db_path=Path(sys.argv[2])).close(); print('ok')\n"
         "except Exception as e:\n    print(type(e).__name__, e)\n"
     )
-    env = {"PATH": os.environ.get("PATH", ""), "HERMES_HOME": str(db.parent), "HOME": str(db.parent)}
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HERMES_HOME": str(db.parent),
+        "HOME": str(db.parent),
+    }
     return subprocess.run(  # noqa: S603
-        [sys.executable, "-I", "-c", code, _HERMES_SRC, str(db)], env=env, capture_output=True, text=True,
+        [sys.executable, "-I", "-c", code, _HERMES_SRC, str(db)],
+        env=env,
+        capture_output=True,
+        text=True,
         timeout=300,
     ).stdout.strip()
 
@@ -135,9 +145,13 @@ def test_real_v2026_9_14_empty_db_reproduces_the_race_and_the_fix_opens_it(tmp_p
     done = _real(tmp_path, fixed)
     # FALSIFIER: the race is real on the pinned Hermes. If Hermes ever fixes it,
     # this assertion fails and the workaround's retry branch can be retired.
-    assert _hermes_open(raw).startswith("OperationalError no such savepoint"), "race no longer reproduces"
+    assert _hermes_open(raw).startswith("OperationalError no such savepoint"), (
+        "race no longer reproduces"
+    )
     assert done.returncode == 0, done.stderr[-2000:]
-    assert "opening once more" in done.stdout and "30 -> 32 after a retry, integrity ok" in done.stdout
+    assert (
+        "opening once more" in done.stdout and "30 -> 32 after a retry, integrity ok" in done.stdout
+    )
     assert state_db_open.schema_version(fixed) == 32
     # The gateway's own open is now clean, which is what the job worker does.
     assert _hermes_open(fixed) == "ok"

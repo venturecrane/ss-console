@@ -94,15 +94,19 @@ def purge(root: Path) -> list[str]:
             shutil.rmtree(tools)
         else:
             tools.unlink()
-        why = "the package-manager store" + (" that built it" if selections else ", with no selection recorded")
+        why = "the package-manager store" + (
+            " that built it" if selections else ", with no selection recorded"
+        )
         removed.append(f"{tools} ({why})")
     return removed
 
 
 def problems(root: Path) -> list[str]:
     """Empty when no hermes process on this volume would swap off the image venv."""
-    found = [f"{key_dir}/facts.json selects a dependency environment: {reason}"
-             for key_dir, reason in recorded_selections(root)]
+    found = [
+        f"{key_dir}/facts.json selects a dependency environment: {reason}"
+        for key_dir, reason in recorded_selections(root)
+    ]
     tools = root / "tools"
     if tools.exists() or tools.is_symlink():
         found.append(f"{tools} exists: a package-manager store the seat image never writes")

@@ -432,7 +432,9 @@ def test_a_recorded_dependency_environment_fails_the_self_test(seat: dict[str, P
     assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
     _write(installs / "facts.json", json.dumps({"packages": {"python": {"entry": "cpython"}}}))
     assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
-    _write(installs / "facts.json", json.dumps({"packages": {"venv": {"environment": str(installs / "environments/g1")}}}))
+    _write(
+        installs / "facts.json", json.dumps({"packages": {"venv": {"environment": str(installs / "environments/g1")}}})
+    )
     found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
     assert found["ok"] is False and "selects" in found["detail"]
     (installs / "facts.json").unlink()

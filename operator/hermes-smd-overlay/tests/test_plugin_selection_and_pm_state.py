@@ -88,7 +88,9 @@ def _install(root: Path, key: str, facts: object) -> Path:
 def test_purge_removes_only_a_recorded_selection_and_its_store(tmp_path, capsys):
     root = tmp_path
     selected = _install(
-        root, "aaaaaaaaaaaaaaaa", {"packages": {"venv": {"environment": "/opt/data/installs/a/environments/g1"}}}
+        root,
+        "aaaaaaaaaaaaaaaa",
+        {"packages": {"venv": {"environment": "/opt/data/installs/a/environments/g1"}}},
     )
     (selected / "environments" / "g1").mkdir(parents=True)
     clean = _install(root, "bbbbbbbbbbbbbbbb", {"packages": {"python": {"entry": "cpython-3.14"}}})
@@ -114,7 +116,9 @@ def test_a_tools_only_volume_is_purged_and_then_passes_check(tmp_path, capsys):
     assert pm_state.main(["x", "purge", str(tmp_path)]) == 0
     assert "with no selection recorded" in capsys.readouterr().out
     assert not (tmp_path / "tools").exists()
-    assert (tmp_path / "installs" / "ffffffffffffffff").exists(), "no selection there: not ours to delete"
+    assert (tmp_path / "installs" / "ffffffffffffffff").exists(), (
+        "no selection there: not ours to delete"
+    )
     assert pm_state.main(["x", "check", str(tmp_path)]) == 0
 
 

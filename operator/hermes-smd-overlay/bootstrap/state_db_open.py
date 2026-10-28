@@ -81,7 +81,9 @@ def open_db(db: Path, session_db: Callable[..., Any]) -> bool:
     except sqlite3.OperationalError as exc:
         if SAVEPOINT_RACE not in str(exc):
             raise
-        _log(f"{db}: first open raised {exc!r} (Hermes v0.22.5 FTS-align savepoint race); opening once more")
+        _log(
+            f"{db}: first open raised {exc!r} (Hermes v0.22.5 FTS-align savepoint race); opening once more"
+        )
     session_db(db_path=db).close()
     return True
 
@@ -100,7 +102,9 @@ def check(db: Path, session_db: Callable[..., Any], want: int) -> list[str]:
         if verdict != "ok":
             problems.append(f"{db}: integrity_check {verdict[:300]!r}")
         else:
-            _log(f"{db}: schema {before} -> {after}{' after a retry' if retried else ''}, integrity ok")
+            _log(
+                f"{db}: schema {before} -> {after}{' after a retry' if retried else ''}, integrity ok"
+            )
     else:
         _log(f"{db}: schema {after}, current, opened cleanly")
     return problems
@@ -123,7 +127,9 @@ def main(argv: list[str]) -> int:
         except Exception as exc:  # noqa: BLE001 - any other failure fails the boot, named
             problems.append(f"{db}: {type(exc).__name__}: {exc}")
     if "hermes_bootstrap" in sys.modules:
-        problems.append("hermes_bootstrap was imported: this open may have swapped dependency environments")
+        problems.append(
+            "hermes_bootstrap was imported: this open may have swapped dependency environments"
+        )
     for problem in problems:
         print(f"state.db open: {problem}", file=sys.stderr, flush=True)
     return 1 if problems else 0

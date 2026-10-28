@@ -77,13 +77,13 @@ except ImportError as exc:  # pragma: no cover - import-time guard
         "PyYAML is required by bootstrap.translate; install with `pip install pyyaml`"
     ) from exc
 
+from bootstrap import plugin_selection
 from bootstrap.cron_materialize import (
     CronMaterializeError,
     CronStore,
     RoutineChange,
     materialize_cron,
 )
-from bootstrap import plugin_selection
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
