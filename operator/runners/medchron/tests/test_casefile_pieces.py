@@ -70,7 +70,13 @@ def test_with_no_thresholds_authored_nothing_is_flagged(tmp_path: Path) -> None:
         ("100k/300k", 100000),
         ("1M CSL", 1000000),
         ("$250,000 per person", 250000),
+        # As dec pages print split limits: a label after each figure (the 10-28 pilot proof).
+        ("$15,000 each person / $30,000 each accident", 15000),
+        ("$15,000 per person / $30,000 per accident", 15000),
+        ("BI: $25,000 per person / $50,000 per occurrence", 25000),
+        ("Bodily Injury $100,000 each person/$300,000 each accident", 100000),
         ("see the dec page", None),
+        ("$15,000 each person and something else", None),
         ("30/60 (claimed by adjuster)", None),
         ("", None),
         (None, None),

@@ -26,8 +26,14 @@ import re
 from typing import Any
 
 _FIGURE = r"\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*([kKmM])?"
-_TAIL = r"(?:\s*(?:csl|combined single limit|per person|each person|pp|bi|limits?))*"
-LIMITS = re.compile(rf"^\s*{_FIGURE}(?:\s*/\s*{_FIGURE})*{_TAIL}\s*$", re.I)
+# A label may follow ANY figure, as dec pages print split limits:
+# "$15,000 each person / $30,000 each accident".
+_LABEL = (
+    r"(?:\s*(?:csl|combined single limit|(?:per|each) (?:person|accident|occurrence)"
+    r"|pp|bi|bodily injury|limits?))*"
+)
+_PREFIX = r"(?:\s*(?:bi|bodily injury)\s*:?)?"
+LIMITS = re.compile(rf"^{_PREFIX}\s*{_FIGURE}{_LABEL}(?:\s*/\s*{_FIGURE}{_LABEL})*\s*$", re.I)
 FIRST = re.compile(_FIGURE)
 SIDES = (("first_party", "Client's own policy"), ("third_party", "Other side"))
 
