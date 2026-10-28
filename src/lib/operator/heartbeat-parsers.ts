@@ -420,7 +420,6 @@ const SHORTFALL_CLASSES = new Set(['not_allowed', 'limit', 'failed', 'partial'])
 const SHORTFALL_NAME_RE = /^[A-Za-z0-9_.:-]{1,80}$/
 const SHORTFALL_CODE_RE = /^[A-Za-z0-9_:. -]{1,80}$/
 const SHORTFALL_KEY_RE = /^[A-Za-z0-9_:.-]{1,128}$/
-
 /** A string that matches `re`, else null. */
 function matching(value: unknown, re: RegExp): string | null {
   return typeof value === 'string' && re.test(value) ? value : null
@@ -442,7 +441,13 @@ function parseShortfallEntry(value: unknown): Record<string, unknown> | null {
   const key = matching(raw.key, SHORTFALL_KEY_RE)
   const routine = parseShortfallRoutine(raw.routine)
   if (ts === null || !cls || !tool || !code || !key || routine === false) return null
-  return { ts, class: cls, tool, routine, code, key }
+  const entry: Record<string, unknown> = { ts, class: cls, tool, routine, code, key }
+  // 2026-10-27 (migration 0143): when the request this event was serving
+  // reached the seat, so the alert can point at that request's card. A time
+  // only (ADR 0052); one that does not parse costs the link, never the event.
+  const requestAt = parseIsoInstant(raw.request_at)
+  if (requestAt !== null) entry.request_at = requestAt
+  return entry
 }
 
 export function parseShortfallsJson(value: unknown): string | null {

@@ -1855,7 +1855,7 @@ def _session_turn(led, ts, session=_MAIL_SESSION):
     led.add(ts, "LLM_TURN_COMPLETED", {"session_id": session})
 
 
-def _shortfalls(tmp_path, build):
+def _shortfalls(tmp_path, build, requests=None):
     global _facts_seq
     _facts_seq += 1
     db = tmp_path / f"audit-short-{_facts_seq}.db"
@@ -1864,7 +1864,7 @@ def _shortfalls(tmp_path, build):
     ledger.conn.close()
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
-        return hb.count_shortfalls(conn, _NOW)
+        return hb.count_shortfalls(conn, _NOW, requests)
     finally:
         conn.close()
 
@@ -1918,6 +1918,120 @@ def test_payload_omits_shortfalls_when_the_seat_cannot_answer():
     )
     for key in SHORTFALL_PAYLOAD_KEYS:
         assert key not in p
+
+
+# ---------------------------------------------------------------------------
+# Linking a shortfall to its request (2026-10-27). The Captain's read of an A&P
+# page: "I cannot tell what happened or what the next steps should be." Each
+# event now carries ``request_at``, when the request it was serving reached
+# the seat: the time that finds that request's card in team@, which is where
+# who asked and what they wrote live (ADR 0052). Metadata only: no sender,
+# subject or message id reaches the wire.
+# ---------------------------------------------------------------------------
+
+_INBOUND = "AAMkInboundVendorMessageId="
+_RECEIVED = (_NOW - timedelta(hours=4)).timestamp()
+_RECEIVED_ISO = (_NOW - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+_REQ = {
+    "vendor_message_id": _INBOUND,
+    "internet_message_id": "<req-1@firm.example>",
+    "received_at": _RECEIVED,
+    "sender": "attorney@firm.example",
+    "subject": "Status on the Testclient file",
+}
+SHORTFALL_LINKED_KEYS = SHORTFALL_EVENT_KEYS | {"request_at"}
+
+
+def _never_names_the_request(event):
+    wire = json.dumps(event)
+    for leaked in ("attorney@", "Testclient", _INBOUND, "req-1@", "_join"):
+        assert leaked not in wire
+
+
+def test_a_failed_call_carries_the_time_of_the_request_its_session_served(tmp_path):
+    """FALSIFIER: drop ``_attach_requests`` and ``request_at`` vanishes."""
+
+    def build(led):
+        _call(
+            led,
+            _ts(3),
+            "mcp_smokeball_get_matter",
+            "error",
+            session=_PERSON_SESSION,
+            error_type="Smokeball returned HTTP 500",
+        )
+        _reply_row(led, _ts(2), "REPLY_SENT", in_reply_to=_INBOUND, session_id=_PERSON_SESSION)
+
+    event = _shortfalls(tmp_path, build, [_REQ]).events[0]
+    assert set(event) == SHORTFALL_LINKED_KEYS
+    assert event["request_at"] == _RECEIVED_ISO
+    assert _ZONED_ISO.match(event["request_at"])
+    _never_names_the_request(event)
+
+
+def test_a_held_reply_carries_the_time_of_the_request_it_held(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_HELD", reason="output_checklist", message_id=_INBOUND
+        ),
+        [_REQ],
+    )
+    assert facts.events[0]["request_at"] == _RECEIVED_ISO
+    _never_names_the_request(facts.events[0])
+
+
+def test_an_unproven_delivery_finds_its_request_through_its_job(tmp_path):
+    def build(led):
+        led.conn.execute(
+            "CREATE TABLE casefile_jobs (id TEXT, request_ref TEXT, state TEXT,"
+            " reason TEXT, updated_at TEXT)"
+        )
+        led.conn.execute(
+            "INSERT INTO casefile_jobs VALUES (?, ?, 'held', NULL, ?)",
+            ("01JPROOFJOBIDXXXXXXXXXXXXX", "<req-1@firm.example>", _ts(2)),
+        )
+        led.add(
+            _ts(2),
+            "DELIVERY_PROOF_FAILED",
+            {"lane": "casefile", "job_id": "01JPROOFJOBIDXXXXXXXXXXXXX", "code": "review_held"},
+        )
+
+    event = _shortfalls(tmp_path, build, [_REQ]).events[0]
+    assert event["request_at"] == _RECEIVED_ISO
+    assert "01JPROOF" not in json.dumps(event)
+    _never_names_the_request(event)
+
+
+def test_no_index_or_no_match_links_nothing_and_leaves_no_hint(tmp_path):
+    def build(led):
+        _call(led, _ts(1), "mcp_smokeball_get_matter", "error", error_type="boom")
+
+    for requests in (None, [], [{**_REQ, "vendor_message_id": "other"}]):
+        assert set(_shortfalls(tmp_path, build, requests).events[0]) == SHORTFALL_EVENT_KEYS
+
+
+def test_generic_job_status_miss_after_the_lane_tool_answered_is_not_a_shortfall(tmp_path):
+    """The A&P 2026-10-28 01:03Z page, replayed: a case-file DELIVER turn read
+    the job with ``casefile_job_status`` (ok), then asked the chronology-only
+    ``job_status``, which said "no such job". The reply went out. FALSIFIER:
+    remove ``_lane_status_answered`` and this pages once."""
+
+    def build(led):
+        _call(led, _ts(3), "casefile_job_status", "ok", session=_PERSON_SESSION)
+        _call(led, _ts(2), "job_status", "error", session=_PERSON_SESSION, error_type="no such job")
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+
+def test_generic_job_status_miss_with_no_lane_answer_still_pages_as_no_such_job(tmp_path):
+    def build(led):
+        _call(led, _ts(2), "job_status", "error", session=_PERSON_SESSION, error_type="no such job")
+        # A lane status in ANOTHER session is not this session's answer.
+        _call(led, _ts(1), "casefile_job_status", "ok", session=_MAIL_SESSION)
+
+    facts = _shortfalls(tmp_path, build)
+    assert facts.count == 1 and facts.events[0]["code"] == "no_such_job"
 
 
 def test_a_trust_refusal_is_not_allowed(tmp_path):
@@ -2517,6 +2631,29 @@ def test_prose_error_codes_follow_the_fixed_order(tmp_path):
         "error",
         # Already token-shaped: rides as written, as it always has.
         "ValueError",
+    ]
+
+
+def test_lookup_and_access_errors_get_their_own_codes(tmp_path):
+    """2026-10-27: "no such job" rode as the bare word ``error``, so the page
+    could not say the call was a lookup miss rather than a broken tool."""
+    assert _error_codes(
+        tmp_path,
+        "no such job",
+        "matter Testclient not found",
+        "permission denied for this mailbox",
+        "the API answered Forbidden",
+        "rate limit exceeded, retry later",
+        "Too Many Requests",
+        "request was unauthorized",
+    ) == [
+        "no_such_job",
+        "not_found",
+        "permission_denied",
+        "forbidden",
+        "rate_limited",
+        "rate_limited",
+        "unauthorized",
     ]
 
 
