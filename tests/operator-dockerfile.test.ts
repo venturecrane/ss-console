@@ -551,7 +551,12 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     expect(flat).not.toMatch(/uv pip check --python \/opt\/hermes\/\.venv\/bin\/python/)
     const pinned = readFileSync(resolve('operator/requirements/hermes-security.txt'), 'utf8')
     const names = [...pinned.matchAll(/^([a-z0-9][a-z0-9._-]*)==/gm)].map((m) => m[1]).sort()
-    expect(names, 'hermes-security.txt overrides only brotlicffi').toEqual(['brotlicffi'])
+    // tornado 6.6 (2026-10-28): three advisories on 6.5.10, inside
+    // python-telegram-bot's `tornado~=6.5` range, so no pip-check exception.
+    expect(names, 'hermes-security.txt overrides only brotlicffi and tornado').toEqual([
+      'brotlicffi',
+      'tornado',
+    ])
   })
 
   it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {

@@ -82,13 +82,18 @@ def test_the_override_pin_is_read_from_the_file() -> None:
     assert PIN and PIN != "1.2.0.2"
 
 
-def test_the_tolerated_table_is_exactly_the_override_file() -> None:
+def test_the_tolerated_table_is_exactly_the_overrides_that_break_a_hermes_pin() -> None:
+    """A TOLERATED row exists only for an override that breaks an exact pin
+    (brotlicffi: hermes-agent pins 1.2.0.2). An override inside its requirer's
+    range needs none: tornado 6.6 satisfies python-telegram-bot 22.8's
+    ``tornado~=6.5``, so ``uv pip check`` reports nothing for it."""
     names = {
         check._norm(line.split("==", 1)[0])
         for line in (REQUIREMENTS / "hermes-security.txt").read_text(encoding="utf-8").splitlines()
         if line and line[0].isalnum()
     }
-    assert set(check.TOLERATED) == names
+    assert set(check.TOLERATED) == names - {"tornado"}
+    assert set(check.TOLERATED) == {"brotlicffi"}
 
 
 def test_a_clean_venv_passes() -> None:
