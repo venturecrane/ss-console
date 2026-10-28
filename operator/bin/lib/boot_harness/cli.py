@@ -446,6 +446,8 @@ def _observe(runner: Runner, args: argparse.Namespace, machine: str, out: Path, 
         # A --postmortem round's entrypoint output is in the bundle (/harness/boot.log),
         # and the Machine log is only the idle sleep, so each round judges its own bundle.
         round_log = "" if getattr(args, "postmortem", False) else log
+        steal = ((round_bundle or {}).get("cpu") or {}).get("steal_pct")
+        print(f"cpu steal since boot: {steal if steal is not None else 'unknown'}% (shared-cpu throttling)")
         rc |= report(judge.judge(round_bundle, round_log, ex, allow, ready))
     return rc
 

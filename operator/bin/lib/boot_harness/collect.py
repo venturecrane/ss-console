@@ -351,6 +351,20 @@ def ready() -> int:
     return 3 if any(GATEWAY_EXITED in text for text in logs) else 1
 
 
+def cpu_time() -> dict:
+    """Since boot: the share of CPU time the host stole. Shared-cpu Machines are
+    throttled once their burst runs out, and a throttled boot is slow for reasons
+    no seat code controls, so every report carries this to read results against."""
+    try:
+        with open("/proc/stat", encoding="utf-8") as fh:
+            fields = [int(x) for x in fh.readline().split()[1:]]
+    except (OSError, ValueError):
+        return {}
+    total = sum(fields[:8]) or 1
+    steal = fields[7] if len(fields) > 7 else 0
+    return {"steal_pct": round(100.0 * steal / total, 1), "ticks_total": total}
+
+
 def on_harness() -> bool:
     """The customer.yaml names the harness: the root-owned copy the entrypoint
     installed, or (before a --volume boot starts) the fixture the runner shipped.
@@ -427,6 +441,7 @@ def main() -> int:
     bundle: dict = {"collected_at": time.time()}
     with open("/proc/uptime", encoding="utf-8") as fh:
         bundle["uptime_s"] = float(fh.read().split()[0])
+    bundle["cpu"] = cpu_time()
     try:
         with open("/opt/hermes/HERMES_SHA", encoding="utf-8") as fh:
             bundle["hermes_sha"] = fh.read().strip()
