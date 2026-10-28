@@ -503,9 +503,7 @@
     "pid": null
   },
   "plugins_enabled": {
-    "/opt/data/profiles/crane/config.yaml": [
-      "hermes-smd-overlay"
-    ]
+    "/opt/data/profiles/crane/config.yaml": ["hermes-smd-overlay"]
   },
   "filesystem": {
     "opt_data_entries": [
@@ -547,9 +545,7 @@
     "opt_data_tools": true,
     "opt_data_installs": true,
     "install_facts_venv_keys": {
-      "/opt/data/installs/351f81cc06284494/facts.json": [
-        "packages.venv"
-      ]
+      "/opt/data/installs/351f81cc06284494/facts.json": ["packages.venv"]
     }
   },
   "imports": {
