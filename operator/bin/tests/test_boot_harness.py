@@ -296,6 +296,14 @@ def test_the_run_command_carries_no_real_secret() -> None:
     assert "<per-run-random>" in cli.masked(argv, dummy) and "d" * 48 not in cli.masked(argv, dummy)
 
 
+def test_the_harness_plants_nothing_under_opt_data_but_the_fixture() -> None:
+    """The harness must boot bootstrap's real path: nothing it ships may pre-create
+    seat state (the voice/cohort workaround was dropped once #3577 shipped)."""
+    argv = cli.machine_run_argv("img", "hermes-boot-harness", "n", Path("/x/customer.yaml"), {})
+    planted = [argv[i + 1].split("=", 1)[0] for i, a in enumerate(argv) if a == "--file-local"]
+    assert [p for p in planted if p.startswith("/opt/data/")] == ["/opt/data/customer.yaml"]
+
+
 def test_the_collector_refuses_off_the_harness(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
     monkeypatch.setattr(collect, "on_harness", lambda: False)
     assert collect.main() == 2
