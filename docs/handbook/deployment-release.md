@@ -31,6 +31,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/boot-smoke-test.sh
   - label: operator/templates/seat-checks.sh (the one check list)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/seat-checks.sh
+  - label: operator/bin/lib/boot_harness/cli.py (the boot harness)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/boot_harness/cli.py
   - label: operator/templates/selftest.sh (the in-image self-test)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/selftest.sh
   - label: scripts/compile-seat-spec.ts (the seat-spec compiler and image guard)
@@ -162,6 +164,26 @@ dispatched by Hermes' own registry, a stub broker) and is required too, since
 2026-10-23; it is also the instrument for a Hermes promotion, run by hand with a
 candidate sha. The Engineering Appendix page "Building the platform" describes
 it.
+
+**A Hermes promotion does not merge until the boot harness passes on its
+candidate image.** `overlay-e2e` drives the agent directly, with no entrypoint,
+no gateway and no plugin enable, so it cannot see a boot failure: the first
+v0.22.5 image built, passed every check above, and then crash-looped
+smd-staging because Hermes built its own environment under `/opt/data` at boot
+and that environment had no `yaml`, `aiohttp` or overlay packages.
+`operator/bin/boot-harness run --image <candidate>` boots the image whole, with
+its real entrypoint and bootstrap, on a throwaway Machine in the
+`hermes-boot-harness` app (no seat's app), on a staging-derived config that
+reaches nobody, with per-run dummy secrets and R2 pointed at a dead local port.
+It prints one PASS/FAIL line per act a seat must perform (gateway ready, overlay
+activation and sub-plugins, webhook adapter, the in-image self-test, the Hermes
+pin, no runtime environment built at boot, a gateway-origin audit row, a managed
+cron firing, a clean boot log, and the boot-path audit items) and exits non-zero
+on any failure. `--postmortem` keeps a dying boot's Machine up so its state can
+still be read. The harness is calibrated against an image every seat runs green
+and one that broke staging; both captures are its test fixtures
+(`operator/bin/tests/test_boot_harness.py`). Candidate images for it are pushed
+to the harness app's own registry, never to `hermes-fleet`.
 
 Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
 green enters the queue (`gh pr merge <n>`, which `/ship` runs; the queue sets
