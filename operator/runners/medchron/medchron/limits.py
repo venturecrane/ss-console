@@ -41,9 +41,12 @@ class LimitHold(Exception):
     """One limit held the run. ``setting`` is the key a person changes to lift
     it; ``reason`` is the whole sentence, which already begins with it."""
 
-    def __init__(self, setting: str, reason: str) -> None:
+    def __init__(self, setting: str, reason: str, allowance: dict[str, int] | None = None) -> None:
         self.setting = setting
         self.reason = reason
+        # An allowance hold's figures (pages, remaining, over) for SMD's alert
+        # and the approve command's default. Never part of ``reason``.
+        self.allowance = allowance
         super().__init__(reason)
 
 
@@ -77,7 +80,15 @@ class Limits:
         return self.allowance_cycle_label or self.allowance_month or "this period"
 
     # ---- once, before the first paid stage ---------------------------------
-    def check_before_first_paid(self, *, pages: int, projected_usd: float, spent_usd: float, stage: str) -> None:
+    def check_before_first_paid(
+        self,
+        *,
+        pages: int,
+        projected_usd: float,
+        spent_usd: float,
+        stage: str,
+        approved_pages: int = 0,
+    ) -> None:
         """Allowance, then the two cost limits. The page check costs nothing and
         answers the bigger question (does this matter fit what the firm bought),
         so it goes first.
@@ -92,14 +103,26 @@ class Limits:
         firm's full 15,000-page allowance sat unused. Margin is not exposed by
         its removal: ``monthly_budget_usd`` binds in DOLLARS, independently, on
         every paid stage and every paid call, and dollars are what actually
-        track cost (a scanned page measured ~4x a text page)."""
-        remaining = self.allowance_remaining_pages
-        if remaining is not None and pages > remaining:
-            raise LimitHold(
-                ALLOWANCE_SETTING,
-                f"{ALLOWANCE_SETTING}: the matter's file is {pages:,} pages and {remaining:,} pages "
-                f"remain in {self.month_label}'s allowance; the package was not started",
-            )
+        track cost (a scanned page measured ~4x a text page).
+
+        Asked once per UNIT (2026-10-28); asked once per process, a two-client
+        job's second unit was never checked at all. ``pages`` is the JOB's
+        whole read (the matter's one extracted file, which every unit shares),
+        and the job is debited it once (``daemon._report``), so each check is
+        the job's total against what remained at submission: a shared file is
+        never counted twice, and pages a later unit adds are counted with it.
+        ``approved_pages`` is SMD's approved overage for this job
+        (``medchron.allowance approve``): it widens the PAGE check alone, and
+        the two cost limits below bind exactly as they always did."""
+        if self.allowance_remaining_pages is not None:
+            remaining = self.allowance_remaining_pages
+            if pages > remaining + approved_pages:
+                raise LimitHold(
+                    ALLOWANCE_SETTING,
+                    f"{ALLOWANCE_SETTING}: the matter's file is {pages:,} pages and {remaining:,} pages "
+                    f"remain in {self.month_label}'s allowance; the package was not started",
+                    allowance={"pages": pages, "remaining": remaining, "over": pages - remaining - approved_pages},
+                )
         self.check_before_paid(projected_usd=projected_usd, spent_usd=spent_usd, stage=stage)
 
     # ---- before every paid stage -------------------------------------------

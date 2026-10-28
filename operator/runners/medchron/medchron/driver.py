@@ -27,6 +27,7 @@ from typing import Any
 
 from . import (
     __version__,
+    allowance as allowance_mod,
     budget as budget_mod,
     config as config_mod,
     dag,
@@ -92,6 +93,10 @@ class Outcome:
     # 2026-10-25: an update that concluded nothing new, delivered with nothing
     # filed: its outcome record's counts (``update/outcome.summary``).
     current: dict[str, Any] | None = None
+    # 2026-10-28: a hold on the cycle's page allowance carries its figures
+    # (pages, remaining, over, projected_cents) for SMD's alert and the approve
+    # command's default (``allowance.py``). Never in ``reason``.
+    allowance: dict[str, int] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -269,7 +274,12 @@ class Driver:
             self.pricing, cap, ledgers, float(self.cfg.get("budget", "usd_per_million_chars"))
         )
         self.limits = self._build_limits(cap)
-        self._first_paid_checked = False
+        # The page question is asked once per UNIT, not once per process: the
+        # job's whole read, counted once, against what remained at submission
+        # (limits.check_before_first_paid). SMD's approved overage, if any,
+        # widens that page check alone (allowance.py).
+        self._page_checked: set[str] = set()
+        self._approved_pages = allowance_mod.approved_pages(self.job.path.parent)
         self.date_stamp = time.strftime("%m-%d-%y")
         self.decided: dict[str, Any] = {}
         problems = dag.validate_dag()
@@ -310,9 +320,7 @@ class Driver:
         0.0, which a report would print as "$0" (the limits treat None as 0 and
         still catch a run that already reached a line)."""
         if stage.name == "vision":
-            return budget_mod.scanned_pages(extracted) * self.limits.usd_per_scanned_page + self.budget.projection(
-                budget_mod.extracted_chars(extracted)
-            )
+            return projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
         if stage.name == "audit":  # the claims still to verify (``projection``)
             n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
             return None if n is None else n * self.limits.usd_per_audit_claim
@@ -321,15 +329,25 @@ class Driver:
         return None
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
-        """Before a paid stage. The first paid stage of the process also asks
-        the two page questions, which cost nothing to answer."""
+        """Before a paid stage. Each unit's first paid stage in this process
+        also asks the page question, which costs nothing to answer."""
         spent = self.budget.refresh()
         projected = self._projection(stage, ctx, extracted) or 0.0
-        if not self._first_paid_checked:
-            self._first_paid_checked = True
-            self.limits.check_before_first_paid(
-                pages=budget_mod.pages_read(extracted), projected_usd=projected, spent_usd=spent, stage=stage.name
-            )
+        if ctx.unit.unit not in self._page_checked:
+            self._page_checked.add(ctx.unit.unit)
+            try:
+                self.limits.check_before_first_paid(
+                    pages=budget_mod.pages_read(extracted),
+                    projected_usd=projected,
+                    spent_usd=spent,
+                    stage=stage.name,
+                    approved_pages=self._approved_pages,
+                )
+            except limits_mod.LimitHold as hold:
+                if hold.allowance is not None:
+                    usd = projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
+                    hold.allowance["projected_cents"] = int(round(usd * 100))
+                raise
             return
         self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
 
@@ -524,7 +542,9 @@ class Driver:
         pages = budget_mod.pages_read(extracted)
         st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.spent(), pages=pages, note=hold.reason)
         st.end("held", hold.reason)
-        return Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
+        out = Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
+        out.allowance = hold.allowance
+        return out
 
     def _open_seat(self):
         if self.rehearse:
