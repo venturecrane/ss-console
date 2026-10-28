@@ -407,7 +407,15 @@ def test_skill_route_gets_skill_prompt_not_email_prompt(monkeypatch):
     # actually execute (ss-console#2255), presents the payload as untrusted
     # data, and never instructs an email draft.
     assert "matter-memo-on-update" in sb["prompt"]
-    assert "/app/skills/matter-memo-on-update/SKILL.md" in sb["prompt"]
+    # The seat's catalog when no persona is named, never the image's /app/skills
+    # (a skills-only release does not refresh it).
+    assert "/opt/data/skills/matter-memo-on-update/SKILL.md" in sb["prompt"]
+    assert "/app/skills" not in sb["prompt"]
+    persona = translate._materialize_webhook_platform(_two_connector_customer(), "operator")
+    assert (
+        "/opt/data/profiles/operator/skills/matter-memo-on-update/SKILL.md"
+        in persona["webhook"]["extra"]["routes"]["smokeball"]["prompt"]
+    )
     assert "read_file" in sb["prompt"]
     assert "skill_view" not in sb["prompt"]
     assert "{__raw__}" in sb["prompt"]
@@ -428,11 +436,11 @@ def test_agentmail_route_keeps_email_prompt(monkeypatch):
 
 def test_webhook_skill_prompt_single_and_multi():
     one = translate._webhook_skill_prompt(["matter-memo-on-update"])
-    assert "/app/skills/matter-memo-on-update/SKILL.md" in one
+    assert "/opt/data/skills/matter-memo-on-update/SKILL.md" in one
     assert "the matter-memo-on-update skill" in one
-    multi = translate._webhook_skill_prompt(["a-skill", "b-skill"])
+    multi = translate._webhook_skill_prompt(["a-skill", "b-skill"], "/opt/data/profiles/p/skills")
     # The first skill anchors the file path; all are named for the agent.
-    assert "/app/skills/a-skill/SKILL.md" in multi
+    assert "/opt/data/profiles/p/skills/a-skill/SKILL.md" in multi
     assert "a-skill, b-skill" in multi
 
 

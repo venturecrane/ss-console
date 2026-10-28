@@ -44,6 +44,7 @@ from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .proof import holds as proof_holds, watch as proof_watch
+from .skill_load import load_line
 from .drafting_lane import DraftingLane
 
 logger = logging.getLogger("medchron.litigation")
@@ -365,6 +366,7 @@ class LitigationLane(DraftingLane):
             )  # fmt: skip
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
+            load_line(SKILL),
             "Kind: litigation.",
             f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
             f"Outcome: {state}.",
@@ -398,6 +400,7 @@ class LitigationLane(DraftingLane):
         ]
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
+            load_line(SKILL),
             "Kind: litigation. Report: deadlines.",
             f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
             f"Outcome: {state}.",

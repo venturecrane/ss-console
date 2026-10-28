@@ -12,6 +12,7 @@ from pathlib import Path
 
 from casefile_testkit import JOB, envelope, make_inputs
 from medchron.casefile_lane import CasefileBroker, CasefileLane
+from medchron.skill_load import load_line
 
 RUNNER = """
 import json, os, sys, pathlib
@@ -99,6 +100,9 @@ def test_the_review_wake_carries_counts_only(tmp_path):
     lane.tick()
     task = lane._daemon_state(JOB)["wake"]["task"]
     assert task.splitlines()[0] == f"Run the case-file-manager skill's DELIVER mode for casefile job {JOB}."
+    # The 2026-10-28 pilot defect: the wake must order the skill load first.
+    assert task.splitlines()[1] == load_line("case-file-manager")
+    assert "case-file-manager/SKILL.md" in task and "read_file" in task
     assert (
         "Matters: 12; read this run: 3; already current: 8; not reviewed: 1; File Status filed: 1; changes proposed: 4."
         in task

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from litigation_testkit import JOB, envelope, make_inputs, make_job
 from medchron.litigation_lane import LitigationBroker, LitigationLane, read_verdict
+from medchron.skill_load import load_line
 
 RUNNER = """
 import json, sys, pathlib, time
@@ -101,6 +102,7 @@ def test_the_wake_is_the_interface_text_with_counts_only(tmp_path):
     task = lane._daemon_state(JOB)["wake"]["task"]
     assert task.splitlines() == [
         f"Run the litigation-status skill's DELIVER mode for litigation job {JOB}.",
+        load_line("litigation-status"),
         "Kind: litigation.",
         "Trigger: request.",
         "Outcome: delivered.",

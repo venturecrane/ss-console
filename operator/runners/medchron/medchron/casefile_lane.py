@@ -42,6 +42,7 @@ from .child import run_child
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
+from .skill_load import load_line
 
 logger = logging.getLogger("medchron.casefile")
 
@@ -303,6 +304,7 @@ class CasefileLane(DraftingLane):
         outcomes = [o for o in fields.get("line_outcomes") or [] if isinstance(o, dict)]
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for casefile job {job_id}.",
+            load_line(SKILL),
             "Kind: casefile.",
             f"Mode: {mode if mode in ('full', 'recheck', 'apply') else 'unknown'}.",
             f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",

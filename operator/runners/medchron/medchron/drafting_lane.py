@@ -49,6 +49,7 @@ from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .proof import watch as proof_watch
+from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
 
 logger = logging.getLogger("medchron.drafting")
@@ -265,6 +266,7 @@ class DraftingLane(Daemon):
         cls = str(env.get("document_class") or "")
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for drafting job {job_id}.",
+            load_line(SKILL),
             "Kind: drafting.",
             f"Document class: {cls if re.fullmatch(r'[a-z_]{1,40}', cls) else 'unknown'}.",
             f"Outcome: {state}.",

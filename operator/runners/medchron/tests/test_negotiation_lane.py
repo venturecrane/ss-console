@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from medchron.negotiation_lane import NegotiationBroker, NegotiationLane, wake_task
+from medchron.skill_load import load_line
 
 JOB = "01KTJ0BX0000000000000000NG"
 N1 = "01KTJ0BX0000000000000000N1"
@@ -88,6 +89,7 @@ def test_the_wake_text_carries_no_matter_fact(tmp_path):
     task = wake_task(N1, "notice")
     assert task.splitlines() == [
         f"Run the negotiation-watch skill's DELIVER mode for negotiation job {N1}.",
+        load_line("negotiation-watch"),
         "Kind: negotiation.",
         "Trigger: scheduled.",
         "Outcome: notice.",

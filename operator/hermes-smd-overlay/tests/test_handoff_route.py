@@ -47,6 +47,102 @@ def test_handoff_route_rides_beside_the_mcp_route(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# the handoff prompt names the skill file (the 2026-10-28 pilot defect)
+# ---------------------------------------------------------------------------
+#
+# A casefile DELIVER wake ran on a webhook turn with no skill_view and no skill
+# index, under a prompt that said only "using your skills exactly as their files
+# direct". The model guessed paths, read a skills root (refused), and wrote a
+# digest memo instead of sending the reply. Each test below fails on that prompt.
+
+_ENABLED = "case-file-manager"
+_DISABLED = "demand-letter-drafter"
+_PERSONA = {
+    "slug": "operator",
+    "name": "Operator",
+    "status": "active",
+    "skills": [
+        {"name": _ENABLED, "enabled": True},
+        {"name": _DISABLED, "enabled": False},
+    ],
+}
+_HANDOFF_YAML = f"""
+customer_id: example
+vertical: law-firm
+personas:
+  - slug: operator
+    skills:
+      - name: {_ENABLED}
+        enabled: true
+      - name: {_DISABLED}
+        enabled: false
+"""
+
+
+def _persona_handoff_prompt(monkeypatch) -> str:
+    """Through _persona_config, as the seat's profile config is built."""
+    monkeypatch.setenv("WEBHOOK_SECRET_MCP", "shh-mcp")
+    config = _wh._persona_config(dict(_PERSONA), {"customer_id": "example"}, {})
+    return config["platforms"]["webhook"]["extra"]["routes"]["handoff"]["prompt"]
+
+
+def _skill_path(prompt: str, skill: str) -> str:
+    import re
+
+    found = re.search(r"read_file on (/\S+)/<name>/SKILL\.md", prompt)
+    assert found, "the handoff prompt names no skill file to read"
+    return f"{found.group(1)}/{skill}/SKILL.md"
+
+
+def test_the_handoff_prompt_names_the_personas_own_skill_file(monkeypatch):
+    prompt = _persona_handoff_prompt(monkeypatch)
+    assert (
+        _skill_path(prompt, _ENABLED) == f"/opt/data/profiles/operator/skills/{_ENABLED}/SKILL.md"
+    )
+    # The image copy goes stale on a skills-only release; it is never the one named.
+    assert "/app/skills" not in prompt
+    assert "FIRST tool call is read_file" in prompt
+    assert "{task}" in prompt and "{handoff_id}" in prompt and "<<" not in prompt
+
+
+def test_the_handoff_prompt_authors_the_failure_branch_and_fences_the_digest_memo(monkeypatch):
+    prompt = _persona_handoff_prompt(monkeypatch)
+    assert "If that file cannot be read, say so in one sentence and do nothing else" in prompt
+    assert "no memo, no digest entry, no email" in prompt
+    assert "Digest home in your instructions is for the daily needs-you digest only" in prompt
+    assert "never stands in for a job's DELIVER" in prompt
+    # "Report through your authored channels" was the phrase that read as license to memo.
+    assert "authored channels" not in prompt
+
+
+def test_the_digest_home_section_says_it_is_never_a_deliver():
+    section = _wh._digest_home_soul_section({"digest": {"home_matter_id": "ops-1"}})
+    assert "holds the daily digest only" in section
+    assert "a job's DELIVER" in section
+
+
+def test_the_named_skill_file_passes_both_read_fences_only_when_enabled(monkeypatch, tmp_path):
+    """The path the prompt names must actually be readable for an enabled skill
+    (the omitted-skill fence, and the record-store allowlist on a records seat,
+    where HERMES_HOME is the profile home), and refused for a disabled one."""
+    prompt = _persona_handoff_prompt(monkeypatch)
+    yaml_path = tmp_path / "customer.yaml"
+    yaml_path.write_text(_HANDOFF_YAML)
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(yaml_path))
+    monkeypatch.setenv("HERMES_HOME", "/opt/data/profiles/operator")
+    skill_fence = load_plugin("hermes-smd-initiation").skill_fence
+    path_fence = load_plugin("hermes-smd-record-store").path_fence
+
+    enabled = {"path": _skill_path(prompt, _ENABLED)}
+    assert skill_fence.on_pre_tool_call(tool_name="read_file", args=enabled, session_id="s") is None
+    assert path_fence.check("read_file", enabled, [], {}) is None
+
+    disabled = {"path": _skill_path(prompt, _DISABLED)}
+    verdict = skill_fence.on_pre_tool_call(tool_name="read_file", args=disabled, session_id="s")
+    assert verdict is not None and verdict["action"] == "block"
+
+
+# ---------------------------------------------------------------------------
 # gate: any non-2xx forward is a retryable failure
 # ---------------------------------------------------------------------------
 

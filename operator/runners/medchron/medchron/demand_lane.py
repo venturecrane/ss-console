@@ -39,6 +39,7 @@ from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .proof import watch as proof_watch
+from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
 
 logger = logging.getLogger("medchron.demand")
@@ -238,6 +239,7 @@ class DemandLane(Daemon):
         )
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for demand job {job_id}.",
+            load_line(SKILL),
             "Kind: demand.",
             f"Outcome: {state}.",
             # The job's actual model spend, recorded per matter (overage billing
