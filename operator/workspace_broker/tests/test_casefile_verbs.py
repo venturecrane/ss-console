@@ -346,3 +346,24 @@ def test_a_library_named_by_number_queues_with_no_id_for_the_runner_to_resolve(s
     assert got["accepted"] is True, got
     doc = json.loads((seat["queue"] / f"{got['job_id']}.json").read_text())
     assert doc["file_to_matter_id"] == "" and doc["file_to_matter_number"] == "2026-OPS-LIB"
+
+
+def test_a_calendar_line_raises_as_add_event_and_closes_on_a_created_entry(seat) -> None:
+    b = seat["broker"]
+    job = submit(b)["job_id"]
+    record(seat, job, "running")
+    line = {"n": 1, "kind": "event", "matter_id": MATTER, "source_id": "appt-0123456789abcdef01234567", "sha256": SHA_A}
+    record(seat, job, "delivered", cents=10, lines=[line], lines_proposed=1, files=[])
+    reply_went(seat, job)
+    assert raise_lines(b, job, THREAD, "sess-1", key_of(job)) == 1
+    rows = casework_ledger.read_ledger(str(seat["casework"]))
+    assert [(r["kind"], r["payload"]["action"]) for r in rows] == [("event", "add_event")]
+    approve(seat, 1)
+    apply_id = apply(seat, numbers=(1,))["job_id"]
+    record(seat, apply_id, "running")
+    event_id = "9e9e9e9e-9e9e-49e9-89e9-000000000000"
+    record(seat, apply_id, "delivered", line_outcomes=[{"n": 1, "kind": "event", "outcome": "created"}],
+           writes=[{"method": "POST", "path": f"/events/{event_id}", "ok": True}])  # fmt: skip
+    assert [ln["state"] for ln in b.casefile.ledger.lines(job)] == ["applied"]
+    done = [r for r in casework_ledger.read_ledger(str(seat["casework"])) if r["event"] == "completed"]
+    assert [r["tool_call_id"] for r in done] == [f"casefile:{apply_id}:1"]

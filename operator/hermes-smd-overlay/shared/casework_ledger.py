@@ -14,7 +14,7 @@ casework row authorizes a WRITE to the firm's record. They share the broker
 Record shape (one JSON object per line)::
 
     {"v":1,"ts":<iso, broker>,"id":<ulid, broker>,"skill":<str>,
-     "matter_id":<str>,"kind":<task|date|medicals>,"source_id":<Smokeball task/event id>,
+     "matter_id":<str>,"kind":<task|date|medicals|event>,"source_id":<Smokeball task/event id>,
      "item_key":<hex16>,"event":<EVENTS>,"session_id":<str|absent>,
      # raises (proposed|named|briefed):
      "n":<1..999>,"dispatch_ref":<hex32>,"thread_ref":<broker-stamped>,
@@ -64,11 +64,12 @@ from datetime import date, datetime, timedelta, timezone
 
 SCHEMA_VERSION = 1
 
-ITEM_KINDS: tuple[str, ...] = ("task", "date", "medicals")
+ITEM_KINDS: tuple[str, ...] = ("task", "date", "medicals", "event")
 _NAMESPACE: dict[str, str] = {
     "task": "__cm_task:",
     "date": "__cm_date:",
     "medicals": "__cm_medicals:",
+    "event": "__cm_event:",
 }
 
 RAISING_EVENTS: tuple[str, ...] = ("proposed", "named", "briefed")
@@ -94,12 +95,14 @@ WITNESSED_EVENTS: tuple[str, ...] = (*RAISING_EVENTS, "mentioned")
 #: deadline-miss-escalator; approving it requires a named person (``decided_by``).
 #: ``add_row`` is a Case File Manager line: a Medicals row proposed from a bill
 #: whose text was read, applied by that lane's runner after a named approval.
-ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step", "add_row")
+#: ``add_event`` is its calendar line: a specialty appointment the file names,
+#: added to the matter's calendar by that runner after a named approval.
+ACTIONS: tuple[str, ...] = ("close", "complete", "keep", "reassign", "step", "add_row", "add_event")
 LEVELS: tuple[str, ...] = ("surfaces", "prepares", "handles")
 #: The actions an approval turns into a write: an update_task call for close,
-#: complete and reassign; for the Case File Manager's ``close`` and ``add_row``
-#: lines, its runner's apply job (a step runs a skill).
-WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign", "add_row")
+#: complete and reassign; for the Case File Manager's ``close``, ``add_row``
+#: and ``add_event`` lines, its runner's apply job (a step runs a skill).
+WRITE_ACTIONS: tuple[str, ...] = ("close", "complete", "reassign", "add_row", "add_event")
 #: The one routine that may raise a ``complete``: the digest a person answers.
 COMPLETE_SKILL = "deadline-miss-escalator"
 CLASSES: tuple[str, ...] = ("open", "done", "stale", "at_stake")

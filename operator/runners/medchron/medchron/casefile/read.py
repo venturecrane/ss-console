@@ -69,6 +69,7 @@ RECORD_KEYS = (
     "letters",
     "questions",
     "unreadable_docs",
+    "specialty_appointments",
 )
 REVIEW_TOOL: dict[str, Any] = {
     "name": "record_review",
@@ -100,6 +101,7 @@ REVIEW_TOOL: dict[str, Any] = {
                     "time_sensitive",
                     "letters",
                     "unreadable_docs",
+                    "specialty_appointments",
                 )
             },
         },

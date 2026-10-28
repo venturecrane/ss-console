@@ -53,6 +53,7 @@ LIST_KEYS: dict[str, tuple[str, ...] | None] = {
     "injury_flags": ("finding",),
     "time_sensitive": ("finding",),
     "unreadable_docs": ("doc_id",),
+    "specialty_appointments": ("provider", "date"),
     "clients": None,
     "questions": None,
 }

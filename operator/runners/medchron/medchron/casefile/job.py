@@ -16,7 +16,7 @@ writes exactly this)::
      "file_to_matter_id": uuid, "file_to_matter_number": str, "folder_name": str,
      # apply:
      "apply": {"source_job_id": ULID, "approver": email, "thread_ref": str,
-               "lines": [{"n", "kind": "task"|"medicals", "matter_id",
+               "lines": [{"n", "kind": "task"|"medicals"|"event", "matter_id",
                           "source_id", "sha256"}, ...]}}
 
 Re-validated here (the broker's package is not on the runner's venv). The
@@ -35,7 +35,7 @@ from typing import Any
 JOB_FILE = "job.json"
 TRIGGERS = ("request", "scheduled")
 MODES = ("full", "recheck", "apply")
-LINE_KINDS = ("task", "medicals")
+LINE_KINDS = ("task", "medicals", "event")
 MAX_NAMES = 10
 MAX_NUMBERS = 200
 MAX_LINES = 999

@@ -17,13 +17,17 @@ toolset had them inline (``at_stake_terms``, ``statute_reminder_patterns``):
   that charge appears in the source's text (1650.00, 1,650.00 or 1650): a
   figure that is nowhere in its source was read from bad text or inferred;
 * every uuid the record cites is a document, task, contact or layout of THIS
-  matter (a mistyped proof id once passed the shape checks).
+  matter (a mistyped proof id once passed the shape checks);
+* a specialty appointment names its provider and specialty, a real date (or
+  none), a 24-hour time (or none), an IANA time zone (or none: only a zone the
+  document states), and the documents it was read from, each READ in this run.
 
 A matter whose record fails here, after the reader's retries, is held alone.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
 from typing import Any, Callable
@@ -45,6 +49,7 @@ POSTURES = {
 CHECKS = {"confirmed", "confirmed_flag", "not_found", "not_confirmed"}
 RECORDS = {"in", "not_in", "not_confirmed"}
 LETTER_STATUS = {"draft", "needs_fact", "not_needed"}
+TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 PLACEHOLDER = re.compile(r"\bREVIEW\b")
 UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 REQUIRED = {
@@ -188,6 +193,29 @@ class _Checker:
         if not any(f in text for f in charge_forms(float(charge))):
             self.bad("medicals_charge", f"{where} ({m.get('provider')}) charge {charge} is not in its source's text")
 
+    def appointment(self, i: int, a: Any) -> None:
+        where = f"specialty_appointments[{i}]"
+        if not isinstance(a, dict) or not str(a.get("provider") or "").strip():
+            self.bad("appointment", f"{where} has no provider")
+            return
+        who = a.get("provider")
+        if not str(a.get("specialty") or "").strip():
+            self.bad("appointment", f"{where} ({who}) has no specialty")
+        if a.get("date") is not None and not _iso_date(a.get("date")):
+            self.bad("appointment", f"{where} ({who}) date {a.get('date')!r} is not YYYY-MM-DD")
+        if a.get("time") is not None and not TIME.match(str(a.get("time"))):
+            self.bad("appointment", f"{where} ({who}) time {a.get('time')!r} is not HH:MM (24-hour)")
+        if a.get("time_zone") is not None and not _zone(a.get("time_zone")):
+            self.bad("appointment", f"{where} ({who}) time_zone {a.get('time_zone')!r} is not an IANA time zone")
+        src = a.get("source_doc_ids")
+        if not isinstance(src, list) or not src:
+            self.bad("appointment_source", f"{where} ({who}) names no source_doc_ids")
+            return
+        for d in src:
+            why = unreadable(self.meta, d)
+            if why:
+                self.bad("appointment_source", f"{where} ({who}) source doc {d}: {why}")
+
     def rest(self, rec: dict[str, Any]) -> None:
         for i, f in enumerate(rec.get("facilities") or []):
             if not isinstance(f, dict) or f.get("records") not in RECORDS:
@@ -204,6 +232,28 @@ class _Checker:
         unknown = sorted({u.lower() for u in UUID.findall(json.dumps(rec))} - known)
         if unknown:
             self.bad("unknown_id", f"{len(unknown)} id(s) are not on this matter: " + ", ".join(u[:8] for u in unknown))
+
+
+def _iso_date(v: Any) -> bool:
+    if not (isinstance(v, str) and len(v) == 10):
+        return False
+    try:
+        dt.date.fromisoformat(v)
+    except ValueError:
+        return False
+    return True
+
+
+def _zone(v: Any) -> bool:
+    from zoneinfo import ZoneInfo
+
+    if not (isinstance(v, str) and "/" in v):
+        return False
+    try:
+        ZoneInfo(v)
+    except Exception:  # noqa: BLE001 - any failure to resolve the zone is the one finding
+        return False
+    return True
 
 
 def _rows(rec: dict[str, Any], key: str) -> list[Any]:
@@ -226,6 +276,10 @@ def check(
         c.done_task(i, t)
     for i, m in enumerate(_rows(rec, "medicals")):
         c.medical(i, m)
+    if "specialty_appointments" in rec and not isinstance(rec["specialty_appointments"], list):
+        c.bad("type", "'specialty_appointments' is not a list")
+    for i, a in enumerate(_rows(rec, "specialty_appointments")):
+        c.appointment(i, a)
     c.rest(rec)
     c.ids(rec)
     for tid in sorted(c.open_ids - seen):

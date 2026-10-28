@@ -26,6 +26,7 @@ from ..litigation.outcome import LitigationFailed, LitigationHold
 from ..litigation.tools import dump
 from . import (
     book,
+    flags as flags_mod,
     matter as matter_mod,
     own_writes,
     propose,
@@ -121,10 +122,15 @@ class DeliverMixin:
                 meta = self._json_m(mid, "meta.json")
                 lines = propose.task_lines(r["review"], inv, meta, r.get("verdicts") or {})
                 med, skipped = propose.medicals_lines(r["review"], inv, meta, self.firm, self._text_of(mid))
-                lines += med
-                dump(self._mfile(mid, "lines.json"), {"lines": lines, "medicals_skipped": skipped})
+                appts, appts_skipped = propose.appointment_lines(r["review"], inv, meta, self.firm, self.today)
+                lines += med + appts
+                dump(
+                    self._mfile(mid, "lines.json"),
+                    {"lines": lines, "medicals_skipped": skipped, "appointments_skipped": appts_skipped},
+                )
             proposed = len(lines) if r["fresh"] else self._still_proposed(r.get("prior_lines") or [], inv)
-            r["rank"] = rank_mod.rank(r["review"], inv, self.firm, self.today, own, proposed)
+            r["flags"] = flags_mod.flags_for(r["review"], inv, self.firm, self.today)
+            r["rank"] = rank_mod.rank(r["review"], inv, self.firm, self.today, own, proposed, r["flags"])
             rows.append(r)
         rows.sort(key=rank_mod.order_key)
         dump(self.data / "rows.json", rows)
@@ -150,12 +156,17 @@ class DeliverMixin:
         state_mod.save_proposals(self.state, self.job.job_id, {str(ln["n"]): ln for ln in lines})
         dump(self.data / "lines.json", lines)
 
-    def _plan_for(self, mid: str, lines: list[dict[str, Any]], verdicts: dict[str, Any]) -> dict[str, Any]:
+    def _plan_for(
+        self, mid: str, lines: list[dict[str, Any]], verdicts: dict[str, Any], flags: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         mine = [ln for ln in lines if ln["matter_id"] == mid]
         return {
             "tasks": {ln["source_id"]: ln["n"] for ln in mine if ln["kind"] == "task"},
             "medicals": {ln["row_index"]: ln["n"] for ln in mine if ln["kind"] == "medicals"},
+            "events": {ln["source_id"]: ln["n"] for ln in mine if ln["kind"] == "event"},
+            "appointments_skipped": (self._json_m(mid, "lines.json") or {}).get("appointments_skipped") or {},
             "verdicts": verdicts,
+            "flags": flags or {},
         }
 
     # ---- book and file ---------------------------------------------------------------
@@ -173,7 +184,7 @@ class DeliverMixin:
                 self.today.isoformat(),
                 meta,
                 r["rank"],
-                self._plan_for(r["matter_id"], lines, r.get("verdicts") or {}),
+                self._plan_for(r["matter_id"], lines, r.get("verdicts") or {}, r.get("flags")),
             )
             out = self._pdf(r)
             out.parent.mkdir(parents=True, exist_ok=True)

@@ -12,7 +12,7 @@ audit db file, the same broker writer, the same monotonic states::
     failed    -> running        (a resume, root only)
 
 ``casefile_lines`` holds every numbered line a delivered ``full`` job issued:
-its kind (``task`` / ``medicals``), matter, source id and the hash of the facts
+its kind (``task`` / ``medicals`` / ``event``), matter, source id and the hash of the facts
 the runner proposed (the facts themselves stay in the runner's state on the
 volume). A line moves ``proposed`` (recorded) -> ``raised`` (the broker sent it
 to the requester, ``reply_binding``) -> ``applying`` (an apply job holds it)
@@ -42,7 +42,7 @@ ALLOWED_NEXT = {
 }
 TRIGGERS = ("request", "scheduled")
 MODES = ("full", "recheck", "apply")
-LINE_KINDS = ("task", "medicals")
+LINE_KINDS = ("task", "medicals", "event")
 LINE_STATES = ("proposed", "raised", "applying", "applied", "refused", "failed")
 SKILL_NAME = "case-file-manager"
 KIND = "casefile"
@@ -66,7 +66,7 @@ REPORT_FIELDS = (
 CLOSED_REASON = "closed"
 CLOSE_REF = re.compile(r"^(vfy_)?[0-9A-HJKMNP-TV-Z]{26}$")
 #: The outcomes that are a write the runner made and read back.
-APPLIED_OUTCOMES = ("completed", "written", "invoice_added")
+APPLIED_OUTCOMES = ("completed", "written", "invoice_added", "created")
 #: The outcomes where nothing needed writing (the record already shows it).
 NOTHING_TO_DO = ("already_complete", "already_present")
 
@@ -79,7 +79,7 @@ _FOLDER = re.compile(r"^[A-Za-z0-9 ._()-]{1,80}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE = re.compile(r"^[A-Za-z0-9:_.-]{1,128}$")
 _OUTCOME = re.compile(r"^[a-z_]{1,40}$")
-_WRITE_PATH = re.compile(r"^/(tasks|matters)/[0-9a-fA-F-]{32,40}$")
+_WRITE_PATH = re.compile(r"^/(tasks|matters|events)/[0-9a-fA-F-]{32,40}$")
 
 CREATE_SQL = (
     "CREATE TABLE IF NOT EXISTS casefile_jobs ("
@@ -166,7 +166,7 @@ def validate_line(raw: Any) -> dict[str, Any]:
     if not (isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= MAX_LINES):
         raise ValueError("a line's n is 1..999")
     if raw["kind"] not in LINE_KINDS or not (isinstance(raw["matter_id"], str) and _UUID.match(raw["matter_id"])):
-        raise ValueError("a line's kind is task or medicals, on a matter uuid")
+        raise ValueError("a line's kind is task, medicals or event, on a matter uuid")
     if not (isinstance(raw["source_id"], str) and _SOURCE.match(raw["source_id"])):
         raise ValueError("a line's source_id is a plain identifier")
     if not (isinstance(raw["sha256"], str) and _SHA256.match(raw["sha256"])):
@@ -242,7 +242,9 @@ def checked_writes(raw: Any) -> list[dict[str, Any]]:
     for w in raw:
         ok = isinstance(w, dict) and set(w) <= {"method", "path", "status", "ok"}
         if not ok or w.get("method") not in ("PUT", "PATCH", "POST") or not _WRITE_PATH.match(str(w.get("path") or "")):
-            raise ValueError("each write is {method: PUT|PATCH|POST, path: /tasks/<id>|/matters/<id>, status, ok}")
+            raise ValueError(
+                "each write is {method: PUT|PATCH|POST, path: /tasks/<id>|/matters/<id>|/events/<id>, status, ok}"
+            )
         out.append({"method": w["method"], "path": w["path"], "ok": w.get("ok") is True})
     return out
 

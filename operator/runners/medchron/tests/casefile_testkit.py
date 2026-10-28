@@ -141,6 +141,8 @@ class Client:
             return dict(next(t for t in s.tasks if t["id"] == path.split("/")[2]))
         if path == "/events":
             return {"value": [e for e in s.events if e["matter"] == params.get("MatterId")]}
+        if path.startswith("/events/"):
+            return dict(next(e for e in s.events if e["id"] == path.split("/")[2]))
         if path.startswith("/contacts/"):
             return {"person": {"firstName": "Gamma", "lastName": "Example"}}
         m = re.fullmatch(r"/matters/([^/]+)(/memos|/layouts(?:/[^/]+)?)?", path)
@@ -161,6 +163,11 @@ class Client:
             t = next(t for t in self.seat.tasks if t["id"] == path.split("/")[2])
             t.update(isCompleted=bool(json.get("isCompleted")), note=json.get("note"))
             return {}
+        if method == "POST" and path == "/events":  # stored as the vendor reads it back
+            eid = f"9e9e9e9e-9e9e-49e9-89e9-{len(self.seat.events):012d}"
+            att = [{"id": a} for a in json.get("attendees") or []]
+            self.seat.events.append({**json, "id": eid, "matter": json.get("matterId"), "attendees": att})
+            return {"id": eid}
         raise AssertionError((method, path))
 
 
