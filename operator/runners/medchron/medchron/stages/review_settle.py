@@ -12,9 +12,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from .. import wording
 from ..audit import claims as CL
 from ..proof import review
 from .base import StageRun
+from .group import PLACEHOLDER
 from .review_policy import _DATE, _EXHIBIT_PAGE, _QUOTED, Outcome, _norm, _phrases, _text, check_no
 
 # ---- step 3b: the system's own words, deleted from the entries --------------------
@@ -126,6 +128,32 @@ def _cut(line: str, frags: list[str]) -> str | None:
     return line if len(kept) == len(_split(line)) else " ".join(p[0] for p in kept)
 
 
+#: Phrases whose words alone can go and leave the sentence reading as written
+#: ("Continue therapy as noted in this chunk." -> "Continue therapy as noted.",
+#: eng#226). Any other phrase cut mid-sentence leaves a fragment ("The image
+#: carries no."), so it is left and flagged instead.
+_WORD_CUTTABLE = re.compile(r"^(?:(?:in|from|within) )?this chunk$")
+
+
+def _cut_words(line: str, frags: list[str]) -> str | None:
+    """The line with only the phrase's own words deleted, case and spacing
+    as written, the citations untouched. None when a fragment is not a
+    ``_WORD_CUTTABLE`` phrase or is not found, or no record text would be
+    left beside the citations."""
+    if not all(_WORD_CUTTABLE.match(f) for f in frags):
+        return None
+    out = line
+    for f in frags:
+        words = (re.escape(w).replace("'", "[\"“”‘’`']") for w in f.split())
+        pat = re.compile(r"\s*" + r"\s+".join(words), re.I)
+        if not pat.search(out):
+            return None
+        out = pat.sub("", out, count=1)
+    out = re.sub(r"\s+([.,;:)])", r"\1", " ".join(out.split()))
+    left = [p for p, cite in _split(out) if not cite and re.search(r"\w", p)]
+    return out if left else None
+
+
 #: A provider heading's trailing clause that names a role or an inbox, not a
 #: provider ("<Clinic> Surgery, hand RN triage supporting <Doctor>, MD" is a
 #: message pool, Pamplona 2026-10-25). Cut, the name
@@ -159,7 +187,26 @@ def _heading_cut(line: str, frags: list[str]) -> str:
     m = _ROLE_CLAUSE.match(head)
     if m and any(m.start("role") < b and a < len(head) for a, b in spans):
         return m.group("keep") + sep + rest
+    if _whole_placeholder(head, spans):
+        return wording.PROVIDER_NOT_STATED + sep + rest
     return out
+
+
+def _whole_placeholder(head: str, spans: list[tuple[int, int]]) -> bool:
+    """True when the reviewer quoted the heading's whole name and that name is
+    the composer's own "I could not tell" (group.PLACEHOLDER): no provider is
+    named, so the firm's wording for exactly that takes its place (a joint matter,
+    2026-10-28: "Outside radiology report, facility not stated"). A name the
+    reviewer quoted only in part, or one with no placeholder words, stays."""
+    name = head.strip()
+    # The firm's own phrase already after it ("<placeholder> (provider not
+    # stated in the record)", seen live) is not part of what was quoted.
+    if name.endswith(wording.PROVIDER_NOT_STATED):
+        name = name[: -len(wording.PROVIDER_NOT_STATED)].rstrip()
+    if not name or not PLACEHOLDER.search(name):
+        return False
+    lo = len(head) - len(head.lstrip())
+    return any(a <= lo and b >= lo + len(name) for a, b in spans)
 
 
 def _content(ln: str | None) -> bool:
@@ -190,7 +237,12 @@ def _scrub_lines(
         else:
             new = _cut(ln, frags)
             if new is None and _content(ln) and _only_content(lines, i, lo, hi):
-                continue  # the entry's only content paragraph: left, the finding stays MUST
+                # The entry's only content paragraph: the words alone go, the
+                # sentence and its citation stay (2026-10-28). Nothing left but
+                # the citation: left, the finding stays MUST.
+                new = _cut_words(ln, frags)
+                if new is None:
+                    continue
         if new != ln:
             edits.append((ln, new))
             lines[i] = new
@@ -223,8 +275,14 @@ def scrub_system(sr: StageRun, doc: Path, out: Outcome, stats: dict[str, int]) -
         frags = [_fragments(p) for p in _phrases(f)]
         if not frags or not all(frags):
             continue
-        if not all(any(_has(ln, fr) for ln in body) for fr in frags):
-            continue  # a phrase not in the entries (Limitations, a table): not this step's to edit
+        gone = [fr for fr in frags if not any(_has(ln, fr) for ln in body)]
+        if len(gone) == len(frags) or any(_has(ln, fr) for ln in raw for fr in gone):
+            # A phrase not in the entries but elsewhere (Limitations, a
+            # table): not this step's to edit. One in no line at all was
+            # already removed (code's own finding on the same words, settled
+            # first; a joint chronology, 2026-10-28) and does not block the rest.
+            continue
+        frags = [fr for fr in frags if fr not in gone]
         for fr in frags:
             _scrub_lines(lines, lo, hi, fr, edits)
         if any(_has(ln, fr) for ln in lines[lo:hi] for fr in frags):
@@ -285,6 +343,37 @@ FLAG_NOTE = (
     "disagreeing; please compare them against the cited pages: "
 )
 _CONFIRMED = ("SUPPORTED", "SUPPORTED_WIDENED")
+
+# ---- last: whatever the rules left is the attorney's, never a stop -----------------
+#: 2026-10-28, the Captain (a joint chronology held on a provider heading after every
+#: other gate passed; Curtis held 3 times and Pamplona on 18 findings the same
+#: way): a review finding about wording, a summary line or a disagreement that
+#: no rule settles goes to the Review Notes and the chronology is delivered.
+#: Only code's integrity findings (an empty chronology, an exhibit cited and
+#: not delivered, an entry dated after today) still hold.
+RESIDUAL_NOTES = {
+    2: FLAG_NOTE,
+    3: (
+        "flagged for the attorney: the pre-delivery review read this wording as not taken from the records, "
+        "and it could not be removed without losing an entry; please read it with that in mind: "
+    ),
+    4: (
+        "flagged for the attorney: the pre-delivery review could not tie this summary line to a chronology "
+        "entry; please check it against the entries before relying on it: "
+    ),
+}
+
+
+def flag_residual(out: Outcome, stats: dict[str, int]) -> None:
+    """Every MUST-FIX left on checks 2 to 4 (the model's, or code's system
+    wording) becomes a flagged NOTE; check 1 is settled before this by the
+    page's identifiers. Code's other findings are integrity and stay MUST."""
+    for k, f in enumerate(out.findings):
+        n = check_no(f)
+        if f.grade != review.MUST or n not in RESIDUAL_NOTES or (f.by == "code" and n != 3):
+            continue
+        out.findings[k] = replace(f, grade=review.NOTE, finding=RESIDUAL_NOTES[n] + f.finding)
+        stats["residual_flagged"] = stats.get("residual_flagged", 0) + 1
 
 
 def confirmed_claims(sr: StageRun, md: str) -> list[tuple[str, dict[str, Any]]]:
