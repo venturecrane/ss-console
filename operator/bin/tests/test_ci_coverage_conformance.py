@@ -342,7 +342,7 @@ def test_overlay_job_runs_the_seat_runtime_suite() -> None:
     ]
     assert len(pytest_steps) == 1, "exactly one pytest step runs from operator/hermes-smd-overlay"
     runs = "\n".join(s.get("run") or "" for s in steps)
-    assert "uv venv --python 3.13" in runs, "the overlay suite runs on the seat interpreter"
+    assert "uv venv --python 3.14" in runs, "the overlay suite runs on the Hermes venv interpreter (3.14)"
     assert "ARG HERMES_UPSTREAM_SHA" in runs and "NousResearch/hermes-agent" in runs, (
         "the pinned Hermes must be read from the Dockerfile and fetched from upstream"
     )
@@ -389,7 +389,7 @@ def test_overlay_e2e_job_runs_the_harness_at_the_image_pin() -> None:
         "Hermes must be fetched from upstream at the resolved sha"
     )
     assert "HERMES_AGENT_SRC=" in runs, "the harness skips without HERMES_AGENT_SRC"
-    assert "uv venv --python 3.13" in runs, "the harness runs on the seat interpreter"
+    assert "uv venv --python 3.14" in runs, "the harness runs on the Hermes venv interpreter (3.14)"
     assert '[mcp,anthropic]"' in runs and "hermes-smd-overlay[e2e]" in runs, (
         "Hermes needs its anthropic extra: the seat adapter (anthropic_messages) imports the SDK"
     )

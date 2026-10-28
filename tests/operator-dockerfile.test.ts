@@ -241,6 +241,25 @@ describe('Operator Machine profile guards', () => {
     ).toBe(true)
   })
 
+  it('re-asserts the authored webhook tool surface after the profile enable, fail-closed (#3564)', () => {
+    // Hermes v0.22 `plugins enable` appends the plugin's toolset to every saved
+    // platform_toolsets list. FALSIFIER: move the re-assertion before the enable,
+    // or swallow its failure, and the inbound email surface ships widened.
+    const enable = BOOTSTRAP_CODE.indexOf(
+      'hermes -p "${ACTIVE_PROFILE}" plugins enable hermes-smd-overlay'
+    )
+    const reassert = BOOTSTRAP_CODE.indexOf('-m bootstrap.webhook_toolsets "${CUSTOMER_YAML}"')
+    const gateway = BOOTSTRAP_CODE.indexOf(
+      'exec /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" gateway run'
+    )
+    expect(enable).toBeGreaterThan(-1)
+    expect(reassert, 'bootstrap.sh never re-asserts the webhook toolsets').toBeGreaterThan(enable)
+    expect(gateway).toBeGreaterThan(reassert)
+    expect(BOOTSTRAP_CODE).toMatch(
+      /-m bootstrap\.webhook_toolsets "\$\{CUSTOMER_YAML\}" "\$\{PROFILE_HERMES_HOME\}\/config\.yaml" \\\n\s*\|\| die/
+    )
+  })
+
   it('seeds and hard-gates the activation hook inside the active profile', () => {
     expect(
       BOOTSTRAP.includes('PROFILE_HOOKS_DIR="${PROFILE_HERMES_HOME}/hooks"'),
@@ -469,16 +488,17 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     const flat = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
     const overlayAt = flat.indexOf('--no-deps /app/overlay-src')
     const checkAt = flat.search(
-      /python3 -I \/app\/requirements\/hermes_pip_check\.py\s+\/opt\/hermes\/\.venv\/bin\/python\s+\/app\/requirements\/hermes-security\.txt/
+      /python3 -I \/app\/requirements\/hermes_pip_check\.py\s+\/opt\/hermes\/\.venv\/bin\/python\s+\/app\/requirements\/hermes-security\.txt\s+\/opt\/hermes\/uv\.lock/
     )
     expect(checkAt, 'no hermes_pip_check.py over the Hermes venv').toBeGreaterThan(overlayAt)
   })
 
   /**
-   * DP-1 (2026-10-27 code review): Hermes' lock pins certifi with compromised
-   * emSign intermediates and urllib3 2.7.0. hermes-security.txt overrides
-   * exactly those, hash-locked, into the Hermes venv after `uv sync`; the
-   * check that follows tolerates only hermes-agent's own certifi pin.
+   * DP-1 (2026-10-27 code review): hermes-security.txt overrides named
+   * Hermes-locked packages, hash-locked, into the Hermes venv after `uv sync`;
+   * the check that follows tolerates only hermes-agent's own pin on each.
+   * Since the v0.22.5 promotion (#3564) the one override is brotlicffi
+   * (PYSEC-2026-4323); v0.22.5's lock carries the certifi and urllib3 fixes.
    */
   it('the Hermes venv gets hermes-security.txt hash-locked after uv sync and before the check', () => {
     const idx = (re: RegExp) => commands.findIndex((c) => re.test(c))
@@ -495,14 +515,11 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
       flat.indexOf('-r /app/requirements/hermes-security.txt')
     )
     // No bare `uv pip check` over the Hermes venv survives beside the
-    // tolerant one: it would fail the build on the certifi override.
+    // tolerant one: it would fail the build on the brotlicffi override.
     expect(flat).not.toMatch(/uv pip check --python \/opt\/hermes\/\.venv\/bin\/python/)
     const pinned = readFileSync(resolve('operator/requirements/hermes-security.txt'), 'utf8')
     const names = [...pinned.matchAll(/^([a-z0-9][a-z0-9._-]*)==/gm)].map((m) => m[1]).sort()
-    expect(names, 'hermes-security.txt overrides only certifi and urllib3').toEqual([
-      'certifi',
-      'urllib3',
-    ])
+    expect(names, 'hermes-security.txt overrides only brotlicffi').toEqual(['brotlicffi'])
   })
 
   it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {

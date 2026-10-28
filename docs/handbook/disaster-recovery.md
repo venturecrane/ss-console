@@ -83,7 +83,7 @@ first heading states its job; grouped by when an agent would reach for it:
 | | `operator/msgraph-dead-letter.md` | Microsoft Graph dead letters: what pages, how to replay |
 | | `operator/hold-ledger-remediation.md` | Releasing held work that never resumed |
 | | `operator/agentmail-vendor-ask-deliverability.md` | Email deliverability controls the AgentMail vendor holds |
-| Upgrades and rehearsal | `operator/hermes-v0.18-upgrade-plan.md`, `hermes-v0.20-upgrade-plan.md`, `hermes-v0.21-upgrade-plan.md` | The staged Hermes runtime upgrades, including the defaults diff and rollback rehearsal to repeat at every bump |
+| Upgrades and rehearsal | `operator/hermes-v0.18-upgrade-plan.md`, `hermes-v0.20-upgrade-plan.md`, `hermes-v0.21-upgrade-plan.md`, `hermes-v0.22-upgrade-plan.md` | The staged Hermes runtime upgrades, including the defaults diff and rollback rehearsal to repeat at every bump |
 | | `operator/shadow-firm.md` | The standing adversarial rehearsal against a fake firm |
 | | `operator/cost-telemetry-enable.md` | Turning on the cost telemetry pipeline |
 

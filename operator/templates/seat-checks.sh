@@ -354,6 +354,44 @@ check "gateway-liveness-files-readable-by-gate" "setpriv --reuid=hermes --regid=
 # --wait-gateway-s flag the R2 strip probe below uses.
 check "gateway-loop-heartbeat-fresh" "n=0; while [ \$n -lt 36 ]; do for f in ${SEAT_ROOT}/opt/data/profiles/*/state/gateway.heartbeat; do [ -f \$f ] || continue; [ \$(( \$(date -u +%s) - \$(stat -c %Y \$f) )) -lt 120 ] && exit 0; done; n=\$((n+1)); sleep 5; done; exit 1"
 
+# ---------- Step 11c.1: the gateway decided to stay standalone (Hermes v0.22.5, #3564) ----------
+# From v0.22 one gateway per host multiplexes every profile by default. A
+# multiplexing gateway arms a fail-closed secret scope (agent/secret_scope.py):
+# an unscoped secret read raises instead of falling back to os.environ, which
+# is where every Fly secret on a seat lives, and it would bring up the other
+# personas' adapters and a /p/<profile>/ ingress no seat authored. translate
+# writes gateway.standalone: true into every persona profile's config.yaml, and
+# Hermes' boot decision (hermes_cli/gateway_multiplex_mode.py
+# resolve_multiplex_mode) then refuses to multiplex with STANDALONE_PROFILE_REASON.
+# log_multiplex_decision logs it ("This gateway stays standalone: <reason>.")
+# and records the reason in the launching profile's gateway_state.json as
+# multiplex_standalone_reason. This reads that record back, for every profile
+# whose gateway heartbeat is fresh (the live gateway; the check above has
+# already waited for it), and requires the exact reason string: any other
+# reason, or none, means the gateway decided for a different cause or is
+# multiplexing. No single quotes: this is a check_script program run by sh.
+check_script "gateway-multiplex-standalone" "$(seat_prog <<'MULTIPLEX_CHECK'
+"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data/profiles" <<'PY'
+import glob, json, os, sys, time
+WANT = "this profile is standalone (gateway.standalone: true); it serves only itself"
+live = []
+for beat in sorted(glob.glob(sys.argv[1] + "/*/state/gateway.heartbeat")):
+    if time.time() - os.stat(beat).st_mtime < 120:
+        live.append(os.path.dirname(os.path.dirname(beat)))
+if not live:
+    sys.exit("no profile has a fresh gateway heartbeat")
+for home in live:
+    try:
+        with open(home + "/gateway_state.json", encoding="utf-8") as fh:
+            reason = (json.load(fh) or {}).get("multiplex_standalone_reason")
+    except (OSError, ValueError) as exc:
+        sys.exit(f"{home}/gateway_state.json: {exc.__class__.__name__}")
+    if reason != WANT:
+        sys.exit(f"{os.path.basename(home)}: multiplex_standalone_reason={reason!r}, want the gateway.standalone guard")
+PY
+MULTIPLEX_CHECK
+)"
+
 # ---------- Step 11d: the loop-watchdog budget is sized to this seat (#2789) ----------
 # Hermes arms its event-loop liveness watchdog before the startup plugin crawl
 # and exits 75 after max_strikes missed probes. At the shipped defaults that is

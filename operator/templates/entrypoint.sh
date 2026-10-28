@@ -804,8 +804,8 @@ fi
 # restarted it. Hermes' OWN loop-liveness watchdog fired and logged "...exiting
 # with code 75 so the service supervisor can restart it" — and then did not
 # exit. At the pin we ran then (v2026.8.18@e624e9fd) that path was already a
-# hard os._exit(75) (gateway/shutdown_watchdog.py:196), and at the blessed pin
-# (v2026.9.14@345cd2b0) it still is: start_loop_liveness_watchdog stamps the
+# hard os._exit(75) (gateway/shutdown_watchdog.py:196), and at the pins since
+# (v2026.9.14@345cd2b0, and v0.22.5@bf0203a7) it still is: start_loop_liveness_watchdog stamps the
 # lifecycle ledger, then os._exit(exit_code). So there was no graceful
 # shutdown to blame: the thread reached its logger.critical (the line is in
 # gateway.log) and never reached the os._exit two statements later. That

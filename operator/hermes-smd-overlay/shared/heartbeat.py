@@ -1698,7 +1698,7 @@ def _default_post(
             host, parts.port or 80, timeout=timeout
         )
     else:
-        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (3.13); the host is the console's heartbeat URL from the image env, never caller input
+        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (CERT_REQUIRED + check_hostname on both seat interpreters: 3.14 Hermes venv, 3.13 workspace broker; #3564); the host is the console's heartbeat URL from the image env, never caller input
         conn = http.client.HTTPSConnection(host, parts.port or 443, timeout=timeout)
     try:
         conn.request("POST", parts.path or "/", body=body, headers=headers)
@@ -1719,7 +1719,7 @@ def _default_ping(url: str) -> None:
             host, parts.port or 80, timeout=_HTTP_TIMEOUT_SECONDS
         )
     else:
-        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (3.13); the host is the dead-man ping URL from the image env, never caller input
+        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected - stdlib client with the interpreter's default TLS verification (CERT_REQUIRED + check_hostname on both seat interpreters: 3.14 Hermes venv, 3.13 workspace broker; #3564); the host is the dead-man ping URL from the image env, never caller input
         conn = http.client.HTTPSConnection(host, parts.port or 443, timeout=_HTTP_TIMEOUT_SECONDS)
     try:
         path = parts.path or "/"
