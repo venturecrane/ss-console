@@ -223,8 +223,8 @@ def test_disabled_skills_reconciler_is_anchored_to_the_gateway_start() -> None:
         )
     # Nothing but the reconciler's own launch, the start log and the exec may sit
     # between the loop and the gateway.
-    between = [l for l in lines[loop_idx:gateway_idx] if l.strip()]
-    assert not any(re.search(r"\bdie\b|/opt/hermes/.venv/bin/python3 -m|\bfor _", l) for l in between), (
+    between = [line for line in lines[loop_idx:gateway_idx] if line.strip()]
+    assert not any(re.search(r"\bdie\b|/opt/hermes/.venv/bin/python3 -m|\bfor _", line) for line in between), (
         "a boot step sits between the reconciler launch and the gateway exec"
     )
     body = "\n".join(lines[loop_idx:gateway_idx])
