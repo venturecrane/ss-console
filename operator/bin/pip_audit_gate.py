@@ -160,8 +160,7 @@ def fetch_hermes_export(sha: str, extras: list[str], work: Path) -> str:
             # --retry covers raw.githubusercontent.com's 429s (curl treats 429 as
             # transient and honours Retry-After): one rate-limited response failed
             # this required gate twice on 2026-10-27 (PR #3567).
-            [curl, "-fsSL", "--max-time", "120", "--retry", "5", "--retry-delay", "10",
-             "-o", str(work / path), url],
+            [curl, "-fsSL", "--max-time", "120", "--retry", "5", "--retry-delay", "10", "-o", str(work / path), url],
             capture_output=True,
             text=True,
             check=False,

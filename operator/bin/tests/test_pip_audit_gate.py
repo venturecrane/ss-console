@@ -223,9 +223,7 @@ def test_live_hermes_lock_at_the_pin_carries_the_advisory_the_override_closes(tm
     assert len(gate.pins(export)) >= gate.HERMES_MIN_AUDITED
 
 
-def test_the_hermes_lock_fetch_retries_a_rate_limited_response(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_hermes_lock_fetch_retries_a_rate_limited_response(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """raw.githubusercontent.com answers 429 under load; one 429 must not fail the gate (2026-10-27)."""
     seen: list[list[str]] = []
 
