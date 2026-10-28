@@ -52,6 +52,33 @@ def test_agentmail_normalizes_svix_data_envelope() -> None:
     assert dto.provider_refs["message_id"] == "msg_777"
 
 
+def test_agentmail_carries_its_rfc_message_id_as_the_internet_message_id() -> None:
+    """Every request lane keys its job on ``internet_message_id``; AgentMail's
+    message_id is the RFC Message-ID, so an emailed request can queue."""
+    rfc = "<0100019a2f@email.amazonses.com>"
+    payload = {
+        "event_type": "message.received",
+        "message": {
+            "message_id": rfc,
+            "inbox_id": "inbox_abc",
+            "from": "a@b.example",
+            "text": "hi",
+        },
+    }
+    dto = im.normalize_inbound("agentmail", payload)
+    assert dto is not None
+    assert dto.provider_refs["internet_message_id"] == rfc
+    bare = im.normalize_inbound(
+        "agentmail",
+        {
+            "event_type": "message.received",
+            "message": {"message_id": "msg_777", "inbox_id": "i", "from": "a@b.example"},
+        },
+    )
+    assert bare is not None
+    assert "internet_message_id" not in bare.provider_refs
+
+
 def test_agentmail_normalizes_message_block() -> None:
     """The vendor webhook shape: fields under ``message`` rather than ``data``."""
     payload = {

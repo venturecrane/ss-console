@@ -110,7 +110,9 @@ are we on 100123") is not this skill.
      promise of a later message: whether one follows depends on how the job ends.
    - refused: relay the broker's sentence in plain words (the Case File Manager is
      not enabled on this seat, a review of the same caseload is already underway, the
-     requester is not a Named Administrator). Nothing was queued; say so.
+     requester is not a Named Administrator). Nothing was queued; say so. Add no
+     promise of your own: never "resend and it will queue", never a next step the
+     broker's sentence does not give.
    - an ask to put it on a schedule: say a standing schedule is switched on by the
      firm through SMD, and submit the one review asked for now.
 4. **Stop.** Do not read any matter, list cases, quote a date or summarize a document
