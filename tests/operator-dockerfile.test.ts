@@ -85,11 +85,11 @@ describe('Operator customer Machine Dockerfile', () => {
     expect(BOOTSTRAP_CODE).toMatch(/\|\| die "overlay pack missing from the image/)
     expect(BOOTSTRAP_CODE).not.toMatch(/unpinned fallback/)
     expect(BOOTSTRAP_CODE).not.toMatch(/no image pack to refresh from/)
-    // The root-home enable is a hard gate like the profile-home one, not `|| true`.
+    // The root-home selection is a hard gate like the profile-home one, not `|| true`.
     expect(BOOTSTRAP_CODE).toMatch(
-      /hermes plugins enable hermes-smd-overlay >\/dev\/null \\\n\s*\|\| die/
+      /-m bootstrap\.plugin_selection "\$\{HERMES_HOME\}\/config\.yaml" \\\n\s*\|\| die/
     )
-    expect(BOOTSTRAP_CODE).not.toMatch(/plugins enable hermes-smd-overlay[^\n]*\|\| true/)
+    expect(BOOTSTRAP_CODE).not.toMatch(/plugin_selection[^\n]*\|\| true/)
   })
 
   it('hard-asserts the overlay policy core is importable at build time', () => {
@@ -224,7 +224,7 @@ describe('Operator Machine: Honcho deferred, flat-file core (ADR 0016 revised)',
 })
 
 describe('Operator Machine profile guards', () => {
-  it('installs and enables the overlay inside the active profile Hermes home', () => {
+  it('installs and selects the overlay inside the active profile Hermes home', () => {
     expect(
       BOOTSTRAP.includes('PROFILE_HERMES_HOME="${HERMES_HOME}/profiles/${ACTIVE_PROFILE}"'),
       'bootstrap.sh must name the Hermes home selected by `hermes -p <profile>`'
@@ -236,17 +236,43 @@ describe('Operator Machine profile guards', () => {
       'profiled plugin discovery must receive the pinned overlay pack'
     ).toBe(true)
     expect(
-      BOOTSTRAP_CODE.includes('hermes -p "${ACTIVE_PROFILE}" plugins enable hermes-smd-overlay'),
-      'the overlay must be enabled in the active profile config'
+      BOOTSTRAP_CODE.includes('-m bootstrap.plugin_selection "${PROFILE_HERMES_HOME}/config.yaml"'),
+      'the overlay must be selected in the active profile config'
     ).toBe(true)
   })
 
-  it('re-asserts the authored webhook tool surface after the profile enable, fail-closed (#3564)', () => {
+  it('never runs `hermes plugins enable` (#3564: it commits a PM env that strips the venv)', () => {
+    // From Hermes v0.22 `plugins enable` runs package-manager admission, which
+    // records a dependency generation under /opt/data/installs; every later
+    // hermes process then boots off the image venv (the reverted #3567).
+    // FALSIFIER: put either enable back and this fails.
+    expect(BOOTSTRAP_CODE).not.toMatch(/hermes\b[^\n]*\bplugins enable\b/)
+  })
+
+  it('purges and asserts the PM dependency state right before the gateway exec, fail-closed (#3564)', () => {
+    const purge = BOOTSTRAP_CODE.indexOf('-m bootstrap.pm_state purge "${HERMES_HOME}"')
+    const check = BOOTSTRAP_CODE.indexOf('-m bootstrap.pm_state check "${HERMES_HOME}"')
+    const tmp = BOOTSTRAP_CODE.indexOf('export TMPDIR=/tmp TMP=/tmp TEMP=/tmp')
+    const gateway = BOOTSTRAP_CODE.indexOf(
+      'exec /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" gateway run'
+    )
+    expect(purge).toBeGreaterThan(-1)
+    expect(check).toBeGreaterThan(purge)
+    expect(tmp).toBeGreaterThan(-1)
+    expect(gateway).toBeGreaterThan(check)
+    expect(gateway).toBeGreaterThan(tmp)
+    expect(BOOTSTRAP_CODE).toMatch(
+      /-m bootstrap\.pm_state check "\$\{HERMES_HOME\}" \\\n\s*\|\| die/
+    )
+  })
+
+  it('re-asserts the authored webhook tool surface after the profile selection, fail-closed (#3564)', () => {
     // Hermes v0.22 `plugins enable` appends the plugin's toolset to every saved
-    // platform_toolsets list. FALSIFIER: move the re-assertion before the enable,
-    // or swallow its failure, and the inbound email surface ships widened.
+    // platform_toolsets list. bootstrap no longer runs it; the re-assertion stays
+    // as the guard. FALSIFIER: move it before the selection, or swallow its
+    // failure, and a widened inbound email surface could ship.
     const enable = BOOTSTRAP_CODE.indexOf(
-      'hermes -p "${ACTIVE_PROFILE}" plugins enable hermes-smd-overlay'
+      '-m bootstrap.plugin_selection "${PROFILE_HERMES_HOME}/config.yaml"'
     )
     const reassert = BOOTSTRAP_CODE.indexOf('-m bootstrap.webhook_toolsets "${CUSTOMER_YAML}"')
     const gateway = BOOTSTRAP_CODE.indexOf(

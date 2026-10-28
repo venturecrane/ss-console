@@ -60,6 +60,7 @@ Ported from
 ``ss-console/operator/adapter/resolve_skill_pins.py``.
 """
 
+import copy
 import hashlib
 import logging
 import os
@@ -82,6 +83,7 @@ from bootstrap.cron_materialize import (
     RoutineChange,
     materialize_cron,
 )
+from bootstrap import plugin_selection
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
@@ -1793,8 +1795,27 @@ def _persona_config(
     #   (gateway/run_housekeeping_disk.py). A seat has no one to answer it, and
     #   its home channel can be a client's. The key keeps v2026.9.14's pruning
     #   and asks nothing.
-    config["plugins"] = {"load_timeout_seconds": 0}
+    config["plugins"] = {
+        "load_timeout_seconds": 0,
+        **copy.deepcopy(plugin_selection.OVERLAY_SELECTION),
+    }
     config["sessions"] = {"auto_prune": True}
+    # plugins.enabled / plugins.entries and security.allow_lazy_installs
+    # (ss-console#3564 re-promotion): the overlay is SELECTED here, in the file,
+    # instead of by `hermes plugins enable`. From v0.22 that command runs the
+    # package manager's admission, which commits an empty dependency generation
+    # under /opt/data/installs; every later hermes process then drops the venv's
+    # site-packages from sys.path, and the gateway booted without yaml, aiohttp,
+    # anthropic or the overlay's own packages (the reverted #3567, upstream
+    # NousResearch/hermes-agent#136015). The loader reads only this list
+    # (hermes_cli/plugins_discovery.py gate_manifest), and allow_lazy_installs:
+    # false stops any non-explicit dependency sync, read from the ACTIVE home's
+    # config (pm/install.py lazy_installs_allowed). See bootstrap/plugin_selection.py.
+    security = config.get("security")
+    config["security"] = {
+        **(security if isinstance(security, dict) else {}),
+        **copy.deepcopy(plugin_selection.SECURITY_PIN),
+    }
 
     return config
 

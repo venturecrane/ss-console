@@ -466,10 +466,12 @@ RUN cd /opt/clio-mcp && npm ci --omit=dev --no-audit --no-fund \
 # build instead of shipping a Machine with no live governance gate.
 #
 # No `hermes plugins install` here any more (2026-10-22): Hermes discovers a
-# plugin as a directory under $HERMES_HOME/plugins, and bootstrap.sh enables it
-# in the root and profile homes at boot. Proven on smd-staging from a scratch
-# home with no prior install: `plugins enable` writes plugins.enabled and
-# `plugins list` shows the pack enabled. The install step's scan opt-out
+# plugin as a directory under $HERMES_HOME/plugins, and the boot selects it in
+# the root and profile homes by writing plugins.enabled into config.yaml
+# (bootstrap/plugin_selection.py; translate for every persona). Not `hermes
+# plugins enable`: from v0.22 that runs package-manager admission, which
+# commits a dependency env on the volume that strips this venv from every later
+# hermes process (#3564, the reverted #3567). The install step's scan opt-out
 # (plugins.scan_on_install) went with it; nothing scans a pack it did not clone.
 #
 # FAIL-CLOSED: a `|| echo "WARN ...; continuing"` once swallowed an install

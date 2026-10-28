@@ -200,6 +200,61 @@ PY
 PLUGINS_CHECK
 )"
 
+# ---------- Step 7a: the overlay is SELECTED in config, and no dependency env is recorded (#3564) ----------
+# From Hermes v0.22 `hermes plugins enable` runs the package manager's admission,
+# which records a dependency generation in /opt/data/installs/<key>/facts.json;
+# every hermes process then drops the image venv's site-packages and the gateway
+# runs without yaml, aiohttp or the overlay (the reverted #3567). bootstrap.sh
+# writes the selection into config.yaml instead (bootstrap/plugin_selection.py)
+# and purges + asserts the PM state before the gateway exec (bootstrap/pm_state.py).
+# These read both back after boot, so anything that later commits an
+# environment (a stray `enable`, a lazy install) fails the self-test. Inline
+# stdlib + yaml on purpose: the fixture trees run them on a bare python.
+check_script "hermes-pm-state-clean" "$(seat_prog <<'PM_STATE_CHECK'
+"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data" <<'PY'
+import glob, json, os, sys
+root = sys.argv[1]
+bad = []
+for facts in sorted(glob.glob(root + "/installs/*/facts.json")):
+    try:
+        data = json.load(open(facts, encoding="utf-8-sig"))
+        venv = ((data.get("packages") or {}).get("venv") or {})
+        env = venv.get("environment") if isinstance(venv, dict) else venv
+    except (OSError, ValueError, AttributeError) as exc:
+        env = f"unreadable {exc.__class__.__name__}"
+    if env is not None:
+        bad.append(f"{facts} selects {env!r}")
+if os.path.lexists(root + "/tools"):
+    bad.append(root + "/tools exists (a package-manager store)")
+sys.exit("; ".join(bad) if bad else 0)
+PY
+PM_STATE_CHECK
+)"
+check_script "hermes-overlay-selected-in-config" "$(seat_prog <<'SELECTION_CHECK'
+"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data" <<'PY'
+import glob, sys, yaml
+root = sys.argv[1]
+K = "hermes-smd-overlay"
+paths = [root + "/config.yaml"] + sorted(glob.glob(root + "/profiles/*/config.yaml"))
+bad = []
+for p in paths:
+    try:
+        c = yaml.safe_load(open(p)) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        bad.append(f"{p}: {exc.__class__.__name__}")
+        continue
+    pl = c.get("plugins") if isinstance(c.get("plugins"), dict) else {}
+    if K not in (pl.get("enabled") or []) or K in (pl.get("disabled") or []):
+        bad.append(f"{p}: {K} not in plugins.enabled")
+    if ((c.get("security") or {}).get("allow_lazy_installs")) is not False:
+        bad.append(f"{p}: security.allow_lazy_installs is not false")
+if len(paths) < 2:
+    bad.append("no profile config.yaml")
+sys.exit("; ".join(bad) if bad else 0)
+PY
+SELECTION_CHECK
+)"
+
 # ---------- Step 7b: the running Hermes IS the pinned Hermes ----------
 # Hermes v0.18.0 -> v0.20.4 promotion (ss-console#2444). Every check above passes
 # identically on 0.18 and 0.20, so until now boot-smoke could not tell a promoted

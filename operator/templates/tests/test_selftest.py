@@ -79,6 +79,11 @@ exec "$@"
 # hermes_cli/gateway_multiplex_mode.py).
 STANDALONE_REASON = "this profile is standalone (gateway.standalone: true); it serves only itself"
 STANDALONE_STATE = {"gateway_state": "running", "multiplex_standalone_reason": STANDALONE_REASON}
+# What bootstrap/plugin_selection.py writes into the root and every profile config (#3564).
+SELECTED_CONFIG = (
+    "plugins:\n  enabled: [hermes-smd-overlay]\n  entries:\n    hermes-smd-overlay: {allow_tool_override: false}\n"
+    "security:\n  allow_lazy_installs: false\n"
+)
 
 
 def _write(path: Path, text: str, mode: int = 0o644) -> Path:
@@ -110,6 +115,10 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     (root / "opt/data/skills").mkdir(parents=True)
     _write(root / "opt/data/profiles/operator/state/gateway.heartbeat", "beat\n")
     _write(root / "opt/data/profiles/operator/gateway_state.json", json.dumps(STANDALONE_STATE))
+    _write(root / "opt/data/config.yaml", SELECTED_CONFIG)
+    _write(root / "opt/data/profiles/operator/config.yaml", SELECTED_CONFIG)
+    # What a clean v0.22 boot leaves: boot-maintenance records, no venv selection.
+    _write(root / "opt/data/installs/0123456789abcdef/bootstrap/operator.json", "{}")
     _write(root / "run/smd-gateway-liveness/state", "armed")
     _write(root / "app/agentmail-webhook-secret-probe.py", "raise SystemExit(0)\n")
     return {"root": root, "shims": shims}
@@ -413,3 +422,32 @@ def test_a_stale_heartbeat_profile_is_not_judged_and_no_live_gateway_fails(seat:
     found = _check(_once(seat, "hourly"), "gateway-multiplex-standalone")
     assert found["ok"] is False
     assert "no profile has a fresh gateway heartbeat" in found["detail"]
+
+
+def test_a_recorded_dependency_environment_fails_the_self_test(seat: dict[str, Path]) -> None:
+    # #3564 re-promotion. FALSIFIER: the state `hermes plugins enable` left on
+    # smd-staging (a facts.json naming a venv generation, plus the PM store)
+    # must fail; facts.json with no venv entry, or none at all, passes.
+    installs = seat["root"] / "opt/data/installs/0123456789abcdef"
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(installs / "facts.json", json.dumps({"packages": {"python": {"entry": "cpython"}}}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(installs / "facts.json", json.dumps({"packages": {"venv": {"environment": str(installs / "environments/g1")}}}))
+    found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
+    assert found["ok"] is False and "selects" in found["detail"]
+    (installs / "facts.json").unlink()
+    (seat["root"] / "opt/data/tools").mkdir()
+    found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
+    assert found["ok"] is False and "tools exists" in found["detail"]
+
+
+def test_the_overlay_must_be_selected_in_every_config(seat: dict[str, Path]) -> None:
+    profile = seat["root"] / "opt/data/profiles/operator/config.yaml"
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is True
+    profile.write_text(SELECTED_CONFIG.replace("allow_lazy_installs: false", "allow_lazy_installs: true"))
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
+    profile.write_text(SELECTED_CONFIG.replace("[hermes-smd-overlay]", "[]"))
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
+    (seat["root"] / "opt/data/config.yaml").unlink()
+    profile.write_text(SELECTED_CONFIG)
+    assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False

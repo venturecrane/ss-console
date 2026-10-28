@@ -393,7 +393,7 @@ def test_translate_pins_upstream_defaults_that_flipped_in_v0_20(tmp_path):
     # A delivered routine is only what the agent wrote: no "Cronjob Response"
     # header, no "stop reminder" footer (captain-mark, 2026-10-26).
     assert config["cron"] == {"wrap_response": False}
-    assert list(config)[-7:] == [
+    assert list(config)[-8:] == [
         "tools",
         "approvals",
         "display",
@@ -401,6 +401,7 @@ def test_translate_pins_upstream_defaults_that_flipped_in_v0_20(tmp_path):
         "auxiliary",
         "plugins",
         "sessions",
+        "security",
     ]
 
 
@@ -438,7 +439,7 @@ def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
     assert config["gateway"]["loop_watchdog"] is True
     assert config["gateway"]["loop_watchdog_max_strikes"] in (6, 12)
     # Still appended before the pin-only keys.
-    assert list(config)[-8:] == [
+    assert list(config)[-9:] == [
         "gateway",
         "tools",
         "approvals",
@@ -447,6 +448,7 @@ def test_translate_sizes_the_loop_watchdog_budget_to_the_seat(tmp_path):
         "auxiliary",
         "plugins",
         "sessions",
+        "security",
     ]
 
 
@@ -470,10 +472,42 @@ def test_translate_pins_upstream_defaults_that_changed_in_v0_22(tmp_path):
     assert config["gateway"]["loop_watchdog"] is True, (
         "the standalone pin clobbered the watchdog block"
     )
-    assert config["plugins"] == {"load_timeout_seconds": 0}
+    assert config["plugins"]["load_timeout_seconds"] == 0
     assert config["sessions"] == {"auto_prune": True}
     assert config["agent"]["auto_recovery_cycles"] == 0
     assert config["agent"]["max_turns"] == 90
+
+
+def test_translate_selects_the_overlay_without_plugins_enable(tmp_path):
+    """#3564 re-promotion: bootstrap no longer runs `hermes plugins enable`
+    (from v0.22 it commits a package-manager environment that strips the image
+    venv off sys.path). translate writes the selection the v0.22.5 loader reads
+    (plugins.enabled, hermes_cli/plugins_discovery.py gate_manifest), the
+    allow_tool_override: false grant v2026.9.14's non-interactive enable wrote,
+    and security.allow_lazy_installs: false, into EVERY persona profile.
+    FALSIFIER: drop any key, or let two personas share one mutable block."""
+    from bootstrap import plugin_selection
+
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    configs = sorted((hermes_home / "profiles").glob("*/config.yaml"))
+    assert configs
+    for path in configs:
+        config = yaml.safe_load(path.read_text())
+        assert config["plugins"] == {
+            "load_timeout_seconds": 0,
+            "enabled": ["hermes-smd-overlay"],
+            "entries": {"hermes-smd-overlay": {"allow_tool_override": False}},
+        }
+        assert config["security"] == {"allow_lazy_installs": False}
+        assert plugin_selection.problems(config, str(path)) == []
+        assert "&id" not in path.read_text(), "a shared mutable block was dumped as a YAML alias"
+    # The module constants are never mutated by a translate run.
+    assert plugin_selection.OVERLAY_SELECTION["enabled"] == ["hermes-smd-overlay"]
 
 
 def test_translate_emits_disabled_toolsets_fleet_default(tmp_path):
