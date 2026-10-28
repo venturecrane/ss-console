@@ -391,7 +391,7 @@ def test_put_readback_that_never_lands_is_false() -> None:
 def test_create_memo_upserts(monkeypatch) -> None:
     c = _Fake([_memo("m1", OLD)])
     monkeypatch.setattr(srv, "_get_client", lambda: c)
-    monkeypatch.setattr(mt.time, "sleep", _nosleep)
+    monkeypatch.setattr(mt.memo_confirm, "SLEEP", _nosleep)
     out = srv.create_memo(M, "Motion calendar as of 2026-09-28\n" + OLD.split("\n", 1)[1])
     assert out["unchanged"] is True and c.writes() == []
 
@@ -408,7 +408,7 @@ def test_update_memo_refuses_a_foreign_matter_number(monkeypatch) -> None:
 def test_update_memo_writes_plain_and_confirms(monkeypatch) -> None:
     c = _Fake([_memo("m1", OLD)])
     monkeypatch.setattr(srv, "_get_client", lambda: c)
-    monkeypatch.setattr(mt.time, "sleep", _nosleep)
+    monkeypatch.setattr(mt.memo_confirm, "SLEEP", _nosleep)
     out = mt.update_memo(M, "m1", "**Corrected** note.")
     assert out["confirmed"] is True
     assert c.writes()[0][2] == {"title": "[Operator] Corrected note.", "text": "[Operator] Corrected note."}

@@ -207,3 +207,43 @@ def test_a_joint_job_records_its_shared_file_once(tmp_path):
     assert d.tick() == "delivered"
     fields = broker.records[-1][2]
     assert (fields["pages"], fields["cents"]) == (2048, 7550)
+
+
+def test_a_joint_delivery_wake_names_every_clients_folder_and_the_shared_file_once(tmp_path):
+    """A joint matter, 2026-10-28: both clients' chronologies delivered, each
+    to its own folder, and the requester's reply named one client because the
+    wake carried one folder. The wake now names every delivered folder (ids
+    only: the deliver turn reads each folder's name) and the job's pages once.
+    FALSIFIER: on the old code the wake read "Delivered folder id: fold-a."
+    and nothing about the second client's folder."""
+    alpha = pd._unit(unit="alpha", outcome="delivered", pages=2048, folder_id="fold-a", proof=pd.PROOF)
+    beta = pd._unit(unit="beta", outcome="delivered", pages=2048, folder_id="fold-b", proof=pd.PROOF)
+    d, broker = ud._daemon(tmp_path, pd._runner(alpha, beta))
+    broker.rows[JOB] = {"state": "submitted"}
+    (d.queue / f"{JOB}.json").write_text(json.dumps(ud._envelope(JOB)))
+    assert d.tick() == "delivered"
+    fields = broker.records[-1][2]
+    assert fields["delivery"]["folders"] == ["fold-a", "fold-b"]
+    task = d._daemon_state(JOB)["wake"]["task"]
+    assert "Delivered folder ids (one chronology per client, 2 clients): fold-a, fold-b." in task
+    assert "Delivered folder id: " not in task
+    assert "pages: 2048;" in task and "4096" not in task
+
+
+def test_the_deliver_skill_reads_the_joint_folder_line_and_names_every_client():
+    """The seat reads SKILL.md at turn time: DELIVER must know the joint line
+    the daemon writes and must say to name every client's chronology."""
+    skill = Path(__file__).resolve().parents[3] / "skills" / "medical-chronology-maintainer" / "SKILL.md"
+    deliver = " ".join(skill.read_text(encoding="utf-8").split("## DELIVER", 1)[1].split("## ANSWER", 1)[0].split())
+    assert "`Delivered folder ids (one chronology per client, <n> clients):`" in deliver
+    assert "never name one client of a joint delivery alone" in deliver
+    assert "never add, split or repeat a count per client" in deliver
+
+
+def test_a_single_client_delivery_wake_is_unchanged(tmp_path):
+    d, broker = ud._daemon(tmp_path, pd._runner(pd._unit(folder_id="fold-a", proof=pd.PROOF)))
+    broker.rows[JOB] = {"state": "submitted"}
+    (d.queue / f"{JOB}.json").write_text(json.dumps(ud._envelope(JOB)))
+    assert d.tick() == "delivered"
+    assert "folders" not in broker.records[-1][2]["delivery"]
+    assert "Delivered folder id: fold-a." in d._daemon_state(JOB)["wake"]["task"]

@@ -66,6 +66,10 @@ Chronology <run | update> delivered in <folder name>: <file count> files; <docum
 Package job: <job id>; covered document ids: <the ids the job was given to read, or "covered set unrecorded">
 ```
 
+A joint matter (one chronology per client, each in its own folder) is still one
+entry: the delivery line names every delivered folder, and the counts are the job's,
+stated once.
+
 The last line is the covered-set record `SKILL.md` names (the UPDATE cross-check);
 when the ids are not available on this turn it says "covered set unrecorded", so a
 later update stops instead of guessing. No dollar figure, no date other than the

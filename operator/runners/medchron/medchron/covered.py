@@ -279,6 +279,30 @@ def merge_covered(outcomes: list[dict[str, Any]]) -> dict[str, Any] | None:
     return _union(records)
 
 
+def delivered_folders(outcomes: list[dict[str, Any]]) -> list[str]:
+    """Every delivered unit's folder id, once each, in unit order."""
+    seen: list[str] = []
+    for o in outcomes:
+        if not isinstance(o, dict) or o.get("outcome") != "delivered":
+            continue
+        fid = str(o.get("folder_id") or "").strip()
+        if fid and fid not in seen:
+            seen.append(fid)
+    return seen
+
+
+def wake_folder_lines(state: str, fields: dict[str, Any]) -> list[str]:
+    """The DELIVER wake's folder line. A joint matter delivered one chronology
+    per client, each in its own folder, and the wake names every one (ids
+    only; the deliver turn reads each folder's name)."""
+    folders = [str(f) for f in (fields.get("delivery") or {}).get("folders") or []]
+    if state == "delivered" and len(folders) > 1:
+        return [f"Delivered folder ids (one chronology per client, {len(folders)} clients): {', '.join(folders)}."]
+    if fields.get("folder_id"):
+        return [f"Delivered folder id: {fields['folder_id']}."]
+    return []
+
+
 def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     """The ledger fields a DELIVERED job carries beyond its counts.
 
@@ -292,6 +316,14 @@ def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> di
         "folder_id": worst.get("folder_id"),
         "delivery": {"files": list(worst.get("files") or [])},
     }
+    # A joint matter (two or more clients) delivers one chronology per client,
+    # each into its own folder, and `folder_id` above is one unit's. The record
+    # names every delivered folder, in unit order, so the DELIVER wake names
+    # each client's chronology (a joint matter, 2026-10-28: the reply named one
+    # client of two). Absent on a single-folder delivery, exactly as before.
+    folders = delivered_folders(outcomes)
+    if len(folders) > 1:
+        fields["delivery"]["folders"] = folders
     if worst.get("replaced"):
         # An update into the delivered chronology retired the document it
         # replaced (by id, after the new one was proven): the record names it.

@@ -30,13 +30,26 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import Any, Callable
 
 from . import readback
 
-#: Read-back attempts and the pause before each retry (seconds).
-_ATTEMPTS = 3
-_BACKOFF = (0.5, 1.5)
+#: Read-back attempts and the pause before each retry (seconds), for a create
+#: and an in-place update alike. Smokeball answers a memo write 202 and applies
+#: it asynchronously. The create path once waited 2 s in all (3 reads, 0.5 and
+#: 1.5 s apart); on a joint matter, 2026-10-28, a ledger write the vendor had
+#: accepted was not readable inside that window, the write reported
+#: ``link_not_visible`` and paged SMD, and a direct read minutes later showed
+#: the line had landed. This schedule waits about 28 s before it says
+#: "unknown", the same order as the file uploads' measured backoff
+#: (``readback.WAITS``). A verdict still needs a read: ``True`` only on a read
+#: that matches, ``"unknown"`` when no read completed.
+VENDOR_LAG_ATTEMPTS = 6
+VENDOR_LAG_BACKOFF: tuple[float, ...] = (1, 2, 4, 8, 13)
+_ATTEMPTS = VENDOR_LAG_ATTEMPTS
+_BACKOFF = VENDOR_LAG_BACKOFF
+#: The pause between reads; module-level so tests run the window unslept.
+SLEEP: Callable[[float], None] = time.sleep
 
 _WS = re.compile(r"\s+")
 
@@ -47,7 +60,7 @@ def _norm(text: Any) -> str:
     return _WS.sub(" ", text).strip() if isinstance(text, str) else ""
 
 
-def post_and_confirm(client: Any, matter_id: str, body: str, *, sleep: Any = time.sleep) -> Any:
+def post_and_confirm(client: Any, matter_id: str, body: str, *, sleep: Any = None) -> Any:
     """POST ``body`` as a memo on ``matter_id``, then read it back by id.
 
     A POST failure raises exactly as before (nothing was written, so the caller
@@ -56,7 +69,7 @@ def post_and_confirm(client: Any, matter_id: str, body: str, *, sleep: Any = tim
     memo_id = resp.get("id") if isinstance(resp, dict) else None
     if not memo_id:
         return _with(resp, "unknown", "the write returned no memo id to read back")
-    confirmed, detail = _readback(client, matter_id, memo_id, body, sleep=sleep)
+    confirmed, detail = _readback(client, matter_id, memo_id, body, sleep=sleep or SLEEP)
     return _with(resp, confirmed, detail)
 
 
