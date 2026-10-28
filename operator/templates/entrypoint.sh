@@ -580,10 +580,13 @@ launch_broker() {
 ) &
 SUPERVISOR_PID=$!
 
-for _ in 1 2 3 4 5; do
-  [ -S "${BROKER_SOCKET}" ] && break
-  sleep 1
-done
+# Wait for the broker to bind its socket. Five one-second polls was the old
+# budget, and a CPU-throttled shared-cpu-1x seat binds in about six seconds
+# (boot harness, 1 GB Machine, 2026-10-28), so a healthy broker could fail the
+# boot. Poll once a second for up to SMD_BROKER_SOCKET_WAIT_S (60 s) and log how
+# long it took; on timeout the behaviour is unchanged (same FATAL line, kill, exit 1).
+_broker_waited=0; until [ -S "${BROKER_SOCKET}" ] || [ "${_broker_waited}" -ge "${SMD_BROKER_SOCKET_WAIT_S:-60}" ]; do sleep 1; _broker_waited=$((_broker_waited + 1)); done
+[ -S "${BROKER_SOCKET}" ] && log "Workspace broker socket up after ${_broker_waited}s"
 [ -S "${BROKER_SOCKET}" ] || {
   log "FATAL: Workspace broker socket was not created"
   kill -KILL "${SUPERVISOR_PID}" 2>/dev/null || true
