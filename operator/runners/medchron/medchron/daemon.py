@@ -390,8 +390,13 @@ class Daemon:
             rank = {"delivered": 0, "dry_run": 0, "held": 1, "refused": 2, "failed": 3}
             worst = max(outcomes, key=lambda o: rank.get(str(o.get("outcome")), 3))
             outcome = str(worst.get("outcome"))
-            cents = int(round(sum(float(o.get("dollars") or 0) for o in outcomes) * 100))
-            pages = int(sum(int(o.get("pages") or 0) for o in outcomes))
+            # Each unit reports JOB-level figures, never its own: `pages` is the
+            # matter's one extracted file and `dollars` the job's whole ledger
+            # set (driver.Budget reads every unit's). So the job's figure is
+            # the largest any unit saw, taken once. Summed, a joint job was
+            # debited its shared file once per client (2026-10-28).
+            cents = int(round(max(float(o.get("dollars") or 0) for o in outcomes) * 100))
+            pages = int(max(int(o.get("pages") or 0) for o in outcomes))
             documents = int(max(int(o.get("documents") or 0) for o in outcomes))
             reason = worst.get("reason")
             stage = str(worst.get("stage") or "") or None

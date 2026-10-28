@@ -27,8 +27,12 @@ Peer gating, per verb:
                            touched; only a person knows a defect is fixed. Also
                            takes a job HELD at the final audit gate (reason
                            `audit coverage: ...`), which re-enters at the audit
-                           stage on its cached verdicts; every other hold stays
-                           refused.
+                           stage on its cached verdicts; and a job HELD on the
+                           cycle page allowance when the request carries SMD's
+                           approved overage (``allowance_approved_pages`` +
+                           ``allowance_approved_by``, from ``medchron.allowance
+                           approve``), audited on the resume row. Every other
+                           hold stays refused.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —
@@ -111,6 +115,24 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     # classifier called non-record (#3460) and this rule, which still read
     # every refusal as the firm's decision, refused the resume.
     return hold_class.classify("medchron", reason) == (hold_class.SMD_FINISHING, "stage_refused")
+
+
+def _allowance_overage(request: dict[str, Any], row: dict[str, Any]) -> dict[str, Any] | None:
+    """SMD's approval of pages past the cycle allowance (``medchron.allowance
+    approve``, root only, no agent tool): the one resume a page-allowance hold
+    takes. None when the request carries no approval; refused when it carries
+    a malformed one or the job is not held on the allowance."""
+    pages = request.get("allowance_approved_pages")
+    if pages is None:
+        return None
+    if not isinstance(pages, int) or isinstance(pages, bool) or pages <= 0:
+        raise ValueError("allowance_approved_pages must be a positive integer")
+    by = request.get("allowance_approved_by")
+    if not isinstance(by, str) or not by.strip() or len(by) > 120:
+        raise ValueError("allowance_approved_by must name who approved (at most 120 characters)")
+    if row.get("state") != "held" or not str(row.get("reason") or "").startswith(ALLOWANCE_KEY):
+        raise ValueError(f"job {row.get('id')} is not held on the page allowance; an approved overage does not apply")
+    return {"allowance_approved_pages": pages, "allowance_approved_by": by.strip()}
 
 
 def _with_hold_class(job: dict[str, Any], lane: str) -> dict[str, Any]:
@@ -309,8 +331,10 @@ class MedchronVerbs:
         raise ValueError(f"unsupported medchron action: {action}")
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Ask the runner daemon to re-run a FAILED job, or one HELD at the final
-        audit gate (`_audit_gate_hold`), from where it stopped.
+        """Ask the runner daemon to re-run a FAILED job, one HELD at the final
+        audit gate (`_audit_gate_hold`), or one HELD on the cycle page allowance
+        when the request carries SMD's approved overage (`_allowance_overage`),
+        from where it stopped.
 
         This writes a MARKER into the queue dir and nothing else. It cannot do
         the re-queue itself: `jobs/` is root:medchron 0710 and this process is
@@ -342,7 +366,8 @@ class MedchronVerbs:
         row = self._db.read(job_id)
         if row is None:
             raise ValueError(f"no such job {job_id}")
-        if row["state"] != "failed" and not _audit_gate_hold(row):
+        overage = _allowance_overage(request, row)
+        if overage is None and row["state"] != "failed" and not _audit_gate_hold(row):
             raise ValueError(
                 f"job {job_id} is {row['state']}, not failed; only a failed job or one held at the audit gate resumes"
             )
@@ -367,13 +392,17 @@ class MedchronVerbs:
             # (or past a dry run); a stage refusal has nothing to release past.
             raise ValueError(f"job {job_id} is not held by the pre-delivery review; release_review does not apply")
         stages = [s.strip() for s in redo] + [s for s in extras.pop("redo", []) if s not in redo]
-        payload = {"job_id": job_id, "reason": reason[:500], "redo": stages, **extras}
+        payload = {"job_id": job_id, "reason": reason[:500], "redo": stages, **extras, **(overage or {})}
         marker.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
-        self._audit(
-            "MEDCHRON_JOB_RUNNING",
-            {"job_id": job_id, "resume_requested": True, "reason": reason[:500], "redo": len(redo)},
-            row["matter_id"],
-        )
+        meta: dict[str, Any] = {"job_id": job_id, "resume_requested": True, "reason": reason[:500], "redo": len(redo)}
+        if overage is not None:
+            # The billable record of SMD's approved overage: pages, who, when
+            # (the row's own ts). Counts and a name, never a dollar figure.
+            meta["allowance_overage_approved"] = {
+                "pages": overage["allowance_approved_pages"],
+                "by": overage["allowance_approved_by"],
+            }
+        self._audit("MEDCHRON_JOB_RUNNING", meta, row["matter_id"])
         return {"ok": True, "job_id": job_id, "queued": True, "redo": [s.strip() for s in redo]}
 
     def _submit(self, request: dict[str, Any]) -> dict[str, Any]:

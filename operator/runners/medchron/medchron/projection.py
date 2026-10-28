@@ -10,6 +10,14 @@ from typing import Any
 from . import budget
 
 
+def read_usd(extracted: Path, usd_per_scanned_page: float, meter: budget.Budget) -> float:
+    """The cost of reading the extracted file: its scanned pages at the firm's
+    measured per-page transcription rate plus its text at the measured
+    per-character rate. The pre-vision projection, and the figure SMD's
+    allowance-hold alert prices a unit's pages at (``allowance.py``)."""
+    return budget.scanned_pages(extracted) * usd_per_scanned_page + meter.projection(budget.extracted_chars(extracted))
+
+
 def claims_to_verify(slug_dir: Path, unit: str) -> int | None:
     """Claims in the built chronology STILL TO VERIFY, counted with the
     audit gate's OWN extractor, so the projection counts what the audit
