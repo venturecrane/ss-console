@@ -91,6 +91,8 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **lane.** A kind of job a seat runs in the background, such as a medical chronology, a demand letter, or drafting one class of document (`docs/runbooks/operator/lane-proof.md`).
 
+**Case File Manager / File Status.** A law-firm job that reviews a caseload, files a current **File Status** (a PDF of where the file stands) in each matter, ranks the caseload and numbers the changes it proposes; nothing changes until a Named Administrator approves by number ([The Case File Manager](/admin/playbook/case-file-manager)).
+
 **NEW KIND OF ASK / proof run.** When a client asks for a job its seat has never done, the seat holds the job and emails team@ "NEW KIND OF ASK". An agent then does a proof run: the whole job on the client's real matter with nothing filed or sent, so you can read the result and accept it or say no before it runs for real (`docs/runbooks/operator/lane-proof.md`).
 
 **held job.** A job that stopped on purpose before delivering, usually because an independent review found something to fix or a check failed. Nothing was filed; a person decides whether to release, redo or explain ([Incident Response](/admin/playbook/incident-response), History).
