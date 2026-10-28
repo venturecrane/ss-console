@@ -53,6 +53,34 @@ def test_a_proposed_closure_prints_as_proposed_not_left_open() -> None:
     assert "See Records.pdf." in page
 
 
+def test_a_rule_refused_closure_says_the_firm_keeps_it_and_drops_the_confirm_question() -> None:
+    task = "1f8e2a6c-1b3d-4e5f-8a9b-0c1d2e3f4a5b"
+    rec = {
+        **_rec({}),
+        "open_tasks": [{"task_id": task, "subject": "DO DEMAND", "action": "mark_complete", "why": "Sent."}],
+        "questions": ["DO DEMAND is proposed for closure; confirm the closure.", "Who is the adjuster?"],
+    }
+    verdicts = {task: {"task_id": task, "verdict": "refuted", "reason": "money", "by": "rule"}}
+    page = render_html(rec, "2026-10-27", {}, RANK, {"verdicts": verdicts})
+    assert "stay with the firm" in page
+    assert "second reading" not in page
+    assert "confirm the closure" not in page
+    assert "Who is the adjuster?" in page
+
+
+def test_a_reader_refused_closure_still_says_the_second_reading_did_not_confirm() -> None:
+    task = "2f8e2a6c-1b3d-4e5f-8a9b-0c1d2e3f4a5b"
+    rec = {
+        **_rec({}),
+        "open_tasks": [{"task_id": task, "subject": "Order records", "action": "mark_complete", "why": "x"}],
+        "questions": ["Order records closure: confirm?"],
+    }
+    verdicts = {task: {"task_id": task, "verdict": "refuted", "reason": "no proof"}}
+    page = render_html(rec, "2026-10-27", {}, RANK, {"verdicts": verdicts})
+    assert "a second reading did not confirm the proof (refuted)" in page
+    assert "Order records closure: confirm?" in page
+
+
 def test_no_insurance_section_when_none_recorded() -> None:
     assert "<h2>Insurance</h2>" not in render_html(_rec({}), "2026-10-27", {}, RANK, {})
     assert "<h2>Insurance</h2>" not in render_html(
