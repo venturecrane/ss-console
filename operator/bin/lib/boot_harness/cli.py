@@ -51,7 +51,15 @@ PLAIN_ENV = {
     "AWS_MAX_ATTEMPTS": "1",
 }
 DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "WEBHOOK_SECRET_MCP")
-GUEST = ("shared", 2, 4096)  # smd-staging's authored machine block
+# Each run mode: the guest it boots and the seat whose customer.yaml the fixture
+# derives from, so the config's machine block (which the self-test reads) matches
+# the Machine. 2x-4096 is smd-staging's size; 1x-1024 is ring 2's (scott,
+# brokery, captain-mark), the size of the 2026-09-01 startup-watchdog crash loop.
+SIZES = {
+    "2x-4096": (("shared", 2, 4096), fixture.SOURCE_SLUG),
+    "1x-1024": (("shared", 1, 1024), fixture.SOURCE_1GB),
+}
+GUEST = SIZES["2x-4096"][0]
 POLL_S = 15.0
 
 
@@ -101,6 +109,7 @@ def expectations(args: argparse.Namespace, operator: Path = OPERATOR) -> judge.E
         boot_budget_s=args.boot_budget,
         brotlicffi=security_pin(ref, operator),
         require_virtual_env=exports_virtual_env(ref, operator),
+        require_managed_jobs=bool(getattr(args, "keep_routines", False)),
     )
 
 
@@ -137,9 +146,10 @@ def machine_run_argv(
     dummy: dict[str, str],
     hold: bool = False,
     volume: str | None = None,
+    guest: tuple[str, int, int] = GUEST,
 ) -> list[str]:
     argv = ["fly", "machine", "run", image, "-a", app, "--name", name, "--region", "lax", "--restart", "no"]
-    argv += ["--vm-cpu-kind", GUEST[0], "--vm-cpus", str(GUEST[1]), "--vm-memory", str(GUEST[2]), "--detach"]
+    argv += ["--vm-cpu-kind", guest[0], "--vm-cpus", str(guest[1]), "--vm-memory", str(guest[2]), "--detach"]
     argv += ["--file-local", f"/harness/collect.py={HERE / 'collect.py'}"]
     if volume:
         # A seat-like volume mounts over /opt/data, so the fixture goes to the
@@ -301,13 +311,14 @@ def _prepare(args: argparse.Namespace, runner: Runner) -> tuple[list[str], dict[
     out = Path(args.out_dir or tempfile.mkdtemp(prefix="boot-harness-"))
     out.mkdir(parents=True, exist_ok=True)
     fx = out / "customer.yaml"
-    fx.write_text(fixture.render(OPERATOR), encoding="utf-8")
+    guest, source = SIZES[getattr(args, "size", "2x-4096")]
+    fx.write_text(fixture.render(OPERATOR, source, bool(getattr(args, "keep_routines", False))), encoding="utf-8")
     (out / "empty").write_text("", encoding="utf-8")
     # Random suffix: two runs started in the same second collided on the name.
     name = f"boot-harness-{int(time.time())}-{secrets.token_hex(3)}"
     hold = bool(getattr(args, "hold", False) or getattr(args, "postmortem", False))
     volume = getattr(args, "volume", None)
-    return machine_run_argv(args.image, args.app, name, fx, dummy, hold, volume), dummy, out
+    return machine_run_argv(args.image, args.app, name, fx, dummy, hold, volume, guest), dummy, out
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
@@ -464,6 +475,12 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="boot the real entrypoint under a held Machine, so a crashing boot can still be collected",
             )
+            s.add_argument(
+                "--keep-routines",
+                action="store_true",
+                help="keep the source seat's authored routines (on a never-firing slot) so op-managed jobs exist",
+            )
+            s.add_argument("--size", choices=sorted(SIZES), default="2x-4096", help="guest and matching fixture")
             s.add_argument("--volume", help="mount this harness-app volume at /opt/data (implies --postmortem)")
             s.add_argument(
                 "--restart-check", action="store_true", help="after the boot, restart the Machine and judge again"

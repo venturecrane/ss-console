@@ -376,7 +376,11 @@ def cron_snapshot() -> dict:
             out[path] = f"<unreadable: {exc.__class__.__name__}>"
             continue
         jobs = doc if isinstance(doc, list) else (doc or {}).get("jobs") or []
-        out[path] = [{"id": j.get("id"), "name": j.get("name")} for j in jobs if isinstance(j, dict)]
+        out[path] = [
+            {"id": j.get("id"), "name": j.get("name"), "schedule": json.dumps(j.get("schedule"), sort_keys=True)}
+            for j in jobs
+            if isinstance(j, dict)
+        ]
     return out
 
 

@@ -301,6 +301,19 @@ def test_the_collector_refuses_off_the_harness(monkeypatch: pytest.MonkeyPatch, 
     assert "refused" in json.loads(capsys.readouterr().out)
 
 
+def test_the_1gb_fixture_is_a_1gb_seat_that_reaches_nobody() -> None:
+    text = fixture.render(OPERATOR, fixture.SOURCE_1GB)
+    doc = yaml.safe_load(text)
+    assert doc["customer_id"] == fixture.SLUG
+    assert doc["machine"] == {"size": "shared-cpu-1x", "memory_mb": 1024}
+    assert fixture.reachable_addresses(doc) == []
+    for key in ("connectors", "webhook_triggers", "telegram", "record_stores"):
+        assert key not in doc
+    assert all("cron" not in p for p in doc["personas"])
+    assert f"vaults/{fixture.SOURCE_1GB}/" not in yaml.safe_dump(doc)
+    assert cli.SIZES["1x-1024"][0] == ("shared", 1, 1024)
+
+
 # -- --volume: the cron store a seat volume carried survives the boot (audit 11) --------
 def _store(*names: str) -> dict[str, list[dict[str, str]]]:
     return {"/opt/data/profiles/crane/cron/jobs.json": [{"id": str(i), "name": n} for i, n in enumerate(names)]}
@@ -323,6 +336,27 @@ def test_a_volume_boot_that_loses_or_duplicates_a_job_fails(after: dict[str, Any
     bundle["cron_before"] = _store("op-managed:a", "op-managed:b")
     bundle["cron_after"] = after
     assert not verdicts(bundle, HEALTHY_LOG)["cron-store-survives-boot"].ok
+
+
+def test_a_changed_schedule_or_no_managed_job_when_routines_are_authored_fails() -> None:
+    bundle = healthy_bundle()
+    path = "/opt/data/profiles/crane/cron/jobs.json"
+    bundle["cron_before"] = {path: [{"id": "1", "name": "op-managed:a", "schedule": "x"}]}
+    bundle["cron_after"] = {path: [{"id": "2", "name": "op-managed:a", "schedule": "y"}]}
+    assert not verdicts(bundle, HEALTHY_LOG)["cron-store-survives-boot"].ok
+    bundle["cron_after"] = {path: [{"id": "2", "name": "op-managed:a", "schedule": "x"}]}
+    assert verdicts(bundle, HEALTHY_LOG)["cron-store-survives-boot"].ok  # a new id is by design
+    bundle["cron_before"] = bundle["cron_after"] = {path: []}
+    strict = judge.Expect(hermes_sha=PIN, subplugins=SUBS, brotlicffi="1.2.1.0", require_managed_jobs=True)
+    got = {v.check: v for v in judge.judge(bundle, HEALTHY_LOG, strict, ALLOW, 120.0)}
+    assert not got["cron-store-survives-boot"].ok
+
+
+def test_keep_routines_keeps_the_seats_routine_on_a_never_firing_slot() -> None:
+    doc = yaml.safe_load(fixture.render(OPERATOR, fixture.SOURCE_1GB, keep_routines=True))
+    crons = [c for p in doc["personas"] for c in p.get("cron") or []]
+    assert crons and all(c["schedule"] == fixture.NEVER_IN_A_RUN for c in crons)
+    assert fixture.reachable_addresses(doc) == []
 
 
 def test_a_run_without_a_volume_carries_no_cron_store_line() -> None:

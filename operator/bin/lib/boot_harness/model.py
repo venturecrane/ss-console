@@ -24,3 +24,4 @@ class Expect:
     boot_budget_s: float = DEFAULT_BOOT_BUDGET_S
     brotlicffi: str | None = None
     require_virtual_env: bool = False
+    require_managed_jobs: bool = False
