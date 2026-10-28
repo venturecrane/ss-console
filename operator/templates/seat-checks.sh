@@ -208,26 +208,12 @@ PLUGINS_CHECK
 # writes the selection into config.yaml instead (bootstrap/plugin_selection.py)
 # and purges + asserts the PM state before the gateway exec (bootstrap/pm_state.py).
 # These read both back after boot, so anything that later commits an
-# environment (a stray `enable`, a lazy install) fails the self-test. Inline
-# stdlib + yaml on purpose: the fixture trees run them on a bare python.
+# environment (a stray `enable`, a lazy install) fails the self-test. The PM
+# check runs bootstrap/pm_state.py itself from the image's overlay pack, so the
+# boot gate and this check share one predicate. pm_state.py is stdlib-only, so it
+# runs as a script on any python.
 check_script "hermes-pm-state-clean" "$(seat_prog <<'PM_STATE_CHECK'
-"$R/opt/hermes/.venv/bin/python3" - "$R/opt/data" <<'PY'
-import glob, json, os, sys
-root = sys.argv[1]
-bad = []
-for facts in sorted(glob.glob(root + "/installs/*/facts.json")):
-    try:
-        data = json.load(open(facts, encoding="utf-8-sig"))
-        venv = ((data.get("packages") or {}).get("venv") or {})
-        env = venv.get("environment") if isinstance(venv, dict) else venv
-    except (OSError, ValueError, AttributeError) as exc:
-        env = f"unreadable {exc.__class__.__name__}"
-    if env is not None:
-        bad.append(f"{facts} selects {env!r}")
-if os.path.lexists(root + "/tools"):
-    bad.append(root + "/tools exists (a package-manager store)")
-sys.exit("; ".join(bad) if bad else 0)
-PY
+"$R/opt/hermes/.venv/bin/python3" "$R/app/overlay-pack/bootstrap/pm_state.py" check "$R/opt/data"
 PM_STATE_CHECK
 )"
 check_script "hermes-overlay-selected-in-config" "$(seat_prog <<'SELECTION_CHECK'

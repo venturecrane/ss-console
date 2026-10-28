@@ -203,7 +203,7 @@ The set of valid hook names and their kwargs may evolve in future Hermes release
    done
    ```
 
-   Verify file:line for each of the six hooks. If any have moved, update the citations. Also diff the `VALID_HOOKS` set against the appendix (an AST read of `hermes_cli/plugins.py`).
+   Verify file:line for each of the ten hooks in the loop. If any have moved, update the citations. Also diff the `VALID_HOOKS` set against the appendix (an AST read of `hermes_cli/plugins.py`).
 
 2. Run the `hermes-smd-hook-probe` smoke plugin against a stock Hermes container at the new ref. Capture probe logs. Verify hook ordering matches the invariants documented above.
 

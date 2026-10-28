@@ -42,12 +42,13 @@ The probe is observer-only. Every callback returns `None` and wraps its body in 
 
 ## Install
 
+The probe is one of the overlay's sub-plugins (`plugin.yaml` `plugins:`), so it loads whenever the overlay is selected. The overlay pack is a directory under `$HERMES_HOME/plugins` (a seat's `bootstrap.sh` copies it there from the image) and is selected by writing `plugins.enabled` into the home's `config.yaml`:
+
 ```bash
-# The overlay pack is a directory under $HERMES_HOME/plugins (a seat's
-# bootstrap.sh copies it there from the image); Hermes discovers it, then:
-hermes plugins enable hermes-smd-overlay
-hermes plugins enable hermes-smd-hook-probe
+python3 -m bootstrap.plugin_selection "$HERMES_HOME/config.yaml"
 ```
+
+On a profile home, translate already writes the same keys. **Never run `hermes plugins enable` on a seat.** From Hermes v0.22 it runs the package manager's admission, which records a dependency environment under `/opt/data/installs`. Every later hermes process then drops the image venv's `site-packages`, and the gateway boots without yaml, aiohttp or the overlay. That is how the first v0.22.5 promotion failed on smd-staging (ss-console#3564; `bootstrap/plugin_selection.py` has the detail).
 
 The probe ships with no env requirements (`requires_env: []` in `plugin.yaml`), so it has no provisioning prerequisites beyond a working Hermes install.
 

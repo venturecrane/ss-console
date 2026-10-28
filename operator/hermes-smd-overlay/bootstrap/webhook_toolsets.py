@@ -1,22 +1,25 @@
-"""Re-assert the authored ``platform_toolsets.webhook`` after ``hermes plugins enable``.
+"""Guard the authored ``platform_toolsets.webhook`` in a persona profile's config.yaml.
 
 WHY (Hermes v0.22.5 promotion, ss-console#3564). translate writes an exact
-webhook tool surface into the persona profile's config.yaml: Hermes' webhook-safe
-toolsets plus the overlay's one-tool read-only toolset, and nothing that writes
-(``shared/webhook_read_surface.py``, ss-console#2145). Since v0.22,
-``hermes plugins enable`` APPENDS the enabled plugin's toolset to every saved
-``platform_toolsets`` list (``hermes_cli/plugins_cmd.py``
-``_toggle_plugin_toolset``), and bootstrap.sh enables the overlay in the profile
-on every boot, after translate. Left alone, every tool the overlay registers
-would join the surface an untrusted inbound email turn is offered.
+webhook tool surface into the persona profile's config.yaml: Hermes'
+webhook-safe toolsets plus the overlay's one-tool read-only toolset, and
+nothing that writes (``shared/webhook_read_surface.py``, ss-console#2145).
+Since v0.22, ``hermes plugins enable`` APPENDS the enabled plugin's toolset to
+every saved ``platform_toolsets`` list (``hermes_cli/plugins_cmd.py``
+``_toggle_plugin_toolset``). The first promotion ran ``enable`` on every boot
+and so widened that list.
 
-This puts the authored list back and then reads the file again: the list on
-disk must EQUAL the authored one, or the boot fails (exit 1), because a webhook
-surface wider than authored is the failure the safe default exists to prevent,
-and a narrower one breaks the email channel silently. The authored list is
-recomputed from customer.yaml with translate's own functions, so the two
-cannot disagree; a seat whose translate writes no webhook list must still have
-none.
+bootstrap.sh no longer runs ``enable``: the overlay is selected by writing
+``plugins.enabled`` (``bootstrap/plugin_selection.py``). On a normal boot this
+module therefore finds the list already equal to the authored one and writes
+nothing. It stays as a defensive guard, run right before the gateway exec,
+whatever else touched the file. It puts the authored list back and re-reads
+the file. The list on disk must EQUAL the authored one or the boot fails
+(exit 1). A wider webhook surface is the failure the safe default exists to
+prevent, and a narrower one breaks the email channel silently. The authored
+list is recomputed from customer.yaml with translate's own functions, so the
+two cannot disagree. A seat whose translate writes no webhook list must still
+have none.
 
 Usage (bootstrap.sh)::
 

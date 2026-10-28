@@ -39,6 +39,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES = REPO_ROOT / "operator" / "templates"
+PM_STATE = REPO_ROOT / "operator" / "hermes-smd-overlay" / "bootstrap" / "pm_state.py"
 SELFTEST = TEMPLATES / "selftest.sh"
 HERMES = "3" * 40
 
@@ -119,6 +120,8 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     _write(root / "opt/data/profiles/operator/config.yaml", SELECTED_CONFIG)
     # What a clean v0.22 boot leaves: boot-maintenance records, no venv selection.
     _write(root / "opt/data/installs/0123456789abcdef/bootstrap/operator.json", "{}")
+    # The real predicate: seat-checks runs the image's bootstrap/pm_state.py as a script.
+    _write(root / "app/overlay-pack/bootstrap/pm_state.py", PM_STATE.read_text())
     _write(root / "run/smd-gateway-liveness/state", "armed")
     _write(root / "app/agentmail-webhook-secret-probe.py", "raise SystemExit(0)\n")
     return {"root": root, "shims": shims}
@@ -437,6 +440,12 @@ def test_a_recorded_dependency_environment_fails_the_self_test(seat: dict[str, P
     )
     found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
     assert found["ok"] is False and "selects" in found["detail"]
+    # One predicate with the boot gate: a non-dict `packages` and an empty
+    # `packages.venv` select nothing in pm_state, so the self-test agrees.
+    _write(installs / "facts.json", json.dumps({"packages": ["venv"]}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
+    _write(installs / "facts.json", json.dumps({"packages": {"venv": {}}}))
+    assert _check(_once(seat, "hourly"), "hermes-pm-state-clean")["ok"] is True
     (installs / "facts.json").unlink()
     (seat["root"] / "opt/data/tools").mkdir()
     found = _check(_once(seat, "hourly"), "hermes-pm-state-clean")
