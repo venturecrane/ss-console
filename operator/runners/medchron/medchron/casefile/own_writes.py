@@ -1,9 +1,9 @@
 """The lane's write journal: every id the Case File Manager wrote to a matter.
 
 Each File Status it filed, each folder it created, each task it completed and
-each Medicals row it added is one line in ``<state>/own-writes.jsonl``::
+each Medicals row and calendar entry it added is one line in ``<state>/own-writes.jsonl``::
 
-    {"job_id", "matter_id", "kind": "file"|"folder"|"task"|"medicals"|"contact",
+    {"job_id", "matter_id", "kind": "file"|"folder"|"task"|"medicals"|"contact"|"event",
      "id", "at"}
 
 so a later read can tell the Operator's own activity from the firm's: the
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 NAME = "own-writes.jsonl"
-KINDS = ("file", "folder", "task", "medicals", "contact")
+KINDS = ("file", "folder", "task", "medicals", "contact", "event")
 
 
 def record(state: Path, job_id: str, matter_id: str, kind: str, write_id: str) -> None:

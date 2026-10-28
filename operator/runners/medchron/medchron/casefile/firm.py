@@ -32,6 +32,14 @@ The schema::
                                 court_pull_days, court_week_days,
                                 gov_claim_pull_days, stale_negotiation_days,
                                 court_event_patterns, gov_claim_patterns}
+    low_limits:                {per_person_usd, bills_trigger_usd, carrier_patterns}
+                               a policy whose per-person limit is at or under
+                               ``per_person_usd``, or an other-side carrier the
+                               patterns name, is a low limit; bills at or over
+                               ``bills_trigger_usd`` make it urgent (0 and []: off)
+    new_matter:                {opened_within_days, opening_tasks: [{name, pattern}]}
+                               a file opened within the days that carries none of
+                               the opening tasks is flagged with them ([]: off)
     read_workers:              int 1..4     matters read at once (2)
     tool_iterations:           int >= 4     a read's call cap (24)
     chunk_chars:               int >= 5000  one fetch_doc page (20000)
@@ -96,6 +104,8 @@ RANK_DEFAULTS: dict[str, Any] = {
     "court_event_patterns": [],
     "gov_claim_patterns": [],
 }
+LOW_LIMIT_DEFAULTS: dict[str, Any] = {"per_person_usd": 0, "bills_trigger_usd": 0, "carrier_patterns": []}
+NEW_MATTER_DEFAULTS: dict[str, Any] = {"opened_within_days": 30, "opening_tasks": []}
 REQUIRED: dict[str, str] = {
     "firm": "firm",
     "models": "models",
@@ -111,6 +121,8 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "medicals_layout_design": ("str", "PersonalInjurySettlementDetailsItem"),
     "pack": ("pack", PACK_DEFAULTS),
     "rank": ("rank", RANK_DEFAULTS),
+    "low_limits": ("low_limits", LOW_LIMIT_DEFAULTS),
+    "new_matter": ("new_matter", NEW_MATTER_DEFAULTS),
     "read_workers": ("workers", 2),
     "tool_iterations": ("int4", 24),
     "chunk_chars": ("int5000", 20000),
@@ -176,6 +188,40 @@ def _check_rank(key: str, v: Any) -> list[str]:
     return out
 
 
+def _check_low_limits(key: str, v: Any) -> list[str]:
+    if not isinstance(v, dict) or set(v) - set(LOW_LIMIT_DEFAULTS):
+        return [f"{key}: expected a map of {sorted(LOW_LIMIT_DEFAULTS)}"]
+    out = []
+    for k in ("per_person_usd", "bills_trigger_usd"):
+        if k in v and not (_is_int(v[k]) and v[k] >= 0):
+            out.append(f"{key}.{k}: expected a whole dollar amount >= 0")
+    if "carrier_patterns" in v:
+        got = v["carrier_patterns"]
+        out += [] if got == [] else _regexes(f"{key}.carrier_patterns", got)
+    return out
+
+
+def _check_new_matter(key: str, v: Any) -> list[str]:
+    if not isinstance(v, dict) or set(v) - set(NEW_MATTER_DEFAULTS):
+        return [f"{key}: expected a map of {sorted(NEW_MATTER_DEFAULTS)}"]
+    out = []
+    if "opened_within_days" in v and not (_is_int(v["opened_within_days"]) and v["opened_within_days"] >= 1):
+        out.append(f"{key}.opened_within_days: expected an integer >= 1")
+    tasks = v.get("opening_tasks", [])
+    ok = isinstance(tasks, list) and all(
+        isinstance(t, dict) and set(t) == {"name", "pattern"} and isinstance(t["name"], str) and t["name"].strip()
+        for t in tasks
+    )
+    if not ok:
+        return [*out, f"{key}.opening_tasks: expected a list of {{name, pattern}}"]
+    names = [t["name"].strip().casefold() for t in tasks]
+    if len(set(names)) != len(names):
+        out.append(f"{key}.opening_tasks: a name appears twice")
+    if tasks:
+        out += _regexes(f"{key}.opening_tasks pattern", [t["pattern"] for t in tasks])
+    return out
+
+
 def _check_ident(key: str, v: Any, kind: str) -> list[str]:
     if kind == "firm":
         ok = isinstance(v, dict) and set(v) == {"slug", "display_name"}
@@ -229,6 +275,8 @@ _CHECKS = {
     "postures": _check_text,
     "pack": lambda key, v, _kind: _check_pack(key, v),
     "rank": lambda key, v, _kind: _check_rank(key, v),
+    "low_limits": lambda key, v, _kind: _check_low_limits(key, v),
+    "new_matter": lambda key, v, _kind: _check_new_matter(key, v),
 }
 
 
@@ -281,6 +329,12 @@ class CasefileFirm:
 
     def rank(self, key: str) -> Any:
         return {**RANK_DEFAULTS, **(self.data.get("rank") or {})}[key]
+
+    def low_limits(self, key: str) -> Any:
+        return {**LOW_LIMIT_DEFAULTS, **(self.data.get("low_limits") or {})}[key]
+
+    def new_matter(self, key: str) -> Any:
+        return {**NEW_MATTER_DEFAULTS, **(self.data.get("new_matter") or {})}[key]
 
     def rx(self, values: list[str]) -> list[re.Pattern[str]]:
         return [re.compile(p, re.I) for p in values]

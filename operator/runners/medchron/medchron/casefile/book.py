@@ -172,7 +172,15 @@ def _medicals(rec: dict[str, Any], med_lines: dict[int, int]) -> str:
 INSURANCE_SIDES = (("first_party", "Client's own policy"), ("third_party", "Other side"))
 
 
-def _insurance(rec: dict[str, Any]) -> str:
+def _low(p: dict[str, Any], side: str, low: list[dict[str, Any]]) -> str:
+    """The low-limit flag code set on this policy (``flags.low_limits``), if any."""
+    for f in low:
+        if f["side"] == side and f["carrier"] == str(p.get("carrier") or "") and f["limits"] == (p.get("limits") or ""):
+            return f'<span class="bad">Low limit</span>: {e(f["why"])}'
+    return ""
+
+
+def _insurance(rec: dict[str, Any], low: list[dict[str, Any]]) -> str:
     ins = rec.get("insurance") or {}
     rows = []
     for key, side in INSURANCE_SIDES:
@@ -185,12 +193,46 @@ def _insurance(rec: dict[str, Any]) -> str:
                     e(p.get("claim_no")),
                     e(p.get("adjuster")),
                     e(p.get("limits")),
+                    _low(p, key, low),
                     e(source),
                 ]
             )
     if not rows:
         return ""
-    return "<h2>Insurance</h2>\n" + table(["Policy", "Carrier", "Claim", "Adjuster", "Limits", "Source"], rows)
+    head = ["Policy", "Carrier", "Claim", "Adjuster", "Limits", "Low limit", "Source"]
+    return "<h2>Insurance</h2>\n" + table(head, rows)
+
+
+def _new_matter(flags: dict[str, Any]) -> str:
+    nm = flags.get("new_matter")
+    if not nm:
+        return ""
+    items = "".join(f"<li>{e(x)}</li>\n" for x in nm["missing"])
+    return (
+        "<h2>New file: opening tasks not set</h2>\n"
+        f"<p>Opened {e(long_date(nm['opened']))}. None of the opening tasks is on the file; "
+        "these are the ones it does not have. Nothing was created.</p>\n"
+        f"<ul>\n{items}</ul>\n"
+    )
+
+
+def _appointments(rec: dict[str, Any], plan: dict[str, Any]) -> str:
+    from .propose import appointments
+
+    rows = []
+    for a in appointments(rec):
+        n = (plan.get("events") or {}).get(a["key"])
+        status = (
+            f"Proposed for the calendar, change {n}, awaiting approval"
+            if n is not None
+            else (plan.get("appointments_skipped") or {}).get(a["key"], "Reported, not proposed")
+        )
+        when = " ".join(str(x) for x in (long_date(a.get("date")) if a.get("date") else "date not given",
+                                         a.get("time"), a.get("time_zone")) if x)  # fmt: skip
+        rows.append([e(a.get("provider")), e(a.get("specialty")), e(when), e(status), e(a.get("note"))])
+    if not rows:
+        return ""
+    return "<h2>Specialty appointments</h2>\n" + table(["Provider", "Specialty", "When", "Calendar", "Note"], rows)
 
 
 def questions_kept(rec: dict[str, Any], verdicts: dict[str, Any]) -> list[Any]:
@@ -235,7 +277,9 @@ def _lists(rec: dict[str, Any], verdicts: dict[str, Any]) -> str:
 def render_html(
     rec: dict[str, Any], asof: str, meta: dict[str, Any], rank: dict[str, Any], plan: dict[str, Any]
 ) -> str:
-    """The print-out. ``plan``: ``{"tasks": {task_id: n}, "medicals": {row index: n}, "verdicts": {...}}``."""
+    """The print-out. ``plan``: ``{"tasks": {task_id: n}, "medicals": {row index: n},
+    "events": {appointment key: n}, "appointments_skipped": {key: why}, "verdicts": {...},
+    "flags": {low_limits, new_matter}}``."""
     bad = [s for s in _strings(rec) if any(d in s for d in DASHES)]
     if bad:
         raise CasefileFailed(f"stage_unfinished: book: the record for {rec.get('number')} holds an em or en dash")
@@ -257,8 +301,10 @@ def render_html(
         _facilities(rec),
         _open_tasks(rec, plan.get("tasks") or {}, plan.get("verdicts") or {}),
         _done(rec),
+        _new_matter(plan.get("flags") or {}),
         _medicals(rec, plan.get("medicals") or {}),
-        _insurance(rec),
+        _insurance(rec, (plan.get("flags") or {}).get("low_limits") or []),
+        _appointments(rec, plan),
         _lists(rec, plan.get("verdicts") or {}),
     ]
     body = "\n".join(p for p in parts if p)

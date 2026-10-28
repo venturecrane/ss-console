@@ -13,12 +13,16 @@ current state plus the requested changes and ``put_event_update`` sends it;
 
 ``with_responsible_attorney`` is the create-side rule: ``server.create_event``
 puts the matter's responsible attorney on every event it creates on a matter.
+``create_event_proven`` is the create itself (the body, the POST and the
+read-back), shared by ``server.create_event`` and the medchron runner's apply of
+an approved calendar line, so both write an event exactly one way.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
+from .local_time import event_span
 from .readback_records import prove_event
 
 
@@ -138,3 +142,43 @@ def with_responsible_attorney(client: Any, matter_id: str | None, attendees: lis
     if staff_id and staff_id not in people:
         people.append(staff_id)
     return people
+
+
+def create_event_proven(
+    client: Any,
+    *,
+    subject: str,
+    start_time: str,
+    end_time: str,
+    attendees: list[str],
+    time_zone: str,
+    stamp: Callable[[str | None], str | None],
+    matter_id: str | None = None,
+    description: str | None = None,
+    location: str | None = None,
+    all_day: bool | None = None,
+    tool: str = "create_event",
+) -> Any:
+    """POST one non-recurring (``Normal``) event and read it back by id.
+
+    The subject carries the provenance ``stamp``; the start and end are the
+    firm's LOCAL clock in ``time_zone`` (an all-day span normalized to the
+    date's midnight boundaries; a timed stamp with ``Z`` or an offset refused);
+    the matter's responsible attorney is appended to ``attendees``. Returns the
+    write's result with the read-back verdict (``readback: "confirmed"``, or a
+    shortfall ``status``)."""
+    start_time, end_time = event_span(tool, start_time, end_time, all_day)
+    fields = dict(
+        subject=stamp(subject),
+        startTime=start_time,
+        endTime=end_time,
+        matterId=matter_id,
+        description=description,
+        location=location,
+        allDay=all_day,
+        attendees=with_responsible_attorney(client, matter_id, attendees),
+        timeZone=time_zone,
+        type="Normal",
+    )
+    body = {k: v for k, v in fields.items() if v is not None}
+    return prove_event(client, body, client.request("POST", "/events", json=body))

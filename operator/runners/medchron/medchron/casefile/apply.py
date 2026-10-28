@@ -18,7 +18,12 @@ names a line. Here, for each line, in number order:
      polled until it reads back completed;
    * a Medicals row: the connector's proven row write (``medicals_tools``):
      the provider matched to the firm's contacts (several candidates write
-     nothing), the contact linked, the values patched and read back.
+     nothing), the contact linked, the values patched and read back;
+   * a calendar entry: the matter's calendar read again (the appointment
+     already there that day is ``already_present``, never written twice), then
+     the connector's create-and-read-back (``event_update.create_event_proven``,
+     the path ``create_event`` takes): stamped, the responsible attorney an
+     attendee, read back by id.
 
 Every write is journaled (``own_writes``) and rides the job's record to the
 broker (``writes``), and every line ends with an outcome. A proof run (the
@@ -44,7 +49,7 @@ from .outcome import CasefileHold, Verdict
 READBACK_WAITS = (1, 2, 3, 5, 8, 13)
 APPLIED = "applied.jsonl"
 #: A line whose write landed and read back (or whose record already showed it).
-DONE_OUTCOMES = ("completed", "written", "invoice_added", "already_complete", "already_present")
+DONE_OUTCOMES = ("completed", "written", "invoice_added", "created", "already_complete", "already_present")
 #: A line whose write may or may not have landed: never reported as made.
 UNCERTAIN_OUTCOMES = ("readback_mismatch", "unknown_after_stop", "error", "link_not_visible")
 
@@ -224,6 +229,62 @@ class ApplyRun:
             }
         return out
 
+    # ---- calendar entries ---------------------------------------------------------------
+    def _calendar(self, matter_id: str) -> list[dict[str, Any]]:
+        return [e for e in paged(getter(self.seat), "/events", MatterId=matter_id, ExcludeDeletedEvents=True)
+                if isinstance(e, dict)]  # fmt: skip
+
+    def _on_calendar(self, line: job_mod.Line, facts: dict[str, Any]) -> bool:
+        return propose.on_calendar(self._calendar(line.matter_id), facts["provider"], facts["date"])
+
+    def _event(self, line: job_mod.Line, facts: dict[str, Any]) -> dict[str, Any]:
+        """The connector's create-and-read-back (``create_event_proven``, the
+        path ``create_event`` takes): stamped, on the responsible attorney's
+        calendar, read back by id. A calendar that already shows the
+        appointment that day is not written again."""
+        if self._on_calendar(line, facts):
+            return {"outcome": "already_present"}
+        matter = self.client.get(f"/matters/{line.matter_id}")
+        owner = str(matter.get("personResponsibleStaffId") or "") if isinstance(matter, dict) else ""
+        if not owner:
+            return {"outcome": "refused_no_staff"}
+        if proof_mode.active():
+            return {"outcome": "would_create"}
+        from smokeball_connector.event_update import create_event_proven
+        from smokeball_connector.readback import is_shortfall
+
+        source = self.job.apply.source_job_id if self.job.apply is not None else ""
+        who = self.job.apply.approver if self.job.apply is not None else ""
+        description = (
+            f"Added on approval of change {line.n} (Case File Manager job {source}) by {who}. "
+            f"{facts['specialty']} appointment with {facts['provider']}, {facts['how']}. "
+            f"From the file: {'; '.join(facts.get('source_names') or [])[:300]}"
+        )
+        self._note(line.n, intent="POST")
+        got = create_event_proven(
+            self.client, subject=facts["subject"], start_time=facts["start"], end_time=facts["end"],
+            attendees=[owner], time_zone=facts["time_zone"], stamp=_stamp, matter_id=line.matter_id,
+            description=description, all_day=bool(facts["all_day"]),
+        )  # fmt: skip
+        eid = str(got.get("id") or got.get("eventId") or "") if isinstance(got, dict) else ""
+        write = {
+            "method": "POST",
+            "path": f"/events/{eid}" if eid else f"/matters/{line.matter_id}",
+            "ok": not is_shortfall(got),
+        }
+        if eid:  # ours whether or not it read back: never a firm change on the next re-check
+            own_writes.record(self.state, self.job.job_id, line.matter_id, "event", eid)
+        return {"outcome": "readback_mismatch" if is_shortfall(got) else "created", "write": write}
+
+    def _resumed(self, line: job_mod.Line, proposals: dict[str, Any]) -> dict[str, Any]:
+        """A line whose write may have landed before a stop: read back, never write again."""
+        if line.kind == "task":
+            return self._task_readback(line.source_id, line.n)
+        facts = self._facts(line, proposals) if line.kind == "event" else None
+        if facts is not None and self._on_calendar(line, facts):
+            return {"outcome": "created"}
+        return {"outcome": "unknown_after_stop"}
+
     # ---- the walk ----------------------------------------------------------------------
     def _one(self, line: job_mod.Line, proposals: dict[str, Any], staff: str | None) -> dict[str, Any]:
         facts = self._facts(line, proposals)
@@ -231,6 +292,8 @@ class ApplyRun:
             return {"outcome": "refused_not_as_proposed"}
         if line.kind == "task":
             return self._task(line, facts, staff)
+        if line.kind == "event":
+            return self._event(line, facts)
         return self._medicals(line, facts)
 
     def _guarded(self, line: job_mod.Line, proposals: dict[str, Any], staff: str | None) -> dict[str, Any]:
@@ -271,11 +334,7 @@ class ApplyRun:
             if prev.get("outcome"):
                 res = prev
             elif prev.get("intent"):  # a write may have landed before a stop: read back, never write again
-                res = (
-                    self._task_readback(line.source_id, line.n)
-                    if line.kind == "task"
-                    else {"outcome": "unknown_after_stop"}
-                )
+                res = self._resumed(line, proposals)
             else:
                 res = self._guarded(line, proposals, staff)
             if not prev.get("outcome"):

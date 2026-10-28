@@ -105,7 +105,7 @@ def raise_lines(broker: BrokerContext, job_id: str, thread_ref: str, session_id:
     with broker._escalation_lock:
         existing = casework_ledger.read_ledger(path)
         for ln in lines:
-            action = "close" if ln["kind"] == "task" else "add_row"
+            action = {"task": "close", "event": "add_event"}.get(ln["kind"], "add_row")
             ev = casework_event(
                 ln, "proposed", n=int(ln["n"]), dispatch_ref=dispatch, thread_ref=thread_ref,
                 payload={"action": action, "class": "done" if action == "close" else "open",

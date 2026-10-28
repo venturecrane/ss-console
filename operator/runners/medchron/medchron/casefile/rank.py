@@ -13,9 +13,11 @@ and the matter's own calendar and tasks. The FIRST rule that fits wins:
    settled file with items open, or a Pending status (settled, money not fully
    out: never priority 4); a court event within ``court_week_days``; an open
    task carrying money or a court date past its due date; a demand or offer
-   with no activity in ``stale_negotiation_days``.
+   with no activity in ``stale_negotiation_days``; a low limit on the other
+   side with the bills past the firm's line (``flags.py``).
 3. **This month.** Active workup: records still to order, a letter drafted or
-   waiting on a fact, an overdue task, a change proposed.
+   waiting on a fact, an overdue task, a change proposed, a low limit, a new
+   file with none of its opening tasks.
 4. **On track.**
 
 Every reason names its date and source; nothing here invents a date. Rules the
@@ -141,8 +143,32 @@ def _workup(rec: dict[str, Any], proposed: int) -> list[tuple[int, str, None]]:
     return out
 
 
+def _flagged(rec: dict[str, Any], flags: dict[str, Any] | None) -> list[tuple[int, str, None]]:
+    """The code's flags (``flags.flags_for``): a low limit is this month's work,
+    this week's once the bills pass the firm's line; a new file with none of
+    its opening tasks is this month's."""
+    if not flags or rec.get("posture") in OUT_OF_CASE:
+        return []
+    out: list[tuple[int, str, None]] = []
+    for p in flags.get("low_limits") or []:
+        what = f"Low limit, {p['side_label'].lower()} ({p['carrier'] or 'carrier not named'}): {p['why']}"
+        out.append((2 if p.get("urgent") else 3, what, None))
+    nm = flags.get("new_matter")
+    if nm:
+        out.append(
+            (3, f"New file opened {_md(dt.date.fromisoformat(nm['opened']))} with none of its opening tasks.", None)
+        )
+    return out
+
+
 def rank(
-    rec: dict[str, Any], inv: dict[str, Any], firm: Any, today: dt.date, own: set[str], proposed: int = 0
+    rec: dict[str, Any],
+    inv: dict[str, Any],
+    firm: Any,
+    today: dt.date,
+    own: set[str],
+    proposed: int = 0,
+    flags: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """``{priority, label, reason, key_dates, last_activity}``."""
     last = last_activity(inv, own)
@@ -151,7 +177,7 @@ def rank(
     if st is not None:
         hits.append(st)
     hits += _calendar(inv, firm, today) + _money_overdue(inv, firm, today)
-    hits += _settled(rec, inv) + _stale(rec, firm, today, last) + _workup(rec, proposed)
+    hits += _settled(rec, inv) + _stale(rec, firm, today, last) + _workup(rec, proposed) + _flagged(rec, flags)
     hits.sort(key=lambda h: (h[0], h[2] or dt.date.max))
     key_dates = sorted({(h[2].isoformat(), h[1]) for h in hits if h[2] is not None})
     if not hits:

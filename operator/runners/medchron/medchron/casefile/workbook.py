@@ -7,7 +7,8 @@ second reader confirmed, a Medicals row from a bill whose text was read).
 
 Sheets: Priorities (one row per matter, most urgent first), Proposed changes,
 Needs you (the reader's time-sensitive findings and questions), Records to
-order, Scanned bills not read (bills this job did not transcribe, so no row was
+order, Low limits (policies the firm's thresholds call low, decided in code),
+New files (opened recently with none of the opening tasks), Scanned bills not read (bills this job did not transcribe, so no row was
 proposed from them), and Not reviewed this run (matters held alone, by a
 firm-safe reason, never a stack trace).
 """
@@ -34,6 +35,7 @@ POSTURE_WORDS = {
     "declined": "Declined",
     "unknown": "Unclear from file",
 }
+KIND_WORDS = {"task": "Task", "medicals": "Medicals row", "event": "Calendar entry"}
 FILL = {1: "F8D7DA", 2: "FFE8CC", 3: "FFF6CC", 4: "E6F2E6"}
 HELD_WORDS = {
     "inventory": "Smokeball could not be read for this file",
@@ -88,6 +90,9 @@ def _proposed(wb: Any, lines: list[dict[str, Any]]) -> None:
         if ln["kind"] == "task":
             what = f"Mark the task complete: {f['subject']}"
             proof, second = "; ".join(f.get("proof_names") or []), f.get("audit_reason") or ""
+        elif ln["kind"] == "event":
+            what = f"Add to the calendar: {f['subject']}, {f['date']} ({f['how']})"
+            proof, second = "; ".join(f.get("source_names") or []), "Not on the matter's calendar that day"
         else:
             what = (
                 f"Add to the Medicals tab: {f['provider']}, {f['charge']}, {f['service_start']} to {f['service_end']}"
@@ -97,7 +102,7 @@ def _proposed(wb: Any, lines: list[dict[str, Any]]) -> None:
             [
                 ln["n"],
                 f.get("number"),
-                "Task" if ln["kind"] == "task" else "Medicals row",
+                KIND_WORDS.get(ln["kind"], ln["kind"]),
                 what,
                 proof,
                 f.get("why") or "",
@@ -139,13 +144,40 @@ def build(path: Path, rows: list[dict[str, Any]], lines: list[dict[str, Any]], h
         for o in r["review"].get("records_to_order") or []
     ]
     _plain(wb, "Records to order", ["Matter", "Facility", "Note"], orders, [10, 36, 70], "No records to order.")
+    lows = [
+        [str(r["number"]), LABEL[r["rank"]["priority"]], p["side_label"], p["carrier"], p["limits"],
+         f"{p['bills']:,.2f}", p["why"]]
+        for r in rows
+        for p in (r.get("flags") or {}).get("low_limits") or []
+    ]  # fmt: skip
+    _plain(
+        wb, "Low limits", ["Matter", "Priority", "Policy", "Carrier", "Limits", "Bills on the file", "Why"],
+        lows, [10, 13, 18, 28, 14, 14, 60], "No low limits on these files.",
+    )  # fmt: skip
+    new = [
+        [str(r["number"]), nm["opened"], "; ".join(nm["missing"])]
+        for r in rows
+        if (nm := (r.get("flags") or {}).get("new_matter"))
+    ]
+    _plain(
+        wb, "New files", ["Matter", "Opened", "Opening tasks not set (nothing was created)"], new,
+        [10, 12, 90], "No new file is missing its opening tasks.",
+    )  # fmt: skip
     scans = [[str(r["number"]), name] for r in rows for name in r.get("scanned_bills") or []]
     _plain(wb, "Scanned bills not read", ["Matter", "Bill (a scan, not read in this run)"], scans, [10, 80], "None.")
     nr = [[str(h["number"]), HELD_WORDS.get(h["why"], "the review did not finish")] for h in held]
     _plain(wb, "Not reviewed this run", ["Matter", "Why"], nr, [10, 60], "Every file in scope was reviewed.")
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
-    return {"rows": len(rows), "lines": len(lines), "needs": len(needs), "orders": len(orders), "held": len(held)}
+    return {
+        "rows": len(rows),
+        "lines": len(lines),
+        "needs": len(needs),
+        "orders": len(orders),
+        "held": len(held),
+        "low_limits": len(lows),
+        "new_files": len(new),
+    }
 
 
 __all__ = ["POSTURE_WORDS", "build"]

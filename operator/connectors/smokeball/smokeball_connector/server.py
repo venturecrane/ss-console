@@ -33,11 +33,11 @@ from typing import Any
 from operator_connector_sdk.server import ConnectorServer
 
 from .client import SmokeballClient, build_client_from_env
-from .event_update import put_event_update, with_responsible_attorney
+from .event_update import create_event_proven, put_event_update
 from .expense_ledger import drop_deleted as drop_deleted_expenses
 from .matter_create import create_operator_matter
 from .readback import file_and_prove, prove_file_deleted, prove_folder
-from .readback_records import prove_event, prove_reminder, prove_task, prove_webhook
+from .readback_records import prove_reminder, prove_task, prove_webhook
 from .webhook_target import subscription_body
 from .local_time import _next_day  # noqa: F401 - re-exported; tests import it from the server
 from .local_time import enrich_events, enrich_task, enrich_tasks, event_span, refuse_shifted_clocks
@@ -951,22 +951,14 @@ def create_event(
             "create_event: Smokeball requires an IANA time_zone "
             "(e.g. 'America/Los_Angeles'). Use the firm's authored zone."
         )
-    start_time, end_time = event_span("create_event", start_time, end_time, all_day)
+    event_span("create_event", start_time, end_time, all_day)  # refuse a shifted clock before any read
     client = _get_client()
     _verify_matter_reference(client, matter_id or "", subject, description)
-    body = _body(
-        subject=_stamp(subject),
-        startTime=start_time,
-        endTime=end_time,
-        matterId=matter_id,
-        description=description,
-        location=location,
-        allDay=all_day,
-        attendees=with_responsible_attorney(client, matter_id, attendees),
-        timeZone=time_zone,
-        type="Normal",
-    )
-    return prove_event(client, body, client.request("POST", "/events", json=body))
+    return create_event_proven(
+        client, subject=subject, start_time=start_time, end_time=end_time, attendees=attendees,
+        time_zone=time_zone, stamp=_stamp, matter_id=matter_id, description=description,
+        location=location, all_day=all_day,
+    )  # fmt: skip
 
 
 @server.tool()
