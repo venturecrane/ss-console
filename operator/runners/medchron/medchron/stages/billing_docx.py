@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from .. import billing_paid as BP
 from .. import docx_style as S
 from .base import StageRun, read_json
 from .billing_chart import NO_BILL
@@ -123,6 +124,79 @@ def _as_printed(doc: Any, data: dict[str, Any]) -> None:
         else ["SUBTOTAL, INCOMPLETE (not in the grand total)", "", money(data.get("as_printed_subtotal") or 0.0)],
         right_cols=(2,),
     )
+
+
+def _paid_cells(r: dict[str, Any]) -> tuple[str, str]:
+    """(the figures as printed, the provider's paid total or why there is none)."""
+    paid = r.get("paid") or {}
+    figs = paid.get("figures") or []
+    if not figs:
+        return (BP.NO_PAYMENT if r.get("docs") else BP.NO_BILL_ON_FILE), "-"
+    total = paid.get("total")
+    return "\n".join(BP.cite(f) for f in figs), (money(total) if total is not None else str(paid.get("note")))
+
+
+def _paid(doc: Any, data: dict[str, Any]) -> None:
+    """Amounts paid beside the charges: every figure as printed with its
+    source, summed only where billing_paid says a sum cannot count a payment
+    twice. A balance or an amount due is never shown here."""
+    rows = [r for r in data["rows"] if "paid" in r]
+    printed = [r for r in data.get("as_printed_rows") or [] if (r.get("paid") or {}).get("figures")]
+    if not rows and not printed:
+        return
+    doc.add_paragraph("Amounts Paid (as printed)", style="Heading 1")
+    para(
+        doc,
+        "Each amount below is a payment exactly as a bill prints it (by an insurer, a plan or the patient), with the "
+        "document and page it was read from. Balances, amounts due and adjustments are not payments and are not "
+        "shown here.",
+    )
+    body = [[r["provider"], *_paid_cells(r)] for r in rows]
+    body += [[f"{r['provider']} (name not matched; not in the total)", *_paid_cells(r)] for r in printed]
+    summed = [r["paid"]["total"] for r in rows if r["paid"].get("total") is not None]
+    short = [r["provider"] for r in rows if r["paid"].get("total") is None]
+    table(
+        doc,
+        ["Provider", "Amounts Paid (as printed)", "Total Paid"],
+        body,
+        [2.0, 4.0, 1.2],
+        total_row=[
+            "TOTAL PAID" if summed and not short else "SUBTOTAL PAID (incomplete)",
+            "",
+            money(round(sum(summed), 2)) if summed else "not computed",
+        ],
+        right_cols=(2,),
+    )
+    unpaid = BP.unpaid_billed(rows)
+    if unpaid:
+        para(doc, BP.limitation_sentence(len(unpaid)) + " No payment printed: " + "; ".join(unpaid) + ".")
+    unsummed = [r["provider"] for r in rows if r["paid"].get("figures") and r["paid"].get("total") is None]
+    if unsummed:
+        para(doc, "Printed payments shown above but not in the total paid: " + "; ".join(unsummed) + ".")
+    _owed(doc, rows + printed)
+
+
+_OWED_KINDS = (
+    ("balances", "Balance or amount due (owed, not paid)"),
+    ("combined", "Payments and adjustments combined, as printed"),
+    ("adjustments", "Adjustment (not a payment)"),
+)
+
+
+def _owed(doc: Any, rows: list[dict[str, Any]]) -> None:
+    """Balances, amounts due and adjustments, each on its own line, never
+    counted as paid."""
+    body = [
+        [r["provider"], kind, BP.cite(f)]
+        for r in rows
+        for key, kind in _OWED_KINDS
+        for f in (r.get("paid") or {}).get(key) or []
+    ]
+    if not body:
+        return
+    doc.add_paragraph("Balances and Adjustments (as printed)", style="Heading 1")
+    para(doc, "These figures are printed on the bills but are not payments. None is in the total paid above.")
+    table(doc, ["Provider", "What the bill prints", "Figure (as printed)"], body, [2.0, 1.9, 3.3])
 
 
 def _disagree(doc: Any, rows: list[dict[str, Any]]) -> None:
@@ -257,6 +331,15 @@ def _refusal(sr: StageRun, data: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _sections(doc: Any, data: dict[str, Any], rows: list[dict[str, Any]], gaps: list[dict[str, Any]]) -> None:
+    """Everything after the Billing by Provider table, in order."""
+    _as_printed(doc, data)
+    _paid(doc, data)
+    _disagree(doc, rows)
+    _excluded(doc, data)
+    _not_in_total(doc, data, gaps)
+
+
 def run(sr: StageRun) -> int:
     from docx import Document
     from docx.shared import Inches
@@ -322,10 +405,7 @@ def run(sr: StageRun) -> int:
             "own report, but it cannot be attributed to a provider from the documents on file.",
             size=9,
         )
-    _as_printed(doc, data)
-    _disagree(doc, rows)
-    _excluded(doc, data)
-    _not_in_total(doc, data, gaps)
+    _sections(doc, data, rows, gaps)
     stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
     glob = str(sr.cfg.get("delivery", "worksheet_glob") or "* - Medical Billing Worksheet *.docx")
     out = d / "out" / unit / glob.replace("*", who, 1).replace("*", stamp, 1)

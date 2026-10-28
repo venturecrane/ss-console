@@ -32,6 +32,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from .. import billing_paid as BP
 from . import billing_match as BM
 from .base import StageRun, read_json, read_jsonl
 
@@ -231,7 +232,7 @@ def _labels(records: list[dict[str, Any]], patient: str | None) -> list[str]:
 
 
 def _new_entry() -> dict[str, Any]:
-    return {"totals": [], "docs": set(), "bdates": [], "adjustments": []}
+    return {"totals": [], "docs": set(), "bdates": [], "adjustments": [], "printed": []}
 
 
 class _Tally:
@@ -296,6 +297,15 @@ class _Tally:
         e["docs"].add(r["file"])
         for t in c.get("printed_totals") or []:
             a = self._amount(r, t, key)
+            e["printed"].append(
+                {
+                    "label": t.get("label"),
+                    "amount_text": t.get("amount"),
+                    "amount": a,
+                    "file": r["file"],
+                    "page": t.get("page"),
+                }
+            )
             if a is None:
                 continue
             e["totals"].append((a, t.get("label"), r["file"], t.get("page"), c.get("doc_type")))
@@ -342,6 +352,7 @@ class _Tally:
             if k in lien:
                 continue
             e = {**v, "totals": [t for t in v["totals"] if t[2] not in matched_docs]}
+            e["printed"] = [p for p in v["printed"] if p["file"] not in matched_docs]
             e["docs"] = {f for f in v["docs"] if f not in matched_docs}
             if not e["docs"]:
                 continue
@@ -392,6 +403,7 @@ def _row(
             for a, lab, fl, pg in sorted(e.get("adjustments") or [], reverse=True)
         ],
         "alternates": alternates,
+        "paid": BP.summarize(e.get("printed") or []),
     }
 
 
@@ -416,6 +428,7 @@ def _lien_only(k: str, v: float) -> dict[str, Any]:
         "docs": [],
         "adjustments": [],
         "alternates": [],
+        "paid": BP.summarize([]),
     }
 
 

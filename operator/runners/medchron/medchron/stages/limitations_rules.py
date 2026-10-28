@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import Callable
 
+from .. import billing_paid
 from .base import read_json
 
 
@@ -234,7 +235,7 @@ def _billing_lines(d: Path, unit: str | None, log: Callable[[str], None]) -> lis
             "confirmed against the page:\n",
         ]
         o += [f'* "{f}" - p. {p}' + (f" ({r})" if r else "") for f, p, r in dropped]
-    return o
+    return o + billing_paid.limitation_lines(d, unit)
 
 
 #: Written by the pre-delivery review (stages/review_evidence.py LEFT_OUT):
