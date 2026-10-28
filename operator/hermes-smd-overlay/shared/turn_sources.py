@@ -48,10 +48,11 @@ JOB_KIND = {
 }
 JOB_KINDS = frozenset(JOB_KIND.values())
 #: The kinds whose wake may be a SCHEDULED run's (no request email): a
-#: litigation list the calendar ran, a negotiation notice, and a NEW-MESSAGE
+#: litigation list the calendar ran, a negotiation notice, a NEW-MESSAGE
 #: SMD note (no colleague's email to answer; the broker binds it
-#: ``mode: new_message`` and sets its recipient and subject).
-SCHEDULED_KINDS = frozenset({"litigation_job", "negotiation_job", "note_job"})
+#: ``mode: new_message`` and sets its recipient and subject), and the Case
+#: File Manager's weekday re-check and monthly full read.
+SCHEDULED_KINDS = frozenset({"litigation_job", "negotiation_job", "note_job", "casefile_job"})
 #: A litigation, negotiation or note wake's trigger line (ss-console
 #: litigation_lane.py / negotiation_lane.py / note_lane.py, code-authored):
 #: "Trigger: scheduled." Read only from a wake the gateway delivered on the

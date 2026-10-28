@@ -297,6 +297,7 @@ class CasefileRun(DeliverMixin, RunBase):
             v = Verdict("failed", stage=self._current(), reason=f"unexpected: {type(exc).__name__}: {str(exc)[:300]}")
         if v.reason and not REASON.match(v.reason):
             v.reason = f"unexpected: {v.reason}"
+        v.mode = self.job.mode  # a recheck's verdict says recheck, not the dataclass default
         v.cents = int(round(self.budget.refresh() * 100))
         v.metrics = metrics.summarize(self.data / "usage-ledger.jsonl", self.pricing)
         self._counts(v)
