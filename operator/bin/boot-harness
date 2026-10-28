@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# boot-harness: boot a candidate seat image WHOLE on a throwaway Fly Machine,
+# off every real seat, and print one PASS/FAIL line per act a seat must perform.
+# The code is operator/bin/lib/boot_harness/; its __init__.py is the contract.
+#
+#   operator/bin/boot-harness plan  --image registry.fly.io/hermes-fleet:<tag>
+#   operator/bin/boot-harness run   --image registry.fly.io/hermes-fleet:<tag>
+#   operator/bin/boot-harness judge <bundle.json> --log <machine.log>
+#
+# No Infisical: the harness needs no real secret. Same interpreter rule as
+# operator/bin/fleet (the laptop's system python carries no yaml module).
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${HERE%/bin}${PYTHONPATH:+:${PYTHONPATH}}"
+if python3 -c 'import sys, yaml; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  exec python3 -m bin.lib.boot_harness "$@"
+fi
+exec uv run --quiet --no-project --python '>=3.11' --with pyyaml python3 -m bin.lib.boot_harness "$@"

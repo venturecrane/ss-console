@@ -1,0 +1,382 @@
+2026-10-28T04:03:58Z runner[48e005efe5dd48] lax [info]Successfully prepared image registry.fly.io/hermes-fleet@sha256:fd05edb58a4604a95277d597f54ddd7aa487e12d9118c21d71401c83fcd443df (1m6.661155084s)
+2026-10-28T04:03:59Z runner[48e005efe5dd48] lax [info]Configuring firecracker
+2026-10-28T04:03:59Z app[48e005efe5dd48] lax [info]2026-10-28T04:03:59.706067615 [01M60ASMFEZ140FKSZ86P6ZMF1:main] Running Firecracker v1.14.4
+2026-10-28T04:03:59Z app[48e005efe5dd48] lax [info]2026-10-28T04:03:59.706211535 [01M60ASMFEZ140FKSZ86P6ZMF1:main] Listening on API socket ("/fc.sock").
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO Starting init (commit: 62b09659)...
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO Writing file: /opt/data/customer.yaml
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO Writing file: /harness/collect.py
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO Writing file: /opt/data/voice/cohort/.harness
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO chowning file, /opt/data/customer.yaml, to 0:0
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO chowning file, /harness/collect.py, to 0:0
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO chowning file, /opt/data/voice/cohort/.harness, to 0:0
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO Preparing to run: `/usr/bin/tini -g -- /app/entrypoint.sh` as root
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info] INFO [fly api proxy] listening at /.fly/api
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info][WARN  tini (642)] Tini is not running as PID 1 and isn't registered as a child subreaper.
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info]Zombie processes will not be re-parented to Tini, so zombie reaping won't work.
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info]To fix the problem, use the -s option or set the environment variable TINI_SUBREAPER to register Tini as a child subreaper, or run Tini as PID 1.
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info]2026/10/28 04:04:00 INFO SSH listening listen_address=[fdaa:76:8a99:a7b:810:8be6:b3d7:2]:22
+2026-10-28T04:04:00Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:00Z] [entrypoint] migrated legacy /opt/data/customer.yaml -> /var/lib/smd-config/customer.yaml (keystone relocation)
+2026-10-28T04:04:00Z runner[48e005efe5dd48] lax [info]Machine created and started in 1m8.221s
+2026-10-28T04:04:07Z app[48e005efe5dd48] lax [info]fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"
+2026-10-28T04:04:07Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:07Z] [entrypoint] WARN: R2 fetch failed; using existing root-owned customer.yaml
+2026-10-28T04:04:12Z app[48e005efe5dd48] lax [info]2026/10/28 04:04:12 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:04:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:14Z] [entrypoint] No medchron-firm.yaml in the vault for boot-harness; the chronology runner will refuse jobs
+2026-10-28T04:04:20Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:20Z] [entrypoint] WARN: demand inputs fetch attempt 1/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url"
+2026-10-28T04:04:31Z app[48e005efe5dd48] lax [info]2026/10/28 04:04:31 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:04:32Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:32Z] [entrypoint] WARN: demand inputs fetch attempt 2/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url"
+2026-10-28T04:04:48Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:48Z] [entrypoint] WARN: demand inputs fetch attempt 3/3 did not land demand-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdemand%2F&encoding-type=url"
+2026-10-28T04:04:48Z app[48e005efe5dd48] lax [info]2026/10/28 04:04:48 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:04:53Z app[48e005efe5dd48] lax [info][2026-10-28T04:04:53Z] [entrypoint] ERROR: the demand firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the demand lane will defer demand jobs until a restart fetches them
+2026-10-28T04:05:00Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:00Z] [entrypoint] WARN: drafting inputs fetch attempt 1/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url"
+2026-10-28T04:05:09Z app[48e005efe5dd48] lax [info]2026/10/28 04:05:09 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:05:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:11Z] [entrypoint] WARN: drafting inputs fetch attempt 2/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url"
+2026-10-28T04:05:28Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:28Z] [entrypoint] WARN: drafting inputs fetch attempt 3/3 did not land drafting-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fdrafting%2F&encoding-type=url"
+2026-10-28T04:05:28Z app[48e005efe5dd48] lax [info]2026/10/28 04:05:28 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:05:33Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:33Z] [entrypoint] ERROR: the drafting firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the drafting lane will defer drafting jobs until a restart fetches them
+2026-10-28T04:05:39Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:39Z] [entrypoint] WARN: litigation inputs fetch attempt 1/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url"
+2026-10-28T04:05:45Z app[48e005efe5dd48] lax [info]2026/10/28 04:05:45 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:05:50Z app[48e005efe5dd48] lax [info][2026-10-28T04:05:50Z] [entrypoint] WARN: litigation inputs fetch attempt 2/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url"
+2026-10-28T04:06:03Z app[48e005efe5dd48] lax [info]2026/10/28 04:06:03 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:06:07Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:07Z] [entrypoint] WARN: litigation inputs fetch attempt 3/3 did not land litigation-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Flitigation%2F&encoding-type=url"
+2026-10-28T04:06:12Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:12Z] [entrypoint] ERROR: the litigation firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the litigation lane will defer litigation jobs until a restart fetches them
+2026-10-28T04:06:18Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:18Z] [entrypoint] WARN: casefile inputs fetch attempt 1/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url"
+2026-10-28T04:06:21Z app[48e005efe5dd48] lax [info]2026/10/28 04:06:21 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:06:30Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:30Z] [entrypoint] WARN: casefile inputs fetch attempt 2/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url"
+2026-10-28T04:06:38Z app[48e005efe5dd48] lax [info]2026/10/28 04:06:38 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:06:46Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:46Z] [entrypoint] WARN: casefile inputs fetch attempt 3/3 did not land casefile-firm.yaml: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fcasefile%2F&encoding-type=url"
+2026-10-28T04:06:51Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:51Z] [entrypoint] ERROR: the casefile firm inputs could not be fetched from the vault for boot-harness and this seat has no copy; the casefile lane will defer casefile jobs until a restart fetches them
+2026-10-28T04:06:56Z app[48e005efe5dd48] lax [info]2026/10/28 04:06:56 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:06:58Z app[48e005efe5dd48] lax [info][2026-10-28T04:06:58Z] [entrypoint] No lane-proofs.yaml for boot-harness: every job waits for a proof run
+2026-10-28T04:07:04Z app[48e005efe5dd48] lax [info]upload failed: ./image-manifest.json to s3://smd-customer-config/vaults/boot-harness/image-manifest.json Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/image-manifest.json"
+2026-10-28T04:07:04Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:04Z] [entrypoint] WARN: could not publish the image manifest; CI will refuse config that adds a skill until a boot publishes it
+2026-10-28T04:07:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:11Z] [entrypoint] No medchron-controls/ in the vault for boot-harness; the chronology runner will refuse the classify stage of every job
+2026-10-28T04:07:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:11Z] [entrypoint] Gateway process forked and held (pid 1354) until the boot gates pass
+2026-10-28T04:07:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:11Z] [entrypoint] AGENTMAIL_SEND_API_KEY unset; broker transmit verbs stay fail-closed
+2026-10-28T04:07:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:11Z] [entrypoint] MSGRAPH_SEND_CLIENT_SECRET unset; broker msgraph verbs stay fail-closed
+2026-10-28T04:07:11Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:11Z] [entrypoint] MSGRAPH_CLIENT_SECRET unset; broker msgraph reply verb stays fail-closed
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,076 ERROR __main__ spec_applier: preference boot fetch failed (list_pref_keys: could not list s3://smd-customer-config/vaults/boot-harness/preferences/: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fpreferences%2F&encoding-type=url"); keeping the installed preference tree
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,078 ERROR __main__ spec_applier: boot fetch failed (pull_specs: could not read s3://smd-customer-config/vaults/boot-harness/output-classes.json: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/output-classes.json"); keeping the installed spec tree
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] authored-spec boot fetch complete (/var/lib/smd-config/specs)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,394 ERROR __main__ skills_applier: boot fetch failed (could not read s3://smd-customer-config/vaults/boot-harness/skills-pointer.json: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/skills-pointer.json"); keeping current
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] skills release boot fetch complete (/var/lib/smd-skills/current)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] Root skills applier launched (uid 0; polls this seat's skills pointer)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] Workspace broker started as uid 10001; dropping gateway to hermes
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] Root config applier launched (uid 0; polls R2 for live customer.yaml changes)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,644 INFO __main__ skills_applier: poll loop started (slug=boot-harness root=/var/lib/smd-skills interval=15.0s)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,647 INFO __main__ skills_applier: no readable skills pointer (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/skills-pointer.json")
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from /run/smd-medchron/queue)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:13Z] [entrypoint] Root authored-spec applier launched (uid 0; polls R2 for live spec changes)
+2026-10-28T04:07:13Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:13,991 INFO __main__ applier: poll loop started (slug=boot-harness bucket=smd-customer-config volume=/var/lib/smd-config/customer.yaml interval=15.0s)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,000 WARNING config_applier.spec_verifier spec_verifier: R2 read failed (could not read s3://smd-customer-config/vaults/boot-harness/spec-pointer.json: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/spec-pointer.json"); keeping the last spec
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,001 WARNING config_applier.spec_verifier spec_verifier: fetch_error spec=None unmet=[]
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,001 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,005 INFO __main__ applier: seeded change-cache from current R2 ETag=None (volume config present)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,006 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [entrypoint] Root establishment intake launched (uid 0; polls /var/lib/smd-establish-spool/runs for admin-instructed voice/shape submissions)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [entrypoint] Root gateway liveness supervisor forked (uid 0; watches the Hermes loop heartbeat and kills container main 1354 so Fly replaces the Machine; stale>240s, max 3 kill(s)/3600s)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,055 INFO medchron.daemon medchron daemon up: run_dir=/run/smd-medchron poll=5.0s
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,061 INFO medchron.demand demand lane up: queue=/run/smd-medchron/demand-queue jobs=/run/smd-medchron/demand-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,067 INFO medchron.drafting drafting lane up: queue=/run/smd-medchron/drafting-queue jobs=/run/smd-medchron/drafting-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,094 INFO medchron.litigation litigation lane up: queue=/run/smd-medchron/litigation-queue jobs=/run/smd-medchron/litigation-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [selftest] Root self-test started (uid 0; boot run once the gateway supervisor arms, then every 3600s; /run/smd-selftest/results.json)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [entrypoint] Cross-machine isolation boot check PASSED (ADR 0009 / SEC-22)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,135 INFO medchron.negotiation negotiation lane up: queue=/run/smd-medchron/negotiation-queue jobs=/run/smd-medchron/negotiation-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,138 INFO medchron.note note lane up: jobs=/run/smd-medchron/note-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,143 INFO medchron.casefile case file lane up: queue=/run/smd-medchron/casefile-queue jobs=/run/smd-medchron/casefile-jobs
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [entrypoint] Authored-spec tree ownership check PASSED (ss ADR 0083)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026/10/28 04:07:14 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [entrypoint] Supervisor: gateway released (pid 1354); the entrypoint stays as its supervisor
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,244 INFO __main__ spec_applier: poll loop started (slug=boot-harness bucket=smd-customer-config spec_dir=/var/lib/smd-config/specs interval=30.0s)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,249 INFO __main__ spec_applier: no readable spec object at s3://smd-customer-config/vaults/boot-harness/output-classes.json (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/output-classes.json"); the seat serves whatever is already installed
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] Starting bootstrap for customer: boot-harness
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] Hermes SHA: 345cd2b057a452236de401d3534b8502a7465e8d
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: ANTHROPIC_API_KEY present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: R2_ACCESS_KEY_ID present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: R2_BUCKET_CONFIG present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: R2_SECRET_ACCESS_KEY present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: R2_SKILL_BODIES_BUCKET present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: SMD_D1_AUDIT_BINDING present
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: AGENTMAIL_API_KEY not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: AGENTMAIL_SEND_API_KEY not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: GOOGLE_CLIENT_SECRET_JSON not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: GOOGLE_SERVICE_ACCOUNT_JSON not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: GOOGLE_TOKEN_JSON not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: HONCHO_API_KEY not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_CLIENT_ID not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_CLIENT_SECRET not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_MAILBOX not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_SEND_CLIENT_ID not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_SEND_CLIENT_SECRET not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_SEND_TENANT_ID not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: MSGRAPH_TENANT_ID not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: R2_ENDPOINT_URL present (optional)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: R2_SKILL_BODIES_ACCESS_KEY_ID not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: R2_SKILL_BODIES_SECRET_ACCESS_KEY not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: SMD_AUDIT_BROKER_SOCKET present (optional)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: SMD_D1_AGENT_STATE_BINDING present (optional)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: SMD_D1_OBSERVATIONS_BINDING not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: SMD_GATEWAY_PID present (optional)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check OK: SMD_SPEC_DIR present (optional)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: SMD_VOICE_VAULT_DIR not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: SMOKEBALL_OAUTH_STATE_KEY not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: TELEGRAM_ALLOWED_USERS not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] env check: TELEGRAM_BOT_TOKEN not set (default will apply)
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:14Z] [bootstrap] Using root-owned customer.yaml: /var/lib/smd-config/customer.yaml
+2026-10-28T04:07:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:14,397 INFO __main__ establish_intake: LAUNCHED (slug=boot-harness spool=/var/lib/smd-establish-spool spec_dir=/var/lib/smd-config/specs poll=5.0s compilers=ok)
+2026-10-28T04:07:20Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:20Z] [bootstrap] WARN: voice vault sync FAILED (rc=1) — previous mirror retained (0 cohort sample(s)) (non-fatal). aws: fatal error: Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config?list-type=2&prefix=vaults%2Fboot-harness%2Fvoice%2Fcohort%2F&encoding-type=url"
+2026-10-28T04:07:20Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:20Z] [bootstrap] Workspace broker ready; gateway environment is credential-free
+2026-10-28T04:07:20Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:20Z] [bootstrap] Seeding repo skill catalog onto the volume (/app/skills -> /opt/data/skills)...
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Skill catalog seeded (84 skill dir(s) on volume)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill blog-post-draft from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill business-profile-post from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill calendar from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill case-file-manager from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill client-matter-digest from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill client-verification-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill combined-post-intake from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill conflict-intake-router from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill connector-auth-check from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill consult-scheduler from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill couples-checkin from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill couples-settings from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill daily-needs-you-digest from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill date-night-planner from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill date-prep-brief from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill dates-to-remember from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill deadline-and-sol-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill deadline-miss-escalator from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill demand-letter-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill discovery-response-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill discovery-response-staging from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill discovery-response-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill discovery-served-watch from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill document-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill document-library-establishment from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill document-receipt-logger from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill email-reply from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill engagement-letter-chaser from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill file-work-requests from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill follow-up-discovery-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill gratitude-prompts from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill intake-to-system-sync from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill lien-ledger-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill litigation-status from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill marketing-analytics-note from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill marketing-request-router from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill marketing-topic-slate from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-document-review from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-inbox-router from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-initiation-setup from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-memo-on-update from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-status-digest from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill matter-status-responder from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill mediation-brief-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill mediation-settlement-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill medical-chronology-maintainer from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill medical-records-chaser from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill meet-and-confer-drafter from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill memory-journal from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill minors-compromise-packet from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill motion-calendar-tracker from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill motion-package-assembler from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill negotiation-watch from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill new-matter-intake from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill open-house-visitor-capture from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill operator-help from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill operator-introduce from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill operator-self-initiation from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill operator-self-test from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill opposing-response-deficiency-review from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill partner-messages from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill press-release-draft from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill referral-source-acknowledgment from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill review-reply-draft from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill separate-statement-assembler from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill service-confirmation-watcher from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill settlement-statement-feeder from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill shape-establishment from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill shared-lists from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill social-post-draft from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill stalled-matter-nudge from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill status-report-assembler from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill statute-watch from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill task-list-keeper from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill travel from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill trial-binder-assembler from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill trust-balance-nudge from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill vendor-invoice-intake from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill voice-establishment from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill weekly-checkin-agenda from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Pruned omitted skill youtube-episode-post from /opt/data/skills (not enabled in customer.yaml)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Hermes timezone: unset (business_hours.timezone unauthored) — cron + clock run in UTC
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:21Z] [bootstrap] Running hermes-smd bootstrap (customer.yaml -> profiles)...
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:21,686 INFO bootstrap.cli hermes-smd bootstrap: customer_yaml=/var/lib/smd-config/customer.yaml hermes_home=/opt/data
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:21,705 INFO bootstrap.translate translate: wrote profile crane (config=True, soul=True, bundles_written=0, bundles_removed=0, skills_installed=3)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:21,988 INFO bootstrap.translate translate: reconciled cron for 1 persona(s); 0 job(s) registered: (none)
+2026-10-28T04:07:21Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:21,988 INFO bootstrap.cli hermes-smd bootstrap: wrote 1 profile(s): crane
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Profile config(s) generated under /opt/data/profiles/
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Writing customer-owned operator identity facts into SOUL.md...
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-operator-identity] updated /opt/data/profiles/crane/SOUL.md
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-operator-identity] done; 1 SOUL.md file(s) updated
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Operator identity facts written
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Disabling Hermes curator in profile configs (ADR 0017)...
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-curator-disabled] curator disabled in /opt/data/profiles/crane/config.yaml
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-curator-disabled] done; 1 of 1 profile config(s) updated
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Curator disabled in profile config(s)
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Removing customer-disabled bundled skills from profile catalogs...
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Disabled skill guard passed
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Verifying Telegram allowlist (fail-closed, ADR 0033)...
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][ensure-telegram-allowlist] TELEGRAM_BOT_TOKEN unset; Telegram platform inert — nothing to guard
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Telegram allowlist guard passed
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Active persona profile: crane
+2026-10-28T04:07:22Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:22Z] [bootstrap] Refreshing overlay on the volume from the image pack (/app/overlay-pack)...
+2026-10-28T04:07:23Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:23Z] [bootstrap] Overlay refreshed on the volume (fan-out register present)
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:24Z] [bootstrap] Overlay materialized + enabled in active profile
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:24Z] [bootstrap] Seeding overlay gateway hooks into active profile from /app/overlay-pack/hooks...
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:24Z] [bootstrap] Overlay gateway hooks seeded into active profile
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:24Z] [bootstrap] Running safety substrate invariant checks (Phase A.5 gate)...
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_1_no_destructive_without_confirmation.py: PASS: invariant 1 holds across autonomous/draft ceilings + with/without approval
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_2_no_external_send_without_confirmation.py: PASS: invariant 2 holds — external send gated by configured ceiling; autonomous skill scalar does not auto-grant send; explicit override sends; vertical floor narrows; refused scalar blocks all; confirm withholds without approval, sends with it, and is narrowed by a draft_for_review floor (ADR 0071)
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_3_no_autonomous_commitment.py: PASS: invariant 3 holds — commitment gated by approval; draft skills never commit
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_4_sticky_stop_survives_compaction.py: PASS: invariant 4 holds — pinned stop survives compaction; enforce_with_session refuses despite approval
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_5_ceiling_enforced_in_code_not_prompt.py: PASS: invariant 5 holds — ceiling read from authoring, prompt cannot escalate; legitimate flows still work
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  SKIP test_invariant_6.py: pytest-mode test (pytest not available in runner venv)
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_6_no_citations.py: PASS: invariant 6 holds — 20/20 adversarial flagged, 6/6 clean unflagged, refusal_message non-empty
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  SKIP test_invariant_7.py: pytest-mode test (pytest not available in runner venv)
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]  PASS test_invariant_7_storage_bindings.py: PASS: invariant 7 detects cross-Machine binding mismatch (2 of 2 self-check fixtures held)
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.
+2026-10-28T04:07:24Z app[48e005efe5dd48] lax [info]hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  PASS test_invariant_8_overlay_activation.py: PASS: invariant 8 holds — overlay active (30 plugins registered, hooks attached, audit schema present, trust gated banned 'email_send')
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  PASS test_invariant_9_env_consumption_contract.py: PASS: env-consumption contract consistent (61 vars; no agent-needed var is stripped)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]substrate result for customer=boot-harness: 9 pass, 0 fail, 2 pytest-only (of 11 invariant tests)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]Exception in thread smd-job-worker:
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]Traceback (most recent call last):
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/usr/lib/python3.13/threading.py", line 1043, in _bootstrap_inner
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    self.run()
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    ~~~~~~~~^^
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/usr/lib/python3.13/threading.py", line 994, in run
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    self._target(*self._args, **self._kwargs)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/.venv/lib/python3.13/site-packages/shared/job_worker_runtime.py", line 531, in _worker_loop
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from hermes_state import SessionDB  # lazy: Hermes-only
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/hermes_state.py", line 30, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from hermes_state_common import escape_like as _escape_like, stat_db_file_identity as _stat_db_file_identity
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/hermes_state_common.py", line 14, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from agent.context_compressor import (LEGACY_SUMMARY_PREFIX, SUMMARY_PREFIX, _MERGED_PRIOR_CONTEXT_HEADER,
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]        _MERGED_SUMMARY_DELIMITER, _SUMMARY_END_MARKER)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/agent/context_compressor.py", line 34, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from agent.turn_context import drop_stale_api_content
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/agent/turn_context.py", line 22, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from agent.memory_manager import build_memory_context_block
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/opt/hermes/agent/memory_manager.py", line 15, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from concurrent.futures import Future, ThreadPoolExecutor, wait
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "<frozen importlib._bootstrap>", line 1412, in _handle_fromlist
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/usr/lib/python3.13/concurrent/futures/__init__.py", line 50, in __getattr__
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    from .thread import ThreadPoolExecutor as te
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/usr/lib/python3.13/concurrent/futures/thread.py", line 37, in <module>
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    threading._register_atexit(_python_exit)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]  File "/usr/lib/python3.13/threading.py", line 1505, in _register_atexit
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]    raise RuntimeError("can't register atexit after shutdown")
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]RuntimeError: can't register atexit after shutdown
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Safety substrate invariants PASSED
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Running connector classification probe (ADR 0053)...
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]connector-classification-probe: OK (87 declared tool(s) across 6 author-built connector(s) agree with the overlay map)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Connector classification probe PASSED
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Reconciling egress webhook subscriptions (boot backstop)...
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Front-door gate launched (public :8643 -> gateway :8644; agentmail route absent)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:25Z] [bootstrap] Launching Hermes gateway for profile 'crane' (overlay plugins enabled)...
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:25,823 INFO hermes_smd.sentry sentry: disabled (no SENTRY_DSN) for component=gate
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:25,825 INFO hermes_smd.webhook_gate webhook-gate listening on 0.0.0.0:8643 -> 127.0.0.1:8644 (HMAC self-check ok)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:25,827 WARNING hermes-smd-heartbeat heartbeat: MACHINE_HEARTBEAT_KEY or slug missing and no healthchecks URL; emitter not started (admin fleet view will read 'no signal yet')
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:25,848 INFO hermes-smd-msgraph-poller msgraph poller: WEBHOOK_SECRET_MSGRAPH unset; poller not started (fail-closed)
+2026-10-28T04:07:25Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:25,849 INFO hermes_smd.webhook_gate gate: inbound wake guard armed (ADR 0062)
+2026-10-28T04:07:27Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 4 disabled skill artifact(s)
+2026-10-28T04:07:27Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 4 artifact(s) updated
+2026-10-28T04:07:29Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:29,010 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]┌─────────────────────────────────────────────────────────┐
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]│           ☤ Hermes Gateway Starting...                 │
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]├─────────────────────────────────────────────────────────┤
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]│  Messaging platforms + cron scheduler                    │
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]│  Press Ctrl+C to stop                                   │
+2026-10-28T04:07:30Z app[48e005efe5dd48] lax [info]└─────────────────────────────────────────────────────────┘
+2026-10-28T04:07:32Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:32,422 WARNING gateway.run: No env user allowlists configured. Messaging platforms default to pairing/allowlist policies and will deny unknown senders unless you configure platform allowlists (e.g., TELEGRAM_ALLOWED_USERS=your_id) or explicitly opt in with GATEWAY_ALLOW_ALL_USERS=true plus dm_policy/group_policy: open on the platform.
+2026-10-28T04:07:32Z app[48e005efe5dd48] lax [info][hooks] Loaded hook 'smd-overlay-activation' for events: ['gateway:startup']
+2026-10-28T04:07:32Z app[48e005efe5dd48] lax [info]2026/10/28 04:07:32 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:07:32Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 4 disabled skill artifact(s)
+2026-10-28T04:07:32Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 4 artifact(s) updated
+2026-10-28T04:07:33Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:33,393 WARNING hermes_state: shared-state.db (hosted_rooms): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+2026-10-28T04:07:33Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:33,403 WARNING hermes_state: shared-state.db (room policy checkpoint): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+2026-10-28T04:07:34Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:34,767 WARNING hermes_plugins.hermes_smd_audit: hermes-smd-audit: R2 skill-bodies env not configured (R2_ENDPOINT_URL + R2_SKILL_BODIES_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}); body capture writes pending D1 rows only, reconciler skipped on this boot.
+2026-10-28T04:07:34Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:34,778 WARNING hermes_plugins.hermes_smd_webhook_router: hermes-smd-webhook-router: SMD_WEBHOOK_SIGNING_SECRET not set; inbound webhooks cannot be verified and will NOT be routed until it is provisioned
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,342 WARNING tools.registry: check_fn _a2a_tools_available returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,358 WARNING tools.registry: check_fn check_browser_back_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,360 WARNING tools.registry: check_fn _browser_cdp_check returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,373 WARNING tools.registry: check_fn check_browser_click_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,380 WARNING tools.registry: check_fn check_browser_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:36Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:36,381 WARNING tools.registry: check_fn _browser_dialog_check returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,251 WARNING tools.registry: check_fn check_browser_navigate_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,257 WARNING tools.registry: check_fn check_browser_press_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,259 WARNING tools.registry: check_fn check_browser_scroll_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,264 WARNING tools.registry: check_fn check_browser_snapshot_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,265 WARNING tools.registry: check_fn check_browser_type_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_web_api_key returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,270 WARNING tools.registry: check_fn check_browser_vision_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,282 WARNING tools.registry: check_fn check_computer_use_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,283 WARNING tools.registry: check_fn check_discord_tool_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,284 WARNING tools.registry: check_fn _check_feishu returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,285 WARNING tools.registry: check_fn _check_ha_available returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,291 WARNING tools.registry: check_fn check_image_generation_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,306 WARNING tools.registry: check_fn _connectors_available returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,309 WARNING tools.registry: check_fn check_react_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,313 WARNING tools.registry: check_fn _check_spotify_available returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,529 WARNING tools.registry: check_fn check_tts_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,782 WARNING tools.registry: check_fn check_video_generation_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,783 WARNING tools.registry: check_fn check_x_search_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,784 WARNING tools.registry: check_fn _check_xai_video_requirements returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:37,814 WARNING tools.registry: check_fn _check_yuanbao returned False; dependent tools will be unavailable this turn
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:37Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:38Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:38,786 WARNING hermes_state: state.db (delivery_ledger): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+2026-10-28T04:07:38Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:38,807 WARNING hermes_state: cron/executions.db: linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+2026-10-28T04:07:43Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:43Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:43Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:43,991 WARNING hermes_state: kanban.db (kanban.db): linked SQLite 3.46.1 (interpreter /opt/hermes/.venv/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+2026-10-28T04:07:44Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:44,013 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:07:44Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:44Z] [entrypoint] Gateway liveness supervisor ARMED (loop heartbeat /opt/data/profiles/crane/state/gateway.heartbeat is 11s fresh)
+2026-10-28T04:07:45Z app[48e005efe5dd48] lax [info][2026-10-28T04:07:45Z] [selftest] boot run finished (results written)
+2026-10-28T04:07:48Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:48Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:50Z app[48e005efe5dd48] lax [info]2026/10/28 04:07:50 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:07:53Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:53Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:54Z app[48e005efe5dd48] lax [info]2026/10/28 04:07:54 INFO New SSH session email=smdurgan@smdurgan.com verified=true
+2026-10-28T04:07:55Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:55,627 INFO hermes_smd.webhook_gate gate 127.0.0.1 - "GET /health HTTP/1.1" 200 -
+2026-10-28T04:07:55Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:55,628 WARNING gateway.platforms.webhook: [webhook] Invalid signature for route handoff
+2026-10-28T04:07:58Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:07:58Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:07:59Z app[48e005efe5dd48] lax [info]2026-10-28 04:07:59,017 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:08:04Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:04Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:09Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:09Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:14Z app[48e005efe5dd48] lax [info]2026-10-28 04:08:14,020 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:08:14Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:14Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:19Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:19Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:24Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:24Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:29Z app[48e005efe5dd48] lax [info]2026-10-28 04:08:29,023 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:08:30Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:30Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:35Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:35Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:40Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:40Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
+2026-10-28T04:08:44Z app[48e005efe5dd48] lax [info]2026-10-28 04:08:44,027 WARNING __main__ applier: HEAD s3://smd-customer-config/vaults/boot-harness/customer.yaml failed (Could not connect to the endpoint URL: "http://127.0.0.1:9/smd-customer-config/vaults/boot-harness/customer.yaml"); will retry
+2026-10-28T04:08:45Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] crane: removed 0 disabled skill artifact(s)
+2026-10-28T04:08:45Z app[48e005efe5dd48] lax [info][ensure-disabled-skills] done; 0 artifact(s) updated
