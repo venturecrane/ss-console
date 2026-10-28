@@ -26,6 +26,8 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Callable
 
+from .. import unopened
+
 PAGE_MARK = "===== page {n} ====="
 SCAN_FLOOR = 25  # characters: a page with less carries no text layer
 HEAD, TAIL = 3, 2
@@ -41,6 +43,11 @@ class ExtractFailure(RuntimeError):
     def __init__(self, problem: str) -> None:
         self.problem = problem
         super().__init__(problem)
+
+
+#: The failure code of a PDF locked with a password (``unopened``): a locked
+#: attachment is named inside its email instead of making the email unreadable.
+PASSWORD = "pdf_password"
 
 
 def _pages(texts: list[str]) -> str:
@@ -76,6 +83,8 @@ def pdf_text(data: bytes, ocr: Ocr | None) -> tuple[str, int]:
     except Exception as exc:  # noqa: BLE001 - a PDF that does not open is one failure record
         raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
     try:
+        if unopened.locked(doc):
+            raise ExtractFailure(f"{PASSWORD}: {unopened.REASON}")
         texts = [pg.get_text() or "" for pg in doc]
     finally:
         doc.close()
@@ -189,4 +198,4 @@ def text_of(path: Path, ext: str, ocr: Ocr | None) -> tuple[str, int]:
     raise ExtractFailure(f"unsupported: no reader for {ext or 'a file without an extension'}")
 
 
-__all__ = ["OCR_PROMPT", "ExtractFailure", "Ocr", "ocr_pages", "pdf_text", "text_of"]
+__all__ = ["OCR_PROMPT", "PASSWORD", "ExtractFailure", "Ocr", "ocr_pages", "pdf_text", "text_of"]

@@ -27,6 +27,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import unopened
 from ..stages.vision import render_page
 
 STAGE = "caption"
@@ -110,6 +111,7 @@ def page_one(source: str, log: Callable[[str], None], name: str) -> tuple[str, s
     import pymupdf
 
     with pymupdf.open(source) as doc:
+        unopened.refuse_locked(doc)
         page = doc[0]
         return render_page(page, log, name, 1), page.get_text() or ""
 
@@ -123,6 +125,8 @@ def read(doorway: Any, model: str, doc: dict[str, Any], log: Callable[[str], Non
     name = str(doc.get("name") or "")
     try:
         b64, text = page_one(str(doc["source_path"]), log, name)
+    except unopened.Locked:
+        raise Unread(unopened.REASON) from None
     except Exception as exc:  # noqa: BLE001 - an unrenderable page leaves the caption unread, never fails the job
         raise Unread(f"page 1 could not be rendered ({type(exc).__name__})") from None
     messages: list[dict[str, Any]] = [

@@ -250,6 +250,24 @@ def make_pdf(pages: list[str]) -> bytes:
     return data
 
 
+def make_locked_pdf(pages: list[str] | int = 1) -> bytes:
+    """A real PDF locked with a user password (AES-256): pymupdf opens it and
+    reports needs_pass, an empty password does not authenticate, and touching
+    a page raises "document closed or encrypted"; pypdf raises "File has not
+    been decrypted". The one locked-file fixture every lane's test uses."""
+    import pymupdf
+
+    texts = [""] * pages if isinstance(pages, int) else pages
+    doc = pymupdf.open()
+    for text in texts:
+        page = doc.new_page()
+        if text:
+            page.insert_text((72, 72), text, fontsize=11)
+    data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
+    doc.close()
+    return data
+
+
 def doc_row(fid: str, name: str, folder_id: str | None, size: int, ext: str | None = None) -> dict:
     """A listing row as the seat returns it: the NAME carries no extension,
     the extension is its own field (every stage joins them back as name+ext)."""

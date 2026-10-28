@@ -34,7 +34,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .. import llm, stop_request
+from .. import llm, stop_request, unopened
 from ..update.pageid import SKIPPED
 from . import vision_seed
 from .base import StageRun, append_jsonl, read_jsonl
@@ -183,6 +183,11 @@ def _gather(
                 del done[pno]  # a failed image page is asked again on a resume, never kept as read
         try:
             doc = pymupdf.open(path)
+            if unopened.locked(doc):
+                # pymupdf counts a locked file's pages and raises only at the
+                # render below, outside this guard, which crashed the stage.
+                doc.close()
+                raise unopened.Locked()
             npages = len(doc)
         except Exception as exc:  # noqa: BLE001 - an unopenable file is a results row
             append_jsonl(log_path, {"id": rec["id"], "name": rec["name"], "error": str(exc)[:200]})
