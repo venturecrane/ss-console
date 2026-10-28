@@ -299,3 +299,38 @@ def test_the_collector_refuses_off_the_harness(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(collect, "on_harness", lambda: False)
     assert collect.main() == 2
     assert "refused" in json.loads(capsys.readouterr().out)
+
+
+# -- --volume: the cron store a seat volume carried survives the boot (audit 11) --------
+def _store(*names: str) -> dict[str, list[dict[str, str]]]:
+    return {"/opt/data/profiles/crane/cron/jobs.json": [{"id": str(i), "name": n} for i, n in enumerate(names)]}
+
+
+def test_a_volume_boot_that_keeps_its_cron_store_passes() -> None:
+    bundle = healthy_bundle()
+    bundle["cron_before"] = _store("op-managed:a", "op-managed:b")
+    bundle["cron_after"] = _store("op-managed:a", "op-managed:b", "op-managed:boot-harness-cron-probe")
+    got = verdicts(bundle, HEALTHY_LOG)
+    assert got["cron-store-survives-boot"].ok, got["cron-store-survives-boot"].detail
+
+
+@pytest.mark.parametrize(
+    "after",
+    [_store("op-managed:a"), _store("op-managed:a", "op-managed:b", "op-managed:b"), {}],
+)
+def test_a_volume_boot_that_loses_or_duplicates_a_job_fails(after: dict[str, Any]) -> None:
+    bundle = healthy_bundle()
+    bundle["cron_before"] = _store("op-managed:a", "op-managed:b")
+    bundle["cron_after"] = after
+    assert not verdicts(bundle, HEALTHY_LOG)["cron-store-survives-boot"].ok
+
+
+def test_a_run_without_a_volume_carries_no_cron_store_line() -> None:
+    assert "cron-store-survives-boot" not in verdicts(healthy_bundle(), HEALTHY_LOG)
+
+
+def test_a_volume_run_mounts_it_and_ships_the_fixture_to_the_rootfs() -> None:
+    argv = cli.machine_run_argv("img", "hermes-boot-harness", "n", Path("/x/customer.yaml"), {}, True, "hermes_state")
+    assert "hermes_state:/opt/data" in argv
+    assert "/harness/customer.yaml=/x/customer.yaml" in argv
+    assert not any(a.startswith("/opt/data/") for a in argv)

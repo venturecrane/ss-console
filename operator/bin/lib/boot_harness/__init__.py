@@ -28,6 +28,11 @@ signals of the failed staging boots and asserts FAIL (Law 12).
   boot-harness run --image REF --postmortem  the same boot started under a held Machine, so a
                                              gateway that dies still leaves its state to collect
   boot-harness observe --machine ID --image REF   re-attach to a Machine a run left up
+  boot-harness run --image REF --volume hermes_state --restart-check
+                                             on a harness volume restored from a smd-staging
+                                             snapshot: the cron store survives, then the same
+                                             Machine restarts on the same volume and is judged
+                                             again (boot-path audit items 10 and 11)
 
 Expectations (Hermes pin, declared sub-plugins, brotlicffi override, whether the
 launch path exports VIRTUAL_ENV) are read at the commit the image's rel-<sha>-
@@ -41,8 +46,6 @@ staging crash loop) fails on the same lines staging showed.
 WHAT IT DOES NOT PROVE (boot-path audit items with no probe here, by design
 rather than by omission): a cron TOOL call audited from the gateway pid and an
 attachment turn's cache/expose_cli writes (both need a model turn); an MCP stdio
-child's interpreter (the fixture carries no MCP connector); a restart on the
-same volume and a v2026.9.14 jobs.json surviving the first v0.22 boot (both need
-a volume restored from a smd-staging snapshot); Telegram (staging has none); and
+child's interpreter (the fixture carries no MCP connector); Telegram (staging has none); and
 exec-to-disarm on a 1 GB Machine (the harness boots staging's 4 GB size).
 """

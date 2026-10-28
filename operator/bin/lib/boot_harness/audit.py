@@ -144,6 +144,35 @@ def check_cron_child(bundle: dict[str, Any] | None) -> Verdict:
     return Verdict(name, True, f"pre_run child: {exe} (Python {child.get('version')}), env names {env}")
 
 
+PROBE_NAME = "op-managed:boot-harness-cron-probe"
+
+
+def _names(store: Any) -> dict[str, list[str]]:
+    if not isinstance(store, dict):
+        return {}
+    return {
+        path: [str(j.get("name")) for j in jobs if isinstance(j, dict) and j.get("name") != PROBE_NAME]
+        for path, jobs in store.items()
+        if isinstance(jobs, list)
+    }
+
+
+def check_cron_store(bundle: dict[str, Any]) -> Verdict:
+    """Audit 11, on a --volume boot: the cron store the volume carried survives the
+    boot (every job before is there after) and holds no duplicate name."""
+    name = "cron-store-survives-boot"
+    before, after = _names(bundle.get("cron_before")), _names(bundle.get("cron_after"))
+    if not after and before:
+        return Verdict(name, False, "the cron store could not be read after the boot")
+    lost = sorted({f"{p}: {n}" for p, names in before.items() for n in names if n not in after.get(p, [])})
+    dupes = sorted({f"{p}: {n}" for p, names in after.items() for n in names if names.count(n) > 1})
+    if lost or dupes:
+        return Verdict(name, False, f"lost {lost[:5]}; duplicated {dupes[:5]}")
+    total = sum(len(v) for v in after.values())
+    managed = sum(1 for v in after.values() for n in v if n.startswith("op-managed:"))
+    return Verdict(name, True, f"{total} job(s) after boot ({managed} managed), none lost, no duplicate names")
+
+
 def check_job_broker(logs: str) -> Verdict:
     name = "no-job-broker-refusals"
     count = sum(1 for ln in logs.splitlines() if JOB_BROKER_REFUSED in ln)
@@ -153,7 +182,8 @@ def check_job_broker(logs: str) -> Verdict:
 
 
 def checks(bundle: dict[str, Any] | None, logs: str, ex: Expect) -> list[Verdict]:
-    return [
+    volume = [check_cron_store(bundle)] if bundle and bundle.get("cron_before") is not None else []
+    return volume + [
         check_plugins_enabled(bundle),
         check_modules(bundle, ex),
         check_gateway_env(bundle, ex),
