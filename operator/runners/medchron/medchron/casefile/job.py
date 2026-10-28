@@ -20,8 +20,9 @@ writes exactly this)::
                           "source_id", "sha256"}, ...]}}
 
 Re-validated here (the broker's package is not on the runner's venv). The
-increment-1 kinds are ``full`` and ``apply``; ``recheck`` is accepted by the
-envelope (the kind enum stays open) and refused by the runner until it ships.
+kinds are ``full``, ``recheck`` (the weekday schedule: only what changed) and
+``apply``. A ``scheduled`` job's ``message_ref`` is
+``scheduled:<firm date>:<caseload key>`` (``casefile_schedule``), never an email.
 """
 
 from __future__ import annotations

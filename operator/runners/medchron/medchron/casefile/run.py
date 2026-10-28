@@ -38,6 +38,7 @@ from ..litigation.tools import ReadIncomplete, dump
 from ..litigation.workers import in_parallel
 from ..llm import Doorway
 from . import (
+    billing,
     firm as firm_mod,
     inventory,
     job as job_mod,
@@ -181,8 +182,9 @@ class CasefileRun(DeliverMixin, RunBase):
 
     # ---- stages ---------------------------------------------------------------
     def _inventory(self) -> None:
-        if self.job.mode != "full":
-            raise CasefileHold(f"envelope_invalid: the {self.job.mode} kind is not available yet")
+        if self.job.mode not in ("full", "recheck"):
+            raise CasefileHold(f"envelope_invalid: the {self.job.mode} kind is not a caseload read")
+        billing.take(self)  # first, so the month's count stands whatever the read does
         self._library()
         inv = inventory.build(self.seat, self.job, self.firm, self.data, self.log)
         dump(self.data / "inventory.json", inv)
@@ -215,6 +217,10 @@ class CasefileRun(DeliverMixin, RunBase):
         provenance stamp (``recheck.stamped_ids``)."""
         plan: dict[str, Any] = {}
         journal = state_mod.own_ids(self.state)
+        # The month's scheduled full read reads every file whole: what changed
+        # is the re-check's question, and the full read is its monthly ground
+        # truth. A requested job, and every re-check, keeps the economies.
+        whole = self.job.mode == "full" and self.job.trigger == "scheduled"
         for m in self._matters():
             mid = m["id"]
             if self._mfile(mid, matter_mod.HELD).is_file():
@@ -225,7 +231,7 @@ class CasefileRun(DeliverMixin, RunBase):
             fp = state_mod.fingerprint(inv, own)
             prior = self.prior(mid)
             plan[mid] = {"mode": "whole", "changed": None, "fingerprint": fp}
-            if prior is None:
+            if prior is None or whole:
                 continue
             age = (self.today - dt.date.fromisoformat(str(prior.get("delivered_at") or "1970-01-01")[:10])).days
             if prior.get("fingerprint") in (fp, state_mod.fingerprint(inv, journal)):
@@ -297,6 +303,9 @@ class CasefileRun(DeliverMixin, RunBase):
         return v
 
     def _counts(self, v: Verdict) -> None:
+        count = billing.metric(self)  # first: the month's count stands whatever the read did
+        if count is not None:
+            v.metrics["billing_count"] = count
         if not (self.data / "inventory.json").is_file():
             return
         v.matters_total = len(self._matters())

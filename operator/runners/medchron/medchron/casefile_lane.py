@@ -67,6 +67,8 @@ DONE_OUTCOMES = ("completed", "written", "invoice_added", "already_complete", "a
 LIT_INPUTS_ENV = "MEDCHRON_LITIGATION_INPUTS"
 COUNT_FIELDS = ("cents", "matters_total", "matters_read", "matters_current", "matters_held", "lines_proposed")
 _STAGE = re.compile(r"[a-z0-9_]{1,24}")
+#: A Smokeball matter status as the billing count names it (Open, Pending).
+_STATUS = re.compile(r"[A-Za-z][A-Za-z ]{0,23}")
 
 
 class CasefileBroker:
@@ -321,6 +323,15 @@ class CasefileLane(DraftingLane):
                 f"changes proposed: {int(fields.get('lines_proposed') or 0)}."
             )
             lines.append(f"Folder id: {fields.get('folder_id') or 'none'}.")
+            count = (fields.get("metrics") or {}).get("billing_count")
+            if isinstance(count, dict) and count:
+                # The month's billing snapshot (casefile/billing.py): counts by
+                # Smokeball status only, code-composed, never a name.
+                lines.append(
+                    "Count on the 1st: "
+                    + ", ".join(f"{int(n)} {s if _STATUS.fullmatch(str(s)) else 'other'}" for s, n in count.items())
+                    + "."
+                )
         lines.append(f"Requested by: {env.get('requester') or ''}.")
         if state != "delivered":
             where = str(fields.get("stage") or stage or "")

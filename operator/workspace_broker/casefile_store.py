@@ -205,7 +205,7 @@ class CasefileLedger:
             now = _iso_utc()
             self._spend(conn, job_id, now, f.get("cents"), int(cur["cents"] or 0))
             self._update(conn, job_id, now, state, cur, f)
-            if state == "delivered" and cur["mode"] == "full" and f.get("lines"):
+            if state == "delivered" and cur["mode"] in ("full", "recheck") and f.get("lines"):
                 self._lines(conn, job_id, now, f["lines"])
             if state == "delivered" and cur["mode"] == "apply" and f.get("line_outcomes"):
                 self._outcomes(conn, cur, now, f["line_outcomes"])

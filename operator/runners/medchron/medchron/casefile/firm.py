@@ -40,7 +40,9 @@ The schema::
     bulk_recheck_docs:         int >= 1     more changed documents than this is a bulk upload,
                                             read whole rather than re-checked (200)
     validate_retries:          int 0..3     record_review retries on a refused record (2)
-    timezone:                  IANA name
+    timezone:                  IANA name    the firm's zone (the schedule's calendar too)
+    holidays:                  [YYYY-MM-DD] the firm's days off: no scheduled run ([])
+    scheduled_cutoff_hour:     int 1..23    firm-local hour a deferred scheduled run stops retrying (14)
 
 ``prompts/`` holds ``contract.md`` (the reader contract), ``reader.md`` (the
 read's instructions) and ``auditor.md`` (the second reader's). All three are
@@ -119,6 +121,11 @@ OPTIONAL: dict[str, tuple[str, Any]] = {
     "bulk_recheck_docs": ("int1", 200),
     "validate_retries": ("retries", 2),
     "timezone": ("str", "America/Los_Angeles"),
+    # The standing schedule (the broker reads these from its copy): the firm's
+    # own days off, and the firm-local hour after which a deferred caseload is
+    # a missed day (SMD paged) rather than retried.
+    "holidays": ("dates", []),
+    "scheduled_cutoff_hour": ("hour", 14),
 }
 MAX_READ_WORKERS = 4
 _FOLDER = re.compile(r"^[A-Za-z0-9 ._()-]{1,80}$")
@@ -212,6 +219,22 @@ def _check_text(key: str, v: Any, kind: str) -> list[str]:
     return [] if ok else [f"{key}: expected a list drawn from {list(POSTURES)}"]
 
 
+def _check_dates(key: str, v: Any) -> list[str]:
+    """A list of dates (YAML reads an unquoted 2026-11-26 as a date)."""
+    import datetime as _dt
+
+    if not isinstance(v, list):
+        return [f"{key}: expected a list of YYYY-MM-DD dates"]
+    for x in v:
+        if isinstance(x, _dt.date):
+            continue
+        try:
+            _dt.date.fromisoformat(str(x).strip())
+        except ValueError:
+            return [f"{key}: {x!r} is not a YYYY-MM-DD date"]
+    return []
+
+
 _CHECKS = {
     "firm": _check_ident,
     "models": _check_ident,
@@ -227,6 +250,8 @@ _CHECKS = {
     "strs": _check_text,
     "regexes": _check_text,
     "postures": _check_text,
+    "dates": lambda key, v, _kind: _check_dates(key, v),
+    "hour": lambda key, v, _kind: [] if _is_int(v) and 1 <= v <= 23 else [f"{key}: expected an hour 1..23"],
     "pack": lambda key, v, _kind: _check_pack(key, v),
     "rank": lambda key, v, _kind: _check_rank(key, v),
 }

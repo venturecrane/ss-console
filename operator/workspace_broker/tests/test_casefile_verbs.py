@@ -148,8 +148,9 @@ def approve(seat, n: int, who: str = ADMIN, thread: str = THREAD) -> None:
 
 def apply(seat, who: str = ADMIN, numbers=(1, 2), ref: str = "<approve-1@mail.example>", thread: str = THREAD):
     return call(
-        seat["broker"], "casefile_apply_submit", thread_ref=thread, approver=who, message_ref=ref, numbers=list(numbers)
-    )
+        seat["broker"], "casefile_apply_submit", thread_ref=thread, approver=who, message_ref=ref,
+        numbers=list(numbers), smokeball_token_age_seconds=3600,
+    )  # fmt: skip
 
 
 def record(seat, job: str, state: str, **fields) -> None:

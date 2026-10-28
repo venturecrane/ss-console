@@ -135,7 +135,11 @@ def after_bound_reply(broker: BrokerContext, v: Any, session_id: str) -> None:
     on that reply's thread. The broker raises them itself; the model never
     names a line. Never raises: the reply already went."""
     row = getattr(v, "row", None) or {}
-    if getattr(v, "kind", "") != "casefile_job" or row.get("state") != "delivered" or row.get("mode") != "full":
+    if (
+        getattr(v, "kind", "") != "casefile_job"
+        or row.get("state") != "delivered"
+        or row.get("mode") not in ("full", "recheck")
+    ):
         return
     try:
         raised = raise_lines(broker, v.job_id, v.conversation_id, session_id, v.key)

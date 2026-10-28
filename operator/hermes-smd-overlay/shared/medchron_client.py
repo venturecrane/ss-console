@@ -113,7 +113,17 @@ class MedchronBrokerClient:
         numbers: list[int],
     ) -> dict[str, Any]:
         """Queue the apply of the lines this reply named (``numbers``) and
-        approved on ``thread_ref``; the broker builds the set. Called by the casework reply path, never a turn's tool."""
+        approved on ``thread_ref``; the broker builds the set. Called by the casework reply path, never a turn's tool.
+
+        Carries the seat's Smokeball token age (``connector_check.token_ages``,
+        the heartbeat's own reader; None when unknown): the broker holds an
+        apply when the connection is about to lapse (``casefile_schedule``)."""
+        from shared.connector_check import token_ages
+
+        try:
+            age = token_ages().get("smokeball")
+        except Exception:  # noqa: BLE001 - unknown is refused by the broker, never guessed
+            age = None
         return self._request(
             {
                 "action": "casefile_apply_submit",
@@ -122,6 +132,7 @@ class MedchronBrokerClient:
                 "message_ref": message_ref,
                 "request_text": request_text,
                 "numbers": list(numbers),
+                "smokeball_token_age_seconds": age,
             }
         )
 

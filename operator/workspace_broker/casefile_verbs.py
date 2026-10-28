@@ -20,8 +20,12 @@ requester a Named Administrator (``scope.admins``); the filing target authored
 (``file_to_matter_id`` and ``folder_name`` in the skill's settings, and the
 firm's library matter number); the firm's case file budget authored and not
 spent this Pacific month; no unfinished job for the same caseload, and this
-email not already queued. Only ``full`` is offered (``recheck`` is refused
-until it ships).
+email not already queued. A request is always ``full``. A SCHEDULED submit
+(the weekday cron's pre_run, agent uid, never a turn) is ``casefile_scheduled``'s:
+``recheck`` on business days, ``full`` on the month's first, one job per
+authored caseload per firm date, behind the Smokeball connection gate. An apply
+is held by the same gate, and an apply of a scheduled list over ten days old
+is refused as replaced.
 
 THE APPLY (``casefile_apply_submit``). The broker, never the model, builds the
 line set: every line a delivered case file job RAISED on the reply's thread
@@ -52,7 +56,8 @@ from typing import Any
 
 import yaml
 
-from . import casefile_casework as casework, casework_ledger, delivery_proof, hold_class
+from . import casefile_casework as casework, casefile_schedule as schedule, casework_ledger, delivery_proof, hold_class
+from .casefile_scheduled import Refused as _Refused, ScheduledSubmit, refusal as _refusal
 from .broker_context import BrokerContext
 from .casefile_ledger import (
     CLOSE_REF,
@@ -96,14 +101,6 @@ VERBS = (
     "casefile_apply_submit",
 )
 _REQUEST_KEYS = {"trigger", "requester", "message_ref", "request_text", "scope"}
-
-
-class _Refused(ValueError):
-    """A submit check that failed; the message is the sentence to relay."""
-
-
-def _refusal(reason: str, **extra: Any) -> dict[str, Any]:
-    return {"ok": True, "accepted": False, "reason": reason, **extra}
 
 
 def _load(path: str | Path) -> dict[str, Any]:
@@ -155,7 +152,7 @@ def _scope_in(raw: Any) -> dict[str, Any]:
     raise EnvelopeError("scope names the people whose caseload to read (assisting) or matter numbers (matters)")
 
 
-class CasefileVerbs:
+class CasefileVerbs(ScheduledSubmit):
     def __init__(
         self,
         ledger: CasefileLedger | None,
@@ -243,14 +240,19 @@ class CasefileVerbs:
         return out
 
     # ---- submit -------------------------------------------------------------------------
-    def _gates(self, peer_uid: int | None, from_gateway: bool) -> tuple[dict[str, Any], tuple[str, ...]]:
-        if not from_gateway and peer_uid != 0:
+    def _gates(
+        self, peer_uid: int | None, from_gateway: bool, trigger: str = "request"
+    ) -> tuple[dict[str, Any], tuple[str, ...]]:
+        if trigger == "request" and not from_gateway and peer_uid != 0:
             raise PermissionError("a case file job is submitted from an email turn or by root")
         entry = skill_entry(self.customer_yaml)
         if entry is None:
             raise _Refused("the Case File Manager is not enabled on this seat; nothing was queued")
-        if not initiation_allows(entry, "request"):
-            raise _Refused("the Case File Manager is not switched on by request for this seat; nothing was queued")
+        if not initiation_allows(entry, trigger):
+            word = "by request" if trigger == "request" else "on a schedule"
+            raise _Refused(f"the Case File Manager is not switched on {word} for this seat; nothing was queued")
+        if trigger == "scheduled" and peer_uid != 0 and not schedule.cron_row_live(self.customer_yaml):
+            raise _Refused("the Case File Manager's schedule is not switched on for this seat; nothing was queued")
         admins = admins_from_customer_yaml(self.customer_yaml)
         if not admins:
             raise _Refused("the seat's administrator list cannot be read, so who may ask cannot be established")
@@ -259,6 +261,9 @@ class CasefileVerbs:
         return settings, admins
 
     def _submit(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
+        raw_env = request.get("envelope")
+        if isinstance(raw_env, dict) and raw_env.get("trigger") == "scheduled":
+            return self._scheduled(raw_env, peer_uid=peer_uid, from_gateway=from_gateway)
         if not from_gateway and peer_uid != 0:
             raise PermissionError("a case file job is submitted from an email turn or by root")
         try:
@@ -319,6 +324,20 @@ class CasefileVerbs:
         return month, cents
 
     # ---- apply ------------------------------------------------------------------------------
+    def _stale(self, source: str) -> bool:
+        """A scheduled list more than STALE_DAYS old has been replaced by a
+        newer one: its numbers are refused, never applied against today's."""
+        row = self._db.read(source) or {}
+        if row.get("trigger") != "scheduled":
+            return False
+        try:
+            made = datetime.fromisoformat(str(row.get("created_at") or "").replace("Z", "+00:00"))
+        except ValueError:
+            return True
+        if made.tzinfo is None:
+            made = made.replace(tzinfo=timezone.utc)
+        return (self._now() - made).days >= schedule.STALE_DAYS
+
     def _apply(self, request: dict[str, Any], *, peer_uid: int | None, from_gateway: bool) -> dict[str, Any]:
         if not from_gateway and peer_uid != 0:
             raise PermissionError("an apply is submitted from the approver's verified reply or by root")
@@ -335,6 +354,14 @@ class CasefileVerbs:
                 "nothing_approved: no change this reply approved is open to apply",
                 **({"approved_by_another": others} if others else {}),
             )
+        if self._stale(source):
+            return _refusal(f"stale: {schedule.STALE_SENTENCE}", stale=True)
+        raw_settings = (skill_entry(self.customer_yaml) or {}).get("settings")
+        stop = self.token_gate(
+            request.get("smokeball_token_age_seconds"), raw_settings if isinstance(raw_settings, dict) else {}
+        )
+        if stop is not None:
+            return _refusal(f"token_gate: {stop}", paged=self.broker is not None)
         env = {
             "trigger": "request",
             "mode": "apply",

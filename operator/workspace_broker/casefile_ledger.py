@@ -75,6 +75,7 @@ _ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
 _NUMBER = re.compile(r"^[A-Za-z0-9 ._-]{1,64}$")
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
+_SCHEDULED_REF = re.compile(r"^scheduled:\d{4}-\d{2}-\d{2}:[0-9a-f]{12}$")
 _FOLDER = re.compile(r"^[A-Za-z0-9 ._()-]{1,80}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE = re.compile(r"^[A-Za-z0-9:_.-]{1,128}$")
@@ -181,7 +182,12 @@ def _common(req: dict[str, Any]) -> dict[str, Any]:
     if not (isinstance(who, str) and _EMAIL.match(who)):
         raise EnvelopeError("requester must be the requester's email address")
     ref = req.get("message_ref")
-    if not (isinstance(ref, str) and _MESSAGE_ID.match(ref)):
+    if req["trigger"] == "scheduled":
+        # One job per caseload per firm date (casefile_schedule.scheduled_ref);
+        # the unique index on request_ref is what makes a second fire a no-op.
+        if not (isinstance(ref, str) and _SCHEDULED_REF.match(ref)) or req["mode"] not in ("full", "recheck"):
+            raise EnvelopeError("a scheduled job is a full or recheck read keyed scheduled:<YYYY-MM-DD>:<caseload>")
+    elif not (isinstance(ref, str) and _MESSAGE_ID.match(ref)):
         raise EnvelopeError("message_ref must be the request email's internetMessageId")
     text = req.get("request_text")
     if not (isinstance(text, str) and text.strip() and len(text) <= MAX_REQUEST_TEXT):

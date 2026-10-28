@@ -25,6 +25,12 @@ def _authored_recipients(kind: str, customer_path: Any) -> tuple[list[str], bool
         from . import litigation_intake as intake
     elif kind == "negotiation_job":
         from . import negotiation_intake as intake
+    elif kind == "casefile_job":
+        from .casefile_verbs import skill_entry as casefile_entry
+        from .litigation_intake import scheduled_recipients
+
+        raw = (casefile_entry(customer_path) or {}).get("settings")
+        return scheduled_recipients(raw if isinstance(raw, dict) else {}), True
     elif kind == "note_job":
         from .note_verbs import note_recipients
 
@@ -32,6 +38,19 @@ def _authored_recipients(kind: str, customer_path: Any) -> tuple[list[str], bool
     else:
         raise ValueError(f"{kind} has no authored scheduled recipients")
     return intake.scheduled_recipients(intake.settings_of(intake.skill_entry(customer_path))), True
+
+
+def casefile_subject(request_ref: str, mode: str) -> str:
+    """The fixed subject of a scheduled case file run's one email, from its
+    ``scheduled:<firm date>:<caseload key>`` ref; "" when the ref is not one.
+    Names no person: two caseloads the same day share a subject."""
+    from .casefile_schedule import ref_day
+
+    day = ref_day(request_ref)
+    if day is None:
+        return ""
+    what = "monthly full review" if mode == "full" else "daily re-check"
+    return f"Case file {what}, {day.isoformat()}"
 
 
 def scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> bool:
@@ -49,4 +68,4 @@ def scheduled_recipient_ok(broker: BrokerContext, kind: str, requester: str) -> 
     return recipients[0] == who if first_only else who in recipients
 
 
-__all__ = ["scheduled_recipient_ok"]
+__all__ = ["casefile_subject", "scheduled_recipient_ok"]
