@@ -311,6 +311,17 @@ def test_a_gateway_whose_job_worker_died_fails_job_worker_ready() -> None:
     assert failed(healthy_bundle(), log) == {"job-worker-ready"}
 
 
+def test_the_pilot_fixture_reaches_nobody_and_keeps_its_roster_classes_disjoint() -> None:
+    """pilot-smokeball carries addresses outside scope/users (rosters, routine
+    recipients). Every one becomes a distinct .invalid stand-in; a pack ref stays."""
+    doc = yaml.safe_load(fixture.render(OPERATOR, cli.SIZES["4x-8192"][1]))
+    assert doc["machine"]["size"] == "shared-cpu-4x" and doc["machine"]["memory_mb"] == 8192
+    assert fixture.reachable_addresses(doc) == []
+    roster = [e["address"] for e in (doc.get("scope") or {}).get("outbound_roster") or []]
+    assert len(roster) == len(set(roster))
+    assert fixture._is_address("someone@example.com") and not fixture._is_address("law-firm/pi@0.3.0")
+
+
 def test_the_1gb_fixture_is_a_1gb_seat_that_reaches_nobody() -> None:
     text = fixture.render(OPERATOR, fixture.SOURCE_1GB)
     doc = yaml.safe_load(text)
