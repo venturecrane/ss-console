@@ -306,6 +306,7 @@ class CasefileRun(DeliverMixin, RunBase):
             v.matters_read = sum(1 for mid in plan if self._mfile(mid, matter_mod.REVIEW).is_file())
             v.metrics["recheck"] = self._recheck_counts(plan)
         v.matters_held = sum(1 for m in self._matters() if self._mfile(m["id"], matter_mod.HELD).is_file())
+        v.metrics["filing_refused"] = self.filing_refused()
 
     def _recheck_counts(self, plan: dict[str, Any]) -> dict[str, int]:
         """The re-check paths this run took, by matter: unchanged (``current``),
