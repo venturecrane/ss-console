@@ -183,6 +183,32 @@ def check_cron_store(bundle: dict[str, Any], ex: Expect) -> Verdict:
     return Verdict(name, True, f"{total} job(s) after boot, managed {managed}, none lost or changed, no duplicates")
 
 
+JOB_WORKER_READY = re.compile(r"smd-job-worker: ready \(worker_id=gw-(\d+)\)")
+JOB_WORKER_DIED = "Exception in thread smd-job-worker"
+
+
+def check_job_worker(bundle: dict[str, Any] | None, logs: str) -> Verdict:
+    """The gateway's durable-job worker came up. Its thread can die (an exception in
+    SessionDB() on the first v0.22 open of an empty v2026.9.14 state.db did exactly
+    this, 2026-10-28) while activation, the self-test and every other line stay green.
+
+    The decisive signal is the ready line carrying the GATEWAY's pid. A bare thread
+    traceback is not, because the safety-substrate invariant process also starts a
+    worker thread that dies at its own interpreter shutdown on every image, and the
+    log does not say which process printed it."""
+    name = "job-worker-ready"
+    pid = ((bundle or {}).get("gateway") or {}).get("pid")
+    ready = {int(p) for p in JOB_WORKER_READY.findall(logs)}
+    if pid is None:
+        return Verdict(name, False, "no gateway pid to match the worker against")
+    if int(pid) not in ready:
+        died = " (a smd-job-worker thread raised this boot)" if JOB_WORKER_DIED in logs else ""
+        return Verdict(
+            name, False, f"no 'smd-job-worker: ready' line from the gateway (pid {pid}); saw {sorted(ready)}{died}"
+        )
+    return Verdict(name, True, f"job worker ready in the gateway (worker_id=gw-{pid})")
+
+
 def check_job_broker(logs: str) -> Verdict:
     name = "no-job-broker-refusals"
     count = sum(1 for ln in logs.splitlines() if JOB_BROKER_REFUSED in ln)
@@ -199,5 +225,6 @@ def checks(bundle: dict[str, Any] | None, logs: str, ex: Expect) -> list[Verdict
         check_gateway_env(bundle, ex),
         check_watchdog(bundle, logs, ex),
         check_cron_child(bundle),
+        check_job_worker(bundle, logs),
         check_job_broker(logs),
     ]

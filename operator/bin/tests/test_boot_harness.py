@@ -28,6 +28,7 @@ HEALTHY_LOG = "\n".join(
         "INFO hermes_smd.overlay.activation: SMD overlay ACTIVE + AUDITING on the live gateway: 9 hook type(s) in the "
         "live singleton, trust gate fired on banned 'email_send', audit row written (before=3 after=4) | cost breaker: armed",
         "2026-10-28 03:21:40,100 INFO gateway.run: Startup watchdog disarmed",
+        "2026-10-28 03:21:41,000 INFO shared.job_worker_runtime: smd-job-worker: ready (worker_id=gw-812); sweeping every 15.0s",
     ]
 )
 
@@ -97,7 +98,7 @@ def failed(bundle: dict[str, Any] | None, log: str) -> set[str]:
 def test_a_healthy_boot_passes_every_check() -> None:
     got = verdicts(healthy_bundle(), HEALTHY_LOG)
     assert [c for c, v in got.items() if not v.ok] == [], [v.line() for v in got.values()]
-    assert len(got) == 18
+    assert len(got) == 19
 
 
 def test_the_real_known_good_capture_passes_every_check() -> None:
@@ -299,6 +300,15 @@ def test_the_collector_refuses_off_the_harness(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(collect, "on_harness", lambda: False)
     assert collect.main() == 2
     assert "refused" in json.loads(capsys.readouterr().out)
+
+
+def test_a_gateway_whose_job_worker_died_fails_job_worker_ready() -> None:
+    """The 2026-10-28 stage-2 signal: the worker thread raised in SessionDB(), so the
+    gateway's pid never logged ready, while every other line stayed green."""
+    log = HEALTHY_LOG.replace("worker_id=gw-812", "worker_id=gw-999") + "\nException in thread smd-job-worker:"
+    got = verdicts(healthy_bundle(), log)
+    assert not got["job-worker-ready"].ok and "raised" in got["job-worker-ready"].detail
+    assert failed(healthy_bundle(), log) == {"job-worker-ready"}
 
 
 def test_the_1gb_fixture_is_a_1gb_seat_that_reaches_nobody() -> None:
