@@ -19,13 +19,16 @@ and SMD is paged within minutes. The target is a released job within hours.
 A lane key names a kind of job: the skill that queues it, plus the document
 class for drafting, whose classes are different jobs.
 
-| Key                             | Proof run stops before                                         |
-| ------------------------------- | -------------------------------------------------------------- |
-| `medical-chronology-maintainer` | the upload stage (package staged under `out/`)                 |
-| `demand-letter-drafter`         | filing (letter, gap audit, attorney notes under `out/`)        |
-| `document-drafter.<class>`      | filing; caption corrections are journaled, not written         |
-| `litigation-status`             | filing the workbook; runs on a copy of the real state cursor   |
-| `negotiation-watch`             | any Negotiation Details write or notice (its dry run, ss#3119) |
+| Key                             | Proof run stops before                                            |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `medical-chronology-maintainer` | the upload stage (package staged under `out/`)                    |
+| `demand-letter-drafter`         | filing (letter, gap audit, attorney notes under `out/`)           |
+| `document-drafter.<class>`      | filing; caption corrections are journaled, not written            |
+| `litigation-status`             | filing the workbook; runs on a copy of the real state cursor      |
+| `negotiation-watch`             | any Negotiation Details write or notice (its dry run, ss#3119)    |
+| `case-file-manager.full`        | filing (File Statuses rendered, nothing filed or emailed)         |
+| `case-file-manager.recheck`     | filing, as `.full`; reads only what changed since the last run    |
+| `case-file-manager.apply`       | the first write (approvals and fresh reads checked, nothing made) |
 
 An in-turn skill (`file-work-requests`, the router) is never held: the turn is
 the act. Its first live use pages once, so SMD reads that first answer.
