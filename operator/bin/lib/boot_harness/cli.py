@@ -17,7 +17,6 @@ import base64
 import json
 import re
 import secrets
-import subprocess
 import sys
 import tempfile
 import time
@@ -27,6 +26,7 @@ from typing import Any
 import yaml
 
 from bin.lib.boot_harness import fixture, judge
+from bin.lib.boot_harness.stream import ANSI, LogStream, machine_lines
 from bin.lib.fleet.build import dockerfile_arg
 from bin.lib.fleet.runner import CommandRunner, Runner, ToolingError
 
@@ -51,7 +51,15 @@ PLAIN_ENV = {
     "AWS_MAX_ATTEMPTS": "1",
 }
 DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "WEBHOOK_SECRET_MCP")
-GUEST = ("shared", 2, 4096)  # smd-staging's authored machine block
+# Each run mode: the guest it boots and the seat whose customer.yaml the fixture
+# derives from, so the config's machine block (which the self-test reads) matches
+# the Machine. 2x-4096 is smd-staging's size; 1x-1024 is ring 2's (scott,
+# brokery, captain-mark), the size of the 2026-09-01 startup-watchdog crash loop.
+SIZES = {
+    "2x-4096": (("shared", 2, 4096), fixture.SOURCE_SLUG),
+    "1x-1024": (("shared", 1, 1024), fixture.SOURCE_1GB),
+}
+GUEST = SIZES["2x-4096"][0]
 POLL_S = 15.0
 
 
@@ -101,6 +109,7 @@ def expectations(args: argparse.Namespace, operator: Path = OPERATOR) -> judge.E
         boot_budget_s=args.boot_budget,
         brotlicffi=security_pin(ref, operator),
         require_virtual_env=exports_virtual_env(ref, operator),
+        require_managed_jobs=bool(getattr(args, "keep_routines", False)),
     )
 
 
@@ -130,12 +139,26 @@ def security_pin(ref: str | None, operator: Path = OPERATOR) -> str | None:
 
 
 def machine_run_argv(
-    image: str, app: str, name: str, fixture_path: Path, dummy: dict[str, str], hold: bool = False
+    image: str,
+    app: str,
+    name: str,
+    fixture_path: Path,
+    dummy: dict[str, str],
+    hold: bool = False,
+    volume: str | None = None,
+    guest: tuple[str, int, int] = GUEST,
 ) -> list[str]:
     argv = ["fly", "machine", "run", image, "-a", app, "--name", name, "--region", "lax", "--restart", "no"]
-    argv += ["--vm-cpu-kind", GUEST[0], "--vm-cpus", str(GUEST[1]), "--vm-memory", str(GUEST[2]), "--detach"]
-    argv += ["--file-local", f"/opt/data/customer.yaml={fixture_path}"]
+    argv += ["--vm-cpu-kind", guest[0], "--vm-cpus", str(guest[1]), "--vm-memory", str(guest[2]), "--detach"]
     argv += ["--file-local", f"/harness/collect.py={HERE / 'collect.py'}"]
+    if volume:
+        # A seat-like volume mounts over /opt/data, so the fixture goes to the
+        # rootfs and the --postmortem prelude copies it onto the volume, where the
+        # entrypoint's legacy migration adopts it exactly as it does without one.
+        argv += ["-v", f"{volume}:/opt/data", "--file-local", f"/harness/customer.yaml={fixture_path}"]
+        argv += _env_args(dummy) + (["--entrypoint", "/bin/sleep", "--", "infinity"] if hold else [])
+        return argv
+    argv += ["--file-local", f"/opt/data/customer.yaml={fixture_path}"]
     # A seat's voice-vault mirror exists before its first failed sync; the harness
     # volume is fresh and its R2 is dead. Without this directory bootstrap.sh's
     # failed-sync branch (`_voice_prev_n="$(find .../voice/cohort ... | wc -l)"`
@@ -143,13 +166,19 @@ def machine_run_argv(
     # calibration run of rel-4cd01e8e-202610280041. A seat defect too (a fresh
     # seat whose first voice fetch fails dies the same way), reported, not fixed here.
     argv += ["--file-local", f"/opt/data/voice/cohort/.harness={fixture_path.parent / 'empty'}"]
-    for key, value in {**PLAIN_ENV, **dummy}.items():
-        argv += ["-e", f"{key}={value}"]
+    argv += _env_args(dummy)
     if hold:
         # Debug only: the Machine idles instead of booting, so a person can run
         # /app/entrypoint.sh by hand over ssh and read every line it prints.
         argv += ["--entrypoint", "/bin/sleep", "--", "infinity"]
     return argv
+
+
+def _env_args(dummy: dict[str, str]) -> list[str]:
+    out: list[str] = []
+    for key, value in {**PLAIN_ENV, **dummy}.items():
+        out += ["-e", f"{key}={value}"]
+    return out
 
 
 def masked(argv: list[str], dummy: dict[str, str]) -> str:
@@ -194,10 +223,14 @@ def wait_ready(runner: Runner, app: str, machine: str, budget: float) -> tuple[f
     return None, _state(runner, app, machine) == "started"
 
 
-POSTMORTEM_START = "setsid nohup /usr/bin/tini -s -g -- /app/entrypoint.sh > /harness/boot.log 2>&1 &"
+VOLUME_PRELUDE = (
+    "cp /harness/customer.yaml /opt/data/customer.yaml && "
+    "/opt/hermes/.venv/bin/python3 -I /harness/collect.py --prelude && "
+)
+POSTMORTEM_START = "{ setsid nohup /usr/bin/tini -s -g -- /app/entrypoint.sh > /harness/boot.log 2>&1 < /dev/null & }"
 
 
-def start_postmortem_boot(runner: Runner, app: str, machine: str) -> None:
+def start_postmortem_boot(runner: Runner, app: str, machine: str, volume: bool = False) -> None:
     """--postmortem: the Machine idles (sleep), and the REAL entrypoint is started
     under tini over ssh, so a boot that dies leaves its Machine up for the collector.
     The boot is the image's own entrypoint; only its parent differs (PID 1 is sleep)."""
@@ -206,7 +239,8 @@ def start_postmortem_boot(runner: Runner, app: str, machine: str) -> None:
         if time.time() > deadline:
             raise ToolingError("held Machine never reached started")
         time.sleep(5)
-    b64 = base64.b64encode(POSTMORTEM_START.encode("utf-8")).decode("ascii")
+    command = (VOLUME_PRELUDE if volume else "") + POSTMORTEM_START
+    b64 = base64.b64encode(command.encode("utf-8")).decode("ascii")
     res = runner.run(_ssh(app, machine, f'bash -c "echo {b64} | base64 -d | bash"'), timeout=120)
     if not res.ok:
         raise ToolingError(f"could not start the entrypoint on the held Machine: {res.text[-300:]}")
@@ -277,12 +311,14 @@ def _prepare(args: argparse.Namespace, runner: Runner) -> tuple[list[str], dict[
     out = Path(args.out_dir or tempfile.mkdtemp(prefix="boot-harness-"))
     out.mkdir(parents=True, exist_ok=True)
     fx = out / "customer.yaml"
-    fx.write_text(fixture.render(OPERATOR), encoding="utf-8")
+    guest, source = SIZES[getattr(args, "size", "2x-4096")]
+    fx.write_text(fixture.render(OPERATOR, source, bool(getattr(args, "keep_routines", False))), encoding="utf-8")
     (out / "empty").write_text("", encoding="utf-8")
     # Random suffix: two runs started in the same second collided on the name.
     name = f"boot-harness-{int(time.time())}-{secrets.token_hex(3)}"
     hold = bool(getattr(args, "hold", False) or getattr(args, "postmortem", False))
-    return machine_run_argv(args.image, args.app, name, fx, dummy, hold), dummy, out
+    volume = getattr(args, "volume", None)
+    return machine_run_argv(args.image, args.app, name, fx, dummy, hold, volume, guest), dummy, out
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
@@ -342,59 +378,41 @@ def cmd_observe(args: argparse.Namespace) -> int:
     return _observe(CommandRunner(), args, args.machine, out)
 
 
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
-
-
-class LogStream:
-    """`fly logs` streamed to a file for the whole run.
-
-    `fly logs --no-tail` returns only the last ~100 buffered lines; on the first
-    calibration run that cut off everything before the gateway's exit, including
-    its cause. The harness app holds only harness Machines, so the app stream is
-    this run's log. Started BEFORE `fly machine run`, so the first boot line is kept.
-    """
-
-    def __init__(self, app: str, path: Path) -> None:
-        self.path = path
-        self._fh = path.open("w", encoding="utf-8")
-        self._proc = subprocess.Popen(  # noqa: S603 - fixed argv, never a shell
-            ["fly", "logs", "-a", app], stdout=self._fh, stderr=subprocess.STDOUT, text=True
-        )
-
-    def close(self) -> str:
-        time.sleep(5)  # let the last lines arrive
-        self._proc.terminate()
-        try:
-            self._proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self._proc.kill()
-        self._fh.close()
-        return ANSI.sub("", self.path.read_text(encoding="utf-8", errors="replace"))
-
-
-def machine_lines(log: str, machine: str) -> str:
-    """Only this Machine's lines: the app stream replays buffered lines of earlier
-    harness Machines, and the first calibration run judged those as this boot's."""
-    tag = f"[{machine}]"
-    return "\n".join(ln for ln in log.splitlines() if tag in ln)
+def _boot_round(runner: Runner, args: argparse.Namespace, machine: str) -> tuple[float | None, dict[str, Any] | None]:
+    if getattr(args, "postmortem", False):
+        start_postmortem_boot(runner, args.app, machine, volume=bool(getattr(args, "volume", None)))
+    ready_after, up = wait_ready(runner, args.app, machine, args.boot_budget)
+    return ready_after, (collect(runner, args.app, machine, booted=ready_after is not None) if up else None)
 
 
 def _observe(runner: Runner, args: argparse.Namespace, machine: str, out: Path, stream: LogStream | None = None) -> int:
-    if getattr(args, "postmortem", False):
-        start_postmortem_boot(runner, args.app, machine)
-    ready_after, up = wait_ready(runner, args.app, machine, args.boot_budget)
-    bundle = collect(runner, args.app, machine, booted=ready_after is not None) if up else None
+    allow = judge.load_allowlist(HERE / "log-allowlist.yaml")
+    ex = expectations(args)
+    ready_after, bundle = _boot_round(runner, args, machine)
+    rounds = [("boot", ready_after, bundle)]
+    if getattr(args, "restart_check", False):
+        # Audit 10: the same Machine, on the same volume, restarted, must come up clean.
+        runner.run(["fly", "machine", "restart", machine, "-a", args.app], timeout=300)
+        ready_after, bundle = _boot_round(runner, args, machine)
+        rounds.append(("restart", ready_after, bundle))
     if stream is not None:
         log = machine_lines(stream.close(), machine)
     else:
         log = ANSI.sub(
             "", runner.run(["fly", "logs", "-a", args.app, "--machine", machine, "--no-tail"], timeout=120).stdout
         )
-    (out / "bundle.json").write_text(json.dumps(bundle, indent=2), encoding="utf-8")
     (out / "machine.log").write_text(log, encoding="utf-8")
-    print(f"evidence: {out}/bundle.json, {out}/machine.log (Machine {machine})")
-    allow = judge.load_allowlist(HERE / "log-allowlist.yaml")
-    return report(judge.judge(bundle, log, expectations(args), allow, ready_after))
+    rc = 0
+    for label, ready, round_bundle in rounds:
+        (out / f"bundle.{label}.json").write_text(json.dumps(round_bundle, indent=2), encoding="utf-8")
+        print(f"\n== {label} round == evidence: {out}/bundle.{label}.json, {out}/machine.log (Machine {machine})")
+        # A --postmortem round's entrypoint output is in the bundle (/harness/boot.log),
+        # and the Machine log is only the idle sleep, so each round judges its own bundle.
+        round_log = "" if getattr(args, "postmortem", False) else log
+        steal = ((round_bundle or {}).get("cpu") or {}).get("steal_pct")
+        print(f"cpu steal since boot: {steal if steal is not None else 'unknown'}% (shared-cpu throttling)")
+        rc |= report(judge.judge(round_bundle, round_log, ex, allow, ready))
+    return rc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -422,6 +440,16 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="boot the real entrypoint under a held Machine, so a crashing boot can still be collected",
             )
+            s.add_argument(
+                "--keep-routines",
+                action="store_true",
+                help="keep the source seat's authored routines (on a never-firing slot) so op-managed jobs exist",
+            )
+            s.add_argument("--size", choices=sorted(SIZES), default="2x-4096", help="guest and matching fixture")
+            s.add_argument("--volume", help="mount this harness-app volume at /opt/data (implies --postmortem)")
+            s.add_argument(
+                "--restart-check", action="store_true", help="after the boot, restart the Machine and judge again"
+            )
             if name == "observe":
                 s.add_argument("--machine", required=True)
     return p
@@ -429,6 +457,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if getattr(args, "volume", None):
+        args.postmortem = True
     handler = {"fixture": cmd_fixture, "judge": cmd_judge, "plan": cmd_plan, "run": cmd_run, "observe": cmd_observe}[
         args.cmd
     ]

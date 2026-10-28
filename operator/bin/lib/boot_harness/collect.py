@@ -31,6 +31,9 @@ SELFTEST_RESULTS = "/run/smd-selftest/results.json"
 # /harness/boot.log is the entrypoint's own output in a --postmortem run.
 LOG_GLOBS = (DATA + "/logs/*.log", DATA + "/profiles/*/logs/*.log", "/harness/boot.log")
 GATEWAY_EXITED = "Supervisor: gateway exited"
+HARNESS_FIXTURE = "/harness/customer.yaml"
+LOG_OFFSETS = "/harness/log-offsets.json"
+CRON_BEFORE = "/harness/cron-before.json"
 LOG_TAIL_BYTES = 256 * 1024
 OVERLAY_MODULES = ("shared", "shared.selfcheck", "bootstrap", "bootstrap.validate", "plugins")
 PROBE_DIR = ".smd-boot-harness"
@@ -146,7 +149,7 @@ def gateway_processes() -> list[str]:
     return out
 
 
-GATEWAY_ENV_NAMES = ("PYTHONPATH", "VIRTUAL_ENV", "INVOCATION_ID", "HERMES_HOME", "SMD_GATEWAY_PID")
+GATEWAY_ENV_NAMES = ("PYTHONPATH", "VIRTUAL_ENV", "INVOCATION_ID", "HERMES_HOME", "SMD_GATEWAY_PID", "TMPDIR")
 
 
 def _gateway_pid() -> int | None:
@@ -198,6 +201,9 @@ def gateway_introspect() -> dict:
         "started_epoch": _started_epoch(pid),
         "env_present": sorted(n for n in GATEWAY_ENV_NAMES if n in env),
         "smd_gateway_pid_matches": env.get("SMD_GATEWAY_PID") == str(pid),
+        # TMPDIR is a path, never a credential: its value is reported.
+        "tmpdir": env.get("TMPDIR"),
+        "profile_scratch_dirs": {p: os.path.isdir(p) for p in sorted(glob.glob(DATA + "/profiles/*/cache/scratch"))},
         "resolved": resolved,
     }
 
@@ -248,12 +254,17 @@ def install_facts() -> dict:
 
 
 def read_logs() -> dict[str, str]:
+    """Each log's tail, from where it ended before this boot when a prelude marked it."""
     logs = {}
+    marked = _load(LOG_OFFSETS) or {}
     for pattern in LOG_GLOBS:
         for path in sorted(glob.glob(pattern)):
             try:
+                size = os.path.getsize(path)
+                start = int(marked.get(path, 0)) if isinstance(marked, dict) else 0
+                start = start if start <= size else 0
                 with open(path, "rb") as fh:
-                    fh.seek(max(0, os.path.getsize(path) - LOG_TAIL_BYTES))
+                    fh.seek(max(start, size - LOG_TAIL_BYTES))
                     logs[path] = fh.read().decode("utf-8", "replace")
             except OSError as exc:
                 logs[path] = f"<unreadable: {exc.__class__.__name__}>"
@@ -340,14 +351,77 @@ def ready() -> int:
     return 3 if any(GATEWAY_EXITED in text for text in logs) else 1
 
 
-def on_harness() -> bool:
-    """The live customer.yaml names the harness. Read from the root-owned copy the
-    entrypoint installed, not from env, which an ssh session may not carry."""
+def cpu_time() -> dict:
+    """Since boot: the share of CPU time the host stole. Shared-cpu Machines are
+    throttled once their burst runs out, and a throttled boot is slow for reasons
+    no seat code controls, so every report carries this to read results against."""
     try:
-        with open("/var/lib/smd-config/customer.yaml", encoding="utf-8") as fh:
-            return any(line.strip() == f"customer_id: {SLUG}" for line in fh)
-    except OSError:
-        return False
+        with open("/proc/stat", encoding="utf-8") as fh:
+            fields = [int(x) for x in fh.readline().split()[1:]]
+    except (OSError, ValueError):
+        return {}
+    total = sum(fields[:8]) or 1
+    steal = fields[7] if len(fields) > 7 else 0
+    return {"steal_pct": round(100.0 * steal / total, 1), "ticks_total": total}
+
+
+def on_harness() -> bool:
+    """The customer.yaml names the harness: the root-owned copy the entrypoint
+    installed, or (before a --volume boot starts) the fixture the runner shipped.
+    Never env, which an ssh session may not carry."""
+    for path in ("/var/lib/smd-config/customer.yaml", HARNESS_FIXTURE):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                if any(line.strip() == f"customer_id: {SLUG}" for line in fh):
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def cron_snapshot() -> dict:
+    """Each profile's cron store as [{id, name}], read from jobs.json directly."""
+    out = {}
+    for path in sorted(glob.glob(DATA + "/profiles/*/cron/jobs.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError) as exc:
+            out[path] = f"<unreadable: {exc.__class__.__name__}>"
+            continue
+        jobs = doc if isinstance(doc, list) else (doc or {}).get("jobs") or []
+        out[path] = [
+            {"id": j.get("id"), "name": j.get("name"), "schedule": json.dumps(j.get("schedule"), sort_keys=True)}
+            for j in jobs
+            if isinstance(j, dict)
+        ]
+    return out
+
+
+def prelude() -> int:
+    """Before a --volume boot: remember where every existing log ends (so this boot
+    is judged on its own lines, not the volume's history) and what the cron store held."""
+    offsets = {}
+    for pattern in LOG_GLOBS:
+        for path in glob.glob(pattern):
+            try:
+                offsets[path] = os.path.getsize(path)
+            except OSError:
+                continue
+    with open(LOG_OFFSETS, "w", encoding="utf-8") as fh:
+        json.dump(offsets, fh)
+    with open(CRON_BEFORE, "w", encoding="utf-8") as fh:
+        json.dump(cron_snapshot(), fh)
+    print(json.dumps({"logs_marked": len(offsets)}))
+    return 0
+
+
+def _load(path: str) -> object:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
 
 
 def main() -> int:
@@ -360,11 +434,14 @@ def main() -> int:
         return 2
     if sys.argv[1:2] == ["--ready"]:
         return ready()
+    if sys.argv[1:2] == ["--prelude"]:
+        return prelude()
     selftest_wait = float(sys.argv[1]) if len(sys.argv) > 1 else 900
     cron_wait = float(sys.argv[2]) if len(sys.argv) > 2 else 180
     bundle: dict = {"collected_at": time.time()}
     with open("/proc/uptime", encoding="utf-8") as fh:
         bundle["uptime_s"] = float(fh.read().split()[0])
+    bundle["cpu"] = cpu_time()
     try:
         with open("/opt/hermes/HERMES_SHA", encoding="utf-8") as fh:
             bundle["hermes_sha"] = fh.read().strip()
@@ -377,6 +454,8 @@ def main() -> int:
     bundle["filesystem"] = filesystem()
     bundle["imports"] = imports()
     bundle["http"] = http_probes()
+    bundle["cron_before"] = _load(CRON_BEFORE)
+    bundle["cron_after"] = cron_snapshot()  # before the probe is planted
     bundle["cron"] = cron_probe("workspace", cron_wait)
     bundle["logs"] = read_logs()
     print(json.dumps(bundle, default=str))

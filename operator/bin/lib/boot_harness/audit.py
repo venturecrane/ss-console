@@ -144,6 +144,71 @@ def check_cron_child(bundle: dict[str, Any] | None) -> Verdict:
     return Verdict(name, True, f"pre_run child: {exe} (Python {child.get('version')}), env names {env}")
 
 
+PROBE_NAME = "op-managed:boot-harness-cron-probe"
+
+
+def _jobs(store: Any) -> dict[str, list[tuple[str, str]]]:
+    """(name, schedule) per profile store, the harness probe excluded."""
+    if not isinstance(store, dict):
+        return {}
+    return {
+        path: [
+            (str(j.get("name")), str(j.get("schedule")))
+            for j in jobs
+            if isinstance(j, dict) and j.get("name") != PROBE_NAME
+        ]
+        for path, jobs in store.items()
+        if isinstance(jobs, list)
+    }
+
+
+def check_cron_store(bundle: dict[str, Any], ex: Expect) -> Verdict:
+    """Audit 11, on a --volume boot: every job the volume carried is there after the
+    boot with the same schedule, no name is duplicated, and when the fixture
+    authors routines at least one op-managed job exists (else the check is vacuous).
+    Ids are not compared: the materializer removes and recreates managed jobs on
+    every boot by design (bootstrap/cron_materialize.py, pass B)."""
+    name = "cron-store-survives-boot"
+    before, after = _jobs(bundle.get("cron_before")), _jobs(bundle.get("cron_after"))
+    if not after and before:
+        return Verdict(name, False, "the cron store could not be read after the boot")
+    lost = sorted({f"{n} ({s})" for p, jobs in before.items() for n, s in jobs if (n, s) not in after.get(p, [])})
+    dupes = sorted({n for jobs in after.values() for n, _ in jobs if [m for m, _ in jobs].count(n) > 1})
+    managed = sorted({n for jobs in after.values() for n, _ in jobs if n.startswith("op-managed:")})
+    if lost or dupes:
+        return Verdict(name, False, f"lost or changed {lost[:5]}; duplicated {dupes[:5]}")
+    if ex.require_managed_jobs and not managed:
+        return Verdict(name, False, "the fixture authors routines but no op-managed job is in the store")
+    total = sum(len(v) for v in after.values())
+    return Verdict(name, True, f"{total} job(s) after boot, managed {managed}, none lost or changed, no duplicates")
+
+
+JOB_WORKER_READY = re.compile(r"smd-job-worker: ready \(worker_id=gw-(\d+)\)")
+JOB_WORKER_DIED = "Exception in thread smd-job-worker"
+
+
+def check_job_worker(bundle: dict[str, Any] | None, logs: str) -> Verdict:
+    """The gateway's durable-job worker came up. Its thread can die (an exception in
+    SessionDB() on the first v0.22 open of an empty v2026.9.14 state.db did exactly
+    this, 2026-10-28) while activation, the self-test and every other line stay green.
+
+    The decisive signal is the ready line carrying the GATEWAY's pid. A bare thread
+    traceback is not, because the safety-substrate invariant process also starts a
+    worker thread that dies at its own interpreter shutdown on every image, and the
+    log does not say which process printed it."""
+    name = "job-worker-ready"
+    pid = ((bundle or {}).get("gateway") or {}).get("pid")
+    ready = {int(p) for p in JOB_WORKER_READY.findall(logs)}
+    if pid is None:
+        return Verdict(name, False, "no gateway pid to match the worker against")
+    if int(pid) not in ready:
+        died = " (a smd-job-worker thread raised this boot)" if JOB_WORKER_DIED in logs else ""
+        return Verdict(
+            name, False, f"no 'smd-job-worker: ready' line from the gateway (pid {pid}); saw {sorted(ready)}{died}"
+        )
+    return Verdict(name, True, f"job worker ready in the gateway (worker_id=gw-{pid})")
+
+
 def check_job_broker(logs: str) -> Verdict:
     name = "no-job-broker-refusals"
     count = sum(1 for ln in logs.splitlines() if JOB_BROKER_REFUSED in ln)
@@ -153,11 +218,13 @@ def check_job_broker(logs: str) -> Verdict:
 
 
 def checks(bundle: dict[str, Any] | None, logs: str, ex: Expect) -> list[Verdict]:
-    return [
+    volume = [check_cron_store(bundle, ex)] if bundle and bundle.get("cron_before") is not None else []
+    return volume + [
         check_plugins_enabled(bundle),
         check_modules(bundle, ex),
         check_gateway_env(bundle, ex),
         check_watchdog(bundle, logs, ex),
         check_cron_child(bundle),
+        check_job_worker(bundle, logs),
         check_job_broker(logs),
     ]
