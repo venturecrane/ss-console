@@ -18,10 +18,14 @@
 #
 # Remove a line once Hermes' lock at HERMES_UPSTREAM_SHA carries the fix.
 
-# brotlicffi 1.2.0.2 -> fix: PYSEC-2026-4323 / GHSA-9v8h-qqgm-4m35 (out-of-bounds
-# write in the Brotli decoder). Reachable: aiohttp decodes a `br` response body
-# with it. A patch release of a binding with no API change Hermes calls.
-# hermes-agent exact-pins brotlicffi==1.2.0.2 in its `messaging` extra
-# (pyproject.toml, v0.22.5), so hermes_pip_check.py tolerates that one
-# requirement, and only while the installed version is the pin below.
-brotlicffi>=1.2.1.0
+# certifi 2026.5.20 -> fix: PYSEC-2026-4320 / GHSA-6q48-6c7w-9gw2 (critical).
+# The bundle still trusts emSign roots whose intermediate CA keys were
+# compromised; httpx (and so the Anthropic SDK) verifies TLS against it.
+# certifi is a CA data bundle with no API surface. hermes-agent exact-pins
+# certifi==2026.5.20, so hermes_pip_check.py tolerates that one requirement,
+# and only while the installed version is the pin below.
+certifi>=2026.10.19
+
+# urllib3 2.7.0 -> fix: PYSEC-2026-4175 / -4176 / -4177 (high). In-major
+# release; hermes-agent declares urllib3>=2.7.0,<3, which 2.8 satisfies.
+urllib3>=2.8.0

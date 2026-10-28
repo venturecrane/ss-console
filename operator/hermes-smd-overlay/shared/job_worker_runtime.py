@@ -170,8 +170,8 @@ def _overlay_table_cents(
     """Price the segment from the overlay's own Anthropic table, or None when the
     model is not in it.
 
-    Hermes' bundled price table lags new models (v2026.9.14 did not price
-    claude-sonnet-5-5, the A&P main model since 2026-10-13), and
+    Hermes' bundled price table lags new models (the pinned v2026.9.14 does not
+    price claude-sonnet-5-5, the A&P main model since 2026-10-13), and
     ``shared/anthropic_pricing.json`` is the table SMD keeps current for exactly
     that reason. It carries input/output rates only, so cache buckets use
     Anthropic's multipliers on the input rate: reads at 0.1x, writes at 2x (the
@@ -197,7 +197,7 @@ def _cost_dollars(cost: Any) -> float | None:
     """Dollar amount from whatever ``estimate_usage_cost`` returned, or None when
     the shape carries no usable figure.
 
-    Hermes (agent/usage_pricing.py ``CostResult``, v2026.9.14 and v0.22.5) returns
+    The pinned Hermes (v2026.9.14, agent/usage_pricing.py ``CostResult``) returns
     a frozen dataclass whose ``amount_usd`` is a ``Decimal`` -- or ``None`` when
     the route is unpriced (status ``"unknown"``). A dict (``{"total": ...}``) and
     a bare number are accepted for older/other shapes. Anything else is None, and

@@ -74,13 +74,6 @@ exec "$@"
 """
 
 
-# What Hermes v0.22.5 records in the launching profile's gateway_state.json when
-# gateway.standalone: true keeps it single-profile (STANDALONE_PROFILE_REASON,
-# hermes_cli/gateway_multiplex_mode.py).
-STANDALONE_REASON = "this profile is standalone (gateway.standalone: true); it serves only itself"
-STANDALONE_STATE = {"gateway_state": "running", "multiplex_standalone_reason": STANDALONE_REASON}
-
-
 def _write(path: Path, text: str, mode: int = 0o644) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
@@ -109,7 +102,6 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     _write(root / "app/retired-skills.txt", "# retired\nold-tracker\n")
     (root / "opt/data/skills").mkdir(parents=True)
     _write(root / "opt/data/profiles/operator/state/gateway.heartbeat", "beat\n")
-    _write(root / "opt/data/profiles/operator/gateway_state.json", json.dumps(STANDALONE_STATE))
     _write(root / "run/smd-gateway-liveness/state", "armed")
     _write(root / "app/agentmail-webhook-secret-probe.py", "raise SystemExit(0)\n")
     return {"root": root, "shims": shims}
@@ -390,26 +382,3 @@ def test_trigger_runs_only_when_root_placed_it(seat: dict[str, Path], tmp_path: 
     finally:
         proc.terminate()
         proc.wait(timeout=10)
-
-
-def test_the_gateway_must_record_the_standalone_guard(seat: dict[str, Path]) -> None:
-    # Hermes v0.22.5 promotion (#3564). FALSIFIER: a gateway that multiplexes
-    # (no guard reason) or stayed standalone for another cause fails the check;
-    # a missing record fails it too. Only the gateway.standalone reason passes.
-    state = seat["root"] / "opt/data/profiles/operator/gateway_state.json"
-    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is True
-    state.write_text(json.dumps({"gateway_state": "running", "multiplex_standalone_reason": None}))
-    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
-    state.write_text(json.dumps({"gateway_state": "running", "multiplex_standalone_reason": "only one profile exists"}))
-    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
-    state.unlink()
-    assert _check(_once(seat, "hourly"), "gateway-multiplex-standalone")["ok"] is False
-
-
-def test_a_stale_heartbeat_profile_is_not_judged_and_no_live_gateway_fails(seat: dict[str, Path]) -> None:
-    beat = seat["root"] / "opt/data/profiles/operator/state/gateway.heartbeat"
-    old = time.time() - 3600
-    os.utime(beat, (old, old))
-    found = _check(_once(seat, "hourly"), "gateway-multiplex-standalone")
-    assert found["ok"] is False
-    assert "no profile has a fresh gateway heartbeat" in found["detail"]

@@ -310,7 +310,7 @@
         "finished_at": "2026-10-23T12:00:00Z",
         "version": "1111111111111111111111111111111111111111",
         "image_ref": "registry.fly.io/hermes-fleet:rel-11111111-202610230000",
-        "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+        "hermes_sha": "345cd2b057a452236de401d3534b8502a7465e8d",
         "total": 74,
         "failed_count": 1,
         "warned_count": 1,

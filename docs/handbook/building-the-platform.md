@@ -102,8 +102,8 @@ The directory keeps the plugin's name on purpose: pytest's package walk stops at
 a directory whose name is not a Python identifier, so the overlay's tests
 resolve their imports (`shared`, `bootstrap`, `plugins`) from the overlay root
 exactly as they did in the standalone repo, which relied on the same stop. CI runs it as the `overlay` job of `operator-substrate.yml`: ruff
-check and format on the overlay tree, the overlay pytest suite on Python 3.14
-(the Hermes venv's interpreter since the v0.22.5 promotion) against the pinned Hermes (fetched shallow from `NousResearch/hermes-agent` at
+check and format on the overlay tree, the overlay pytest suite on Python 3.13
+against the pinned Hermes (fetched shallow from `NousResearch/hermes-agent` at
 the Dockerfile's `ARG HERMES_UPSTREAM_SHA`), and a no-diff run of
 `operator/requirements/compile.sh`. The overlay tests read this repo's contract
 fixtures in place, so they run in CI with nothing copied across. To run the
@@ -111,8 +111,8 @@ suite locally:
 
 ```bash
 cd operator/hermes-smd-overlay
-uv venv --python 3.14 .venv
-uv pip install --python .venv/bin/python -e '.[dev]' ruamel.yaml==0.18.16 psutil==7.2.2
+uv venv --python 3.13 .venv
+uv pip install --python .venv/bin/python -e '.[dev]'
 HERMES_AGENT_SRC=<a NousResearch/hermes-agent checkout at ARG HERMES_UPSTREAM_SHA> \
   .venv/bin/python -m pytest -q
 ```
@@ -169,7 +169,7 @@ To run the harness locally, with a Hermes checkout at the pin (or a candidate):
 
 ```bash
 cd operator/hermes-smd-overlay
-uv venv --python 3.14 .venv
+uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python -e '<hermes checkout>[mcp,anthropic]'
 uv pip install --python .venv/bin/python -e '.[e2e]'
 HERMES_AGENT_SRC=<hermes checkout> .venv/bin/python -m pytest tests_e2e -x -q --timeout=240

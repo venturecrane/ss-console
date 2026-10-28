@@ -2,7 +2,7 @@
 what is listed here.
 
 THE DEFECT (proven offline 2026-10-17 against the real Hermes ``read_file_tool``
-at the then-pinned v2026.9.14). The owner fence in this plugin guards the
+at the pinned v2026.9.14). The owner fence in this plugin guards the
 ``record_store_*`` tools and nothing else. ``read_file`` is READ-class, which
 the trust plugin always allows, and it is on the webhook (email) surface
 (``shared.webhook_read_surface``: ``smd_webhook_read`` = ``read_file``).
