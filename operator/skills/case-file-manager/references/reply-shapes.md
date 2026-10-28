@@ -27,7 +27,10 @@ the ranked list hold the rest.
   its File Status folder. The list's Proposed changes sheet numbers 9 changes; to
   make them, reply in this thread with the numbers, for example yes to 1, 3 and 4,
   or yes to all. Nothing changes until then, and nothing has been sent to anyone
-  outside the firm." Each count only when above zero.
+  outside the firm." Each count only when above zero. A `recheck` reads the same.
+  A scheduled job's message is one NEW email to the firm's authored recipient
+  (the broker binds it and sets its subject), never a reply; when the wake carries
+  `Count on the 1st: 41 Open, 7 Pending.`, that line opens the message unchanged.
 - **delivered, an apply.** A reply in the approver's thread: "Changes 1, 3 and 4
   are made in Smokeball and checked. Change 2 was left as it is because the file
   changed since it was proposed, so nothing was guessed."

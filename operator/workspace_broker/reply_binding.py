@@ -57,7 +57,11 @@ the recipient. So the broker, which the agent cannot steer, decides:
       paged when it stopped;
     - a Case File Manager job (2026-10-26): exactly the litigation status rules
       for a REQUESTED job, on the case file ledger (``casefile_store``), a
-      reply in the requester's thread; it is never scheduled. One side effect:
+      reply in the requester's thread. A SCHEDULED job (2026-10-27, the weekday
+      cron, ``casefile_schedule``) sends ONE NEW email per job, so each day's
+      list is its own thread and a reply's numbers can only name that list's
+      lines, to the first authored ``scheduled_recipients`` entry of
+      ``case-file-manager`` under the subject ``casefile_subject`` composes. One side effect:
       once a delivered review's reply is sent and settled, the broker raises
       that job's numbered changes on the casework ledger, on this reply's thread
       (``casefile_casework.after_bound_reply``), so the requester can approve
@@ -83,6 +87,7 @@ Every verdict, bound or refused, writes a ``REPLY_BINDING`` audit row.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import logging
 import os
@@ -104,7 +109,7 @@ from .note_ledger import NoteLedger
 from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .casefile_casework import after_bound_reply, casefile_ledger_of
-from .reply_scheduled import scheduled_recipient_ok as _scheduled_recipient_ok
+from .reply_scheduled import casefile_subject as _casefile_subject, scheduled_recipient_ok as _scheduled_recipient_ok
 from .transmit_verbs import dispatch_transmit
 
 KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")  # fmt: skip
@@ -140,6 +145,8 @@ SCHEDULED_LANES = {
     # 2026-10-16: a note with no request email (``note_ledger``
     # trigger='scheduled'), to an admin the smd-note skill authors.
     "note_job": "skill:smd-note",
+    # 2026-10-27: the Case File Manager's weekday run (casefile_schedule).
+    "casefile_job": "skill:case-file-manager",
 }
 #: The outcomes a requester is told about, for EVERY job kind (demand and
 #: drafting alike; the name predates the drafting lane). NOT ``failed``: a
@@ -380,6 +387,10 @@ def _verify_scheduled(broker: BrokerContext, kind: str, ident: str, key: str, ro
         subject = str(row.get("subject") or "").strip()
         if not subject:
             raise BindingRefused(f"{_NOUN[kind]} job {ident} records no subject; nothing was sent")
+    elif kind == "casefile_job":
+        subject = _casefile_subject(str(row["request_ref"]), str(row.get("mode") or ""))
+        if not subject:
+            raise BindingRefused(f"{_NOUN[kind]} job {ident}'s date cannot be read; nothing was sent")
     else:
         subject = scheduled_subject(str(row["request_ref"]))
     if not _scheduled_recipient_ok(broker, kind, str(row["requester"])):
@@ -678,6 +689,10 @@ def reply_verb(
             _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
         raise
     _settle_sent(broker, db_path, v, result)
+    if v.mode == MODE_NEW_MESSAGE and isinstance(result, dict) and result.get("conversation_id"):
+        # A new message's thread is known only once Sent Items found it: the
+        # case file lines are raised on that thread, the one a reply arrives in.
+        v = dataclasses.replace(v, conversation_id=str(result["conversation_id"]))
     after_bound_reply(broker, v, session_id)
     return result
 

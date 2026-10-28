@@ -120,10 +120,16 @@ are we on 100123") is not this skill.
 
 The runner wakes this skill with a task whose first line is "Run the
 case-file-manager skill's DELIVER mode for casefile job <id>." followed by `Kind:`,
-`Mode:` (`full` or `apply`), `Trigger:`, `Outcome:`, a counts line, `Requested by:`
-and, on a hold, `Hold class:`. The wake is a pointer; the job's own record is the fact.
+`Mode:` (`full`, `recheck` or `apply`), `Trigger:` (`request` or `scheduled`),
+`Outcome:`, a counts line, `Requested by:` and, on a hold, `Hold class:`. The wake is
+a pointer; the job's own record is the fact.
 
-A `full` job's counts line is `Matters:` (the total, read this run, already current,
+A `scheduled` job came from the firm's standing schedule, not an email: its bind
+answers with a NEW message to the firm's authored recipient under a subject the
+broker sets, and you send that one message the same way. A `full` and a `recheck`
+job are both a review; a `recheck` reads only what changed since the last one.
+
+A review's counts line is `Matters:` (the total, read this run, already current,
 not reviewed, File Status filed, changes proposed). An `apply` job's is `Changes
 applied:` (how many of how many, the numbers made and the numbers not made). An
 apply job answers the approval email itself: its bound reply goes to the person who
@@ -144,7 +150,9 @@ the `job_id` once (that call is what raises SMD's shortfall alert) and end the t
    message carries COUNTS ONLY, never a matter fact.** No matter number, no client or
    party name, no date from a document, no task's words. Those live in the File
    Status in each file and in the ranked list:
-   - **delivered, a review** (`Mode: full.`): the ranked list is filed in the firm's
+   - **delivered, a review** (`Mode: full.` or `Mode: recheck.`): when the wake has a
+     `Count on the 1st:` line, its words go first, unchanged, as one line (the
+     month's count of open and Pending files, counts only). Then: the ranked list is filed in the firm's
      Operator Library (the folder the library uses for these lists); it covers
      `<matters_total>` files, `<matters_read>` read this run and `<matters_current>`
      already current with nothing new; each file read has a current File Status in
@@ -235,6 +243,19 @@ REQUEST mode runs on a Named Administrator's own email, routed here by
 `matter-inbox-router`; DELIVER mode runs on the case file job's completion wake
 (`/webhooks/handoff`). Nothing runs on a schedule until the firm switches one on
 through SMD.
+
+**The standing schedule** (once the firm says yes) needs no turn at all. The
+skill's cron row runs `pre_run.py` hourly on weekday mornings; it submits one
+scheduled envelope and wakes nothing. The broker (`casefile_schedule.py`) queues,
+per authored caseload (`settings.scheduled_caseloads`, names separated by `;`), a
+`recheck` on each business day and a `full` read of every file on the month's first
+business day, in the firm's own time zone with the firm's authored `holidays`
+skipped; one job per caseload per day; a caseload whose last job is still running
+waits for the next fire until the firm's cutoff hour, and a day that ends with no
+job pages SMD once. It refuses, and pages SMD once, when the Smokeball connection
+has under seven days left or its age is not known. The month's first scheduled job
+also records the month's count of open and Pending files, from the matter list.
+Each job's completion wake runs DELIVER mode as above.
 
 ## References
 

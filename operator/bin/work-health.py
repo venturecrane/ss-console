@@ -47,6 +47,7 @@ import yaml
 from bin.lib import console_d1, msgraph_channel, seam_pull
 from bin.lib import work_health as wh
 from bin.lib import work_health_auth as auth
+from bin.lib import work_health_casefile as casefile_wh
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_sources as src
 
@@ -273,6 +274,7 @@ def _operator_items(
     items = wh.request_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
     items += src.delivery_proof_items(slug, rows, cfg, now)
+    items += casefile_wh.casefile_schedule_items(slug, rows, now)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)

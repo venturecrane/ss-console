@@ -130,6 +130,7 @@ RANK = {
     "heartbeat_stale": 32,
     "auth_unchecked": 34,
     "missed_slot": 40,
+    "schedule_paused": 41,
     "schedule_drift": 44,
     "silent_run": 42,
     "shortfall": 50,
