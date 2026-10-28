@@ -310,6 +310,12 @@ def _persona() -> str | None:
 def _stage_probe(persona: str) -> str:
     target = os.path.join(DATA, "profiles", persona, "scripts", PROBE_DIR)
     os.makedirs(target, exist_ok=True)
+    # A --volume run keeps the previous round's sentinel on the volume: without this,
+    # a restart round whose gateway never came up read the old file as "fired".
+    try:
+        os.remove(os.path.join(target, "fired"))
+    except FileNotFoundError:
+        pass
     with open(os.path.join(target, "probe.py"), "w", encoding="utf-8") as fh:
         fh.write(PROBE_SCRIPT)
     _run(["chown", "-R", "hermes:hermes", os.path.join(DATA, "profiles", persona, "scripts")])

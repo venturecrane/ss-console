@@ -34,6 +34,8 @@ OPERATOR = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 APP_RE = re.compile(r"^hermes-boot-harness(-[a-z0-9]+)?$")
 DEAD_ENDPOINT = "http://127.0.0.1:9"
+# The entrypoint logs how long it waited for the broker socket (from #3586).
+BROKER_WAIT = re.compile(r"Workspace broker socket up after (\d+)s")
 # The seat's own [env] (operator/templates/fly.toml.template), harness-slugged.
 PLAIN_ENV = {
     "HERMES_HOME": "/opt/data",
@@ -58,6 +60,9 @@ DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"
 SIZES = {
     "2x-4096": (("shared", 2, 4096), fixture.SOURCE_SLUG),
     "1x-1024": (("shared", 1, 1024), fixture.SOURCE_1GB),
+    # SMD's own pilot (a Smokeball test firm, not a client): its 630 MB state.db is the
+    # large-store timing case. A snapshot of it is only ever restored inside the harness app.
+    "4x-8192": (("shared", 4, 8192), "pilot-smokeball"),
 }
 GUEST = SIZES["2x-4096"][0]
 POLL_S = 15.0
@@ -411,6 +416,8 @@ def _observe(runner: Runner, args: argparse.Namespace, machine: str, out: Path, 
         round_log = "" if getattr(args, "postmortem", False) else log
         steal = ((round_bundle or {}).get("cpu") or {}).get("steal_pct")
         print(f"cpu steal since boot: {steal if steal is not None else 'unknown'}% (shared-cpu throttling)")
+        waited = BROKER_WAIT.findall(judge.all_logs(round_bundle, round_log))
+        print(f"broker socket wait: {waited[-1] + 's' if waited else 'not logged by this image'}")
         rc |= report(judge.judge(round_bundle, round_log, ex, allow, ready))
     return rc
 

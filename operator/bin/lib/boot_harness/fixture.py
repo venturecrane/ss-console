@@ -19,6 +19,7 @@ route" block), and the runner sets it to a per-run random value.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -98,7 +99,28 @@ def derive(source_text: str, source: str = SOURCE_SLUG, keep_routines: bool = Fa
     doc["customer_name"] = "SMD boot harness (throwaway, not a seat)"
     _scrub_scope(doc.setdefault("scope", {}))
     _scrub_personas(doc.get("personas") or [], keep_routines)
-    return doc
+    return _scrub_addresses(doc, {})
+
+
+# A pack reference (`law-firm/pi@0.3.0`) carries an @ and is not an address.
+_PACK_REF = re.compile(r"^[a-z0-9-]+/[a-z0-9-]+@\d+(\.\d+)*$")
+
+
+def _is_address(value: str) -> bool:
+    return "@" in value and not _PACK_REF.match(value) and not value.split("@")[-1].endswith(".invalid")
+
+
+def _scrub_addresses(node: Any, seen: dict[str, str]) -> Any:
+    """Every address anywhere in the document, wherever a seat put one, becomes a
+    distinct address under .invalid (the same original maps to the same stand-in,
+    so a roster that must keep its classes disjoint still validates)."""
+    if isinstance(node, dict):
+        return {k: _scrub_addresses(v, seen) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_scrub_addresses(v, seen) for v in node]
+    if isinstance(node, str) and _is_address(node):
+        return seen.setdefault(node.lower(), f"nobody-{len(seen) + 1}@boot-harness.invalid")
+    return node
 
 
 def render(operator_root: Path, source_slug: str = SOURCE_SLUG, keep_routines: bool = False) -> str:
@@ -123,7 +145,7 @@ def reachable_addresses(doc: dict[str, Any]) -> list[str]:
         elif isinstance(node, list):
             for value in node:
                 walk(value)
-        elif isinstance(node, str) and "@" in node and not node.split("@")[-1].endswith(".invalid"):
+        elif isinstance(node, str) and _is_address(node):
             found.append(node)
 
     walk(doc)
