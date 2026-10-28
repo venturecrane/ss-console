@@ -398,7 +398,7 @@ def _observe(runner: Runner, args: argparse.Namespace, machine: str, out: Path, 
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="boot-harness", description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(prog="boot-harness", description=(__doc__ or "boot-harness").splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("fixture")
     f.add_argument("--out")
