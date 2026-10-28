@@ -85,15 +85,24 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie AS uv_source
 # pins its toolchain to Node 26 everywhere and, as of v2026.8.18, ships
 # `.npmrc engine-strict=true` with `engines.node >=22.22.0` — so `npm install`
 # over the Hermes tree hard-fails on the apt Node (vfy_01M0DP257XDYJ0Z04V1ZF57G2X:
-# seat had v20.19.2 / npm 9.2.0). We copy node + npm from the official image
-# exactly the way upstream's own Dockerfile does at that tag (its `node_source`
-# stage, same digest), so the runtime matches what Hermes is built and tested
-# against. The `engines.npm` range (`<11.10.0 || >=11.17.0`) is satisfied by
-# construction: upstream builds its published image from this digest under
-# engine-strict. Bumping the Node major is a one-line change to this FROM; the
-# next digest bump re-checks that npm range. Node is needed at RUNTIME too:
-# `@oktopeak/clio-mcp` (below) is a Node stdio MCP server the gateway launches.
-FROM node:26-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS node_source
+# seat had v20.19.2 / npm 9.2.0). We copy node + npm from the official image.
+# Node is needed at RUNTIME too: `@oktopeak/clio-mcp` (below) is a Node stdio
+# MCP server the gateway launches.
+#
+# Pinned 2026-10-28 (ss-console#3564): node:26-bookworm-slim index digest
+# 88e48077..., NODE_VERSION 26.12.1 in the linux/amd64 config blob, bundled npm
+# 11.20.0 (nodejs.org/dist/index.json). That bump fixes CVE-2026-111497 (a
+# high-severity Brotli-decoder RCE in Node < 26.12.1; the previous digest
+# 9e6f9357... was 26.5.1). npm 11.20.0 satisfies Hermes' `engines.npm`
+# range `<11.10.0 || >=11.17.0` (v0.22.5 package.json), and the image build
+# prints `node --version` / `npm --version`.
+# Upstream: v0.22.5 (bf0203a7) has no `node_source` stage any more. Its image
+# takes Node from its package manager's lock (pm/lock.json: node v26.12.1,
+# npm 12.0.2). So we now DELIBERATELY diverge in how we get Node (the official
+# image's binaries, pinned by digest), at the same Node version; npm differs
+# (11.20.0 vs 12.0.2) and both satisfy the engines range. Every digest bump
+# re-checks the engines.npm range and this comparison.
+FROM node:26-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS node_source
 # Python 3.14 source stage for the Hermes venv (Hermes v0.22.5 promotion,
 # ss-console#3564). Hermes v0.22 supports only 3.14: its uv.lock's
 # supported-markers are python_full_version >= '3.14', and Debian 13 ships 3.13.
