@@ -46,7 +46,7 @@ FILL = {
     "[SLUG]": "couple-test",
     "[COUPLE NAME]": "Test Couple",
     "[CURRENT BLESSED FLEET PIN, e.g., v2026.5.7@<40-hex-sha>]": (
-        "v2026.9.14@345cd2b057a452236de401d3534b8502a7465e8d"
+        "v0.22.5@bf0203a794a07aac3ff764972ab9087baa4e4f4e"
     ),
     "[PARTNER 1 NAME]": "Alex Example",
     "[PARTNER 2 NAME]": "Sam Example",

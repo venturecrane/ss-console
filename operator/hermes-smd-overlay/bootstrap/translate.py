@@ -1694,7 +1694,18 @@ def _persona_config(
     # v2026.8.18; bridged into HERMES_MAX_ITERATIONS by gateway/run.py:1979-2022).
     # A runaway turn must not spend 5.5x more iterations because the fleet pin
     # moved; raising it is a Captain cost-posture decision, not a side effect.
-    config["agent"] = {"disabled_toolsets": disabled_toolsets, "max_turns": 90}
+    # `auto_recovery_cycles: 0` (Hermes v0.22.5 promotion, #3564): v0.22 added a
+    # provider-outage recovery ladder (agent/turn_recovery_autorecover.py,
+    # default 5 cycles) that parks a turn with "Provider temporarily
+    # unavailable, retrying automatically" status lines and "send /stop to
+    # cancel". Unproven that those lines never reach a client on an email or
+    # webhook turn, so the ladder stays off (0 disables it) and a provider outage
+    # ends the turn the way v2026.9.14 did.
+    config["agent"] = {
+        "disabled_toolsets": disabled_toolsets,
+        "max_turns": 90,
+        "auto_recovery_cycles": 0,
+    }
 
     # ------------------------------------------------------------------
     # Pins for upstream defaults that FLIPPED between Hermes v2026.7.1 (0.18)
@@ -1734,13 +1745,24 @@ def _persona_config(
     # two minutes, and a 1 GB seat's synchronous plugin imports take about four
     # (ss-console docs/runbooks/operator/incidents/2026-09-01-gateway-startup-
     # watchdog-collision.md: pilot-smokeball crash-looped for two and a half
-    # hours with no load at all). The knobs exist from Hermes v2026.9.14
-    # (gateway/config.py GatewayConfig; bounds interval 1..3600s, timeout
-    # 1..600s, strikes 1..1000); an older pin reads only gateway.loop_watchdog
-    # and ignores the rest, so writing them is inert until the seat is promoted.
+    # hours with no load at all). The knobs exist from Hermes v2026.9.14 and are
+    # unchanged at v0.22.5 (gateway/config.py GatewayConfig; bounds interval
+    # 1..3600s, timeout 1..600s, strikes 1..1000).
     # Small seats get a budget that clears a cold start with margin; larger
     # seats keep detection tighter, still above the shipped default.
-    config["gateway"] = _loop_watchdog_knobs(customer)
+    # gateway.standalone: true (Hermes v0.22.5 promotion, #3564). From v0.22 one
+    #   gateway per host serves every profile by default ("multiplex"), and a
+    #   gateway launched from a named profile (bootstrap.sh launches the active
+    #   persona's) multiplexes unless that profile's own config.yaml opts out
+    #   (hermes_cli/profiles.py profile_is_standalone; the old opt-out,
+    #   gateway.multiplex_profiles: false, is retired and rewritten to true).
+    #   Multiplexing arms a fail-closed secret scope in which an unscoped secret
+    #   read raises instead of reading os.environ, where every Fly secret on a
+    #   seat lives (agent/secret_scope.py), opens a /p/<profile>/ ingress, and
+    #   brings up the other personas' adapters. Standalone is the single-profile
+    #   gateway every seat runs today; seat-checks.sh
+    #   gateway-multiplex-standalone reads the gateway's recorded decision back.
+    config["gateway"] = {**_loop_watchdog_knobs(customer), "standalone": True}
     config["tools"] = {"tool_search": {"enabled": "off"}}
     config["approvals"] = {"mode": "manual"}
     config["display"] = {"show_reasoning": False}
@@ -1755,6 +1777,24 @@ def _persona_config(
     title_generation = _title_generation_pin(customer)
     if title_generation:
         config["auxiliary"] = {"title_generation": title_generation}
+    # Pins for upstream defaults that changed between Hermes v2026.9.14 and
+    # v0.22.5 (#3564), appended last for the same reason as the block above.
+    # plugins.load_timeout_seconds: 0. v0.22 gives every plugin's import and
+    #   register() a 10s deadline and skips a plugin that overruns it
+    #   (hermes_cli/plugins_loader.py). A 1 GB seat's cold plugin crawl takes
+    #   minutes (the 2026-09-01 incident measured about four), so the trust,
+    #   audit and inbound plugins could be skipped on a slow boot and the
+    #   activation gate would then refuse to serve. 0 loads inline with no
+    #   deadline, which is what v2026.9.14 did.
+    # sessions.auto_prune: true. v2026.9.14 pruned ended sessions past
+    #   retention_days (90) by default; v0.22.5 turns that off and, while the key
+    #   is unset, posts a "prune old sessions?" question to each served profile's
+    #   home channel when the disk holding state.db runs low
+    #   (gateway/run_housekeeping_disk.py). A seat has no one to answer it, and
+    #   its home channel can be a client's. The key keeps v2026.9.14's pruning
+    #   and asks nothing.
+    config["plugins"] = {"load_timeout_seconds": 0}
+    config["sessions"] = {"auto_prune": True}
 
     return config
 
@@ -1762,7 +1802,8 @@ def _persona_config(
 # The session auto-title runs on the current Haiku, for cost.
 #
 # Hermes titles every new session with one side-call, by default on the MAIN
-# model (agent/title_generator.py @ v2026.9.14). A title is a handful of
+# model (agent/title_generator.py; auxiliary.title_generation.model is "" at
+# v2026.9.14 and v0.22.5). A title is a handful of
 # tokens; on an Opus seat that is Opus pricing for a label. Claude Haiku 5.5 is
 # the current small model ($0.10/$0.50 per MTok against Opus 5.5's $4/$20).
 # The call asks for thinking off; shared/anthropic_thinking_off.py renders that

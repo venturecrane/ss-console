@@ -64,7 +64,7 @@ import zipfile
 from datetime import datetime, timedelta
 from typing import Any
 
-# nosemgrep: python.lang.security.use-defused-xml.use-defused-xml - the seat interpreter is 3.13 whose expat skips external entities when no handler is set and caps entity expansion (expat 2.4.1+); the zip is bounded first (_MAX_MEMBERS, _MAX_UNCOMPRESSED_BYTES) and only the parts _ALLOWED_PARTS names are parsed
+# nosemgrep: python.lang.security.use-defused-xml.use-defused-xml - both seat interpreters (3.14 Hermes venv, 3.13 workspace broker; #3564) ship an expat that skips external entities when no handler is set and caps entity expansion (expat 2.4.1+); the zip is bounded first (_MAX_MEMBERS, _MAX_UNCOMPRESSED_BYTES) and only the parts _ALLOWED_PARTS names are parsed
 from xml.etree import ElementTree
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

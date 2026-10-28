@@ -886,6 +886,17 @@ replace_dir_tolerant "${OVERLAY_PACK}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
   || die "failed to enable hermes-smd-overlay in active profile ${ACTIVE_PROFILE}"
 log "Overlay materialized + enabled in active profile"
 
+# Re-assert the authored webhook tool surface (Hermes v0.22.5 promotion, #3564).
+# Since v0.22 `plugins enable` appends the enabled plugin's toolset to every
+# SAVED platform_toolsets list (hermes_cli/plugins_cmd.py _toggle_plugin_toolset),
+# so the enable above widens the exact read-only list translate authored for
+# inbound email turns (shared/webhook_read_surface.py, ss-console#2145). This
+# writes the authored list back and fails the boot unless the file then equals
+# it: a wider surface on an untrusted inbound turn is not a seat we serve.
+/opt/hermes/.venv/bin/python3 -m bootstrap.webhook_toolsets "${CUSTOMER_YAML}" "${PROFILE_HERMES_HOME}/config.yaml" \
+  || die "platform_toolsets.webhook in ${ACTIVE_PROFILE} does not equal the authored list after plugins enable — refusing to launch"
+log "Webhook tool surface equals the authored list"
+
 # ---------- Seed the gateway-startup ACTIVATION GATE onto the volume ----------
 # The overlay's LIVE governance gate is a HookRegistry handler
 # (hooks/smd-overlay-activation) that fires at gateway:startup IN the gateway

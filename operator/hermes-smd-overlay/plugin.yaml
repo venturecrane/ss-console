@@ -2,6 +2,14 @@ name: hermes-smd-overlay
 version: "0.4.0"
 description: "Plugin overlay for the Nous Hermes Agent — adds audit emission, trust ceilings, sample-driven voice transformation, and memory mirroring without modifying Hermes core."
 author: VentureCrane
+# Hermes v0.22 enables a plugin through its package manager (pm/), which reads a
+# plugin directory's pyproject.toml as dependencies to install into a shared
+# workspace environment on `hermes plugins enable`. This pack's pyproject is the
+# overlay's own package, already installed into the Hermes venv at image build
+# from hash-locked requirements (operator/templates/Dockerfile). `external` tells
+# Hermes it installs nothing for this plugin and leaves the pyproject alone
+# (pm/plugin_declarations.py PythonDeclaration.external @ v0.22.5).
+python_runtime: external
 plugins:
   - plugins/hermes-smd-audit
   # space-gate refuses a write from a turn whose couples space is unresolved,
