@@ -213,6 +213,7 @@ class ApplyRun:
                 "first_page": facts.get("page") or 1,
                 "last_page": facts.get("page") or 1,
                 "from_scan": False,
+                "origin": "matter",
             },
         )
         self._note(line.n, intent="PATCH")
