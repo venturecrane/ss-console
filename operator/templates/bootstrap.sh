@@ -193,7 +193,10 @@ _voice_cp_err="$(
 )" || _voice_cp_rc=$?
 # The reader consumes cohort/<cohort>/*.json; count those as the ground truth,
 # independent of the LIST view that made the old probe flaky.
-_voice_n="$(find "${_voice_stage}/cohort" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+# `|| true` inside the count: with no cohort dir (a fresh volume, or a failed
+# fetch) find exits 1, pipefail fails the substitution, and set -e killed
+# bootstrap with no log line (found by the boot harness, 2026-10-28).
+_voice_n="$( { find "${_voice_stage}/cohort" -name '*.json' 2>/dev/null || true; } | wc -l | tr -d ' ')"
 if [ "${_voice_cp_rc}" -eq 0 ]; then
   rm -rf "${SMD_VOICE_VAULT_DIR}"
   mv "${_voice_stage}" "${SMD_VOICE_VAULT_DIR}"
@@ -207,7 +210,7 @@ else
   # here reads as "no corpus" and voice never activates (ss#2223). The stale
   # mirror (if any) stays in place rather than losing voice to a transient.
   rm -rf "${_voice_stage}"
-  _voice_prev_n="$(find "${SMD_VOICE_VAULT_DIR}/cohort" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+  _voice_prev_n="$( { find "${SMD_VOICE_VAULT_DIR}/cohort" -name '*.json' 2>/dev/null || true; } | wc -l | tr -d ' ')"
   log "WARN: voice vault sync FAILED (rc=${_voice_cp_rc}) — previous mirror retained (${_voice_prev_n} cohort sample(s)) (non-fatal). aws: ${_voice_cp_err}"
 fi
 
