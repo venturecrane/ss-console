@@ -85,8 +85,12 @@ def places(name: str, found: list[dict[str, Any]]) -> list[list[dict[str, Any]]]
     rows = [(c, _place(c["address"]), _name_key(name, c["name"])) for c in _main_listings(name, found)]
     groups: dict[tuple[Any, ...], list[tuple[dict[str, Any], dict[str, str]]]] = {}
     for c, p, key in rows:
-        if p["street"]:
-            groups.setdefault((key, p["street"]), []).append((c, p))
+        if not p["street"]:
+            continue
+        # one street number in two towns is two places (a chain's "100 E Main"
+        # in one city and "100 E Baseline" in another share a street key)
+        same = [g for g in groups if g[:2] == (key, p["street"]) and any(_same_town(p, q) for _, q in groups[g])]
+        groups.setdefault(same[0] if same else (key, p["street"], len(groups)), []).append((c, p))
     for c, p, key in rows:
         if p["street"]:
             continue

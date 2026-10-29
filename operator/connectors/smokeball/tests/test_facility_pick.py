@@ -208,3 +208,12 @@ def test_her_answer_naming_the_hospital_and_its_street_settles_it() -> None:
     out = prepare(FakeSmokeball(), Directory({"Saint Example Medical Center": HOSPITAL}), req, TODAY)
     assert out["status"] == "ready", out
     assert out["order"]["locations"][0]["custodian_id"] == "neo_5121"
+
+
+def test_one_street_number_in_two_towns_is_two_places_not_a_pick() -> None:
+    chain = [
+        _row("a1", "Example Urgent Care", "100 E Main St", "Mesaville", "AZ", "85201"),
+        _row("a2", "Example Urgent Care", "100 E Baseline Rd", "Tuctown", "AZ", "85706"),
+    ]
+    assert len(places("Example Urgent Care", _cands(chain))) == 2
+    assert narrow("Example Urgent Care", _cands(chain), [])["pick"] is None
