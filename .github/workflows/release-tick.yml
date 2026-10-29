@@ -11,6 +11,16 @@
 # Code: operator/bin/lib/fleet/tick.py. The laptop `fleet release` stays as the
 # manual fallback (docs/handbook/deployment-release.md).
 #
+# SKILLS RELEASES TOO (2026-10-28). The same `latest` run then steps the newest
+# skills release CI published (deploy.yml publish-skills) with the same rings,
+# bake, holds, standing halt and lease. A skills release is a pointer write and a
+# heartbeat read-back, no restart and no busy gate, and it goes to a seat only
+# once that seat's image was built from the skills' commit or a later one, so
+# skills follow the image ring by ring; a seat whose image is older waits, it
+# does not halt. Before this, only a person running `fleet release --skills`
+# rolled skills, and five published candidates reached no seat. A run with an
+# explicit image release id steps that image only.
+#
 # WHAT IT NEVER DOES. --force-mid-job (a running client job always wins) and
 # --accept-lane-inputs (a lane schema change is a person's call: the seat is
 # refused at preflight, the run halts, and someone re-stages). The conformance
@@ -83,7 +93,7 @@ jobs:
   # `if:` is evaluated before the environment is entered, so a disabled run never
   # touches it, and never makes GitHub auto-create it without branch protection.
   tick:
-    name: Advance the image release one step
+    name: Advance the image and skills releases one step
     runs-on: ubuntu-latest
     timeout-minutes: 150
     environment: fleet-release

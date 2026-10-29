@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # CI: publish a CANDIDATE skills release to R2. Never live on merge.
 #
-# Skills reach seats through `operator/bin/fleet release --skills <version>`,
-# ring by ring, with a capability gate and a heartbeat read-back. This script
-# only makes a version AVAILABLE to that command:
+# Skills reach seats ring by ring, with a capability gate and a heartbeat
+# read-back: the release controller (release-tick.yml, `fleet release latest
+# --tick`) walks the newest published version through the rings, and
+# `operator/bin/fleet release --skills <version>` is the by-hand path. This
+# script only makes a version AVAILABLE to them:
 #
 #   fleet/skills/objects/<sha256>   every shipped skill file, content-addressed
 #   fleet/skills/<version>.json     the manifest (operator/bin/skills-manifest.py):
@@ -109,7 +111,8 @@ r2 s3 cp "${work}/manifest.json" "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" --on
 r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" "${work}/readback.json" --only-show-errors
 cmp -s "${work}/manifest.json" "${work}/readback.json" || { echo "::error::manifest read-back does not match"; exit 1; }
 echo "skills release ${VERSION} published: s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY} (${uploaded} new object(s))"
-echo "  candidate only. Roll it out with: operator/bin/fleet release --skills ${VERSION}"
+echo "  candidate only. The release controller (release-tick.yml) rolls it through the rings;"
+echo "  by hand: operator/bin/fleet release --skills ${VERSION}"
 
 # ---------- D1 record (best effort; fleet release records a missing row) ----------
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then

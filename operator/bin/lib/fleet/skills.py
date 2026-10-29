@@ -19,6 +19,11 @@ capabilities file for it: refused, never assumed.
 FAILURE. Pointer written, but no heartbeat reports the version within the
 window: the pointer goes back to what it was (or is removed if there was none),
 and the rollout halts.
+
+WHO ROLLS IT. The release controller (release-tick.yml, `fleet release latest
+--tick`) since 2026-10-28, ring by ring like an image, each seat only once its
+image has the skills' commit (:func:`deferrals`). `fleet release --skills
+<version>` stays the by-hand path.
 """
 
 from __future__ import annotations
@@ -61,6 +66,56 @@ def unmet_needs(manifest: dict[str, Any], caps: dict[str, Any]) -> list[str]:
                 if not ok:
                     missing.append(f"{skill}: {kind[:-1] if kind.endswith('s') else kind} {need}")
     return missing
+
+
+def _stamp(version: str | None) -> str | None:
+    """A skills version's publish time (yyyymmddHHMM), or None when it is not one."""
+    return version.split("-", 1)[0] if version and ids.SKILLS_VERSION_RE.match(version) else None
+
+
+def deferrals(
+    release: dict[str, Any],
+    seats: list[str],
+    status: dict[str, dict[str, Any]],
+    image_sha_of: Callable[[str | None], str | None],
+    at_or_after: Callable[[str, str], bool],
+) -> dict[str, str]:
+    """The seats that may not take this skills release on this tick, with why.
+
+    ORDERING RULE (the release controller, 2026-10-28). A skills release goes to
+    a seat only once the seat runs an image built from the commit the skills
+    were published at, or a later one on main: ``at_or_after(skills_sha,
+    image_sha)``. Skills are written against the code in their own commit, and
+    the capability gate sees only what a skill NAMES (paths, tools, verbs,
+    action classes), not a changed argument or behaviour, so this is the rule
+    that keeps a skill from reaching code older than it. Every merge that
+    touches operator/skills/** also builds an image (operator/skills/** is on
+    the image path list), so the wait is the image's own rollout, and skills
+    follow it ring by ring. Waiting is a deferral, never a halt.
+
+    A seat whose heartbeat already reports a NEWER skills version is deferred
+    too: promotion never moves a seat backwards, even one pointed by hand at a
+    release newer than any the tick weighs.
+    """
+    sha = release.get("ss_console_sha")
+    mine = _stamp(release.get("skills_version"))
+    out: dict[str, str] = {}
+    for seat in seats:
+        row = status.get(seat) or {}
+        current = row.get("skills_version")
+        theirs = _stamp(current)
+        if mine and theirs and theirs > mine:
+            out[seat] = f"already runs newer skills {current}"
+            continue
+        if not sha or not ids.SHA_RE.match(sha):
+            out[seat] = "the skills release names no source commit"
+            continue
+        image_sha = image_sha_of(row.get("image_ref"))
+        if not image_sha:
+            out[seat] = "its image is not a recorded release built from main; the skills wait for one"
+        elif not at_or_after(sha, image_sha):
+            out[seat] = f"waiting for the image: it runs {image_sha[:8]}, the skills were written at {sha[:8]}"
+    return out
 
 
 class SkillsRollout:

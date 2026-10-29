@@ -6,7 +6,10 @@
                 [--verify bash|selftest] [--no-ssh-fallback]
   fleet release <release-id>|latest --tick [--max-idle-wait SECONDS] [--dry-run]
                                                       one scheduler step (release-tick.yml, ADR 0096):
-                                                      at most one ring, after the bake; self-test decides
+                                                      at most one ring, after the bake; self-test decides.
+                                                      `latest` then steps the skills releases the same
+                                                      way, each seat only once its image has the
+                                                      skills' commit
   fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
                                                       staging only: plant one real violation, prove
                                                       the self-test alert opens and resolves
@@ -60,9 +63,9 @@ from .rings import load_rings
 from .rollout import ImagePlan, ImageRollout
 from .runner import CommandRunner, Refusal, Runner, ToolingError
 from .selftest_plant import SelftestPlant
-from .skills import SkillsRollout
+from .skills import SkillsRollout, deferrals
 from .smoke import FleetSideChecks, SmokeRunner
-from .tick import TICK_WAITING, Ticker
+from .tick import TICK_WAITING, Ticker, combine
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
@@ -303,9 +306,33 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
 
 
 def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
-    """One scheduler step (tick.py). Never forces a busy seat, never accepts lane inputs."""
+    """One scheduler step (tick.py). Never forces a busy seat, never accepts lane inputs.
+
+    ``latest`` steps the image releases, then the skills releases (2026-10-28:
+    five skills candidates were published and none reached the fleet, because
+    only a person running ``--skills`` ever rolled one). Image first, so a seat
+    the image step just moved can take skills written at that commit on the
+    same tick. A refusal or tooling error on the image side does not starve the
+    skills side: the skills step still runs, then the image error is raised.
+    """
     if a.only or a.force_mid_job or a.accept_lane_inputs or a.parallel != 1:
         raise ValueError("--tick takes none of --only, --force-mid-job, --accept-lane-inputs, --parallel")
+    if a.release_id != "latest":
+        return _image_tick(ctx, a)
+    image_error: Exception | None = None
+    image_code = TICK_WAITING
+    try:
+        image_code = _image_tick(ctx, a)
+    except (Refusal, ToolingError) as exc:
+        ctx.log(f"tick: the image step stopped ({exc}); stepping the skills releases before reporting it")
+        image_error = exc
+    skills_code = _skills_tick(ctx, a)
+    if image_error is not None:
+        raise image_error
+    return combine(image_code, skills_code)
+
+
+def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     release = _image_release(ctx, a.release_id)
     if release.get("completed_last_ring_at"):
         ctx.log(f"{release['release_id']}: already completed on every seat; nothing to do")
@@ -349,6 +376,90 @@ def _in_flight(ctx: Ctx, newest: dict[str, Any]) -> list[dict[str, Any]]:
         if len(out) >= IN_FLIGHT_MAX:
             break
     return out
+
+
+def _at_or_after(ctx: Ctx, older: str, newer: str) -> bool:
+    """Whether commit ``older`` is ``newer`` or one of its ancestors (both on main).
+
+    A commit this clone has never seen is not on main (see _built_from_main), so
+    it answers no rather than raising; any other git failure is a tooling error.
+    """
+    if older == newer:
+        return True
+    for sha in (older, newer):
+        if not ids.SHA_RE.match(sha):
+            return False
+        present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
+        if present.rc != 0:
+            return False
+    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", older, newer], timeout=60)
+    if res.rc not in (0, 1):
+        raise ToolingError(f"git merge-base --is-ancestor failed (rc={res.rc})")
+    return res.rc == 0
+
+
+def _skills_in_flight(ctx: Ctx) -> list[dict[str, Any]]:
+    """The skills releases a tick may move, newest first: published from main, back
+    to the newest completed one (anything older is superseded by it)."""
+    out: list[dict[str, Any]] = []
+    # Image releases share the table (one per substrate merge), so read past the cap.
+    for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
+        if rel.get("kind") != "skills":
+            continue
+        if rel.get("completed_last_ring_at"):
+            break
+        version = rel.get("skills_version") or ""
+        if ids.SKILLS_VERSION_RE.match(version) and _built_from_main(ctx, rel.get("ss_console_sha")):
+            out.append(rel)
+        if len(out) >= IN_FLIGHT_MAX:
+            break
+    return out
+
+
+def _skills_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
+    """skills.deferrals bound to this tick's reads: fleet_status once (after the
+    image step, so a seat it just moved counts), each image's commit and each
+    ancestry question once."""
+    status = ctx.store.fleet_status()
+    shas: dict[str, str | None] = {}
+    pairs: dict[tuple[str, str], bool] = {}
+
+    def image_sha_of(ref: str | None) -> str | None:
+        if not ref:
+            return None
+        if ref not in shas:
+            sha = (ctx.store.release_for_image(ref) or {}).get("ss_console_sha")
+            shas[ref] = sha if _built_from_main(ctx, sha) else None
+        return shas[ref]
+
+    def at_or_after(older: str, newer: str) -> bool:
+        if (older, newer) not in pairs:
+            pairs[(older, newer)] = _at_or_after(ctx, older, newer)
+        return pairs[(older, newer)]
+
+    return lambda rel: deferrals(rel, seats, status, image_sha_of, at_or_after)
+
+
+def _skills_tick(ctx: Ctx, a: argparse.Namespace) -> int:
+    """The skills half of a `latest` tick: the same promotion an image gets, no restart."""
+    candidates = _skills_in_flight(ctx)
+    if not candidates:
+        ctx.log("tick: no skills release in flight (the newest published from main has completed)")
+        return TICK_WAITING
+    roll = SkillsRollout(ctx.store, ctx.r2, ctx.log, ctx.sleep, ctx.clock)
+    manifests: dict[str, tuple[dict[str, Any], str, str]] = {}
+
+    def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
+        version = rel["skills_version"]
+        if version not in manifests:
+            manifests[version] = roll.load_manifest(version)
+        manifest, key, sha = manifests[version]
+        return lambda seat, ring: roll.run(seat, ring, rel, manifest, key, sha, a.dry_run)
+
+    rings = ctx.rings()
+    seats = [seat for ring in rings for seat in ring.seats]
+    ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_skills_defer(ctx, seats))
+    return ticker.run_promoting(rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run)
 
 
 def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
@@ -489,7 +600,7 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
         if bool(a.skills) == bool(a.release_id):
             raise Refusal("give exactly one of <release-id> or --skills <version>")
         if a.tick and a.skills:
-            raise ValueError("--tick rolls image releases only")
+            raise ValueError("--tick takes no --skills: `fleet release latest --tick` steps skills releases too")
         return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
     if a.cmd == "status":
         rings = ctx.rings()

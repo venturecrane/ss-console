@@ -10,9 +10,11 @@ enforced_by:
   - .github/workflows/release-tick.yml
   - .github/workflows/deploy.yml
   - operator/bin/lib/fleet/tick.py
+  - operator/bin/lib/fleet/skills.py
   - operator/bin/lib/fleet/fly.py
   - operator/bin/lib/fleet/ledger.py
   - operator/bin/tests/test_fleet_tick.py
+  - operator/bin/tests/test_fleet_skills_tick.py
   - operator/bin/tests/test_fleet_release.py
   - operator/bin/tests/test_ci_coverage_conformance.py
   - scripts/lib/seat-registries.ts
@@ -84,6 +86,25 @@ ADR 0007 exists to prevent.
    moves every ring that has a release ready (one release per ring), not only
    the first: with one ring per tick the newest release, ready for ring 0 after
    every merge, took every tick while the client ring waited.
+
+   **Amended 2026-10-28: the controller rolls skills releases too.** CI published
+   a candidate skills release on every merge touching `operator/skills/**`, and
+   only a person running `fleet release --skills <version>` ever rolled one: five
+   candidates published after `skl-202610272001-04e1b619` reached no seat, and
+   `fleet status` showed `drift [skills]`. A `latest` tick now steps the skills
+   releases after the image releases, with the same promotion, bake, holds,
+   standing halt and lease; a skills seat is a pointer write and a heartbeat
+   read-back, with no restart and no busy gate. One rule is added: a seat takes
+   a skills release only once it runs an image built from the skills' commit or
+   a later commit on main (`deferrals` in `operator/bin/lib/fleet/skills.py`).
+   The capability gate checks only what a skill names, not a changed argument or
+   behaviour, and every skills merge also builds an image, so skills follow the
+   image ring by ring. A seat whose image is older, or not built from main, is
+   deferred: not pending, never halted, and the release stays incomplete. A seat
+   whose heartbeat reports a newer skills version is deferred too, so a seat
+   pointed by hand at something newer is never moved back. An image step that
+   refuses or errors does not stop the skills step; the run reports the image
+   error after it. A tick for a named image release steps that image only.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`
