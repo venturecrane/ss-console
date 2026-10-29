@@ -36,6 +36,11 @@ def test_redact_text_email() -> None:
     assert redact_text("ping owner@example.com now") == "ping [redacted-email] now"
 
 
+#: A Telegram-shaped token built at runtime so no literal token sits in the
+#: source (secret scanners flag the literal, rightly).
+_FAKE_TELEGRAM_TOKEN = "123456789" + ":" + "AAFake" + "Token" * 6 + "Fake12"
+
+
 @pytest.mark.parametrize(
     "secret",
     [
@@ -44,12 +49,33 @@ def test_redact_text_email() -> None:
         "pk_live_abcdefghijklmnopqrstuvwx",
         "pk_test_abcdefghijklmnopqrstuvwx",
         "AKIAIOSFODNN7EXAMPLE",
+        _FAKE_TELEGRAM_TOKEN,
     ],
 )
 def test_redact_text_key_shapes(secret: str) -> None:
     out = redact_text(f"leaked {secret} here")
     assert secret not in out
     assert "[redacted-key]" in out
+
+
+def test_telegram_token_in_bot_api_url_is_redacted() -> None:
+    # The httpx integration records the Bot API URL, which glues "bot" to the
+    # token, as a trace description (SMD-OPERATOR-2X, 2026-10-27).
+    token = _FAKE_TELEGRAM_TOKEN
+    event = {
+        "contexts": {
+            "trace": {"description": f"POST https://api.telegram.org/bot{token}/sendMessage"}
+        }
+    }
+    out = scrub_event(event)
+    desc = out["contexts"]["trace"]["description"]
+    assert token not in desc
+    assert desc == "POST https://api.telegram.org/bot[redacted-key]/sendMessage"
+
+
+def test_clock_times_and_short_pairs_are_not_tokens() -> None:
+    line = "ran at 2026-10-29 15:27:13,635 port 8080:443 ratio 3:1"
+    assert redact_text(line) == line
 
 
 def test_redact_text_empty_is_noop() -> None:

@@ -64,6 +64,19 @@ export const FLEET_ENTITY_SEAT = 'scott'
 /** Issue actions that mean "something is broken now". */
 const PAGING_ISSUE_ACTIONS = new Set(['created', 'unresolved'])
 
+/**
+ * Sentry levels that are markers, not errors. The overlay sends an info-level
+ * "boot: monitoring active" on every process start (`sentry_init.py`); paging
+ * on it turned every seat restart into a "New Operator error" (SMD-OPERATOR-4,
+ * 1,013 events by 2026-10-29). They stay visible in Sentry; they do not page.
+ */
+const NON_PAGING_LEVELS = new Set(['info', 'debug'])
+
+function isMarkerLevel(record: unknown): boolean {
+  const level = stringField(record, 'level')
+  return level !== undefined && NON_PAGING_LEVELS.has(level.toLowerCase())
+}
+
 /** Step into a parsed JSON value by key; undefined when it is not an object. */
 function field(value: unknown, key: string): unknown {
   return isRecord(value) ? value[key] : undefined
@@ -98,6 +111,7 @@ export function interpretDelivery(
   const data = field(payload, 'data')
   if (resource === 'event_alert') {
     const event = field(data, 'event')
+    if (isMarkerLevel(event)) return null
     const issueId = stringField(event, 'issue_id') ?? stringField(event, 'group_id')
     if (!issueId) return null
     return { issueId, tenant: extractTenantTag(event), summary: buildSummary(data) }
@@ -106,6 +120,7 @@ export function interpretDelivery(
     if (issueResourceMode !== 'page') return null
     if (!PAGING_ISSUE_ACTIONS.has(action)) return null
     const issue = field(data, 'issue')
+    if (isMarkerLevel(issue)) return null
     const issueId = stringField(issue, 'id')
     if (!issueId) return null
     return { issueId, tenant: null, summary: buildSummary(data) }

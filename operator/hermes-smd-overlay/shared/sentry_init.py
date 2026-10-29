@@ -79,10 +79,16 @@ _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 #: is on every Machine, so the literal shape would miss the single most likely
 #: key to leak. Over-redaction of a secret-shaped token is safe; under-redaction
 #: leaks.
+#:
+#: Telegram bot tokens (``<bot id>:<35-char secret>``) ride in the Bot API URL
+#: (``api.telegram.org/bot<token>/sendMessage``), so the httpx integration put
+#: one into a trace description on SMD-OPERATOR-2X (2026-10-27). Matched with
+#: no word boundary because the URL glues ``bot`` to the id.
 _KEY_RES: tuple[re.Pattern[str], ...] = (
     re.compile(r"sk-[A-Za-z0-9_\-]{20,}"),
     re.compile(r"pk_(?:live|test)_[A-Za-z0-9]{20,}"),
     re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"(?<![0-9])[0-9]{6,12}:[A-Za-z0-9_\-]{30,}"),
 )
 
 _REDACTED_GUID = "[redacted-guid]"
