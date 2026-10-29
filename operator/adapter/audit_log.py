@@ -323,6 +323,9 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "MEDCHRON_JOB_HELD",
         "MEDCHRON_JOB_DELIVERED",
         "MEDCHRON_JOB_FAILED",
+        # 2026-10-29: SMD waived pages from the cycle page allowance (root-only
+        # medchron_allowance_credit; operator/workspace_broker/medchron_credits.py).
+        "MEDCHRON_ALLOWANCE_CREDITED",
         # The verified reply binding's verdicts (operator/workspace_broker/reply_binding.py).
         "REPLY_BINDING",
         # Proven delivery (operator/workspace_broker/delivery_proof.py): a job whose

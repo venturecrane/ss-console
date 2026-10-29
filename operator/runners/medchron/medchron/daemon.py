@@ -43,7 +43,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, config as config_mod, job as job_mod, lane_proof, proof_run, quiesce, requeue
 from . import resume as resume_mod, retention
-from . import rewake, verdict as verdict_mod, wake_grace
+from . import allowance as allowance_mod, rewake, verdict as verdict_mod, wake_grace
 from .proof import holds as proof_holds, watch as proof_watch
 from .skill_load import load_line
 from .stages import vision_seed
@@ -467,6 +467,7 @@ class Daemon:
             *upd,
         ]
         lines.extend(wake_folder_lines(state, fields))
+        lines.extend(allowance_mod.credit_wake_lines(getattr(self, "broker", None), job_id, state, fields))
         if state != "delivered":
             lines.append(f"Held at: {stage or 'runner (no verdict)'}.")
         if state == "held":  # the firm-safe token the skill words; the reason stays SMD's

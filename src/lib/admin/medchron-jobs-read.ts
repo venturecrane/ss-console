@@ -78,6 +78,40 @@ export interface MedchronMonthTotals {
    * one debit of its pages, three of its cents. */
   pagesUsed: number
   centsUsed: number
+  /** SMD's page credits in the window (2026-10-29): pages waived from the
+   * allowance (a correction of SMD's own miss). `pagesUsed` is already net of
+   * them, floored at 0, by the seat's own rule (`medchron_credits.py`). */
+  pagesCredited: number
+}
+
+/** One of SMD's page credits, as the seat projects it (`CREDIT_PROJECTION`):
+ * counts, times and ids only. `appliesAt` decides the window: a credit linked
+ * to a job applies at the job's own `created_at`, one with no job when it was
+ * written, so the console never re-derives it. */
+export interface MedchronCreditRow {
+  id: string
+  createdAt: string
+  appliesAt: string
+  pages: number
+  jobId: string | null
+}
+
+/** One credit row, or null when its id, its window time or a positive page
+ * count is missing: a malformed credit is dropped, never guessed at. */
+export function parseCreditRow(raw: unknown): MedchronCreditRow | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const r = raw as Record<string, unknown>
+  const id = asText(r['id'])
+  const appliesAt = asText(r['applies_at'])
+  const pages = asCount(r['pages'])
+  if (!id || !appliesAt || pages <= 0) return null
+  return {
+    id,
+    createdAt: asText(r['created_at']) ?? '',
+    appliesAt,
+    pages,
+    jobId: asText(r['job_id']),
+  }
 }
 
 /** The seat key the allowance is authored under. */
@@ -87,7 +121,12 @@ export type MedchronJobsReadResult =
   | { status: 'not_enabled' }
   | { status: 'unreachable'; reason: string }
   | { status: 'empty' }
-  | { status: 'items'; jobs: MedchronJobRow[]; month: MedchronMonthTotals }
+  | {
+      status: 'items'
+      jobs: MedchronJobRow[]
+      credits: MedchronCreditRow[]
+      month: MedchronMonthTotals
+    }
 
 const STATES: ReadonlySet<string> = new Set(['submitted', 'running', 'held', 'delivered', 'failed'])
 
@@ -149,7 +188,8 @@ function groupedDebits(debited: MedchronJobRow[]): { pages: number; cents: numbe
  * and failed jobs show in the table, not the totals. */
 export function monthTotals(
   jobs: MedchronJobRow[],
-  window: CycleWindow = cycleWindow(new Date().toISOString())
+  window: CycleWindow = cycleWindow(new Date().toISOString()),
+  credits: MedchronCreditRow[] = []
 ): MedchronMonthTotals {
   // Half-open [start, end) on the SAME string field and the SAME algorithm the
   // seat meters with (operator/workspace_broker/cycle_window.py), held together
@@ -158,6 +198,10 @@ export function monthTotals(
   const inMonth = jobs.filter((j) => j.createdAt >= window.start && j.createdAt < window.end)
   const delivered = inMonth.filter((j) => j.state === 'delivered')
   const debited = groupedDebits(inMonth.filter((j) => j.cents > 0))
+  // The seat's rule: used = debited minus credited in the window, floored at 0.
+  const credited = credits
+    .filter((c) => c.appliesAt >= window.start && c.appliesAt < window.end)
+    .reduce((s, c) => s + c.pages, 0)
   return {
     month: window.label,
     cycleStart: window.start,
@@ -169,8 +213,9 @@ export function monthTotals(
     documents: delivered.reduce((s, j) => s + j.documents, 0),
     pages: delivered.reduce((s, j) => s + j.pages, 0),
     cents: delivered.reduce((s, j) => s + j.cents, 0),
-    pagesUsed: debited.pages,
+    pagesUsed: Math.max(0, debited.pages - credited),
     centsUsed: debited.cents,
+    pagesCredited: credited,
   }
 }
 
@@ -307,8 +352,13 @@ export async function loadMedchronJobsView(
   if (!configured) return { status: 'not_enabled' }
   const result = await readMachineRuntime(deps, customerSlug, { kind: 'medchron_jobs' }, actor)
   if (!result.ok) return { status: 'unreachable', reason: result.reason }
-  const payload = result.data as { entries?: unknown } | null
+  const payload = result.data as { entries?: unknown; credits?: unknown } | null
   const entries = Array.isArray(payload?.entries) ? payload.entries : []
+  const credits: MedchronCreditRow[] = []
+  for (const raw of Array.isArray(payload?.credits) ? payload.credits : []) {
+    const parsed = parseCreditRow(raw)
+    if (parsed) credits.push(parsed)
+  }
   const jobs: MedchronJobRow[] = []
   for (const raw of entries) {
     const parsed = parseJobRow(raw)
@@ -316,7 +366,7 @@ export async function loadMedchronJobsView(
   }
   if (jobs.length === 0) return { status: 'empty' }
   jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
-  return { status: 'items', jobs, month: monthTotals(jobs, window) }
+  return { status: 'items', jobs, credits, month: monthTotals(jobs, window, credits) }
 }
 
 export function formatCents(cents: number): string {

@@ -33,6 +33,14 @@ Peer gating, per verb:
                            ``allowance_approved_by``, from ``medchron.allowance
                            approve``), audited on the resume row. Every other
                            hold stays refused.
+    medchron_allowance_credit
+                           uid 0 only, with NO agent tool (2026-10-29). SMD
+                           waives pages from the firm's cycle page allowance (a
+                           correction of SMD's own miss is not charged). Writes a
+                           ``medchron_page_credits`` row and a
+                           ``MEDCHRON_ALLOWANCE_CREDITED`` audit row. A credit
+                           lowers what the firm is billed, so a client
+                           conversation must never be able to reach it.
 
 Every writing verb pins the audit type its transition maps to (``AUDIT_TYPE``),
 so none can forge another row. Audit rows carry counts, digests and ids —
@@ -45,7 +53,7 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof, hold_class
+from . import delivery_proof, hold_class, medchron_credits
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -80,6 +88,7 @@ VERBS = (
     "medchron_job_record",
     "medchron_backfill_covered",
     "medchron_job_resume",
+    "medchron_allowance_credit",
 )
 
 #: The coverage arrays, replaced by counts on the LIST paths. A matter can carry
@@ -264,6 +273,8 @@ class MedchronVerbs:
             # resume its own failures is the loop the daemon already learned
             # about on 2026-08-31, when a cap-refused hold re-ran every tick.
             "medchron_job_resume": is_root,
+            # ROOT only, no agent tool: a credit lowers what the firm is billed.
+            "medchron_allowance_credit": is_root,
         }.get(action, False)
         if not ok:
             raise PermissionError(f"{action} is not permitted for this caller")
@@ -314,12 +325,27 @@ class MedchronVerbs:
                 raise ValueError("medchron_job_status takes job_id or matter_id, not both")
             if job_id:
                 row = self._db.read(job_id)
-                return {"ok": True, "job": _with_hold_class(self._db.project(row), "medchron") if row else None}
+                if row is None:
+                    return {"ok": True, "job": None}
+                job = _with_hold_class(self._db.project(row), "medchron")
+                # 2026-10-29: the pages SMD waived on this job's work
+                # (`medchron.allowance credit --job`), 0 when none. The
+                # Operator says the waiver sentence only when this is > 0.
+                job["smd_page_credit_pages"] = self._db.job_credited_pages(job_id)
+                return {"ok": True, "job": job}
             if matter_id:
                 return {"ok": True, "matter": self._db.delivered_coverage(matter_id)}
             return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
         if action == "medchron_job_list":
-            return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(200)]}
+            return {
+                "ok": True,
+                "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(200)],
+                # SMD's page credits, so the console's cycle figure subtracts
+                # them exactly as `allowance()` does (2026-10-29).
+                "credits": self._db.list_credits(200),
+            }
+        if action == "medchron_allowance_credit":
+            return self._credit(request)
         if action == "medchron_job_submit":
             return self._submit(request)
         if action == "medchron_job_record":
@@ -329,6 +355,32 @@ class MedchronVerbs:
         if action == "medchron_job_resume":
             return self._resume(request)
         raise ValueError(f"unsupported medchron action: {action}")
+
+    def _credit(self, request: dict[str, Any]) -> dict[str, Any]:
+        """SMD waives ``pages`` from the cycle its creation time falls in.
+        Refused, never filled in: pages not a positive integer, no ``by``, no
+        ``why``, or a ``job_id`` the ledger does not hold."""
+        pages, by, why, job_id = medchron_credits.validate(request)
+        row = self._db.read(job_id) if job_id else None
+        if job_id and row is None:
+            raise ValueError(f"no such job {job_id}; nothing was credited")
+        credit = self._db.add_credit(pages=pages, by=by, why=why, job_id=job_id)
+        # The billing record: pages, who, the job, the credit's id. `why` stays
+        # in the ledger row (free text a person typed); billing reads it there
+        # by `credit_id`.
+        self._audit(
+            "MEDCHRON_ALLOWANCE_CREDITED",
+            {"credit_id": credit["id"], "pages": pages, "by": by, "job_id": job_id},
+            row["matter_id"] if row else None,
+        )
+        try:
+            anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
+            state = self._db.allowance(
+                allowance_from_customer_yaml(self.customer_yaml), anchor_day=anchor, effective_from=effective_from
+            )
+        except AnchorInvalid as exc:
+            state = {"invalid": True, "reason": str(exc)}
+        return {"ok": True, "credit": credit, "allowance": state}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         """Ask the runner daemon to re-run a FAILED job, one HELD at the final

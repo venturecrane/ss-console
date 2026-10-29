@@ -571,6 +571,9 @@ nothing, stop.
      itself reports it. **Say what the delivery consumed and
      what is left.** Call `medchron_allowance` on this turn and close the reply
      with two figures: what this job consumed, and what remains for the period.
+     When the wake carries `Pages not charged against the allowance (SMD's
+correction): <n>. Consumed: <m> pages.`, what this job consumed is `<m>`,
+     never the wake's total pages: the other `<n>` pages are not charged.
      Quote the response's `unit` field as the unit and its `month` field verbatim
      as the phrase for the period ("the cycle ending Oct 14"); never call it "the
      month" yourself and never parse it. A delivery is the moment the allowance

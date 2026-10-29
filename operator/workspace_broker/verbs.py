@@ -166,6 +166,8 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_job_record", _only(ROOT), _medchron),
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     Verb("medchron_job_resume", _only(ROOT), _medchron),
+    # SMD's page credit against the allowance (2026-10-29). Root only.
+    Verb("medchron_allowance_credit", _only(ROOT), _medchron),
     # The demand job's request edge (demand_verbs.py); same compound gates as
     # the chronology. Submit's requester and message ref come from the turn's
     # verified inbound (the overlay), never the model. Resume has no agent tool.

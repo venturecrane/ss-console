@@ -77,6 +77,17 @@ class _FakeBroker:
                         "folder_id": None,
                     },
                 ],
+                "credits": [
+                    {
+                        "id": "C1",
+                        "created_at": "3",
+                        "applies_at": "2",
+                        "pages": 856,
+                        "job_id": "B",
+                        "by_name": "a name",
+                        "why": "free text",
+                    }
+                ],
             },
         }
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -329,7 +340,32 @@ def test_medchron_jobs_runtime_read_fails_safe_when_broker_unreachable(monkeypat
     assert runtime_read.read_runtime("medchron_jobs", db_path=None) == {
         "entries": [],
         "cursor": None,
+        "credits": [],
     }
+
+
+def test_medchron_jobs_runtime_read_carries_credits_without_name_or_reason(broker):
+    """2026-10-29: SMD's page credits ride the same payload so the console
+    subtracts what the seat subtracts. The author's name and the free-text
+    reason never cross the management seam."""
+    result = runtime_read.read_runtime("medchron_jobs", db_path=None)
+    assert result["credits"] == [
+        {"id": "C1", "created_at": "3", "applies_at": "2", "pages": 856, "job_id": "B"}
+    ]
+
+
+def test_credit_columns_are_byte_pinned_to_the_broker():
+    import pathlib
+    import re
+
+    src = (
+        pathlib.Path(__file__).resolve().parents[2] / "workspace_broker" / "medchron_credits.py"
+    ).read_text()
+    m = re.search(r"^CREDIT_PROJECTION = (\(.*?\))$", src, re.M)
+    assert m is not None
+    import ast
+
+    assert tuple(ast.literal_eval(m.group(1))) == runtime_read._MEDCHRON_CREDIT_COLUMNS
 
 
 # -- action classes ------------------------------------------------------------

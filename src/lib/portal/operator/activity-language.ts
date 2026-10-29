@@ -247,6 +247,8 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
   EMITTED_WAKE: 'TELEMETRY. A gated cron woke. Scheduler bookkeeping.',
 
   // --- INTERNAL: our operations on our own infrastructure -------------------
+  MEDCHRON_ALLOWANCE_CREDITED:
+    'INTERNAL. SMD waived pages from the cycle page allowance; a billing record. The firm sees the result in its used and remaining pages, not a feed row with no authored wording.',
   DELIVERY_PROOF_FAILED:
     'INTERNAL. Proven delivery: a job whose delivery could not be proven (its review held it, its read-back failed, or the requester reply was not seen in Sent Items). It pages SMD to act; the job itself shows on this feed through its own held or failed line.',
   DELIVERY_PROVEN:

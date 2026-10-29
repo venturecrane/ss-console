@@ -149,6 +149,12 @@ class MedchronBrokerClient:
     def list_all(self) -> list[dict[str, Any]]:
         return list(self._request({"action": "medchron_job_list"}).get("jobs") or [])
 
+    def list_with_credits(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """The jobs and SMD's page credits (2026-10-29) from one read, so the
+        console's cycle figure subtracts the same credits the seat does."""
+        resp = self._request({"action": "medchron_job_list"})
+        return list(resp.get("jobs") or []), list(resp.get("credits") or [])
+
     # -- the help review (ss-console operator/workspace_broker/help_signals.py) --
     def help_job_signals(self, days: int = 7) -> dict[str, Any]:
         """Held and failed jobs in the window: lane, state, hold class and

@@ -104,6 +104,12 @@ _MEDCHRON_JOBS_COLUMNS: tuple[str, ...] = (
     "work_digest",
 )
 
+# SMD's page credits against the allowance (2026-10-29), carried beside the
+# jobs in the same ``medchron_jobs`` payload. Counts, times and ids only; the
+# credit's author and free-text reason stay on the seat. Byte-pinned to the
+# broker's ``medchron_credits.CREDIT_PROJECTION``.
+_MEDCHRON_CREDIT_COLUMNS: tuple[str, ...] = ("id", "created_at", "applies_at", "pages", "job_id")
+
 # config_export section allow-list (ADR 0048). Unlike ``config`` (a
 # materialized-state *facts snapshot* the drift audit diffs), ``config_export``
 # serves authored CONTENT blocks from the live ``customer.yaml`` for the admin
@@ -411,11 +417,12 @@ def _read_medchron_jobs() -> dict[str, Any]:
     from shared.medchron_client import MedchronBrokerClient, MedchronBrokerError
 
     try:
-        rows = MedchronBrokerClient().list_all()
+        rows, credit_rows = MedchronBrokerClient().list_with_credits()
     except MedchronBrokerError:
-        return {"entries": [], "cursor": None}
+        return {"entries": [], "cursor": None, "credits": []}
     entries = [{col: row.get(col) for col in _MEDCHRON_JOBS_COLUMNS} for row in rows]
-    return {"entries": entries, "cursor": None}
+    credits = [{col: row.get(col) for col in _MEDCHRON_CREDIT_COLUMNS} for row in credit_rows]
+    return {"entries": entries, "cursor": None, "credits": credits}
 
 
 # audit_log columns (per-customer D1) → the console wire shape consumed by
