@@ -53,6 +53,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/.github/workflows/release-tick.yml
   - label: operator/bin/lib/fleet/tick.py (one tick, the bake)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/tick.py
+  - label: operator/bin/lib/fleet/skills.py (a skills release, and when a seat may take one)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/skills.py
   - label: ADR 0096 (the release controller and its fleet credentials)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0096-release-controller-and-fleet-credentials.md
 ---
@@ -230,7 +232,8 @@ a skill-only change is a skills release and restarts nothing.
 
 Since 2026-10-23 an image release needs no laptop (ADR 0096): a merge that
 changes the image is built by CI and rolled through the rings by a scheduled
-controller, described under "The release controller" below. The steps that
+controller, described under "The release controller" below. Since 2026-10-28 the
+same controller rolls skills releases too. The steps that
 follow are what that controller runs, and they remain the manual path: a person
 finishes a halted release, fixes one seat or ships a hotfix lane with them.
 
@@ -419,9 +422,19 @@ Two workflows run the release (ADR 0096).
     lands in the rollout's detail (`verify row: vfy_...`); a failed write is a
     note there, never a failed release.
 
+  - **skills releases** take the same step in the same run, after the image
+    step: the newest skills release published from main and not yet complete,
+    with older ones promoted exactly as older images are. A seat takes one only
+    once its image has the skills' commit (see "A skills release" above). An
+    image step that refuses or errors does not stop the skills step; the run
+    then reports the image error. A run dispatched with an explicit image
+    release id steps that image only.
+
   A tick exits 0 on progress, 5 when it is waiting (a bake running, the lease
   held by a laptop run, nothing to do) and 6 on a standing halt; all three are
-  green runs. 1 (this tick halted the release), 3 and 4 fail the run.
+  green runs. 1 (this tick halted the release), 3 and 4 fail the run. With
+  both kinds stepped, a halt in either wins, then a standing halt, then
+  progress.
 
 There is no approval step before the client ring. The bake, the busy gate and
 holds protect it, and a hold set by any session is read before every seat; a
@@ -544,16 +557,30 @@ R2 `fleet/skills/objects/<sha256>` and a candidate manifest
 skill names, and what each skill NEEDS from its image (cited paths, tools,
 broker verbs, action classes), and records the release in D1
 `fleet_releases` (kind `skills`) when it can reach D1. The version is
-`<yyyymmddHHMM UTC>-<commit sha8>`. It writes no seat pointer; nothing changes on a
-seat until `fleet release --skills <version>` walks the same rings. Per seat it
-checks the needs against that seat's image (`image-capabilities.json` for the
-digest its heartbeat reports; an unknown image is refused), writes
+`<yyyymmddHHMM UTC>-<commit sha8>`. It writes no seat pointer itself. The
+release controller rolls it: every `release-tick` run (`fleet release latest
+--tick`) steps the skills releases after the image releases, with the same
+rings, bake, holds, standing halt and lease (see "The release controller"
+below). `fleet release --skills <version>` walks the same rings by hand. Per
+seat it checks the needs against that seat's image (`image-capabilities.json`
+for the digest its heartbeat reports; an unknown image is refused), writes
 `vaults/<slug>/skills-pointer.json`, and waits up to 3 minutes for the
 heartbeat to report the version. No restart, no busy gate: open sessions keep
 their prompt, new turns read the new files. A seat that never confirms gets its
 previous pointer back and the rollout halts. **Rolling a skill back is a
 skills release of the previous version** (`fleet release --skills
 <previous>`); `rollback-skill.sh` is gone.
+
+**Skills follow the image.** The controller gives a seat a skills release only
+once that seat runs an image built from the skills' commit or a later commit on
+main (`deferrals` in `operator/bin/lib/fleet/skills.py`). A skill is written
+against the code in its own commit, and the capability check sees only what a
+skill names, not a changed argument or behaviour. Every merge that touches
+`operator/skills/**` also builds an image, so in practice the skills reach each
+ring a tick after that merge's image does. A seat whose image is older waits;
+it never halts, and the tick log says which seat waits and for what. A seat on
+an image not built from main (a hotfix lane) waits too, and a seat whose
+heartbeat already reports a newer skills version is never moved back.
 
 A seat's config reaches R2 by one writer, the deploy job's publisher
 (`scripts/ci-publish-customer-configs.sh`, job `publish-customer-configs`). On

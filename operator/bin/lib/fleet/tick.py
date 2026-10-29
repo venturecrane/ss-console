@@ -25,6 +25,15 @@ starts the client ring until the ring before it has proved the release on real
 seats for the bake. A busy seat ends waiting_idle and the next tick retries it;
 a held seat is left alone and keeps the release incomplete.
 
+SKILLS RELEASES (2026-10-28). A ``latest`` tick then takes the same step for
+skills releases (cli.cmd_release_tick): the newest skills release CI published,
+promoted ring by ring exactly as an image is, with the same bake, holds, halt
+and lease. One more input, ``deferred``: a seat whose image is older than the
+commit the skills were written at is not pending this tick (skills.deferrals),
+so skills follow the image ring by ring and never reach a seat before the code
+they were written against. A deferred seat neither deploys nor halts; it keeps
+the release incomplete, and a ring with no seat that may take it waits.
+
 What a tick never does: ``--force-mid-job`` (a running client job always wins),
 ``--accept-lane-inputs`` (a lane schema change is a person's call: the seat's
 preflight refuses, the tick halts, and someone re-stages), and the ssh boot
@@ -151,8 +160,15 @@ def plan_tick(
     holds: dict[str, Any],
     alarms: Callable[[list[str]], list[dict[str, Any]]],
     now: datetime,
+    deferred: dict[str, str] | None = None,
 ) -> TickPlan:
-    """The one step this tick may take. Pure: every input was read before the call."""
+    """The one step this tick may take. Pure: every input was read before the call.
+
+    ``deferred`` names seats that may not take this release yet, with why (a
+    skills release waiting for the seat's image). Like a hold, a deferred seat
+    is not pending; unlike a hold, it is named as waiting, not as held.
+    """
+    deferred = deferred or {}
     ringed = [s for ring in rings for s in ring.seats]
     halted = sorted(s for s in ringed if (latest.get(s) or {}).get("state") in HALTING)
     if halted:
@@ -167,7 +183,7 @@ def plan_tick(
         if not ring.seats:
             continue
         done = [s for s in ring.seats if (latest.get(s) or {}).get("state") == "done"]
-        pending = [s for s in ring.seats if s not in done and s not in holds]
+        pending = [s for s in ring.seats if s not in done and s not in holds and s not in deferred]
         if pending:
             if before is not None:
                 wait = bake_gate(before, latest, alarms, now)
@@ -175,23 +191,51 @@ def plan_tick(
                     return TickPlan(TICK_WAITING, wait, ring)
             return TickPlan(TICK_PROGRESS, f"ring {ring.number}: {', '.join(pending)}", ring, pending)
         if not done:
+            waiting = [s for s in ring.seats if s in deferred]
+            if waiting:
+                why = "; ".join(f"{s}: {deferred[s]}" for s in waiting)
+                return TickPlan(TICK_WAITING, f"ring {ring.number}: no seat may take this release yet ({why})", ring)
             return TickPlan(
                 TICK_WAITING,
                 f"ring {ring.number}: every seat is held; nothing proves the release for the rings after it",
                 ring,
             )
         before = ring
+    waiting = sorted(s for s in ringed if s in deferred and (latest.get(s) or {}).get("state") != "done")
+    if waiting:
+        why = "; ".join(f"{s}: {deferred[s]}" for s in waiting)
+        return TickPlan(TICK_WAITING, f"every seat that may take it is done; waiting: {why}")
     held = sorted(s for s in ringed if s in holds and (latest.get(s) or {}).get("state") != "done")
     if held:
         return TickPlan(TICK_WAITING, f"every unheld seat is done; held and not yet on it: {', '.join(held)}")
     return TickPlan(TICK_WAITING, "every seat is done on this release")
 
 
+def combine(*codes: int) -> int:
+    """One exit for a tick that stepped two kinds of release (image, then skills).
+
+    This tick halting wins, then a standing halt (a person must act, so the run
+    says so even when the other kind moved), then progress, then waiting.
+    """
+    for code in (TICK_HALT, TICK_HALTED_STANDING, TICK_PROGRESS):
+        if code in codes:
+            return code
+    return TICK_WAITING
+
+
 class Ticker:
     """Run one tick against the records: lease, plan, at most one ring, completion."""
 
-    def __init__(self, store: FleetStore, log: Callable[[str], None], clock: Callable[[], float]) -> None:
+    def __init__(
+        self,
+        store: FleetStore,
+        log: Callable[[str], None],
+        clock: Callable[[], float],
+        defer: Callable[[dict[str, Any]], dict[str, str]] | None = None,
+    ) -> None:
+        """``defer(release)``: the seats that may not take ``release`` this tick, with why (skills only)."""
         self.store, self.log, self.clock = store, log, clock
+        self.defer: Callable[[dict[str, Any]], dict[str, str]] = defer or (lambda release: {})
 
     def plan(self, rings: list[Ring], release: dict[str, Any]) -> TickPlan:
         now = datetime.fromtimestamp(self.clock(), timezone.utc)
@@ -201,6 +245,7 @@ class Ticker:
             self.store.holds(),
             lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
             now,
+            self.defer(release),
         )
 
     def run(
@@ -313,6 +358,7 @@ class Ticker:
                 self.store.holds(),
                 lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
                 now,
+                self.defer(rel),
             )
             if plan.code == TICK_PROGRESS and plan.ring is not None and plan.ring.number in taken:
                 newer.append((rid, rows))

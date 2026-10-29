@@ -222,8 +222,11 @@ jobs:
   # operator/skills/** publishes a CANDIDATE skills release to R2: the
   # content-addressed objects plus fleet/skills/<version>.json (files, retired
   # names, each skill's needs from the image). It never writes a seat's
-  # pointer, so nothing changes on any seat until `operator/bin/fleet release
-  # --skills <version>` walks the rings. Same CF-token-derived R2 credentials as
+  # pointer. The release controller (release-tick.yml, which runs when this
+  # workflow completes and every 15 minutes) walks it through the rings: each
+  # seat takes it once that seat's image was built from this commit or a later
+  # one, so skills follow the image this same merge builds. `operator/bin/fleet
+  # release --skills <version>` is the by-hand path. Same CF-token-derived R2 credentials as
   # publish-customer-configs (no new secret); the D1 record goes through the
   # same wrangler path sync-customer-configs uses.
   publish-skills:
