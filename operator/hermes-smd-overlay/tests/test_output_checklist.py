@@ -189,6 +189,32 @@ def test_a_quoted_record_title_keeps_the_firms_capitals():
     assert _rules("Delete the entry EDITED today.") == ["caps_emphasis"]
 
 
+FOLDER = "MEDICAL CHRONOLOGY - Jane Example 10-28-26 by Example Operator Agent"
+
+
+def test_the_runners_folder_name_is_the_firms_spelling_not_emphasis():
+    """A joint matter, 2026-10-28: a ledger write and an SMD note naming the
+    folder the runner created, unquoted, were held as shouting. FALSIFIER: on
+    the old rule both of these refused on 'MEDICAL'."""
+    note = f"Chronology run delivered in {FOLDER}: 4 files; 55 documents and 2048 pages read."
+    assert oc._caps(note, oc.MEMO) is None
+    assert _rules(f"The chronology is filed in {FOLDER} on the matter.") == []
+    # A second client's folder on the same line, and a client name the firm
+    # spells in capitals, are both the folder's own text.
+    two = f"Filed in {FOLDER} and in MEDICAL CHRONOLOGY - JOHN EXAMPLE-SMITH 10-28-26."
+    assert oc._caps(two, oc.MEMO) is None
+
+
+def test_capitals_outside_the_folder_name_are_still_emphasis():
+    """The pair's other half: the exemption is the folder's shape, nothing more."""
+    assert _rules("The MEDICAL CHRONOLOGY is ready for review.") == ["caps_emphasis"]
+    assert _rules("MEDICAL CHRONOLOGY - URGENT, call the adjuster today.") == ["caps_emphasis"]
+    (refused,) = oc.refusing(oc.check(f"URGENT: the chronology is in {FOLDER}.", oc.MEMO))
+    assert refused.rule == "caps_emphasis" and "URGENT" in refused.detail
+    # The same line with a shout after the name: the name is spared, the shout is not.
+    assert oc._caps(f"Filed in {FOLDER}. Review it TODAY.", oc.MEMO).group(0) == "TODAY"
+
+
 def test_not_captured_in_a_file_note_is_refused():
     (refused,) = oc.refusing(
         oc.check("Motions in limine deadline: NOT CAPTURED. Attorney to confirm.", oc.MEMO)

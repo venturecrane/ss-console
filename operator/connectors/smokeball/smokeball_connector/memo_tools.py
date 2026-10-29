@@ -31,11 +31,11 @@ carried forward (see below).
 from __future__ import annotations
 
 import re
-import time
 from datetime import datetime, timezone
 from typing import Any
 
-from .memo_confirm import _norm, _readback, _with, post_and_confirm
+from . import memo_confirm
+from .memo_confirm import VENDOR_LAG_ATTEMPTS, VENDOR_LAG_BACKOFF, _norm, _readback, _with, post_and_confirm
 from .render import _number_ordered_runs, _table_row
 from .task_update import PROVENANCE_MARK
 
@@ -107,8 +107,8 @@ _PAGE = 100
 _MAX_PAGES = 20
 
 #: Read-back after a PUT: the 202 applies asynchronously (seconds).
-_PUT_ATTEMPTS = 5
-_PUT_BACKOFF = (1, 2, 4, 6)
+_PUT_ATTEMPTS = VENDOR_LAG_ATTEMPTS
+_PUT_BACKOFF = VENDOR_LAG_BACKOFF
 
 
 class MemoRefused(ValueError):
@@ -390,7 +390,7 @@ def put_and_confirm(client: Any, matter_id: str, memo_id: str, body: str, *, sle
         matter_id,
         memo_id,
         body,
-        sleep=sleep or time.sleep,
+        sleep=sleep or memo_confirm.SLEEP,
         attempts=_PUT_ATTEMPTS,
         backoff=_PUT_BACKOFF,
         retry_mismatch=True,
@@ -399,7 +399,7 @@ def put_and_confirm(client: Any, matter_id: str, memo_id: str, body: str, *, sle
 
 
 def _post(client: Any, matter_id: str, body: str, sleep: Any) -> Any:
-    return post_and_confirm(client, matter_id, body, sleep=sleep or time.sleep)
+    return post_and_confirm(client, matter_id, body, sleep=sleep)
 
 
 def upsert_memo(client: Any, matter_id: str, text: str, *, sleep: Any = None) -> Any:

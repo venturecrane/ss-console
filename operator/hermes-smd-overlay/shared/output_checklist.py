@@ -219,7 +219,9 @@ _CAPTION = re.compile(r"\s(?:v|vs)\.\s")
 #: ``SROG-1``, ``Medi-Cal`` spelled in capitals), (c) it sits on a caption line
 #: (one carrying `` v. `` or `` vs. ``), (d) it sits on a heading line, or on
 #: a document's table row (``_layout_spans``), or (e) it is inside double quotes
-#: on the line, a record's own title quoted back. There is no dictionary and no
+#: on the line, a record's own title quoted back, or (f) it is inside the
+#: chronology runner's verbatim delivery folder name (``_RUNNER_FOLDER``:
+#: "MEDICAL CHRONOLOGY - <client> <MM-DD-YY>"). There is no dictionary and no
 #: inference: an acronym this list does not know is a refusal with the word
 #: named, and the model writes it in ordinary case or the firm adds it here.
 #: Three-letter words are never checked, so MSC, FSC, RFP, MRI and CCP need no
@@ -459,8 +461,31 @@ def _quoted_spans(text: str) -> list[tuple[int, int]]:
     return [(m.start(), m.end()) for m in _QUOTED.finditer(text)]
 
 
+#: The chronology runner's delivery folder name, verbatim: "MEDICAL CHRONOLOGY -
+#: <client> <MM-DD-YY>" and whatever the firm's template appends ("by ...").
+#: The runner creates the folder with the firm's own capitals
+#: (medchron/stages/manifest.py), so a ledger entry or a note naming the folder
+#: is quoting the firm's record, not shouting. On a joint matter, 2026-10-28, the
+#: unquoted name held a ledger write and an SMD note. Narrow on purpose: the
+#: span is the fixed heading, " - ", a client name (letters and name
+#: punctuation, no digits) and the folder's date stamp, all on one line. Bare
+#: "MEDICAL CHRONOLOGY" without that shape is still emphasis.
+_RUNNER_FOLDER = re.compile(
+    r"\bMEDICAL CHRONOLOGY - [A-Za-z][A-Za-z .,'&-]{0,80}? \d{2}-\d{2}-\d{2}\b"
+)
+
+
+def _runner_folder_spans(text: str) -> list[tuple[int, int]]:
+    return [(m.start(), m.end()) for m in _RUNNER_FOLDER.finditer(text)]
+
+
 def _caps(text: str, surface: str = STAFF_SEND) -> re.Match[str] | None:
-    spans = _caption_spans(text) + _layout_spans(text, surface) + _quoted_spans(text)
+    spans = (
+        _caption_spans(text)
+        + _layout_spans(text, surface)
+        + _quoted_spans(text)
+        + _runner_folder_spans(text)
+    )
     for match in _CAPS.finditer(text):
         word = match.group(0)
         if word in KNOWN_CAPS:

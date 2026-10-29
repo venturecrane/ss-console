@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .broker_client import BrokerClient, BrokerError
-from .covered import delivery_fields
+from .covered import delivery_fields, wake_folder_lines
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, config as config_mod, job as job_mod, lane_proof, proof_run, quiesce, requeue
@@ -466,8 +466,7 @@ class Daemon:
             update_outcome.totals_line(fields, len(upd) > 1),
             *upd,
         ]
-        if fields.get("folder_id"):
-            lines.append(f"Delivered folder id: {fields['folder_id']}.")
+        lines.extend(wake_folder_lines(state, fields))
         if state != "delivered":
             lines.append(f"Held at: {stage or 'runner (no verdict)'}.")
         if state == "held":  # the firm-safe token the skill words; the reason stays SMD's

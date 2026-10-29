@@ -236,6 +236,42 @@ def test_a_proven_mismatch_is_false() -> None:
     assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] is False
 
 
+def test_a_create_the_vendor_applies_late_confirms_inside_the_lag_window() -> None:
+    """A joint matter, 2026-10-28: Smokeball accepted the memo POST (202), the
+    read-back by id failed for longer than the old 2 s window, the write
+    reported link_not_visible and paged SMD, and a direct read minutes later
+    showed the memo had landed. FALSIFIER: on the old schedule (3 reads, 0.5 and
+    1.5 s apart) these four not-yet reads exhausted the budget and the result
+    was "unknown"; now the fifth read, about 15 s after the POST, confirms."""
+    c = _FakeClient([RuntimeError("404")] * 4 + [{"id": "m1", "plainText": BODY}])
+    slept: list = []
+    out = mc.post_and_confirm(c, "A", BODY, sleep=slept.append)
+    assert out["confirmed"] is True and out["readback"] == "confirmed"
+    assert sum(slept) >= 15 and len(c.posts) == 1
+
+
+def test_the_create_window_is_long_enough_for_observed_vendor_lag() -> None:
+    """The create path waits about as long as the file uploads' measured
+    backoff before it says "unknown" (it once waited 2 s)."""
+    waits = [mc._BACKOFF[min(i, len(mc._BACKOFF) - 1)] for i in range(mc._ATTEMPTS - 1)]
+    assert sum(waits) >= 25
+
+
+def test_a_create_never_readable_is_still_unknown_after_the_whole_window() -> None:
+    """Honest "unknown": a write no read ever saw is never reported confirmed,
+    and the memo is never re-created."""
+    c = _FakeClient([RuntimeError("404")] * mc._ATTEMPTS)
+    slept: list = []
+    out = mc.post_and_confirm(c, "A", BODY, sleep=slept.append)
+    assert out["confirmed"] == "unknown" and out["status"] == "link_not_visible"
+    assert len(slept) == mc._ATTEMPTS - 1 and len(c.posts) == 1
+
+
+def test_a_late_read_that_differs_is_still_a_mismatch_never_confirmed() -> None:
+    c = _FakeClient([RuntimeError("404")] * 3 + [{"id": "m1", "plainText": "[Operator] other"}])
+    assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] is False
+
+
 def test_no_id_in_the_response_is_unknown() -> None:
     c = _FakeClient([], post={"ok": True})
     assert mc.post_and_confirm(c, "A", BODY, sleep=_nosleep)["confirmed"] == "unknown"
@@ -244,7 +280,7 @@ def test_no_id_in_the_response_is_unknown() -> None:
 def test_create_memo_returns_confirmed(monkeypatch) -> None:
     c = _FakeClient([{"id": "m1", "plainText": "[Operator] Plain note, no matter cited."}])
     monkeypatch.setattr(srv, "_get_client", lambda: c)
-    monkeypatch.setattr(mc.time, "sleep", _nosleep)
+    monkeypatch.setattr(mc, "SLEEP", _nosleep)
     out = srv.create_memo("A", "Plain note, no matter cited.")
     assert out["confirmed"] is True
     assert c.posts[0]["json"]["text"].startswith("[Operator]")

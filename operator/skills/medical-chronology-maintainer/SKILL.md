@@ -482,7 +482,8 @@ apply unchanged.
 When the runner finishes a job, the platform wakes this skill with a task whose
 first line is "Run the medical-chronology-maintainer skill's DELIVER mode for
 chronology job <id>." followed by `Outcome:`, `Matter number:`, the counts, and
-`Delivered folder id:` (delivered; an update that found nothing new carries
+`Delivered folder id:` (delivered; a joint matter carries
+`Delivered folder ids (one chronology per client, <n> clients):` instead; an update that found nothing new carries
 `Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held or failed), a
 `Hold class: <class>` line (held: only `rerouted_to_update` ever wakes this
 mode), then `Requester:` and `Request ref:`. **That wake IS this mode's initiation**: it arrives
@@ -527,6 +528,11 @@ nothing, stop.
 2. **Read the job** with `medchron_job_status` (`job_id`): its state, its counts,
    its reason. On `delivered`, `get_files_on_matter` for the delivered folder's
    contents. Report what the record shows, not what the wake says.
+   **A joint matter** (the wake lists more than one delivered folder id) delivered
+   one chronology per client, each in its own folder: read every listed folder,
+   and every step below covers all of them. The counts are the job's, read once:
+   a file the clients share is counted once, so never add, split or repeat a
+   count per client.
    **On `delivered`, the `reason` field is not part of the delivery and is never
    relayed**, in the reply, the ledger entry, or the task. A reason describes a
    hold or a failure; a job that was held and then resumed and delivered may
@@ -547,12 +553,17 @@ nothing, stop.
    the responsible attorney (`personResponsibleStaffId` from `get_matter`; subject
    names the matter number and the folder; no legal characterization), confirmed by
    `list_tasks`. The task is the attorney's only notice of a delivery; the attorney
-   is never emailed. A held job gets no ledger entry and no task.
+   is never emailed. A held job gets no ledger entry and no task. On a joint
+   matter the one entry and the one task name every delivered folder.
 4. **Reply once** with `create_draft` addressed to the bound sender only (the seat
    sends it in the requester's original thread after the reply checks, copying the firm's people who were on the request;
    never add anyone yourself):
    - **delivered**: the counts (documents read, pages, exclusions as the runner
      reported them) and where the folder is, and nothing from the job's `reason`.
+     On a joint matter, name every client's chronology, each with its own
+     folder, taking the client and the folder from each folder's name as
+     `get_files_on_matter` returns it; never name one client of a joint
+     delivery alone, and state the counts once for the job.
      When the wake says `Request: update into the delivered chronology.`, say the
      chronology was updated in its own folder and the earlier version of the
      document replaced by the updated one:
