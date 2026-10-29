@@ -25,3 +25,10 @@
 # (pyproject.toml, v0.22.5), so hermes_pip_check.py tolerates that one
 # requirement, and only while the installed version is the pin below.
 brotlicffi>=1.2.1.0
+
+# tornado 6.5.10 -> fix: CVE-2026-116577, CVE-2026-115927, CVE-2026-116578
+# (fixed in 6.6). In Hermes' lock only python-telegram-bot requires it (its
+# webhook server); no seat runs a Telegram platform. A minor release of a
+# library Hermes never calls directly; python-telegram-bot's requirement is a
+# range, so the override resolves without a Hermes promotion.
+tornado>=6.6
