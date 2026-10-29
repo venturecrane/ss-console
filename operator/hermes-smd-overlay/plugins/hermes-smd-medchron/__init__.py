@@ -56,14 +56,19 @@ _UNIT_SCHEMA = {
         },
         "dob": {
             "type": "string",
-            "description": "Date of birth, MM/DD/YYYY, read from the matter (never guessed).",
+            "description": (
+                "Date of birth, MM/DD/YYYY, read from the matter (never guessed). Leave it out "
+                "on an UPDATE for a client medchron_job_status(matter_id) lists with "
+                "dob_on_record true: the broker uses the date the delivered chronology ran on. "
+                "Required on a RUN."
+            ),
         },
         "folder_prefix": {
             "type": "string",
             "description": "On a joint matter only: the document folder that holds this client's records.",
         },
     },
-    "required": ["client_name", "surname", "dob"],
+    "required": ["client_name", "surname"],
     "additionalProperties": False,
 }
 
@@ -283,7 +288,9 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
                     "description": (
                         "The practice-management matter id, resolved on this turn. Returns the "
                         "covered and uncovered document ids accumulated across every delivered "
-                        "chronology on the matter, so an update reads only the rest."
+                        "chronology on the matter, so an update reads only the rest, and "
+                        "delivered_clients: each client a delivered chronology was for, with "
+                        "dob_on_record saying whether the update can reuse its date of birth."
                     ),
                 },
             }
