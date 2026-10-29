@@ -31,8 +31,11 @@ Peer gating, per verb:
                            cycle page allowance when the request carries SMD's
                            approved overage (``allowance_approved_pages`` +
                            ``allowance_approved_by``, from ``medchron.allowance
-                           approve``), audited on the resume row. Every other
-                           hold stays refused.
+                           approve``), audited on the resume row; and an update
+                           HELD by its independent review (``update_held: the
+                           independent review ...``), after SMD records the
+                           correction with ``medchron.update_decide``. Every
+                           other hold stays refused.
     medchron_allowance_credit
                            uid 0 only, with NO agent tool (2026-10-29). SMD
                            waives pages from the firm's cycle page allowance (a
@@ -100,6 +103,11 @@ VERBS = (
 # stage's exit-1 text in the runner's `dag.py`, which the daemon passes through
 # as the row's reason. Pinned there by `test_audit_gate_hold_reason_is_the_one_the_broker_resumes`.
 AUDIT_GATE_HOLD_PREFIX = "audit coverage:"
+#: The update's independent review held on a must-fix its finisher could not
+#: correct (``dag_update.py``, the ``update_review`` stage's exit-2 text, and
+#: ``update_review_settle.hold_line``). Pinned by
+#: `test_update_review_hold_reason_is_the_one_the_broker_resumes`.
+UPDATE_REVIEW_HOLD_PREFIX = "update_held: the independent review of the update"
 
 
 def _audit_gate_hold(row: dict[str, Any]) -> bool:
@@ -117,6 +125,15 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     if row.get("state") != "held":
         return False
     if reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported")):
+        return True
+    # The update's independent review held on a finding the finisher could not
+    # correct: "SMD finishes it" in its own words. 2026-10-29: Oleksandra's
+    # update held there with the reviewer right and the audit wrong, and this
+    # rule refused the resume, so SMD had no way to finish what the hold says
+    # SMD finishes. The correction is recorded first (``medchron.update_decide``,
+    # root on the seat, which writes its own marker); a bare resume settles the
+    # held findings again by today's rules at $0 and holds again if any is left.
+    if reason.startswith(UPDATE_REVIEW_HOLD_PREFIX):
         return True
     # A stage refusal is a pipeline integrity stop the hold classifier already
     # pages to SMD as ours (``stage_refused``); once the fix ships, SMD resumes

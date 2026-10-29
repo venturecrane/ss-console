@@ -601,9 +601,28 @@ def test_a_stage_refusal_hold_resumes_through_the_same_verb(verbs):
     assert out["queued"] is True and (queue / f".resume-{j}.json").is_file()
 
 
+def test_an_update_review_hold_resumes_through_the_same_verb(verbs):
+    """2026-10-29, live: Oleksandra's update held at update_review ("SMD
+    finishes it") with the reviewer right, and the resume refused it, so SMD
+    had no way to finish what the hold names SMD to finish."""
+    v, _ledger, queue = verbs
+    reason = (
+        "update_held: the independent review of the update left must-fix findings the finisher could not "
+        "correct against the pages; SMD finishes it; last output: update_held: the independent review of the "
+        "update left 1 must-fix finding(s) the finisher could not correct against the pages; SMD finishes it: x"
+    )
+    j = _held_job(v, reason)
+    out = call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="SMD corrected entry N3", redo=[])
+    assert out["queued"] is True and (queue / f".resume-{j}.json").is_file()
+    with pytest.raises(ValueError, match="not held by the pre-delivery review"):
+        call(v, "medchron_job_resume", peer_uid=ROOT, job_id=j, reason="x", redo=[], release_review=True)
+
+
 @pytest.mark.parametrize(
     "reason",
     [
+        "update_held: the update into the delivered chronology cannot go on as asked",
+        "update_held: the update found two chronologies that carry the newest date",
         "refused: list_matter: the matter already holds a delivered chronology; submit it as an update",
         "identity: an emailed attachment names a different person than the client",
         "per_job_cap_usd: this run's projected cost would exceed the job's cost cap before audit",
@@ -635,6 +654,21 @@ def test_audit_gate_hold_reason_is_the_one_the_broker_resumes():
     audit = src[src.index('        "audit",\n') :]
     audit = audit[: audit.index("    Stage(")]
     assert f'1: (HELD, "{AUDIT_GATE_HOLD_PREFIX}' in audit
+
+
+def test_update_review_hold_reason_is_the_one_the_broker_resumes():
+    """The update review's hold text lives in the runner (dag_update.py's
+    exit 2 and update_review_settle.hold_line); read the source so the
+    broker's prefix cannot drift from it."""
+    from workspace_broker.medchron_verbs import UPDATE_REVIEW_HOLD_PREFIX
+
+    pkg = Path(__file__).resolve().parents[2] / "runners" / "medchron" / "medchron"
+    dag = (pkg / "dag_update.py").read_text(encoding="utf-8")
+    stage = dag[dag.index('        "update_review",\n') :]
+    stage = stage[: stage.index("    Stage(")]
+    assert f'"{UPDATE_REVIEW_HOLD_PREFIX} ' in stage
+    settle = (pkg / "stages" / "update_review_settle.py").read_text(encoding="utf-8")
+    assert f'f"{UPDATE_REVIEW_HOLD_PREFIX} ' in settle
 
 
 def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):
