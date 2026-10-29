@@ -181,3 +181,111 @@ def test_the_newest_delivered_job_decides(verbs):
 def test_fill_leaves_a_run_envelope_alone():
     env = run_envelope(units=[{"client_name": "Dana Sample", "surname": "Sample"}])
     assert medchron_identity.fill_update_dobs(object(), env) is env
+
+
+# ---- the backfill: a job submitted before units were kept ---------------------
+def _forget_units(db):
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM medchron_job_units")
+    conn.commit()
+    conn.close()
+
+
+def _audit_rows(db, action_type):
+    conn = sqlite3.connect(db)
+    try:
+        return [r[0] for r in conn.execute("SELECT metadata FROM audit_log WHERE action_type=?", (action_type,))]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+
+def backfill(v, job_id, units, peer_uid=ROOT, **kw):
+    return call(v, "medchron_units_backfill", peer_uid=peer_uid, job_id=job_id, units=units, **kw)
+
+
+def test_a_backfilled_delivery_lends_its_date_to_the_next_update(verbs):
+    """The A&P case: delivered before units were kept, so the update would ask."""
+    v, db, queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    assert backfill(v, first["job_id"], run_envelope()["units"])["outcome"] == "recorded"
+    matter = call(v, "medchron_job_status", matter_id="m-7")["matter"]
+    assert matter["delivered_clients"] == [{"client_name": "Dana Sample", "surname": "Sample", "dob_on_record": True}]
+    second = call(v, "medchron_job_submit", envelope=update_envelope())
+    assert second["accepted"], second
+    assert json.loads((queue / f"{second['job_id']}.json").read_text())["units"][0]["dob"] == DOB
+    # The audit row names the job and counts the units; never a name or a date.
+    (meta,) = _audit_rows(db, "MEDCHRON_UNITS_BACKFILLED")
+    assert json.loads(meta) == {"job_id": first["job_id"], "units": 1}
+    assert DOB not in meta and "Sample" not in meta
+
+
+def test_a_backfill_is_idempotent_and_never_replaces_a_kept_row(verbs):
+    v, db, _queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    assert backfill(v, first["job_id"], run_envelope()["units"])["outcome"] == "recorded"
+    other = [{"client_name": "Dana Sample", "surname": "Sample", "dob": "09/09/1999"}]
+    assert backfill(v, first["job_id"], other)["outcome"] == "already_recorded"
+    assert backfill(v, first["job_id"], run_envelope()["units"])["outcome"] == "already_recorded"
+    assert len(_audit_rows(db, "MEDCHRON_UNITS_BACKFILLED")) == 1
+    # A job kept at submit is already recorded too.
+    kept = call(v, "medchron_job_submit", envelope=run_envelope(matter={"id": "m-8", "number": "2026-PI-778"}))
+    assert backfill(v, kept["job_id"], run_envelope()["units"])["outcome"] == "already_recorded"
+
+
+def test_a_backfill_with_no_date_of_birth_keeps_nothing(verbs):
+    v, db, _queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    bare = [{"client_name": "Dana Sample", "surname": "Sample", "dob": " "}]
+    assert backfill(v, first["job_id"], bare)["outcome"] == "no_dob"
+    assert backfill(v, first["job_id"], "not a list")["outcome"] == "no_dob"
+    assert medchron_identity.recorded(v._db, first["job_id"]) is False
+    assert _audit_rows(db, "MEDCHRON_UNITS_BACKFILLED") == []
+
+
+def test_a_backfill_for_a_job_the_broker_never_queued_keeps_nothing(verbs):
+    v, db, _queue = verbs
+    assert backfill(v, "01UNKNOWN", run_envelope()["units"])["outcome"] == "unknown_job"
+    assert medchron_identity.recorded(v._db, "01UNKNOWN") is False
+    assert _audit_rows(db, "MEDCHRON_UNITS_BACKFILLED") == []
+
+
+def test_a_backfill_naming_other_clients_keeps_nothing(verbs):
+    v, db, _queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    other = [{"client_name": "Robin Sample", "surname": "Sample", "dob": DOB}]
+    assert backfill(v, first["job_id"], other)["outcome"] == "names_differ"
+    assert medchron_identity.recorded(v._db, first["job_id"]) is False
+
+
+def test_a_dry_run_backfill_decides_and_writes_nothing(verbs):
+    v, db, _queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    out = backfill(v, first["job_id"], run_envelope()["units"], dry_run=True)
+    assert out["outcome"] == "recorded" and out["dry_run"] is True
+    assert medchron_identity.recorded(v._db, first["job_id"]) is False
+    assert _audit_rows(db, "MEDCHRON_UNITS_BACKFILLED") == []
+
+
+@pytest.mark.parametrize("uid", [AGENT_UID, 1234, None])
+def test_a_backfill_is_root_only(verbs, uid):
+    """An update reuses the date this keeps, so it must come from the job's own
+    envelope on the seat, never from a conversation the agent could steer."""
+    v, db, _queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    deliver(v, first["job_id"])
+    _forget_units(db)
+    with pytest.raises(PermissionError):
+        backfill(v, first["job_id"], run_envelope()["units"], peer_uid=uid)
+    assert medchron_identity.recorded(v._db, first["job_id"]) is False
