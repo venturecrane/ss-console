@@ -24,6 +24,11 @@ IDLE_MINUTES="${IDLE_MINUTES:-60}"
 S="$HOME/state"; mkdir -p "$S"
 now=$(date +%s)
 
+# Finished handoff sessions are closed whether or not anyone is attached: the
+# Captain's laptop usually is, so the Machine never idles and they would pile up
+# until memory ran out (2026-10-29). See ops-reap-tasks.
+/opt/ops/bin/ops-reap-tasks || true
+
 reason=""
 if tmux list-clients 2>/dev/null | grep -q .; then reason="tmux client attached"; fi
 if [ -z "$reason" ]; then

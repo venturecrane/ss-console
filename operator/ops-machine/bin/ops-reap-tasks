@@ -1,0 +1,84 @@
+#!/bin/bash
+# ops-reap-tasks (called by ops-idle-stop every 10 min, client workspaces only):
+# close the Claude session of a handed-off task once it is finished.
+#
+# Why: every `ops-handoff` opens a tmux window running ops-start, whose Claude
+# session waits at its prompt forever after the task is done. The Machine never
+# stops to clear them, because the Captain's laptop keeps a tmux client attached
+# ("busy: tmux client attached" on every idle-stop run). On 2026-10-29 the A&P
+# workspace held 15 sessions, 1 to 6 days old, at ~200 MB each on a 4 GB Machine
+# with no swap: 93 MB free, load 32, and a new task sat 14 minutes on its first
+# grep until twelve were killed by hand.
+#
+# Finished means BOTH:
+#   * the task wrote its outbox file (ops-start names it ~/outbox/task-*-<pid>.md
+#     after its own pid, which is the tmux pane's pid), and
+#   * the window has shown no output for TASK_REAP_HOURS (default 12), so a
+#     session the Captain is still talking to is never closed.
+# Under memory pressure (MemAvailable below TASK_REAP_FLOOR_MB, default 600) the
+# quiet period drops to TASK_REAP_PRESSURE_MINUTES (default 30), oldest first.
+#
+# Never touched: a window with no outbox file (the task has not reported, so it
+# may still be working or stopped on a question), and any window that is not a
+# handed-off task (the plain `ops` session has no outbox file either).
+#
+# Closing: SIGTERM to the Claude process, then the window is killed. A Claude
+# stuck in uninterruptible reclaim ignores TERM (seen 2026-10-29), so the pid is
+# remembered and the next run sends SIGKILL if it is still alive. The
+# conversation itself survives on disk (claude --resume).
+#
+# Test seams: OPS_REAP_PANES names a file of "<pane_pid> <window_index>
+# <window_activity_epoch>" lines in place of tmux, OPS_REAP_MEM_MB stands in for
+# MemAvailable, and OPS_REAP_DRY=1 prints the decisions instead of acting.
+set -uo pipefail
+HOURS="${TASK_REAP_HOURS:-12}"
+FLOOR="${TASK_REAP_FLOOR_MB:-600}"
+PRESSURE_MIN="${TASK_REAP_PRESSURE_MINUTES:-30}"
+S="$HOME/state"; mkdir -p "$S"
+pending="$S/reap-pending"
+now=$(date +%s)
+dry="${OPS_REAP_DRY:-}"
+
+act() { if [ -n "$dry" ]; then echo "would: $*"; else "$@"; fi; }
+
+# Second pass: anything TERMed last run and still alive gets KILL.
+if [ -f "$pending" ]; then
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "$(date -u +%FT%TZ) reap: pid $pid ignored TERM; KILL"
+      act kill -KILL "$pid"
+    fi
+  done < "$pending"
+  [ -z "$dry" ] && : > "$pending"
+fi
+
+mem="${OPS_REAP_MEM_MB:-$(awk '/^MemAvailable:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 99999)}"
+quiet=$((HOURS * 3600))
+if [ "$mem" -lt "$FLOOR" ]; then
+  quiet=$((PRESSURE_MIN * 60))
+  echo "$(date -u +%FT%TZ) reap: ${mem} MB available, under ${FLOOR}; quiet period ${PRESSURE_MIN}m"
+fi
+
+if [ -n "${OPS_REAP_PANES:-}" ]; then
+  panes=$(cat "$OPS_REAP_PANES")
+else
+  panes=$(tmux list-panes -s -t main -F "#{pane_pid} #{window_index} #{window_activity}" 2>/dev/null)
+fi
+
+# Oldest activity first, so pressure frees the longest-idle sessions.
+echo "$panes" | sort -k3 -n | while read -r ppid win activity; do
+  [ -n "$ppid" ] || continue
+  out=$(ls "$HOME"/outbox/task-*-"$ppid".md 2>/dev/null | head -1)
+  [ -n "$out" ] || continue
+  idle=$((now - activity))
+  [ "$idle" -ge "$quiet" ] || continue
+  cpid=$(pgrep -P "$ppid" -x claude 2>/dev/null | head -1)
+  echo "$(date -u +%FT%TZ) reap: window $win ($(basename "$out")) quiet $((idle / 60))m; closing${cpid:+ claude $cpid}"
+  if [ -n "$cpid" ]; then
+    act kill -TERM "$cpid"
+    [ -z "$dry" ] && echo "$cpid" >> "$pending"
+  fi
+  act tmux kill-window -t "main:$win"
+done
+exit 0
