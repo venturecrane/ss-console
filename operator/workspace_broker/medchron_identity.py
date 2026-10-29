@@ -22,7 +22,9 @@ one.
 
 A job submitted before this table existed has no row. Its clients still show
 (from ``client_keys``) with ``dob_on_record: false``, so the skill knows to read
-the date from the file instead; it is never guessed here.
+the date from the file instead; it is never guessed here. While its job dir is
+still on the seat, ``python -m medchron.units_backfill`` (root) keeps its units
+from the job's own envelope through :func:`backfill`.
 """
 
 from __future__ import annotations
@@ -144,3 +146,56 @@ def fill_update_dobs(ledger: Any, envelope: dict[str, Any]) -> dict[str, Any]:
                 unit = {**unit, "dob": known["dob"]}
         filled.append(unit)
     return {**envelope, "units": filled}
+
+
+# ---- the backfill, for jobs submitted before this table existed ----------------
+#: What ``backfill`` did with one job. Closed, so the CLI counts by outcome and
+#: never prints what a unit holds.
+BACKFILL_OUTCOMES = ("recorded", "already_recorded", "unknown_job", "no_dob", "names_differ")
+
+
+def recorded(ledger: Any, job_id: str) -> bool:
+    """Whether this job's units are already kept."""
+    conn = ledger._connect()
+    try:
+        _ensure(conn)
+        conn.commit()
+        return conn.execute("SELECT 1 FROM medchron_job_units WHERE job_id=?", (str(job_id),)).fetchone() is not None
+    finally:
+        conn.close()
+
+
+def backfill(ledger: Any, job_id: str, units: Any, *, dry_run: bool = False) -> str:
+    """Keep the units of a job submitted before this table existed.
+
+    The units come from the job's own envelope in the runner's job directory
+    (``medchron.units_backfill``, root on the seat), which survives about 72
+    hours after delivery. Returns one of ``BACKFILL_OUTCOMES``:
+
+    * ``already_recorded``: a row exists (written at submit, or by an earlier
+      backfill). Never replaced, so a second run changes nothing.
+    * ``unknown_job``: no ledger row. Nothing is kept for a job this broker
+      never queued.
+    * ``no_dob``: no unit names a date, so there is nothing an update could
+      reuse.
+    * ``names_differ``: the units name clients the ledger row does not, so they
+      are not that job's units.
+
+    The matter is the ledger row's, never the caller's. ``dry_run`` decides
+    the same outcome and writes nothing (``recorded`` then means "would be").
+    """
+    job_id = str(job_id or "")
+    row = ledger.read(job_id) if job_id else None
+    if row is None:
+        return "unknown_job"
+    if recorded(ledger, job_id):
+        return "already_recorded"
+    clean = [u for u in units if isinstance(u, dict)] if isinstance(units, list) else []
+    if not any(str(u.get("dob") or "").strip() for u in clean):
+        return "no_dob"
+    keys = json.loads(row["client_keys"]) if row.get("client_keys") else None
+    if keys is not None and sorted({_key(u.get("client_name")) for u in clean} - {""}) != sorted(keys):
+        return "names_differ"
+    if not dry_run:
+        remember(ledger, job_id, {"matter": {"id": row["matter_id"]}, "units": clean})
+    return "recorded"

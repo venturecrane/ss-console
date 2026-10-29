@@ -160,6 +160,9 @@ const EXPECTED_VERBS = [
   'medchron_job_resume',
   'medchron_job_status',
   'medchron_job_submit',
+  // 2026-10-29: keeps the units of a job submitted before the broker kept
+  // them, read from the job dir on the seat. Root only, no agent tool.
+  'medchron_units_backfill',
   // The relay's working draft, deleted once its reply is out (msgraph_drafts.py).
   'msgraph_discard_draft',
   'msgraph_reply',

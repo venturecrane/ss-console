@@ -20,6 +20,14 @@ Peer gating, per verb:
                            update SKIPS whatever that record names -- so a path
                            the agent could reach is a path a client conversation
                            could use to make a chronology omit medical records.
+    medchron_units_backfill
+                           uid 0 only, with NO agent tool (2026-10-29). Keeps the
+                           units of a job submitted before the broker kept them
+                           (``medchron_identity.backfill``), read by
+                           ``medchron.units_backfill`` from the runner's job dir.
+                           An update reuses the date of birth it keeps, so the
+                           date must come from the job's own envelope on the
+                           seat, never from a conversation.
     medchron_job_resume    uid 0 only, and with NO agent tool (ss#2903). Asks the
                            runner daemon to re-run a FAILED job from the stages
                            its state file has not finished, instead of paying for
@@ -82,6 +90,7 @@ VERBS = (
     "medchron_job_list",
     "medchron_job_record",
     "medchron_backfill_covered",
+    "medchron_units_backfill",
     "medchron_job_resume",
 )
 
@@ -274,6 +283,9 @@ class MedchronVerbs:
             # records. The runner's own reporting verb is root-only for the
             # adjacent reason.
             "medchron_backfill_covered": is_root,
+            # ROOT only, no agent tool: an update reuses the date of birth this
+            # keeps, so it comes from the job's own envelope on the seat.
+            "medchron_units_backfill": is_root,
             # ROOT only, and deliberately with no agent tool (ss#2903). A resume
             # spends money and writes to the firm's matter, and the judgment it
             # rests on -- "the defect is fixed, the completed stages are still
@@ -346,6 +358,8 @@ class MedchronVerbs:
             return self._record(request)
         if action == "medchron_backfill_covered":
             return self._backfill(request)
+        if action == "medchron_units_backfill":
+            return self._units_backfill(request)
         if action == "medchron_job_resume":
             return self._resume(request)
         raise ValueError(f"unsupported medchron action: {action}")
@@ -641,3 +655,25 @@ class MedchronVerbs:
             row["matter_id"],
         )
         return {"ok": True, "job": projected}
+
+    def _units_backfill(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Keep a pre-2026-10-29 job's units, read from its job dir on the seat.
+
+        Returns the closed outcome only. The audit row (on a write) carries the
+        job id and the unit count, never a name or a date: the audit log is not
+        a copy of the units.
+        """
+        job_id = str(request.get("job_id") or "")
+        if not job_id:
+            raise ValueError("medchron_units_backfill requires job_id")
+        units = request.get("units")
+        dry_run = request.get("dry_run") is True
+        outcome = medchron_identity.backfill(self._db, job_id, units, dry_run=dry_run)
+        if outcome == "recorded" and not dry_run:
+            row = self._db.read(job_id) or {}
+            self._audit(
+                "MEDCHRON_UNITS_BACKFILLED",
+                {"job_id": job_id, "units": len(units) if isinstance(units, list) else 0},
+                row.get("matter_id"),
+            )
+        return {"ok": True, "job_id": job_id, "outcome": outcome, "dry_run": dry_run}
