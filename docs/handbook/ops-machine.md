@@ -27,6 +27,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/crontab
   - label: operator/ops-machine/bin/ops-idle-stop - the idle stop
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-idle-stop
+  - label: operator/ops-machine/bin/ops-reap-tasks - closes finished handoff sessions
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-reap-tasks
 ---
 
 A client's documents (matter files, medical records, and everything made from them) are opened only on that client's own locked-down machine in the cloud, its ops workspace, never on a laptop. This page says what a workspace is, who opens one and how, how long documents are kept, and what `smd-ops`, SMD's own operations machine, does.
@@ -50,6 +52,7 @@ Each client with document work has its own Fly app, `ops-<slug>` (A&P: `ops-asht
 - runs the tools on that client's own Anthropic key, while Claude itself runs on the Captain's Max login;
 - has no Infisical identity, so nothing else in the vault is reachable from it;
 - stops itself after an hour with nobody attached and nothing running, and costs nothing while stopped.
+- closes a handed-off task's session once it has written its outbox file and its window has been quiet for 12 hours (30 minutes when memory runs low), attached or not, so finished sessions do not pile up. A task that has not reported is never closed.
 
 An agent runs `bin/ops-workspace create <slug>` from a laptop signed in to the Captain's Fly, Infisical and GitHub accounts (the slug must first be added to `workspaces.json` in a reviewed change): app, volume, secrets, image, health check. `update` rebuilds the image and re-mints its tokens; `status` shows its state and selftest; `destroy` deletes it and everything on it. Decommissioning a client destroys its workspace with its seat.
 
