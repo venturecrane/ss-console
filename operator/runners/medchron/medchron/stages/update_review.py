@@ -466,7 +466,10 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
     if rec.get("doc_sha_out") != _sha(md):
         return None
     if rec.get("status") == "clean":
-        sr.log("update review: the audit document is the one already reviewed clean; not paid again")
+        if rec.get("smd_corrected"):  # ``medchron.update_decide``: SMD corrected what the review held on
+            sr.log("update review: SMD corrected the held finding(s) against the pages; not paid again")
+        else:
+            sr.log("update review: the audit document is the one already reviewed clean; not paid again")
         return 0
     if rec.get("status") == "held":
         if PR.release_requested(sr.job.path.parent) is not None:
@@ -694,6 +697,13 @@ def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) 
     for the rest (two finishes and the narrow re-check, at most), priced at the review model's input
     rate (output is bounded by the parts and small beside the pages)."""
     out = slug_dir / "out" / unit
+    doc = slug_dir / "runs" / unit / "final-chronology.md"
+    rec = read_json(slug_dir / "runs" / unit / "update" / RECORD, {})
+    if rec.get("status") == "clean" and doc.is_file() and rec.get("doc_sha_out") == _sha(doc.read_text("utf-8")):
+        # ``_reuse`` returns at once on this document (a resume after SMD's
+        # correction, ``medchron.update_decide``): projecting a full review
+        # here would hold a resumed job on the cap for money it never spends.
+        return 0.0
     new = [r.get("exhibit") for r in read_json(slug_dir / "runs" / unit / "update" / "new_exhibits.final.json", [])]
     exs = [x for x in new if isinstance(x, int)]
     if not exs:
