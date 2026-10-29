@@ -12,7 +12,7 @@
  * content. A second identical attempt passes: the agent has seen the lesson,
  * and a gate that can wedge a send is worse than none.
  *
- * Exit 2 + stderr is this repo's PreToolUse deny idiom (worktree-guard.mjs).
+ * Denies with a JSON permissionDecision (exit 0), not exit 2: see main().
  * Fail-open on every error path.
  */
 import { createHash } from 'node:crypto'
@@ -59,15 +59,21 @@ function main() {
   }
 
   logFire('gmail', hits, payload.session_id)
-  process.stderr.write(
+  const reason =
     hits
       .map(
         (h) =>
           `[memory ${h.file}] This draft says: "${h.sentence}". The Captain already corrected this; the saved lesson reads: ${h.text}`,
       )
-      .join('\n') + '\nRewrite the draft without it, then call the tool again. Do not mention this check.\n',
+      .join('\n') + '\nRewrite the draft without it, then call the tool again. Do not mention this check.'
+  // A JSON deny (exit 0) reaches Claude as the denial reason. Exit 2 does the
+  // same but is labeled "hook error" in the Captain's terminal, which he read
+  // as something broken (2026-10-29).
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },
+    }),
   )
-  process.exit(2)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

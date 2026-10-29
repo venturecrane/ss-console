@@ -59,9 +59,23 @@ function runHook(payload: unknown, env: Record<string, string> = {}): HookResult
   }
 }
 
-function decision(r: HookResult): string | null {
+interface StopOut {
+  decision?: string
+  reason?: string
+  hookSpecificOutput?: { hookEventName?: string; additionalContext?: string }
+}
+
+/** The bounce text, whichever shape carried it; null when the reply passed. */
+function reasonOf(r: HookResult): string | null {
   if (!r.stdout.trim()) return null
-  return (JSON.parse(r.stdout) as { decision?: string }).decision ?? null
+  const out = JSON.parse(r.stdout) as StopOut
+  if (out.decision === 'block') return out.reason ?? ''
+  return out.hookSpecificOutput?.additionalContext ?? null
+}
+
+/** 'block' when the reply was bounced, in either delivery shape. */
+function decision(r: HookResult): string | null {
+  return reasonOf(r) === null ? null : 'block'
 }
 
 const proseLine = (i: number) => `This is prose line number ${i} of a long unstructured reply.`
@@ -92,7 +106,7 @@ describe('reply-contract: blocking', () => {
     const r = runHook(payload(WALL))
     expect(r.status).toBe(0)
     expect(decision(r)).toBe('block')
-    const reason = (JSON.parse(r.stdout) as { reason: string }).reason
+    const reason = reasonOf(r) ?? ''
     expect(reason).toMatch(/MISSION/)
     expect(reason).toMatch(/Do NOT repeat/)
   })
@@ -186,7 +200,7 @@ describe('reply-contract: a cost is never weighed against the monthly fee', () =
       const r = runHook(payload(`Short answer.\n\n${s}`))
       expect(r.status).toBe(0)
       expect(decision(r)).toBe('block')
-      expect((JSON.parse(r.stdout) as { reason: string }).reason).toMatch(/ADDED cost of goods/)
+      expect(reasonOf(r)).toMatch(/ADDED cost of goods/)
     })
   }
 
