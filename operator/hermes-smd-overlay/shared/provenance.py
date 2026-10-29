@@ -44,6 +44,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import re
 import threading
 from collections import OrderedDict
 from collections.abc import Iterator
@@ -522,10 +523,118 @@ def record_read(session_id: str, text: str) -> None:
         else:
             _registers.move_to_end(session_id)  # LRU touch
         reg.add_read_text(text)
+        _record_money_fields(reg, text)
         _record_captions(reg, text)
         _record_associations(reg, text)
     except Exception:  # noqa: BLE001 — recording is best-effort, never fatal
         logger.debug("provenance: record_read failed for session %s", session_id, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Money the firm's record stores as a bare number
+# ---------------------------------------------------------------------------
+#
+# WHY (2026-10-29 pilot rehearsal). ``add_read_text`` learns a figure only when
+# it is written with a ``$`` (``identifier_filter.MONEY_RE``). Smokeball never
+# writes one: an expense row is ``"price": 96.25`` and a Medicals tab line is
+# ``"Providers[0]/Invoices[0]/InitialInvoiceAmount": "1875.40"``. So the
+# Operator re-read the entry it staged with ``get_expenses``, exactly as
+# vendor-invoice-intake says to, and the reply "staged as an expense of
+# $96.25" was still refused as untraceable. The figure WAS in a read of the
+# firm's own record; the register could not see it.
+#
+# THE RULE, narrow on purpose. A bare number registers as money only when
+#   * it came through ``record_read``, whose trust-plugin caller is gated on
+#     ``seeds_provenance`` (a read of the tenant's own record), so a write
+#     tool's return and ``read_attachment_text`` (the vendor's PDF) never reach
+#     it; the other callers pass prose, which does not parse as JSON;
+#   * it sits under a key whose LAST path segment ends with one of
+#     ``_MONEY_KEY_SUFFIXES`` (``price``, ``InitialInvoiceAmount``,
+#     ``InvoiceBalance``); a count, an index, a quantity or an id never does;
+#   * it reads as a plain amount (digits, at most two decimals). Anything else
+#     is skipped, which leaves the figure blocked: the safe direction.
+#
+# A total the record does not store (price x quantity on a multi-unit expense)
+# is NOT derived here. A reply stating one over-reports; the vendor stage
+# always writes quantity 1, so its price is the entry's amount.
+
+_MONEY_KEY_SUFFIXES: tuple[str, ...] = ("amount", "price", "charge", "balance")
+_BARE_AMOUNT_RE = re.compile(r"\d{1,12}(?:\.\d{1,2})?")
+_MAX_MONEY_WALK_DEPTH = 8
+_MAX_MONEY_WALK_NODES = 20_000
+
+
+def _decode_tool_payload(text: str) -> Any:
+    """The tool's own JSON from a post-hook result string, or ``None``.
+
+    Sees through the inbound quarantine fence and the dispatcher's
+    ``{"result": "<json>"}`` envelope (both live on seats; see
+    ``shared/result_unwrap.py``). Prose, or anything that does not parse, is
+    ``None``: nothing structured to read."""
+    from shared.result_unwrap import peel_envelopes, unwrap_inbound
+
+    try:
+        payload = json.loads(unwrap_inbound(text).strip())
+    except (ValueError, TypeError):
+        return None
+    return peel_envelopes(payload) if isinstance(payload, dict) else payload
+
+
+def _is_money_key(key: Any) -> bool:
+    if not isinstance(key, str) or not key:
+        return False
+    return key.rsplit("/", 1)[-1].strip().lower().endswith(_MONEY_KEY_SUFFIXES)
+
+
+def _bare_amount(value: Any) -> str:
+    """``value`` as a canonical money figure, or ``""`` when it is not a plain
+    non-negative amount. ``bool`` is excluded (it is an ``int`` in Python)."""
+    from shared.identifier_filter import canon_money
+
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, (int, float)):
+        raw = str(value)
+    elif isinstance(value, str):
+        raw = value.strip()
+    else:
+        return ""
+    if not _BARE_AMOUNT_RE.fullmatch(raw):
+        return ""
+    return canon_money(raw)
+
+
+def money_field_figures(text: str) -> list[str]:
+    """Canonical figures stored bare under money-named keys in a read result.
+
+    Public for tests; ``record_read`` is the only production caller."""
+    payload = _decode_tool_payload(text)
+    if payload is None:
+        return []
+    found: list[str] = []
+    stack: list[tuple[Any, int]] = [(payload, 0)]
+    visited = 0
+    while stack and visited < _MAX_MONEY_WALK_NODES:
+        node, depth = stack.pop()
+        visited += 1
+        if depth > _MAX_MONEY_WALK_DEPTH:
+            continue
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, (dict, list)):
+                    stack.append((value, depth + 1))
+                elif _is_money_key(key):
+                    canon = _bare_amount(value)
+                    if canon:
+                        found.append(canon)
+        elif isinstance(node, list):
+            stack.extend((item, depth + 1) for item in node)
+    return found
+
+
+def _record_money_fields(reg: ProvenanceRegister, text: str) -> None:
+    for canon in money_field_figures(text):
+        reg.add_money(canon)
 
 
 def record_records(session_id: str, records: list[dict]) -> None:

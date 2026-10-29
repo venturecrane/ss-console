@@ -37,7 +37,7 @@ metadata:
     content_ceiling: surface_only # reports what the letters state and where each was filed; a bill's figures are copied as printed, never totalled or characterized
     connectors:
       - email # the Operator's inbox: mail_list_attachments (the event carries none), mail_spool_attachment (bytes to the seat, a token back), and the reply draft
-      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the letter write, which refuses without a unique resolution), add_medicals_row (one Medicals row from a bill this run filed), stage_vendor_invoice with a page range (a vendor's bill, filed and staged in one write)
+      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the letter write, which refuses without a unique resolution), add_medicals_row (one Medicals row from a bill this run filed), stage_vendor_invoice with a page range (a vendor's bill, filed and staged in one write), get_expenses and get_matter_layouts (the confirming reads every reply figure comes from)
 ---
 
 # Combined Post Intake
@@ -354,9 +354,10 @@ already in the contacts is never added again.
 | `link_not_visible` | the provider was linked but no row appeared in time; nothing further written | "the Medicals row did not appear; check the tab" |
 | `refused` | nothing written; `reason` says why | the reason, in plain words |
 
-The figure on the line is the tool's returned `charge`, never retyped from the
-page. When `from_scan` is true, the line adds "read from a scan, check the
-figure", because the figure was transcribed from paper.
+The figure on the line comes from the Medicals tab READ BACK in step 4c, never
+from this tool's return and never retyped from the page. When `from_scan` is
+true, the line adds "read from a scan, check the figure", because the figure
+was transcribed from paper.
 
 ### 4b. A vendor's bill: stage the expense
 
@@ -381,9 +382,28 @@ the `status` exactly as `vendor-invoice-intake` does: `staged` (the line says
 alerted; say which by `stage_status`, `staged_unverified` or
 `staged_file_failed`, and never stage it again), `duplicate` or `possible_duplicate`
 (nothing created; name the existing entry), `refused` (nothing created; the
-reason in plain words). The amount on the line is the tool's returned
-`amount`. Never call the filing tool for a bill that was staged: its pages
-are filed by the stage, and a second filing is refused anyway.
+reason in plain words). The amount on the line comes from the ledger READ
+BACK in step 4c, never from this tool's return. Never call the filing tool
+for a bill that was staged: its pages are filed by the stage, and a second
+filing is refused anyway.
+
+### 4c. Re-read what you wrote before replying (HARD STEP, never skip)
+
+**Every dollar figure in the reply comes from a read of the firm's record made
+after the write, never from a write tool's return and never from the page.**
+The mail channel holds a reply whose figure it cannot trace to such a read, so
+a figure quoted from `add_medicals_row` or `stage_vendor_invoice` does not
+reach the sender at all.
+
+- For every matter you staged on, call `get_expenses(matter_id)` and find the
+  entry by the stage's `expense_id`. The figure is that row's `price` (the
+  stage writes quantity 1), written as dollars, e.g. `$96.25`.
+- For every matter you added a Medicals line to, call
+  `get_matter_layouts(matter_id, section="Medicals")` and find the provider's
+  row. The figure is that line's `InitialInvoiceAmount`, written as dollars.
+
+If the entry or the row is not in the read, keep the line, state no figure on
+it, and say the figure could not be read back.
 
 ### 5. Reply once to the sender
 
