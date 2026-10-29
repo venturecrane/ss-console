@@ -402,6 +402,11 @@
       "producerFile": "operator/workspace_broker/medchron_ledger.py",
       "reason": "ss#2614. The runner daemon reports through the broker (medchron_job_record, uid 0 only) and the broker writes the row: the run started, or resumed after a seat-pause hold."
     },
+    "MEDCHRON_ALLOWANCE_CREDITED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/medchron_verbs.py",
+      "reason": "2026-10-29. SMD waived pages from the firm's cycle page allowance through the root-only medchron_allowance_credit verb (python -m medchron.allowance credit). Carries the credit id, the pages, who waived them and the job id; the reason stays in the ledger row. The record billing reads a waiver from."
+    },
     "MEDCHRON_JOB_HELD": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/medchron_ledger.py",

@@ -247,3 +247,109 @@ def test_a_single_client_delivery_wake_is_unchanged(tmp_path):
     assert d.tick() == "delivered"
     assert "folders" not in broker.records[-1][2]["delivery"]
     assert "Delivered folder id: fold-a." in d._daemon_state(JOB)["wake"]["task"]
+
+
+# ---- credit (2026-10-29): SMD waives pages; a person's act, never the runner's --
+
+
+class _CreditBroker(ud.FakeBroker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.credits: list[dict] = []
+        self.refuse_credit = False
+
+    def _request(self, req):
+        if req["action"] == "medchron_allowance_credit":
+            if self.refuse_credit:
+                raise ValueError("refused for the test")
+            self.credits.append(req)
+            return {"ok": True, "credit": {"id": "C1"}, "allowance": {"used": 1, "remaining": 2}}
+        return super()._request(req)
+
+
+def _credit_daemon(tmp_path: Path):
+    d, _ = ud._daemon(tmp_path)
+    b = _CreditBroker()
+    b.rows[JOB] = {"state": "running"}
+    d.broker = b
+    return d, b
+
+
+@pytest.mark.parametrize(
+    ("kw", "says"),
+    [
+        ({"pages": 0, "by": "S", "why": "w", "job_id": None}, "--pages"),
+        ({"pages": -1, "by": "S", "why": "w", "job_id": None}, "--pages"),
+        ({"pages": True, "by": "S", "why": "w", "job_id": None}, "--pages"),
+        ({"pages": 856, "by": " ", "why": "w", "job_id": None}, "--by"),
+        ({"pages": 856, "by": "S", "why": " ", "job_id": None}, "--why"),
+        ({"pages": 856, "by": "S", "why": "w", "job_id": "NOPE"}, "no chronology job NOPE"),
+    ],
+)
+def test_credit_refusals_send_nothing(tmp_path, kw, says):
+    d, b = _credit_daemon(tmp_path)
+    with pytest.raises(allowance.Refused, match=says):
+        allowance.plan_credit(d, **kw)
+    assert b.credits == []
+
+
+def test_credit_plan_then_apply_sends_the_root_verb(tmp_path):
+    d, b = _credit_daemon(tmp_path)
+    p = allowance.plan_credit(d, pages=856, by=" Scott ", why=" SMD's miss ", job_id=JOB)
+    assert p["request"] == {
+        "action": "medchron_allowance_credit",
+        "pages": 856,
+        "by": "Scott",
+        "why": "SMD's miss",
+        "job_id": JOB,
+    }
+    assert b.credits == []  # planning (the dry run) writes nothing
+    assert allowance.apply_credit(d, p)["credit"]["id"] == "C1"
+    assert b.credits == [p["request"]]
+
+
+def test_credit_without_a_job_carries_no_job_id(tmp_path):
+    d, _b = _credit_daemon(tmp_path)
+    assert "job_id" not in allowance.plan_credit(d, pages=5, by="S", why="w", job_id=None)["request"]
+
+
+def test_a_refused_credit_is_reported_as_refused(tmp_path):
+    d, b = _credit_daemon(tmp_path)
+    b.refuse_credit = True
+    p = allowance.plan_credit(d, pages=5, by="S", why="w", job_id=None)
+    with pytest.raises(allowance.Refused, match="nothing was credited"):
+        allowance.apply_credit(d, p)
+
+
+def test_the_cli_dry_run_sends_nothing_and_refuses_with_exit_2(tmp_path, monkeypatch, capsys):
+    from medchron import daemon as daemon_mod
+
+    d, b = _credit_daemon(tmp_path)
+    monkeypatch.setattr(daemon_mod, "build", lambda: d)
+    argv = ["credit", "--pages", "856", "--by", "Scott", "--why", "SMD's miss", "--job", JOB]
+    assert allowance.main([*argv, "--dry-run"]) == 0 and b.credits == []
+    assert json.loads(capsys.readouterr().out)["dry_run"] is True
+    assert allowance.main(["credit", "--pages", "0", "--by", "Scott", "--why", "w"]) == 2
+    assert allowance.main(argv) == 0
+    assert len(b.credits) == 1
+
+
+def test_the_delivery_wake_nets_the_jobs_credit_out_of_consumed(tmp_path):
+    d, broker = ud._daemon(tmp_path, pd._runner(pd._unit(folder_id="fold-a", proof=pd.PROOF)))
+    broker.month["job_pages_credited"] = 2
+    broker.rows[JOB] = {"state": "submitted"}
+    (d.queue / f"{JOB}.json").write_text(json.dumps(ud._envelope(JOB)))
+    assert d.tick() == "delivered"
+    pages = int(broker.records[-1][2]["pages"])
+    task = d._daemon_state(JOB)["wake"]["task"]
+    want = f"Pages not charged against the allowance (SMD's correction): 2. Consumed: {max(0, pages - 2)} pages."
+    assert want in task
+
+
+def test_no_credit_no_line_and_the_runner_writes_no_credit(tmp_path):
+    d, broker = ud._daemon(tmp_path, pd._runner(pd._unit(folder_id="fold-a", proof=pd.PROOF)))
+    broker.rows[JOB] = {"state": "submitted"}
+    (d.queue / f"{JOB}.json").write_text(json.dumps(ud._envelope(JOB)))
+    assert d.tick() == "delivered"
+    assert "not charged against the allowance" not in d._daemon_state(JOB)["wake"]["task"]
+    assert all(r["action"] != "medchron_allowance_credit" for r in broker.proof_requests)

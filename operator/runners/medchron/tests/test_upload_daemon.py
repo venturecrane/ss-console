@@ -1114,7 +1114,9 @@ def test_every_run_reads_the_month_fresh_and_excludes_its_own_row(tmp_path):
     assert first["allowance_remaining_pages"] == 40 and first["month_cents_used"] == 0
     assert first["allowance_pages"] == 40 and first["month_pages_used"] == 0
     assert first["allowance_month"] == "2026-09"
-    assert broker.allowance_calls == ["01A"]
+    # Two reads per delivered job, both excluding its own row: the stamp before
+    # the run, and the delivery wake's SMD page-credit line (2026-10-29).
+    assert broker.allowance_calls == ["01A", "01A"]
 
     broker.month.update(remaining=5, pages_used=35, cents_used=1234, used=35)
     _submit(d, broker, "01B")
@@ -1122,7 +1124,7 @@ def test_every_run_reads_the_month_fresh_and_excludes_its_own_row(tmp_path):
     second = yaml.safe_load((d.jobs / "01B" / "job.yaml").read_text())
     assert second["allowance_remaining_pages"] == 5 and second["month_cents_used"] == 1234
     assert second["month_pages_used"] == 35
-    assert broker.allowance_calls == ["01A", "01B"]
+    assert broker.allowance_calls == ["01A", "01A", "01B", "01B"]
 
 
 def test_a_job_defers_when_the_allowance_read_fails(tmp_path):

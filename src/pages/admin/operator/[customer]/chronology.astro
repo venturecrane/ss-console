@@ -183,6 +183,14 @@ const statePill: Record<string, string> = {
                         ? result.month.pagesUsed.toLocaleString('en-US')
                         : `${result.month.pagesUsed.toLocaleString('en-US')} / ${allowancePages.toLocaleString('en-US')}`,
                   },
+                  ...(result.month.pagesCredited > 0
+                    ? [
+                        {
+                          label: 'Pages waived by SMD (not charged)',
+                          value: result.month.pagesCredited.toLocaleString('en-US'),
+                        },
+                      ]
+                    : []),
                   {
                     label: 'Runner spend (this period, all jobs)',
                     value: formatCents(result.month.centsUsed),

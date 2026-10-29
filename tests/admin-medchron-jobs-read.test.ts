@@ -10,6 +10,7 @@ import {
   allowanceFromPersonas,
   loadMedchronJobsView,
   monthTotals,
+  parseCreditRow,
   parseJobRow,
 } from '../src/lib/admin/medchron-jobs-read'
 import { cycleWindow } from '../src/lib/admin/cycle-window'
@@ -78,6 +79,7 @@ describe('monthTotals', () => {
       // it delivered nothing.
       pagesUsed: 1800,
       centsUsed: 8200,
+      pagesCredited: 0,
     })
   })
 
@@ -277,5 +279,89 @@ describe('loadMedchronJobsView', () => {
       true
     )
     expect(result).toEqual({ status: 'empty' })
+  })
+})
+
+// 2026-10-29: SMD's page credits. The seat's rule (operator/workspace_broker/
+// medchron_credits.py): used = debited minus credited in the window, floored at
+// 0; the window is the credit's `applies_at` (the job's own created_at for a
+// job-linked credit). The figures mirror the broker's
+// test_medchron_page_credits.py cases so the two surfaces cannot disagree.
+describe('monthTotals with page credits', () => {
+  const credit = (over: Record<string, unknown> = {}) =>
+    parseCreditRow({
+      id: 'C1',
+      created_at: '2026-08-20T00:00:00Z',
+      applies_at: '2026-08-20T00:00:00Z',
+      pages: 300,
+      job_id: null,
+      ...over,
+    })!
+  const one = [parseJobRow(row({ cents: 10 }))!]
+
+  it('reduces pages used in its window, pages only', () => {
+    const m = monthTotals(one, monthOf('2026-08'), [credit()])
+    expect(m.pagesUsed).toBe(600)
+    expect(m.pagesCredited).toBe(300)
+    expect(m.centsUsed).toBe(10)
+    expect(m.pages).toBe(900)
+  })
+
+  it('never takes used below zero', () => {
+    expect(monthTotals(one, monthOf('2026-08'), [credit({ pages: 5000 })]).pagesUsed).toBe(0)
+  })
+
+  it('has no effect in another window', () => {
+    const m = monthTotals(one, monthOf('2026-08'), [credit({ applies_at: '2026-07-20T00:00:00Z' })])
+    expect(m.pagesUsed).toBe(900)
+    expect(m.pagesCredited).toBe(0)
+  })
+
+  it("a job credit written next month lands in the job's month, by applies_at", () => {
+    const late = credit({
+      created_at: '2026-09-01T09:00:00Z',
+      applies_at: '2026-08-29T10:00:00.000Z',
+      job_id: '01J',
+    })
+    expect(monthTotals(one, monthOf('2026-08'), [late]).pagesUsed).toBe(600)
+    expect(monthTotals(one, monthOf('2026-09'), [late]).pagesCredited).toBe(0)
+  })
+
+  it('drops a malformed credit rather than guessing', () => {
+    expect(parseCreditRow({ id: 'x', applies_at: '2026-08-01', pages: 0 })).toBeNull()
+    expect(parseCreditRow({ id: 'x', pages: 5 })).toBeNull()
+    expect(parseCreditRow({ applies_at: '2026-08-01', pages: 5 })).toBeNull()
+    expect(parseCreditRow('nope')).toBeNull()
+  })
+
+  it('reads the credits the seat sends beside the jobs', async () => {
+    const transport = {
+      read: async () => ({
+        data: {
+          entries: [row({ cents: 10 })],
+          credits: [
+            {
+              id: 'C1',
+              created_at: 'x',
+              applies_at: '2026-08-20T00:00:00Z',
+              pages: 300,
+              job_id: null,
+            },
+            { id: 'bad', pages: -1 },
+          ],
+        },
+      }),
+    }
+    const result = await loadMedchronJobsView(
+      { transport, audit: noopAudit },
+      'example',
+      ACTOR,
+      true,
+      monthOf('2026-08')
+    )
+    expect(result.status).toBe('items')
+    if (result.status !== 'items') return
+    expect(result.credits.map((c) => c.id)).toEqual(['C1'])
+    expect(result.month.pagesUsed).toBe(600)
   })
 })

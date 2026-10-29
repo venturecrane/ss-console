@@ -154,6 +154,7 @@ const EXPECTED_VERBS = [
   // ss#2834: registers what a chronology delivered before the coverage record
   // existed actually covered. Root only, and with no agent tool, because an
   // update SKIPS whatever the record says was covered.
+  'medchron_allowance_credit',
   'medchron_backfill_covered',
   'medchron_job_list',
   'medchron_job_record',

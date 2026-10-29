@@ -100,6 +100,7 @@
     "ACT_COMMITTED": "ss#2536. Broker-written, same reason as ACT_PROPOSED.",
     "MEDCHRON_JOB_SUBMITTED": "ss#2614 routine 11. Written by operator/workspace_broker/medchron_verbs.py under the broker uid when the Operator (or root on the box) submits a chronology-package job: job id, matter number, unit count, the allowance remainder. Console-owned source running on the seat, so the overlay vocabulary does not gate the write.",
     "MEDCHRON_JOB_RUNNING": "ss#2614. Broker-written on the runner daemon's medchron_job_record(running); also the release after a seat-pause hold.",
+    "MEDCHRON_ALLOWANCE_CREDITED": "2026-10-29. Broker-written on the root-only medchron_allowance_credit verb: SMD waived pages from the firm's cycle page allowance. Credit id, pages, who, the job id; never the free-text reason.",
     "MEDCHRON_JOB_HELD": "ss#2614. Broker-written when the runner holds (a seat at HARD_STOP, an unexplained file, an unmatched folder) or refuses (the cents cap, the allowance); the reason travels in metadata as prose, never a document.",
     "MEDCHRON_JOB_DELIVERED": "ss#2614. Broker-written on delivery: documents read, pages, cents, the folder id, and the file names with sha256 and byte counts read back from the matter.",
     "MEDCHRON_JOB_FAILED": "ss#2614. Broker-written when the runner exits without a verdict or a stage fails; the reason is the runner's sentence.",

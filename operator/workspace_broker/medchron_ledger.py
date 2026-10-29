@@ -48,6 +48,7 @@ from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
+from . import medchron_credits
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
 
@@ -441,7 +442,7 @@ def allowance_from_customer_yaml(path: str | Path) -> int | None:
     return None
 
 
-class MedchronLedger:
+class MedchronLedger(medchron_credits.CreditLedger):
     """Per-operation sqlite connections, ``journal_mode=DELETE`` — the same
     discipline as ``JobLedgerWriter`` and for the same cross-uid reasons."""
 
@@ -486,6 +487,9 @@ class MedchronLedger:
                     conn.execute(alter)
             # After the column exists (the debit groups on it).
             conn.execute(CREATE_WORK_INDEX_SQL)
+            # 2026-10-29: SMD's page credits (`medchron_credits`), created
+            # beside the jobs table so an existing seat's ledger gains it.
+            medchron_credits.ensure_schema(conn)
             conn.commit()
         finally:
             conn.close()
@@ -522,15 +526,6 @@ class MedchronLedger:
         finally:
             conn.close()
 
-    def pages_used(self, window: Window, exclude_job_id: str | None = None) -> int:
-        return self.debits(window, exclude_job_id)["pages"]
-
-    def cents_used(self, window: Window, exclude_job_id: str | None = None) -> int:
-        return self.debits(window, exclude_job_id)["cents"]
-
-    def documents_used(self, window: Window, exclude_job_id: str | None = None) -> int:
-        return self.debits(window, exclude_job_id)["documents"]
-
     def allowance(
         self,
         allowance: int | None,
@@ -558,12 +553,18 @@ class MedchronLedger:
         range rides `cycle_start`/`cycle_end`; never parse `month`.
         """
         window = cycle_window(now or _iso_utc(), anchor_day, effective_from)
-        pages = self.pages_used(window, exclude_job_id)
+        # SMD's page credits (2026-10-29): `credit_figures` nets them out of
+        # the window's debit; `own_credit` is the excluded job's headroom.
+        # One read of the window's debits (pages, documents and cents can then
+        # never disagree about which rows they counted).
+        deb = self.debits(window, exclude_job_id)
+        pages, own_credit, credit_keys = self.credit_figures(window, deb["pages"], exclude_job_id)
         extra: dict[str, Any] = {
             "unit": "pages",
             "pages_used": pages,
-            "documents_used": self.documents_used(window, exclude_job_id),
-            "cents_used": self.cents_used(window, exclude_job_id),
+            **credit_keys,
+            "documents_used": deb["documents"],
+            "cents_used": deb["cents"],
             "cycle_start": window.start,
             "cycle_end": window.end,
             "cycle_anchored": window.anchored,
@@ -578,7 +579,7 @@ class MedchronLedger:
                 "pages_remaining": 0,
                 **extra,
             }
-        remaining = max(0, allowance - pages)
+        remaining = max(0, allowance - pages) + own_credit
         return {
             "month": window.label,
             "allowance": allowance,

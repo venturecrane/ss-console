@@ -186,6 +186,8 @@ export const AUDIT_ACTION_TYPES = [
   'MEDCHRON_JOB_RUNNING',
   'MEDCHRON_JOB_HELD',
   'MEDCHRON_JOB_DELIVERED',
+  // 2026-10-29: SMD waived pages from the cycle page allowance (root-only verb).
+  'MEDCHRON_ALLOWANCE_CREDITED',
   'MEDCHRON_JOB_FAILED',
   'DEMAND_JOB_SUBMITTED',
   'DEMAND_JOB_RUNNING',

@@ -2,6 +2,7 @@
 
     python -m medchron.allowance approve <job_id> --by "<name>" [--pages N] [--dry-run]
     python -m medchron.allowance decline <job_id> --by "<name>" [--dry-run]
+    python -m medchron.allowance credit --pages N --by "<name>" --why "<reason>" [--job <job_id>] [--dry-run]
 
 Root only, on the seat, with the medchron venv's python: the same uid and
 environment as the runner daemon (``SMD_WORKSPACE_BROKER_SOCKET``,
@@ -29,7 +30,17 @@ decision needs, and these two commands are the decision:
   refuses a stopped chronology its reply. So the requester has NOT been told,
   and the alert says so; telling her is SMD's, until wording is authored.
 
-What each refuses: a job not held on the page allowance; a job the daemon is
+* **credit** (2026-10-29) waives ``--pages`` from the cycle page allowance:
+  a correction of SMD's own miss is not the firm's to pay for. The cycle the
+  credit is written in charges that many fewer pages (floored at 0); another
+  cycle is untouched; documents and cents are untouched (the cents are SMD's
+  real cost). With ``--job`` the credit is also that job's own headroom when
+  the runner meters it, so a correction does not hold on waived pages. The
+  broker writes the credit row and a ``MEDCHRON_ALLOWANCE_CREDITED`` audit row
+  (pages, who, the job): the record billing reads. Keep ``--why`` free of
+  patient names; it is stored on the seat, never shown on the console.
+
+What approve and decline refuse: a job not held on the page allowance; a job the daemon is
 running or has queued; a decision already recorded for this hold.
 """
 
@@ -253,6 +264,40 @@ def apply_decline(d: Any, p: dict[str, Any]) -> None:
     )
 
 
+def plan_credit(d: Any, *, pages: int, by: str, why: str, job_id: str | None) -> dict[str, Any]:
+    """Refused, never filled in: pages not > 0, no author, no reason, or a
+    job the broker does not hold."""
+    if isinstance(pages, bool) or not isinstance(pages, int) or pages <= 0:
+        raise Refused("--pages must be a whole number greater than 0")
+    if not by.strip():
+        raise Refused("--by is required: who waived the pages")
+    if not why.strip():
+        raise Refused("--why is required: what SMD is not charging for, and why")
+    job = (job_id or "").strip() or None
+    if job is not None and d.broker.status(job) is None:
+        raise Refused(f"there is no chronology job {job}; nothing was credited")
+    before = d.broker.allowance()
+    return {
+        "request": {
+            "action": "medchron_allowance_credit",
+            "pages": pages,
+            "by": by.strip(),
+            "why": why.strip(),
+            **({"job_id": job} if job else {}),
+        },
+        "before": {k: before.get(k) for k in ("month", "allowance", "used", "remaining", "pages_credited")},
+    }
+
+
+def apply_credit(d: Any, p: dict[str, Any]) -> dict[str, Any]:
+    from .broker_client import BrokerError
+
+    try:
+        return d.broker._request(p["request"])
+    except (BrokerError, OSError, ValueError) as exc:
+        raise Refused(f"the broker refused the credit ({exc}); nothing was credited") from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="medchron.allowance", description=(__doc__ or "").split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -267,10 +312,18 @@ def main(argv: list[str] | None = None) -> int:
     d_ap.add_argument("job_id")
     d_ap.add_argument("--by", required=True, help="who declined")
     d_ap.add_argument("--dry-run", action="store_true")
+    c_ap = sub.add_parser("credit", help="waive pages from the cycle page allowance (SMD's own miss)")
+    c_ap.add_argument("--pages", type=int, required=True, help="pages the firm is not charged for")
+    c_ap.add_argument("--by", required=True, help="who waived them")
+    c_ap.add_argument("--why", required=True, help="what is not charged, and why (no patient names)")
+    c_ap.add_argument("--job", default=None, help="the job the waived pages are read by (optional)")
+    c_ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     from . import daemon as daemon_mod
 
     d = daemon_mod.build()
+    if a.cmd == "credit":
+        return _main_credit(d, a)
     try:
         if a.cmd == "approve":
             p = plan_approve(d, a.job_id, by=a.by, pages=a.pages)
@@ -287,6 +340,45 @@ def main(argv: list[str] | None = None) -> int:
         print(f"approved {p['decision']['pages']:,} pages on {a.job_id}; the daemon re-queues it on its next tick")
     else:
         print(f"declined {a.job_id}; the job ended failed and the requester has not been told")
+    return 0
+
+
+def credit_wake_lines(broker: Any, job_id: str, state: str, fields: dict[str, Any]) -> list[str]:
+    """For the daemon's DELIVER wake: SMD's page credits on this job (written
+    by ``credit``, a person's act; the runner never writes one), so the reply's
+    "consumed" is the pages the firm is charged for. Credits land in the job's
+    own cycle, so this figure and the cycle's "remains" come from one rule.
+    Unreadable is no line: the reply then states the job's pages as it always
+    did, and the allowance tool's remainder is still the credited one."""
+    from .broker_client import BrokerError
+
+    if state != "delivered" or broker is None:
+        return []
+    try:
+        credited = int(broker.allowance(exclude_job_id=job_id).get("job_pages_credited") or 0)
+    except (BrokerError, OSError, ValueError, TypeError):
+        return []
+    if credited <= 0:
+        return []
+    consumed = max(0, int(fields.get("pages") or 0) - credited)
+    return [f"Pages not charged against the allowance (SMD's correction): {credited}. Consumed: {consumed} pages."]
+
+
+def _main_credit(d: Any, a: argparse.Namespace) -> int:
+    try:
+        p = plan_credit(d, pages=a.pages, by=a.by, why=a.why, job_id=a.job)
+        print(json.dumps({"dry_run": a.dry_run, **p}, indent=1, default=str))
+        if a.dry_run:
+            return 0
+        resp = apply_credit(d, p)
+    except (Refused, OSError, ValueError) as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
+    after = resp.get("allowance") or {}
+    print(
+        f"credited {a.pages:,} pages ({(resp.get('credit') or {}).get('id')}); {after.get('month')}: "
+        f"{after.get('used')} used, {after.get('remaining')} remain of {after.get('allowance')}"
+    )
     return 0
 
 
