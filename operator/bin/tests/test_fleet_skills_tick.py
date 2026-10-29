@@ -263,14 +263,14 @@ def test_a_held_seat_takes_no_skills() -> None:
 
 class LinearMain:
     """git, as a clone of MAIN answers: a commit is present when it is on MAIN, and
-    `merge-base --is-ancestor a b` is MAIN order (HEAD is MAIN's last commit)."""
+    `merge-base --is-ancestor a b` is MAIN order (cli.MAIN_REF is MAIN's last commit)."""
 
     def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
         assert argv[:2] == ["git", "-C"]
         if "cat-file" in argv:
             return Result(0 if argv[-1].split("^")[0] in MAIN else 128, "", "")
         older, newer = argv[-2], argv[-1]
-        newer = MAIN[-1] if newer == "HEAD" else newer
+        newer = MAIN[-1] if newer == cli.MAIN_REF else newer
         if older not in MAIN or newer not in MAIN:
             return Result(128, "", "")
         return Result(0 if ancestor(older, newer) else 1, "", "")

@@ -241,8 +241,17 @@ def _summary(
     return 0
 
 
+# What "main" is when asking whether an image was built from it. Never HEAD: on
+# a laptop HEAD is whatever branch the worktree is on, and from a hotfix-lane
+# worktree a hotfix image IS an ancestor of HEAD, so `latest` would pick it and
+# roll it to every ring. origin/main is main on CI (checkout fetch-depth: 0
+# writes refs/remotes/origin/*) and on a laptop (stale at worst, which only
+# makes `latest` older, never a hotfix).
+MAIN_REF = "refs/remotes/origin/main"
+
+
 def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
-    """Whether ``sha`` is in this checkout's history (CI checks out main).
+    """Whether ``sha`` is an ancestor of origin/main (MAIN_REF).
 
     A commit this clone has never seen is not on main: the tick checks out main
     with full history, so main's commits are all present, and an image built
@@ -250,14 +259,14 @@ def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
     128 on such a commit, which halted every tick for an hour on 2026-10-26 once
     `latest` began weighing several releases (one was a drill image built from a
     local commit). So presence is asked first; 128 after that is still a tooling
-    error (a broken clone), never a guess.
+    error (a broken clone, or no origin/main), never a guess.
     """
     if not sha or not ids.SHA_RE.match(sha):
         return False
     present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
     if present.rc != 0:
         return False
-    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", sha, "HEAD"], timeout=60)
+    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", sha, MAIN_REF], timeout=60)
     if res.rc not in (0, 1):
         raise ToolingError(f"git merge-base --is-ancestor failed (rc={res.rc})")
     return res.rc == 0

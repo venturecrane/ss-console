@@ -5,6 +5,7 @@ Each test names its falsifier: the one change to the code that turns it red.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -324,6 +325,7 @@ class AncestorRunner:
         if "cat-file" in argv:
             return Result(0 if argv[-1].split("^")[0] in self.present else 128, "", "")
         assert "--is-ancestor" in argv
+        assert argv[-1] == cli.MAIN_REF, "main is origin/main, never the checkout's HEAD"
         sha = argv[-2]
         return Result(0 if sha in self.on_main else 1 if sha in self.present else 128, "", "")
 
@@ -349,6 +351,39 @@ def test_latest_is_the_newest_image_built_from_main_never_a_hotfix_lane_image() 
     ctx.runner = AncestorRunner(set(), {w.rel["ss_console_sha"], "9" * 40})  # type: ignore[assignment]
     with pytest.raises(cli.Refusal, match="built from main"):
         cli._image_release(ctx, "latest")
+
+
+def test_from_a_hotfix_worktree_a_hotfix_image_is_still_not_built_from_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A laptop run from a hotfix-lane worktree: HEAD is the hotfix branch, so the
+    # hotfix commit IS an ancestor of HEAD. Real git, not a fake.
+    # FALSIFIER: ask `--is-ancestor <sha> HEAD` (the old check) and the hotfix
+    # image counts as main, so `latest` rolls it to every ring.
+    import subprocess
+
+    from bin.lib.fleet.runner import CommandRunner
+
+    for key in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(key)
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp_path), "PATH": os.environ["PATH"]}  # fmt: skip
+
+    def git(*args: str) -> str:
+        out = subprocess.run(["git", "-C", str(tmp_path), *args], env=env, check=True, capture_output=True, text=True)  # noqa: S603 - argv list of fixed git args, never a shell
+        return out.stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "main")
+    main_sha = git("rev-parse", "HEAD")
+    git("update-ref", "refs/remotes/origin/main", main_sha)
+    git("checkout", "-q", "-b", "hotfix/x")
+    git("commit", "-q", "--allow-empty", "-m", "hotfix")
+    hotfix_sha = git("rev-parse", "HEAD")
+
+    ctx = cli.Ctx(tmp_path, CommandRunner(), None, None, None)  # type: ignore[arg-type]
+    assert cli._built_from_main(ctx, main_sha) is True
+    assert cli._built_from_main(ctx, hotfix_sha) is False
 
 
 def test_the_in_flight_window_reaches_the_release_ready_for_the_client_ring() -> None:
