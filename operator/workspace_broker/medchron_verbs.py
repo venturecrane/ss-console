@@ -332,30 +332,7 @@ class MedchronVerbs:
                 ),
             }
         if action == "medchron_job_status":
-            job_id = str(request.get("job_id") or "")
-            matter_id = str(request.get("matter_id") or "")
-            if job_id and matter_id:
-                # Refused rather than resolved by precedence: a caller that sent
-                # both does not know which answer it is getting, and silently
-                # picking one would hand an update a delta measured against the
-                # wrong thing.
-                raise ValueError("medchron_job_status takes job_id or matter_id, not both")
-            if job_id:
-                row = self._db.read(job_id)
-                if row is None:
-                    return {"ok": True, "job": None}
-                job = _with_hold_class(self._db.project(row), "medchron")
-                # 2026-10-29: the pages SMD waived on this job's work
-                # (`medchron.allowance credit --job`), 0 when none. The
-                # Operator says the waiver sentence only when this is > 0.
-                job["smd_page_credit_pages"] = self._db.job_credited_pages(job_id)
-                return {"ok": True, "job": job}
-            if matter_id:
-                matter = self._db.delivered_coverage(matter_id)
-                if matter is not None:
-                    matter["delivered_clients"] = medchron_identity.delivered_clients(self._db, matter_id)
-                return {"ok": True, "matter": matter}
-            return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
+            return self._status(request)
         if action == "medchron_job_list":
             return {
                 "ok": True,
@@ -401,6 +378,33 @@ class MedchronVerbs:
         except AnchorInvalid as exc:
             state = {"invalid": True, "reason": str(exc)}
         return {"ok": True, "credit": credit, "allowance": state}
+
+    def _status(self, request: dict[str, Any]) -> dict[str, Any]:
+        """``medchron_job_status``: one job, one matter's coverage, or the recent list."""
+        job_id = str(request.get("job_id") or "")
+        matter_id = str(request.get("matter_id") or "")
+        if job_id and matter_id:
+            # Refused rather than resolved by precedence: a caller that sent
+            # both does not know which answer it is getting, and silently
+            # picking one would hand an update a delta measured against the
+            # wrong thing.
+            raise ValueError("medchron_job_status takes job_id or matter_id, not both")
+        if job_id:
+            row = self._db.read(job_id)
+            if row is None:
+                return {"ok": True, "job": None}
+            job = _with_hold_class(self._db.project(row), "medchron")
+            # 2026-10-29: the pages SMD waived on this job's work
+            # (`medchron.allowance credit --job`), 0 when none. The
+            # Operator says the waiver sentence only when this is > 0.
+            job["smd_page_credit_pages"] = self._db.job_credited_pages(job_id)
+            return {"ok": True, "job": job}
+        if matter_id:
+            matter = self._db.delivered_coverage(matter_id)
+            if matter is not None:
+                matter["delivered_clients"] = medchron_identity.delivered_clients(self._db, matter_id)
+            return {"ok": True, "matter": matter}
+        return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         """Ask the runner daemon to re-run a FAILED job, one HELD at the final
