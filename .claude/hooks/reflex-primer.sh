@@ -303,4 +303,17 @@ staleness_block() {
 }
 staleness_block || true
 
+# --- Situational memory -----------------------------------------------------
+#
+# A saved lesson whose trigger_prompt matches this prompt is shown here, once
+# per session, before the agent starts (situational-recall.mjs; the triggers
+# live in the memory files themselves). Silent when nothing matches. Bounded
+# by a 2-second alarm (stock macOS has no `timeout`) so a slow store can never
+# cost this turn its doctrine and board lines, which were printed above.
+recall="$HOOK_DIR/situational-recall.mjs"
+[ -f "$recall" ] || recall="$ROOT_EARLY/.claude/hooks/situational-recall.mjs"
+if [ -f "$recall" ] && command -v node >/dev/null 2>&1 && command -v perl >/dev/null 2>&1; then
+  printf '%s' "$PAYLOAD" | perl -e 'alarm 2; exec @ARGV' node "$recall" 2>/dev/null || true
+fi
+
 exit 0

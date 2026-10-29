@@ -39,6 +39,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { transcriptDirs } from './lib/situational-memory.mjs'
 
 /** The traps block shipped with the delivery-tier rewrite on this date. */
 const DEFAULT_SINCE = '2026-09-09'
@@ -289,19 +290,29 @@ function scanFile(file) {
   return hits
 }
 
+/**
+ * `projectDir` is one directory or a list. The default is every transcript
+ * directory of this repo (lib/situational-memory.mjs transcriptDirs): the
+ * harness keeps each worktree's sessions in its own directory, and reading the
+ * canonical one alone missed every worktree session, which is most of them
+ * (2026-10-29: 57 canonical sessions of the window on disk).
+ */
 function scan(projectDir, sinceISO) {
-  if (!fs.existsSync(projectDir)) {
+  const dirs = (Array.isArray(projectDir) ? projectDir : [projectDir]).filter((d) => fs.existsSync(d))
+  if (!dirs.length) {
     return { ok: false, missing: true, dir: projectDir, problems: [`no transcripts at ${projectDir}`] }
   }
   const since = Date.parse(sinceISO)
-  const files = fs
-    .readdirSync(projectDir, { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
-    .map((e) => {
-      const full = path.join(projectDir, e.name)
-      const st = fs.statSync(full)
-      return { full, name: e.name, startedMs: (st.birthtime ?? st.mtime).getTime() }
-    })
+  const files = dirs.flatMap((dir) =>
+    fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .map((e) => {
+        const full = path.join(dir, e.name)
+        const st = fs.statSync(full)
+        return { full, name: e.name, startedMs: (st.birthtime ?? st.mtime).getTime() }
+      }),
+  )
   const inWindow = files.filter((f) => f.startedMs >= since)
 
   const byTrap = Object.fromEntries(
@@ -440,7 +451,7 @@ function main() {
     return 1
   }
   const dirArg = argv.find((a, i) => !a.startsWith('-') && argv[i - 1] !== '--since')
-  const dir = dirArg ?? resolveProjectDir()
+  const dir = dirArg ?? (process.env.SS_TRANSCRIPT_DIR ? resolveProjectDir() : transcriptDirs())
   const result = scan(dir, since)
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\n')

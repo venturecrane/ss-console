@@ -36,6 +36,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { loadTriggered, selfCheck } from './lib/situational-memory.mjs'
 
 /**
  * MEMORY.md loads into every session's context, so it is capped, not merely watched.
@@ -263,17 +264,55 @@ function auditStore(dir) {
   const lines = indexRaw.split('\n').length
   const problems = storeProblems(orphans, dangling, bytes, lines)
 
+  const triggers = auditTriggers(dir, memories)
+
   return {
     ok: problems.length === 0,
     dir,
     total: memories.length,
+    triggers,
     reachable: reachable.size,
     orphans,
     dangling,
     attic: atticFiles.length,
     index: indexStats(bytes, lines),
     problems,
-    warnings: storeWarnings(bytes),
+    warnings: [...storeWarnings(bytes), ...triggers.problems],
+  }
+}
+
+/**
+ * Situational triggers (lib/situational-memory.mjs) live in this untracked
+ * store, so no CI test sees the live ones. This is their test: every memory's
+ * trigger_example must still fire and every trigger_counter must not, and a
+ * refused regex is named. Problems surface as warnings, so the SessionStart
+ * run speaks about them. `candidates` counts feedback memories that record a
+ * repeat correction ("Recurred", "again", "Nth time") and carry no trigger:
+ * the lessons most likely to recur, still waiting to be given one.
+ */
+const REPEAT_CORRECTION = /\b(recurred|again|\d+(?:st|nd|rd|th) time|repeated(?:ly)? correct)/i
+
+function auditTriggers(dir, memories) {
+  let triggered
+  try {
+    triggered = loadTriggered(dir)
+  } catch {
+    return { triggered: 0, candidates: 0, problems: [] }
+  }
+  const have = new Set(triggered.map((m) => m.file))
+  let candidates = 0
+  for (const n of memories) {
+    if (!n.startsWith('feedback') || have.has(n)) continue
+    try {
+      if (REPEAT_CORRECTION.test(fs.readFileSync(path.join(dir, n), 'utf8'))) candidates++
+    } catch {
+      /* unreadable: not a candidate */
+    }
+  }
+  return {
+    triggered: triggered.length,
+    candidates,
+    problems: selfCheck(triggered).map((p) => `trigger: ${p}`),
   }
 }
 
@@ -384,6 +423,11 @@ function summarize(r) {
   const lines = [head]
   for (const p of r.problems) lines.push(`  ! ${p}`)
   for (const w of r.warnings ?? []) lines.push(`  ~ ${w}`)
+  if (r.triggers) {
+    lines.push(
+      `  · triggers: ${r.triggers.triggered} memories delivered by hook; ${r.triggers.candidates} repeat-correction feedback memories have none`,
+    )
+  }
   if (r.wiring) lines.push(`  ${r.wiring.ok ? '·' : '!'} ${r.wiring.message}`)
   for (const o of r.orphans.slice(0, 20)) lines.push(`    orphan: ${o}`)
   if (r.orphans.length > 20) lines.push(`    ... and ${r.orphans.length - 20} more`)

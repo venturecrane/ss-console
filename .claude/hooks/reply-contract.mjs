@@ -50,6 +50,8 @@
 import { readFileSync, mkdirSync, appendFileSync, writeFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { createHash } from 'node:crypto'
+import { loadTriggered, matchReply, resolveMemoryDir, logFire } from './lib/situational-memory.mjs'
 
 const MAX_PROSE_LINES = Number(process.env.SS_REPLY_CONTRACT_MAX || 25)
 const FOLD_PROSE_LINES = 12
@@ -139,10 +141,72 @@ export function headerOk(msg) {
   return head.some((l) => /^DID\s*:/i.test(l)) && head.some((l) => /^NEXT\s*:/i.test(l))
 }
 
-export function evaluate(msg) {
+/**
+ * Every rule that fires contributes to ONE block. They used to return on the
+ * first hit, and with one bounce per reply a second rule (another memory, the
+ * shape) was silently waived whenever a first one claimed the slot.
+ *
+ * `memories` are the triggered memories from the store (situational-memory):
+ * a saved lesson whose trigger matches this reply is put in front of the agent
+ * in its own words. The hardcoded fee rule stays as the floor that works when
+ * the store is missing.
+ */
+export function evaluate(msg, memories = []) {
+  const memHits = matchReply(msg, memories)
   const fee = feeComparison(msg)
-  if (fee.length) return { verdict: 'block', rule: 'fee-comparison', sentences: fee }
-  return evaluateShape(msg)
+  const shape = evaluateShape(msg)
+  const rules = []
+  if (memHits.length) rules.push('memory')
+  if (fee.length) rules.push('fee-comparison')
+  if (shape.verdict === 'block') rules.push('shape')
+  if (!rules.length) return shape
+  return {
+    verdict: 'block',
+    rule: rules[0],
+    rules,
+    memHits,
+    sentences: fee,
+    total: shape.total,
+    missing: shape.missing,
+  }
+}
+
+export function memoryReason(hits) {
+  return hits
+    .map(
+      (h) =>
+        `[memory ${h.file}] This reply says: "${h.sentence}". The Captain already corrected this; the saved lesson reads: ${h.text}`,
+    )
+    .join(' ')
+}
+
+export function blockReason(result) {
+  const parts = []
+  if (result.rules.includes('memory')) {
+    parts.push(memoryReason(result.memHits))
+  }
+  if (result.rules.includes('fee-comparison')) {
+    parts.push(
+      `[reply-contract] This reply weighs a cost against the monthly fee: "${result.sentences[0]}". ` +
+        `The Captain has ruled this out repeatedly: the fee already carries chronology cost of goods, labor and hosting, and the margin is slim. ` +
+        `Report the dollar figure with its basis as ADDED cost of goods, and stop there.`,
+    )
+  }
+  if (result.rules.includes('shape')) {
+    parts.push(
+      `[reply-contract] This reply has ${result.total} prose lines and is missing ${result.missing.join(' and ')}. ` +
+        `Lead with the header, keep at most ${FOLD_PROSE_LINES} prose lines above a "--- Detail" fold, ` +
+        `move detail below the fold or into the PR/issue and link it. Do NOT repeat the full text you already wrote. ` +
+        `Facts carry their source inline (command, file:line, or "inferring").`,
+    )
+  }
+  const content = result.rules.includes('memory') || result.rules.includes('fee-comparison')
+  parts.push(
+    content
+      ? 'Restate the reply now without that sentence or its comparison. Do not apologize or mention this check. This bounce happens at most once per reply.'
+      : 'This bounce happens at most once per reply.',
+  )
+  return parts.join(' ')
 }
 
 function evaluateShape(msg) {
@@ -158,6 +222,42 @@ function evaluateShape(msg) {
   if (!header) missing.push('the MISSION:/STATUS:/DID:/NEXT: header (STATUS one of OK|BLOCKED|DECISION-NEEDED|DEFECT-FOUND)')
   if (!fold) missing.push(`a "--- Detail" fold with at most ${FOLD_PROSE_LINES} prose lines above it`)
   return { verdict: 'block', total, aboveFold, missing }
+}
+
+/** The triggered memories for this session's repo; none when the store is absent. */
+function storeMemories(payload) {
+  try {
+    return loadTriggered(resolveMemoryDir(process.env, (payload.cwd || process.cwd()).toString()))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Loop guard 2: one bounce per reply, keyed on the session AND the reply text,
+ * so it holds even if stop_hook_active is absent from this harness's payload.
+ * It used to be keyed on the tree alone, which let one rule's bounce silently
+ * waive every other rule for five minutes. False when this reply was already
+ * bounced, or when the guard cannot be recorded (never risk a loop).
+ */
+function claimBounce(payload, msg, result) {
+  try {
+    const key = `${payload.session_id || payload.cwd || 'unknown'}:${msg}`
+    const marker = join(boardDir(), 'bounce-' + createHash('sha1').update(key).digest('hex').slice(0, 16))
+    try {
+      if (Date.now() - statSync(marker).mtimeMs < BOUNCE_TTL_MS) {
+        log({ ts: new Date().toISOString(), event: 'passed-under-guard', rules: result.rules })
+        return false
+      }
+    } catch {
+      /* no marker: first bounce */
+    }
+    mkdirSync(boardDir(), { recursive: true })
+    writeFileSync(marker, String(Date.now()))
+    return true
+  } catch {
+    return false
+  }
 }
 
 function main() {
@@ -184,50 +284,19 @@ function main() {
   const msg = payload.last_assistant_message
   if (typeof msg !== 'string' || msg === '') return
 
-  const result = evaluate(msg)
-  log({ ts: new Date().toISOString(), event: 'evaluated', ...('missing' in result ? { ...result } : result) })
+  const result = evaluate(msg, storeMemories(payload))
+  const { memHits, ...logged } = result
+  log({
+    ts: new Date().toISOString(),
+    event: 'evaluated',
+    ...logged,
+    ...(memHits && memHits.length ? { memories: memHits.map((h) => h.name) } : {}),
+  })
   if (result.verdict !== 'block') return
+  if (!claimBounce(payload, msg, result)) return
 
-  // Loop guard 2: one bounce max, keyed on the session's tree so it works
-  // even if stop_hook_active is absent from this harness's payload.
-  try {
-    const key = (payload.cwd || payload.session_id || 'unknown').toString()
-    const marker = join(boardDir(), 'bounce-' + [...key].reduce((a, c) => (a * 33 + c.charCodeAt(0)) >>> 0, 5381).toString(16))
-    try {
-      const age = Date.now() - statSync(marker).mtimeMs
-      if (age < BOUNCE_TTL_MS) return // already bounced this reply once
-    } catch {
-      /* no marker: first bounce */
-    }
-    mkdirSync(boardDir(), { recursive: true })
-    writeFileSync(marker, String(Date.now()))
-  } catch {
-    return // if the guard cannot be recorded, do not risk a loop: let it pass
-  }
-
-  if (result.rule === 'fee-comparison') {
-    process.stdout.write(
-      JSON.stringify({
-        decision: 'block',
-        reason:
-          `[reply-contract] This reply weighs a cost against the monthly fee: "${result.sentences[0]}". ` +
-          `The Captain has ruled this out repeatedly: the fee already carries chronology cost of goods, labor and hosting, and the margin is slim. ` +
-          `Restate the reply without comparing any cost to the fee or calling it small, covered or a fraction. ` +
-          `Report the dollar figure with its basis as ADDED cost of goods, and stop there. Do not apologize or mention this check.`,
-      }),
-    )
-    return
-  }
-  process.stdout.write(
-    JSON.stringify({
-      decision: 'block',
-      reason:
-        `[reply-contract] This reply has ${result.total} prose lines and is missing ${result.missing.join(' and ')}. ` +
-        `Restate it now, compactly: lead with the header, keep at most ${FOLD_PROSE_LINES} prose lines above a "--- Detail" fold, ` +
-        `move detail below the fold or into the PR/issue and link it. Do NOT repeat the full text you already wrote. ` +
-        `Facts carry their source inline (command, file:line, or "inferring"). This bounce happens at most once per reply.`,
-    }),
-  )
+  if (result.memHits.length) logFire('reply', result.memHits, payload.session_id)
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: blockReason(result) }))
 }
 
 // Only run main when executed as a hook, not when imported by tests.
