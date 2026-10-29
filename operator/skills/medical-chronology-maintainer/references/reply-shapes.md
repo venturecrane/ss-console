@@ -1,7 +1,8 @@
 # Reply shapes: medical-chronology-maintainer
 
 The replies this skill may send. All are plain email, no em dashes, no
-timing, no figure, no job id.
+timing, no job id, and no figure other than the page count the UPDATE offer
+line names.
 
 ## DELIVER mode: delivered only
 
@@ -29,6 +30,29 @@ The broker enforces every held wording above: `reply_bind` returns it as
   all that is needed."
 - **Two or more matters fit.** The candidates as prose (number, client,
   status), then "Which of these is it?"
+
+## Every reply: any question first, then the detail
+
+One reply per request. When a reply carries a question for the requester,
+the question is the first paragraph and everything else follows it. A reply
+with no question leads with what was done.
+
+## UPDATE mode, the request reply
+
+- **Who it is for** comes from the delivered chronology. Never ask the firm
+  to confirm a date of birth on an update, and do not mention dates of
+  birth in the reply at all.
+- **The records the requester named** are submitted on the same turn. The
+  reply says what was submitted and what was left out and why.
+- **Other records the chronology does not cover**, one line after the
+  detail, never a question that holds the named records: "Also not yet in
+  the chronology: <file name>, <N> pages. Reply add and I'll put them in a
+  second update."
+- **Records that were on the matter when the chronology was filed:**
+  "These files aren't listed among the records the chronology reviewed, so
+  the update will check them against it." Never "missed", never "left out".
+  Add "There's no charge to your allowance for this." only when the new
+  job's `smd_page_credit_pages` is above 0; otherwise no billing sentence.
 
 ## ANSWER mode, the requester writes again on a chronology not yet delivered
 
