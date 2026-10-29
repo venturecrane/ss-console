@@ -750,6 +750,29 @@ def _sender_may_confirm(
     return not for_admin and stated_by == sender
 
 
+def may_confirm(
+    row: dict[str, Any], sender: Any, is_admin: bool, apply_others: bool = False
+) -> bool:
+    """Public face of the standing test :func:`resolve` applies to a named row.
+
+    The seat uses it when exactly one item is outstanding and an untagged
+    affirmative arrived: it restates that item with its tag, and must know
+    which words would confirm it (a plain yes, or an admin's "apply that") so
+    the restatement asks for the answer that will actually bind.
+    """
+    return _sender_may_confirm(row, str(sender or "").strip().lower(), is_admin, apply_others)
+
+
+def tag_word(row: dict[str, Any]) -> str:
+    """The tag word a row is read back under: ``act`` for a call, ``rule`` otherwise."""
+    kind = str(row.get("kind") or "rule")
+    if kind == "tool_call":
+        return "act"
+    if kind == OPS_REQUEST_KIND:
+        return OPS_TAG_KIND
+    return "rule"
+
+
 def may_decline(row: dict[str, Any], sender: Any, is_admin: bool) -> bool:
     """Whether THIS sender may refuse THIS rule ON SOMEBODY ELSE'S BEHALF.
 
@@ -940,10 +963,12 @@ __all__ = [
     "Verdict",
     "email_body",
     "find_tags",
+    "may_confirm",
     "may_decline",
     "read_ops_reply",
     "read_own_text",
     "read_send_as_command",
     "resolve",
     "strip_quoted",
+    "tag_word",
 ]

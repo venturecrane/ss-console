@@ -1543,6 +1543,25 @@ _ACT_NOT_OPEN_NOTE = (
     "offer to put the same thing to them again."
 )
 
+#: An untagged affirmative when exactly ONE thing is outstanding for this
+#: person (ss-console 2026-10-29, matter 203508). The old note told the model
+#: the person had "more than one thing outstanding" and asked for
+#: ``[rule x] yes`` even when the one thing was an act, so a firm administrator
+#: who wrote "Yes place it." was asked to retype a tag. Binding stays by tag: a
+#: bare yes still confirms nothing, and there is no phrase matching across
+#: threads. What changes is the reply. It restates the one item with its own
+#: tag, verbatim (the readback lock enforces the verbatim part), so the next
+#: one-word answer in that thread quotes the tag and confirms it.
+_ASK_SINGLE_NOTE = (
+    "The person answered in the affirmative, and exactly one thing is "
+    "outstanding for them: {tag}. Their reply did not carry the tag, so "
+    "nothing was confirmed and nothing will be done on this turn. Open your "
+    "reply with this question, before any other detail, carrying this block "
+    "word for word, unedited:\n\n{readback}\n\n"
+    "and ask them to reply {answer} to confirm it. Say that a one-word reply "
+    "to this email is enough. Do not ask them to type the tag."
+)
+
 _ASK_NOTES: dict[str, str] = {
     "unnameable": (
         "The person answered in the affirmative, but the only thing this seat "
@@ -1551,15 +1570,15 @@ _ASK_NOTES: dict[str, str] = {
         "Say what is waiting and leave it waiting."
     ),
     "needs_tag": (
-        "The person answered in the affirmative but named no rule, and they "
+        "The person answered in the affirmative but named no tag, and they "
         "have more than one thing outstanding ({candidates}). Ask which, and "
         "tell them the quickest answer is to reply with the tag and the word "
-        "yes, like `[rule {first}] yes`."
+        "yes, like `{first_tag} yes`."
     ),
     "needs_affirmative": (
-        "The person's message mentions rule [rule {first}] but does not agree "
-        "to it in their own words. Do not commit it. Ask them plainly to reply "
-        "`[rule {first}] yes` if they want it in force."
+        "The person's message mentions {first_tag} but does not agree "
+        "to it in their own words. Do not act on it. Ask them plainly to reply "
+        "`{first_tag} yes` if they want it."
     ),
     "ambiguous": (
         "The person agreed, but more than one outstanding rule matches what "
@@ -4125,14 +4144,64 @@ def _confirmation_note(
                     proposal_id=str(act_row.get("proposal_id") or ""),
                     admins=_admin_names(_load_config()),
                 )
+        if verdict.reason == rule_confirm.ASK_NEEDS_TAG and not extra_open:
+            single = _single_outstanding_note(
+                session_id, pending, verdict.candidates, sender, is_admin
+            )
+            if single is not None:
+                return single
         template = _ASK_NOTES.get(verdict.reason or "")
         if template is None:
             return None
+        first = verdict.candidates[0] if verdict.candidates else ""
+        first_row = next((p for p in pending if str(p.get("proposal_id")) == first), {})
         return template.format(
             candidates=", ".join(verdict.candidates),
-            first=verdict.candidates[0] if verdict.candidates else "",
+            first=first,
+            first_tag=f"[{rule_confirm.tag_word(first_row)} {first}]",
         )
     return None
+
+
+def _single_outstanding_note(
+    session_id: str,
+    pending: list[dict[str, Any]],
+    candidates: tuple[str, ...],
+    sender: str,
+    is_admin: bool,
+) -> str | None:
+    """The restating note when an untagged yes has exactly one referent.
+
+    ``None`` when the referent is not unique. When no answer from THIS sender
+    could confirm it, the note says who can instead. Registers the readback as owed, so the reply
+    that restates it must carry the broker's block verbatim.
+    """
+    if len(candidates) != 1:
+        return None
+    row = next((p for p in pending if str(p.get("proposal_id")) == candidates[0]), None)
+    if row is None:
+        return None
+    if rule_confirm.may_confirm(row, sender, is_admin):
+        answer = "yes"
+    elif rule_confirm.may_confirm(row, sender, is_admin, apply_others=True):
+        answer = "apply that"
+    elif str(row.get("kind") or "rule") == act_broker.KIND_TOOL_CALL:
+        return _ACT_NOT_ADMIN_NOTE.format(
+            proposal_id=str(row.get("proposal_id") or ""),
+            admins=_admin_names(_load_config()),
+        )
+    else:
+        return _ASK_NOTES["not_theirs"].format(candidates=str(row.get("proposal_id") or ""))
+    proposal_id = str(row.get("proposal_id") or "")
+    tag = f"[{rule_confirm.tag_word(row)} {proposal_id}]"
+    readback = str(row.get("readback") or "").strip()
+    if not readback.startswith(tag):
+        text = str(row.get("text") or "").strip()
+        if not text:
+            return None
+        readback = f"{tag} {text}"
+    _remember_readback(session_id, readback)
+    return _ASK_SINGLE_NOTE.format(tag=tag, readback=readback, answer=answer)
 
 
 # ---------------------------------------------------------------------------
