@@ -64,6 +64,7 @@ describe('fetchTenantErrorsLast24h', () => {
     expect(r.status).toBe('ok')
     expect(r.count).toBe(17)
     expect(captured[0].url).toContain('organizations/smd/events/')
+    expect(captured[0].url).toContain('dataset=errors')
     expect(captured[0].url).toContain('field=count')
     expect(captured[0].url).toContain('query=tenant%3Asmd')
     expect(captured[0].url).toContain('statsPeriod=24h')

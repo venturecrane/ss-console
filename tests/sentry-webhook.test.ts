@@ -294,4 +294,23 @@ describe('interpretDelivery', () => {
   it('ignores unknown resources', () => {
     expect(interpretDelivery('installation', { action: 'created', data: {} }, 'page')).toBeNull()
   })
+  it('does not page an info- or debug-level event alert (the boot marker)', () => {
+    for (const level of ['info', 'debug', 'INFO']) {
+      const payload = {
+        data: { event: { issue_id: '7', level, title: 'boot: monitoring active' } },
+      }
+      expect(interpretDelivery('event_alert', payload, 'page')).toBeNull()
+    }
+  })
+  it('still pages error- and warning-level event alerts, and alerts with no level', () => {
+    for (const level of ['error', 'warning', 'fatal', undefined]) {
+      const payload = { data: { event: { issue_id: '7', level, title: 'JobLedgerError' } } }
+      expect(interpretDelivery('event_alert', payload, 'page')?.issueId).toBe('7')
+    }
+  })
+  it('does not page a new info-level issue, but pages an error-level one', () => {
+    const issue = (level: string) => ({ action: 'created', data: { issue: { id: '9', level } } })
+    expect(interpretDelivery('issue', issue('info'), 'page')).toBeNull()
+    expect(interpretDelivery('issue', issue('error'), 'page')?.issueId).toBe('9')
+  })
 })

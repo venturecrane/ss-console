@@ -67,6 +67,9 @@ export async function fetchTenantErrorsLast24h(
   }
 
   const params = new URLSearchParams({
+    // Sentry removes the implicit discover/events dataset on 2026-12-03
+    // (notice of 2026-10-20); error counts must name `errors`.
+    dataset: 'errors',
     field: 'count()',
     query: `tenant:${tenantSlug}`,
     statsPeriod: '24h',
