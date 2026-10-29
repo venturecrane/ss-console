@@ -126,21 +126,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     # EXPLAINED in the other client's record, the union kept "uncovered in any
     # unit", and every cited exhibit of both clients read as never delivered.
     own_ids = {str(f["id"]) for f in unit_files if f.get("id")}
-    others = adopted_elsewhere(slug_dir, unit) - own_ids
-
-    pulled: dict[str, dict[str, Any]] = {}
-    duplicates: set[str] = set()
-    failed: set[str] = set()
-    for row in read_jsonl(slug_dir / "raw_manifest.jsonl"):
-        if row.get("id") and str(row["id"]) in others:
-            continue
-        key = file_key(row)
-        if not row.get("ok"):
-            failed.add(key)
-            continue
-        if row.get("duplicate_of"):
-            duplicates.add(key)
-        pulled[key] = row
+    pulled, duplicates, failed = _manifest_rows(slug_dir, adopted_elsewhere(slug_dir, unit) - own_ids)
 
     orphans, withheld = _orphan_names(slug_dir)
     # Withheld (the firm's direction or the identity rule) is accounted for,
@@ -205,6 +191,25 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     if reasons:
         out["why"] = reasons
     return out
+
+
+def _manifest_rows(slug_dir: Path, others: set[str]) -> tuple[dict[str, dict[str, Any]], set[str], set[str]]:
+    """(pulled rows by file key, byte-duplicate keys, failed keys), leaving out
+    every row another unit of this job adopted (``others``)."""
+    pulled: dict[str, dict[str, Any]] = {}
+    duplicates: set[str] = set()
+    failed: set[str] = set()
+    for row in read_jsonl(slug_dir / "raw_manifest.jsonl"):
+        if row.get("id") and str(row["id"]) in others:
+            continue
+        key = file_key(row)
+        if not row.get("ok"):
+            failed.add(key)
+            continue
+        if row.get("duplicate_of"):
+            duplicates.add(key)
+        pulled[key] = row
+    return pulled, duplicates, failed
 
 
 def adopted_elsewhere(slug_dir: Path, unit: str) -> set[str]:
