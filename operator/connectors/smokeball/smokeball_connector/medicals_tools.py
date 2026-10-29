@@ -69,7 +69,9 @@ from .letter_pages import FILED_DOCS
 from .matter_resolution import contacts_by_name
 from .medicals_layout import (
     _MAX_ACCOUNT,
+    MAX_ADDRESS,
     _clean,
+    address_body,
     _contact_label,
     _items,
     _problem,
@@ -158,6 +160,7 @@ def add_medicals_row(
     account_number: str = "",
     claimant_index: int | None = None,
     patient_name: str = "",
+    provider_address: str = "",
 ) -> Any:
     """Put ONE provider row on a matter's Medicals tab from a medical bill
     this run filed on that matter. Classified INTERNAL_WRITE: a write into the
@@ -182,6 +185,13 @@ def add_medicals_row(
     If no client or several match, the call refuses and lists the tabs, and
     the sender is asked which claimant it is; then pass ``claimant_index``.
     Never pick one yourself.
+
+    ``provider_address`` is the provider's own address exactly as the bill
+    prints it ("100 Main St, Springfield, CA 90000"), the facility's location
+    rather than a payment or remit-to box when the bill prints both; leave it
+    empty when the bill prints none. It is written ONLY when the provider is in
+    none of the firm's contacts and is added as a new company; a contact the
+    firm already holds is never changed.
 
     A provider already on the tab gets this bill as its own invoice line on
     that row, unless a line there already has the same amount and the same
@@ -212,6 +222,8 @@ def add_medicals_row(
     )
     if problem:
         return _refused(problem)
+    if not isinstance(provider_address, str) or len(provider_address.strip()) > MAX_ADDRESS:
+        return _refused(f"provider_address must be the address the bill prints, up to {MAX_ADDRESS} characters")
     matter = _clean(matter_id)
     source = FILED_DOCS.lookup(matter, _clean(source_file_id))
     if source is None:
@@ -229,6 +241,7 @@ def add_medicals_row(
         end=service_end.strip(),
         account=_clean(account_number)[:_MAX_ACCOUNT],
         source=source,
+        address=" ".join(_clean(provider_address).split()),
     )
     client = _client()
     tab = _select_tab(client, matter, claimant_index, _clean(patient_name))
@@ -248,6 +261,7 @@ class _Bill:
     end: str
     account: str
     source: dict[str, Any]
+    address: str = ""
 
 
 def _select_tab(client: Any, matter: str, claimant_index: int | None, patient_name: str) -> dict[str, Any]:
@@ -337,7 +351,7 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
         }
     if candidates:
         return _link_and_fill(client, bill, item_id, path, rows, str(candidates[0].get("id")))
-    contact_id = _create_provider_contact(client, bill.provider)
+    contact_id = create_company(client, bill.provider, bill.address)
     if contact_id is None:
         return _refused(f"{bill.provider} is not in the firm's contacts and could not be added; nothing was written")
     # The created contact's id rides every result, so a caller can journal it as its own write.
@@ -345,17 +359,26 @@ def _write_row(client: Any, bill: _Bill, item_id: str) -> dict[str, Any]:
         **_link_and_fill(client, bill, item_id, path, rows, contact_id),
         "contact_created": True,
         "contact_id": contact_id,
+        "contact_address": address_body(bill.address) if bill.address else None,
     }
 
 
-def _create_provider_contact(client: Any, provider: str) -> str | None:
+def create_company(client: Any, name: str, address: str = "") -> str | None:
     """Add a provider the firm's contacts do not hold, as a company named exactly
-    as the bill prints it, and return its id. Reached ONLY when the broad token
-    search returned nothing at all: one or more candidates never creates (a
-    client tenant, 2026-10-01: two providers on that day's bills were in no
-    contact record, and their Medicals rows waited on a person to add them)."""
+    as the bill (or the person) gives it, with the printed address as its
+    business address when one was given, and return its id. Reached ONLY when
+    the broad token search returned nothing at all: one or more candidates
+    never creates (a client tenant, 2026-10-01: two providers on that day's
+    bills were in no contact record, and their Medicals rows waited on a person
+    to add them). The address is the provider's location the firm asked for on
+    2026-10-29: the Medicals tab has no location field of its own (its rows
+    are contact links, read on the pilot tenant that day), so the location is
+    the contact's. A contact that already exists is never given one here."""
+    company: dict[str, Any] = {"name": name}
+    if address:
+        company["businessAddress"] = address_body(address)
     try:
-        made = client.request("POST", "/contacts", json={"company": {"name": provider}})
+        made = client.request("POST", "/contacts", json={"company": company})
     except Exception:  # noqa: BLE001 - the vendor write raises a wide family; a failed create writes no row
         return None
     contact_id = made.get("id") if isinstance(made, dict) else None

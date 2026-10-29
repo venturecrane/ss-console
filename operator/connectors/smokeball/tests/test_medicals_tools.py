@@ -153,6 +153,9 @@ def test_no_argument_carries_free_text() -> None:
         "account_number",
         "claimant_index",
         "patient_name",
+        # The bill's printed address, written only onto a contact this call
+        # creates (2026-10-29); it never reaches the tab or the note.
+        "provider_address",
     }
     # The overlay's draft gate scans write arguments by these names; the
     # note is composed in the connector, so none may exist.
@@ -264,6 +267,55 @@ def test_a_provider_with_no_contact_is_added_then_linked(tenant: _Tenant) -> Non
     assert create[1] == "/contacts" and create[2] == {"company": {"name": "Northside Imaging Center"}}
     assert link[2]["contactId"] == "c-new-0"
     assert out["linked_as"] == "Northside Imaging Center"
+
+
+def test_a_new_provider_contact_carries_the_bills_printed_address(tenant: _Tenant) -> None:
+    """The firm asked (2026-10-29) that a medical bill's provider be entered
+    with its location. The Medicals tab has no location field (its rows are
+    contact links), so the location is the new contact's business address."""
+    _filed()
+    tenant.contacts = []
+    out = _add(provider_name="Northside Imaging Center", provider_address="100 Main St, Springfield, CA 90000")
+    assert out["status"] == "written", out
+    create = tenant.writes()[0]
+    assert create[2] == {
+        "company": {
+            "name": "Northside Imaging Center",
+            "businessAddress": {
+                "addressLine1": "100 Main St",
+                "city": "Springfield",
+                "state": "CA",
+                "zipCode": "90000",
+            },
+        }
+    }
+    assert out["contact_address"]["city"] == "Springfield"
+    # The address goes on the contact only: the tab's own values never carry it.
+    assert not any("Springfield" in str(v) for v in tenant.values.values())
+
+
+def test_an_address_of_another_shape_is_kept_whole(tenant: _Tenant) -> None:
+    _filed()
+    tenant.contacts = []
+    _add(provider_name="Northside Imaging Center", provider_address="Suite 4,  the old mill")
+    assert tenant.writes()[0][2]["company"]["businessAddress"] == {"addressLine1": "Suite 4, the old mill"}
+
+
+def test_an_existing_contact_is_never_given_the_address(tenant: _Tenant) -> None:
+    _filed()
+    out = _add(provider_address="100 Main St, Springfield, CA 90000")
+    assert out["status"] == "written", out
+    assert "contact_created" not in out
+    assert not any(w[1] == "/contacts" for w in tenant.writes()), "no contact is created or changed"
+    assert not any("businessAddress" in str(w[2]) for w in tenant.writes())
+
+
+def test_an_overlong_address_writes_nothing(tenant: _Tenant) -> None:
+    _filed()
+    tenant.contacts = []
+    out = _add(provider_address="x" * 201)
+    assert out["status"] == "refused"
+    assert tenant.writes() == []
 
 
 def test_a_failed_contact_create_writes_no_row(tenant: _Tenant, monkeypatch: pytest.MonkeyPatch) -> None:

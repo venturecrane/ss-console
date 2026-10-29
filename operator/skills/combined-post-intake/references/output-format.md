@@ -1,5 +1,10 @@
 # Combined Post Intake: the reply
 
+This is the per-bundle reply, used only when the firm has NOT authored the
+daily post list (`post-intake-daily-list`). Where it has, the bundle gets no
+reply and its lines reach the firm through that skill's one email a day
+(its own `references/output-format.md`).
+
 One reply per inbound message, to the sender only, in the same thread. One line
 per letter: first any court paper or vendor's bill that was filed (the flagged
 lines), then every other letter in page order, then one reconciling count. No greeting, no summary

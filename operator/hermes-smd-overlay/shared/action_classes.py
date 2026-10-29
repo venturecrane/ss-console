@@ -744,6 +744,13 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # layout_tools.py, 2026-10-09). Internal write: the firm's own record,
     # it never sends, signs or settles anything.
     "mcp_smokeball_add_negotiation_rows": ActionClass.INTERNAL_WRITE,
+    # The post journal (ss-console post_journal.py, 2026-10-29): combined post
+    # intake records what it did with each scanned bundle on the seat's own
+    # volume, and the daily post list's pre-run reads it. Internal write: the
+    # seat's state, nothing reaches the firm's record or an inbox. The read
+    # returns one sent list's numbered lines so a reply can be filed.
+    "mcp_smokeball_record_post_batch": ActionClass.INTERNAL_WRITE,
+    "mcp_smokeball_get_post_list": ActionClass.READ,
     # The .docx producer (ss#2222, Captain directive 2026-08-10): renders a
     # content-gated markdown skeleton server-side and files it into the matter
     # via the same two-stage upload as add_file. Internal write: it reaches

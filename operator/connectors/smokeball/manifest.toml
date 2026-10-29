@@ -304,3 +304,16 @@ render_funding_case_eval = "internal_write"
 # UNREACHABLE.
 get_matter_layouts = "read"
 add_negotiation_rows = "internal_write"
+# record_post_batch / get_post_list (2026-10-29, a firm asked for ONE email a
+# day listing only the post the Operator could not place or placed with low
+# confidence): the intake records what it did with each scanned bundle in the
+# seat's own journal (post_journal.py), and the post-intake-daily-list pre-run
+# renders the day's list from it. The write touches only the seat volume
+# (/opt/data/post-intake-journal); nothing reaches the firm's record or an inbox.
+# The read returns one sent list's numbered lines so a reply can be filed.
+#
+# COORDINATED CHANGE: hermes-smd-overlay shared/action_classes.py carries
+# mcp_smokeball_record_post_batch = ActionClass.INTERNAL_WRITE and
+# mcp_smokeball_get_post_list = ActionClass.READ in the same change.
+record_post_batch = "internal_write"
+get_post_list = "read"

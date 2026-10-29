@@ -271,6 +271,19 @@ skills:
       in the skill's settings; the model composes nothing, and the envelope's
       in_turn declares the skeleton as the only body the woken review turn may
       send. Stamps: body_sha256 entries on EMITTED_WAKE (full and skeleton).
+  post-intake-daily-list:
+    render: templated
+    template: operator/skills/post-intake-daily-list/pre_run.py
+    note: >-
+      The daily post list (2026-10-29) is rendered deterministically in
+      pre_run (render, subject, skeleton) from the seat's post journal: only
+      the letters combined-post-intake could not place or placed with a check,
+      scans nothing was filed from, and court papers to calendar. Dispatched
+      out of turn by the overlay's prerendered-dispatch hook to the recipient
+      authored in the skill's settings; the model composes nothing, and the
+      envelope's in_turn declares the skeleton as the only body the woken
+      turn may send. Stamps: body_sha256 entries on EMITTED_WAKE (full and
+      skeleton).
   negotiation-watch:
     render: compositional
     note: >-

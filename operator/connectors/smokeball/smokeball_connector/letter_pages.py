@@ -336,6 +336,13 @@ class FiledPages:
             taken |= wanted
         return None
 
+    def pages(self, key: str) -> set[int] | None:
+        """The pages filed under this key, or None when this process has filed
+        nothing from it (a restart forgets: None means "not known", not "none")."""
+        with self._lock:
+            taken = self._filed.get(key)
+            return set(taken) if taken is not None else None
+
     def release(self, key: str, first_page: int, last_page: int) -> None:
         """Give a claimed range back when the write did not happen."""
         with self._lock:
