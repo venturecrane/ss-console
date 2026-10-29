@@ -474,8 +474,64 @@ already list. **A record whose own text names a different person than the client
 never stops a chronology**: the runner leaves it out by rule and the delivered
 package names it, saying it named a person other than the client (never who).
 
-The allowance pre-flight, the dual-probe resolution, and the identity-field rules
-apply unchanged.
+The allowance pre-flight and the dual-probe resolution apply unchanged. The
+identity fields do not, and neither does the RUN's reply.
+
+**Who the update is for comes from the delivered chronology when the record
+holds it** (2026-10-29: an update asked a paralegal to confirm two dates of
+birth the delivered chronology had already run on).
+`medchron_job_status(matter_id=...)` may list `delivered_clients`: each client
+a delivered chronology on the matter was for, by the name and surname it ran
+on, with `dob_on_record`. When that client's entry says `dob_on_record: true`,
+submit the update with its `client_name` and `surname` (and `folder_prefix`
+when the entry carries one) and leave `dob` out: the broker supplies the date
+of birth the delivered chronology ran on, the one every delivered entry was
+checked against. Then never ask the firm about a date of birth, and the reply
+does not mention dates of birth at all, not even to say none was needed. In
+every other case (`delivered_clients` absent, the client not listed, or
+`dob_on_record` false or missing) nothing changes: RUN step 2's date-of-birth
+rules apply exactly as written, including reading the date from the file and
+having the requester confirm it before submitting. Never leave `dob` out
+unless the entry says `dob_on_record: true`.
+
+**The files the requester named go now; anything else is offered, never
+asked.** When the requester names records to add (a facility, a provider, a
+date range, a file), submit on this turn every named record the delivered
+chronology does not cover, under the "Name medical records only" rule (a date
+of birth still awaiting the requester's confirmation is the one thing that
+waits; then the confirming turn submits them). Nothing
+else on the matter holds them back. Other medical records on the matter that
+the delivered chronology does not cover are offered in ONE line, after the
+detail, in these words: "Also not yet in the chronology: <file name>, <N>
+pages. Reply add and I'll put them in a second update." Several files go in
+that one line, each name with its page count, separated by semicolons; a file
+whose page count no read on this turn gave is named without one. Never a
+question that waits on an answer before the named records are submitted, and
+never a list of choices. When the requester names no particular records, the
+update reads every medical record the delivery did not cover, as above, and
+there is no offer line.
+
+**Records that were already on the matter.** When the requester asks to add
+records that were on the matter when the delivered chronology was filed (ids
+in `uncovered_document_ids`, or absent from `covered_document_ids`), the reply
+says, word for word: "These files aren't listed among the records the
+chronology reviewed, so the update will check them against it." Never say they
+were missed or left out, and never that what they hold is not in the
+chronology: the update may find every visit in them already there (2026-10-29:
+two such updates read 1,837 pages and found almost nothing new). After the
+submission is accepted, call `medchron_job_status(job_id=...)` with the new job
+id. Only when `job.smd_page_credit_pages` is greater than 0, add right after
+that sentence: "There's no charge to your allowance for this." The field
+missing, 0, or anything that is not a number above 0: no billing sentence at
+all. SMD writes credits after a submission, so this sentence usually does not
+appear at request time, and that is correct.
+
+**The reply: any question first, then the detail.** One reply per request.
+When the reply carries a question for the requester (something waiting on
+their yes, a matter to choose, a date no document carried), the question is
+the first paragraph; what was submitted, what was left out and why, and the
+offer line follow it. A reply with no question leads with what was submitted.
+Never a second email for the same turn's work.
 
 ## DELIVER - on the handoff wake (ss#2616)
 
