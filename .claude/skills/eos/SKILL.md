@@ -49,7 +49,7 @@ gh issue list --state all --json number,title,state,updatedAt --jq '.[] | select
 .claude/bin/memory-recurrence
 ```
 
-Put memory-recurrence's first line in the handoff. When it exits 1, a lesson the Captain already corrected either escaped the hooks or he had to correct it again. Widen that memory's trigger now, add the sentence that escaped as a `trigger_example`, and check that `node .claude/hooks/memory-audit.mjs` still reports no trigger problems. That is in-scope work under Law 13, not a filing. A correction the Captain gave this session that recorded a repeat ("again", "Nth time") gets a trigger of its own before the session closes.
+Put memory-recurrence's first line in the handoff. When it exits 1, a lesson the Captain already corrected either escaped the hooks or he had to correct it again. Widen that memory's trigger now, add the sentence that escaped as a `trigger_example`, and run `.claude/bin/memory-trigger-test <memory file>` until it exits 0 and every hit it prints is the mistake the memory names. That is in-scope work under Law 13, not a filing. A correction the Captain gave this session that recorded a repeat ("again", "Nth time") gets a trigger of its own before the session closes, tested the same way (use `trigger_draft` when the rule is about what a client reads).
 
 ### 2. Session Close-Out Audit
 

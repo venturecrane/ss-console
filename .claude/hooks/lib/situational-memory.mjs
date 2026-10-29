@@ -17,6 +17,10 @@
  *   trigger_reply: '<regex>'     tested per sentence (and adjacent sentence
  *                                pair) of the agent's own words
  *   trigger_prompt: '<regex>'    tested on the Captain's prompt
+ *   trigger_draft: '<regex>'     like trigger_reply, but only on a Gmail
+ *                                draft's text: for rules about what a client
+ *                                reads ("we", never "I checked") that chat
+ *                                replies to the Captain legitimately break
  *   trigger_since: 'YYYY-MM-DD'  when recurrence counting starts
  *   trigger_example: '<text>'    must match a reply trigger (self-check)
  *   trigger_counter: '<text>'    must NOT match (self-check)
@@ -139,14 +143,14 @@ function cap(s, n) {
 
 /** Parse one memory. Returns null when it carries no trigger key at all. */
 export function parseMemory(file, raw) {
-  if (!/^\s*trigger_(reply|prompt)\s*:/m.test(raw)) return null
+  if (!/^\s*trigger_(reply|prompt|draft)\s*:/m.test(raw)) return null
   const { fm, body } = frontmatterOf(raw)
-  const triggers = { reply: [], prompt: [] }
+  const triggers = { reply: [], prompt: [], draft: [] }
   const invalid = []
   const examples = []
   const counters = []
   let since = null
-  for (const m of fm.matchAll(/^\s*trigger_(reply|prompt|since|example|counter)\s*:(.*)$/gm)) {
+  for (const m of fm.matchAll(/^\s*trigger_(reply|prompt|draft|since|example|counter)\s*:(.*)$/gm)) {
     const [, key, value] = m
     if (key === 'since') {
       since = plainScalar(value)
@@ -205,7 +209,7 @@ export function loadTriggered(dir) {
     const file = path.join(dir, n)
     try {
       const head = readHead(file)
-      if (!/trigger_(reply|prompt)\s*:/.test(head)) continue
+      if (!/trigger_(reply|prompt|draft)\s*:/.test(head)) continue
       // The body (for the shown text) is read only for the few triggered files.
       const mem = parseMemory(file, fs.readFileSync(file, 'utf8'))
       if (mem) out.push(mem)
@@ -248,16 +252,22 @@ export function sentenceHash(s) {
 }
 
 /** Memories whose reply trigger matches the agent's own words. */
-export function matchReply(msg, memories) {
+export function matchReply(msg, memories, stages = ['reply']) {
   const hits = []
   if (typeof msg !== 'string' || !msg) return hits
   const cands = candidates(ownWords(msg))
   for (const mem of memories) {
-    if (!mem.triggers.reply.length) continue
-    const s = cands.find((x) => mem.triggers.reply.some((re) => re.test(x)))
+    const res = stages.flatMap((st) => mem.triggers[st] ?? [])
+    if (!res.length) continue
+    const s = cands.find((x) => res.some((re) => re.test(x)))
     if (s) hits.push({ name: mem.name, file: mem.file, sentence: s.slice(0, 240), hash: sentenceHash(s), text: mem.text })
   }
   return hits
+}
+
+/** A Gmail draft is checked against reply AND draft-only triggers. */
+export function matchDraft(text, memories) {
+  return matchReply(text, memories, ['reply', 'draft'])
 }
 
 /** Memories whose prompt trigger matches the Captain's prompt. */
@@ -275,10 +285,10 @@ export function selfCheck(memories) {
   for (const mem of memories) {
     for (const inv of mem.invalid) problems.push(`${mem.file}: trigger_${inv.stage} refused (${inv.error})`)
     for (const ex of mem.examples) {
-      if (!matchReply(ex, [mem]).length) problems.push(`${mem.file}: trigger_example no longer matches: ${cap(ex, 80)}`)
+      if (!matchDraft(ex, [mem]).length) problems.push(`${mem.file}: trigger_example no longer matches: ${cap(ex, 80)}`)
     }
     for (const c of mem.counters) {
-      if (matchReply(c, [mem]).length) problems.push(`${mem.file}: trigger_counter now matches: ${cap(c, 80)}`)
+      if (matchDraft(c, [mem]).length) problems.push(`${mem.file}: trigger_counter now matches: ${cap(c, 80)}`)
     }
   }
   return problems

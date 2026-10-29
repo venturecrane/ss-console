@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { boardDir, loadTriggered, logFire, matchReply, resolveMemoryDir } from './lib/situational-memory.mjs'
+import { boardDir, loadTriggered, logFire, matchDraft, resolveMemoryDir } from './lib/situational-memory.mjs'
 
 const ONCE_TTL_MS = 30 * 60 * 1000
 
@@ -41,7 +41,7 @@ function main() {
   const text = draftText(payload.tool_input)
   if (!text) return
   const memories = loadTriggered(resolveMemoryDir(process.env, (payload.cwd || process.cwd()).toString()))
-  const hits = matchReply(text, memories)
+  const hits = matchDraft(text, memories)
   if (!hits.length) return
 
   try {

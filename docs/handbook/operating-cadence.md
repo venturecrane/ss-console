@@ -25,6 +25,8 @@ sources:
     href: .claude/hooks/situational-recall.mjs
   - label: Memory-recurrence counter
     href: .claude/hooks/memory-recurrence.mjs
+  - label: Memory trigger test (history sweep)
+    href: .claude/hooks/memory-trigger-test.mjs
 ---
 
 This page covers how an AI agent's working session runs: how it starts, how it hands
@@ -212,8 +214,11 @@ saved in a memory: it sat one hop from `MEMORY.md`, and nothing in that session
 followed the pointer. So a memory may carry its own trigger, written in its
 frontmatter as single-quoted regexes: `trigger_reply` (tested against each
 sentence of the agent's reply), `trigger_prompt` (tested against the Captain's
-prompt), `trigger_since` (when counting starts), and `trigger_example` /
-`trigger_counter` (sentences that must and must not match). Three surfaces read
+prompt), `trigger_draft` (tested only against a Gmail draft, for rules about
+what a client reads, such as "we", never "I checked", that a chat reply to the
+Captain legitimately breaks), `trigger_since` (when counting starts), and
+`trigger_example` / `trigger_counter` (sentences that must and must not match).
+Three surfaces read
 them, quote the memory's own text, and say nothing otherwise:
 
 - the reply contract (Stop hook) bounces a matching reply once;
@@ -231,6 +236,15 @@ their test: at every session start it runs each memory's examples and counters
 against its live triggers and names any trigger it refuses (one that matches
 everything, nests a quantifier, or is not single-quoted), and it counts the
 feedback memories that record a repeat correction and still carry no trigger.
+
+A trigger that matches ordinary work stops agents constantly, and an agent
+stopped constantly learns to route around the stop, which kills the lesson. So
+a trigger is tested against history before it goes live:
+`.claude/bin/memory-trigger-test <memory file>` runs it over every past reply,
+Captain prompt and Gmail draft and prints the hits to read by eye. Each hit that
+is not the mistake the memory names is a false positive: narrow the trigger and
+add that sentence as a `trigger_counter`. The first fee trigger matched 53 past
+replies; after narrowing it matched 14, nine of them real.
 
 `.claude/bin/memory-recurrence` is the measure, and `/eos` runs it. Per
 triggered memory it counts STUMBLES (replies whose words match), BOUNCED (caught
