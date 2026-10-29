@@ -84,7 +84,8 @@ def prepare_records_order(
 
     ``facilities``: one entry per facility, each ``{"name": ...}`` plus any of
     ``zip`` (narrows the directory search), ``custodian_id`` (the requester's
-    pick from a previous ``candidates`` list), ``new_custodian`` (true only when
+    pick from a previous ``candidates`` list, or the facility's entry in a
+    previous ``picked_ids``), ``new_custodian`` (true only when
     she says it is not in the vendor's directory; give its ``address``), and its
     own ``years`` / ``service_start`` / ``service_end`` / ``record_types``.
     The order-level ``years`` (or ``service_start``; the end defaults to today)
@@ -98,6 +99,11 @@ def prepare_records_order(
     several or no directory locations, or the HIPAA authorization is not
     settled: ask the requester), ``missing_client_facts`` (the client contact
     lacks what the vendor requires, listed by name), or ``not_connected``.
+    ``ready`` and ``needs_choice`` also carry ``picked``: each facility whose
+    listing this tool settled itself (one place listed several times, or the
+    one listing near the order's other facilities), with its reason, to say to
+    the requester FIRST; and ``picked_ids``, to pass back as each facility's
+    ``custodian_id`` on the next prepare and never to write in a reply.
     The client's SSN, date of birth and address are never returned; only the
     SSN's last four digits, for the read-back."""
     yc = client_from_env()

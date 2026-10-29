@@ -1236,7 +1236,12 @@ def _materialize_telegram_platform(
             "refusing to materialize an unrestricted bot. Author allow_from with the "
             "permitted Telegram user id(s)."
         )
-    block: dict[str, Any] = {"allow_from": allow_from}
+    # Hermes posts "⚠️ Hermes is shutting down…" and "♻️ Gateway online" to the
+    # chat on every restart (pinned ref: gateway/run_shutdown.py
+    # _notify_active_sessions_of_shutdown; config.py calls it "noise on end-user
+    # platforms"). Every merge rolls every seat, so a client saw a dozen a day
+    # (captain-mark, 2026-10-28/29). Not authorable: restarts are ours to absorb.
+    block: dict[str, Any] = {"allow_from": allow_from, "gateway_restart_notification": False}
     if "require_mention" in tg:
         block["require_mention"] = bool(tg["require_mention"])
     if "reactions" in tg:

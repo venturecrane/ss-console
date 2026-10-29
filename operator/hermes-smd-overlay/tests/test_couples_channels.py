@@ -66,6 +66,7 @@ def test_space_mode_block_uses_the_pinned_hermes_keys():
     block = _wh._materialize_telegram_platform(_couple())
     assert block == {
         "allow_from": [P1, P2],
+        "gateway_restart_notification": False,
         "group_allow_from": [P1, P2],
         "allowed_chats": [GROUP],
         "group_sessions_per_user": False,
@@ -152,6 +153,7 @@ def test_non_space_seat_passes_group_keys_through():
     }
     assert _wh._materialize_telegram_platform(cust) == {
         "allow_from": [P1],
+        "gateway_restart_notification": False,
         "group_allow_from": [P1],
         "allowed_chats": [GROUP],
         "group_sessions_per_user": True,
@@ -162,11 +164,18 @@ def test_non_space_seat_passes_group_keys_through():
     "telegram, expected",
     [
         # scott-shaped (after the phase-2 migration)
-        ({"enabled": True, "allow_from": ["7367659986"]}, {"allow_from": ["7367659986"]}),
+        (
+            {"enabled": True, "allow_from": ["7367659986"]},
+            {"allow_from": ["7367659986"], "gateway_restart_notification": False},
+        ),
         # Brokery-shaped
         (
             {"enabled": True, "allow_from": ["7367659986", "5550001111"], "require_mention": False},
-            {"allow_from": ["7367659986", "5550001111"], "require_mention": False},
+            {
+                "allow_from": ["7367659986", "5550001111"],
+                "gateway_restart_notification": False,
+                "require_mention": False,
+            },
         ),
     ],
 )

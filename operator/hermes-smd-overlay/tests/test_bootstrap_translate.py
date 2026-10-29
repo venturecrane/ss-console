@@ -1802,6 +1802,18 @@ def test_telegram_platform_materialized_with_allowlist():
     assert block["reactions"] is True
 
 
+def test_telegram_restart_notices_are_always_off():
+    # FALSIFIER: fails if the block stops carrying the switch, which brings back
+    # the "Hermes is shutting down" message on every fleet release (captain-mark,
+    # 2026-10-29). An authored value cannot turn it back on.
+    for tg in (
+        {"enabled": True, "allow_from": ["1"]},
+        {"enabled": True, "allow_from": ["1"], "gateway_restart_notification": True},
+    ):
+        block = _wh._materialize_telegram_platform({"telegram": tg})
+        assert block["gateway_restart_notification"] is False
+
+
 def test_telegram_platform_fail_closed_on_empty_allowlist():
     # enabled + empty allow_from must raise — pinned ref fails OPEN on empty allowlist
     for bad in ([], ["", "  "], None):
@@ -1842,7 +1854,7 @@ _SCOTT_TELEGRAM = {"telegram": {"allowed_users": ["7367659986"]}}
 def test_telegram_alias_materializes_when_token_present():
     # FALSIFIER: fails if allowed_users is ignored again (returns {}).
     block = _wh._materialize_telegram_platform(_SCOTT_TELEGRAM, token_present=True)
-    assert block == {"allow_from": ["7367659986"]}
+    assert block == {"allow_from": ["7367659986"], "gateway_restart_notification": False}
 
 
 def test_telegram_alias_inert_without_token():
@@ -1856,7 +1868,10 @@ def test_telegram_alias_reads_token_presence_from_env(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "  ")
     assert _wh._materialize_telegram_platform(_SCOTT_TELEGRAM) == {}
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token-not-real")
-    assert _wh._materialize_telegram_platform(_SCOTT_TELEGRAM) == {"allow_from": ["7367659986"]}
+    assert _wh._materialize_telegram_platform(_SCOTT_TELEGRAM) == {
+        "allow_from": ["7367659986"],
+        "gateway_restart_notification": False,
+    }
 
 
 def test_telegram_alias_unions_with_allow_from_dedup_in_order():
@@ -1870,14 +1885,15 @@ def test_telegram_alias_unions_with_allow_from_dedup_in_order():
     # Explicit enabled: token presence is irrelevant (unchanged behavior).
     for token in (True, False):
         block = _wh._materialize_telegram_platform(cust, token_present=token)
-        assert block == {"allow_from": ["1", "2", "3"]}
+        assert block == {"allow_from": ["1", "2", "3"], "gateway_restart_notification": False}
 
 
 def test_telegram_alias_satisfies_explicit_enabled():
     # FALSIFIER: an enabled block whose ONLY list is allowed_users must not raise.
     cust = {"telegram": {"enabled": True, "allowed_users": ["7367659986"]}}
     assert _wh._materialize_telegram_platform(cust, token_present=False) == {
-        "allow_from": ["7367659986"]
+        "allow_from": ["7367659986"],
+        "gateway_restart_notification": False,
     }
 
 
@@ -1905,7 +1921,10 @@ def test_telegram_alias_lands_in_persona_config(monkeypatch):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     assert "telegram" not in _wh._persona_config(persona, cust, {})
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token-not-real")
-    assert _wh._persona_config(persona, cust, {})["telegram"] == {"allow_from": ["7367659986"]}
+    assert _wh._persona_config(persona, cust, {})["telegram"] == {
+        "allow_from": ["7367659986"],
+        "gateway_restart_notification": False,
+    }
 
 
 def test_webhook_platform_toolsets_emitted_with_the_platform(monkeypatch):

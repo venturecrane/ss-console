@@ -53,7 +53,7 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof, hold_class, medchron_credits
+from . import delivery_proof, hold_class, medchron_credits, medchron_identity
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -334,7 +334,10 @@ class MedchronVerbs:
                 job["smd_page_credit_pages"] = self._db.job_credited_pages(job_id)
                 return {"ok": True, "job": job}
             if matter_id:
-                return {"ok": True, "matter": self._db.delivered_coverage(matter_id)}
+                matter = self._db.delivered_coverage(matter_id)
+                if matter is not None:
+                    matter["delivered_clients"] = medchron_identity.delivered_clients(self._db, matter_id)
+                return {"ok": True, "matter": matter}
             return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
         if action == "medchron_job_list":
             return {
@@ -459,7 +462,9 @@ class MedchronVerbs:
 
     def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
         try:
-            envelope = validate_envelope(request.get("envelope") or {})
+            # An update names the client and takes the date of birth from the
+            # delivered job's own units (medchron_identity, 2026-10-29).
+            envelope = validate_envelope(medchron_identity.fill_update_dobs(self._db, request.get("envelope") or {}))
         except EnvelopeError as exc:
             return {"ok": True, "accepted": False, "reason": str(exc)}
         try:
@@ -520,6 +525,7 @@ class MedchronVerbs:
                 "and surfaces the item",
             }
         job_id = self._db.submit(envelope, remaining=state["remaining"])
+        medchron_identity.remember(self._db, job_id, envelope)
         self._audit(
             AUDIT_TYPE["submitted"],
             {
