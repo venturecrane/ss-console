@@ -1606,13 +1606,19 @@ staff_mailbox_reads:
 # the a copy in the Accounting/ Invoices subfolder." and "Always click
 # Billable."
 #
+#
+# Superseded 2026-10-29 by Christa's reply in the same thread (Gmail message
+# 1a189d7e1c2d2d38, 22:46Z): "Medical documents: save to a folder named
+# MEDICAL RECORDS." and "All other correspondence: save directly inside the
+# matter, not in a subfolder."
+#
 # combined_post_intake.medical_folder: a medical record or bill cut from the
 # post files into the matter's folder of this name, resolved by the Smokeball
 # connector at write time (smokeball_connector/post_intake_config.py). A matter
 # without one gets the letter at its root and the reply says so; no folder is
 # ever created by this setting.
 combined_post_intake:
-  medical_folder: Medical
+  medical_folder: MEDICAL RECORDS
 
 # smokeball_layouts.settlement_negotiations_design: the base guid of the firm's
 # Negotiation Details layout, learned 2026-10-09 from matters whose tab carries
@@ -1759,11 +1765,17 @@ form_letters:
         - 'folsom police'
         - 'folsom pd'
 
-# vendor_invoice_intake: every staged vendor invoice is billable, and its PDF
-# files into Accounting/Invoices (a nested path: the "Invoices" folder whose
-# parent is "Accounting"). Cost type, activity code and staff stay unauthored
-# and are left to Smokeball's defaults until the firm says otherwise. The
-# expense is still never finalized; the firm's staff finalize it.
+# vendor_invoice_intake, as Christa set it 2026-10-29 (Gmail message
+# 1a189d7e1c2d2d38, 22:46Z): "Invoices: save to a folder named INVOICES, and
+# enter each one on the Expenses tab as billable and unfinalized ... Leave the
+# Activity label blank. Set Staff Member to Christa Barrera. Cost type can stay
+# at Smokeball's default." So: billable, filed into the matter's INVOICES
+# folder (the root when a matter has none; no folder is created), staff is her
+# Smokeball staff row (read from /staff on the seat 2026-10-29: the one row
+# whose email is christa@ashtonandprice.com, enabled), and activity code and
+# cost type stay unauthored by her word. The expense is still never finalized;
+# the firm's staff finalize it.
 vendor_invoice_intake:
   is_billable: true
-  folder_name: Accounting/Invoices
+  folder_name: INVOICES
+  staff_id: '210332d8-5cc4-41a0-9228-900ce4f00b28'
