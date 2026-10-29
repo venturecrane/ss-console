@@ -234,9 +234,13 @@ def pull(seat: Any, matter_ids: list[str], data: Path, log: Callable[[str], None
 
     path = data / CALENDAR_NAME
     have: dict[str, Any] = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    if seat is None:
+    try:
+        get = getter(seat) if seat is not None else None
+    except Exception as exc:  # noqa: BLE001 - an offline replay's seat cannot list: every case shows "not read"
+        log(f"[calendar] this seat cannot read the calendar ({type(exc).__name__})")
+        get = None
+    if get is None:
         return have
-    get = getter(seat)
     keep = ("startTime", "endTime", "allDay", "subject", "isDeleted")
     for i, mid in enumerate(matter_ids, 1):
         if mid in have:
