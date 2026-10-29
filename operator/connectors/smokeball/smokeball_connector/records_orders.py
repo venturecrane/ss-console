@@ -263,41 +263,76 @@ def _candidate(row: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def resolve_facility(yc: Any, facility: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """``(location, None)`` when settled, else ``(None, question)``.
+def _settled(c: dict[str, Any], name: str) -> dict[str, Any]:
+    return {
+        "custodian_id": c["custodian_id"],
+        "custodian_name": c["name"] or name,
+        "custodian_address": c["address"] or None,
+    }
 
-    Settled means: exactly one directory match for the name (and ZIP, if given);
-    or the custodian_id she chose IS among the directory's matches for the name;
-    or ``new_custodian`` true, which orders it by name for the vendor to register.
-    """
+
+def _search(yc: Any, facility: dict[str, Any]) -> tuple[str, list[dict[str, Any]] | None]:
+    """Her facility's name and the directory's answer for it (None: new custodian)."""
     name = str(facility.get("name") or "").strip()
     if not name or len(name) > 255:
         raise OrderRefused("every facility needs its name (up to 255 characters). Nothing was ordered.")
-    address = scrub(facility.get("address") or "")[:255]
     if facility.get("new_custodian") is True:
-        return {"custodian_id": None, "custodian_name": name, "custodian_address": address or None}, None
+        return name, None
     rows = yc.get_locations(name, str(facility.get("zip") or "").strip() or None)
-    found = [c for c in (_candidate(r) for r in rows) if c is not None]
+    return name, [c for c in (_candidate(r) for r in rows) if c is not None]
+
+
+def _resolve(
+    facility: dict[str, Any], name: str, found: list[dict[str, Any]] | None, anchors: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """``(location, question, pick)``: settled, asked, and whether the settling was our pick."""
+    from .facility_pick import narrow  # gap_locate imports this module
+
+    if found is None:
+        address = scrub(facility.get("address") or "")[:255]
+        return {"custodian_id": None, "custodian_name": name, "custodian_address": address or None}, None, None
     wanted = str(facility.get("custodian_id") or "").strip()
     if wanted:
         if not _CUSTODIAN_ID.fullmatch(wanted):
             raise OrderRefused(f"custodian_id {wanted!r} is not a vendor custodian id. Nothing was ordered.")
         found = [c for c in found if c["custodian_id"] == wanted]
     if len(found) == 1:
-        c = found[0]
-        return {
-            "custodian_id": c["custodian_id"],
-            "custodian_name": c["name"] or name,
-            "custodian_address": c["address"] or None,
-        }, None
-    reason = (
-        "no location in the vendor's directory matches this name"
-        if not found
-        else f"{len(found)} locations in the vendor's directory match this name"
-    )
+        return _settled(found[0], name), None, None
     if wanted:
         reason = f"custodian {wanted} is not among the directory matches for this name"
-    return None, {"facility": name, "reason": reason, "candidates": found[:MAX_CANDIDATES]}
+        return None, {"facility": name, "reason": reason, "candidates": []}, None
+    if not found:
+        return (
+            None,
+            {"facility": name, "reason": "no location in the vendor's directory matches this name", "candidates": []},
+            None,
+        )
+    best = narrow(name, found, anchors)
+    if best["pick"] is not None:
+        c = best["pick"]
+        pick = {
+            "facility": name,
+            "picked": c["name"],
+            "address": c["address"],
+            "why": best["why"],
+            "id": c["custodian_id"],
+        }
+        return _settled(c, name), None, pick
+    reason = f"{len(found)} locations in the vendor's directory match this name"
+    return None, {"facility": name, "reason": reason, "candidates": best["shortlist"][:MAX_CANDIDATES]}, None
+
+
+def resolve_facility(yc: Any, facility: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """``(location, None)`` when settled, else ``(None, question)``.
+
+    Settled means: exactly one directory match for the name (and ZIP, if given);
+    or the custodian_id she chose IS among the directory's matches for the name;
+    or ``new_custodian`` true, which orders it by name for the vendor to register;
+    or one place the directory lists several times (``facility_pick``).
+    """
+    name, found = _search(yc, facility)
+    location, question, _pick = _resolve(facility, name, found, [])
+    return location, question
 
 
 # ---- prepare (READ) ---------------------------------------------------------
@@ -317,15 +352,31 @@ def _require_request(facilities: Any, order_by_email: Any, language: Any) -> tup
 
 def _locations(
     yc: Any, facilities: list[dict[str, Any]], default: dict[str, Any], types: list[str], today: date
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Each facility resolved to a directory location with its record types and
-    dates, or a question for the requester."""
+    dates, or a question for the requester; plus the picks we made.
+
+    Two passes: first what settles on its own (her choice, one match, one place
+    listed several times); then the rest, narrowed to listings near those. The
+    client's home is never an anchor."""
+    searched = [(f, *_search(yc, f)) for f in facilities]
+    first = [_resolve(f, name, found, []) for f, name, found in searched]
+    anchors = [
+        {"facility": name, "address": loc["custodian_address"]}
+        for (_f, name, _x), (loc, _q, _p) in zip(searched, first)
+        if loc and loc["custodian_address"]
+    ]
     locations: list[dict[str, Any]] = []
     questions: list[dict[str, Any]] = []
-    for facility in facilities:
-        location, question = resolve_facility(yc, facility)
+    picks: list[dict[str, Any]] = []
+    for (facility, name, found), done in zip(searched, first):
+        location, question, pick = (
+            done if done[0] is not None or not anchors else _resolve(facility, name, found, anchors)
+        )
+        if pick is not None:
+            picks.append(pick)
         if question is not None or location is None:
-            questions.append(question or {"facility": str(facility.get("name") or "")})
+            questions.append(question or {"facility": name})
             continue
         start, end = service_range(facility, default, today)
         location.update(
@@ -336,7 +387,17 @@ def _locations(
             }
         )
         locations.append(location)
-    return locations, questions
+    return locations, questions, picks
+
+
+def _picked(picks: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the reply says first (no directory id), and the ids the next prepare
+    passes back as each facility's ``custodian_id`` so the pick she read is the
+    pick ordered."""
+    return {
+        "picked": [{k: p[k] for k in ("facility", "picked", "address", "why")} for p in picks],
+        "picked_ids": {p["facility"]: p["id"] for p in picks},
+    }
 
 
 def _ready(facts: Any, order: dict[str, Any], fee: float, auth: str) -> dict[str, Any]:
@@ -382,15 +443,17 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
     hipaa, hipaa_choices = (
         (None, []) if auth == "e_auth" else find_hipaa(client, matter_id, request.get("hipaa_file_id"))
     )
-    locations, questions = _locations(yc, facilities, default, types, today)
+    locations, questions, picks = _locations(yc, facilities, default, types, today)
     if questions or (hipaa is None and auth == "upload"):
         return {
             "status": "needs_choice",
             "matter_number": matter["number"],
             "facilities": questions,
             "hipaa_candidates": hipaa_choices if (hipaa is None and auth == "upload") else [],
-            "next_step": "Ask the requester to settle each item (a facility from its candidates, or new_custodian "
-            "true with its address; the authorization by file_id), then prepare again. Nothing was ordered.",
+            **_picked(picks),
+            "next_step": "Say each `picked` line first. Ask the requester to settle each remaining item (a facility "
+            "from its candidates, or new_custodian true with its address; the authorization by file_id), then "
+            "prepare again with each `picked_ids` entry as that facility's custodian_id. Nothing was ordered.",
         }
     order: dict[str, Any] = {
         "vendor_name": str(request.get("vendor_name") or "the records vendor")[:60],
@@ -408,7 +471,7 @@ def prepare(client: Any, yc: Any, request: dict[str, Any], today: date) -> dict[
         "order_certificate": "request" if request.get("certification") is True else "no_request",
         "locations": locations,
     }
-    return _ready(facts, order, fee, auth)
+    return {**_ready(facts, order, fee, auth), **_picked(picks)}
 
 
 __all__ = [
