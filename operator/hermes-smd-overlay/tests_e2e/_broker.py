@@ -22,9 +22,10 @@ from typing import Any
 
 DEFAULT_RESPONSES: dict[str, dict[str, Any]] = {
     "health": {"ok": True, "jobs_ready": True, "caller_is_gateway": True},
-    # The jobs plugin starts the seat's job worker (shared/job_worker_runtime),
-    # which sweeps the ledger every 15 s on its own thread. An empty ledger
-    # keeps it idle, so its sweeps never start an agent mid-test.
+    # The jobs plugin starts the seat's job worker (shared/job_worker_runtime)
+    # only where SMD_GATEWAY_PID names the process, which these tests never
+    # set. Should one ever start, an empty ledger keeps its 15 s sweeps idle, so
+    # they never start an agent mid-test.
     "job_list_claimable": {"ok": True, "jobs": []},
     # The Workspace pair (shared/workspace_broker.py): the trust gate mints a
     # single-use grant in pre_tool_call, and the tool redeems it.

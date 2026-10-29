@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -109,8 +110,32 @@ def test_the_real_known_good_capture_passes_every_check() -> None:
     # The image's own manifest, not today's: a sub-plugin added later must not fail this capture.
     at_image = tuple(s.strip() for s in judge.REGISTERED.findall(judge.all_logs(bundle, log))[-1][1].split(","))
     good = judge.Expect(hermes_sha="345cd2b057a452236de401d3534b8502a7465e8d", subplugins=at_image)
-    got = judge.judge(bundle, log, good, ALLOW, 244.0)
+    # This image predates the job-worker gateway gate (2026-10-28): its step-8
+    # invariant run started a worker that died on interpreter shutdown. That
+    # block is tolerated for THIS capture only; the shipped allowlist no longer
+    # carries it, which the next test proves.
+    got = judge.judge(bundle, log, good, [*ALLOW, PRE_GATE_WORKER_TRACEBACK], 244.0)
     assert [v.line() for v in got if not v.ok] == []
+
+
+PRE_GATE_WORKER_TRACEBACK = judge.AllowRule(
+    re.compile(r"Exception in thread smd-job-worker:[\s\S]*RuntimeError: can't register atexit after shutdown"),
+    "rel-4cd01e8e predates the job worker's gateway gate (shared/job_worker_runtime.py)",
+)
+
+
+def test_a_job_worker_dying_at_interpreter_shutdown_now_fails_the_boot_log() -> None:
+    """The step-8 invariant run used to start a job worker that raised "can't
+    register atexit after shutdown" on every boot, and the shipped allowlist
+    tolerated it. The worker is now gateway-only, so the rule is gone: the
+    real capture of that traceback fails boot-log-clean."""
+    bundle = json.loads((FIXTURES / "harness-rel-4cd01e8e-good.bundle.json").read_text(encoding="utf-8"))
+    log = (FIXTURES / "harness-rel-4cd01e8e-good.machine.log").read_text(encoding="utf-8")
+    assert not any("smd-job-worker" in r.pattern.pattern for r in ALLOW)
+    logs = judge.all_logs(bundle, log)
+    assert not judge.check_log_clean(logs, ALLOW).ok
+    # ...and that traceback is the ONLY thing standing between it and clean.
+    assert judge.check_log_clean(logs, [*ALLOW, PRE_GATE_WORKER_TRACEBACK]).ok
 
 
 # -- Law 12: the boots that broke on staging ---------------------------------------

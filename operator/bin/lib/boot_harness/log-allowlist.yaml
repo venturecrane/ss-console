@@ -18,10 +18,3 @@ allow:
       Harness artifact: the root spec and skills appliers' boot fetch names the dead
       harness R2 endpoint (127.0.0.1:9); both are fail-static by design. Seen on the
       known-good calibration run of rel-4cd01e8e-202610280041.
-  - pattern: "Exception in thread smd-job-worker:[\\s\\S]*RuntimeError: can't register atexit after shutdown"
-    reason: >-
-      Pre-existing, not harness-specific, and not boot-fatal: the safety-substrate
-      invariant run (bootstrap step 8, a short-lived python process) starts the overlay's
-      job-worker thread, which imports Hermes after interpreter shutdown began. Logged on
-      the known-good calibration run of rel-4cd01e8e-202610280041, the image every seat
-      runs green. Reported to the lead as its own finding; remove this rule when fixed.

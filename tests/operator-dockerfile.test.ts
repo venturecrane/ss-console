@@ -101,6 +101,34 @@ describe('Operator customer Machine Dockerfile', () => {
     ).toBe(true)
     expect(DOCKERFILE).toMatch(/from shared\.outbound_gate import evaluate/)
   })
+
+  it('stamps the Hermes install with the pinned tag and sha, and proves it reads back as the gateway uid', () => {
+    // 2026-10-28: every v0.22.5 seat reported `hermes --version` as
+    // "vunknown (2026.9.24)". No install stamp, and the git fallback dies on
+    // "dubious ownership" because /opt/hermes is root-owned and Hermes runs as
+    // uid 10000. The stamp is the version; the build check makes it unshippable
+    // to lose.
+    const lines = DOCKERFILE_CODE.split('\n')
+    const editable = lines.findIndex((l) => /uv pip install .*-e "\."/.test(l))
+    const stamp = lines.findIndex((l) => /scripts\/write_install_stamp\.py/.test(l))
+    expect(editable, 'the Hermes editable install line').toBeGreaterThan(-1)
+    expect(stamp, 'the install stamp is written after Hermes is installed').toBeGreaterThan(
+      editable
+    )
+    const block = lines.slice(stamp, stamp + 20).join('\n')
+    expect(block).toMatch(/--output \/opt\/hermes\/install-stamp\.json/)
+    expect(block).toMatch(/--commit "\$\{HERMES_UPSTREAM_SHA\}"/)
+    expect(block).toMatch(/--base-version "\$\{HERMES_UPSTREAM_TAG#v\}"/)
+    expect(block).toMatch(/--update-mechanism external/)
+    // docker distribution makes Hermes demand a pm-runtime this image never builds.
+    expect(block).not.toMatch(/--distribution/)
+    expect(block).toMatch(/runuser -u hermes -- \/opt\/hermes\/\.venv\/bin\/python -c/)
+    expect(block).toMatch(/assert i\.derived_version == want_version/)
+    expect(block).toMatch(/assert i\.commit == want_sha/)
+    const argDecls = lines.slice(editable, stamp).join('\n')
+    expect(argDecls).toMatch(/^ARG HERMES_UPSTREAM_TAG$/m)
+    expect(argDecls).toMatch(/^ARG HERMES_UPSTREAM_SHA$/m)
+  })
 })
 
 /**

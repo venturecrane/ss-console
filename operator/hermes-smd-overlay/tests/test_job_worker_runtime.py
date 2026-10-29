@@ -8,6 +8,7 @@ the worker may claim a job, so it is unit-tested.
 from __future__ import annotations
 
 import logging
+import os
 
 import pytest
 
@@ -212,3 +213,50 @@ def test_session_db_retry_backoff_caps_at_a_minute():
 
     rt._open_session_db(Flaky, sleep=slept.append)
     assert slept == [2.0, 5.0, 15.0, 30.0, 60.0, 60.0, 60.0, 60.0]
+
+
+# -- who starts the worker thread ---------------------------------------------
+# Bootstrap step 8 (the safety-substrate invariant run) is a short-lived python
+# that registers every overlay plugin, broker socket in its env. Before
+# 2026-10-28 that started a worker thread in a process about to exit, and every
+# boot logged "RuntimeError: can't register atexit after shutdown" from it. The
+# worker is the gateway's alone.
+
+
+@pytest.fixture
+def worker_spawns(monkeypatch):
+    """Reset the once-only latch and record threads instead of starting them."""
+    from shared import job_worker_runtime as rt
+
+    spawned: list[str] = []
+
+    class _RecordingThread:
+        def __init__(self, *, target, name, daemon):
+            self.name = name
+
+        def start(self):
+            spawned.append(self.name)
+
+    monkeypatch.setattr(rt, "_started", False)
+    monkeypatch.setattr(rt.threading, "Thread", _RecordingThread)
+    monkeypatch.setenv("SMD_WORKSPACE_BROKER_SOCKET", "/run/smd/broker.sock")
+    return rt, spawned
+
+
+def test_a_non_gateway_process_with_the_broker_socket_starts_no_worker(worker_spawns, monkeypatch):
+    rt, spawned = worker_spawns
+    monkeypatch.delenv("SMD_GATEWAY_PID", raising=False)
+    assert rt.start_worker_thread() is False
+    monkeypatch.setenv("SMD_GATEWAY_PID", str(os.getpid() + 1))
+    assert rt.start_worker_thread() is False
+    assert spawned == []
+
+
+def test_the_gateway_starts_the_worker_once_even_after_a_refused_call(worker_spawns, monkeypatch):
+    rt, spawned = worker_spawns
+    monkeypatch.delenv("SMD_GATEWAY_PID", raising=False)
+    assert rt.start_worker_thread() is False
+    monkeypatch.setenv("SMD_GATEWAY_PID", str(os.getpid()))
+    assert rt.start_worker_thread() is True
+    assert rt.start_worker_thread() is False
+    assert spawned == ["smd-job-worker"]
