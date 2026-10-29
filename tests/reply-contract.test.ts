@@ -43,7 +43,14 @@ function runHook(payload: unknown, env: Record<string, string> = {}): HookResult
     const stdout = execFileSync('node', [HOOK], {
       input: typeof payload === 'string' ? payload : JSON.stringify(payload),
       encoding: 'utf8',
-      env: { ...process.env, SS_BOARD_DIR: boardDir, ...env },
+      // An empty memory store: the live one carries situational triggers
+      // (tests/situational-memory.test.ts covers those) and must not leak in.
+      env: {
+        ...process.env,
+        SS_BOARD_DIR: boardDir,
+        SS_MEMORY_DIR: join(boardDir, 'no-store'),
+        ...env,
+      },
     })
     return { stdout, status: 0 }
   } catch (err) {

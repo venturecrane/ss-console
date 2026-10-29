@@ -23,6 +23,10 @@ const SETTINGS = resolve('.claude/settings.json')
 const EXEMPT: Record<string, string> = {
   'trap-recurrence.mjs':
     'a Captain CLI, invoked through .claude/bin/trap-recurrence to answer the memory traps review; not a harness hook',
+  'memory-recurrence.mjs':
+    'a CLI, invoked through .claude/bin/memory-recurrence by /eos to say whether a triggered memory recurred; not a harness hook',
+  'situational-recall.mjs':
+    'run by reflex-primer.sh (UserPromptSubmit) with the payload it already captured, so the memory line rides the one primer hook',
 }
 
 function hookScripts(): string[] {

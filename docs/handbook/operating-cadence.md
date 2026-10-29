@@ -4,7 +4,7 @@ section: engineering
 order: 11
 owner: engineering
 review_every: 90
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-10-29"
 summary: How a single working session runs - start, end, the heartbeat, and when to stop and escalate
 sources:
   - label: CLAUDE.md - Session Start
@@ -15,6 +15,16 @@ sources:
     href: .claude/hooks/memory-audit.mjs
   - label: Trap-recurrence counter
     href: .claude/hooks/trap-recurrence.mjs
+  - label: Situational memory (triggers, matching, fire log)
+    href: .claude/hooks/lib/situational-memory.mjs
+  - label: Reply contract (Stop hook)
+    href: .claude/hooks/reply-contract.mjs
+  - label: Gmail draft gate
+    href: .claude/hooks/situational-gate.mjs
+  - label: Prompt-stage recall
+    href: .claude/hooks/situational-recall.mjs
+  - label: Memory-recurrence counter
+    href: .claude/hooks/memory-recurrence.mjs
 ---
 
 This page covers how an AI agent's working session runs: how it starts, how it hands
@@ -57,7 +67,10 @@ agent to remember:
 1. **Reply contract.** A Stop hook (`.claude/hooks/reply-contract.mjs`) bounces a
    reply over 25 prose lines that does not lead with `MISSION:` / `STATUS:` /
    `DID:` / `NEXT:`, where STATUS is one of `OK`, `BLOCKED`, `DECISION-NEEDED`
-   or `DEFECT-FOUND`.
+   or `DEFECT-FOUND`. At any length it also bounces a reply that weighs a cost
+   against a client's fee, or that matches a saved memory's trigger (see "Lessons
+   delivered when they apply" below). Every rule that fires lands in one bounce,
+   and each reply is bounced at most once.
 2. **Mission and board.** Once the session's focus is set, the agent records it
    as a winning line, the outcome the business or a client experiences and the
    task that gets there, with
@@ -187,7 +200,45 @@ tier is doing its job. The counter reports its own blind spots on every run, and
 its rules were narrowed by running them over thirty-two sessions of history:
 the first draft scored a thousand false stumbles on one rule and made another
 incapable of ever passing, either of which would have handed the review a
-predetermined answer.
+predetermined answer. It reads every transcript directory of this repo, the
+canonical one and one per worktree; until 2026-10-29 it read only the canonical
+one, which held 57 of the 112 sessions in its window.
+
+### Lessons delivered when they apply
+
+Reachable is still not seen. On 2026-10-29 an agent set a cost "against the
+firm's monthly fee" for the third time, although the Captain's correction was
+saved in a memory: it sat one hop from `MEMORY.md`, and nothing in that session
+followed the pointer. So a memory may carry its own trigger, written in its
+frontmatter as single-quoted regexes: `trigger_reply` (tested against each
+sentence of the agent's reply), `trigger_prompt` (tested against the Captain's
+prompt), `trigger_since` (when counting starts), and `trigger_example` /
+`trigger_counter` (sentences that must and must not match). Three surfaces read
+them, quote the memory's own text, and say nothing otherwise:
+
+- the reply contract (Stop hook) bounces a matching reply once;
+- `.claude/hooks/situational-gate.mjs` (before a Gmail draft, reply, send or
+  forward) refuses a matching draft once, because client sentences travel there
+  and the Stop hook never sees a draft's body;
+- `.claude/hooks/situational-recall.mjs`, run by the per-turn primer, shows a
+  matching memory before the agent starts, once per session.
+
+A Stop hook runs after the reply is on screen, so the reply stage corrects the
+agent in the same turn rather than hiding the sentence; the prompt and draft
+stages are the ones that prevent it. Triggers live in the private memory store,
+not in this public repo, so no CI test sees the live ones. The memory audit is
+their test: at every session start it runs each memory's examples and counters
+against its live triggers and names any trigger it refuses (one that matches
+everything, nests a quantifier, or is not single-quoted), and it counts the
+feedback memories that record a repeat correction and still carry no trigger.
+
+`.claude/bin/memory-recurrence` is the measure, and `/eos` runs it. Per
+triggered memory it counts STUMBLES (replies whose words match), BOUNCED (caught
+by a hook, matched by sentence hash against the fire log), ESCAPED (the rest:
+the Captain read them), and the headline, Captain re-corrections: prompts that
+raise the memory's subject in correction language. The last does not depend on
+the reply trigger, so a paraphrase the trigger misses still shows up as the
+Captain repeating himself. A lesson is working when re-corrections stay at zero.
 
 ## Escalation triggers - mandatory stop points
 

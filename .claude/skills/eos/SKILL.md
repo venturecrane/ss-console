@@ -44,7 +44,12 @@ gh pr list --author @me --state all --json number,title,state,updatedAt --jq '.[
 
 # Get issues worked on (from commits or conversation)
 gh issue list --state all --json number,title,state,updatedAt --jq '.[] | select(.updatedAt | startswith("'$(date +%Y-%m-%d)'"))'
+
+# Did a saved lesson recur? (memories carrying trigger_reply / trigger_prompt)
+.claude/bin/memory-recurrence
 ```
+
+Put memory-recurrence's first line in the handoff. When it exits 1, a lesson the Captain already corrected either escaped the hooks or he had to correct it again. Widen that memory's trigger now, add the sentence that escaped as a `trigger_example`, and check that `node .claude/hooks/memory-audit.mjs` still reports no trigger problems. That is in-scope work under Law 13, not a filing. A correction the Captain gave this session that recorded a repeat ("again", "Nth time") gets a trigger of its own before the session closes.
 
 ### 2. Session Close-Out Audit
 
