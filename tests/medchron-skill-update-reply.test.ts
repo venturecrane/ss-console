@@ -35,12 +35,23 @@ const ALREADY =
 const NO_CHARGE = "There's no charge to your allowance for this."
 
 describe('medical-chronology-maintainer: an update request gets one useful reply', () => {
-  it('takes identity from the delivered chronology and never asks for a DOB on an update', () => {
-    expect(update).toContain('never from a question to the firm')
+  it('takes identity from the delivered chronology only when the record holds it', () => {
+    expect(update).toContain('comes from the delivered chronology when the record holds it')
     expect(update).toContain('`delivered_clients`')
-    expect(update).toContain('When `dob_on_record` is true, leave `dob` out')
-    expect(update).toContain('never ask the firm to confirm a date of birth')
+    expect(update).toContain('and leave `dob` out')
+    expect(update).toContain('Then never ask the firm about a date of birth')
     expect(update).not.toContain('identity-field rules apply unchanged')
+  })
+
+  it('degrades to the RUN rule when the fields are absent (skills roll before images)', () => {
+    expect(update).toContain(
+      '`delivered_clients` absent, the client not listed, or `dob_on_record` false or missing'
+    )
+    expect(update).toContain("RUN step 2's date-of-birth rules apply exactly as written")
+    expect(update).toContain('Never leave `dob` out unless the entry says `dob_on_record: true`.')
+    expect(update).toContain(
+      'The field missing, 0, or anything that is not a number above 0: no billing sentence'
+    )
     // RUN keeps its confirmation step.
     expect(run).toContain('Never submit on a date read from a document alone.')
   })

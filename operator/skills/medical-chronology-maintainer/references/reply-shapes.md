@@ -39,9 +39,10 @@ with no question leads with what was done.
 
 ## UPDATE mode, the request reply
 
-- **Who it is for** comes from the delivered chronology. Never ask the firm
-  to confirm a date of birth on an update, and do not mention dates of
-  birth in the reply at all.
+- **Who it is for** comes from the delivered chronology when its entry says
+  `dob_on_record: true`: then no question about a date of birth and no
+  mention of one. Otherwise the RUN's date-of-birth confirmation applies
+  as written.
 - **The records the requester named** are submitted on the same turn. The
   reply says what was submitted and what was left out and why.
 - **Other records the chronology does not cover**, one line after the

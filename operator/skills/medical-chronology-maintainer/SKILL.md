@@ -477,28 +477,29 @@ package names it, saying it named a person other than the client (never who).
 The allowance pre-flight and the dual-probe resolution apply unchanged. The
 identity fields do not, and neither does the RUN's reply.
 
-**Who the update is for comes from the delivered chronology, never from a
-question to the firm** (2026-10-29: an update asked a paralegal to confirm two
-dates of birth the delivered chronology had already run on).
-`medchron_job_status(matter_id=...)` lists `delivered_clients`: each client a
-delivered chronology on the matter was for, by the name and surname it ran on,
-with `dob_on_record`. Submit the update with that client's `client_name` and
-`surname` (and `folder_prefix` when the entry carries one). When `dob_on_record`
-is true, leave `dob` out: the broker supplies the date of birth the delivered
-chronology ran on, the one every delivered entry was checked against. When it
-is false, or `delivered_clients` is absent (a chronology delivered before the
-date was kept), read the date from the matter's documents under RUN step 2's
-rules (labeled, beside the client's name, bounded, quoted as written); when two
-documents agree, submit with it on this turn, because the RUN's confirmation
-step is for a client with no delivered chronology. Only when no two documents
-agree, or none carries a usable date, does the reply ask for it. On an update,
-never ask the firm to confirm a date of birth, and the reply does not mention
-dates of birth at all, not even to say none was needed.
+**Who the update is for comes from the delivered chronology when the record
+holds it** (2026-10-29: an update asked a paralegal to confirm two dates of
+birth the delivered chronology had already run on).
+`medchron_job_status(matter_id=...)` may list `delivered_clients`: each client
+a delivered chronology on the matter was for, by the name and surname it ran
+on, with `dob_on_record`. When that client's entry says `dob_on_record: true`,
+submit the update with its `client_name` and `surname` (and `folder_prefix`
+when the entry carries one) and leave `dob` out: the broker supplies the date
+of birth the delivered chronology ran on, the one every delivered entry was
+checked against. Then never ask the firm about a date of birth, and the reply
+does not mention dates of birth at all, not even to say none was needed. In
+every other case (`delivered_clients` absent, the client not listed, or
+`dob_on_record` false or missing) nothing changes: RUN step 2's date-of-birth
+rules apply exactly as written, including reading the date from the file and
+having the requester confirm it before submitting. Never leave `dob` out
+unless the entry says `dob_on_record: true`.
 
 **The files the requester named go now; anything else is offered, never
 asked.** When the requester names records to add (a facility, a provider, a
 date range, a file), submit on this turn every named record the delivered
-chronology does not cover, under the "Name medical records only" rule. Nothing
+chronology does not cover, under the "Name medical records only" rule (a date
+of birth still awaiting the requester's confirmation is the one thing that
+waits; then the confirming turn submits them). Nothing
 else on the matter holds them back. Other medical records on the matter that
 the delivered chronology does not cover are offered in ONE line, after the
 detail, in these words: "Also not yet in the chronology: <file name>, <N>
