@@ -80,7 +80,7 @@ def test_a_full_run_delivers_a_read_back_workbook_and_commits_state(tmp_path):
     proof = out["proof"]
     assert proof["readback"] == "confirmed" and proof["review"] == "code_only" and proof["review_cents"] == 0
     assert proof["files"] == [{k: x[k] for k in ("name", "file_id", "size", "sha256")} for x in v.files]
-    assert [x["role"] for x in v.files] == ["workbook", "per_case_workbook"]
+    assert [x["role"] for x in v.files] == ["workbook", "per_case_workbook", "printout_pdf"]
 
 
 def test_an_unchanged_matter_is_not_read_again(tmp_path):
