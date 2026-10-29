@@ -201,13 +201,45 @@ def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[
 PLACEHOLDER = re.compile(r"(?i)not identified|not stated|unknown provider|unattributed|illegible|not legible")
 
 
+#: The share of a file's named rows a listed brand needs to name the file over
+#: an unlisted FACILITY that outvotes it (``lane_name``).
+BRAND_FLOOR = 0.25
+
+
+def _dominant_facility(named: list[str], branded: list[str], canon: Canon) -> list[str]:
+    """The unlisted facility's rows when it, not the brand, is the file.
+
+    WHY (2026-10-29). A 400-page hospital records set carried a few ambulance
+    run-sheet rows; the ambulance company is on the firm's brand list and the
+    hospital is not, so "a brand beats any unlisted name" titled the hospital's
+    exhibit after the ambulance. A brand still beats a bare clinician (the
+    reason for the rule: a hospital file's rows mostly name doctors), so only an
+    unlisted name carrying a facility word, outvoting the brand while the brand
+    holds under ``BRAND_FLOOR`` of the named rows, takes the file. [] otherwise."""
+    if not branded or len(branded) >= BRAND_FLOOR * len(named):
+        return []
+    votes: dict[str, list[str]] = {}
+    for p in named:
+        if canon.brand(p):
+            continue
+        c = canon(p)
+        if FACILITY_WORD.search(c):
+            votes.setdefault(c, []).append(p)
+    if not votes:
+        return []
+    top = max(votes.values(), key=len)  # dict order is first-seen: a tie keeps the earlier
+    return top if len(top) > len(branded) else []
+
+
 def lane_name(provs: list[str], canon: Canon) -> str:
     """The provider a file's INDEX rows name. A facility brand beats a bare
-    clinician, a real name beats a placeholder, the most-voted wins, and a tie
-    goes to the row seen FIRST (document order), never to set iteration."""
+    clinician (unless an unlisted facility dominates the file,
+    ``_dominant_facility``), a real name beats a placeholder, the most-voted
+    wins, and a tie goes to the row seen FIRST (document order), never to set
+    iteration."""
     named = [p for p in provs if not PLACEHOLDER.search(p)] or provs
     branded = [p for p in named if canon.brand(p)]
-    pool = branded or named
+    pool = _dominant_facility(named, branded, canon) or branded or named
     first = {p: i for i, p in reversed(list(enumerate(pool)))}
     return max(first, key=lambda p: (pool.count(p), -first[p]))
 

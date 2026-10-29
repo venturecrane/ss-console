@@ -5,7 +5,9 @@ Every pulled document (the named ids, after the firm's exclusions, plus any
 attachment folded from a named email) is a candidate, in pull order:
 
 * byte-identical to a delivered exhibit (one the delivered Exhibit List
-  names): skipped (it IS a delivered record);
+  names), or to the SOURCE file a delivered chronology on this matter cites
+  (``prior_reading.cited_sources``; an exhibit PDF is a rewritten copy, so
+  a re-pulled source never matched it): skipped (it IS a delivered record);
 * byte-identical to a FIRM-numbered file in the chronology folder the list
   never named ("Exhibit 6- ..."): read, and it takes that file's number; it
   is never filed again, and the Exhibit List names the firm's file;
@@ -127,6 +129,10 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
     locked = set(unopened.password_protected(sr.slug_dir))
     raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")
     prior = prior_reading.decided(sr, {str(r.get("id")) for r in raw})
+    # The SOURCE of a file a delivered chronology on this matter cites: the
+    # firm already has it as an exhibit, so it is never filed again, and no
+    # page picture has to prove it (``prior_reading.cited_sources``).
+    delivered_src = prior_reading.cited_sources(sr)
     out = []
     for r in raw:
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
@@ -135,7 +141,7 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
             # Keyed by how it is disclosed: the firm's direction, or the rule's.
             skipped.setdefault(FI.withheld_reason(sr.slug_dir, str(r["id"])), []).append(str(r["id"]))
             continue
-        if r.get("sha256") in delivered_sha:
+        if r.get("sha256") in delivered_sha or (r.get("sha256") and r["sha256"] in delivered_src):
             skipped["byte-identical to a delivered exhibit"].append(str(r["id"]))
             continue
         if str(r["id"]) in prior:  # the delivered run read it and said why: never paid for twice

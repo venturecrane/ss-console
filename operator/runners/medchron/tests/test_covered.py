@@ -105,3 +105,91 @@ def test_the_union_across_units_keeps_the_uncovered_reading(
     )
     assert merged == {"covered": ["a", "d"], "uncovered": ["b", "c"], "pulled": 4}
     assert merge_covered([{"outcome": "delivered"}]) is None
+
+
+def _seed_joint(d: Path, *, units_spec: bool = True) -> None:
+    """A joint matter: two clients, one manifest, one unit per client.
+
+    alpha cites its own file a1; beta cites its own file b1; o1 belongs to no
+    unit (a documented orphan) and f1 never arrived.
+    """
+    (d / "units").mkdir(parents=True, exist_ok=True)
+    if units_spec:
+        (d / "units.json").write_text(json.dumps({"alpha": {"name_token": "Alpha"}, "beta": {"name_token": "Beta"}}))
+    (d / "units" / "alpha.json").write_text(json.dumps([{"id": "a1", "name": "alpha clinic", "ext": ".pdf"}]))
+    (d / "units" / "beta.json").write_text(json.dumps([{"id": "b1", "name": "beta hospital", "ext": ".pdf"}]))
+    (d / "raw_manifest.jsonl").write_text(
+        "".join(
+            json.dumps(r) + "\n"
+            for r in [
+                {"id": "a1", "name": "alpha clinic", "ext": ".pdf", "ok": True},
+                {"id": "b1", "name": "beta hospital", "ext": ".pdf", "ok": True},
+                {"id": "o1", "name": "loose page", "ext": ".pdf", "ok": True},
+                {"id": "f1", "name": "torn page", "ext": ".pdf", "ok": False, "error": "no url"},
+            ]
+        )
+    )
+    (d / "orphans.json").write_text(json.dumps({"orphans": [{"name": "loose page.pdf", "reason": "no folder"}]}))
+    for unit, fname in (("alpha", "alpha clinic.pdf"), ("beta", "beta hospital.pdf")):
+        rd = d / "runs" / unit
+        rd.mkdir(parents=True, exist_ok=True)
+        (rd / "entries_final.md").write_text("01/02/2026\nExample Clinic\n\nStrain. (Exhibit 1 - p. 1)\n")
+        (d / "out" / unit).mkdir(parents=True, exist_ok=True)
+        (d / "out" / unit / "page_map.json").write_text(json.dumps([{"exhibit": 1, "files": [{"file": fname}]}]))
+
+
+def _matter_dir(job_dir: Path) -> Path:
+    job = job_mod.load(job_dir)
+    d = Path(job.data_root) / job.slug
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def test_a_joint_matter_records_every_clients_cited_files_covered(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-10-28: each unit judged the WHOLE manifest, so each client's cited
+    files read NOT EXPLAINED in the other client's record and the union made
+    every cited exhibit of both clients uncovered; the next update re-read and
+    re-filed exhibits the firm already had."""
+    d = _matter_dir(job_dir)
+    _seed_joint(d)
+    cfg = _cfg(firm_config_path)
+
+    alpha = covered_sets(d, "alpha", cfg)
+    beta = covered_sets(d, "beta", cfg)
+    # Each unit judges only its own files plus the rows no unit adopted.
+    assert "b1" not in alpha["covered"] + alpha["uncovered"]
+    assert "a1" not in beta["covered"] + beta["uncovered"]
+
+    payload = covered_payload(d, ["alpha", "beta"], cfg)
+    assert payload is not None
+    assert payload["covered"] == ["a1", "b1"]
+    # The orphan and the failed retrieval stay uncovered: an update reads them.
+    assert payload["uncovered"] == ["f1", "o1"]
+    assert payload["pulled"] == 4
+    # The daemon's path (one record per outcome) unions the same way.
+    assert merge_covered([{"covered": alpha}, {"covered": beta}]) == payload
+
+
+def test_a_joint_matter_without_a_units_spec_reads_the_unit_files_present(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    d = _matter_dir(job_dir)
+    _seed_joint(d, units_spec=False)
+    payload = covered_payload(d, ["alpha", "beta"], _cfg(firm_config_path))
+    assert payload is not None and payload["covered"] == ["a1", "b1"]
+
+
+def test_a_unit_file_outside_the_jobs_spec_is_not_read_as_this_jobs(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A unit file left by a different job on the matter adopts nothing here:
+    skipping its ids would drop them from both sets."""
+    d = _matter_dir(job_dir)
+    _seed(d)
+    (d / "units.json").write_text(json.dumps({"alpha": {}}))
+    (d / "units" / "stale.json").write_text(json.dumps([{"id": "c"}, {"id": "e"}]))
+    sets = covered_sets(d, "alpha", _cfg(firm_config_path))
+    assert sets["covered"] == ["a", "b", "d"]
+    assert sets["uncovered"] == ["c", "e"]

@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import unopened
+from ..covered import cited_names
 from .base import StageRun, read_json, read_jsonl
 from .coverage import composer_dispositions, file_key
 from .vision_seed import delivered_same_matter
@@ -66,6 +67,31 @@ def decided(sr: StageRun, ids: set[str]) -> dict[str, str]:
             same = bool(mine.get(rid)) and mine.get(rid) == theirs.get(rid)
             if rid in ids and rid not in out and why and why != unopened.REASON and same:
                 out[rid] = f"set aside: {why}"
+    return out
+
+
+def cited_sources(sr: StageRun) -> set[str]:
+    """The sha256 of every SOURCE file a delivered chronology on this matter
+    cites for this unit (``vision_seed.delivered_same_matter``).
+
+    WHY (2026-10-28). An update skipped a candidate only when its bytes
+    matched a delivered EXHIBIT PDF, and an exhibit is a rewritten copy of
+    its source (``exhibits`` re-writes it, ``strip`` re-saves it), so a
+    re-pulled source never matched. The page pictures then had to prove the
+    match, look-alike flowsheet pages drifted a few pixels, and a file the
+    firm already had was filed again as a new exhibit. The delivered job's
+    own manifest holds each source's hash, and its page map names the files
+    it cited, so a byte-identical source is recognised before any picture
+    is compared."""
+    out: set[str] = set()
+    for src in delivered_same_matter(getattr(sr, "job", None), sr.slug_dir.name):
+        unit = sr.unit.unit
+        unit_files = read_json(src / "units" / f"{unit}.json", []) or []
+        if not isinstance(unit_files, list):
+            continue
+        cited = cited_names(src, unit, src / "runs" / unit)
+        ids = {str(f["id"]) for f in unit_files if isinstance(f, dict) and f.get("id") and file_key(f) in cited}
+        out |= {sha for rid, sha in _hashes(read_jsonl(src / "raw_manifest.jsonl")).items() if rid in ids}
     return out
 
 

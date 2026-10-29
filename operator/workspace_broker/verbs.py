@@ -167,6 +167,8 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     # Keeps a pre-2026-10-29 job's units from its job dir. Root only, no agent tool.
     Verb("medchron_units_backfill", _only(ROOT), _medchron),
+    # Replaces a delivered job's coverage record recomputed from its job dir. Root only.
+    Verb("medchron_covered_recompute", _only(ROOT), _medchron),
     Verb("medchron_job_resume", _only(ROOT), _medchron),
     # SMD's page credit against the allowance (2026-10-29). Root only.
     Verb("medchron_allowance_credit", _only(ROOT), _medchron),
