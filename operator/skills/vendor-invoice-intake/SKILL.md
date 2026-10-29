@@ -202,7 +202,9 @@ duplicates the expense.
 ### 5. Re-read the ledger before replying (HARD STEP, never skip)
 
 For every matter you staged on, call `get_expenses(matter_id)` and find the
-entry you staged (its `id` is the stage's `expense_id`). **Every dollar figure
+entry you staged (its `id` is the stage's `expense_id`). The figure is that
+row's `price` (the stage writes quantity 1), written as dollars, e.g. `$96.25`.
+**Every dollar figure
 in the reply comes from that read, never from the invoice text and never from
 the stage's return.** The mail channel holds a reply whose figure it cannot
 trace to a read of the firm's own record, so a reply written from memory does
