@@ -322,6 +322,41 @@ RUN cd web && npm run build && cd ../ui-tui && npm run build
 # explicit flag outranks the env var and targets the project venv uv sync made.
 RUN uv pip install --no-cache-dir --no-deps --python /opt/hermes/.venv/bin/python -e "."
 
+# ---------- Hermes install stamp: the version a seat reports ----------
+# `hermes --version` on every v0.22.5 seat printed "vunknown (2026.9.24)"
+# (2026-10-28). Hermes resolves its identity from /opt/hermes/install-stamp.json
+# first and live git second (hermes_cli/version_info.py). This image wrote no
+# stamp, and the git fallback cannot answer at runtime: /opt/hermes is root-owned
+# and the gateway runs as uid 10000, so every git call dies on "detected dubious
+# ownership" and the version degrades to "unknown". Upstream's own image writes
+# the stamp with this same script (their Dockerfile, "Image provenance + install
+# stamp"); we name the pinned tag and sha explicitly rather than let it read git.
+# `--update-mechanism external`: the image is rebuilt and released, it never
+# updates itself, and Hermes' updater, channel switch and launcher publication
+# all stand down for an external stamp. No `--distribution docker`: that value
+# makes pm/runtime.py demand a packaged pm-runtime this image does not build.
+# The check after it runs AS uid 10000 (the gateway's uid, where git cannot
+# answer) and fails the BUILD unless Hermes reports exactly the pinned tag at the
+# pinned sha, so a stamp that stops being read cannot ship.
+ARG HERMES_UPSTREAM_TAG
+ARG HERMES_UPSTREAM_SHA
+RUN /opt/hermes/.venv/bin/python scripts/write_install_stamp.py \
+      --output /opt/hermes/install-stamp.json \
+      --commit "${HERMES_UPSTREAM_SHA}" \
+      --base-version "${HERMES_UPSTREAM_TAG#v}" \
+      --distance 0 \
+      --source docker \
+      --update-mechanism external \
+ && chmod 0644 /opt/hermes/install-stamp.json \
+ && runuser -u hermes -- /opt/hermes/.venv/bin/python -c \
+      "import sys; from hermes_cli.version_info import get_version_info; \
+i = get_version_info(); \
+want_version, want_sha = sys.argv[1], sys.argv[2]; \
+assert i.derived_version == want_version, ('hermes reports', i.derived_version, 'expected', want_version, i); \
+assert i.commit == want_sha, ('hermes reports commit', i.commit, 'expected', want_sha); \
+print('hermes version OK as uid', __import__('os').getuid(), i.derived_version, i.commit[:12], i.source)" \
+      "${HERMES_UPSTREAM_TAG#v}" "${HERMES_UPSTREAM_SHA}"
+
 # ---------- Honcho: deferred to Phase 2 (ADR 0016, revised 2026-05-30) ----------
 # No in-container Honcho server is installed. The prior `honcho-ai` pip install
 # was fictional — that package is the Honcho CLIENT SDK, not the server; the

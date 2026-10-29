@@ -25,6 +25,8 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from shared.gateway_identity import GATEWAY_PID_ENV, _env_says_gateway
+
 logger = logging.getLogger(__name__)
 
 WORKER_SWEEP_INTERVAL_S = 15.0
@@ -460,13 +462,36 @@ _started = False
 def start_worker_thread() -> bool:
     """Launch the durable-job worker as a daemon thread (the cron model — off the
     asyncio loop). Idempotent: only the first call spawns. Returns True if it
-    started a thread this call."""
+    started a thread this call.
+
+    Only the seat's gateway runs the worker. Plugin registration is not proof of
+    that: bootstrap step 8 (the safety-substrate invariant run) is a short-lived
+    python that registers every overlay plugin to check the overlay activates,
+    and with the broker socket in its env it started a worker of its own. That
+    thread raced the process's exit: its lazy ``from hermes_state import
+    SessionDB`` reached ``concurrent.futures.thread``, whose import registers an
+    atexit hook, after interpreter shutdown began, and every boot logged
+    ``RuntimeError: can't register atexit after shutdown`` (2026-10-28, boot
+    harness). A worker that won that race instead would have claimed a job in a
+    process about to die. So the worker starts only where ``SMD_GATEWAY_PID``
+    names this process, the gateway identity the entrypoint exports and the
+    boot harness asserts; unset or another pid starts nothing, and a later call
+    from the real gateway still starts it.
+    """
     global _started
     with _thread_started:
         if _started:
             return False
         if not os.environ.get("SMD_WORKSPACE_BROKER_SOCKET"):
             logger.info("hermes-smd-jobs: no broker socket; worker thread not started")
+            return False
+        if not _env_says_gateway():
+            logger.info(
+                "hermes-smd-jobs: pid %s is not the gateway (SMD_GATEWAY_PID=%r); "
+                "worker thread not started",
+                os.getpid(),
+                os.environ.get(GATEWAY_PID_ENV),
+            )
             return False
         _started = True
     t = threading.Thread(target=_worker_loop, name="smd-job-worker", daemon=True)
