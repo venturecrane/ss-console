@@ -172,9 +172,26 @@ describe('one bounce per reply, every rule in it', () => {
     expect(log).toContain('passed-under-guard')
   })
 
-  it('a different reply in the same tree still bounces (the guard no longer keys on cwd)', () => {
-    expect(reason(run(REPLY, stop(INCIDENT_1, 'h')))).not.toBeNull()
-    expect(reason(run(REPLY, stop(INCIDENT_2, 'h')))).not.toBeNull()
+  it('another session in the same tree still bounces (the guard no longer keys on cwd)', () => {
+    expect(reason(run(REPLY, stop(INCIDENT_1, 'h1')))).not.toBeNull()
+    expect(reason(run(REPLY, stop(INCIDENT_2, 'h2')))).not.toBeNull()
+  })
+
+  it('the restatement right after a bounce always stands, even without stop_hook_active (no loop)', () => {
+    expect(reason(run(REPLY, stop(INCIDENT_1, 'loop')))).not.toBeNull()
+    // A different text that still violates, in the same session, inside the cooldown.
+    expect(reason(run(REPLY, stop(INCIDENT_2, 'loop')))).toBeNull()
+    // After the cooldown the session can be bounced again.
+    expect(
+      reason(run(REPLY, stop(INCIDENT_2, 'loop'), { SS_REPLY_CONTRACT_COOLDOWN_MS: '0' }))
+    ).not.toBeNull()
+  })
+
+  it('never logs reply text, including the fee floor sentences', () => {
+    run(REPLY, stop('That is small against the $5,000 monthly fee.', 'nolog'))
+    const log = execFileSync('cat', [join(board, 'reply-contract.log')], { encoding: 'utf8' })
+    expect(log).toContain('"feeSentences":1')
+    expect(log).not.toContain('small against')
   })
 
   it('a memory hit and the hardcoded fee floor land in ONE block', () => {
@@ -334,11 +351,34 @@ describe('memory-recurrence', () => {
     expect(row.escaped).toBe(1)
     expect(row.corrections).toBe(1)
 
-    // The same reply, caught by the Stop hook, is a bounce, not an escape.
-    run(REPLY, stop(`${INCIDENT_1} ${INCIDENT_2}`, 'rec'))
+    // The same reply, caught by the Stop hook in that session, is a bounce.
+    run(REPLY, stop(`${INCIDENT_1} ${INCIDENT_2}`, 'incident'))
     const after = scanOnce()
     const row2 = (after.r as { rows: { escaped: number; bounced: number }[] }).rows[0]
     expect(row2.bounced).toBe(1)
     expect(row2.escaped).toBe(0)
+
+    // A restatement that repeats the bounced sentence reached the Captain: one
+    // fire catches one occurrence, so the repeat is ESCAPED, not a second bounce.
+    writeFileSync(
+      join(tdir, 'incident.jsonl'),
+      [
+        rec('assistant', `${INCIDENT_1} ${INCIDENT_2}`, '2026-10-29T19:48:37Z'),
+        rec('assistant', `${INCIDENT_1} ${INCIDENT_2}`, '2026-10-29T19:49:10Z'),
+      ].join('\n')
+    )
+    const repeat = scanOnce()
+    const row3 = (repeat.r as { rows: { escaped: number; bounced: number }[] }).rows[0]
+    expect(row3.bounced).toBe(1)
+    expect(row3.escaped).toBe(1)
+
+    // A fire from a different session catches nothing here.
+    writeFileSync(
+      join(tdir, 'other.jsonl'),
+      rec('assistant', `${INCIDENT_1} ${INCIDENT_2}`, '2026-10-29T20:00:00Z')
+    )
+    const other = scanOnce()
+    const row4 = (other.r as { rows: { escaped: number; bounced: number }[] }).rows[0]
+    expect(row4.escaped).toBe(2)
   })
 })

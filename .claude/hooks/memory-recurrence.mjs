@@ -87,7 +87,16 @@ function* records(file) {
 }
 
 export function scan({ dirs, memories, fires, since }) {
-  const caught = new Set(fires.filter((f) => f.stage === 'reply' || f.stage === 'gmail').map((f) => f.hash))
+  // One fire catches one occurrence, in the session it fired in. Keyed on the
+  // hash alone, a bounced sentence repeated word for word in the restatement
+  // (which reaches the Captain) also read as BOUNCED, hiding the exact escape
+  // this counter exists to find.
+  const caught = new Map()
+  for (const f of fires) {
+    if (f.stage !== 'reply' && f.stage !== 'gmail') continue
+    const key = `${f.session ?? ''}:${f.hash}`
+    caught.set(key, (caught.get(key) ?? 0) + 1)
+  }
   const rows = memories.map((m) => ({
     memory: m.name,
     file: m.file,
@@ -159,8 +168,12 @@ function tally(rec, file, memories, rows, caught) {
     const hit = reply ? matchReply(reply, [mem])[0] : null
     if (!hit) return
     row.stumbles++
-    if (caught.has(hit.hash)) row.bounced++
-    else {
+    const key = `${file.replace(/\.jsonl$/, '')}:${hit.hash}`
+    const left = caught.get(key) ?? 0
+    if (left > 0) {
+      caught.set(key, left - 1)
+      row.bounced++
+    } else {
       row.escaped++
       if (row.escapedAt.length < 5) row.escapedAt.push(`${rec.timestamp} ${file.slice(0, 8)}: ${hit.sentence.slice(0, 120)}`)
     }
@@ -191,7 +204,7 @@ function selfTest() {
       ].join('\n'),
     )
     const caughtHash = matchReply('Another widget here.', mems)[0].hash
-    const r = scan({ dirs: [tdir], memories: mems, fires: [{ stage: 'reply', hash: caughtHash }] })
+    const r = scan({ dirs: [tdir], memories: mems, fires: [{ stage: 'reply', session: 's', hash: caughtHash }] })
     const row = r.rows[0]
     const pass = row.stumbles === 2 && row.bounced === 1 && row.escaped === 1 && row.corrections === 1 && !r.ok
     const clean = scan({ dirs: [tdir], memories: mems, fires: [], since: '2027-01-01' })

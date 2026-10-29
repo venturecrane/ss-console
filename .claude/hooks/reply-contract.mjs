@@ -57,6 +57,7 @@ const MAX_PROSE_LINES = Number(process.env.SS_REPLY_CONTRACT_MAX || 25)
 const FOLD_PROSE_LINES = 12
 const STATUS_ENUM = /^(OK|BLOCKED|DECISION-NEEDED|DEFECT-FOUND)\b/
 const BOUNCE_TTL_MS = 5 * 60 * 1000
+const SESSION_COOLDOWN_MS = Number(process.env.SS_REPLY_CONTRACT_COOLDOWN_MS || 60 * 1000)
 
 // Skill-formatted reports have their own mandated shapes; forcing them
 // through the header+fold shape would make every /critique and /sos output
@@ -242,18 +243,28 @@ function storeMemories(payload) {
  */
 function claimBounce(payload, msg, result) {
   try {
-    const key = `${payload.session_id || payload.cwd || 'unknown'}:${msg}`
-    const marker = join(boardDir(), 'bounce-' + createHash('sha1').update(key).digest('hex').slice(0, 16))
-    try {
-      if (Date.now() - statSync(marker).mtimeMs < BOUNCE_TTL_MS) {
-        log({ ts: new Date().toISOString(), event: 'passed-under-guard', rules: result.rules })
+    const session = `${payload.session_id || payload.cwd || 'unknown'}`
+    const markerFor = (key) => join(boardDir(), 'bounce-' + createHash('sha1').update(key).digest('hex').slice(0, 16))
+    const fresh = (marker, ttl) => {
+      try {
+        return Date.now() - statSync(marker).mtimeMs < ttl
+      } catch {
         return false
       }
-    } catch {
-      /* no marker: first bounce */
+    }
+    // Two markers. Per reply (5 min): the same text is never bounced twice.
+    // Per session (60 s): the restatement written right after a bounce always
+    // stands, even if the harness ever stops sending stop_hook_active, so a
+    // reply that keeps failing a rule cannot loop.
+    const perReply = markerFor(`${session}:${msg}`)
+    const perSession = markerFor(`session:${session}`)
+    if (fresh(perReply, BOUNCE_TTL_MS) || fresh(perSession, SESSION_COOLDOWN_MS)) {
+      log({ ts: new Date().toISOString(), event: 'passed-under-guard', rules: result.rules })
+      return false
     }
     mkdirSync(boardDir(), { recursive: true })
-    writeFileSync(marker, String(Date.now()))
+    writeFileSync(perReply, String(Date.now()))
+    writeFileSync(perSession, String(Date.now()))
     return true
   } catch {
     return false
@@ -285,7 +296,9 @@ function main() {
   if (typeof msg !== 'string' || msg === '') return
 
   const result = evaluate(msg, storeMemories(payload))
-  const { memHits, ...logged } = result
+  // Never log reply text: memory hits are reduced to names, fee sentences to a count.
+  const { memHits, sentences, ...logged } = result
+  if (sentences) logged.feeSentences = sentences.length
   log({
     ts: new Date().toISOString(),
     event: 'evaluated',
