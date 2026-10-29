@@ -709,3 +709,95 @@ def test_only_an_administrator_may_confirm_an_act():
     verdict = rule_confirm.resolve(f"[act {PROPOSAL}] yes", [row], PARALEGAL, False)
     assert verdict.kind == "ask"
     assert verdict.reason == rule_confirm.ASK_NOT_THEIRS
+
+
+# ---------------------------------------------------------------------------
+# One thing outstanding, an untagged yes (2026-10-29)
+#
+# A firm administrator wrote "Yes place it." in the thread, with no tag. The
+# old note said "more than one thing outstanding" and asked for
+# `[rule x] yes` although the one open item was an act. Binding stays by tag;
+# the reply now restates the one item with its own tag and readback.
+# ---------------------------------------------------------------------------
+
+
+def test_a_bare_yes_with_one_act_open_restates_the_act_with_its_tag(establishment):
+    mod, state = establishment
+    state["pending"] = [_act_row()]
+    _admin_turn()
+    context = _turn(mod, ADMIN, "Yes place it.")["context"]
+    assert f"[act {PROPOSAL}]" in context
+    assert READBACK in context
+    assert "exactly one thing" in context
+    assert "more than one" not in context
+    assert "[rule " not in context
+    # Nothing was confirmed by the untagged yes.
+    assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
+    # The reply that restates it must carry the block verbatim.
+    blocked = mod.on_pre_tool_call(
+        tool_name="mcp_agentmail_send_message",
+        session_id=SESSION,
+        args={"to": ["christa@firm.com"], "text": "Placing it now."},
+    )
+    assert blocked is not None and blocked["action"] == "block"
+    assert (
+        mod.on_pre_tool_call(
+            tool_name="mcp_agentmail_send_message",
+            session_id=SESSION,
+            args={"to": ["christa@firm.com"], "text": f"Confirm this one?\n\n{READBACK}"},
+        )
+        is None
+    )
+
+
+def test_a_one_word_yes_quoting_the_restated_act_confirms_it(establishment):
+    mod, state = establishment
+    state["pending"] = [_act_row()]
+    _admin_turn()
+    _turn(mod, ADMIN, "Yes place it.")
+    _admin_turn(session="sess-next")
+    _turn(mod, ADMIN, f"Yes\n\nOn Tue, the Operator wrote:\n> {READBACK}", session="sess-next")
+    assert PENDING_ACTS.peek_confirmed("sess-next", TOOL) is not None
+
+
+def test_two_items_open_still_ask_which_using_the_rows_own_tag(establishment):
+    mod, state = establishment
+    state["pending"] = [_act_row(), _rule_row()]
+    _admin_turn()
+    context = _turn(mod, ADMIN, "Yes place it.")["context"]
+    assert "more than one thing outstanding" in context
+    assert f"`[act {PROPOSAL}] yes`" in context
+    assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
+    assert SESSION not in mod._CONFIRMED_STASH
+
+
+def test_a_bare_yes_with_one_rule_open_restates_it_as_a_rule(establishment):
+    mod, state = establishment
+    row = _rule_row()
+    state["pending"] = [row]
+    _admin_turn()
+    context = _turn(mod, ADMIN, "yes")["context"]
+    assert "[rule 0b91ee42]" in context
+    assert row["readback"] in context
+    assert "[act " not in context
+    assert SESSION not in mod._CONFIRMED_STASH
+
+
+def test_a_colleagues_bare_yes_to_the_one_act_says_who_can(establishment):
+    mod, state = establishment
+    state["pending"] = [_act_row()]
+    _admin_turn(sender=PARALEGAL)
+    context = _turn(mod, PARALEGAL, "yes")["context"]
+    assert "only an Operator administrator" in context
+    assert "more than one" not in context
+    assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
+
+
+def test_one_act_and_a_withheld_send_keeps_the_ambiguity(establishment):
+    mod, state = establishment
+    state["pending"] = [_act_row()]
+    PENDING_SEND.capture("mcp_agentmail_send_message", {"to": ["x@y.com"]}, {"x@y.com"})
+    _admin_turn()
+    context = _turn(mod, ADMIN, "yes")["context"]
+    assert "exactly one thing" not in context
+    assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
