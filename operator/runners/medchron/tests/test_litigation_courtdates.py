@@ -169,6 +169,36 @@ def test_the_pdf_scan_catches_internal_text(tmp_path: Path):
     assert any(w == "internal process wording" for _p, w, _m in printout.scan(out))
 
 
+def test_a_token_wider_than_its_column_still_lays_out_and_reads_back_whole(tmp_path: Path):
+    """2026-10-29: a 39-character file name in a discovery cell could never be
+    placed, and the layout added pages forever."""
+    long = "Plaintiffs_Responses_to_Form_Interrogatories_Set_One_v2.pdf"
+    m = _matter(
+        "m1", "1001", "A v. B", "Lee",
+        discovery_served_on_client=[{"set": long, "served_by": long, "date": "2026-01-02",
+                                     "source": {"name": long}, "responses_served": {"value": long}}],
+    )  # fmt: skip
+    shown = cd.shown([m], {"m1": CAL}, TODAY)
+    out = tmp_path / "x.pdf"
+    stats = printout.build(shown, out, TODAY)
+    assert stats["pages"] < 10 and long in "".join("".join(printout.text_of(out)).split())
+    assert printout.check(out, shown) == [] and printout.scan(out) == []
+
+
+def test_a_case_that_cannot_be_laid_out_fails_the_stage_instead_of_hanging(tmp_path: Path, monkeypatch):
+    from medchron.litigation.outcome import LitigationFailed
+
+    monkeypatch.setattr(printout, "MAX_CASE_PAGES", 1)
+    rows = [{"name": f"Defendant {i}", "status": "Served"} for i in range(60)]
+    shown = cd.shown([_matter("m1", "1001", "A v. B", "Lee", defendants=rows)], {"m1": CAL}, TODAY)
+    try:
+        printout.build(shown, tmp_path / "x.pdf", TODAY)
+    except LitigationFailed as exc:
+        assert str(exc).startswith("stage_unfinished: book:")
+    else:
+        raise AssertionError("a case over the page cap must fail the stage")
+
+
 # ---- the run: the calendar reaches the files, never the stored state ---------------------------
 def test_a_run_shows_the_calendar_date_in_every_file_and_stores_only_the_papers(tmp_path: Path, pricing_path: Path):
     from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs

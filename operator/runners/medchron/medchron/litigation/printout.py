@@ -17,6 +17,8 @@ from __future__ import annotations
 import datetime as dt
 import html
 import io
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -58,8 +60,24 @@ def _case(m: dict[str, Any]) -> str:
     return str(m.get("case_name") or m.get("title") or "")
 
 
+#: A run of this many characters with no space is broken with zero-width
+#: spaces: the layout cannot fit a token wider than its column and would add
+#: pages forever (2026-10-29, a 39-character file name in a discovery cell).
+#: ``text_of`` strips them again, so the review and the leak scan read the
+#: text exactly as written.
+_LONG = re.compile(r"\S{%d,}" % 16)
+ZWSP = "\u200b"
+#: Pages one case may take before the layout is called stuck (the longest real
+#: case took 28).
+MAX_CASE_PAGES = 80
+
+
+def _breakable(t: str) -> str:
+    return _LONG.sub(lambda m: ZWSP.join(m.group(0)[i : i + 12] for i in range(0, len(m.group(0)), 12)), t)
+
+
 def _e(v: Any) -> str:
-    return html.escape(str(book.clean(v) if v is not None else ""))
+    return html.escape(_breakable(str(book.clean(v) if v is not None else "")))
 
 
 def _table(header: list[str], rows: list[list[Any]]) -> str:
@@ -150,6 +168,10 @@ def _place(writer: Any, story: Any) -> int:
     where = pymupdf.Rect(MARGIN, MARGIN, PAGE_W - MARGIN, PAGE_H - MARGIN - FOOT)
     n, more = 0, True
     while more:
+        if n >= MAX_CASE_PAGES:
+            from .outcome import LitigationFailed
+
+            raise LitigationFailed(f"stage_unfinished: book: a case of the print-out did not fit in {n} pages")
         dev = writer.begin_page(pymupdf.Rect(0, 0, PAGE_W, PAGE_H))
         more, _ = story.place(where)
         story.draw(dev)
@@ -201,7 +223,7 @@ def text_of(pdf: Path) -> list[str]:
     import pymupdf
 
     with pymupdf.open(pdf) as doc:
-        return [p.get_text() for p in doc]
+        return [unicodedata.normalize("NFKC", p.get_text()).replace(ZWSP, "") for p in doc]
 
 
 def scan(pdf: Path) -> list[tuple[str, str, str]]:
