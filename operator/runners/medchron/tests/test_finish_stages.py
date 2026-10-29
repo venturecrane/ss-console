@@ -171,6 +171,30 @@ def test_group_never_names_a_lane_after_the_clients_renamed_folder(tmp_path: Pat
     assert groups == {"(unattributed)"}, groups
 
 
+class _BrandCfg:
+    """A firm config whose brand list names the ambulance company only."""
+
+    def get(self, section: str, key: str):
+        if (section, key) == ("providers", "aliases"):
+            return [{"match": r"Example Ambulance|EAR\b", "label": "Example Ambulance Response"}]
+        return None
+
+
+def test_a_minority_brand_never_names_a_record_set_another_facility_dominates() -> None:
+    """2026-10-29: a 400-page hospital records file carried a few ambulance
+    run-sheet rows; the ambulance company is on the brand list, the hospital
+    is not, and the hospital's exhibit was titled after the ambulance."""
+    canon = group_stage.Canon(_BrandCfg())
+    hospital = ["Example Valley Hospital", "Example Valley Hospital, Jane Doe, MD"] * 20
+    assert canon(group_stage.lane_name(["Example Ambulance Response"] * 3 + hospital, canon)) == (
+        "Example Valley Hospital"
+    )
+    # A brand still beats bare clinicians however many rows they hold ...
+    assert group_stage.lane_name(["EAR"] + ["Jane Doe, MD"] * 30, canon) == "EAR"
+    # ... and still names a file it holds a real share of.
+    assert group_stage.lane_name(["EAR"] * 10 + ["Example Valley Hospital"] * 20, canon) == "EAR"
+
+
 def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_the_first_row(
     job_dir: Path, firm: Path, data_root: Path
 ) -> None:

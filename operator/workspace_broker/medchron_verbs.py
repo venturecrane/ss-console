@@ -28,6 +28,14 @@ Peer gating, per verb:
                            An update reuses the date of birth it keeps, so the
                            date must come from the job's own envelope on the
                            seat, never from a conversation.
+    medchron_covered_recompute
+                           uid 0 only, with NO agent tool (2026-10-29). Replaces
+                           a DELIVERED job's coverage record with one recomputed
+                           from its job dir by ``medchron.covered_backfill``
+                           (``medchron_coverage.recompute``): a joint matter's
+                           record had every cited exhibit uncovered. An update
+                           skips what the record covers, so a conversation
+                           must never reach it.
     medchron_job_resume    uid 0 only, and with NO agent tool (ss#2903). Asks the
                            runner daemon to re-run a FAILED job from the stages
                            its state file has not finished, instead of paying for
@@ -64,7 +72,7 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof, hold_class, medchron_credits, medchron_identity
+from . import delivery_proof, hold_class, medchron_coverage, medchron_credits, medchron_identity
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -99,6 +107,7 @@ VERBS = (
     "medchron_job_record",
     "medchron_backfill_covered",
     "medchron_units_backfill",
+    "medchron_covered_recompute",
     "medchron_job_resume",
     "medchron_allowance_credit",
 )
@@ -295,6 +304,9 @@ class MedchronVerbs:
             # ROOT only, no agent tool: an update reuses the date of birth this
             # keeps, so it comes from the job's own envelope on the seat.
             "medchron_units_backfill": is_root,
+            # ROOT only, no agent tool: rewrites what a delivered chronology
+            # covered, which an update skips (same reason as the backfill above).
+            "medchron_covered_recompute": is_root,
             # ROOT only, and deliberately with no agent tool (ss#2903). A resume
             # spends money and writes to the firm's matter, and the judgment it
             # rests on -- "the defect is fixed, the completed stages are still
@@ -363,6 +375,8 @@ class MedchronVerbs:
             return self._backfill(request)
         if action == "medchron_units_backfill":
             return self._units_backfill(request)
+        if action == "medchron_covered_recompute":
+            return self._covered_recompute(request)
         if action == "medchron_job_resume":
             return self._resume(request)
         raise ValueError(f"unsupported medchron action: {action}")
@@ -733,3 +747,17 @@ class MedchronVerbs:
                 row.get("matter_id"),
             )
         return {"ok": True, "job_id": job_id, "outcome": outcome, "dry_run": dry_run}
+
+    def _covered_recompute(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Replace a delivered job's coverage record (``medchron_coverage.recompute``).
+        The audit row carries the job id and the set sizes before and after,
+        never the ids: the audit log is not a copy of the record."""
+        job_id = str(request.get("job_id") or "")
+        if not job_id:
+            raise ValueError("medchron_covered_recompute requires job_id")
+        dry_run = request.get("dry_run") is True
+        outcome, counts = medchron_coverage.recompute(self._db, job_id, request.get("covered"), dry_run=dry_run)
+        if outcome == "recomputed" and not dry_run:
+            row = self._db.read(job_id) or {}
+            self._audit("MEDCHRON_COVERAGE_RECOMPUTED", {"job_id": job_id, **counts}, row.get("matter_id"))
+        return {"ok": True, "job_id": job_id, "outcome": outcome, "dry_run": dry_run, **counts}

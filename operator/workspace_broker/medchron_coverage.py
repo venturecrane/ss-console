@@ -202,3 +202,62 @@ def parse_covered(raw: Any) -> tuple[list[str] | None, list[str] | None]:
         return list(parsed.get("covered") or []), list(parsed.get("uncovered") or [])
     except (ValueError, AttributeError):
         return None, None
+
+
+#: What ``recompute`` decided for one job.
+RECOMPUTE_OUTCOMES = ("recomputed", "unchanged", "unknown_job", "not_delivered", "no_record")
+
+
+def recompute(ledger: Any, job_id: str, covered: Any, *, dry_run: bool = False) -> tuple[str, dict[str, int]]:
+    """Replace a DELIVERED job's coverage record with one recomputed from its
+    own job directory on the seat (``medchron.covered_backfill``, root).
+
+    WHY (2026-10-29). A joint matter (two clients, one job) recorded every
+    cited exhibit of both clients as uncovered: each unit judged the whole
+    matter's manifest, so each client's cited files read "not explained" in
+    the other client's record, and the union kept "uncovered in any unit".
+    The next update on that matter re-read and re-filed exhibits the firm
+    already had. The runner now judges each unit on its own files; this is
+    the door the corrected record comes back through for a job delivered
+    before that fix.
+
+    Only ``covered_json`` changes, and only on a row that is ``delivered`` and
+    already carries a record: a job never recorded is the pre-record
+    backfill's (``backfill_delivered``), never this. The payload passes the
+    same validation as at delivery. Returns ``(outcome, counts)`` with the
+    before and after set sizes; ``dry_run`` decides the same outcome and
+    writes nothing.
+    """
+    row = ledger.read(str(job_id)) if job_id else None
+    if row is None:
+        return "unknown_job", {}
+    if row.get("state") != "delivered":
+        return "not_delivered", {}
+    before = row.get("covered_json")
+    if not before:
+        return "no_record", {}
+    payload = validate_covered(covered)
+    b_cov, b_unc = parse_covered(before)
+    after = json.loads(payload)
+    counts = {
+        "covered_before": len(b_cov or []),
+        "uncovered_before": len(b_unc or []),
+        "covered_after": len(after["covered"]),
+        "uncovered_after": len(after["uncovered"]),
+    }
+    try:
+        same = json.loads(before) == after
+    except ValueError:
+        same = False
+    if same:
+        return "unchanged", counts
+    if not dry_run:
+        conn = ledger._connect()
+        try:
+            conn.execute(
+                "UPDATE medchron_jobs SET covered_json=? WHERE id=? AND state='delivered'", (payload, str(job_id))
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    return "recomputed", counts

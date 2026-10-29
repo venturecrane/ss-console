@@ -58,7 +58,7 @@ from .stages.coverage import (
 from .stages.units import billing_stem
 
 
-def _cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
+def cited_names(slug_dir: Path, unit: str, run_dir: Path) -> set[str]:
     """File names the delivered document actually cites, via the page map when
     one exists (it maps exhibit -> files) and the exhibit map otherwise."""
     body = ""
@@ -118,17 +118,15 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         if row.get("id"):
             id_of.setdefault(file_key(row), str(row["id"]))
 
-    pulled: dict[str, dict[str, Any]] = {}
-    duplicates: set[str] = set()
-    failed: set[str] = set()
-    for row in read_jsonl(slug_dir / "raw_manifest.jsonl"):
-        key = file_key(row)
-        if not row.get("ok"):
-            failed.add(key)
-            continue
-        if row.get("duplicate_of"):
-            duplicates.add(key)
-        pulled[key] = row
+    # A joint matter (two or more clients) pulls ONE manifest and builds one
+    # unit per client. Each unit judges only its own files plus the rows no
+    # unit adopted (orphans, failed retrievals, duplicates, name exclusions):
+    # a file another unit adopted is that unit's to judge. 2026-10-28: judging
+    # the whole manifest per unit marked each client's cited files NOT
+    # EXPLAINED in the other client's record, the union kept "uncovered in any
+    # unit", and every cited exhibit of both clients read as never delivered.
+    own_ids = {str(f["id"]) for f in unit_files if f.get("id")}
+    pulled, duplicates, failed = _manifest_rows(slug_dir, adopted_elsewhere(slug_dir, unit) - own_ids)
 
     orphans, withheld = _orphan_names(slug_dir)
     # Withheld (the firm's direction or the identity rule) is accounted for,
@@ -140,7 +138,7 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     }
     rules = exclusions(cfg)
     said = composer_dispositions(run_dir, unit_files)
-    cited = _cited_names(slug_dir, unit, run_dir)
+    cited = cited_names(slug_dir, unit, run_dir)
 
     covered: set[str] = set()
     uncovered: set[str] = set()
@@ -192,6 +190,45 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
     reasons = _why_by_id(slug_dir, {id_of[n]: t for n, t in why.items() if n in id_of}, uncovered_ids)
     if reasons:
         out["why"] = reasons
+    return out
+
+
+def _manifest_rows(slug_dir: Path, others: set[str]) -> tuple[dict[str, dict[str, Any]], set[str], set[str]]:
+    """(pulled rows by file key, byte-duplicate keys, failed keys), leaving out
+    every row another unit of this job adopted (``others``)."""
+    pulled: dict[str, dict[str, Any]] = {}
+    duplicates: set[str] = set()
+    failed: set[str] = set()
+    for row in read_jsonl(slug_dir / "raw_manifest.jsonl"):
+        if row.get("id") and str(row["id"]) in others:
+            continue
+        key = file_key(row)
+        if not row.get("ok"):
+            failed.add(key)
+            continue
+        if row.get("duplicate_of"):
+            duplicates.add(key)
+        pulled[key] = row
+    return pulled, duplicates, failed
+
+
+def adopted_elsewhere(slug_dir: Path, unit: str) -> set[str]:
+    """Ids every OTHER unit of this job adopted (``units/<other>.json``).
+
+    The job's units are the authored spec (``units.json``, written by
+    ``decisions.units`` for this job), so a unit file a different job left on
+    the matter is never read as this job's; with no spec on disk, every unit
+    file present is."""
+    ud = slug_dir / "units"
+    spec = read_json(slug_dir / "units.json", None)
+    names = [str(u) for u in spec] if isinstance(spec, dict) and spec else sorted(p.stem for p in ud.glob("*.json"))
+    out: set[str] = set()
+    for name in names:
+        if name == unit:
+            continue
+        rows = read_json(ud / f"{name}.json", [])
+        if isinstance(rows, list):
+            out |= {str(f["id"]) for f in rows if isinstance(f, dict) and f.get("id")}
     return out
 
 

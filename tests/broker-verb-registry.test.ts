@@ -156,6 +156,9 @@ const EXPECTED_VERBS = [
   // update SKIPS whatever the record says was covered.
   'medchron_allowance_credit',
   'medchron_backfill_covered',
+  // 2026-10-29: replaces a delivered joint-matter job's coverage record with
+  // one recomputed from its job dir. Root only, no agent tool.
+  'medchron_covered_recompute',
   'medchron_job_list',
   'medchron_job_record',
   'medchron_job_resume',

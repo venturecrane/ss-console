@@ -109,6 +109,60 @@ def test_a_file_the_run_set_aside_with_a_reason_is_decided_and_a_locked_one_is_n
     assert got == {"o1": "set aside: identity or engagement document, not a chronology source"}
 
 
+def _cite_clinic(tmp_path: Path) -> None:
+    """The delivered chronology cites clinic.pdf (e1) as Exhibit 1."""
+    base = tmp_path / "run" / "jobs" / BASE / "data" / "firm"
+    (base / "runs" / "alpha" / "entries_final.md").write_text(
+        "01/02/2026\nExample Clinic\n\nStrain. (Exhibit 1 - p. 1)\n"
+    )
+    (base / "out" / "alpha").mkdir(parents=True)
+    (base / "out" / "alpha" / "page_map.json").write_text(
+        json.dumps([{"exhibit": 1, "files": [{"file": "clinic.pdf"}]}])
+    )
+
+
+def test_a_delivered_cited_source_is_never_filed_again(tmp_path):
+    """2026-10-28: a re-pulled SOURCE never matched the delivered EXHIBIT PDF
+    (a rewritten copy), the page pictures drifted, and a file the firm already
+    had was filed again as a new exhibit. Its bytes match the delivered job's
+    source of a cited file, so it is skipped before any picture is compared,
+    under any id, and the update's record counts it covered."""
+    from medchron.update import coverage as UC
+
+    sr = _scene(tmp_path)
+    _cite_clinic(tmp_path)
+    assert prior_reading.cited_sources(sr) == {"eee"}  # type: ignore[arg-type]
+    rows = [json.loads(x) for x in (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines()]
+    copy = tmp_path / "again.pdf"
+    copy.write_bytes(b"x")
+    rows.append({"id": "r1", "ok": True, "sha256": "eee", "ext": ".pdf", "path": str(copy), "name": "again"})
+    _jsonl(sr.slug_dir / "raw_manifest.jsonl", rows)
+
+    out, skipped = update_select._candidates(sr, {})  # type: ignore[arg-type]
+    assert sorted(skipped["byte-identical to a delivered exhibit"]) == ["e1", "r1"]
+    assert {r["id"] for r in out} == {"q1"}
+    assert outcome._skipped("r1", {"skipped": skipped})[0] == outcome.DUPLICATE  # type: ignore[index]
+
+    ud = sr.slug_dir / "runs" / "alpha" / "update"
+    ud.mkdir(parents=True)
+    (ud / "selection.json").write_text(json.dumps({"skipped": skipped}))
+    assert {"e1", "r1"} <= set(UC.covered_sets(sr.slug_dir, "alpha")["covered"])
+
+
+def test_a_source_the_delivered_chronology_did_not_cite_is_still_read(tmp_path):
+    """Falsifiers: an uncited delivered file (q1) and other bytes stay candidates."""
+    sr = _scene(tmp_path)
+    _cite_clinic(tmp_path)
+    rows = [json.loads(x) for x in (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines()]
+    for r in rows:
+        if r["id"] == "e1":
+            r["sha256"] = "changed"
+    _jsonl(sr.slug_dir / "raw_manifest.jsonl", rows)
+    out, skipped = update_select._candidates(sr, {})  # type: ignore[arg-type]
+    assert {r["id"] for r in out} == {"e1", "q1"}
+    assert skipped["byte-identical to a delivered exhibit"] == []
+
+
 def test_update_select_sets_a_decided_file_aside_and_the_outcome_names_its_finding(tmp_path):
     sr = _scene(tmp_path)
     out, skipped = update_select._candidates(sr, {})  # type: ignore[arg-type]
