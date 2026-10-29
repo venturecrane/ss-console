@@ -32,6 +32,7 @@ const GATE = join(HOOKS, 'situational-gate.mjs')
 const RECALL = join(HOOKS, 'situational-recall.mjs')
 const RECURRENCE = join(HOOKS, 'memory-recurrence.mjs')
 const LIB = join(HOOKS, 'lib', 'situational-memory.mjs')
+const TRIGGER_TEST = join(HOOKS, 'memory-trigger-test.mjs')
 
 // The live fee memory's triggers, verbatim as single-quoted YAML scalars.
 const FEE_A =
@@ -380,5 +381,107 @@ describe('memory-recurrence', () => {
     const other = scanOnce()
     const row4 = (other.r as { rows: { escaped: number; bounced: number }[] }).rows[0]
     expect(row4.escaped).toBe(2)
+  })
+})
+
+describe('draft-only triggers (trigger_draft)', () => {
+  // "We", never "I checked", is a rule about what a client reads; a chat reply
+  // to the Captain saying "I checked the log" is fine. So the trigger fires on
+  // a Gmail draft and never on a reply.
+  const WE_MEMORY = [
+    '---',
+    'name: feedback_we',
+    'description: "Client emails say we; never I checked."',
+    "trigger_draft: '(?<![\"“])\\bI (?:checked|reviewed)\\b'",
+    "trigger_example: 'I checked the file.'",
+    "trigger_counter: 'We checked the file.'",
+    '---',
+    '',
+    '**How to apply:** Write the work as we.',
+    '',
+  ].join('\n')
+  beforeEach(() => writeFileSync(join(store, 'feedback_we.md'), WE_MEMORY))
+
+  const gmail = (body: string, session: string) => ({
+    session_id: session,
+    cwd: '/tmp/some-tree',
+    tool_input: { body },
+  })
+
+  it('denies a Gmail draft that says "I checked"', () => {
+    const r = run(GATE, gmail('I checked the file and the bill is there.', 'w1'))
+    expect(r.status).toBe(2)
+    expect(r.stderr).toContain('feedback_we.md')
+  })
+
+  it('never bounces a chat reply that says "I checked"', () => {
+    expect(reason(run(REPLY, stop('I checked the log and the job finished.', 'w2')))).toBeNull()
+  })
+
+  it('lets a draft quote the client saying it', () => {
+    const r = run(GATE, gmail('Her reply says: "I reviewed the package and found nothing."', 'w3'))
+    expect(r.status).toBe(0)
+  })
+})
+
+describe('memory-trigger-test', () => {
+  function runTest(tdir: string) {
+    try {
+      const stdout = execFileSync(
+        'node',
+        [
+          TRIGGER_TEST,
+          'feedback_never_call_a_cost_small_against_the_fee.md',
+          '--since',
+          '2026-01-01',
+        ],
+        { encoding: 'utf8', env: { ...process.env, SS_MEMORY_DIR: store, SS_TRANSCRIPT_DIR: tdir } }
+      )
+      return { status: 0, stdout }
+    } catch (err) {
+      const e = err as { status: number; stdout: string }
+      return { status: e.status, stdout: e.stdout }
+    }
+  }
+
+  it('sweeps history per stage and passes a memory whose self-check holds', () => {
+    const tdir = join(scratch, 'tt')
+    mkdirSync(tdir)
+    const rec = (type: string, content: unknown, ts: string) =>
+      JSON.stringify({ type, timestamp: ts, message: { content } })
+    const draft = {
+      type: 'tool_use',
+      name: 'mcp__claude_ai_Gmail__create_draft',
+      input: { body: INCIDENT_2 },
+    }
+    writeFileSync(
+      join(tdir, 's.jsonl'),
+      [
+        rec('user', 'what would this lane cost us?', '2026-10-29T19:40:00Z'),
+        rec('assistant', [{ type: 'text', text: INCIDENT_1 }], '2026-10-29T19:48:37Z'),
+        rec('assistant', [draft], '2026-10-29T19:50:00Z'),
+        rec('assistant', [{ type: 'text', text: 'A clean reply.' }], '2026-10-29T19:51:00Z'),
+      ].join('\n')
+    )
+    writeFileSync(
+      join(store, 'feedback_never_call_a_cost_small_against_the_fee.md'),
+      FEE_MEMORY.replace(
+        "trigger_since: '2026-10-29'",
+        "trigger_since: '2026-10-29'\ntrigger_example: 'That''s why I''d fold it into the agreement at no added fee.'"
+      )
+    )
+    const r = runTest(tdir)
+    expect(r.stdout).toMatch(/reply: 1 hit\(s\) in 2 assistant replies/)
+    expect(r.stdout).toMatch(/draft: 1 hit\(s\)/)
+    expect(r.stdout).toMatch(/prompt: 1 hit\(s\) in 1 Captain prompts/)
+    expect(r.status).toBe(0)
+  })
+
+  it('fails a memory with a reply trigger and no example (untested is not tested)', () => {
+    const tdir = join(scratch, 'tt2')
+    mkdirSync(tdir)
+    const r = runTest(tdir)
+    expect(r.stdout).toContain('no trigger_example')
+    expect(r.status).toBe(1)
   })
 })

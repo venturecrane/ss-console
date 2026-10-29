@@ -35,11 +35,13 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   loadTriggered,
+  matchDraft,
   matchReply,
   readFires,
   resolveMemoryDir,
   transcriptDirs,
 } from './lib/situational-memory.mjs'
+import { draftText } from './situational-gate.mjs'
 
 const DEFAULT_SINCE = '2026-10-29'
 const CORRECTION =
@@ -51,7 +53,7 @@ export const BLIND_SPOTS = [
   'a bounce whose sentence the hook split differently than this reader (reads as ESCAPED)',
 ]
 
-function textOf(content) {
+export function textOf(content) {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content
@@ -61,7 +63,7 @@ function textOf(content) {
 }
 
 /** A user record that is the Captain typing, not a tool result, hook echo or command wrapper. */
-function captainPrompt(rec) {
+export function captainPrompt(rec) {
   if (rec.type !== 'user' || rec.isMeta) return ''
   const c = rec.message?.content
   if (Array.isArray(c) && c.some((x) => x?.type === 'tool_result')) return ''
@@ -75,7 +77,7 @@ function captainPrompt(rec) {
   return t
 }
 
-function* records(file) {
+export function* records(file) {
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue
     try {
@@ -130,7 +132,7 @@ export function scan({ dirs, memories, fires, since }) {
 }
 
 /** Transcript files modified on or after `floor`, across every directory. */
-function transcriptFiles(dirs, floor) {
+export function transcriptFiles(dirs, floor) {
   const out = []
   for (const dir of dirs) {
     let names
@@ -151,6 +153,18 @@ function transcriptFiles(dirs, floor) {
   return out
 }
 
+const GMAIL_WRITE = /^mcp__claude_ai_Gmail__(create_draft|update_draft|send_message|reply|forward)$/
+
+/** The text of every Gmail draft/send this assistant record makes. */
+export function gmailDrafts(content) {
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter((c) => c?.type === 'tool_use' && GMAIL_WRITE.test(c.name ?? ''))
+    .map((c) => draftText(c.input ?? {}))
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 /** Apply one transcript record to every memory's row. */
 function tally(rec, file, memories, rows, caught) {
   const at = Date.parse(rec.timestamp ?? '')
@@ -158,6 +172,7 @@ function tally(rec, file, memories, rows, caught) {
   const isReply = rec.type === 'assistant'
   const prompt = isReply ? '' : captainPrompt(rec)
   const reply = isReply ? textOf(rec.message?.content) : ''
+  const drafts = isReply ? gmailDrafts(rec.message?.content) : ''
   memories.forEach((mem, i) => {
     const row = rows[i]
     if (at < Date.parse(row.since)) return
@@ -165,7 +180,7 @@ function tally(rec, file, memories, rows, caught) {
       if (CORRECTION.test(prompt) && mem.triggers.prompt.some((re) => re.test(prompt))) row.corrections++
       return
     }
-    const hit = reply ? matchReply(reply, [mem])[0] : null
+    const hit = (reply && matchReply(reply, [mem])[0]) || (drafts && matchDraft(drafts, [mem])[0]) || null
     if (!hit) return
     row.stumbles++
     const key = `${file.replace(/\.jsonl$/, '')}:${hit.hash}`
