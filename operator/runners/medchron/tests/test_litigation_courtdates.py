@@ -277,6 +277,17 @@ def test_a_case_the_layout_engine_cycles_on_prints_once_and_whole(tmp_path: Path
     assert printout.check(out, shown) == [] and printout.scan(out) == []
 
 
+def test_the_pdf_prints_portrait(tmp_path: Path):
+    """2026-10-30: Chris prints the book portrait, not landscape."""
+    import pymupdf
+
+    shown = cd.shown([_matter("m1", "1001", "A v. B", "Lee")], {"m1": CAL}, TODAY)
+    out = tmp_path / "x.pdf"
+    printout.build(shown, out, TODAY)
+    with pymupdf.open(out) as doc:
+        assert doc.page_count >= 2 and all(p.rect.width < p.rect.height for p in doc)
+
+
 def test_a_blank_or_repeated_page_reads_as_a_cycled_layout():
     assert printout.cycled(["a", "b", "", "c"]) and printout.cycled(["a", "b", "c", "b"])
     assert not printout.cycled(["a", "b", "c"])
