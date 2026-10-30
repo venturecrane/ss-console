@@ -84,7 +84,7 @@ def test_the_override_pin_is_read_from_the_file() -> None:
 
 def test_the_tolerated_table_is_exactly_the_overrides_that_break_a_hermes_pin() -> None:
     """A TOLERATED row exists only for an override that breaks an exact pin
-    (brotlicffi: hermes-agent pins 1.2.0.2). An override inside its requirer's
+    (brotlicffi: hermes-agent pins 1.2.0.2; pyasn1: it pins 0.6.4). An override inside its requirer's
     range needs none: tornado 6.6 satisfies python-telegram-bot 22.8's
     ``tornado~=6.5``, so ``uv pip check`` reports nothing for it."""
     names = {
@@ -93,7 +93,7 @@ def test_the_tolerated_table_is_exactly_the_overrides_that_break_a_hermes_pin() 
         if line and line[0].isalnum()
     }
     assert set(check.TOLERATED) == names - {"tornado"}
-    assert set(check.TOLERATED) == {"brotlicffi"}
+    assert set(check.TOLERATED) == {"brotlicffi", "pyasn1"}
 
 
 def test_a_clean_venv_passes() -> None:

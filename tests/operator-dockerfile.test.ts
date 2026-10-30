@@ -581,8 +581,11 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     const names = [...pinned.matchAll(/^([a-z0-9][a-z0-9._-]*)==/gm)].map((m) => m[1]).sort()
     // tornado 6.6 (2026-10-28): three advisories on 6.5.10, inside
     // python-telegram-bot's `tornado~=6.5` range, so no pip-check exception.
-    expect(names, 'hermes-security.txt overrides only brotlicffi and tornado').toEqual([
+    // pyasn1 0.6.5 (2026-10-30): four advisories on 0.6.4, past hermes-agent's
+    // exact floor pin, so tolerated in hermes_pip_check.py like brotlicffi.
+    expect(names, 'hermes-security.txt overrides only brotlicffi, pyasn1 and tornado').toEqual([
       'brotlicffi',
+      'pyasn1',
       'tornado',
     ])
   })
