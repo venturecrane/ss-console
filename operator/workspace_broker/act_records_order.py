@@ -203,11 +203,22 @@ def proposed_metadata(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def committed_metadata(payload: dict[str, Any], outcome: dict[str, Any]) -> dict[str, Any]:
-    """Counts and the vendor's order id (the ``ref`` the seat's post-call hook
-    forwards), bounded; nothing else the vendor wrote is kept."""
+    """Counts, the order's matter id and the vendor's order id (the ``ref`` the
+    seat's post-call hook forwards), bounded; nothing else the vendor wrote is
+    kept.
+
+    ``matter_id`` is the stored order's own (validated by ``require_order``), and
+    it replaces the generic field ``act_commit`` rebuilds from the outcome, which
+    the place-order outcome never carries. The weekly records chase reads it
+    (``records_order_acts``): without it, an order's matter is known only while
+    its proposal row is kept, seven days."""
     ref = outcome.get("ref") if isinstance(outcome, dict) else None
     order_id = ref if isinstance(ref, str) and _UUID.match(ref) else None
-    return {**proposed_metadata(payload), "vendor_order_record_id": order_id}
+    return {
+        **proposed_metadata(payload),
+        "matter_id": payload["order"]["matter_id"],
+        "vendor_order_record_id": order_id,
+    }
 
 
 __all__ = [

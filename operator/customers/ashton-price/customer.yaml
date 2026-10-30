@@ -602,6 +602,21 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+      # The weekly records chase as letter 416 (#10, base fee) committed it: the
+      # records orders placed through the Operator that the vendor does not show
+      # as completed, each with a follow-up for a person to send. Rendered and
+      # sent by the pre-run to the one recipient below; nothing goes to the
+      # vendor or a provider. Its cron row ships commented (below): the firm
+      # switches it on.
+      - name: records-order-chase
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: christa@ashtonandprice.com
       - name: medical-chronology-maintainer # routine 11: a run or an update, on request
         version: pending
         initiation:
@@ -1031,7 +1046,11 @@ personas:
     #   schedule: '51 7 * * 1-5' # weekday 0751 seat-local
     #   pre_run: pre_run.py
     #   wake_policy: pre_run_decides
-    # - skill: medical-records-chaser
+    # letter 416 #10; switch on with the firm's go-ahead. The records chase as
+    # letter 416 defined it (the vendor's open requests, a follow-up prepared for
+    # a person), replacing the provider chase (medical-records-chaser) this row
+    # used to name, which letter 416 does not include.
+    # - skill: records-order-chase
     #   schedule: '9 8 * * 2' # weekly Tue 0809 seat-local
     #   pre_run: pre_run.py
     #   wake_policy: pre_run_decides
@@ -1467,7 +1486,7 @@ routine_names:
   discovery-response-staging: 'Response inputs staged'
   matter-initiation-setup: 'New matter setup'
   service-confirmation-watcher: 'Service confirmation'
-  medical-records-chaser: 'Records chase'
+  records-order-chase: 'Records chase'
   medical-chronology-maintainer: 'Medical chronology'
   motion-calendar-tracker: 'Motion calendar'
   motion-package-assembler: 'Motion package'
