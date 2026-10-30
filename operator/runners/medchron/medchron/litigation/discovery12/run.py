@@ -244,12 +244,15 @@ class Discovery12Run(LitigationRun):
     def final(self, m: dict[str, Any]) -> dict[str, Any] | None:
         mid = m["id"]
         p = self._plan().get(mid) or {}
-        n = int(
-            (self._json("d12-audit-chunks.json") if (self.data / "d12-audit-chunks.json").is_file() else {}).get(mid)
-            or 0
-        )
+        planned = self._json("d12-audit-chunks.json") if (self.data / "d12-audit-chunks.json").is_file() else {}
+        n = int(planned.get(mid) or 0)
         got = [self._mjson(mid, batch.FILE.format(p="audit", k=k)) for k in range(n)]
         read = bool(p.get("read_groups")) and n > 0 and all(g is not None for g in got)
+        # 2026-10-29 proof: a case whose candidates hold no discovery paper (only
+        # emails without a discovery attachment) packs into ZERO chunks. That is
+        # nothing to read, not a read that failed: it prints "not read" and does
+        # not hold every other case. A case the passes skipped (unread) is absent.
+        nothing = mid in planned and n == 0
         merged = batch.merge([g["result"] for g in got if g]) if read else {"sections": {}, "flags": []}
         return {
             "matter_id": mid,
@@ -257,6 +260,7 @@ class Discovery12Run(LitigationRun):
             "title": m["title"],
             "responsible": m.get("responsible") or "",
             "read": read,
+            "nothing_to_read": nothing,
             **merged,
         }
 
@@ -281,7 +285,7 @@ class Discovery12Run(LitigationRun):
             for n, path, why in bad:
                 found.setdefault(why, []).append((n, path))
             sections.unconfirm(m, {path for _n, path, _w in bad})
-            if self._plan()[m["matter_id"]]["read_groups"] and not m["read"]:
+            if self._plan()[m["matter_id"]]["read_groups"] and not m["read"] and not m.get("nothing_to_read"):
                 holds.setdefault("matter could not be read", []).append((m["number"], "audit"))
         unconfirmed = sum(len(v) for v in found.values())
         if dated and unconfirmed / dated > sections.MAX_UNCONFIRMED_SHARE:
