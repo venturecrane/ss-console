@@ -14,7 +14,7 @@
 # client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
 # come after. The last ring always deploys one seat at a time.
 #
-# Holds are NOT authored here. `fleet hold <slug> --reason "..."` writes D1
+# Holds are NOT authored here. `fleet hold <slug> --reason "..." --until "..."` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
 # and recorded as skipped_held).
 #
