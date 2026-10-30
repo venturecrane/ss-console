@@ -335,6 +335,12 @@ def test_an_email_contributes_only_its_discovery_attachments_never_its_body():
     assert batch.attachments_only("From: a\n\nonly a body", rx, set()) == ""
 
 
+def test_two_copies_of_one_paper_hash_alike_and_a_different_paper_does_not():
+    a = "FORM INTERROGATORIES\nSet One   served 3/5/2026"
+    assert batch.text_hash(a) == batch.text_hash("form interrogatories set one served 3/5/2026")
+    assert batch.text_hash(a) != batch.text_hash(a.replace("One", "Two"))
+
+
 def test_the_fake_refuses_a_forced_tool_as_the_api_does():
     with pytest.raises(ValueError, match="not supported for this model"):
         Scripted12()._msg(tool_choice={"type": "tool", "name": "record_discovery"}, system="x", messages=[])
