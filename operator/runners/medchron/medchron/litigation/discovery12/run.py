@@ -164,6 +164,14 @@ class Discovery12Run(LitigationRun):
                     )
                 )
 
+        #: Items answered without the tool on the first round; asked once more
+        #: (2026-10-29 review: one such reply marked a whole case unread, and an
+        #: unread case holds the report). An ERRORED item the doorway already
+        #: retries once (``Doorway.batch_call``); a no-tool answer is a success
+        #: to it, so the retry is here.
+        notool: list[Item] = []
+        final_round = [False]
+
         def on_result(it: Item, r: Result | None, err: str | None) -> None:
             mid, k = it.meta["mid"], it.meta["k"]
             if r is None:
@@ -174,6 +182,9 @@ class Discovery12Run(LitigationRun):
             name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
             got = batch.tool_input(r.message, name)
             if got is None:
+                if not final_round[0]:
+                    notool.append(it)
+                    return
                 dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
                 return
             ctx = ctxs[mid]
@@ -186,14 +197,14 @@ class Discovery12Run(LitigationRun):
                 rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
             dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
 
-        if items:
+        def submit(todo: list[Item], where: str) -> None:
             summary = self.doorway.batch_call(
                 batch.STAGES[role],
-                items,
+                todo,
                 on_result,
                 model=self.firm.model(role),
                 max_tokens=batch.MAX_TOKENS,
-                batch_dir=self.data / "batches",
+                batch_dir=self.data / where,
                 system=sections.system_for(role, self.today) + batch.only_by_tool(role),
                 **batch.shape(role),
             )
@@ -201,6 +212,15 @@ class Discovery12Run(LitigationRun):
                 raise LitigationFailed(
                     f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
                 )
+
+        if items:
+            submit(items, "batches")
+        if notool:
+            # Its own batch dir: the doorway resumes a dir's batches by custom id,
+            # so the same dir would hand back the same no-tool answer.
+            final_round[0] = True
+            self.log(f"[{role}] {len(notool)} answers did not call the tool; asking those once more")
+            submit(list(notool), "batches-notool")
         dump(self.data / f"d12-{role}-chunks.json", want)
 
     def _read1(self) -> None:
@@ -348,6 +368,41 @@ class Discovery12Run(LitigationRun):
     def _report(self) -> None:
         return None
 
+    # ---- the per-chunk results: kept, listed, reopened only on purpose ----------------------------
+    def _kept(self) -> dict[str, int]:
+        """Every per-chunk result on disk, listed in ``data/d12-results.json``
+        (case id -> pass -> files, relative to ``data``) so a later list can
+        reuse them: discovery12 has no incremental carry, and nothing in the
+        lane prunes a job dir. Returns the verdict's counts per pass."""
+        listing: dict[str, dict[str, list[str]]] = {}
+        counts = {f"d12_{p}_chunks": 0 for p in batch.PASSES}
+        root = self.data / "m"
+        for mdir in sorted(root.iterdir()) if root.is_dir() else []:
+            for p in batch.PASSES:
+                got = sorted(x.name for x in mdir.glob(batch.FILE.format(p=p, k="*")))
+                if got:
+                    listing.setdefault(mdir.name, {})[p] = [f"m/{mdir.name}/{x}" for x in got]
+                    counts[f"d12_{p}_chunks"] += len(got)
+        dump(self.data / "d12-results.json", listing)
+        return counts
+
+    def reopen(self, stages: list[str]) -> None:
+        """The run's reopen, plus each reopened pass's per-chunk results: the
+        pass skips a chunk whose file exists, so a redo that left them would
+        silently re-use the answers it was asked to redo."""
+        super().reopen(stages)
+        order: list[str] = list(STAGES)
+        known = [s for s in stages if s in order]
+        if not known:
+            return
+        redo = {"read1": "read", "read2": "verify", "read3": "audit"}
+        passes_ = [redo[s] for s in order[min(order.index(s) for s in known) :] if s in redo]
+        root = self.data / "m"
+        for mdir in root.iterdir() if root.is_dir() else []:
+            for p in passes_:
+                for x in mdir.glob(batch.FILE.format(p=p, k="*")):
+                    x.unlink(missing_ok=True)
+
     def _walk(self) -> Verdict:
         for name in STAGES:
             if name == "file" and proof_mode.active():
@@ -358,6 +413,7 @@ class Discovery12Run(LitigationRun):
                         {"role": role, "name": p.name, "size": p.stat().st_size}
                         for role, p in ((ROLE, self._out()), (PRINTOUT_ROLE, self._pdf()))
                     ],
+                    counts=self._kept(),
                 )
             self._stage(name, getattr(self, f"_{name}"))
             if name == "inventory" and not self._matters():
@@ -369,6 +425,7 @@ class Discovery12Run(LitigationRun):
             stage="report",
             files=[{"role": role, **{k: f[k] for k in keep}} for role, f in both],
             folder_id=both[0][1]["folder_id"],
+            counts=self._kept(),
             proof={
                 "readback": "confirmed",
                 "files": [{k: f[k] for k in ("name", "file_id", "size", "sha256")} for _r, f in both],
