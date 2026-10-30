@@ -481,7 +481,8 @@ class Discovery12Run(LitigationRun):
             # Delivered merged rows (with any correction made after the merge)
             # stand while the status values they were merged from are unchanged.
             got = carry.merged(saved, prior) or complete.merge(prior, d12, h)
-            out.append({**f, **{k: got[k] for k in ("sections", "status_rows", "kind_hits", "completed")}})
+            row = {**f, **{k: got[k] for k in ("sections", "status_rows", "kind_hits", "completed")}}
+            out.append({**row, "prior_hash": carry.prior_hash(prior)})
         dump(self.data / "final-complete.json", out)
         return out
 

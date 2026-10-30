@@ -33,6 +33,8 @@ from . import sections
 from .run import Discovery12Run
 
 PROOF_STAGES = STAGES[: STAGES.index("file")]
+#: A scope no matter id matches: the reuse check with nothing reused builds nothing.
+NO_CASE = "(no reused case)"
 
 
 class Discovery12Proof(Discovery12Run):
@@ -92,7 +94,9 @@ class Discovery12Proof(Discovery12Run):
                     {"number": m["number"], "chunks": len(parts), "chars": sum(len(t) for p in parts for _n, t in p)}
                 )
         self._put("would_read", would)
-        self.only = [m["id"] for m in self._matters() if m["id"] in reused]
+        # An empty scope reads as "every case" (run._matters), so a check that
+        # reuses nothing is held to a scope no matter can match.
+        self.only = [m["id"] for m in self._matters() if m["id"] in reused] or [NO_CASE]
         return None
 
     def _walk(self) -> Verdict:
@@ -162,14 +166,16 @@ class Discovery12Proof(Discovery12Run):
         """What the reuse check proves: the reused cases, each one's printed
         rows as a digest to compare with the filed breakdown, and what a read
         of every other case would carry."""
+        reused = self._reused()
         rows = self._json("final-complete.json") if (self.data / "final-complete.json").is_file() else []
         digest = {
             str(f["number"]): hashlib.sha256(json.dumps(f.get("sections") or {}, sort_keys=True).encode()).hexdigest()
             for f in rows
+            if f.get("matter_id") in reused
         }
         would = self._state().get("would_read") or []
         return {
-            "reused": len(digest),
+            "reused": len(reused),
             "row_digest": digest,
             "would_read": would,
             "would_read_chars": sum(w["chars"] for w in would),

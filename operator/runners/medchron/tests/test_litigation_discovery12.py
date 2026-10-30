@@ -798,3 +798,20 @@ def test_a_correction_made_after_the_merge_stands_until_the_status_values_change
     _prior(tmp_path, "2026-06-02")
     r3 = _run_job(tmp_path, "job3", LitSeat({M1: _docs()}), Scripted12())
     assert r3.run().verdict == "delivered" and _rfps(r3)
+
+
+def test_a_reuse_check_with_nothing_saved_reports_no_case_reused(tmp_path):
+    """An empty scope reads as every case: with no saved record the check must
+    report none reused, never rebuild every case as if it were."""
+    report = tmp_path / "check.json"
+    c = Scripted12()
+    v = Discovery12Proof(
+        make_job(tmp_path / "check", report="discovery12"),
+        report_path=report,
+        reuse_check=True,
+        **_kw(tmp_path, LitSeat({M1: _docs()}), c),
+    ).run()
+    assert v.verdict == "held" and _asked(c) == []
+    rc = json.loads(report.read_text())["reuse_check"]
+    assert rc["reused"] == 0 and rc["row_digest"] == {}
+    assert [w["number"] for w in rc["would_read"]] == ["100001"]

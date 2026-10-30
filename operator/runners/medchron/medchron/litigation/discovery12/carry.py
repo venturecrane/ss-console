@@ -164,7 +164,9 @@ def record(
         "final": final,
         "kind_hits": kind_hits,
         "complete": {f: complete.get(f) for f in MERGED} if complete else None,
-        "prior_hash": prior_hash(prior) if complete else None,
+        # The digest the rows were merged against (``run._completed`` stamps
+        # it), never the values reloaded later; the seed hashes the lane's now.
+        "prior_hash": (complete.get("prior_hash") or prior_hash(prior)) if complete else None,
         "provenance": provenance,
     }
 
