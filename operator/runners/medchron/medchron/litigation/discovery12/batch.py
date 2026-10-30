@@ -61,6 +61,13 @@ def chunk(docs: list[tuple[int, str]], limit: int = CHUNK_CHARS) -> list[list[tu
 ATTACHMENT = "\n\n[ATTACHMENT] "
 
 
+def text_hash(text: str) -> str:
+    """The whole normalized text's digest: two papers with this equal are one paper."""
+    import hashlib
+
+    return hashlib.sha256(" ".join(text.lower().split()).encode()).hexdigest()
+
+
 def paper_key(text: str) -> str:
     """Two copies of one paper (a filed PDF and the same PDF on an email) share this."""
     return " ".join(text.lower().split())[:3000]

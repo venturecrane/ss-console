@@ -114,6 +114,7 @@ class Discovery12Run(LitigationRun):
         by = {str(f["id"]): f for f in inventory.files_of(self.data, mid)}
         docs: list[tuple[int, str]] = []
         seen: set[str] = set()
+        hashes: set[str] = set()
         mail: list[tuple[int, str]] = []
         for fid in self._plan()[mid]["candidates"]:
             n = ctx.by_id.get(fid)
@@ -122,9 +123,15 @@ class Discovery12Run(LitigationRun):
                 continue
             if manifest.is_email(by.get(fid) or {}):
                 mail.append((n, text))
-            else:
-                seen.add(batch.paper_key(text))
-                docs.append((n, text))
+                continue
+            # An exact copy of a paper already in the set (a served copy, a
+            # re-save) is read once: the first, newest, is the one cited.
+            whole = batch.text_hash(text)
+            if whole in hashes:
+                continue
+            hashes.add(whole)
+            seen.add(batch.paper_key(text))
+            docs.append((n, text))
         for n, text in mail:
             kept = batch.attachments_only(text, self.firm.discovery_rx, seen)
             if kept:
