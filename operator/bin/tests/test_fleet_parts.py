@@ -393,8 +393,10 @@ def test_cli_unknown_release_and_bad_ids_refuse() -> None:
 
 def test_cli_hold_unhold_and_latest_image(capsys: pytest.CaptureFixture[str]) -> None:
     store = FakeStore()
-    assert cli.main(["hold", "scott", "--reason", "client demo"], ctx=_ctx(store)) == 0
-    assert store.holds_rows["scott"]["reason"] == "client demo"
+    assert cli.main(["hold", "scott", "--reason", "client demo", "--until", "the demo ends"], ctx=_ctx(store)) == 0
+    assert store.holds_rows["scott"]["reason"] == "client demo. Lift when: the demo ends"
+    with pytest.raises(SystemExit):  # FALSIFIER: drop required=True and a hold says nothing about when it ends
+        cli.main(["hold", "scott", "--reason", "client demo"], ctx=_ctx(store))
     assert cli.main(["unhold", "scott"], ctx=_ctx(store)) == 0 and "scott" not in store.holds_rows
     assert cli.main(["latest-image"], ctx=_ctx(store)) == 1
     rel = release(completed_last_ring_at="2026-10-19T01:00:00Z")

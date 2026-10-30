@@ -305,10 +305,16 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
 - **Already done.** A full run skips a seat whose latest rollout of this
   release is `done`, so rerunning a release after a halt resumes it instead of
   deploying the finished seats again. `--only` still redeploys on request.
-- **Hold.** A seat in `fleet_holds` (`fleet hold <slug> --reason "..."`, takes
-  effect at once, no PR; `fleet unhold <slug>` lifts it) is skipped as
-  `skipped_held`. Holds are read again before every seat, so a hold set while a
-  release is walking stops the next seat it covers.
+- **Hold.** A seat in `fleet_holds` (`fleet hold <slug> --reason "..." --until
+"..."`, takes effect at once, no PR; `fleet unhold <slug>` lifts it) is
+  skipped as `skipped_held`. Holds are read again before every seat, so a hold
+  set while a release is walking stops the next seat it covers. `--until` is
+  the condition that ends the hold, in words, and is recorded with it. The hold
+  records the Claude session that set it (its worktree name and mission line,
+  from the session board) or the GitHub run, and `fleet status` lists every
+  hold with who, when and why. On 2026-10-30 ashton-price sat held while
+  several sessions waited for it to lift, and the hold named only the laptop
+  login, so nobody could say whose it was.
 - **Preflight.** The release's required env must all be on the seat (secret
   names or rendered `[env]`); a staged secret the release does not declare is
   refused (`fly deploy` would apply it); a lane whose firm-input schema changed
@@ -547,7 +553,7 @@ Three lanes, depending on what the seat runs and what main holds.
   images built from main), so the controller cannot roll it to other rings.
   With the seat idle (`fleet busy <seat>`), release it in one chained command
   so the hold always comes back, even when the release fails:
-  `fleet unhold <seat> && fleet release <id> --only <seat>; fleet hold <seat> --reason "<the hold's reason, verbatim>"`.
+  `fleet unhold <seat> && fleet release <id> --only <seat>; fleet hold <seat> --reason "<the hold's reason>" --until "<its lift-when, as fleet status shows it>"`.
   Read back `fleet status` (the hotfix image, a green heartbeat, held again)
   and record the lane in the release notes. The lane closes at the held
   change's promotion, and that promotion must use a main build that contains

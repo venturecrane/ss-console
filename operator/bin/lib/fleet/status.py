@@ -120,6 +120,18 @@ def render_table(rows: list[dict[str, Any]]) -> str:
     return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in lines)
 
 
+def render_holds(holds: dict[str, dict[str, Any]]) -> str:
+    """Each hold with who set it, when, and why, so nobody waits on a hold no one can name."""
+    if not holds:
+        return "\nholds: none"
+    out = ["", "holds:"]
+    for seat in sorted(holds):
+        h = holds[seat]
+        out.append(f"  {seat}: held {h.get('held_at') or '?'} by {h.get('held_by') or '?'}")
+        out.append(f"    {h.get('reason') or '(no reason recorded)'}")
+    return "\n".join(out)
+
+
 def render_releases(rows: list[dict[str, Any]], as_json: bool) -> str:
     if as_json:
         return json.dumps(rows, indent=1, default=str)

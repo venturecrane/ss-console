@@ -16,7 +16,7 @@
   fleet release --skills <version> [--only SLUG] [--parallel N] [--dry-run]
   fleet status [--json]
   fleet releases [--json] [--limit N]
-  fleet hold SLUG --reason TEXT
+  fleet hold SLUG --reason TEXT --until TEXT          records the session that set it (owner.py)
   fleet unhold SLUG
   fleet busy SLUG [--wait] [--max-wait SECONDS]     exit 0 idle, 1 busy, 3 could not tell
   fleet unquiesce SLUG                                remove a quiesce marker a fleet run left
@@ -41,9 +41,7 @@ fixing one seat never queues behind a rollout of the others.
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
-import os
 import subprocess
 import sys
 import time
@@ -51,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ids, status
+from . import ids, owner, status
 from .build import BuildOptions, Builder, ImageExtractor
 from .busy import BusyGate
 from .d1 import D1, FleetStore
@@ -171,6 +169,7 @@ def _parser() -> argparse.ArgumentParser:
     h = sub.add_parser("hold")
     h.add_argument("slug")
     h.add_argument("--reason", required=True)
+    h.add_argument("--until", required=True, help="the condition that ends the hold, in words (recorded with it)")
     u = sub.add_parser("unhold")
     u.add_argument("slug")
     bz = sub.add_parser("busy")
@@ -599,13 +598,6 @@ def cmd_latest_image(ctx: Ctx, _a: argparse.Namespace) -> int:
     return 0
 
 
-def _who() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:  # noqa: BLE001 - a username only labels the hold row, never a reason to stop
-        return os.environ.get("USER", "unknown")
-
-
 def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "build":
         return cmd_build(ctx, a)
@@ -621,14 +613,22 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
         rings = ctx.rings()
         seats = [seat for ring in rings for seat in ring.seats]
         rows = status.seat_rows(ctx.store, rings, status.lever_flags(ctx.fly, seats))
-        print(json.dumps(rows, indent=1, default=str) if a.json else status.render_table(rows))
+        if a.json:
+            print(json.dumps(rows, indent=1, default=str))
+        else:
+            print(status.render_table(rows))
+            print(status.render_holds(ctx.store.holds()))
         return 0
     if a.cmd == "releases":
         print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
         return 0
     if a.cmd == "hold":
-        ctx.store.hold(ids.slug(a.slug), a.reason, _who())
-        ctx.log(f"{a.slug}: held ({a.reason})")
+        # The reason carries when to lift it, so whoever finds the hold can tell
+        # whether it is still needed without finding the session that set it.
+        reason = f"{a.reason.rstrip('. ')}. Lift when: {a.until}"
+        by = owner.held_by()
+        ctx.store.hold(ids.slug(a.slug), reason, by)
+        ctx.log(f"{a.slug}: held by {by} ({reason})")
         return 0
     if a.cmd == "unhold":
         ctx.store.unhold(ids.slug(a.slug))
