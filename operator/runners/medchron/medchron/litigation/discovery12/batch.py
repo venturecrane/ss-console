@@ -46,6 +46,33 @@ def chunk(docs: list[tuple[int, str]], limit: int = CHUNK_CHARS) -> list[list[tu
     return out
 
 
+ATTACHMENT = "\n\n[ATTACHMENT] "
+
+
+def paper_key(text: str) -> str:
+    """Two copies of one paper (a filed PDF and the same PDF on an email) share this."""
+    return " ".join(text.lower().split())[:3000]
+
+
+def attachments_only(text: str, rx: list[Any], seen: set[str]) -> str:
+    """An email's discovery attachments and nothing else (the Captain, 2026-10-29:
+    the read covers the discovery PAPERS the quote priced, plus a paper that
+    exists only as an attachment; email bodies are out). Keeps an attachment
+    whose NAME matches a discovery pattern, that carries text, and whose text
+    is not already one of the case's papers (``seen``, updated)."""
+    out = []
+    for seg in text.split(ATTACHMENT)[1:]:
+        name, _, body = seg.partition("\n")
+        if not body.strip() or not any(r.search(name) for r in rx):
+            continue
+        key = paper_key(body)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f"[ATTACHMENT] {name}\n{body.strip()}")
+    return "\n\n".join(out)
+
+
 def papers(lines: Callable[[int], str], docs: list[tuple[int, str]]) -> str:
     return "\n\n".join(f"===== {lines(n)}\n{t}" for n, t in docs)
 
@@ -70,10 +97,26 @@ def tool_input(message: Any, name: str) -> dict[str, Any] | None:
     return None
 
 
+def tool_for(role: str) -> dict[str, Any]:
+    return sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS
+
+
 def shape(role: str) -> dict[str, Any]:
-    """The request shape for a pass: its one tool, forced."""
-    tool = sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS
-    return {"tools": [tool], "tool_choice": {"type": "tool", "name": tool["name"]}}
+    """The request shape for a pass: its one tool, chosen by the model.
+
+    2026-10-29: the proof's every batched read was refused, "tool_choice: type
+    'tool' and 'any' are not supported for this model" (claude-sonnet-5-5).
+    ``auto`` plus the system prompt's ``ONLY_BY_TOOL`` line asks for the call;
+    an answer that does not call it is no result (``tool_input`` is None), so
+    the case is marked unread and the gates hold it, never filled in."""
+    return {"tools": [tool_for(role)], "tool_choice": {"type": "auto"}}
+
+
+def only_by_tool(role: str) -> str:
+    return (
+        f"\n\nAnswer ONLY by calling the {tool_for(role)['name']} tool, exactly once. "
+        "Write no other text; an answer outside the tool is discarded."
+    )
 
 
 def merge(chunks: list[dict[str, Any]]) -> dict[str, Any]:

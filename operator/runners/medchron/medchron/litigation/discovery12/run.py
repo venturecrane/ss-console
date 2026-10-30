@@ -45,9 +45,17 @@ PRINTOUT_ROLE = "printout_pdf"
 CLASSES = ("discovery", "email")
 
 
+def _paper(f: dict[str, Any], firm: Any) -> bool:
+    """A discovery PAPER as the quote counted it (part 4, 2026-10-29): not an
+    email, and its name matches a firm discovery pattern, whatever its class
+    (a motion to compel classes as court)."""
+    name = manifest.full_name(f)
+    return not manifest.is_email(f) and any(r.search(name) for r in firm.discovery_rx)
+
+
 def plan_for(files: list[dict[str, Any]], firm: Any, today: Any) -> dict[str, Any]:
     """One case's plan: the discovery papers and named emails, newest first."""
-    picked = [f for f in files if manifest.classify(f, firm, today) in CLASSES]
+    picked = [f for f in files if manifest.classify(f, firm, today) in CLASSES or _paper(f, firm)]
     picked.sort(key=manifest.file_date, reverse=True)
     cands = [str(f["id"]) for f in picked]
     return {
@@ -100,13 +108,27 @@ class Discovery12Run(LitigationRun):
 
     # ---- the three passes, batched ---------------------------------------------------------------
     def _chunks(self, mid: str) -> tuple[Any, list[list[tuple[int, str]]]]:
+        """The case's discovery papers, then the discovery attachments of its
+        emails that are not already one of those papers; no email body."""
         ctx = self._ctx(mid)
-        docs = []
+        by = {str(f["id"]): f for f in inventory.files_of(self.data, mid)}
+        docs: list[tuple[int, str]] = []
+        seen: set[str] = set()
+        mail: list[tuple[int, str]] = []
         for fid in self._plan()[mid]["candidates"]:
             n = ctx.by_id.get(fid)
             text = self._text_of(mid, fid)
-            if n is not None and text:
+            if n is None or not text:
+                continue
+            if manifest.is_email(by.get(fid) or {}):
+                mail.append((n, text))
+            else:
+                seen.add(batch.paper_key(text))
                 docs.append((n, text))
+        for n, text in mail:
+            kept = batch.attachments_only(text, self.firm.discovery_rx, seen)
+            if kept:
+                docs.append((n, kept))
         return ctx, batch.chunk(docs)
 
     def _prev(self, mid: str, role: str, k: int) -> dict[str, Any] | None:
@@ -172,7 +194,7 @@ class Discovery12Run(LitigationRun):
                 model=self.firm.model(role),
                 max_tokens=batch.MAX_TOKENS,
                 batch_dir=self.data / "batches",
-                system=sections.system_for(role, self.today),
+                system=sections.system_for(role, self.today) + batch.only_by_tool(role),
                 **batch.shape(role),
             )
             if summary.timed_out:
@@ -214,22 +236,43 @@ class Discovery12Run(LitigationRun):
         return [self.final(m) for m in self._matters()]  # type: ignore[misc]
 
     def _gates(self) -> None:
+        """A date the gates cannot confirm (not ISO, no source on the matter,
+        not in its cited paper) is printed as unconfirmed, never as fact, and
+        counted. The report HOLDS on a case that could not be read, or when
+        more than ``MAX_UNCONFIRMED_SHARE`` of its dates are unconfirmed (the
+        reads, not one value, are then in doubt). 2026-10-29: one value used to
+        hold every case, with no way for SMD to accept it."""
         ms = self._finals()
-        dump(self.data / "final.json", ms)
-        issues: dict[str, list[Any]] = {}
+        found: dict[str, list[Any]] = {}
+        holds: dict[str, list[Any]] = {}
+        dated = 0
         for m in ms:
             on = {str(f["id"]) for f in inventory.files_of(self.data, m["matter_id"])}
-            for n, path, why in sections.findings(
-                m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on
-            ):
-                issues.setdefault(why, []).append((n, path))
+            dated += len(sections.dated_values(m))
+            bad = sections.findings(m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on)
+            for n, path, why in bad:
+                found.setdefault(why, []).append((n, path))
+            sections.unconfirm(m, {path for _n, path, _w in bad})
             if self._plan()[m["matter_id"]]["read_groups"] and not m["read"]:
-                issues.setdefault("matter could not be read", []).append((m["number"], "audit"))
-        dump(self.data / "gates.json", {"passed": not issues, "issues": issues})
-        if issues:
+                holds.setdefault("matter could not be read", []).append((m["number"], "audit"))
+        unconfirmed = sum(len(v) for v in found.values())
+        if dated and unconfirmed / dated > sections.MAX_UNCONFIRMED_SHARE:
+            holds[f"more than {sections.MAX_UNCONFIRMED_SHARE:.0%} of dates unconfirmed"] = [(unconfirmed, dated)]
+        dump(self.data / "final.json", ms)
+        dump(
+            self.data / "gates.json",
+            {
+                "passed": not holds,
+                "issues": holds,
+                "unconfirmed": found,
+                "dates": dated,
+                "unconfirmed_count": unconfirmed,
+            },
+        )
+        if holds:
             raise LitigationHold(
                 "gate_refused: the gates refused the breakdown: "
-                + "; ".join(f"{k} ({len(v)})" for k, v in issues.items())[:400]
+                + "; ".join(f"{k} ({len(v)})" for k, v in holds.items())[:400]
             )
 
     def _parity(self) -> None:
