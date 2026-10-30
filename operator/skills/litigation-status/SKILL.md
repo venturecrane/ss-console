@@ -147,6 +147,20 @@ status list. Word your one reply by that same rule: the job queued is the one
 the email's words name. (When the tool's answer carries `report` and
 `workbooks`, those are the broker's own decision; follow them.)
 
+## The discovery breakdown (the same request, the same tool)
+
+A Named Administrator may ask for the **12-section discovery breakdown**: every
+litigated case's discovery laid out in twelve sections (form and special
+interrogatories, requests for production and for admission, depositions,
+nonparty subpoenas, examinations, expert discovery, ESI, inspection, initial
+disclosures, supplemental responses), each date citing its paper. It is paid
+reading, billed as it reads, so the seat queues it only when its settings switch
+it on; until then the broker refuses it and you say it is not set up yet. Submit
+it exactly as above, with `litigation_job_submit`; the broker tells it apart by
+the email's own words ("12-section discovery", "discovery breakdown"). Its wake
+says `Kind: litigation. Report: discovery breakdown.`; word the delivered reply as
+for the status list, naming the one file exactly as the job row names it.
+
 ## Moving cases between staff (the same request, the same tool)
 
 A Named Administrator may instead ask the Operator to **move cases from one or

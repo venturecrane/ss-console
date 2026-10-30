@@ -72,6 +72,7 @@ _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")
 UPDATE_CLASS = "update_delivered"
 DEADLINES_CLASS = "deadlines"
 REASSIGN_CLASS = "reassign"
+DISCOVERY12_CLASS = "discovery12"
 VERIFY_RE = re.compile(r"^vfy_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -94,6 +95,11 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
         # tasks, so its first live request waits for its own proof run (which
         # stops before the first write and reports what it would move).
         return f"{skill}.{REASSIGN_CLASS}"
+    if lane == "litigation" and envelope.get("report") == DISCOVERY12_CLASS:
+        # 2026-10-29: the 12-section discovery breakdown is a paid read of
+        # every case's discovery papers, so its first live request waits for
+        # its own proof run, never riding the status list's.
+        return f"{skill}.{DISCOVERY12_CLASS}"
     if lane == "casefile":
         # The case file manager's three modes are different jobs: a full read of
         # the caseload, a recheck of what changed, and an APPLY that writes the

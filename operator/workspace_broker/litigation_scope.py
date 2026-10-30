@@ -80,7 +80,11 @@ def scope_key(scope: dict[str, Any]) -> str:
     earlier row carries); ``paralegal:<ids>``; ``staff:<ids>|paralegal:<ids>``;
     ``people:<names>`` and/or ``me:<requester>`` (any staff role, 2026-10-24)."""
     report = scope.get("report")
-    if report in ("deadlines", "reassign"):  # never blocks (or is blocked by) a status list for the same people
+    if report in (
+        "deadlines",
+        "reassign",
+        "discovery12",
+    ):  # never blocks (or is blocked by) a status list for the same people
         return f"{report}:" + scope_key({k: v for k, v in scope.items() if k != "report"})
     if scope.get("all") is True:
         return "all"
