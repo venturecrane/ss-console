@@ -42,6 +42,21 @@ def test_a_breakdown_value_with_its_own_paper_is_never_overwritten():
     assert got["sections"]["rfps"][0]["served"] == own and got["completed"] == {"filled": 0, "added": 0, "unplaced": 0}
 
 
+def test_a_set_the_breakdown_printed_twice_is_filled_in_both_rows():
+    d12 = {"read": True, "sections": {"srogs": [_e("Special Interrogatories, Set One"), _e("SROGs Set One")]}}
+    got = complete.merge({"discovery_served_on_client": [_row("Special Interrogatories, Set One", "2026-05-01")]}, d12)
+    assert [e["served"].get("date") for e in got["sections"]["srogs"]] == ["2026-05-01", "2026-05-01"]
+
+
+def test_two_different_sets_tied_for_the_best_match_are_not_filled():
+    d12 = {"read": True, "sections": {"srogs": [_e("SROGs", party="Acme Corp"), _e("SROGs", party="Beta Acme LLC")]}}
+    got = complete.merge(
+        {"discovery_served_on_client": [_row("Special Interrogatories", "2026-05-01", by="Acme")]}, d12
+    )
+    assert [e["served"].get("date") for e in got["sections"]["srogs"]] == [None, None]
+    assert got["completed"] == {"filled": 0, "added": 0, "unplaced": 0}
+
+
 def test_an_unconfirmed_breakdown_date_is_not_replaced():
     unc = {"date": None, "unconfirmed": True, "source": {"file_id": "f9", "name": "own.pdf"}}
     d12 = {"read": True, "sections": {"rfps": [_e("RFP Set One", served=unc)]}}

@@ -116,6 +116,31 @@ def entry(row: dict[str, Any], direction: str, party: str) -> dict[str, Any]:
     }
 
 
+def _score(row: dict[str, Any], party: str, e: dict[str, Any]) -> tuple[int, int]:
+    a, b = set_number(str(row.get("set") or "")), set_number(str(e.get("item") or ""))
+    same_set = 2 if a is not None and a == b else (1 if a is None or b is None else 0)
+    return same_set, len(_words(party) & (_words(e.get("party")) | _words(e.get("item"))))
+
+
+def _fill(row: dict[str, Any], party: str, cands: list[dict[str, Any]]) -> int:
+    """Fill the served date of the best-matching candidates when they are ONE
+    set (the same set number and party: the breakdown sometimes prints a set
+    twice); two different sets tie and nothing is filled. Returns how many."""
+    best = max(_score(row, party, e) for e in cands)
+    top = [e for e in cands if _score(row, party, e) == best]
+    if len({(set_number(str(e.get("item") or "")), frozenset(_words(e.get("party")))) for e in top}) != 1:
+        return 0
+    filled = 0
+    for e in top:
+        served = e.get("served") if isinstance(e.get("served"), dict) else {}
+        if served.get("date") or served.get("unconfirmed"):
+            continue
+        e["served"] = {"date": row["date"], "source": _source(row), "from_status": True}
+        e["notes"] = "; ".join(x for x in (str(e.get("notes") or ""), FILLED_NOTE) if x)
+        filled += 1
+    return filled
+
+
 def merge(prior: dict[str, Any], d12: dict[str, Any]) -> dict[str, Any]:
     """The case's twelve sections completed from ``prior`` (the status list's
     values); returns a new dict with ``sections``, ``status_rows`` (sets with no
@@ -142,11 +167,8 @@ def merge(prior: dict[str, Any], d12: dict[str, Any]) -> dict[str, Any]:
                 got.append(entry(row, direction, party))
                 n["added"] += 1
                 continue
-            served = cands[0].get("served") if isinstance(cands[0].get("served"), dict) else {}
-            if len(cands) == 1 and row.get("date") and not served.get("date") and not served.get("unconfirmed"):
-                cands[0]["served"] = {"date": row["date"], "source": _source(row), "from_status": True}
-                cands[0]["notes"] = "; ".join(x for x in (str(cands[0].get("notes") or ""), FILLED_NOTE) if x)
-                n["filled"] += 1
+            if row.get("date"):
+                n["filled"] += _fill(row, party, cands)
     out["status_rows"] = loose
     out["completed"] = n
     return out
