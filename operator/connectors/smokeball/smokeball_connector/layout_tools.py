@@ -47,7 +47,7 @@ from .layout_sections import (
     row_key,
     section_of,
 )
-from .medicals_layout import layout_values
+from .layout_shape import layout_values
 
 #: Read-back waits after the PATCH, in seconds; module-level so tests shorten them.
 VALUE_WAITS: tuple[float, ...] = (2, 3, 5, 8, 12)

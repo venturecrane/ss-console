@@ -35,10 +35,10 @@ CONTACT = "c0000000-0000-4000-8000-0000000000c1"
 OTHER_CONTACT = "c0000000-0000-4000-8000-0000000000c2"
 NAME = "Jordan Vale"
 
-#: Two open matters for one client: the shape of the live defect. Neither record
-#: carries a structured claim number or date of loss -- Smokeball has no field
-#: for either -- so the firm writes them into the description, which is where
-#: MATTER_TEXT_FIELDS looks.
+#: Two open matters for one client: the shape of the live defect. These records
+#: carry the claim number and date of loss in the description, which is where
+#: MATTER_TEXT_FIELDS looks; the layout tests below carry them where Smokeball
+#: keeps them, in the matter's layout (``LAYOUT_KEYS``).
 MATTERS: dict[str, dict[str, Any]] = {
     M101: {
         "id": M101,
@@ -65,10 +65,16 @@ class Tenant:
         contact_matters: dict[str, list[str]] | None = None,
         contacts: dict[str, dict[str, Any]] | None = None,
         fail: str | None = None,
+        layouts: dict[str, list[dict[str, Any]]] | None = None,
+        matters: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.contact_matters = contact_matters if contact_matters is not None else {CONTACT: [M101, M107]}
         self.contacts = contacts if contacts is not None else {CONTACT: {"id": CONTACT, "name": NAME}}
         self.fail = fail
+        #: matter id -> its layout items, each ``{"id": ..., "values": {key: value}}``.
+        #: A matter not listed has no layout items, as a bare matter has.
+        self.layouts = layouts or {}
+        self.matters = matters if matters is not None else MATTERS
         self.requests: list[httpx.Request] = []
 
     def client(self) -> SmokeballClient:
@@ -95,11 +101,20 @@ class Tenant:
             contact_id = request.url.params.get("ContactId")
             if contact_id:
                 return httpx.Response(
-                    200, json={"value": [MATTERS[m] for m in self.contact_matters.get(contact_id, [])]}
+                    200, json={"value": [self.matters[m] for m in self.contact_matters.get(contact_id, [])]}
                 )
             keyword = (request.url.params.get("Search") or "").casefold()
-            rows = [m for m in MATTERS.values() if keyword and keyword in str(m.get("number", "")).casefold()]
+            rows = [m for m in self.matters.values() if keyword and keyword in str(m.get("number", "")).casefold()]
             return httpx.Response(200, json={"value": rows})
+        parts = path.strip("/").split("/")
+        if len(parts) in (3, 4) and parts[0] == "matters" and parts[2] == "layouts":
+            items = self.layouts.get(parts[1], [])
+            if len(parts) == 3:
+                return httpx.Response(200, json={"value": [{"id": i["id"]} for i in items]})
+            for item in items:
+                if item["id"] == parts[3]:
+                    values = [{"key": k, "value": v} for k, v in item["values"].items()]
+                    return httpx.Response(200, json={"values": values})
         return httpx.Response(404, json={"error": f"unscripted {path}"})
 
 
@@ -601,3 +616,191 @@ def test_the_probe_is_a_normalized_token() -> None:
     tenant = _one("Rosa Linda", "", "Quill")
     mr._contacts_by_name(tenant.client(), "Rosa-Linda Quill")
     assert tenant.queries("/contacts")[0]["Search"] == "name:*Quill*"
+
+
+# ---- Facts kept in the matter's layout (2026-10-30) ----------------------------
+#
+# A client seat's post: a carrier letter printing a claim number for a client
+# with two matters, and a court notice printing its case number, were held as
+# questions because the firm keeps both in the matter's layout and the resolver
+# read only the matter's text. These records carry no claim, date or case in
+# their text, so every corroboration below comes from a layout.
+
+BARE: dict[str, dict[str, Any]] = {
+    M101: {"id": M101, "number": "2026-PI-101", "title": "Motor Vehicle Accident", "description": ""},
+    M107: {"id": M107, "number": "2026-PI-107", "title": "Property Damage", "description": ""},
+}
+P_CLAIM, D_CLAIM = mr.LAYOUT_KEYS[mr.FACT_CLAIM]
+(LOSS_KEY,) = mr.LAYOUT_KEYS[mr.FACT_LOSS]
+(CASE_KEY,) = mr.LAYOUT_KEYS[mr.FACT_CASE]
+TWO_CLIENTS = {
+    CONTACT: {"id": CONTACT, "name": NAME},
+    OTHER_CONTACT: {"id": OTHER_CONTACT, "name": "Casey Vale"},
+}
+ONE_EACH = {CONTACT: [M101], OTHER_CONTACT: [M107]}
+
+
+def _item(item_id: str, **values: Any) -> dict[str, Any]:
+    return {"id": item_id, "values": values}
+
+
+def _laid(layouts: dict[str, list[dict[str, Any]]], **kw: Any) -> Tenant:
+    return Tenant(matters=BARE, layouts=layouts, **kw)
+
+
+def _layout_requests(tenant: Tenant) -> list[str]:
+    return [r.url.path for r in tenant.requests if "/layouts" in r.url.path]
+
+
+def test_a_claim_in_the_layout_separates_one_clients_two_matters() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("p1", **{P_CLAIM: "CLM-123456"})],
+            M107: [_item("p1", **{P_CLAIM: "CLM-999999"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, claim_number="CLM 123456")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_CLAIM]
+    assert rt.verify(out["matter_resolution"], M101).matched_on == (mr.FACT_NAME, mr.FACT_CLAIM)
+
+
+def test_the_other_sides_claim_number_corroborates_too() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("d1", **{D_CLAIM: "0545-22-918"})],
+            M107: [_item("d1", **{D_CLAIM: "0545-22-100"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, claim_number="054522918")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+
+
+def test_a_claim_recorded_on_only_one_of_two_matters_stays_ambiguous() -> None:
+    """An injury matter and a property-damage matter from one accident, the
+    claim recorded on only the first. The empty field on the second is not
+    evidence the letter belongs to the first: filing there is the 2026-09-18
+    defect in another form."""
+    tenant = _laid({M101: [_item("p1", **{P_CLAIM: "CLM-123456"})]})
+    out = _resolve(tenant, client_name=NAME, claim_number="CLM-123456")
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS and out["candidate_count"] == 2
+    assert _minted() == 0
+
+
+def test_a_second_claimants_claim_number_is_seen_not_hidden_behind_the_first() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("p1", **{P_CLAIM: "CLM-111111"}), _item("p2", **{P_CLAIM: "CLM-222222"})],
+            M107: [_item("p1", **{P_CLAIM: "CLM-333333"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, claim_number="CLM-222222")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+
+
+def test_two_clients_sharing_the_other_sides_claim_number_are_kept_apart_by_name() -> None:
+    """One accident, two of the firm's clients, one at-fault carrier's claim."""
+    shared = {M101: [_item("d1", **{D_CLAIM: "DEF-777777"})], M107: [_item("d1", **{D_CLAIM: "DEF-777777"})]}
+    out = _resolve(
+        _laid(shared, contacts=TWO_CLIENTS, contact_matters=ONE_EACH), client_name=NAME, claim_number="DEF-777777"
+    )
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    rt._reset_for_tests()
+    surname = _resolve(
+        _laid(shared, contacts=TWO_CLIENTS, contact_matters=ONE_EACH), client_name="Vale", claim_number="DEF-777777"
+    )
+    assert surname["verdict"] == mr.VERDICT_AMBIGUOUS and _minted() == 0
+
+
+def test_a_date_of_loss_in_the_layout_separates_them() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("c1", **{LOSS_KEY: "2026-03-04T00:00:00"})],
+            M107: [_item("c1", **{LOSS_KEY: "2025-01-01T00:00:00"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_loss="2026-03-04")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_LOSS]
+
+
+def test_a_court_notices_case_number_corroborates_the_clients_one_matter() -> None:
+    """The held court notice: one matter for the name, its case number in the
+    layout. A name alone is a question; the case number is the second fact."""
+    tenant = _laid({M101: [_item("c1", **{CASE_KEY: "STK-CV-2026-0042"})]}, contact_matters={CONTACT: [M101]})
+    out = _resolve(tenant, client_name=NAME, case_number="STK-CV-2026-0042")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_CASE]
+
+
+def test_a_consolidated_docket_is_settled_by_the_name_not_the_number() -> None:
+    docket = {
+        M101: [_item("c1", **{CASE_KEY: "STK-CV-2026-0042"})],
+        M107: [_item("c1", **{CASE_KEY: "STK-CV-2026-0042"})],
+    }
+    out = _resolve(
+        _laid(docket, contacts=TWO_CLIENTS, contact_matters=ONE_EACH), client_name=NAME, case_number="STK-CV-2026-0042"
+    )
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    rt._reset_for_tests()
+    surname = _resolve(
+        _laid(docket, contacts=TWO_CLIENTS, contact_matters=ONE_EACH),
+        client_name="Vale",
+        case_number="STK-CV-2026-0042",
+    )
+    assert surname["verdict"] == mr.VERDICT_AMBIGUOUS and _minted() == 0
+
+
+def test_a_case_number_is_never_read_from_a_description() -> None:
+    """A description may cite a related or prior case."""
+    matters = {M101: {**BARE[M101], "description": "Related: STK-CV-2026-0042"}}
+    tenant = Tenant(matters=matters, contact_matters={CONTACT: [M101]})
+    out = _resolve(tenant, client_name=NAME, case_number="STK-CV-2026-0042")
+    assert out["verdict"] == mr.VERDICT_NONE and out["matched_on"] == [mr.FACT_NAME]
+
+
+def test_a_layout_that_cannot_be_read_is_a_failed_search_not_an_answer() -> None:
+    tenant = _laid({M101: [_item("p1", **{P_CLAIM: "CLM-123456"})]}, fail="/layouts/")
+    out = _resolve(tenant, client_name=NAME, claim_number="CLM-123456")
+    assert out["verdict"] == mr.VERDICT_SEARCH_FAILED and _minted() == 0
+
+
+def test_layouts_are_read_once_per_survivor_and_not_beyond_the_cap() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("p1", **{P_CLAIM: "CLM-123456"}), _item("c1", **{LOSS_KEY: "2026-03-04"})],
+            M107: [_item("p1", **{P_CLAIM: "CLM-999999"})],
+        }
+    )
+    _resolve(tenant, client_name=NAME, claim_number="CLM-123456", date_of_loss="2026-03-04")
+    # one listing per matter and one read per item (2 + 3), however many facts use them
+    assert len(_layout_requests(tenant)) == 5
+
+    many = {f"m-{i}": {"id": f"m-{i}", "number": f"2026-PI-20{i}", "title": "", "description": ""} for i in range(5)}
+    crowd = Tenant(matters=many, contact_matters={CONTACT: list(many)})
+    out = _resolve(crowd, client_name=NAME, claim_number="CLM-123456")
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS
+    assert _layout_requests(crowd) == []
+
+
+def test_no_layout_fact_supplied_reads_no_layout() -> None:
+    tenant = _laid({M101: [_item("p1", **{P_CLAIM: "CLM-123456"})]})
+    _resolve(tenant, matter_number="2026-PI-101", client_name=NAME)
+    assert _layout_requests(tenant) == []
+
+
+@pytest.mark.parametrize("weak", ["2024", "ABCDEFG", "1-2"])
+def test_a_weak_claim_number_is_reported_and_not_used(weak: str) -> None:
+    tenant = _laid({M101: [_item("p1", **{P_CLAIM: weak})]})
+    out = _resolve(tenant, client_name=NAME, claim_number=weak)
+    assert out["ignored"] == [mr.FACT_CLAIM]
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS and _minted() == 0
+    assert _layout_requests(tenant) == []
+
+
+def test_the_tool_takes_the_case_number() -> None:
+    import inspect
+
+    from smokeball_connector import vendor_invoice_tools
+
+    assert "case_number" in inspect.signature(vendor_invoice_tools.resolve_invoice_matter).parameters

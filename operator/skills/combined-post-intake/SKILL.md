@@ -252,17 +252,25 @@ client's file, and nobody will find it.
 
 For each letter, read ONLY that letter's own pages and call
 `resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss,
-date_of_birth)` with exactly the facts **that letter** prints, and nothing else.
+date_of_birth, case_number)` with exactly the facts **that letter** prints, and
+nothing else.
 
 The tool is named for the first thing that used it; its arithmetic is not
 specific to invoices, and it is the same resolver here.
 
 - `client_name` is the client or claimant the letter concerns, never the sender
-  and never the firm.
+  and never the firm. On a court paper it is the firm's client named in the
+  caption, never the opposing party.
 - `matter_number` means **the firm's own file number**, and nothing else. A
   docket number, a claim number, a carrier's file number or a policy number put
   there empties the search and destroys a resolution that would otherwise have
   worked. When in doubt, leave it out.
+- Pass every other identifying fact the letter prints: its `claim_number`, its
+  `date_of_loss` (ISO), and on a court paper the court's case number as
+  `case_number`. The tool checks each against the matter's own record,
+  including the fields where the firm keeps them, so a printed claim or case
+  number is often the second fact that files a letter instead of asking. Leaving
+  one out turns a letter that would have filed into a question.
 - Nothing from another letter, from the covering email, from an earlier message,
   or from memory.
 
@@ -610,7 +618,8 @@ reply does not name a matter number, do not file; ask again for the number.
   with a number the Operator itself supplied, in order to turn a hold into a
   `unique`.
 - Never pass a docket number, claim number or carrier file number as
-  `matter_number`.
+  `matter_number`. A court's case number goes in `case_number`, a claim number
+  in `claim_number`.
 - Never set a deadline, a calendar entry or a task from a court paper in the
   bundle. It is filed and flagged; what follows from it is a person's act.
 - Never finalize an expense, never pay anyone, and never put a figure on the

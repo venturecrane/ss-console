@@ -153,7 +153,7 @@ def _patch(client: Any, path: str, values: dict[str, Any]) -> None:
 
 
 def fix_case_number(client: Any, matter_id: str, new: str) -> dict[str, Any]:
-    from smokeball_connector.medicals_layout import layout_values
+    from smokeball_connector.layout_shape import layout_values
 
     found = case_item(client, matter_id)
     if found is None:

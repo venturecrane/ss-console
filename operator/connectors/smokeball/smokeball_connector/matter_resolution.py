@@ -35,11 +35,32 @@ HOW THE FACTS ARE USED, and the distinction that makes the arithmetic work:
   membership relation read from the other direction). When both are supplied the
   survivors are the INTERSECTION: a number that names one matter and a name that
   names three leave the one matter they agree on, resolved on two facts.
-* Three facts only NARROW, because no endpoint searches on them: the claim
-  number, the date of loss (both read from the matter's own text) and the date of
-  birth (read from a party's contact record). Each narrows the survivors when at
-  least one of them carries it, and is otherwise inert -- a date of loss the firm
-  never recorded must not wipe a clean number-plus-name resolution.
+* Four facts only NARROW, because no endpoint searches on them: the claim
+  number, the date of loss, the court's case number and the date of birth (read
+  from a party's contact record). Each narrows the survivors when at least one
+  of them carries it, and is otherwise inert -- a date of loss the firm never
+  recorded must not wipe a clean number-plus-name resolution.
+
+WHERE THE CLAIM NUMBER, DATE OF LOSS AND CASE NUMBER LIVE (2026-10-30). The
+first form of this module read the claim number and date of loss only from the
+matter's own text (number, title, description), on the premise that Smokeball
+has no field for either. The premise was wrong: a firm records them in the
+matter's LAYOUT, the fields the form letters already read
+(``form_letters._claim_number``, ``form_letter_facts.ACCIDENT_DATE_KEY``). At a
+firm that keeps them there, a letter's claim number could never corroborate the
+client's name, so every carrier letter for a client with two matters, and every
+court notice, came back as a question (a client seat's post, 2026-10-30). The
+layout is now read too, for the few survivors a name or number leaves.
+
+Layout evidence narrows only by CONTRADICTION: a survivor is dropped when its
+layout records the fact with a different value, never because its field is
+empty. One client with an injury matter and a property-damage matter from one
+accident, the claim recorded on only one of them, stays ``ambiguous``: an empty
+field is not evidence the letter belongs to the other matter (the 2026-09-18
+defect in another form). Every value of a key is collected across the layout's
+items, so a second claimant's or second defendant's claim number is seen, not
+hidden behind the first. The case number is read from the layout only, never
+from a description, which may cite a related case.
 
 Absence of corroboration is never a match, in either direction: a fact this
 module cannot read back from Smokeball simply does not appear in ``matched_on``,
@@ -60,6 +81,7 @@ from typing import Any
 from .expense_ledger import contains_run_sequence, invoice_number_key
 from .library import _listing as listing
 from .library import _norm as norm
+from .layout_shape import layout_values
 from .resolution_token import mint
 
 VERDICT_UNIQUE = "unique"
@@ -75,12 +97,34 @@ FACT_CLAIM = "claim_number"
 FACT_LOSS = "date_of_loss"
 FACT_BIRTH = "date_of_birth"
 
-#: The matter fields a claim number or date of loss may be read from. Smokeball's
-#: matter record has no structured field for either (surface doc, "Smokeball
-#: matter shape"), so the firm records them in the text it does have. The list is
-#: closed on purpose: a fact found nowhere in it does not corroborate, which
-#: fails toward ``none``.
+FACT_CASE = "case_number"
+
+#: The matter fields a claim number or date of loss may ALSO be read from, for a
+#: firm that writes them into the matter's own text. The layout keys below are
+#: where Smokeball keeps them. Both lists are closed on purpose: a fact found
+#: nowhere in them does not corroborate, which fails toward ``none``.
 MATTER_TEXT_FIELDS = ("number", "description", "title")
+
+#: The layout keys each fact is read from: the keys the form letters and the
+#: litigation pull already read (``form_letters._claim_number``,
+#: ``form_letter_facts.ACCIDENT_DATE_KEY``, medchron ``litigation/deadlines/pull``).
+LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
+    FACT_CLAIM: (
+        "Matter/Plaintiffs/InsurancePolicy/Claims/Number",
+        "Matter/Defendants/InsurancePolicy/Claims/Number",
+    ),
+    FACT_LOSS: ("Matter/CaseDetails/AccidentDetails/AccidentDate",),
+    FACT_CASE: ("Matter/CaseDetails/StandardCaseDetails/CaseNumber",),
+}
+
+#: Layouts are read for at most this many survivors. Each costs one listing read
+#: plus one read per layout item at 5 requests/second, and more survivors than
+#: this is an ambiguous answer a claim number rarely settles.
+MAX_LAYOUT_SURVIVORS = 4
+
+#: A claim or case number shorter than this once normalized, or with no digit,
+#: is too weak to corroborate ("2024", a misread "1"): it is reported ignored.
+_MIN_NUMBER_KEY = 5
 
 #: The contact fields a date of birth may be read from. Several spellings are
 #: accepted because the value is compared exactly: a spelling we do not know
@@ -142,6 +186,59 @@ def _get(client: Any, path: str, **params: Any) -> list[dict[str, Any]]:
         # Re-raised, not swallowed: any failure to read is reported as a failure
         # to read, never as an answer about the firm's record.
         raise SearchFailed(f"the tenant could not be searched ({exc.__class__.__name__})") from exc
+
+
+def _number_key(value: str) -> str:
+    """A claim or case number as compared: letters and digits only, lowercased.
+    Empty when too weak to corroborate (see ``_MIN_NUMBER_KEY``)."""
+    key = invoice_number_key(value)
+    return key if len(key) >= _MIN_NUMBER_KEY and any(c.isdigit() for c in key) else ""
+
+
+#: A matter's layout facts: fact -> every value its layout records for it.
+Layouts = dict[str, dict[str, list[str]]]
+
+
+def _layout_facts(client: Any, matter_id: str) -> dict[str, list[str]]:
+    """Every value this matter's layout records for each layout-backed fact.
+
+    COLLECTED, never merged: ``form_letter_facts.matter_layout_values`` keeps the
+    first non-empty value of a key, which is right for filling one letter and
+    wrong for identity, where a matter with two claimants carries two claim
+    numbers under one key and the letter may be about the second. A failed read
+    of the listing or of any item is ``SearchFailed``: a layout we could not read
+    is not a layout that records nothing."""
+    wanted = {key: fact for fact, keys in LAYOUT_KEYS.items() for key in keys}
+    found: dict[str, list[str]] = {}
+    for item in _get(client, f"/matters/{matter_id}/layouts"):
+        item_id = item.get("id") or item.get("itemId")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        try:
+            values = layout_values(client.get(f"/matters/{matter_id}/layouts/{item_id}"))
+        except Exception as exc:
+            raise SearchFailed(f"a matter's layout could not be read ({exc.__class__.__name__})") from exc
+        for key, value in values.items():
+            fact = wanted.get(key)
+            text = _clean(value)
+            if fact == FACT_LOSS:
+                text = _iso_date(text[:10])
+            if fact and text:
+                found.setdefault(fact, []).append(text)
+    return found
+
+
+def _layout_says(matter_id: str, fact: str, layouts: Layouts, values: dict[str, str]) -> bool | None:
+    """True: this matter's layout records the letter's value. False: it records
+    the fact, and every value differs (a contradiction). None: it records
+    nothing for the fact, or its layout was not read, which is no evidence."""
+    recorded = (layouts.get(matter_id) or {}).get(fact) or []
+    if not recorded:
+        return None
+    if fact == FACT_LOSS:
+        return values[FACT_LOSS] in recorded
+    want = _number_key(values[fact])
+    return any(invoice_number_key(value) == want for value in recorded)
 
 
 def _matters_by_number(client: Any, number: str, records: dict[str, dict[str, Any]]) -> set[str]:
@@ -362,8 +459,24 @@ def _carries(
     records: dict[str, dict[str, Any]],
     parties: dict[str, list[dict[str, Any]]],
     values: dict[str, str],
+    layouts: Layouts,
 ) -> bool:
-    """Does THIS matter carry this narrowing fact, read back from Smokeball?"""
+    """Does THIS matter carry this narrowing fact, read back from Smokeball, in
+    its own text or in its layout?"""
+    return _text_carries(matter_id, fact, records, parties, values) or bool(
+        _layout_says(matter_id, fact, layouts, values)
+    )
+
+
+def _text_carries(
+    matter_id: str,
+    fact: str,
+    records: dict[str, dict[str, Any]],
+    parties: dict[str, list[dict[str, Any]]],
+    values: dict[str, str],
+) -> bool:
+    """The fact as the first form of this module read it: the matter's own text,
+    or a party's contact record. The case number has no text form."""
     matter = records.get(matter_id) or {}
     if fact == FACT_CLAIM:
         return contains_run_sequence(_matter_text(matter), invoice_number_key(values[FACT_CLAIM]))
@@ -401,17 +514,32 @@ def _narrow(
     records: dict[str, dict[str, Any]],
     parties: dict[str, list[dict[str, Any]]],
     values: dict[str, str],
+    layouts: Layouts,
 ) -> set[str]:
     """Apply each narrowing fact that at least one survivor carries.
 
     A fact no survivor carries is INERT, never fatal: the firm may simply not
     have recorded a date of loss, and that must not wipe a matter the number and
     the name already agree on. A fact some survivor carries discriminates, and
-    that is how a name plus a date of loss reaches one matter."""
+    that is how a name plus a date of loss reaches one matter.
+
+    What a non-carrier loses depends on the evidence against it. Its LAYOUT
+    recording the fact with another value drops it. Its layout recording
+    nothing drops it only under the text rule this module always had (another
+    survivor's own text carries the fact, and this one's layout says nothing);
+    a carrier found only in a layout never drops a matter whose field is empty,
+    so a claim recorded on one of a client's two matters leaves both standing."""
     for fact in facts:
-        subset = {mid for mid in survivors if _carries(mid, fact, records, parties, values)}
-        if subset:
-            survivors = subset
+        carriers = {mid for mid in survivors if _carries(mid, fact, records, parties, values, layouts)}
+        if not carriers:
+            continue
+        text_carriers = {mid for mid in survivors if _text_carries(mid, fact, records, parties, values)}
+        kept: set[str] = set()
+        for mid in survivors:
+            says = _layout_says(mid, fact, layouts, values)
+            if mid in carriers or (says is None and not text_carriers):
+                kept.add(mid)
+        survivors = kept
     return survivors
 
 
@@ -422,11 +550,16 @@ def _matched_on(
     records: dict[str, dict[str, Any]],
     parties: dict[str, list[dict[str, Any]]],
     values: dict[str, str],
+    layouts: Layouts,
 ) -> list[str]:
     """The facts THIS matter actually carries, in the order they were supplied."""
     out: list[str] = []
     for fact in supplied:
-        hit = matter_id in generated[fact] if fact in generated else _carries(matter_id, fact, records, parties, values)
+        hit = (
+            matter_id in generated[fact]
+            if fact in generated
+            else _carries(matter_id, fact, records, parties, values, layouts)
+        )
         if hit:
             out.append(fact)
     return out
@@ -467,6 +600,7 @@ def _verdict(
     records: dict[str, dict[str, Any]],
     parties: dict[str, list[dict[str, Any]]],
     values: dict[str, str],
+    layouts: Layouts,
 ) -> dict[str, Any]:
     """Turn the surviving set into the closed verdict. ONE survivor is not yet a
     match: it becomes one only when a second fact corroborates it."""
@@ -482,7 +616,7 @@ def _verdict(
             "candidates": [_candidate(mid, records) for mid in survivors[:MAX_CANDIDATES]],
         }
     matter_id = survivors[0]
-    matched_on = _matched_on(matter_id, supplied, generated, records, parties, values)
+    matched_on = _matched_on(matter_id, supplied, generated, records, parties, values, layouts)
     candidate = _candidate(matter_id, records)
     if len(matched_on) < 2:
         return {
@@ -511,25 +645,33 @@ def resolve_matter(
     claim_number: Any = None,
     date_of_loss: Any = None,
     date_of_birth: Any = None,
+    case_number: Any = None,
 ) -> dict[str, Any]:
     """Resolve the matter one invoice belongs to. See the module docstring for
     the four verdicts and the arithmetic; only ``unique`` mints a token."""
     values = {
         FACT_NUMBER: _clean(matter_number),
         FACT_NAME: _clean(client_name),
-        FACT_CLAIM: _clean(claim_number),
+        FACT_CLAIM: _clean(claim_number) if _number_key(_clean(claim_number)) else "",
         FACT_LOSS: _iso_date(date_of_loss),
         FACT_BIRTH: _iso_date(date_of_birth),
+        FACT_CASE: _clean(case_number) if _number_key(_clean(case_number)) else "",
     }
-    # A date that is not an ISO date is REPORTED, never silently dropped: the
-    # sender should learn the fact went unused rather than read a "none" that
-    # implies the firm's record lacks it.
+    # A fact that cannot be used is REPORTED, never silently dropped: a date that
+    # is not an ISO date, or a claim or case number too short or with no digit to
+    # corroborate anything. The sender should learn the fact went unused rather
+    # than read a "none" that implies the firm's record lacks it.
     ignored = [
         fact
-        for fact, raw in ((FACT_LOSS, date_of_loss), (FACT_BIRTH, date_of_birth))
+        for fact, raw in (
+            (FACT_CLAIM, claim_number),
+            (FACT_LOSS, date_of_loss),
+            (FACT_BIRTH, date_of_birth),
+            (FACT_CASE, case_number),
+        )
         if _clean(raw) and not values[fact]
     ]
-    supplied = [f for f in (FACT_NUMBER, FACT_NAME, FACT_CLAIM, FACT_LOSS, FACT_BIRTH) if values[f]]
+    supplied = [f for f in (FACT_NUMBER, FACT_NAME, FACT_CLAIM, FACT_LOSS, FACT_BIRTH, FACT_CASE) if values[f]]
     base: dict[str, Any] = {"searched": supplied, "ignored": ignored}
     if not (values[FACT_NUMBER] or values[FACT_NAME]):
         return {
@@ -543,15 +685,23 @@ def resolve_matter(
     except SearchFailed as exc:
         return {**base, "verdict": VERDICT_SEARCH_FAILED, "reason": str(exc)}
     survivors = set.intersection(*generated.values())
-    narrowing = [f for f in (FACT_CLAIM, FACT_LOSS, FACT_BIRTH) if values[f]]
-    survivors = _narrow(survivors, narrowing, records, parties, values)
-    return _verdict(sorted(survivors), base, supplied, generated, records, parties, values)
+    narrowing = [f for f in (FACT_CLAIM, FACT_LOSS, FACT_BIRTH, FACT_CASE) if values[f]]
+    layouts: Layouts = {}
+    if any(f in LAYOUT_KEYS for f in narrowing) and 0 < len(survivors) <= MAX_LAYOUT_SURVIVORS:
+        try:
+            layouts = {mid: _layout_facts(client, mid) for mid in sorted(survivors)}
+        except SearchFailed as exc:
+            return {**base, "verdict": VERDICT_SEARCH_FAILED, "reason": str(exc)}
+    survivors = _narrow(survivors, narrowing, records, parties, values, layouts)
+    return _verdict(sorted(survivors), base, supplied, generated, records, parties, values, layouts)
 
 
 __all__ = [
     "CONTACT_BIRTH_FIELDS",
+    "LAYOUT_KEYS",
     "MATTER_TEXT_FIELDS",
     "MAX_CANDIDATES",
+    "MAX_LAYOUT_SURVIVORS",
     "MAX_NAME_CONTACTS",
     "VERDICT_AMBIGUOUS",
     "VERDICT_NONE",
