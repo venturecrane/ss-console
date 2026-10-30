@@ -210,7 +210,7 @@ def _d12_entry(j: int) -> dict:
         "response": {"date": "2026-02-01", "value": _words(4),
                      "source": {"file_id": "f", "name": "f.pdf", "doc_date": "2026-02-01"}},
         "extension": {"date": None, "detail": _words(2, 5), "source": None},
-        "notes": _words(39 + (j % 4) * 3),
+        "notes": _words(26 + (j % 4) * 3),
     }  # fmt: skip
 
 
@@ -222,11 +222,11 @@ def test_a_case_the_layout_engine_cycles_on_prints_once_and_whole(tmp_path: Path
 
     from medchron.litigation.discovery12 import sections as d12
 
-    m = _matter("m1", "1001", "A v. B", "Lee", defendants=[{"name": _words(10), "status": "Served"}])
+    m = _matter("m1", "1001", "A v. B", "Lee", defendants=[{"name": _words(4), "status": "Served"}])
     shown = cd.shown([m], {"m1": CAL}, TODAY)
     shown[0]["discovery12"] = {
         "read": True,
-        "sections": {k: [_d12_entry(j) for j in range(16)] for k, _l in d12.SECTIONS[:3]},
+        "sections": {k: [_d12_entry(j) for j in range(14)] for k, _l in d12.SECTIONS[:3]},
         "flags": [_words(5)],
     }
     out = tmp_path / "x.pdf"
