@@ -211,6 +211,22 @@ def test_a_verify_overturn_replaces_the_section_whole(tmp_path):
     assert sum(1 for x in rows if x[4] == sections.NONE_IN_FILE) == 12
 
 
+def test_a_case_whose_candidates_hold_no_discovery_paper_is_not_read_and_does_not_hold(tmp_path, monkeypatch):
+    """2026-10-29 proof: a case whose only candidates were emails with no
+    discovery attachment packed into ZERO chunks and was counted unread, which
+    holds every other case's report."""
+    seat = LitSeat({M1: disc_docs()})
+    client = Scripted12()
+    r = _run(tmp_path, seat, client)
+    real = Discovery12Run._chunks
+    monkeypatch.setattr(Discovery12Run, "_chunks", lambda self, mid: (real(self, mid)[0], []))
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    assert client.calls == [] and client.submitted == []
+    rows = _discovery_rows(r._out().read_bytes())
+    assert len(rows) == 1 and rows[0][4] == book.NOT_READ
+
+
 def test_a_case_with_no_discovery_paper_is_not_read_and_says_so(tmp_path):
     seat = LitSeat({M1: matter_docs()})
     client = Scripted12()
