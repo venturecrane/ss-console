@@ -240,22 +240,57 @@ def _cover(ms: list[dict[str, Any]], as_of: dt.date, discovery_note: str) -> str
     return f"<body><h1>Litigation status, court dates, as of {_e(as_of.isoformat())}</h1>{body}</body>"
 
 
-def _place(writer: Any, story: Any) -> int:
+#: Points taken off the bottom of the frame, tried in turn until a case lays
+#: out clean. MuPDF's layout can cycle on one exact break position: on
+#: 2026-10-30 one case of 230 repeated the same three pages and a blank one
+#: forever (pymupdf 1.28.2) and failed the whole run at the page cap. Moving
+#: the break by 4 points laid it out in 10 pages; the effect is not monotonic
+#: (16 points cycled again), so every attempt is checked, never assumed.
+TRIMS = (0.0, 4.0, 8.0, 24.0, 36.0)
+
+
+def cycled(pages: list[str]) -> bool:
+    """A laid-out case is broken when a page is blank or repeats an earlier
+    page's text: the layout engine went round instead of forward."""
+    return any(not t.strip() for t in pages) or len(set(pages)) < len(pages)
+
+
+def _lay(html_: str, trim: float) -> bytes | None:
+    """One case laid out alone in a frame ``trim`` points shorter; None when
+    it ran past the page cap or cycled."""
     import pymupdf
 
-    where = pymupdf.Rect(MARGIN, MARGIN, PAGE_W - MARGIN, PAGE_H - MARGIN - FOOT)
+    where = pymupdf.Rect(MARGIN, MARGIN, PAGE_W - MARGIN, PAGE_H - MARGIN - FOOT - trim)
+    buf = io.BytesIO()
+    writer = pymupdf.DocumentWriter(buf)
+    story = pymupdf.Story(html=html_, user_css=CSS)
     n, more = 0, True
-    while more:
-        if n >= MAX_CASE_PAGES:
-            from .outcome import LitigationFailed
-
-            raise LitigationFailed(f"stage_unfinished: book: a case of the print-out did not fit in {n} pages")
+    while more and n < MAX_CASE_PAGES:
         dev = writer.begin_page(pymupdf.Rect(0, 0, PAGE_W, PAGE_H))
         more, _ = story.place(where)
         story.draw(dev)
         writer.end_page()
         n += 1
-    return n
+    writer.close()
+    if more:
+        return None
+    with pymupdf.open(stream=buf.getvalue(), filetype="pdf") as doc:
+        return None if cycled([p.get_text() for p in doc]) else buf.getvalue()
+
+
+def _place(doc: Any, html_: str) -> int:
+    """Append one case, laid out clean, to ``doc``; returns its page count."""
+    import pymupdf
+
+    for trim in TRIMS:
+        got = _lay(html_, trim)
+        if got is not None:
+            with pymupdf.open(stream=got, filetype="pdf") as part:
+                doc.insert_pdf(part)
+                return part.page_count
+    from .outcome import LitigationFailed
+
+    raise LitigationFailed(f"stage_unfinished: book: a case of the print-out did not fit in {MAX_CASE_PAGES} pages")
 
 
 def build(ms: list[dict[str, Any]], out: Path, as_of: dt.date, *, discovery_note: str = "") -> dict[str, Any]:
@@ -267,18 +302,13 @@ def build(ms: list[dict[str, Any]], out: Path, as_of: dt.date, *, discovery_note
     by_def: dict[int, list[list[Any]]] = {}
     for r in book.defendant_rows(ms):
         by_def.setdefault(id(r["m"]), []).append(r["cells"][7:])
-    buf = io.BytesIO()
-    writer = pymupdf.DocumentWriter(buf)
-    pages = _place(writer, pymupdf.Story(html=_cover(cases, as_of, discovery_note), user_css=CSS))
+    doc = pymupdf.open()
+    pages = _place(doc, _cover(cases, as_of, discovery_note))
     starts = []
     for m in cases:
         disc = [r[3:] for r in book._discovery_rows([m])]
         starts.append(pages)
-        pages += _place(
-            writer, pymupdf.Story(html=case_html(m, by_def.get(id(m), []), disc, discovery_note), user_css=CSS)
-        )
-    writer.close()
-    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+        pages += _place(doc, case_html(m, by_def.get(id(m), []), disc, discovery_note))
     title = {s: f"{m.get('number') or ''} {book.clean(_case(m))}" for s, m in zip(starts, cases)}
     head = ""
     for i, page in enumerate(doc):
