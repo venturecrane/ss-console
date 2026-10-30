@@ -80,3 +80,29 @@ def test_it_does_not_block_a_status_list_for_the_same_people(seat) -> None:
     assert submit(broker)["accepted"] is True
     second = submit(broker, message_ref="<other@mail.firm.example>", request_text=ASK)
     assert second["accepted"] is True, second
+
+
+def test_root_may_send_it_on_the_scheduled_path_to_the_authored_recipient(seat) -> None:
+    """2026-10-29: SMD runs the breakdown the firm agreed to by letter; the
+    Operator tells the scheduled recipient, never anyone the text names."""
+    from workspace_broker.tests.test_litigation_verbs import ADMIN, call
+
+    broker, _db, yaml_path, queue, _firm = seat
+    env = {"trigger": "scheduled", "request_text": "The 12-section discovery breakdown on all litigated files."}
+    yaml_path.write_text(_yaml())
+    off = call(broker, "litigation_job_submit", pid=1, uid=0, envelope=env)
+    assert off["accepted"] is False and "not switched on" in off["reason"]
+    yaml_path.write_text(_on(_yaml()))
+    out = call(broker, "litigation_job_submit", pid=1, uid=0, envelope=env)
+    assert out["accepted"] is True and out["report"] == "discovery12", out
+    job = json.loads(queued(queue)[0].read_text())
+    assert job["report"] == "discovery12" and job["requester"] == ADMIN and job["trigger"] == "scheduled"
+
+
+def test_the_crons_own_scheduled_run_stays_the_status_list(seat) -> None:
+    from workspace_broker.tests.test_litigation_verbs import LIVE_CRON, scheduled
+
+    broker, _db, yaml_path, _queue, _firm = seat
+    yaml_path.write_text(_on(_yaml(cron=LIVE_CRON)))
+    out = scheduled(broker)
+    assert out["accepted"] is True and out["report"] == "status"

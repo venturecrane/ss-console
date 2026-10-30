@@ -173,6 +173,16 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
 
             return Discovery12Run(jd, state_dir=args.state_dir, **kw)
         return run_cls(jd, state_dir=args.state_dir, **kw)
+    if _report_of(jd) == "discovery12":  # the breakdown's proof: real reads on named matters, nothing filed
+        from .litigation.discovery12.proof import Discovery12Proof
+
+        return Discovery12Proof(
+            jd,
+            report_path=Path(args.rehearse),
+            only=[x.strip() for x in (args.read_matters or "").split(",") if x.strip()],
+            state_dir=args.state_dir,
+            **kw,
+        )
     lit_rehearse.ensure_job(jd, lit_firm.load(args.inputs).data["firm"]["slug"], [])
     return lit_rehearse.RehearsalRun(
         jd,

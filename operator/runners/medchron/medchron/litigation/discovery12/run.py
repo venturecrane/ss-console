@@ -1,6 +1,6 @@
 """`medchron litigate <job_dir>` for the 12-section discovery breakdown
 (``report: "discovery12"``): the status run's inventory, fetch, extract, text
-cache, caps and filing, with its own plan, reads, gates and workbook.
+cache, caps and filing, with its own plan, reads, gates and files.
 
     inventory -> diff -> fetch -> extract -> screen -> read1 -> read2 -> read3
       -> gates -> parity -> book -> review -> file -> report
@@ -8,30 +8,38 @@ cache, caps and filing, with its own plan, reads, gates and workbook.
 * **diff** plans every litigated case: its discovery papers by name (all of
   them, newest first, uncapped) and its discovery-named emails. A case with
   none is not read and prints that no discovery paper was found by name.
-* **read1/read2/read3** are the three passes on the twelve sections: a read,
-  an independent verify of every date and every negative, an audit of every
-  empty section and every "no" response. The job's cap and the month's budget
-  stop the run before the call that would cross either (``RunBase._before_call``).
+* **read1/read2/read3** are the three passes (read, verify, Opus audit) as
+  single-shot requests through the Batch API at half price (``batch.py``):
+  each case's papers in chunks, every request answered by one forced tool
+  call. Before each batch is submitted its projected cost at the batch rate
+  is checked against the job's cap and the month's budget; the ledger meters
+  every row at the batch rate it was billed.
 * **gates** hold the report while any date lacks a source on the matter or is
   not in its cited document's text, or any case could not be read.
+* **book** builds the workbook and the print-out PDF: every case's court
+  dates (the papers' values from the lane's state, the calendar read now),
+  its defendants, and the twelve sections, every date naming its paper.
 * **screen** and **parity** do nothing here; **report** commits nothing to the
   lane's state.
 """
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
 from ... import proof_mode
-from .. import deliver, gates, inventory, manifest, passes
-from ..outcome import LitigationHold, Verdict
+from ...llm import Item, Result
+from .. import courtdates, deliver, gates, inventory, manifest, passes, printout
+from ..outcome import LitigationFailed, LitigationHold, Verdict
 from ..run import STAGES, LitigationRun
 from ..tools import dump
-from . import book, sections
+from . import batch, book, sections
 
 GROUP = "discovery12"
 ROLE = "discovery_workbook"
+PRINTOUT_ROLE = "printout_pdf"
 #: The classes a breakdown reads: discovery papers, and recent emails named
 #: for the case (``manifest.classify``).
 CLASSES = ("discovery", "email")
@@ -55,6 +63,29 @@ def plan_for(files: list[dict[str, Any]], firm: Any, today: Any) -> dict[str, An
 
 
 class Discovery12Run(LitigationRun):
+    def __init__(self, job_dir: Path, *, use_batch: bool = True, only: list[str] | None = None, **kw: Any) -> None:
+        super().__init__(job_dir, **kw)
+        #: Matter numbers this run is limited to (the proof's five); empty is all.
+        self.only = [str(x) for x in only or []]
+        if use_batch:
+            self.doorway.batch_stages = frozenset(batch.STAGES.values())
+            self.doorway.before_batch = self._before_batch
+            self.doorway.log = self.log
+
+    def _before_batch(self, stage: str, items: int, chars: int) -> None:
+        """A batch is one commitment: its projected cost at the batch rate,
+        against the job's cap and the month's budget, before it is submitted."""
+        role = next(r for r, s in batch.STAGES.items() if s == stage)
+        rate = self.pricing.rate_for(self.firm.model(role))
+        projected = batch.project_usd(rate, chars, items, self.pricing.batch_multiplier)
+        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(), stage=stage, batch=True)
+
+    def _matters(self) -> list[dict[str, Any]]:
+        ms = super()._matters()
+        if not self.only:
+            return ms
+        return [m for m in ms if str(m.get("number")) in self.only or str(m.get("id")) in self.only]
+
     def _court_only(self) -> bool:
         return False
 
@@ -67,65 +98,116 @@ class Discovery12Run(LitigationRun):
     def _screen(self) -> None:
         return None
 
+    # ---- the three passes, batched ---------------------------------------------------------------
+    def _chunks(self, mid: str) -> tuple[Any, list[list[tuple[int, str]]]]:
+        ctx = self._ctx(mid)
+        docs = []
+        for fid in self._plan()[mid]["candidates"]:
+            n = ctx.by_id.get(fid)
+            text = self._text_of(mid, fid)
+            if n is not None and text:
+                docs.append((n, text))
+        return ctx, batch.chunk(docs)
+
+    def _prev(self, mid: str, role: str, k: int) -> dict[str, Any] | None:
+        before = {"verify": "read", "audit": "verify"}[role]
+        return self._mjson(mid, batch.FILE.format(p=before, k=k))
+
+    def _pass(self, role: str) -> None:
+        items: list[Item] = []
+        ctxs: dict[str, Any] = {}
+        want: dict[str, int] = {}
+        for m in self._matters():
+            mid = m["id"]
+            if not self._plan()[mid]["read_groups"] or passes.unread(self, mid):
+                continue
+            ctx, parts = self._chunks(mid)
+            ctxs[mid], want[mid] = ctx, len(parts)
+            for k, docs in enumerate(parts):
+                if self._mfile(mid, batch.FILE.format(p=role, k=k)).is_file():
+                    continue
+                check = ""
+                if role != "read":
+                    prev = self._prev(mid, role, k)
+                    if prev is None:
+                        continue
+                    check = "\nTHE RESULT TO CHECK:\n" + book.for_model(prev["result"], ctx)
+                body = batch.papers(ctx.line, docs)
+                text = batch.user_text(self._header(m), body, k, len(parts), check)
+                items.append(
+                    Item(
+                        f"{mid}-{k}",
+                        [{"role": "user", "content": [{"type": "text", "text": text}]}],
+                        {"mid": mid, "k": k},
+                    )
+                )
+
+        def on_result(it: Item, r: Result | None, err: str | None) -> None:
+            mid, k = it.meta["mid"], it.meta["k"]
+            if r is None:
+                dump(
+                    self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"}
+                )
+                return
+            name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
+            got = batch.tool_input(r.message, name)
+            if got is None:
+                dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
+                return
+            ctx = ctxs[mid]
+            if role == "read":
+                rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
+            else:
+                prev = self._prev(mid, role, k) or {}
+                result = copy.deepcopy(prev["result"])
+                log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
+                rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
+            dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
+
+        if items:
+            summary = self.doorway.batch_call(
+                batch.STAGES[role],
+                items,
+                on_result,
+                model=self.firm.model(role),
+                max_tokens=batch.MAX_TOKENS,
+                batch_dir=self.data / "batches",
+                system=sections.system_for(role, self.today),
+                **batch.shape(role),
+            )
+            if summary.timed_out:
+                raise LitigationFailed(
+                    f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
+                )
+        dump(self.data / f"d12-{role}-chunks.json", want)
+
     def _read1(self) -> None:
-        def one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
-            ctx = self._ctx(mid)
-            raw = self._loop(ctx, "read", m, mid, "")
-            dump(self._mfile(mid, "read1.json"), {"result": sections.to_result(ctx.source, raw)})
-
-        passes._each(self, "read1", lambda p: bool(p["read_groups"]), one)
-
-    def _check(self, stage: str, role: str) -> None:
-        prev = {"read2": "read1.json", "read3": "read2.json"}[stage]
-
-        def one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
-            ctx = self._ctx(mid)
-            before = self._mjson(mid, prev) or {}
-            result = before["result"]
-            got = self._loop(ctx, role, m, mid, "\nTHE RESULT TO CHECK:\n" + book.for_model(result, ctx))
-            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
-            rec = {"result": result, "overturns": list(before.get("overturns") or []) + log}
-            dump(self._mfile(mid, f"{stage}.json"), rec)
-
-        passes._each(self, stage, lambda p: bool(p["read_groups"]), one)
+        self._pass("read")
 
     def _read2(self) -> None:
-        self._check("read2", "verify")
+        self._pass("verify")
 
     def _read3(self) -> None:
-        self._check("read3", "audit")
-
-    def _loop(self, ctx: Any, role: str, m: dict[str, Any], mid: str, extra: str) -> dict[str, Any]:
-        from ..tools import run_loop
-
-        stage = {"read": "litigation_read", "verify": "litigation_verify", "audit": "litigation_audit"}[role]
-        user = (
-            f"MATTER: {self._header(m)}\nDETERMINE: the twelve discovery sections.\n\n"
-            "Read the document texts below first; use the tools only for what they do not settle.\n\n"
-            f"FILES (discovery papers and discovery emails, newest first):\n{self._listing(ctx, mid)}\n{extra}"
-        )
-        iters = int(self.firm.get("tool_iterations"))
-        return run_loop(
-            self.doorway,
-            stage,
-            model=self.firm.model(role),
-            system=sections.system_for(role, self.today),
-            user=user,
-            ctx=ctx,
-            final_tool=sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS,
-            max_iterations=iters if role == "read" else max(4, iters // 2),
-        )
+        self._pass("audit")
 
     # ---- gates, book, file -----------------------------------------------------------------------
     def final(self, m: dict[str, Any]) -> dict[str, Any] | None:
-        r3 = self._mjson(m["id"], "read3.json")
+        mid = m["id"]
+        p = self._plan().get(mid) or {}
+        n = int(
+            (self._json("d12-audit-chunks.json") if (self.data / "d12-audit-chunks.json").is_file() else {}).get(mid)
+            or 0
+        )
+        got = [self._mjson(mid, batch.FILE.format(p="audit", k=k)) for k in range(n)]
+        read = bool(p.get("read_groups")) and n > 0 and all(g is not None for g in got)
+        merged = batch.merge([g["result"] for g in got if g]) if read else {"sections": {}, "flags": []}
         return {
-            "matter_id": m["id"],
+            "matter_id": mid,
             "number": m["number"],
             "title": m["title"],
             "responsible": m.get("responsible") or "",
-            "read": r3 is not None,
-            **(r3["result"] if r3 else {"sections": {}, "flags": []}),
+            "read": read,
+            **merged,
         }
 
     def _finals(self) -> list[dict[str, Any]]:
@@ -141,9 +223,8 @@ class Discovery12Run(LitigationRun):
                 m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on
             ):
                 issues.setdefault(why, []).append((n, path))
-        unread = passes.unread_matters(self)
-        if unread:
-            issues["matter could not be read"] = [(u["number"], u["stage"]) for u in unread]
+            if self._plan()[m["matter_id"]]["read_groups"] and not m["read"]:
+                issues.setdefault("matter could not be read", []).append((m["number"], "audit"))
         dump(self.data / "gates.json", {"passed": not issues, "issues": issues})
         if issues:
             raise LitigationHold(
@@ -158,26 +239,68 @@ class Discovery12Run(LitigationRun):
         name = f"Discovery breakdown {self.today.isoformat()} (Operator {self.job.job_id[-6:]}).xlsx"
         return self.data / "out" / name
 
+    def _pdf(self) -> Path:
+        name = f"Litigation print-out with discovery {self.today.isoformat()} (Operator {self.job.job_id[-6:]}).pdf"
+        return self.data / "out" / name
+
+    def _status_values(self, finals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Each case as the status list holds it (the lane's state), with its
+        twelve sections attached, and the calendar's court dates merged."""
+        out = []
+        for f in finals:
+            prior = manifest.load_prior(self.state, f["matter_id"]) or {}
+            out.append(
+                {
+                    **prior,
+                    "matter_id": f["matter_id"],
+                    "number": f["number"],
+                    "title": f["title"],
+                    "case_name": prior.get("case_name") or f["title"],
+                    "responsible": f["responsible"],
+                    "discovery12": {
+                        "read": f["read"],
+                        "sections": f.get("sections") or {},
+                        "flags": f.get("flags") or [],
+                    },
+                }
+            )
+        try:
+            seat = self.seat
+        except Exception:  # noqa: BLE001 - no seat (an offline replay): the papers' dates stand alone
+            seat = None
+        cal = courtdates.pull(seat, [str(m["matter_id"]) for m in out], self.data, self.log)
+        return courtdates.shown(out, cal, self.today)
+
     def _book(self) -> None:
-        stats = book.build(self._json("final.json"), self._out(), self.today)
+        finals = self._json("final.json")
+        stats = book.build(finals, self._out(), self.today)
         gates.leak_gate(self._out(), self.data / "book.json", stats)
+        shown = self._status_values(finals)
+        dump(self.data / "shown.json", shown)
+        pstats = printout.build(shown, self._pdf(), self.today)
+        leaks = printout.scan(self._pdf())
+        dump(self.data / "book-printout.json", {**pstats, "leaks": leaks})
+        if leaks:
+            self._pdf().unlink(missing_ok=True)
+            raise LitigationFailed(f"leak_found: the built print-out carries internal text in {len(leaks)} places")
 
     def _review(self) -> None:
         built = self._json("book.json")
         problems = book.check(self._out().read_bytes(), self._json("final.json"))
+        problems += printout.check(self._pdf(), self._json("shown.json"))
         dump(self.data / "review.json", {"problems": problems, "rows": built.get("rows")})
         if problems:
-            from ..outcome import LitigationFailed
-
-            raise LitigationFailed(f"review_held: {len(problems)} findings in the built workbook; nothing was filed")
+            raise LitigationFailed(f"review_held: {len(problems)} findings in the built files; nothing was filed")
         self._put("review_status", "code_only")
 
     def _file(self) -> None:
         pause = deliver.READBACK_PAUSE_SECONDS if self.readback_pause is None else self.readback_pause
+        args = (self.seat, self.job.file_to_id, self.job.folder_name)
+        dump(self.data / "filed.json", deliver.file_workbook(*args, self._out(), self.data, self.log, pause=pause))
         rec = deliver.file_workbook(
-            self.seat, self.job.file_to_id, self.job.folder_name, self._out(), self.data, self.log, pause=pause
+            *args, self._pdf(), self.data, self.log, pause=pause, record="delivery-printout.json"
         )
-        dump(self.data / "filed.json", rec)
+        dump(self.data / "filed-printout.json", rec)
 
     def _report(self) -> None:
         return None
@@ -185,25 +308,27 @@ class Discovery12Run(LitigationRun):
     def _walk(self) -> Verdict:
         for name in STAGES:
             if name == "file" and proof_mode.active():
-                out = self._out()
                 return Verdict(
                     proof_mode.OUTCOME,
                     stage="file",
-                    files=[{"role": ROLE, "name": out.name, "size": out.stat().st_size}],
+                    files=[
+                        {"role": role, "name": p.name, "size": p.stat().st_size}
+                        for role, p in ((ROLE, self._out()), (PRINTOUT_ROLE, self._pdf()))
+                    ],
                 )
             self._stage(name, getattr(self, f"_{name}"))
             if name == "inventory" and not self._matters():
                 raise LitigationHold("scope_empty: no open litigation matters are in this job's scope")
-        f = self._json("filed.json")
         keep = ("name", "size", "sha256", "file_id")
+        both = ((ROLE, self._json("filed.json")), (PRINTOUT_ROLE, self._json("filed-printout.json")))
         return Verdict(
             "delivered",
             stage="report",
-            files=[{"role": ROLE, **{k: f[k] for k in keep}}],
-            folder_id=f["folder_id"],
+            files=[{"role": role, **{k: f[k] for k in keep}} for role, f in both],
+            folder_id=both[0][1]["folder_id"],
             proof={
                 "readback": "confirmed",
-                "files": [{k: f[k] for k in ("name", "file_id", "size", "sha256")}],
+                "files": [{k: f[k] for k in ("name", "file_id", "size", "sha256")} for _r, f in both],
                 "review": "code_only",
                 "review_cents": 0,
                 "review_model": "",

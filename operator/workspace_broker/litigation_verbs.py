@@ -423,6 +423,13 @@ class LitigationVerbs:
         code. A reassignment is checked first: it is the only kind that writes
         to the firm's matters, so it must be switched on for the seat and its
         shape read exactly, or nothing is queued."""
+        if wants_discovery12(text):
+            # A request's own words, or (2026-10-29) the text root authored for
+            # a scheduled run: the cron's pre_run never carries text, so its
+            # scheduled run stays the status list.
+            if str(settings.get(DISCOVERY12_KEY) or "").strip() != DISCOVERY12_ON:
+                raise _Refused("the discovery breakdown is not switched on for this seat; nothing was queued")
+            return "discovery12", {"report": "discovery12"}
         if trigger != "request":
             return "status", {}
         if is_reassignment(text):
@@ -432,10 +439,6 @@ class LitigationVerbs:
                 return "reassign", {"report": "reassign", "reassign": parse_reassignment(text)}
             except ReassignUnreadable as exc:
                 raise _Refused(str(exc)) from exc
-        if wants_discovery12(text):
-            if str(settings.get(DISCOVERY12_KEY) or "").strip() != DISCOVERY12_ON:
-                raise _Refused("the discovery breakdown is not switched on for this seat; nothing was queued")
-            return "discovery12", {"report": "discovery12"}
         report, books = requested_report(text)
         return report, ({"report": report, "workbooks": list(books)} if report == "deadlines" else {})
 
