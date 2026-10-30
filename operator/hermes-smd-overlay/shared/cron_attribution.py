@@ -8,9 +8,27 @@ managed jobs), so a job id recorded raw resolves to nothing days later.
 
 Two Hermes-native facts close the gap without new state:
 
-* A cron-fired session's id is ``cron_{job_id}_{YYYYMMDD}_{HHMMSS}``
-  (``/opt/hermes/cron/scheduler.py:2434``, pinned Hermes v2026.7.1), and the
-  audit hooks already receive that ``session_id``.
+* The scheduler tells the hooks which job a session belongs to, in one of two
+  forms:
+
+  - Hermes v0.22.5+ (ss-console #3581, 2026-10-28) runs each agent cron fire as
+    an OWNER EXECUTION whose session id is ``local-<sha256>``
+    (``hermes_state_keys.local_identity``): a hash nothing can read a job out
+    of. The authoritative fact is the scheduler's own binding, held in two
+    ContextVars for the life of the fire: ``gateway.session_cron.current_execution()``
+    = ``(authority, session_id, job_id, execution_id)`` and
+    ``cron.execution_identity.current_cron_execution()`` (the plugin API
+    ``ctx.current_cron_execution()``) with the job id, execution id and
+    ``started_at``. Model output cannot reach either (tool subprocesses do not
+    share the interpreter), another firing job or an inbound turn sees its own
+    context, and a delegated child reads ``None``. A session is a cron job's
+    only when BOTH bindings exist, agree on job and execution, and the owner
+    binding names THIS session id (:func:`_owner_cron_execution`). That is the
+    guarantee: a non-cron turn holds no binding, so it can never claim a cron
+    job's pre-rendered email or pre-run handoff.
+  - Older Hermes, and ``run_job`` without an owner: the id is
+    ``cron_{job_id}_{YYYYMMDD}_{HHMMSS}`` (``cron/scheduler.py``), parsed by
+    :data:`_CRON_SESSION_RE`. Kept so a seat on an older image keeps working.
 * The cron store (``$HERMES_HOME/profiles/<persona>/cron/jobs.json``, plus the
   root ``$HERMES_HOME/cron/jobs.json`` for the default profile) maps the live
   ``job_id`` to a STABLE managed name ``op-managed:<persona>:<skill>`` and a
@@ -85,12 +103,62 @@ class RoutineIdentity:
 _CACHE: dict[str, tuple[int, dict[str, RoutineIdentity]]] = {}
 
 
+def _owner_cron_execution(session_id: str) -> tuple[str, datetime | None] | None:
+    """``(job_id, started_at)`` when THIS session is a Hermes owner-execution cron fire.
+
+    Hermes v0.22.5 names a cron fire's session ``local-<sha256>``, so the id says
+    nothing; the scheduler's ContextVar bindings say everything (module
+    docstring). Both must be present and agree, and the owner binding must name
+    ``session_id`` itself, so a turn in the same context under another session id
+    does not inherit the claim. ``started_at`` is the execution ledger's start
+    instant, returned NAIVE in the scheduler's own clock (the same digits the
+    legacy id carried, so every caller's clock reasoning is unchanged), or
+    ``None`` when the row has none. ``None`` outside a cron fire or on any
+    doubt. Never raises.
+    """
+    try:
+        from cron.execution_identity import current_cron_execution
+        from gateway.session_cron import current_execution
+    except Exception:  # noqa: BLE001 — not inside Hermes (tests, tools)
+        return None
+    try:
+        identity = current_cron_execution()
+        owner = current_execution()
+        if identity is None or not isinstance(owner, tuple) or len(owner) < 4:
+            return None
+        owner_session, owner_job, owner_execution = owner[1], owner[2], owner[3]
+        job_id = getattr(identity, "job_id", None)
+        if not isinstance(job_id, str) or not job_id:
+            return None
+        if not session_id or owner_session != session_id or owner_job != job_id:
+            return None
+        if str(owner_execution) != str(getattr(identity, "execution_id", None)):
+            return None
+        started_at: datetime | None = None
+        raw = getattr(identity, "started_at", None)
+        if isinstance(raw, str) and raw:
+            try:
+                started_at = datetime.fromisoformat(raw).replace(tzinfo=None)
+            except ValueError:
+                started_at = None
+        return job_id, started_at
+    except Exception as exc:  # noqa: BLE001 — enrichment, never the obligation
+        logger.debug("cron_attribution: owner execution read failed for %r: %s", session_id, exc)
+        return None
+
+
 def parse_cron_session(session_id: str) -> str | None:
-    """Return the embedded job id for a cron session id, else ``None``."""
-    if not isinstance(session_id, str):
+    """Return the cron job id this session belongs to, else ``None``.
+
+    The legacy ``cron_<job>_<stamp>`` id first, then the v0.22.5 owner-execution
+    binding (:func:`_owner_cron_execution`)."""
+    if not isinstance(session_id, str) or not session_id:
         return None
     m = _CRON_SESSION_RE.match(session_id)
-    return m.group("job_id") if m else None
+    if m:
+        return m.group("job_id")
+    owned = _owner_cron_execution(session_id)
+    return owned[0] if owned else None
 
 
 def parse_cron_session_started_at(session_id: str) -> datetime | None:
@@ -117,7 +185,8 @@ def parse_cron_session_started_at(session_id: str) -> datetime | None:
             return None
         m = _CRON_SESSION_RE.match(session_id)
         if m is None:
-            return None
+            owned = _owner_cron_execution(session_id)
+            return owned[1] if owned else None
         return datetime.strptime(f"{m.group('date')}{m.group('time')}", "%Y%m%d%H%M%S")
     except Exception as exc:  # noqa: BLE001 — enrichment, never the obligation
         logger.debug("cron_attribution: session start parse failed for %r: %s", session_id, exc)
