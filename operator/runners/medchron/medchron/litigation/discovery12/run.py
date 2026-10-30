@@ -40,6 +40,11 @@ from . import batch, book, sections
 GROUP = "discovery12"
 ROLE = "discovery_workbook"
 PRINTOUT_ROLE = "printout_pdf"
+#: What the Batch API reports for an answer the model declined to give
+#: (llm.py batch_call: stop_reason "refusal", after its own one retry).
+REFUSAL = "refusal"
+#: The unread marker of a case declined twice: printed for a hand check, no hold.
+DECLINED_REASON = "declined: the reading service declined this file twice (refusal)"
 #: The classes a breakdown reads: discovery papers, and recent emails named
 #: for the case (``manifest.classify``).
 CLASSES = ("discovery", "email")
@@ -142,13 +147,16 @@ class Discovery12Run(LitigationRun):
         before = {"verify": "read", "audit": "verify"}[role]
         return self._mjson(mid, batch.FILE.format(p=before, k=k))
 
-    def _items(self, role: str) -> tuple[list[Item], dict[str, Any], dict[str, int]]:
-        """(the pass's requests still to answer, each case's context, its chunk count)."""
+    def _items(self, role: str, only: set[str] | None = None) -> tuple[list[Item], dict[str, Any], dict[str, int]]:
+        """(the pass's requests still to answer, each case's context, its chunk
+        count); ``only`` limits it to those cases."""
         items: list[Item] = []
         ctxs: dict[str, Any] = {}
         want: dict[str, int] = {}
         for m in self._matters():
             mid = m["id"]
+            if only is not None and mid not in only:
+                continue
             if not self._plan()[mid]["read_groups"] or passes.unread(self, mid):
                 continue
             ctx, parts = self._chunks(mid)
@@ -177,6 +185,12 @@ class Discovery12Run(LitigationRun):
         pass's tool and this is not the last round (the caller asks again)."""
         mid, k = it.meta["mid"], it.meta["k"]
         if r is None:
+            if str(err or "").strip() == REFUSAL:
+                # The doorway already asked once more (llm.py batch_call's retry
+                # round): refused twice, the case is DECLINED, printed for a hand
+                # check, and never holds every other case (2026-10-30 job).
+                dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": DECLINED_REASON, "declined": True})
+                return True
             dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"})
             return True
         name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
@@ -220,16 +234,43 @@ class Discovery12Run(LitigationRun):
         same answer), before its case is marked unread (2026-10-29 review: one
         such reply marked a whole case unread, and an unread case holds the
         report). An ERRORED item the doorway already retries once."""
-        items, ctxs, want = self._items(role)
+        self._run_pass(role)
+
+    def _run_pass(self, role: str, only: set[str] | None = None, where: str = "batches") -> None:
+        items, ctxs, want = self._items(role, only)
         notool: list[Item] = []
         if items:
             self._submit(
-                role, items, "batches", lambda it, r, e: self._record(role, ctxs, it, r, e, False) or notool.append(it)
+                role, items, where, lambda it, r, e: self._record(role, ctxs, it, r, e, False) or notool.append(it)
             )
         if notool:
             self.log(f"[{role}] {len(notool)} answers did not call the tool; asking those once more")
-            self._submit(role, notool, "batches-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True))
-        dump(self.data / f"d12-{role}-chunks.json", want)
+            self._submit(role, notool, f"{where}-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True))
+        path = self.data / f"d12-{role}-chunks.json"
+        if only is not None and path.is_file():  # a subset redo keeps every other case's count
+            want = {**self._json(path.name), **want}
+        dump(path, want)
+
+    def _redo_refused(self) -> None:
+        """Before the gates: every case whose unread marker is a REFUSAL from a
+        run before this code (no ``declined`` decision yet) is asked again,
+        ONLY its missing chunks, pass by pass, in a fresh batch dir (the old
+        dirs would resume the same refused answer by custom id). The kept chunk
+        results of every other case are not asked again. Refused again, the
+        case is declined (``_record``), never unread (2026-10-30: three refused
+        cases held a 230-case report after every other read was paid for)."""
+        mids = set()
+        for m in self._matters():
+            mark = passes.unread(self, m["id"]) or {}
+            if not mark.get("declined") and REFUSAL in str(mark.get("reason") or ""):
+                mids.add(m["id"])
+        if not mids:
+            return
+        self.log(f"[gates] {len(mids)} cases refused before; asking only their missing chunks once more")
+        for mid in mids:
+            self._mfile(mid, passes.UNREAD).unlink(missing_ok=True)
+        for role in batch.PASSES:
+            self._run_pass(role, only=mids, where="batches-refused")
 
     def _read1(self) -> None:
         self._pass("read")
@@ -253,6 +294,7 @@ class Discovery12Run(LitigationRun):
         # nothing to read, not a read that failed: it prints "not read" and does
         # not hold every other case. A case the passes skipped (unread) is absent.
         nothing = mid in planned and n == 0
+        declined = bool((passes.unread(self, mid) or {}).get("declined"))
         merged = batch.merge([g["result"] for g in got if g]) if read else {"sections": {}, "flags": []}
         return {
             "matter_id": mid,
@@ -261,6 +303,7 @@ class Discovery12Run(LitigationRun):
             "responsible": m.get("responsible") or "",
             "read": read,
             "nothing_to_read": nothing,
+            "declined": declined,
             **merged,
         }
 
@@ -274,9 +317,11 @@ class Discovery12Run(LitigationRun):
         more than ``MAX_UNCONFIRMED_SHARE`` of its dates are unconfirmed (the
         reads, not one value, are then in doubt). 2026-10-29: one value used to
         hold every case, with no way for SMD to accept it."""
+        self._redo_refused()
         ms = self._finals()
         found: dict[str, list[Any]] = {}
         holds: dict[str, list[Any]] = {}
+        declined: list[Any] = []
         dated = 0
         for m in ms:
             on = {str(f["id"]) for f in inventory.files_of(self.data, m["matter_id"])}
@@ -285,7 +330,9 @@ class Discovery12Run(LitigationRun):
             for n, path, why in bad:
                 found.setdefault(why, []).append((n, path))
             sections.unconfirm(m, {path for _n, path, _w in bad})
-            if self._plan()[m["matter_id"]]["read_groups"] and not m["read"] and not m.get("nothing_to_read"):
+            if m.get("declined"):
+                declined.append(m["number"])
+            elif self._plan()[m["matter_id"]]["read_groups"] and not m["read"] and not m.get("nothing_to_read"):
                 holds.setdefault("matter could not be read", []).append((m["number"], "audit"))
         unconfirmed = sum(len(v) for v in found.values())
         if dated and unconfirmed / dated > sections.MAX_UNCONFIRMED_SHARE:
@@ -299,6 +346,8 @@ class Discovery12Run(LitigationRun):
                 "unconfirmed": found,
                 "dates": dated,
                 "unconfirmed_count": unconfirmed,
+                "declined": declined,
+                "declined_count": len(declined),
             },
         )
         if holds:
@@ -334,6 +383,7 @@ class Discovery12Run(LitigationRun):
                     "responsible": f["responsible"],
                     "discovery12": {
                         "read": f["read"],
+                        "declined": bool(f.get("declined")),
                         "sections": f.get("sections") or {},
                         "flags": f.get("flags") or [],
                     },
@@ -396,6 +446,8 @@ class Discovery12Run(LitigationRun):
                     listing.setdefault(mdir.name, {})[p] = [f"m/{mdir.name}/{x}" for x in got]
                     counts[f"d12_{p}_chunks"] += len(got)
         dump(self.data / "d12-results.json", listing)
+        g = self._json("gates.json") if (self.data / "gates.json").is_file() else {}
+        counts["d12_declined"] = int(g.get("declined_count") or 0)  # the wake states it (litigation_lane)
         return counts
 
     def reopen(self, stages: list[str]) -> None:

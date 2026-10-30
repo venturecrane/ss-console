@@ -375,6 +375,12 @@ class LitigationLane(DraftingLane):
             f"Files: {files}.",
             f"Requested by: {env.get('requester') or ''}.",
         ]
+        if env.get("report") == "discovery12":
+            # A count, never a matter: files the reading service declined twice,
+            # printed in the breakdown for a hand check (discovery12/run.py).
+            counts = (read_verdict(self.job_dir(job_id), "") or {}).get("counts") or {}
+            declined = int(counts.get("d12_declined") or 0)
+            lines.append(f"Declined by the reading service (marked for a hand check): {declined}.")
         if state != "delivered":
             where = str(fields.get("stage") or stage or "")
             lines.append(
