@@ -8,10 +8,19 @@ before ``file``. The lane's state is read (the print-out's court values) and
 never written. The report JSON carries what the full run is projected from:
 the cents by stage and by model, each stage's wall-clock, the batch ids, each
 case's chunks and entries, the gate findings, and the files built.
+
+``--reuse-check`` (2026-10-30, ``carry.py``) names no matters and spends
+nothing: every case a saved record answers is rebuilt from it through the
+gates, the workbook and the print-out; every other case is dropped from scope
+and listed with what its read would carry. No batch can be submitted and no
+page is transcribed (a page that needs it reads as empty, so its case lands
+among those to read). The report's per-case row digest is compared with the
+filed breakdown.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -27,7 +36,9 @@ PROOF_STAGES = STAGES[: STAGES.index("file")]
 
 
 class Discovery12Proof(Discovery12Run):
-    def __init__(self, job_dir: Path, *, report_path: Path, seat_factory: Any = None, **kw: Any) -> None:
+    def __init__(
+        self, job_dir: Path, *, report_path: Path, seat_factory: Any = None, reuse_check: bool = False, **kw: Any
+    ) -> None:
         def read_only() -> Any:
             if seat_factory is not None:
                 return ReadOnlySeat(seat_factory())
@@ -36,7 +47,9 @@ class Discovery12Proof(Discovery12Run):
             return ReadOnlySeat(open_seat(self.job.slug))
 
         super().__init__(job_dir, seat_factory=read_only, **kw)
-        if not self.only:
+        self.reuse_check = reuse_check
+        self.ocr_skipped = 0
+        if not self.only and not reuse_check:
             raise LitigationFailed("unexpected: a discovery proof names its matters (--read-matters)")
         self.report_path = Path(report_path)
         # A proof runs by hand (as root): what it extracts is not written into
@@ -53,6 +66,34 @@ class Discovery12Proof(Discovery12Run):
                 raise
             self._put(f"{name}_refusal", str(exc))
             self._put(name, {"status": "done", "refused": True})
+
+    def _before_batch(self, stage: str, items: int, chars: int) -> None:
+        if self.reuse_check:
+            raise LitigationFailed(f"unexpected: the reuse check spends nothing ({stage}: {items} requests)")
+        super()._before_batch(stage, items, chars)
+
+    def _ocr(self, png: bytes) -> str:
+        if self.reuse_check:
+            self.ocr_skipped += 1
+            return ""
+        return super()._ocr(png)
+
+    def _read1(self) -> None:
+        if not self.reuse_check:
+            return super()._read1()
+        self._plan_reuse()
+        reused = self._reused()
+        keys = self._json("d12-keys.json")
+        would = []
+        for m in self._matters():
+            if m["id"] in keys and m["id"] not in reused:
+                _ctx, parts = self._chunks(m["id"])
+                would.append(
+                    {"number": m["number"], "chunks": len(parts), "chars": sum(len(t) for p in parts for _n, t in p)}
+                )
+        self._put("would_read", would)
+        self.only = [m["id"] for m in self._matters() if m["id"] in reused]
+        return None
 
     def _walk(self) -> Verdict:
         for name in PROOF_STAGES:
@@ -114,4 +155,23 @@ class Discovery12Proof(Discovery12Run):
             "cases": cases,
             "gates": self._json("gates.json") if (self.data / "gates.json").is_file() else None,
             "files_built": [p.name for p in (self._out(), self._pdf()) if p.is_file()],
+            "reuse_check": self._reuse_report() if self.reuse_check else None,
+        }
+
+    def _reuse_report(self) -> dict[str, Any]:
+        """What the reuse check proves: the reused cases, each one's printed
+        rows as a digest to compare with the filed breakdown, and what a read
+        of every other case would carry."""
+        rows = self._json("final-complete.json") if (self.data / "final-complete.json").is_file() else []
+        digest = {
+            str(f["number"]): hashlib.sha256(json.dumps(f.get("sections") or {}, sort_keys=True).encode()).hexdigest()
+            for f in rows
+        }
+        would = self._state().get("would_read") or []
+        return {
+            "reused": len(digest),
+            "row_digest": digest,
+            "would_read": would,
+            "would_read_chars": sum(w["chars"] for w in would),
+            "pages_not_transcribed": self.ocr_skipped,
         }

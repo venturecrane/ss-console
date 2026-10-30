@@ -171,7 +171,7 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
         if _report_of(jd) == "discovery12":  # the 12-section discovery breakdown (litigation/discovery12/)
             from .litigation.discovery12.run import Discovery12Run
 
-            return Discovery12Run(jd, state_dir=args.state_dir, **kw)
+            return Discovery12Run(jd, state_dir=args.state_dir, full=bool(args.full), **kw)
         return run_cls(jd, state_dir=args.state_dir, **kw)
     if _report_of(jd) == "discovery12":  # the breakdown's proof: real reads on named matters, nothing filed
         from .litigation.discovery12.proof import Discovery12Proof
@@ -179,6 +179,7 @@ def _litigation_run(args: argparse.Namespace, run_cls, lit_rehearse, lit_firm):
         return Discovery12Proof(
             jd,
             report_path=Path(args.rehearse),
+            reuse_check=bool(args.reuse_check),
             only=[x.strip() for x in (args.read_matters or "").split(",") if x.strip()],
             state_dir=args.state_dir,
             **kw,
@@ -228,6 +229,43 @@ def _cmd_litigate(args: argparse.Namespace) -> int:
     verdict_mod.write(Path(args.job_dir), payload)
     print(payload)
     return v.exit_code
+
+
+def _cmd_d12_seed(args: argparse.Namespace) -> int:
+    """Save a delivered discovery breakdown's case results (with SMD's later
+    corrections) as the records the next list reuses
+    (``litigation/discovery12/carry.py``). Keys come from the source job's own
+    texts. Prints ONE JSON object: what was saved and every case left out with
+    its reason. The seat is opened read-only."""
+    import contextlib
+    import json
+
+    from .litigation.discovery12 import carry
+    from .litigation.discovery12.run import Discovery12Run
+    from .litigation.rehearse import ReadOnlySeat
+
+    jd = Path(args.job_dir)
+    finals = json.loads(Path(args.finals).read_text(encoding="utf-8"))
+    if not isinstance(finals, list):
+        print(json.dumps({"error": "--finals is not a list of case records"}))
+        return 2
+
+    def read_only():
+        from .seat import open_seat
+
+        return ReadOnlySeat(open_seat(r.job.slug))
+
+    with contextlib.redirect_stdout(sys.stderr):
+        r = Discovery12Run(
+            jd, state_dir=args.state_dir, inputs_dir=args.inputs, seat_factory=read_only,
+            log=lambda m: print(m, file=sys.stderr),
+        )  # fmt: skip
+        r.cache.read_only = True
+        hand = {x.strip() for x in (args.hand or "").split(",") if x.strip()}
+        completes = json.loads(Path(args.completes).read_text(encoding="utf-8")) if args.completes else None
+        out = carry.seed(r, finals, args.provenance, hand, completes)
+    print(json.dumps(out))
+    return 0 if out["saved"] else 1
 
 
 def _cmd_negotiate(args: argparse.Namespace) -> int:
@@ -529,7 +567,26 @@ def main(argv: list[str] | None = None) -> int:
     lt.add_argument(
         "--offline", action="store_true", help="rehearsal: no seat; replay a copied job dir from its cached text"
     )
+    lt.add_argument("--full", action="store_true", help="discovery breakdown: read every case, saved records or not")
+    lt.add_argument(
+        "--reuse-check",
+        action="store_true",
+        help="discovery proof: rebuild every reused case, read none, spend nothing",
+    )
     lt.set_defaults(fn=_cmd_litigate)
+    sd = sub.add_parser("litigate-d12-seed", help="save a delivered discovery breakdown's corrected case results")
+    sd.add_argument("job_dir", help="the delivered discovery12 job the results came from")
+    sd.add_argument("--finals", required=True, help="the case records (final.json shape), corrections applied")
+    sd.add_argument("--provenance", required=True, help="who corrected what, saved with every record")
+    sd.add_argument("--hand", default="", help="matter numbers read by hand (each needs its own provenance)")
+    sd.add_argument(
+        "--completes",
+        default=None,
+        help="the merged rows as delivered (final-complete.json shape), after-merge fixes applied",
+    )
+    sd.add_argument("--inputs", default=None)
+    sd.add_argument("--state-dir", default=None)
+    sd.set_defaults(fn=_cmd_d12_seed)
     from .casefile.cli import add_parser as _casefile_parser
 
     _casefile_parser(sub)

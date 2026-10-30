@@ -19,8 +19,9 @@ cache, caps and filing, with its own plan, reads, gates and files.
 * **book** builds the workbook and the print-out PDF: every case's court
   dates (the papers' values from the lane's state, the calendar read now),
   its defendants, and the twelve sections, every date naming its paper.
-* **screen** and **parity** do nothing here; **report** commits nothing to the
-  lane's state.
+* **screen** and **parity** do nothing here; **report** saves each freshly
+  read case for the next list (``carry.py``): a case whose read inputs and
+  method are unchanged is printed from that record instead of read again.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from .. import courtdates, deliver, gates, inventory, manifest, passes, printout
 from ..outcome import LitigationFailed, LitigationHold, Verdict
 from ..run import STAGES, LitigationRun
 from ..tools import dump
-from . import batch, book, complete, sections
+from . import batch, book, carry, complete, sections
 
 GROUP = "discovery12"
 ROLE = "discovery_workbook"
@@ -79,8 +80,12 @@ def plan_for(files: list[dict[str, Any]], firm: Any, today: Any) -> dict[str, An
 
 
 class Discovery12Run(LitigationRun):
-    def __init__(self, job_dir: Path, *, use_batch: bool = True, only: list[str] | None = None, **kw: Any) -> None:
+    def __init__(
+        self, job_dir: Path, *, use_batch: bool = True, only: list[str] | None = None, full: bool = False, **kw: Any
+    ) -> None:
         super().__init__(job_dir, **kw)
+        #: Read every case again, saved records or not (a model or prompt change).
+        self.full = full
         #: Matter numbers this run is limited to (the proof's five); empty is all.
         self.only = [str(x) for x in only or []]
         if use_batch:
@@ -160,7 +165,7 @@ class Discovery12Run(LitigationRun):
             mid = m["id"]
             if only is not None and mid not in only:
                 continue
-            if not self._plan()[mid]["read_groups"] or passes.unread(self, mid):
+            if not self._plan()[mid]["read_groups"] or passes.unread(self, mid) or mid in self._reused():
                 continue
             ctx, parts = self._chunks(mid)
             ctxs[mid], want[mid] = ctx, len(parts)
@@ -298,7 +303,36 @@ class Discovery12Run(LitigationRun):
         for role in batch.PASSES:
             self._run_pass(role, only=mids, where="batches-refused")
 
+    # ---- the carry: a case is read once and reused until its inputs change (carry.py) -------------
+    def _method(self) -> str:
+        return carry.method({p: self.firm.model(p) for p in batch.PASSES})
+
+    def _plan_reuse(self) -> None:
+        """Each planned case's key, and the cases a saved record answers:
+        ``d12-keys.json`` (every key, for the report's save) and
+        ``d12-reuse.json`` (the reused cases, which no pass reads)."""
+        how, keys, reused = self._method(), {}, []
+        for m in self._matters():
+            mid = m["id"]
+            if not self._plan()[mid]["read_groups"] or passes.unread(self, mid):
+                continue
+            ctx, parts = self._chunks(mid)
+            keys[mid] = carry.key(ctx, parts, how)
+            if not self.full and carry.reusable(carry.load(self.state, mid, self.log), keys[mid], self.today):
+                reused.append(mid)
+        dump(self.data / "d12-keys.json", keys)
+        dump(self.data / "d12-reuse.json", reused)
+        self.log(
+            f"[d12 carry] {len(reused)} cases reused from their saved breakdown; {len(keys) - len(reused)} to read"
+        )
+
+    def _reused(self) -> set[str]:
+        p = self.data / "d12-reuse.json"
+        return set(self._json(p.name)) if p.is_file() else set()
+
     def _read1(self) -> None:
+        if not (self.data / "d12-reuse.json").is_file():
+            self._plan_reuse()
         self._pass("read")
 
     def _read2(self) -> None:
@@ -310,6 +344,10 @@ class Discovery12Run(LitigationRun):
     # ---- gates, book, file -----------------------------------------------------------------------
     def final(self, m: dict[str, Any]) -> dict[str, Any] | None:
         mid = m["id"]
+        saved = carry.load(self.state, mid, self.log) if mid in self._reused() else None
+        if saved is not None:  # printed as last delivered, under the matter's current name
+            got = {k: m.get(k) or "" for k in ("number", "title", "responsible")}
+            return {**saved["final"], **got, "matter_id": mid, "reused": True}
         p = self._plan().get(mid) or {}
         planned = self._json("d12-audit-chunks.json") if (self.data / "d12-audit-chunks.json").is_file() else {}
         n = int(planned.get(mid) or 0)
@@ -350,6 +388,8 @@ class Discovery12Run(LitigationRun):
         declined: list[Any] = []
         dated = 0
         for m in ms:
+            if m.get("reused"):  # its key proves the inputs it passed these gates on
+                continue
             on = {str(f["id"]) for f in inventory.files_of(self.data, m["matter_id"])}
             dated += len(sections.dated_values(m))
             bad = sections.findings(m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on)
@@ -433,7 +473,14 @@ class Discovery12Run(LitigationRun):
         hits = self._json("kind_hits.json") if (self.data / "kind_hits.json").is_file() else {}
         for f in self._json("final.json"):
             d12 = {"read": f["read"], "declined": bool(f.get("declined")), "sections": f.get("sections") or {}}
-            got = complete.merge(manifest.load_prior(self.state, f["matter_id"]) or {}, d12, hits.get(f["matter_id"]))
+            h = hits.get(f["matter_id"])
+            prior = manifest.load_prior(self.state, f["matter_id"]) or {}
+            saved = carry.load(self.state, f["matter_id"], self.log) if f.get("reused") else None
+            if h is None and saved:  # the hand hits it was delivered with
+                h = saved.get("kind_hits")
+            # Delivered merged rows (with any correction made after the merge)
+            # stand while the status values they were merged from are unchanged.
+            got = carry.merged(saved, prior) or complete.merge(prior, d12, h)
             out.append({**f, **{k: got[k] for k in ("sections", "status_rows", "kind_hits", "completed")}})
         dump(self.data / "final-complete.json", out)
         return out
@@ -470,7 +517,21 @@ class Discovery12Run(LitigationRun):
         dump(self.data / "filed-printout.json", rec)
 
     def _report(self) -> None:
-        return None
+        """After the files are filed and read back (a proof, a hold or a held
+        review never gets here): save each case read in THIS job, so the next
+        list reuses it until its inputs change. Declined and unread cases are
+        not saved; they are read again."""
+        keys = self._json("d12-keys.json") if (self.data / "d12-keys.json").is_file() else {}
+        hits = self._json("kind_hits.json") if (self.data / "kind_hits.json").is_file() else {}
+        merged = {c["matter_id"]: c for c in self._json("final-complete.json")}
+        for f in self._json("final.json"):
+            mid = f["matter_id"]
+            fresh = not f.get("reused") and mid in keys and not f.get("declined")
+            if fresh and (f.get("read") or f.get("nothing_to_read")):
+                prior = manifest.load_prior(self.state, mid)
+                note = f"delivered job {self.job.job_id}"
+                rec = carry.record(keys[mid], f, hits.get(mid), self.job.job_id, note, merged.get(mid), prior)
+                carry.save(self.state, mid, rec)
 
     # ---- the per-chunk results: kept, listed, reopened only on purpose ----------------------------
     def _kept(self) -> dict[str, int]:
@@ -490,6 +551,9 @@ class Discovery12Run(LitigationRun):
         dump(self.data / "d12-results.json", listing)
         g = self._json("gates.json") if (self.data / "gates.json").is_file() else {}
         counts["d12_declined"] = int(g.get("declined_count") or 0)  # the wake states it (litigation_lane)
+        keys = self._json("d12-keys.json") if (self.data / "d12-keys.json").is_file() else {}
+        counts["d12_reused"] = len(self._reused())
+        counts["d12_read"] = len(keys) - counts["d12_reused"]
         return counts
 
     def reopen(self, stages: list[str]) -> None:
@@ -503,6 +567,9 @@ class Discovery12Run(LitigationRun):
             return
         redo = {"read1": "read", "read2": "verify", "read3": "audit"}
         passes_ = [redo[s] for s in order[min(order.index(s) for s in known) :] if s in redo]
+        if "read" in passes_:  # a redo from the read decides reuse again
+            for name in ("d12-reuse.json", "d12-keys.json"):
+                (self.data / name).unlink(missing_ok=True)
         root = self.data / "m"
         for mdir in root.iterdir() if root.is_dir() else []:
             for p in passes_:

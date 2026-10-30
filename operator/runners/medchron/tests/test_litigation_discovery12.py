@@ -432,7 +432,14 @@ def test_the_per_chunk_results_are_listed_and_a_redo_clears_only_its_passes(tmp_
     r = _run(tmp_path, seat, Scripted12())
     v = r.run()
     assert v.verdict == "delivered", v.reason
-    assert v.counts == {"d12_read_chunks": 1, "d12_verify_chunks": 1, "d12_audit_chunks": 1, "d12_declined": 0}
+    assert v.counts == {
+        "d12_read_chunks": 1,
+        "d12_verify_chunks": 1,
+        "d12_audit_chunks": 1,
+        "d12_declined": 0,
+        "d12_reused": 0,
+        "d12_read": 1,
+    }
     listing = json.loads((r.data / "d12-results.json").read_text())
     assert listing[M1]["audit"] == [f"m/{M1}/d12-audit-c0.json"]
     r.reopen(["read2"])
@@ -559,5 +566,235 @@ def test_every_count_the_run_reports_is_one_the_broker_records():
         for n in ast.parse(src.read_text()).body
         if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "DISCOVERY12_COUNTS" for t in n.targets)
     )
-    reported = {f"d12_{p}_chunks" for p in batch.PASSES} | {"d12_declined"}
+    reported = {f"d12_{p}_chunks" for p in batch.PASSES} | {"d12_declined", "d12_reused", "d12_read"}
     assert reported <= set(allowed)
+
+
+# ---- the carry: a case is read once and reused until its inputs change (carry.py) --------------
+
+
+_DOCS: dict[str, Any] = {}
+
+
+@pytest.fixture(autouse=True)
+def _fresh_docs() -> Any:
+    _DOCS.clear()
+    yield
+    _DOCS.clear()
+
+
+def _docs() -> list[tuple[str, str, bytes, str]]:
+    """The test's discovery papers, built once (make_pdf's bytes vary in size)."""
+    if "m1" not in _DOCS:
+        _DOCS["m1"] = disc_docs()
+    return list(_DOCS["m1"])
+
+
+def _seat2() -> LitSeat:
+    from litigation_testkit import M2
+
+    return LitSeat({M1: _docs(), M2: _m2_docs()})
+
+
+def _run_job(tmp_path: Path, name: str, seat: LitSeat, client: Any, **kw: Any) -> Discovery12Run:
+    return Discovery12Run(make_job(tmp_path / name, report="discovery12"), **{**_kw(tmp_path, seat, client), **kw})
+
+
+def _asked(client: Scripted12) -> list[str]:
+    return [q["custom_id"] for b in client.submitted for q in b]
+
+
+def _m2_docs() -> list[tuple[str, str, bytes, str]]:
+    return [("m2" + fid[1:], n, b, d) for fid, n, b, d in _docs()]
+
+
+def test_a_second_identical_list_reads_nothing_and_prints_the_same_breakdown(tmp_path):
+    from medchron.litigation.discovery12 import carry
+
+    r1 = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    assert r1.run().verdict == "delivered"
+    assert carry.load(tmp_path / "state", M1) is not None
+    c2 = Scripted12()
+    r2 = _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), c2)
+    v = r2.run()
+    assert v.verdict == "delivered", v.reason
+    assert _asked(c2) == [] and _ledger(r2) == []
+    assert _discovery_rows(r2._out().read_bytes()) == _discovery_rows(r1._out().read_bytes())
+    assert v.counts["d12_reused"] == 1 and v.counts["d12_read"] == 0
+    assert all(f["read"] is True for f in json.loads((r2.data / "final-complete.json").read_text()))
+
+
+def test_the_second_list_reads_again_when_reuse_is_taken_away(tmp_path, monkeypatch):
+    """The instrument can fail: with reuse refused, the same second list reads."""
+    from medchron.litigation.discovery12 import carry
+
+    assert _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12()).run().verdict == "delivered"
+    monkeypatch.setattr(carry, "reusable", lambda *a, **k: None)
+    c2 = Scripted12()
+    assert _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), c2).run().verdict == "delivered"
+    assert _asked(c2)
+
+
+def test_a_new_paper_reads_only_its_case(tmp_path):
+    from litigation_testkit import M2
+
+    assert _run_job(tmp_path, "job1", _seat2(), Scripted12()).run().verdict == "delivered"
+    rfa = (
+        "f-r1",
+        "Special Interrogatories Set One.pdf",
+        make_pdf(["Special Interrogatories, Set One, served October 20, 2026 on defendant Delta."]),
+        "2026-10-20T10:00:00",
+    )
+    seat = LitSeat({M1: [*_docs(), rfa], M2: _m2_docs()})
+    c2 = Scripted12()
+    v = _run_job(tmp_path, "job2", seat, c2).run()
+    assert v.verdict == "delivered", v.reason
+    asked = _asked(c2)
+    assert asked and all(cid.startswith(M1) for cid in asked)
+    assert v.counts["d12_reused"] == 1 and v.counts["d12_read"] == 1
+
+
+def test_a_later_day_alone_reads_nothing_and_full_reads_everything(tmp_path):
+    """Today's date is not part of the key (the prompt carries it), and an
+    email that ages out without contributing a paper changes nothing."""
+    assert _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12()).run().verdict == "delivered"
+    later = TODAY + dt.timedelta(days=400)
+    c2 = Scripted12()
+    v = _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), c2, today=lambda: later).run()
+    assert v.verdict == "delivered" and _asked(c2) == []
+    c3 = Scripted12()
+    assert _run_job(tmp_path, "job3", LitSeat({M1: _docs()}), c3, full=True).run().verdict == "delivered"
+    assert _asked(c3)
+
+
+def test_the_key_moves_with_the_text_and_the_method_and_not_with_doc_numbers():
+    from medchron.litigation.discovery12 import carry
+
+    f = {"id": "f1", "name": "Form Interrogatories.pdf", "dateModified": "2026-03-05T10:00:00", "size": 10}
+    ctx = SimpleNamespace(refs={1: f})
+    renumbered = SimpleNamespace(refs={7: f})
+    how = carry.method({"read": "a", "verify": "b", "audit": "c"})
+    k = carry.key(ctx, [[(1, "text")]], how)
+    assert k == carry.key(renumbered, [[(7, "text")]], how)
+    assert k != carry.key(ctx, [[(1, "text edited")]], how)
+    assert k != carry.key(ctx, [[(1, "text")]], carry.method({"read": "a", "verify": "b", "audit": "z"}))
+
+
+def test_a_not_yet_due_answer_is_read_again_once_its_day_passes():
+    from medchron.litigation.discovery12 import carry
+
+    e = {"item": "RFAs", "due": {"date": "2026-11-05"}, "response": {"value": "not yet due"}}
+    saved = {"key": "k", "final": {"sections": {"rfas": [e]}}}
+    assert carry.reusable(saved, "k", dt.date(2026, 11, 1)) is saved
+    assert carry.reusable(saved, "k", dt.date(2026, 11, 6)) is None
+    assert carry.reusable(saved, "other", dt.date(2026, 11, 1)) is None
+
+
+def test_a_proof_and_a_held_list_save_nothing(tmp_path):
+    from medchron.litigation.discovery12 import carry
+
+    Discovery12Proof(
+        make_job(tmp_path / "job", report="discovery12"),
+        report_path=tmp_path / "p.json",
+        only=["100001"],
+        **_kw(tmp_path, LitSeat({M1: _docs()}), Scripted12()),
+    ).run()
+    assert carry.load(tmp_path / "state", M1) is None
+    wrong = Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09"))
+    assert _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), wrong).run().verdict == "held"
+    assert carry.load(tmp_path / "state", M1) is None
+
+
+def test_a_declined_case_is_not_saved_and_is_read_on_the_next_list(tmp_path):
+    from litigation_testkit import M2
+
+    from medchron.litigation.discovery12 import carry
+
+    c1 = Scripted12(refuse=lambda cid, system: cid.startswith(M2) and "last check before" in system)
+    assert _run_job(tmp_path, "job1", _seat2(), c1).run().verdict == "delivered"
+    assert carry.load(tmp_path / "state", M1) is not None and carry.load(tmp_path / "state", M2) is None
+    c2 = Scripted12()
+    assert _run_job(tmp_path, "job2", _seat2(), c2).run().verdict == "delivered"
+    asked = _asked(c2)
+    assert asked and all(cid.startswith(M2) for cid in asked)
+
+
+def test_the_seed_saves_corrected_records_and_names_every_one_it_leaves_out(tmp_path):
+    from medchron.litigation.discovery12 import carry
+
+    r1 = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    assert r1.run().verdict == "delivered"
+    carry.purge(tmp_path / "state", M1)
+    good = json.loads((r1.data / "final.json").read_text())[0]
+    good["sections"]["frogs"][0]["notes"] = "Corrected by SMD against the served set."
+    leaky = json.loads(json.dumps(good))
+    leaky["sections"]["frogs"][0]["notes"] = "see read2"
+    out = carry.seed(r1, [leaky], "test", set())
+    assert out["saved"] == [] and "internal text" in out["excluded"][0]["why"]
+    out = carry.seed(r1, [good, {"matter_id": "x"}], "test", {"100001"})
+    assert out["saved"] == [] and any("provenance" in e["why"] for e in out["excluded"])
+    out = carry.seed(r1, [{**good, "provenance": "hand read 10-30"}], "test", {"100001"})
+    assert out["saved"] == ["100001"]
+    c2 = Scripted12()
+    r2 = _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), c2)
+    assert r2.run().verdict == "delivered" and _asked(c2) == []
+    assert "Corrected by SMD" in json.dumps(json.loads((r2.data / "final-complete.json").read_text()))
+
+
+def test_the_reuse_check_rebuilds_reused_cases_and_spends_nothing(tmp_path):
+    assert _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12()).run().verdict == "delivered"
+    seat = _seat2()
+    report = tmp_path / "check.json"
+    c = Scripted12()
+    v = Discovery12Proof(
+        make_job(tmp_path / "check", report="discovery12"),
+        report_path=report,
+        reuse_check=True,
+        **_kw(tmp_path, seat, c),
+    ).run()
+    assert v.verdict == "held" and _asked(c) == [] and seat.sent == []
+    rep = json.loads(report.read_text())
+    rc = rep["reuse_check"]
+    assert rc["reused"] == 1 and "100001" in rc["row_digest"]
+    assert [w["number"] for w in rc["would_read"]] and rc["would_read_chars"] > 0
+    assert rep["usd_total"] == 0
+
+
+def test_purge_removes_a_matters_saved_record(tmp_path):
+    from medchron.litigation.discovery12 import carry
+
+    carry.save(tmp_path, M1, {"key": "k", "final": {}})
+    assert carry.purge(tmp_path, M1) is True and carry.load(tmp_path, M1) is None
+
+
+def _prior(tmp_path: Path, served: str) -> None:
+    p = tmp_path / "state" / "matters" / f"{M1}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    row = {"set": "Requests for Production, Set One", "served_on": "Delta", "date": served}
+    p.write_text(json.dumps({"discovery_propounded": [row], "discovery_served_on_client": []}))
+
+
+def _rfps(r: Discovery12Run) -> list[Any]:
+    return json.loads((r.data / "final-complete.json").read_text())[0]["sections"].get("rfps") or []
+
+
+def test_a_correction_made_after_the_merge_stands_until_the_status_values_change(tmp_path):
+    """2026-10-30: SMD removed contradicted status rows AFTER the merge. A
+    reused case prints its delivered merged rows while the status values it
+    was merged from are unchanged, and is merged again when they change."""
+    from medchron.litigation.discovery12 import carry
+
+    _prior(tmp_path, "2026-06-01")
+    r1 = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    assert r1.run().verdict == "delivered"
+    assert _rfps(r1), "the status list's set is merged in"
+    finals = json.loads((r1.data / "final.json").read_text())
+    completes = json.loads((r1.data / "final-complete.json").read_text())
+    completes[0]["sections"]["rfps"] = []  # SMD's after-merge correction
+    carry.purge(tmp_path / "state", M1)
+    assert carry.seed(r1, finals, "removed a contradicted status row", set(), completes)["saved"] == ["100001"]
+    r2 = _run_job(tmp_path, "job2", LitSeat({M1: _docs()}), Scripted12())
+    assert r2.run().verdict == "delivered" and _rfps(r2) == []
+    _prior(tmp_path, "2026-06-02")
+    r3 = _run_job(tmp_path, "job3", LitSeat({M1: _docs()}), Scripted12())
+    assert r3.run().verdict == "delivered" and _rfps(r3)
