@@ -411,6 +411,24 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # The daily post list. Christa Barrera, 2026-10-29 (Gmail message
+      # 1a189d7e1c2d2d38): "Please email me one list each day of anything the
+      # Operator could not place, or matched with low confidence, so I can
+      # answer in one reply." Authoring it (enabled, her address as recipient,
+      # AND the cron row below) is what stops the per-scan reply: each scan is
+      # recorded, and one email a day names only what needs her. A day with
+      # nothing to list sends nothing. Christa is a Named Administrator
+      # (scope.admins) and the authored recipient of every other scheduled firm
+      # email on this seat.
+      - name: post-intake-daily-list
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: 'christa@ashtonandprice.com'
       # Vendor invoice intake (letter 62: Christa asked that vendor invoices
       # emailed to the Operator be matched to the matter, staged as an
       # unfinalized expense and the PDF filed; letter 64 reported the five
@@ -966,6 +984,14 @@ personas:
       # cases with a statute date in the next three months and nothing filed.
       - skill: statute-watch
         schedule: '7 12 1 * *' # monthly, the 1st at 1207 seat-local (midday so the report ships in its finished form)
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # Christa Barrera, 2026-10-29 (Gmail 1a189d7e1c2d2d38): one list each day
+      # of the post the Operator could not place or matched with low confidence.
+      # Weekdays late in the firm's day (business_hours end 18:00), so she can
+      # answer before close; scans after it are on the next weekday's list.
+      - skill: post-intake-daily-list
+        schedule: '47 16 * * 1-5' # weekdays 1647 seat-local
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       # Christa Barrera, 2026-10-09, offers made thread: "YES, keep up to date
