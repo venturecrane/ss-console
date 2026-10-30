@@ -86,8 +86,13 @@ def court_only(trigger: str, request_text: str, discovery_rx: list[re.Pattern[st
     about. A court-only run neither reads the discovery group nor shows a
     Discovery tab; the stored discovery values stand untouched for the next
     list that asks. The weekday list (scheduled) and a request that names no
-    columns at all read everything, as before."""
-    if trigger != "request" or not _COURT_WORDS.search(request_text or ""):
+    columns at all read everything, as before: the cron's scheduled text names
+    no column. 2026-10-29: a scheduled run whose text ROOT authored (the
+    broker allows only root to) is read by the same words test, so SMD can
+    send the firm a court-only list nobody emailed for. ``trigger`` is kept
+    for the callers' shape."""
+    del trigger
+    if not _COURT_WORDS.search(request_text or ""):
         return False
     text = request_text or ""
     return not (_DISCOVERY_WORD.search(text) or any(rx.search(text) for rx in discovery_rx))
