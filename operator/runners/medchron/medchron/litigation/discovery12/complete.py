@@ -149,28 +149,6 @@ def _fill(row: dict[str, Any], party: str, cands: list[dict[str, Any]]) -> int:
     return filled
 
 
-def _dated_twin(row: dict[str, Any], party: str, direction: str, entries: list[dict[str, Any]]) -> bool:
-    """True when the breakdown already holds this set from its own paper: an
-    entry in any section, the same direction, the same served date, and a
-    shared party word (or a party missing on either side). The status list's
-    value is then never printed, as an addition or a fill (2026-10-30 second
-    review: a status value beside the breakdown's own row for the same set)."""
-    d = row.get("date")
-    if not d:
-        return False
-    mine = _words(party)
-    for e in entries:
-        was = e.get("served")
-        s: dict[str, Any] = was if isinstance(was, dict) else {}
-        if e.get("from_status") or s.get("from_status") or s.get("date") != d:
-            continue
-        if str(e.get("direction") or "") != direction:
-            continue
-        if not mine or not _words(e.get("party")) or mine & (_words(e.get("party")) | _words(e.get("item"))):
-            return True
-    return False
-
-
 def merge(prior: dict[str, Any], d12: dict[str, Any], hits: dict[str, list[str]] | None = None) -> dict[str, Any]:
     """The case's twelve sections completed from ``prior`` (the status list's
     values); returns a new dict with ``sections``, ``status_rows`` (sets with no
@@ -181,7 +159,7 @@ def merge(prior: dict[str, Any], d12: dict[str, Any], hits: dict[str, list[str]]
     secs: dict[str, list[dict[str, Any]]] = out.setdefault("sections", {}) or {}
     out["sections"] = secs
     loose: list[dict[str, Any]] = []
-    n = {"filled": 0, "added": 0, "unplaced": 0, "twin": 0}
+    n = {"filled": 0, "added": 0, "unplaced": 0}
     readable = bool(out.get("read")) and not out.get("declined")
     for field, direction, who in _DIRS:
         for row in prior.get(field) or []:
@@ -189,24 +167,22 @@ def merge(prior: dict[str, Any], d12: dict[str, Any], hits: dict[str, list[str]]
                 continue
             party = str(row.get(who) or "")
             key = kind_of(str(row.get("set") or ""))
-            if readable and _dated_twin(row, party, direction, [e for v in secs.values() for e in v]):
-                n["twin"] += 1
-                continue
+            # 2026-10-30 (laptop decision 11:00 MST): the stricter twin/add rules
+            # were not proven (the targeted check: 27 of 46 contradictions left,
+            # status-list dates printed nowhere), so this is the 09:06 merge; the
+            # rows review 2 found contradicted by a paper are removed by an
+            # explicit list (``drop_listed``), not by a rule.
             if not readable or key is None:
                 loose.append(entry(row, direction, party))
                 n["unplaced"] += 1
                 continue
             got = secs.setdefault(key, [])
-            # A set is added only when the section has nothing in that direction
-            # with a compatible set number: a differing party name is not a missing
-            # set (2026-10-30 second review: 46 status values the papers contradict
-            # printed beside the breakdown's own row for the same set).
-            if not [e for e in got if _plausible(row, "", direction, e)]:
+            cands = [e for e in got if _plausible(row, party, direction, e)]
+            if not cands:
                 got.append(entry(row, direction, party))
                 n["added"] += 1
                 continue
-            cands = [e for e in got if _plausible(row, party, direction, e)]
-            if cands and row.get("date"):
+            if row.get("date"):
                 n["filled"] += _fill(row, party, cands)
     out["status_rows"] = loose
     out["kind_hits"] = {k: list(v) for k, v in (hits or {}).items() if readable and v and not secs.get(k)}
