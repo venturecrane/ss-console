@@ -159,7 +159,11 @@ it on; until then the broker refuses it and you say it is not set up yet. Submit
 it exactly as above, with `litigation_job_submit`; the broker tells it apart by
 the email's own words ("12-section discovery", "discovery breakdown"). Its wake
 says `Kind: litigation. Report: discovery breakdown.`; word the delivered reply as
-for the status list, naming the one file exactly as the job row names it.
+for the status list, naming the one file exactly as the job row names it. When the
+wake's `Declined by the reading service (marked for a hand check): N.` line has N
+above zero, add one sentence with that count only: "N files were marked for a hand
+check in the print-out because the reading service declined them." Never name the
+files or matters; they are marked on their own pages.
 
 ## Moving cases between staff (the same request, the same tool)
 

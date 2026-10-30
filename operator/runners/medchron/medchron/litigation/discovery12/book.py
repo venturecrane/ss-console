@@ -23,6 +23,7 @@ HEADER = [
 ]  # fmt: skip
 WIDTHS = [18, 10, 30, 26, 30, 18, 24, 12, 34, 12, 34, 10, 12, 34, 22, 34, 50]
 NOT_READ = "No discovery paper was found by name in the file; not read"
+DECLINED = "Not read: the reading service declined this file; check it by hand"
 DISCOVERY = "Discovery (12 sections)"
 
 
@@ -44,6 +45,9 @@ def rows(ms: list[dict[str, Any]]) -> list[list[Any]]:
     out: list[list[Any]] = []
     for m in order(ms):
         base = [m.get("responsible") or "", m.get("number"), m.get("title") or ""]
+        if m.get("declined"):
+            out.append([*base, "", DECLINED] + [""] * (len(HEADER) - 5))
+            continue
         if not m.get("read"):
             out.append([*base, "", NOT_READ] + [""] * (len(HEADER) - 5))
             continue

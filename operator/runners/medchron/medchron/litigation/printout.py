@@ -152,6 +152,8 @@ def case_html(m: dict[str, Any], drows: list[list[Any]], disc: list[list[Any]], 
 #: The 12-section discovery breakdown on a case's pages (``discovery12/``).
 D12_HDR = ["Item", "Direction", "Party", "Served", "Due", "Response", "Extension", "Notes"]
 D12_NOT_READ = "No discovery paper was found by name in the file; not read."
+#: A case the reading service declined twice (discovery12/run.py, DECLINED_REASON).
+D12_DECLINED = "Not read: the reading service declined this file; check it by hand"
 
 
 def _dated(v: Any, extra: str = "") -> str:
@@ -193,6 +195,8 @@ def discovery12_html(d: dict[str, Any]) -> str:
     from .discovery12 import sections as d12
 
     parts = ["<h2>Discovery (12 sections)</h2>"]
+    if d.get("declined"):
+        return parts[0] + f"<p class='flag'>{_e(D12_DECLINED)}</p>"
     if not d.get("read"):
         return parts[0] + f"<p>{_e(D12_NOT_READ)}</p>"
     for key, label in d12.SECTIONS:
