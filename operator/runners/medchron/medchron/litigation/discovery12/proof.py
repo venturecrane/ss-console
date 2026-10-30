@@ -39,6 +39,9 @@ class Discovery12Proof(Discovery12Run):
         if not self.only:
             raise LitigationFailed("unexpected: a discovery proof names its matters (--read-matters)")
         self.report_path = Path(report_path)
+        # A proof runs by hand (as root): what it extracts is not written into
+        # the lane's text cache, whose files the lane's own user must own.
+        self.cache.read_only = True
 
     def _stage(self, name: str, fn: Any) -> None:
         """Gates, book and review are RECORDED, not obeyed: the proof is there
