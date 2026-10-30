@@ -840,7 +840,12 @@ personas:
       # ---- the Case File Manager: SCHEDULED (case-file-manager) ----
       # LANE ACTIVATION RECORD. Bound on request 2026-10-26; the weekday
       # schedule is the firm's yes to SMD's 10-27 proposal ("Re: Irma's
-      # files"). Quote the yes here, verbatim, before this merges.
+      # files"). Christa Barrera, 2026-10-29 (letter 415, message
+      # 1a189a60510519de): "We would like to start the Case File Manager on
+      # Irma's caseload as a pilot, with the weekday check and the monthly full
+      # read running automatically." Her five conditions were confirmed in
+      # writing the same day (letter 416); billing starts only on a date
+      # confirmed with her after she has seen it work.
       # A Named Administrator may still ask for a caseload or named matters on
       # request. On schedule, the cron row below fires hourly on weekday
       # mornings and wakes no model: each business day queues one re-check of
