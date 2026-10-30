@@ -47,7 +47,12 @@ REASSIGN_COUNTS = (
     "tasks_not_moved",
     "cases_outside_scope",
 )
-ALL_COUNTS = tuple(dict.fromkeys((*DEADLINES_COUNTS, *REASSIGN_COUNTS)))
+#: The discovery breakdown's named counts (``discovery12/run.py``): chunk
+#: results kept per pass, and cases the reading service declined. Missing
+#: here, the broker refused the run's delivered record and the job row stayed
+#: ``running`` with its files already filed (2026-10-30).
+DISCOVERY12_COUNTS = ("d12_read_chunks", "d12_verify_chunks", "d12_audit_chunks", "d12_declined")
+ALL_COUNTS = tuple(dict.fromkeys((*DEADLINES_COUNTS, *REASSIGN_COUNTS, *DISCOVERY12_COUNTS)))
 #: A reassignment's writes: at most this many ride one audit row.
 MAX_WRITES = 2000
 _WRITE_PATH = re.compile(r"^/(matters|tasks)/[0-9a-fA-F-]{32,40}$")

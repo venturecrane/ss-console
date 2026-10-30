@@ -518,3 +518,21 @@ def test_the_wake_states_the_declined_count_and_no_matter(tmp_path):
     lane = SimpleNamespace(job_dir=lambda j: jd)
     text = litigation_lane.LitigationLane._compose_wake(lane, "J1", "delivered", {"files": []})  # type: ignore[arg-type]
     assert "Declined by the reading service (marked for a hand check): 2." in text
+
+
+def test_every_count_the_run_reports_is_one_the_broker_records():
+    """The broker refuses a record carrying an unknown count, and the refusal
+    left a filed run's row ``running`` (2026-10-30). The broker's list is read
+    from its source: the two trees are separate packages on the seat."""
+    import ast
+
+    from medchron.litigation.discovery12 import batch
+
+    src = Path(__file__).resolve().parents[3] / "workspace_broker" / "litigation_report.py"
+    allowed = next(
+        ast.literal_eval(n.value)
+        for n in ast.parse(src.read_text()).body
+        if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "DISCOVERY12_COUNTS" for t in n.targets)
+    )
+    reported = {f"d12_{p}_chunks" for p in batch.PASSES} | {"d12_declined"}
+    assert reported <= set(allowed)
