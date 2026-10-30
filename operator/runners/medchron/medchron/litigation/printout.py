@@ -25,7 +25,7 @@ from typing import Any
 from . import book, percase, vocab
 
 SUFFIX = " court dates"
-PAGE_W, PAGE_H = 792.0, 612.0  # landscape Letter, points
+PAGE_W, PAGE_H = 612.0, 792.0  # portrait Letter, points (Chris prints portrait, 2026-10-30)
 MARGIN = 36.0
 FOOT = 20.0
 CSS = """
