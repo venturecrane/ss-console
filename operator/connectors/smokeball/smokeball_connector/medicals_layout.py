@@ -17,6 +17,27 @@ _PROV_KEY = re.compile(r"^Providers\[(\d+)\]/(.+)$")
 _MAX_NAME = 120
 _MAX_ACCOUNT = 60
 _INVOICE_KEY = re.compile(r"^Invoices\[(\d+)\]/(.+)$")
+#: A provider's address as a document prints it: the most a contact takes here.
+MAX_ADDRESS = 200
+#: "100 Main St, Springfield, CA 90000": the one address shape split into fields.
+#: Anything else is written to the first line verbatim, never re-arranged.
+_ADDRESS = re.compile(r"^(?P<line1>[^,]+),\s*(?P<city>[^,]+),\s*(?P<state>[A-Za-z]{2})\s+(?P<zip>\d{5}(?:-\d{4})?)$")
+
+
+def address_body(address: str) -> dict[str, str]:
+    """A printed address as a company contact's ``businessAddress``: split
+    into its fields when it has the one ``line1, city, ST 12345`` shape, and
+    otherwise kept whole on the first line, never re-arranged or completed."""
+    address = " ".join(address.split())
+    match = _ADDRESS.match(address)
+    if not match:
+        return {"addressLine1": address}
+    return {
+        "addressLine1": match["line1"].strip(),
+        "city": match["city"].strip(),
+        "state": match["state"].upper(),
+        "zipCode": match["zip"],
+    }
 
 
 def _items(resp: Any) -> list[Any]:

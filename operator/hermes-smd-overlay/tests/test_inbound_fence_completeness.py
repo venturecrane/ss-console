@@ -326,6 +326,11 @@ SMOKEBALL_FIRM_RECORD_READS: frozenset[str] = frozenset(
         # field values staff entered, not document text from outside the firm.
         "mcp_smokeball_get_matter_layouts",
         "mcp_smokeball_list_matter_types",
+        # The seat's own post journal (ss-console post_journal.py): the numbered
+        # lines of a daily post list the Operator sent, written by its own
+        # intake from the resolves it made. Page ranges and senders as
+        # recorded, never document text.
+        "mcp_smokeball_get_post_list",
         "mcp_smokeball_get_stage_sets",
         "mcp_smokeball_get_stage_to_matter_mappings",
         "mcp_smokeball_get_contacts",

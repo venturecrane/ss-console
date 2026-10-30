@@ -727,6 +727,20 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # The daily post list (2026-10-29), bound here first to prove the path
+      # before any client seat: combined post intake records each bundle and
+      # does NOT reply to it; this skill's pre-run sends one list of only what
+      # needs a person to the one recipient below. Authoring it (enabled, the
+      # recipient, AND the cron row) is what turns the per-bundle reply off.
+      - name: post-intake-daily-list
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: 'ss-probe-admin@agentmail.to'
       # File work requests, bound for rehearsal (2026-10-05): the firm forms
       # resolve from this seat's library (templates below) and the signer is
       # left unauthored here, so a rehearsal letter shows the signer markers.
@@ -814,6 +828,14 @@ personas:
       # firm routine: nothing reaches the firm.
       - skill: operator-help
         schedule: '17 14 * * *' # daily 1417 seat-local (off :13, the hourly auth check); the pre_run adds the note on Mondays
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # The daily post list, HOURLY here on purpose (rehearsal value): each
+      # list covers only what was recorded since the last one and an empty run
+      # sends nothing, so a proof sees exactly one list per rehearsed bundle
+      # within the hour. A client seat authors one daily time.
+      - skill: post-intake-daily-list
+        schedule: '41 * * * *'
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       - skill: date-prep-brief
@@ -1374,3 +1396,11 @@ memory:
   d1_namespace: pilot-smokeball
   r2_vault_path: 'vaults/pilot-smokeball/'
   vectorize_index: 'hermes-pilot-smokeball-vault'
+
+# smokeball_layouts.settlement_negotiations_design: the staging tenant's
+# Negotiation Details design, read 2026-10-29 from every PI matter here (each
+# carries one Plaintiff item of design f6719448-..._<suffix>, empty, so the
+# connector cannot find it by its values). The same guid the client tenant
+# carries; the daily-post rehearsal enters an offer on it.
+smokeball_layouts:
+  settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca

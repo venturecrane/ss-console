@@ -392,7 +392,17 @@ skill_bindings:
   combined-post-intake:
     internal:
       - { artifact: letter_file, seam: smokeball_file, class: record }
-    outbound: derived # one reply to the rostered sender, one line per letter
+      - { artifact: medicals_row, seam: smokeball_layout, class: record }
+      - { artifact: negotiation_rows, seam: smokeball_layout, class: record }
+      - { artifact: post_journal, seam: local_file, class: record }
+    outbound: derived # one reply to the rostered sender, one line per letter; none where the firm authored the daily post list
+  # The daily post list: one email a day to the firm's authored recipient,
+  # rendered by the pre-run from the post journal combined-post-intake writes.
+  post-intake-daily-list:
+    internal:
+      - { artifact: post_list, seam: email_send, class: staff }
+      - { artifact: post_list_record, seam: local_file, class: record }
+    outbound: derived # the list to the authored recipient; a firm address, so the send resolves internal
   service-confirmation-watcher:
     internal:
       - { artifact: capture_surface, seam: session_output, class: staff }

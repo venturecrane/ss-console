@@ -337,6 +337,10 @@ def test_the_empty_register_carve_has_three_states(trust_plugin) -> None:
 #: records. Kept here rather than derived so the list is reviewable as a list.
 _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
     {
+        # The post journal's sent list (ss-console post_journal.py, 2026-10-29):
+        # the Operator's own record of a list it sent. A reply to it re-resolves
+        # on the number the sender gave, so its matter numbers certify nothing.
+        "mcp_smokeball_get_post_list",
         # Hermes-core filesystem / workspace / self-inspection.
         "read_file",
         "search_files",

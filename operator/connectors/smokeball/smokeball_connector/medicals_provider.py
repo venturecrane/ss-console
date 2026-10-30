@@ -28,7 +28,6 @@ read-back as the index that APPEARED, and its description is read back.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .matter_resolution import contacts_by_name
@@ -44,42 +43,16 @@ from .medicals_layout import (
     resembling_rows,
 )
 from .medicals_tools import LINK_WAITS, VALUE_WAITS, _poll, _refused, _select_tab
+from .medicals_tools import create_company as _create_company
 
 _MAX_NAME = 120
 _MAX_TEXT = 200
-#: "100 Main St, Springfield, CA 90000": the one address shape split into fields.
-#: Anything else is written to the first line verbatim, never re-arranged.
-_ADDRESS = re.compile(r"^(?P<line1>[^,]+),\s*(?P<city>[^,]+),\s*(?P<state>[A-Za-z]{2})\s+(?P<zip>\d{5}(?:-\d{4})?)$")
 
 
 def _client() -> Any:
     from . import server
 
     return server._get_client()
-
-
-def _address_body(address: str) -> dict[str, str]:
-    match = _ADDRESS.match(address)
-    if not match:
-        return {"addressLine1": address}
-    return {
-        "addressLine1": match["line1"].strip(),
-        "city": match["city"].strip(),
-        "state": match["state"].upper(),
-        "zipCode": match["zip"],
-    }
-
-
-def _create_company(client: Any, name: str, address: str) -> str | None:
-    company: dict[str, Any] = {"name": name}
-    if address:
-        company["businessAddress"] = _address_body(address)
-    try:
-        made = client.request("POST", "/contacts", json={"company": company})
-    except Exception:  # noqa: BLE001 - the vendor write raises a wide family; a failed create links nothing
-        return None
-    contact_id = made.get("id") if isinstance(made, dict) else None
-    return contact_id if isinstance(contact_id, str) and contact_id else None
 
 
 def _problem(matter_id: str, provider_name: str, address: str | None, note: str | None) -> str | None:

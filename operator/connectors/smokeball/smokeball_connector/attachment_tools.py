@@ -30,6 +30,7 @@ from .sr1_form import register as _register_sr1_tools
 from .sr19_form import register as _register_sr19_tools
 from .funding_case_eval import register as _register_funding_case_eval_tools
 from .layout_tools import register as _register_layout_tools
+from .post_journal import register as _register_post_journal_tools
 
 
 def register(server: Any) -> None:
@@ -63,8 +64,10 @@ def register(server: Any) -> None:
     _register_sr19_tools(server)
     # The funding case evaluation prefill (funding_case_eval.py), after the SR19.
     _register_funding_case_eval_tools(server)
-    # The layout read and the Negotiation Details write (layout_tools.py), last.
+    # The layout read and the Negotiation Details write (layout_tools.py).
     _register_layout_tools(server)
+    # The post journal and its daily list (post_journal.py), last.
+    _register_post_journal_tools(server)
 
 
 __all__ = ["register"]

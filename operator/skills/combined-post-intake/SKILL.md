@@ -6,9 +6,12 @@ description: >-
   holding several letters for different matters, it reads the bundle page by
   page, works out where each letter starts and ends, asks the connector which
   matter each one belongs to, files the letters it can place, puts a medical
-  bill's figures on that matter's Medicals tab, stages a vendor's bill as an
-  unfinalized expense, and replies once naming a candidate matter for every
-  letter it could not place so the sender can say yes. A letter is never
+  bill's figures on that matter's Medicals tab (a new provider with its
+  printed address), a settlement offer's figure on its Negotiation Details,
+  stages a vendor's bill as an unfinalized expense, records the bundle, and
+  either replies once naming a candidate matter for every letter it could not
+  place, or, where the firm authored a daily post list, leaves those lines to
+  that one email a day. A letter is never
   filed on a matter the connector did not resolve or the sender did not name,
   the whole bundle is never filed as one document, no figure is written that
   the page does not print, nothing is ever finalized, and nothing is ever
@@ -32,12 +35,12 @@ metadata:
       example: "Please file today's post (scan attached)."
       admin_only: false
     addon: pi
-    weight: medium # per bundle: one page read (paper pages transcribed at about ten seconds a page, four at a time), one resolve per letter, one write per placed letter, one more per bill (a Medicals row or an expense)
-    action_class: read + internal_write + one reply to the sender # files letters, Medicals rows and unfinalized expenses into the firm's own record; replies only to the rostered sender
+    weight: medium # per bundle: one page read (paper pages transcribed at about ten seconds a page, four at a time), one resolve per letter, one write per placed letter, one more per bill or offer (a Medicals row, an expense, a Negotiation Details row), one journal record
+    action_class: read + internal_write + one reply to the sender # files letters, Medicals rows, offers and unfinalized expenses into the firm's own record; replies only to the rostered sender, and not at all where the firm authored the daily post list
     content_ceiling: surface_only # reports what the letters state and where each was filed; a bill's figures are copied as printed, never totalled or characterized
     connectors:
       - email # the Operator's inbox: mail_list_attachments (the event carries none), mail_spool_attachment (bytes to the seat, a token back), and the reply draft
-      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the letter write, which refuses without a unique resolution), add_medicals_row (one Medicals row from a bill this run filed), stage_vendor_invoice with a page range (a vendor's bill, filed and staged in one write), get_expenses and get_matter_layouts (the confirming reads every reply figure comes from)
+      - smokeball # read_attachment_pages (the bundle, page-marked), resolve_invoice_matter (the matter, as a verdict rather than a judgement), file_attachment_pages_to_matter (the letter write, which refuses without a unique resolution), add_medicals_row (one Medicals row from a bill this run filed; a new provider contact carries the bill's printed address), add_negotiation_rows (a settlement offer's figure and date on the filed letter's matter, empty fields only), stage_vendor_invoice with a page range (a vendor's bill, filed and staged in one write), get_expenses and get_matter_layouts (the confirming reads every reply figure comes from), record_post_batch (the bundle's record, which the daily post list reads) and get_post_list (a sent list's numbered lines, when someone replies to it)
 ---
 
 # Combined Post Intake
@@ -52,11 +55,14 @@ It files a letter as its own document, on its own matter, or it does not file
 it. It never files the bundle whole, and a letter it cannot place comes back
 named, with a candidate matter, for the sender to confirm.
 
-Two kinds of letter are also keyed, because the firm asked for the keying
-(2026-10-01) and keying is what a person would do next: a medical bill goes
-on the matter's Medicals tab as one row, and a vendor's bill goes on the
-matter's expenses as one unfinalized entry. Both copy what the bill prints,
-both say where the figure came from, and neither finalizes anything.
+Three kinds of letter are also keyed, because the firm asked for the keying
+(2026-10-01, and the offers and provider locations 2026-10-29) and keying is
+what a person would do next: a medical bill goes on the matter's Medicals tab
+as one row (a provider new to the firm's contacts is added with the address
+the bill prints), a settlement offer goes on the matter's Negotiation Details
+as one row, and a vendor's bill goes on the matter's expenses as one
+unfinalized entry. Each copies what the page prints, says where the figure
+came from, and finalizes nothing.
 
 Filing one client's letter onto another client's matter is a confidentiality
 event, and this turn cannot undo it: deleting a filed document is a separate,
@@ -71,7 +77,8 @@ gated act. Every rule below falls out of that.
   A `unique` verdict files. Anything else asks.
 - **Never sends anything outside the firm.** No reply to a carrier, a court, a
   records company, or anyone whose letter is in the bundle. The only message is
-  one reply to the rostered sender.
+  one reply to the rostered sender, or none at all when the firm authored the
+  daily post list (step 5): then the seat's one email a day is the message.
 - **Never summarizes a letter.** The reply says who a letter is from and where
   it was filed. It does not say what the letter says, what it means for the
   case, or what anyone should do about it.
@@ -127,6 +134,15 @@ sending the scan is the instruction.
   insurer's letter about bills, a conditional-payment letter, or a settlement
   ledger is NOT a medical bill: it files as a letter and nothing goes on the
   tab.
+- **A settlement offer inside the bundle IS filed, and its figure goes on
+  Negotiation Details.** A carrier's letter that makes or answers a settlement
+  offer with an amount (an offer letter, a response to the firm's demand
+  stating what the carrier offers) is filed on its resolved matter like any
+  letter, and then `add_negotiation_rows` puts ONE offer row on that matter's
+  Negotiation Details from it (step 4d): the amount and the date as the letter
+  prints them. A letter about the claim that states no offer amount (a
+  rejection, a request for records, an acknowledgement) is NOT an offer: it
+  files as a letter and nothing goes on the tab.
 - **A scan holding one letter is a bundle of one.** The router sends a bare PDF
   here without counting its letters; the partition finds one, and it files the
   same way.
@@ -304,7 +320,7 @@ matter to confirm: the read would manufacture a failure that did not happen.
 ### 4a. A medical bill: one row on the Medicals tab
 
 After a medical bill's pages are `filed` (step 4), and only then, call
-`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index, patient_name)`:
+`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index, patient_name, provider_address)`:
 
 - `matter_id` and `source_file_id` are the filing's own `matter_id` and
   `fileId`, unchanged. The tool refuses a file this run did not file on that
@@ -324,6 +340,14 @@ After a medical bill's pages are `filed` (step 4), and only then, call
   still refuses (the patient matched no client, or several): then the letter
   is held with the tabs it listed, and the sender's reply naming the claimant
   is what fills it in.
+- `provider_address` is the provider's own address exactly as the bill
+  prints it, on one line with its commas ("100 Main St, Springfield, CA
+  90000"): the facility's location, not a "remit to" or payment box when the
+  bill prints both. Leave it empty when the bill prints none; never compose
+  or complete one. It is written only onto a provider contact the call
+  creates, because the Medicals tab has no location field of its own: the
+  location a person sees is the provider's contact. A provider already in the
+  firm's contacts is never changed.
 - A second bill from a provider already on the tab is added as its own
   invoice line on that provider's row (`invoice_added`); the same bill keyed
   before (same amount, same first date of service) is `already_present`.
@@ -349,8 +373,10 @@ names>); which is it?" Never pick a candidate yourself.
 
 When a `written` result carries `contact_created: true`, the provider was in
 none of the firm's contacts and was added as a company named as the bill
-prints it; the line adds "added <provider> to your contacts". A provider
-already in the contacts is never added again.
+prints it, with `contact_address` when the bill printed one; the line adds
+"added <provider> to your contacts" (and "with the address on the bill" when
+`contact_address` is set). A provider already in the contacts is never added
+again.
 | `link_not_visible` | the provider was linked but no row appeared in time; nothing further written | "the Medicals row did not appear; check the tab" |
 | `refused` | nothing written; `reason` says why | the reason, in plain words |
 
@@ -401,11 +427,95 @@ reach the sender at all.
 - For every matter you added a Medicals line to, call
   `get_matter_layouts(matter_id, section="Medicals")` and find the provider's
   row. The figure is that line's `InitialInvoiceAmount`, written as dollars.
+- For every matter you added an offer to (step 4d, which runs before this
+  re-read), call `get_matter_layouts(matter_id, section="Negotiation
+Details")` and find the row. The figure is its offer amount.
 
 If the entry or the row is not in the read, keep the line, state no figure on
 it, and say the figure could not be read back.
 
-### 5. Reply once to the sender
+This step reads for the REPLY. When the firm authored the daily post list
+(step 5) there is no reply to this bundle and no figure to quote, so the
+re-read is not needed; what the list carries comes from the record.
+
+### 4d. A settlement offer: one row on Negotiation Details
+
+Do this with the other keying, before step 4c. After a settlement offer's
+pages are `filed` (step 4), and only then, call
+`add_negotiation_rows(matter_id, rows, plaintiff_index)` with the filing's own
+`matter_id` and ONE entry in `rows`:
+
+- `offer_amount` is the offer as the letter prints it, with only the dollar
+  sign and the thousands commas taken out ("$25,000.00" is "25000.00"): never
+  a figure you added up, rounded, converted, or read from another letter. A
+  letter that states a range, a "policy limits" offer with no figure, or no
+  amount at all has no row.
+- `offer_date` is the date the letter gives for the offer, else the letter's
+  own date, as YYYY-MM-DD. A letter with neither has no row.
+- `note` is `From <file name>, pages <first>-<last>, a letter from <sender as
+printed>`, plus `, read from a scan, check the figure` when the filing said
+  `fromScan`. Nothing else: never what the letter argues or asks.
+- `plaintiff_index` is left out. When the matter has a tab for each plaintiff
+  the tool refuses and lists them; the offer is then not written, and its line
+  asks which plaintiff (never pick one, even when the letter names one).
+
+Read the result: `written` or `nothing_to_write` (every entry
+`already_present`) is placed and keyed. An entry `possible_duplicate` (the
+same amount on another date is already on that row) is placed with the issue
+`possible_duplicate`, the existing row's figure and date as its detail; a
+`readback_mismatch` is `figure_not_saved`; a `refused` is `offer_not_written`
+with its reason in plain words. A letter that is an offer but has no amount or
+no date files as a letter and records `offer_not_written` ("the letter states
+no amount"). On a firm whose negotiation watch also reads offer documents, the
+watch finds this row already present and does not enter it twice.
+
+### 5. Record the bundle (HARD STEP, never skip), then reply or stay silent
+
+When every letter is filed, held or keyed, call `record_post_batch(message_id,
+file_name, sha256, page_count, letters, received_at)` once for the bundle:
+`message_id` the email's id from the event, `file_name` and `sha256` as the
+read returned them, `received_at` when the email arrived, and `letters` one
+entry per letter in your partition, covering every page once:
+`first_page`, `last_page`, `sender` (as the letter prints it), `kind`
+(`letter`, `court_paper`, `medical_bill`, `vendor_bill`, `settlement_offer`),
+`placed_on` (the matter number its own resolve returned, when it filed),
+`candidates` (only for `one_candidate` and `ambiguous`: the matter numbers the
+resolve named), `issue` and, when the issue needs a reason, `detail` (one short
+plain line, never what the letter says).
+
+`issue` is empty when the letter filed and every keying step after it landed.
+Otherwise exactly one of:
+
+| issue                | when                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `no_match`           | resolve `none`, no candidates                                                                                          |
+| `one_candidate`      | resolve `none` with one candidate                                                                                      |
+| `ambiguous`          | resolve `ambiguous`                                                                                                    |
+| `search_failed`      | resolve `search_failed`                                                                                                |
+| `filing_refused`     | the filing returned `refused` (the reason is the detail)                                                               |
+| `tab_not_written`    | a medical bill filed but no Medicals row: no total or no dates printed, `needs_contact`, `link_not_visible`, `refused` |
+| `figure_not_saved`   | any `readback_mismatch`, or a stage whose `stage_status` is `staged_unverified` or `staged_file_failed`                |
+| `possible_duplicate` | an offer entry or a vendor stage answered `possible_duplicate` or `duplicate`                                          |
+| `offer_not_written`  | a settlement offer filed but not on Negotiation Details (no amount, no date, several plaintiffs, `refused`)            |
+| `expense_not_staged` | a vendor's bill missing a fact, filed as a letter, or a stage `refused`                                                |
+
+When nothing in the bundle was filed (an unreadable read, a partition you
+could not make, or a second PDF you did not process), call it with `letters`
+empty and `bundle_issue` `unreadable`, `partition_failed` or `not_processed`,
+the reason as `bundle_detail`, and `page_count` when known.
+
+A `refused` record says why (a page left out, pages recorded as filed that
+were not): correct the entries to match what happened, and call again. Never
+change what happened to fit the record.
+
+Then read `daily_list` on the result:
+
+- **`true`**: the firm authored the daily post list. Do NOT reply to this
+  bundle. Everything that needs the sender is on that one email a day. End the
+  turn with `[SILENT]` and nothing else.
+- **`false`**: reply once, as below.
+
+### 5a. Reply once to the sender (when there is no daily list)
 
 Reply by creating a draft (`create_draft`) addressed ONLY to the sender, in the
 same thread. One reply per message, one line per letter, no preamble. A court
@@ -438,9 +548,14 @@ words of the status table and the count says `1 medical bill filed, not on
 the Medicals tab`. A court paper or a bill that did NOT resolve is held like
 any letter, on its ordinary held line, with the same flag words after it.
 
-The reply is the firm's only record of what happened to the paper, so a letter
-that was not filed must appear in it. A held letter with no line is a letter
-nobody knows about.
+A settlement offer that keyed reads `Filed: pages 1-2, a settlement offer from
+<carrier>, on matter <matter-number>; on Negotiation Details, offer of
+<amount> dated <date>.` and counts as `1 settlement offer filed and on
+Negotiation Details`.
+
+The reply (or, with a daily list, the record) is the firm's only record of
+what happened to the paper, so a letter that was not filed must appear in it.
+A held letter with no line is a letter nobody knows about.
 
 See `references/output-format.md` for the worked line shapes.
 
@@ -449,14 +564,23 @@ See `references/output-format.md` for the worked line shapes.
 Her reply naming a matter number for a held letter is a **new** rostered
 request, and it is the firm's act of deciding. Then, and only then:
 
-1. Re-list and re-spool the attachment from the ORIGINAL message in the thread.
-   A spool token expires after a few hours, so do not reuse the old one. The
-   `sha256` must be the same; if it is not, read the bundle again.
-2. Call `resolve_invoice_matter` again with the client name from that letter
+1. Find the letter. In the bundle's own thread it is the ORIGINAL message
+   there. In reply to a daily post list (its subject reads `Post list
+<reference>: ...`), call `get_post_list(<reference>)`: item N gives the
+   bundle's `message_id`, `file_name`, `sha256` and the letter's pages. An
+   item number the list does not hold is asked about, never guessed.
+2. Re-list and re-spool the attachment from that message. A spool token
+   expires after a few hours, so do not reuse the old one. The `sha256` must
+   be the same; if it is not, read the bundle again.
+3. Call `resolve_invoice_matter` again with the client name from that letter
    **and the matter number the sender gave in her reply**. Two facts, both
    checked against Smokeball, so a `unique` verdict mints a token.
-3. File that letter's page range as in step 4, and reply confirming which pages
-   went where.
+4. File that letter's page range as in step 4, key it as in steps 4a, 4b or
+   4d when it is a bill or an offer, and reply once to her reply confirming
+   which pages went where (this is a reply to HER message, so it goes even
+   when the firm has a daily list; do not record the bundle again). An
+   item that only needed a check (a duplicate, a figure) is answered by what
+   she said, and nothing already entered is changed.
 
 **The matter number must come from the sender's own reply.** Never feed back a
 number the Operator found in step 3 to manufacture a second fact: that is one
@@ -489,6 +613,14 @@ reply does not name a matter number, do not file; ask again for the number.
 - Never call `add_medicals_row` with a file id other than the one the filing
   returned for that bill on that matter, and never for a letter that is not a
   medical bill.
+- Never enter an offer the letter does not state, never one on a matter the
+  letter did not file on, never pick a plaintiff, and never change a row
+  already on Negotiation Details (`add_negotiation_rows` fills only empty
+  fields).
+- Never end a bundle's turn without `record_post_batch`, and never record a
+  letter as filed that `file_attachment_pages_to_matter` or
+  `stage_vendor_invoice` did not file. Where the firm has a daily post list,
+  never reply to the bundle as well.
 - Never summarize a letter's contents, state what it means for a case, or say
   what anyone should do about it.
 - Never reply to anyone but the rostered sender, and never to a party named in a
