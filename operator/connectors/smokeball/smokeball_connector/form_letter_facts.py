@@ -28,7 +28,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
-from .medicals_layout import _items, layout_values
+from .layout_shape import _items, layout_values
 
 CONFIG_BLOCK = "form_letters"
 ACCIDENT_DATE_KEY = "Matter/CaseDetails/AccidentDetails/AccidentDate"

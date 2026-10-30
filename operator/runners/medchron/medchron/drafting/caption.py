@@ -261,7 +261,7 @@ def case_item(client: Any, matter_id: str) -> tuple[str, dict[str, Any]] | None:
     """(the layout item carrying the case-number key, all its values), even
     when the number is empty: the merged layout drops empty values, so an
     empty case number would otherwise read as "no such field"."""
-    from smokeball_connector.medicals_layout import _items, layout_values
+    from smokeball_connector.layout_shape import _items, layout_values
 
     for item in _items(client.get(f"/matters/{matter_id}/layouts")):
         item_id = (item.get("id") or item.get("itemId")) if isinstance(item, dict) else None

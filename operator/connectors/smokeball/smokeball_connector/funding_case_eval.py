@@ -43,7 +43,8 @@ from . import readback
 from .form_letters import _file_proved
 from .letterhead import load_firm_identity
 from .library import ResolvedTemplate, load_library_config, resolve_template, same_named_ids
-from .medicals_layout import layout_values, provider_rows
+from .layout_shape import layout_values
+from .medicals_layout import provider_rows
 from .medicals_tools import _pi_items
 from .sr1_form import _address_parts, _birth_date, fill_acroform
 

@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Callable
 
+from .layout_shape import _items, layout_values
 from .letter_pages import FILED_DOCS
 from .matter_resolution import contacts_by_name
 from .medicals_layout import (
@@ -73,7 +74,6 @@ from .medicals_layout import (
     _clean,
     address_body,
     _contact_label,
-    _items,
     _problem,
     _row_values,
     client_positions,
@@ -83,7 +83,6 @@ from .medicals_layout import (
     indices_resembling,
     invoice_line_values,
     invoice_lines,
-    layout_values,
     normalize_name,
     parse_charge,
     prefer_exact,

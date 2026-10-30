@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .layout_shape import layout_values
 from .matter_resolution import contacts_by_name
 from .medicals_layout import (
     _clean,
@@ -37,7 +38,6 @@ from .medicals_layout import (
     compare,
     indices_named,
     indices_resembling,
-    layout_values,
     normalize_name,
     provider_rows,
     resembling_rows,
