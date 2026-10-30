@@ -96,7 +96,8 @@ def _source(v: dict[str, Any]) -> dict[str, Any]:
 
 def entry(row: dict[str, Any], direction: str, party: str) -> dict[str, Any]:
     """A status-list set in the breakdown's entry shape."""
-    rs = row.get("responses_served") if isinstance(row.get("responses_served"), dict) else {}
+    got = row.get("responses_served")
+    rs: dict[str, Any] = got if isinstance(got, dict) else {}
     served = {"date": row.get("date"), "source": _source(row), "from_status": True} if row.get("date") else {}
     response: dict[str, Any] = {}
     if rs.get("value") or rs.get("date"):
@@ -132,7 +133,8 @@ def _fill(row: dict[str, Any], party: str, cands: list[dict[str, Any]]) -> int:
         return 0
     filled = 0
     for e in top:
-        served = e.get("served") if isinstance(e.get("served"), dict) else {}
+        was = e.get("served")
+        served: dict[str, Any] = was if isinstance(was, dict) else {}
         if served.get("date") or served.get("unconfirmed"):
             continue
         e["served"] = {"date": row["date"], "source": _source(row), "from_status": True}
