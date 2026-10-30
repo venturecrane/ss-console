@@ -155,8 +155,9 @@ def test_the_override_file_moves_only_near_zero_risk_packages() -> None:
 # pip-audit 2.10.1 on v0.22.5's export so marked: 117 audited on 3.14, 7 on
 # 3.13, exit 0).
 
-MARKED = "brotlicffi==1.2.0.2 ; python_version >= '3.14'\npyasn1==0.6.4 ; python_version >= '3.14'\ntornado==6.5.10 ; python_version >= '3.14'\n" + "".join(
-    f"pkg-{i}==1.0.{i} ; python_version >= '3.14'\n" for i in range(gate.HERMES_MIN_AUDITED + 20)
+MARKED = (
+    "brotlicffi==1.2.0.2 ; python_version >= '3.14'\npyasn1==0.6.4 ; python_version >= '3.14'\ntornado==6.5.10 ; python_version >= '3.14'\n"
+    + "".join(f"pkg-{i}==1.0.{i} ; python_version >= '3.14'\n" for i in range(gate.HERMES_MIN_AUDITED + 20))
 )
 PY313 = {"python_version": "3.13", "python_full_version": "3.13.5"}
 PY314 = {"python_version": "3.14", "python_full_version": "3.14.10"}
