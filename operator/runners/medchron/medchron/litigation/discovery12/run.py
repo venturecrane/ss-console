@@ -172,7 +172,7 @@ class Discovery12Run(LitigationRun):
                 model=self.firm.model(role),
                 max_tokens=batch.MAX_TOKENS,
                 batch_dir=self.data / "batches",
-                system=sections.system_for(role, self.today),
+                system=sections.system_for(role, self.today) + batch.only_by_tool(role),
                 **batch.shape(role),
             )
             if summary.timed_out:

@@ -70,6 +70,10 @@ class Scripted12:
         )  # fmt: skip
 
     def _msg(self, **params: Any) -> Any:
+        # The real API refuses a forced tool on this model (2026-10-29 proof:
+        # every batched read failed with this message); so does the fake.
+        if (params.get("tool_choice") or {}).get("type") in ("tool", "any"):
+            raise ValueError("tool_choice: type 'tool' and 'any' are not supported for this model")
         self.calls.append(params)
         system = json.dumps(params.get("system"))
         if "YOUR PASS: determine all twelve" in system:
@@ -305,3 +309,16 @@ def test_the_envelope_and_the_proof_key():
     with pytest.raises(job_mod.LitigationJobError):
         job_mod.parse({**env, "workbooks": ["deadlines"]}, Path("/x"))
     assert lane_proof.lane_key("litigation", env) == "litigation-status.discovery12"
+
+
+def test_no_pass_forces_its_tool_and_each_asks_for_it_by_name():
+    """2026-10-29: a forced tool_choice was refused on every batched read."""
+    for role in ("read", "verify", "audit"):
+        s = batch.shape(role)
+        assert s["tool_choice"] == {"type": "auto"}
+        assert s["tools"][0]["name"] in batch.only_by_tool(role)
+
+
+def test_the_fake_refuses_a_forced_tool_as_the_api_does():
+    with pytest.raises(ValueError, match="not supported for this model"):
+        Scripted12()._msg(tool_choice={"type": "tool", "name": "record_discovery"}, system="x", messages=[])

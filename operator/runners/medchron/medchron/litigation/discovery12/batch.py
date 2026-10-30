@@ -70,10 +70,26 @@ def tool_input(message: Any, name: str) -> dict[str, Any] | None:
     return None
 
 
+def tool_for(role: str) -> dict[str, Any]:
+    return sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS
+
+
 def shape(role: str) -> dict[str, Any]:
-    """The request shape for a pass: its one tool, forced."""
-    tool = sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS
-    return {"tools": [tool], "tool_choice": {"type": "tool", "name": tool["name"]}}
+    """The request shape for a pass: its one tool, chosen by the model.
+
+    2026-10-29: the proof's every batched read was refused, "tool_choice: type
+    'tool' and 'any' are not supported for this model" (claude-sonnet-5-5).
+    ``auto`` plus the system prompt's ``ONLY_BY_TOOL`` line asks for the call;
+    an answer that does not call it is no result (``tool_input`` is None), so
+    the case is marked unread and the gates hold it, never filled in."""
+    return {"tools": [tool_for(role)], "tool_choice": {"type": "auto"}}
+
+
+def only_by_tool(role: str) -> str:
+    return (
+        f"\n\nAnswer ONLY by calling the {tool_for(role)['name']} tool, exactly once. "
+        "Write no other text; an answer outside the tool is discarded."
+    )
 
 
 def merge(chunks: list[dict[str, Any]]) -> dict[str, Any]:
