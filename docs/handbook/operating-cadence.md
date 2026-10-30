@@ -228,8 +228,12 @@ them, quote the memory's own text, and say nothing otherwise:
 - `.claude/hooks/situational-recall.mjs`, run by the per-turn primer, shows a
   matching memory before the agent starts, once per session.
 
-A Stop hook runs after the reply is on screen, so the reply stage corrects the
-agent in the same turn rather than hiding the sentence; the prompt and draft
+A bounce reaches the agent as non-error context (`additionalContext` on Stop, a
+JSON deny on the draft gate), because the older shape printed the whole
+instruction in the Captain's terminal as a "Stop hook error"; setting
+`SS_REPLY_CONTRACT_STYLE=block` restores that shape. A Stop hook runs after the
+reply is on screen, so the reply stage corrects the agent in the same turn
+rather than hiding the sentence; the prompt and draft
 stages are the ones that prevent it. Triggers live in the private memory store,
 not in this public repo, so no CI test sees the live ones. The memory audit is
 their test: at every session start it runs each memory's examples and counters

@@ -309,7 +309,21 @@ function main() {
   if (!claimBounce(payload, msg, result)) return
 
   if (result.memHits.length) logFire('reply', result.memHits, payload.session_id)
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: blockReason(result) }))
+  process.stdout.write(JSON.stringify(stopOutput(blockReason(result))))
+}
+
+/**
+ * How a bounce is delivered. `decision: "block"` prints the whole reason in
+ * the Captain's terminal as "Stop hook error: ...", and he read the
+ * instruction to the agent as an error (2026-10-29). Stop also accepts
+ * `hookSpecificOutput.additionalContext`, documented as "non-error feedback
+ * that continues the conversation" and not shown as a chat message, so that is
+ * the default. SS_REPLY_CONTRACT_STYLE=block restores the old shape if the
+ * quiet one ever stops making the agent continue.
+ */
+export function stopOutput(reason) {
+  if (process.env.SS_REPLY_CONTRACT_STYLE === 'block') return { decision: 'block', reason }
+  return { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: reason } }
 }
 
 // Only run main when executed as a hook, not when imported by tests.

@@ -104,10 +104,30 @@ const stop = (msg: string, session = 's1') => ({
   last_assistant_message: msg,
 })
 
+interface HookOut {
+  decision?: string
+  reason?: string
+  hookSpecificOutput?: {
+    hookEventName?: string
+    additionalContext?: string
+    permissionDecision?: string
+    permissionDecisionReason?: string
+  }
+}
+
+/** A Stop bounce's text, in either delivery shape; null when the reply passed. */
 function reason(r: { stdout: string }): string | null {
   if (!r.stdout.trim()) return null
-  const out = JSON.parse(r.stdout) as { decision?: string; reason?: string }
-  return out.decision === 'block' ? (out.reason ?? '') : null
+  const out = JSON.parse(r.stdout) as HookOut
+  if (out.decision === 'block') return out.reason ?? ''
+  return out.hookSpecificOutput?.additionalContext ?? null
+}
+
+/** The Gmail gate's denial reason; null when the draft passed. */
+function denial(r: { status: number; stdout: string }): string | null {
+  if (r.status !== 0 || !r.stdout.trim()) return null
+  const h = (JSON.parse(r.stdout) as HookOut).hookSpecificOutput
+  return h?.permissionDecision === 'deny' ? (h.permissionDecisionReason ?? '') : null
 }
 
 describe('the 2026-10-29 reply is stopped with the memory in front of the agent', () => {
@@ -119,6 +139,17 @@ describe('the 2026-10-29 reply is stopped with the memory in front of the agent'
     expect(why).toContain('feedback_never_call_a_cost_small_against_the_fee.md')
     expect(why).toContain('How to apply: State the cost as ADDED cost of goods')
     expect(why).toContain('$20 to $60 a month against')
+  })
+
+  it('bounces as non-error context, not a "Stop hook error" (block shape only on request)', () => {
+    const quiet = JSON.parse(run(REPLY, stop(INCIDENT_1, 'shape-1')).stdout) as HookOut
+    expect(quiet.decision).toBeUndefined()
+    expect(quiet.hookSpecificOutput?.hookEventName).toBe('Stop')
+    expect(quiet.hookSpecificOutput?.additionalContext).toMatch(/saved lesson/)
+    const loud = JSON.parse(
+      run(REPLY, stop(INCIDENT_1, 'shape-2'), { SS_REPLY_CONTRACT_STYLE: 'block' }).stdout
+    ) as HookOut
+    expect(loud.decision).toBe('block')
   })
 
   it('BLOCKS each incident sentence on its own', () => {
@@ -212,14 +243,17 @@ describe('the Gmail draft gate', () => {
 
   it('DENIES a draft carrying the incident sentence, with the memory text', () => {
     const r = run(GATE, draft(`Hi Christa,\n\n${INCIDENT_2}\n\nThanks,\nScott`))
-    expect(r.status).toBe(2)
-    expect(r.stderr).toContain('feedback_never_call_a_cost_small_against_the_fee.md')
-    expect(r.stderr).toContain('How to apply')
+    // A JSON deny with exit 0: exit 2 shows the Captain a "hook error".
+    expect(r.status).toBe(0)
+    const why = denial(r)
+    expect(why).toContain('feedback_never_call_a_cost_small_against_the_fee.md')
+    expect(why).toContain('How to apply')
+    expect(r.stderr).toBe('')
   })
 
   it('denies once per content, then lets the same draft through', () => {
-    expect(run(GATE, draft(INCIDENT_1, 'd2')).status).toBe(2)
-    expect(run(GATE, draft(INCIDENT_1, 'd2')).status).toBe(0)
+    expect(denial(run(GATE, draft(INCIDENT_1, 'd2')))).not.toBeNull()
+    expect(denial(run(GATE, draft(INCIDENT_1, 'd2')))).toBeNull()
   })
 
   it('reads htmlBody as text', () => {
@@ -229,11 +263,13 @@ describe('the Gmail draft gate', () => {
       body: '',
       htmlBody: `<p>${INCIDENT_2}</p>`,
     } as typeof p.tool_input
-    expect(run(GATE, p).status).toBe(2)
+    expect(denial(run(GATE, p))).not.toBeNull()
   })
 
   it('passes a clean draft', () => {
-    expect(run(GATE, draft('The October invoice is attached.', 'd4')).status).toBe(0)
+    const r = run(GATE, draft('The October invoice is attached.', 'd4'))
+    expect(r.status).toBe(0)
+    expect(denial(r)).toBeNull()
   })
 })
 
@@ -410,8 +446,7 @@ describe('draft-only triggers (trigger_draft)', () => {
 
   it('denies a Gmail draft that says "I checked"', () => {
     const r = run(GATE, gmail('I checked the file and the bill is there.', 'w1'))
-    expect(r.status).toBe(2)
-    expect(r.stderr).toContain('feedback_we.md')
+    expect(denial(r)).toContain('feedback_we.md')
   })
 
   it('never bounces a chat reply that says "I checked"', () => {
@@ -420,7 +455,7 @@ describe('draft-only triggers (trigger_draft)', () => {
 
   it('lets a draft quote the client saying it', () => {
     const r = run(GATE, gmail('Her reply says: "I reviewed the package and found nothing."', 'w3'))
-    expect(r.status).toBe(0)
+    expect(denial(r)).toBeNull()
   })
 })
 
