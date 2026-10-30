@@ -315,18 +315,16 @@ any case.
    - **delivered, a staff reassignment** (`Report: reassign.`): say how many cases
      moved (`cases_moved`) from the `Moved from:` names to the `Moved to:` name, which
      cases they were in words (the `Scope:` line, and the `Attorneys:` names when not
-     `all`), and how many of their open tasks moved with them (`tasks_moved`). Then,
-     each only when it applies: the cases that did not take the change, by the matter
-     numbers on `Cases not moved:`; the tasks that still name the earlier person, by
-     matter number and count from `Tasks not moved:`, adding that SMD has been told
-     and is finishing them; the cases left as they were because they are outside
+     `all`), and how many of their open tasks moved with them (`tasks_moved`). A
+     reassignment is delivered only when Smokeball's read-back shows every change
+     took; one that did not take holds as `smd_finishing`, so `Cases not moved:` and
+     `Tasks not moved:` read `none` here. Then, each only when it applies: the cases left as they were because they are outside
      this request (`cases_outside_scope`, with the count per attorney from `Left
 outside the scope:`), so the firm can ask for those too; a person on `Nothing
 to move for:` had no cases that fit; and `cases_skipped` cases already had
      someone else assigned before the move, so they were left alone. When
      `cases_moved` is zero, say no case was changed and why from those same lines.
-     Matter numbers appear only for what did not move; never a client or party
-     name, a task's words or a date.
+     No matter number, client or party name, task's words or date.
    - **held**: worded by the wake's `Hold class:` line, never by the job's
      `reason`. The reason is SMD's technical record (gates, seed values, matter
      numbers, codes), and SMD already has it: every hold our side caused pages
@@ -426,10 +424,8 @@ no rule-format strings.
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
 - No matter number, no client name, no party name and no date from a court paper in any
   message from this skill. The counts and the workbook's file name are the whole of the
-  facts. The one exception: a staff reassignment names the matter numbers of the cases
-  and tasks that did not take the change, so the firm can find them; never a name or a
-  date with them. If a content gate holds that reply, the minimal note keeps the counts
-  and drops the numbers.
+  facts. A staff reassignment is no exception: one whose changes did not all take is
+  held for SMD to finish, never delivered with a list of what is left.
 - A message about a litigation job names no dollar figure at all.
 
 If the message is held by a content gate: do not retry the same content and do not drop

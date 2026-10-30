@@ -649,6 +649,25 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(sent.text).not.toMatch(/\u2014/)
   })
 
+  it('a first-use lane card never claims the Operator did nothing (2026-10-30)', async () => {
+    // FALSIFIER: print the tallies for lane_unproven again and this card reads
+    // "No tools ran" and "Replies sent: 0", which the seat sets by construction.
+    const res = await post(
+      laneBody({
+        card_key: `${HASH}:lane_unproven:file-work-requests`,
+        lane: { key: 'file-work-requests', job_lane: null, held_job: null, why: 'never_proven' },
+      })
+    )
+    expect(res.status).toBe(200)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
+    expect(sent.subject).toContain('NEW KIND OF ASK, first use: file-work-requests')
+    expect(sent.text).toContain("Not counted on this card. The request's first-reply card")
+    expect(sent.text).toContain("on this request's first-reply card")
+    expect(sent.text).not.toContain('No tools ran')
+    expect(sent.text).not.toContain('Replies sent:')
+  })
+
   it('a held_reply card is recorded with its held job and emailed with the requester words (0136)', async () => {
     // FALSIFIER: drop migration 0136 and the kind CHECK rejects the INSERT
     // (500); drop 'held_reply' from CARD_KINDS and the parse refuses (400).

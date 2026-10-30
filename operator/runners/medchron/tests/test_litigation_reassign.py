@@ -243,9 +243,9 @@ def test_a_task_that_takes_on_its_second_put_converges(tmp_path: Path) -> None:
 def test_a_task_that_never_converges_is_listed_never_dropped(tmp_path: Path) -> None:
     v = Vendor(world(), stuck=(tid(3),))
     out = verdict(make_run(tmp_path, v))
-    assert out["verdict"] == "delivered"
+    assert out["verdict"] == "held" and out["reason"].startswith("readback_mismatch: 0 of 2 case(s) and 1 task(s)")
     assert out["counts"]["tasks_not_moved"] == 1 and out["reassign"]["tasks_not_moved"] == {"100002": 1}
-    assert out["proof"]["alerts"] == ["readback_mismatch"]  # SMD is paged
+    assert "proof" not in out  # never a "confirmed" read-back beside a change that did not take
     assert v.sent[f"/tasks/{tid(3)}"] == run_mod.ATTEMPTS  # bounded
 
 
@@ -254,9 +254,37 @@ def test_falsifier_a_matter_write_that_never_takes_is_reported_by_its_read_back(
     applies it, so only reading the matter again can tell."""
     v = Vendor(world(), stuck=(mid(2),))
     out = verdict(make_run(tmp_path, v))
+    assert out["verdict"] == "held" and out["reason"].startswith("readback_mismatch: 1 of 2 case(s)")
     assert out["counts"]["cases_moved"] == 1 and out["reassign"]["cases_not_moved"] == ["100002"]
     assert v.reads[f"/matters/{mid(2)}"] > run_mod.ATTEMPTS  # read after every write, more than once
     assert assignees(v, tid(3)) == [WEN]  # its tasks are left with the case
+
+
+def test_falsifier_no_case_taking_the_change_is_never_delivered(tmp_path: Path) -> None:
+    """2026-10-30: every write was refused before it was sent, 0 of 7 cases
+    moved, and the verdict read "delivered" with the read-back "confirmed".
+    Fails if ``_delivered`` stops checking what did not move."""
+    v = Vendor(world(), stuck=(mid(1), mid(2)))
+    out = verdict(make_run(tmp_path, v))
+    assert out["verdict"] == "held" and out["stage"] == "matters"
+    assert out["reason"].startswith("readback_mismatch: 2 of 2 case(s)")
+    assert out["counts"]["cases_moved"] == 0 and "proof" not in out
+
+
+def test_a_held_move_resumes_and_delivers_once_the_change_takes(tmp_path: Path) -> None:
+    """The hold reopens the stage it stuck in, so the next run retries what is
+    left and reports every case the job moved, the earlier ones included."""
+    v = Vendor(world(), stuck=(mid(2),))
+    r = make_run(tmp_path, v)
+    assert verdict(r)["verdict"] == "held"
+    v.stuck.clear()
+    again = run_mod.ReassignRun(
+        r.job.job_dir, inputs_dir=str(tmp_path / "inputs"), seat_factory=lambda: Seat(v), log=lambda m: None,
+        poll_seconds=0.0, settle_seconds=0.0, write_pause=0.0, sleep=lambda s: None,
+    )  # fmt: skip
+    out = verdict(again)
+    assert out["verdict"] == "delivered" and out["proof"]["readback"] == "confirmed"
+    assert (out["counts"]["cases_moved"], out["counts"]["cases_not_moved"]) == (2, 0)
 
 
 def test_converge_with_the_read_back_removed_would_claim_success() -> None:
@@ -420,7 +448,7 @@ def test_falsifier_a_list_write_that_never_takes_is_not_moved(tmp_path: Path, mo
     v = Vendor(_listed_world(a=(DANA, [PAT])), stuck=(mid(11),))
     out = verdict(make_run(tmp_path, v))
     assert out["counts"]["cases_moved"] == 0 and out["reassign"]["cases_not_moved"] == ["200011"]
-    assert out["proof"]["alerts"] == ["readback_mismatch"]
+    assert out["verdict"] == "held" and out["reason"].startswith("readback_mismatch: 1 of 1 case(s)")
 
 
 def test_the_ignored_field_name_would_not_move_the_list() -> None:
