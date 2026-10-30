@@ -228,6 +228,12 @@ def _summary(
     if halted:
         ctx.log("HALTED")
         return 1
+    stuck = [o.seat for o in outcomes if o.state == "tooling_error"]
+    if stuck:
+        # No longer a halt (the rollout went on past them), but a person who ran
+        # this must not read 0 as "it worked" on those seats.
+        ctx.log(f"NOT on the release, nothing decided (tooling_error): {', '.join(stuck)}; see the detail above")
+        return 1
     if only is not None:
         mine = [o for o in outcomes if o.seat == only]
         state = mine[-1].state if mine else "not reached"

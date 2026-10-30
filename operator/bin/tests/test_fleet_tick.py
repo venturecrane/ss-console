@@ -117,13 +117,50 @@ def test_a_halt_stands_until_a_person_acts(tmp_path) -> None:
     assert len(w.fly.deploys) == 2  # the release deploy and its rollback, nothing since
 
 
-def test_a_selftest_timeout_in_a_tick_halts_without_any_boot_smoke(tmp_path) -> None:
+def test_a_selftest_timeout_in_a_tick_stalls_the_seat_without_any_boot_smoke(tmp_path) -> None:
     w = _tick_world(tmp_path)
     for seat in w.store.status:
         w.store.status[seat] = fresh_status()  # no self-test row ever arrives
-    assert _tick(w, 0) == TICK_HALT
+    assert _tick(w, 0) == TICK_PROGRESS
     assert w.store.states()["smd-staging"] == "tooling_error"
     assert w.smoke.calls == []  # FALSIFIER: fall back to bash and the boot smoke is called
+    # Ring 0 has no seat done, so it stays the front and the next tick retries it,
+    # and nothing past it moves: nothing has proved the release yet.
+    assert _tick(w, 20) == TICK_PROGRESS
+    assert _deployed(w) == ["hermes-smd-staging", "hermes-smd-staging"]
+
+
+def test_a_stalled_seat_never_holds_the_client_ring_back(tmp_path) -> None:
+    """2026-10-29: brokery's Fly deploy failed with no reason and the client seat waited hours."""
+    w = _tick_world(tmp_path)
+    for minute in (0, 31):
+        assert _tick(w, minute) == TICK_PROGRESS
+    w.fly.deploy_results = [Result(0, "deployed", ""), Result(1, "", "Error: x"), Result(1, "", "Error: x")]
+    assert _tick(w, 62) == TICK_PROGRESS  # ring 2: scott done, brokery stalled twice over
+    assert w.store.states()["brokery"] == "tooling_error"
+    # FALSIFIER: count a stalled seat as pending and ring 2 stays the front (brokery
+    # retried every tick), so ashton-price never deploys.
+    assert _tick(w, 93) == TICK_PROGRESS
+    assert "hermes-ashton-price" in _deployed(w)
+    # Once the front has nothing to do, the stalled seat is retried and the release completes.
+    before = len(w.fly.deploys)
+    assert _tick(w, 124) == TICK_PROGRESS
+    assert _deployed(w)[before:] == ["hermes-brokery"]
+    assert w.store.completed == [w.rel["release_id"]]
+
+
+def test_a_stalled_seat_is_retried_while_the_front_bakes() -> None:
+    latest = {
+        "smd-staging": {"state": "done", "finished_at": DONE_AT},
+        "pilot-smokeball": {"state": "done", "finished_at": DONE_AT},
+        "scott": {"state": "done", "finished_at": "2026-10-23T01:55:00Z"},
+        "brokery": {"state": "tooling_error", "finished_at": "2026-10-23T01:55:00Z"},
+    }
+    now = datetime(2026, 10, 23, 2, tzinfo=timezone.utc)
+    plan = plan_tick(RINGS, latest, {}, lambda seats: [], now)
+    # ring 3 waits on ring 2's bake; meanwhile brokery is tried again.
+    assert plan.code == TICK_PROGRESS and plan.seats == ["brokery"] and "baking" in plan.reason
+    assert plan.ring is not None and plan.ring.number == 2
 
 
 def test_a_busy_seat_waits_and_a_later_tick_picks_it_up(tmp_path) -> None:

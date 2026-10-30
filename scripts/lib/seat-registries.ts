@@ -27,9 +27,10 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 # Release rings: which seats take a release first. MEMBERSHIP ONLY.
 #
 # \`operator/bin/fleet release\` walks these in order. A ring finishes before the
-# next starts; any seat that FAILS (smoke red, so it is rolled back) or ends in a
-# TOOLING ERROR halts the whole rollout, so a defect stops at the smallest ring
-# that shows it. Ring 0 is SMD's own staging seat; the last ring is the paying
+# next starts; any seat that FAILS (smoke red, so it is rolled back) halts the
+# whole rollout, so a defect stops at the smallest ring that shows it. A seat
+# that ends in a TOOLING ERROR (nothing decided) stalls only itself and is
+# retried; it never holds the rings after it back. Ring 0 is SMD's own staging seat; the last ring is the paying
 # client's seat and always deploys one seat at a time.
 #
 # Holds are NOT authored here. \`fleet hold <slug> --reason "..."\` writes D1

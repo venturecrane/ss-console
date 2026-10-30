@@ -153,15 +153,18 @@ def test_busy_then_idle_waits_then_deploys() -> None:
     assert len(w.fly.deploys) == 1
 
 
-def test_smoke_tooling_error_halts_without_rollback() -> None:
+def test_smoke_tooling_error_stalls_its_seat_without_rollback_and_the_rollout_goes_on() -> None:
     w = World(Check("tooling_error", "3 checks got no verdict over ssh"))
     result = w.release_all()
     states = w.store.states()
     assert states["smd-staging"] == "tooling_error"
     # FALSIFIER: roll back on a tooling error and a second deploy (to the from-image) appears.
-    assert deployed_images(w) == [("hermes-smd-staging", w.rel["image_ref"])]
-    assert result.halted and not result.completed
-    assert states["pilot-smokeball"] == "halted" and states["ashton-price"] == "halted"
+    assert [d for d in deployed_images(w) if d[0] == "hermes-smd-staging"] == [
+        ("hermes-smd-staging", w.rel["image_ref"])
+    ]
+    # FALSIFIER: put tooling_error back in HALTING and every later seat is "halted" (2026-10-29).
+    assert not result.halted and not result.completed
+    assert states["pilot-smokeball"] == "done" and states["ashton-price"] == "done"
 
 
 def test_failing_smoke_rolls_back_to_from_image_and_halts() -> None:
@@ -306,15 +309,32 @@ def test_ssh_hang_during_the_gate_is_a_tooling_error_not_a_deploy() -> None:
     w.fly.ssh_raises.add("smd-staging")
     result = w.release_all()
     assert w.store.states()["smd-staging"] == "tooling_error"
-    assert w.fly.deploys == [] and result.halted
+    assert "hermes-smd-staging" not in [app for app, _ in deployed_images(w)] and not result.halted
 
 
-def test_deploy_failure_without_a_seat_verdict_does_not_roll_back() -> None:
+def test_a_deploy_that_decides_nothing_once_is_tried_again_and_the_seat_is_done() -> None:
     w = World()
     w.fly.deploy_results = [Result(1, "", "Error: context deadline exceeded")]
     w.release_all(only="smd-staging")
+    # FALSIFIER: drop the retry in _deploy_saying and this seat ends tooling_error.
+    assert w.store.states()["smd-staging"] == "done"
+    assert len(w.fly.deploys) == 2  # the same image twice, never a rollback
+    assert any("trying once more" in line for line in w.logs)
+
+
+def test_a_deploy_that_decides_nothing_twice_does_not_roll_back_and_says_what_fly_said() -> None:
+    w = World()
+    w.fly.deploy_results = [
+        Result(1, "", "Error: context deadline exceeded"),
+        Result(1, "", "using FLY_API_TOKEN abc\nError: failed to update machine: 503 Service Unavailable"),
+    ]
+    w.release_all(only="smd-staging")
     assert w.store.states()["smd-staging"] == "tooling_error"
-    assert len(w.fly.deploys) == 1
+    assert len(w.fly.deploys) == 2
+    detail = _details(w)["smd-staging"]
+    # FALSIFIER: keep throwing Fly's output away and the record cannot say why (2026-10-29).
+    assert "503 Service Unavailable" in detail
+    assert "FLY_API_TOKEN" not in detail  # a line naming a credential never reaches the record
 
 
 def test_force_mid_job_skips_the_gate_loudly() -> None:
@@ -624,7 +644,7 @@ def test_a_hold_set_between_two_seats_stops_the_second() -> None:
     assert states["brokery"] == "done"
 
 
-def test_selftest_timeout_without_ssh_fallback_halts_as_tooling_error_and_runs_no_smoke(tmp_path) -> None:
+def test_selftest_timeout_without_ssh_fallback_is_a_tooling_error_and_runs_no_smoke(tmp_path) -> None:
     w = _selftest_world(tmp_path, None)
     result = w.release_all(verify="selftest", selftest_capable=True, ssh_fallback=False)
     states = w.store.states()
@@ -632,8 +652,9 @@ def test_selftest_timeout_without_ssh_fallback_halts_as_tooling_error_and_runs_n
     assert "no ssh fallback" in _details(w)["smd-staging"]
     # FALSIFIER: keep the bash fallback in this mode and the boot smoke runs (and decides).
     assert w.smoke.calls == []
-    assert len(w.fly.deploys) == 1  # no rollback on a missing verdict
-    assert result.halted and states["pilot-smokeball"] == "halted"
+    staging = [d for d in deployed_images(w) if d[0] == "hermes-smd-staging"]
+    assert len(staging) == 1  # no rollback on a missing verdict
+    assert not result.halted and not result.completed
 
 
 def test_rollback_without_ssh_fallback_is_reverified_by_the_selftest(tmp_path) -> None:

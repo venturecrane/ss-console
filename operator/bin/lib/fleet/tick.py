@@ -9,16 +9,23 @@ ONE TICK.
   1. Take the fleet lease. Another rollout holding it (a laptop run, a stuck
      tick inside its TTL) is not an error: this tick waits.
   2. Read each seat's latest rollout of THIS release and the holds.
-  3. A seat whose latest rollout is rolled_back, failed or tooling_error is a
-     STANDING HALT: nothing moves until a person acts (``fleet release <id>
-     --only <seat>`` from a laptop, or a hold). The pager already went out
+  3. A seat whose latest rollout is rolled_back or failed showed the release is
+     bad: a STANDING HALT, nothing moves until a person acts (``fleet release
+     <id> --only <seat>`` from a laptop, or a hold). The pager already went out
      (fleet-alerts rollout_failed reads the same rows).
   4. Find the first ring with a seat that is neither done nor held. Before it
      may start, the ring before it must have BAKED: every done seat there done
      for at least that ring's ``bake_minutes``, at least one seat done, and no
      open selftest_failing, image_drift or rollout_failed alarm on those seats.
      Not baked: wait. Baked: roll that ring's remaining seats (and only them).
-  5. Record, renew, release the lease, exit.
+  5. A STALLED seat (tooling_error: Fly or the self-test decided nothing; or
+     waiting_idle: busy) in a ring where another seat is done does not hold
+     the next ring back. It is retried on a tick when the front has nothing
+     to do, and the pager speaks when it stays stuck. A ring with NO seat done
+     is still the front, and its stalled seats are retried there. Before
+     2026-10-30 a tooling_error was a standing halt, and one Fly deploy that
+     failed without a reason froze every later seat, the client's included.
+  6. Record, renew, release the lease, exit.
 
 So a tick advances at most one ring, never re-deploys a done seat, and never
 starts the client ring until the ring before it has proved the release on real
@@ -49,7 +56,7 @@ from typing import Any, Callable
 from . import ids
 from .d1 import FleetStore
 from .rings import Ring
-from .rollout import HALTING, SeatOutcome
+from .rollout import HALTING, STALLED, SeatOutcome
 from .runner import Refusal
 from .waves import Lease, Waves
 
@@ -178,12 +185,38 @@ def plan_tick(
             f"the release is halted ({states}); a person must act: fix and run "
             "`fleet release <id> --only <seat>`, or hold the seat",
         )
+    stalled: list[tuple[Ring, list[str]]] = []
+    plan = _front(rings, latest, holds, alarms, now, deferred, stalled)
+    return _or_retry(plan, stalled)
+
+
+def _front(
+    rings: list[Ring],
+    latest: dict[str, dict[str, Any]],
+    holds: dict[str, Any],
+    alarms: Callable[[list[str]], list[dict[str, Any]]],
+    now: datetime,
+    deferred: dict[str, str],
+    stalled: list[tuple[Ring, list[str]]],
+) -> TickPlan:
+    """The release's front: the first ring with work, or why it waits.
+
+    A ring whose seats are all done, held, deferred or STALLED, with at least one
+    done, is behind the front: the stalled seats go into ``stalled`` for a retry
+    and the next ring bakes on the done ones. A ring with no seat done stays the
+    front: nothing has proved the release there yet.
+    """
     before: Ring | None = None
     for ring in rings:
         if not ring.seats:
             continue
         done = [s for s in ring.seats if (latest.get(s) or {}).get("state") == "done"]
         pending = [s for s in ring.seats if s not in done and s not in holds and s not in deferred]
+        stuck = [s for s in pending if (latest.get(s) or {}).get("state") in STALLED]
+        if done and pending and stuck == pending:
+            stalled.append((ring, stuck))
+            before = ring
+            continue
         if pending:
             if before is not None:
                 wait = bake_gate(before, latest, alarms, now)
@@ -191,16 +224,26 @@ def plan_tick(
                     return TickPlan(TICK_WAITING, wait, ring)
             return TickPlan(TICK_PROGRESS, f"ring {ring.number}: {', '.join(pending)}", ring, pending)
         if not done:
-            waiting = [s for s in ring.seats if s in deferred]
-            if waiting:
-                why = "; ".join(f"{s}: {deferred[s]}" for s in waiting)
-                return TickPlan(TICK_WAITING, f"ring {ring.number}: no seat may take this release yet ({why})", ring)
-            return TickPlan(
-                TICK_WAITING,
-                f"ring {ring.number}: every seat is held; nothing proves the release for the rings after it",
-                ring,
-            )
+            return _ring_waits(ring, deferred)
         before = ring
+    return _tail_waits([s for ring in rings for s in ring.seats], latest, holds, deferred)
+
+
+def _ring_waits(ring: Ring, deferred: dict[str, str]) -> TickPlan:
+    waiting = [s for s in ring.seats if s in deferred]
+    if waiting:
+        why = "; ".join(f"{s}: {deferred[s]}" for s in waiting)
+        return TickPlan(TICK_WAITING, f"ring {ring.number}: no seat may take this release yet ({why})", ring)
+    return TickPlan(
+        TICK_WAITING,
+        f"ring {ring.number}: every seat is held; nothing proves the release for the rings after it",
+        ring,
+    )
+
+
+def _tail_waits(
+    ringed: list[str], latest: dict[str, dict[str, Any]], holds: dict[str, Any], deferred: dict[str, str]
+) -> TickPlan:
     waiting = sorted(s for s in ringed if s in deferred and (latest.get(s) or {}).get("state") != "done")
     if waiting:
         why = "; ".join(f"{s}: {deferred[s]}" for s in waiting)
@@ -209,6 +252,24 @@ def plan_tick(
     if held:
         return TickPlan(TICK_WAITING, f"every unheld seat is done; held and not yet on it: {', '.join(held)}")
     return TickPlan(TICK_WAITING, "every seat is done on this release")
+
+
+def _or_retry(plan: TickPlan, stalled: list[tuple[Ring, list[str]]]) -> TickPlan:
+    """While the front waits, retry the earliest ring's stalled seats; otherwise the plan as is.
+
+    The front always goes first, so a stalled seat never costs the seats after
+    it a tick: it is retried on a tick when the front has nothing to do (baking,
+    waiting, or the release done everywhere else).
+    """
+    if plan.code != TICK_WAITING or not stalled:
+        return plan
+    ring, seats = stalled[0]
+    return TickPlan(
+        TICK_PROGRESS,
+        f"{plan.reason}; meanwhile retrying ring {ring.number}: {', '.join(seats)} (it did not take the release last time)",
+        ring,
+        seats,
+    )
 
 
 def combine(*codes: int) -> int:

@@ -352,9 +352,13 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   the self-test; that is how the controller verifies.
 - **Classify.** Only a real seat failure (a smoke check that ran and said no, a
   Machine that never started, a heartbeat naming another image) rolls the seat
-  back to its recorded image and toml, re-smokes it, and HALTS the rollout. A
-  tooling error (ssh with no verdict, Fly agent or wrangler errors) or a timeout
-  halts without touching the seat. Seats not reached are recorded `halted`.
+  back to its recorded image and toml, re-smokes it, and HALTS the rollout.
+  Seats not reached are recorded `halted`. A tooling error (Fly or the self-test
+  decided nothing: ssh with no verdict, Fly agent or wrangler errors) or a
+  timeout leaves the seat untouched and stalls only that seat: the rollout goes
+  on to the next one. A `fly deploy` that fails without saying the release is
+  unhealthy is tried once more a minute later, and what Fly printed is kept in
+  the rollout's detail (lines naming a credential are dropped).
 - **Complete.** After any real run, a release whose latest rollout on every
   ringed seat is `done` is marked `completed_last_ring_at`. That is read from
   the `fleet_rollouts` records, not from one run: a release repaired seat by
@@ -399,10 +403,19 @@ Two workflows run the release (ADR 0096).
   tick moves every ring that has a release ready, so staging taking each new
   merge never keeps the client ring waiting.
   A seat already on a newer release is never moved back to an older one:
-  - a seat whose latest rollout is `rolled_back`, `failed` or `tooling_error`
-    is a **standing halt**: nothing moves until a person acts, and the
-    `rollout_failed` pager has already mailed. Finish it from a laptop with
+  - a seat whose latest rollout is `rolled_back` or `failed` is a **standing
+    halt**: nothing moves until a person acts, and the `rollout_failed` pager
+    has already mailed. Finish it from a laptop with
     `fleet release <id> --only <seat>`, or hold the seat.
+  - a seat that is **stalled** (`tooling_error`, or `waiting_idle` because it
+    was busy) in a ring where another seat is done does not hold the rings
+    after it back: the next ring bakes on the done seats, and the stalled seat
+    is tried again on a tick when the front of the release has nothing to do.
+    A ring with no seat done stays the front, and its stalled seats are retried
+    there. Before 2026-10-30 a `tooling_error` was a standing halt: on
+    2026-10-29 one Fly deploy that failed without a reason, first on
+    smd-staging and then on brokery, kept every later seat, the client's
+    included, off merged fixes for hours.
   - otherwise the remaining seats of the first unfinished ring deploy, after
     **the bake**: every unheld seat of the ring before it done on the release
     for that ring's `bake_minutes` (10 by default; a seat may author
@@ -411,7 +424,7 @@ Two workflows run the release (ADR 0096).
     `image_drift` alarm open on those seats. A ring whose every seat is held
     holds every ring after it.
   - each seat is verified by its own self-test, with no ssh boot smoke: no
-    verdict is a tooling error that halts and pages. The busy gate still
+    verdict is a tooling error that stalls that seat. The busy gate still
     probes the seat, waiting up to 10 minutes; a seat still busy is left
     `waiting_idle` and a later tick picks it up. A tick never passes
     `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
@@ -471,8 +484,10 @@ and all seven Fly tokens. Then immediately dispatch `release-tick.yml` with
 acts.
 
 **A failed rollout pages.** The fleet-alerts Worker reads `fleet_rollouts` every
-2 minutes and emails team@smd.services once per new `failed`, `rolled_back` or
-`tooling_error` row, with the release, the detail, and the `--only` command
+2 minutes and emails team@smd.services once per new `failed` or `rolled_back`
+row, and per `tooling_error` row that is the seat's second on the same release
+(one that the next tick's retry fixed is not worth a page), with the release,
+the detail, and the `--only` command
 that finishes it (`workers/fleet-alerts/src/rollout-failed.ts`, migration
 0133). On 2026-10-20 a preflight refusal on captain-mark sat unread for a day.
 

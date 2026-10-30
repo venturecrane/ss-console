@@ -82,6 +82,41 @@ describe('decideRolloutFailedPage', () => {
     expect(decideRolloutFailedPage('captain-mark', rows, null, NOW)).toBeNull()
   })
 
+  it('holds on one tooling_error (the controller retries it) and pages when the seat is stuck twice', () => {
+    const first = rollout({
+      rollout_id: 'ro-t1',
+      state: 'tooling_error',
+      finished_at: '2026-10-21T22:30:00Z',
+    })
+    // FALSIFIER: drop isStuck and every retried Fly blip mails the Captain.
+    expect(decideRolloutFailedPage('captain-mark', [first], null, NOW)).toBeNull()
+    const second = rollout({
+      rollout_id: 'ro-t2',
+      state: 'tooling_error',
+      finished_at: '2026-10-21T22:50:00Z',
+    })
+    const page = decideRolloutFailedPage('captain-mark', [first, second], null, NOW)
+    expect(page?.rows.map((r) => r.rollout_id)).toEqual(['ro-t2'])
+  })
+
+  it('does not count a tooling_error on another release toward stuck', () => {
+    const rows = [
+      rollout({
+        rollout_id: 'ro-a',
+        state: 'tooling_error',
+        release_id: 'img-a',
+        finished_at: '2026-10-21T22:30:00Z',
+      }),
+      rollout({
+        rollout_id: 'ro-b',
+        state: 'tooling_error',
+        release_id: 'img-b',
+        finished_at: '2026-10-21T22:50:00Z',
+      }),
+    ]
+    expect(decideRolloutFailedPage('captain-mark', rows, null, NOW)).toBeNull()
+  })
+
   it('ignores a row with no parseable finished_at rather than paging on junk', () => {
     expect(
       decideRolloutFailedPage('captain-mark', [rollout({ finished_at: null })], null, NOW)
