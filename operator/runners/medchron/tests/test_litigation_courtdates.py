@@ -199,6 +199,65 @@ def test_a_case_that_cannot_be_laid_out_fails_the_stage_instead_of_hanging(tmp_p
         raise AssertionError("a case over the page cap must fail the stage")
 
 
+def _words(n: int, w: int = 6) -> str:
+    return " ".join("n" * w for _ in range(n))
+
+
+def _d12_entry(j: int) -> dict:
+    return {
+        "item": _words(3, 5), "direction": "Served on client", "party": _words(2, 7),
+        "served": {"date": None, "source": None}, "due": {"date": None, "source": None},
+        "response": {"date": "2026-02-01", "value": _words(4),
+                     "source": {"file_id": "f", "name": "f.pdf", "doc_date": "2026-02-01"}},
+        "extension": {"date": None, "detail": _words(2, 5), "source": None},
+        "notes": _words(26 + (j % 4) * 3),
+    }  # fmt: skip
+
+
+def test_a_case_the_layout_engine_cycles_on_prints_once_and_whole(tmp_path: Path):
+    """A synthetic shape (found by search, no client text) on which MuPDF's
+    layout repeats the same pages forever at the full frame; before the fix
+    it failed the whole book at the page cap (2026-10-30, 1 case of 230)."""
+    import pymupdf
+
+    from medchron.litigation.discovery12 import sections as d12
+
+    m = _matter("m1", "1001", "A v. B", "Lee", defendants=[{"name": _words(4), "status": "Served"}])
+    shown = cd.shown([m], {"m1": CAL}, TODAY)
+    shown[0]["discovery12"] = {
+        "read": True,
+        "sections": {k: [_d12_entry(j) for j in range(14)] for k, _l in d12.SECTIONS[:3]},
+        "flags": [_words(5)],
+    }
+    out = tmp_path / "x.pdf"
+    stats = printout.build(shown, out, TODAY)
+    with pymupdf.open(out) as doc:
+        body = [p.get_text().rsplit("page ", 1)[0] for p in doc]
+    assert stats["pages"] == len(body) < 20
+    assert all(t.strip() for t in body) and len(set(body)) == len(body)
+    assert printout.check(out, shown) == [] and printout.scan(out) == []
+
+
+def test_a_blank_or_repeated_page_reads_as_a_cycled_layout():
+    assert printout.cycled(["a", "b", "", "c"]) and printout.cycled(["a", "b", "c", "b"])
+    assert not printout.cycled(["a", "b", "c"])
+
+
+def test_a_case_whose_layout_cycles_is_laid_out_again_in_a_shorter_frame(tmp_path: Path, monkeypatch):
+    real, tried = printout._lay, []
+
+    def first_cycles(html_: str, trim: float):
+        tried.append(trim)
+        return None if trim == 0.0 and "1001" in html_ else real(html_, trim)
+
+    monkeypatch.setattr(printout, "_lay", first_cycles)
+    shown = cd.shown([_matter("m1", "1001", "A v. B", "Lee")], {"m1": CAL}, TODAY)
+    out = tmp_path / "x.pdf"
+    stats = printout.build(shown, out, TODAY)
+    assert printout.TRIMS[1] in tried and stats["pages"] == len(printout.text_of(out)) >= 2
+    assert printout.check(out, shown) == [] and printout.scan(out) == []
+
+
 # ---- the run: the calendar reaches the files, never the stored state ---------------------------
 def test_a_run_shows_the_calendar_date_in_every_file_and_stores_only_the_papers(tmp_path: Path, pricing_path: Path):
     from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
