@@ -40,6 +40,7 @@ class BookStages:
     _json: Any
     _matters: Any
     _court_only: Any
+    _put: Any
 
     def _out(self) -> Path:
         return self.data / "out" / f"Litigation status {self.today.isoformat()} (Operator {self.job.job_id[-6:]}).xlsx"
