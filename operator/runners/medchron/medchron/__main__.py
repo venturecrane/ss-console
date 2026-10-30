@@ -516,40 +516,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         return stop_request.STOP_EXIT
 
 
-def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="medchron")
-    sub = p.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run", help="run a job envelope through the DAG")
-    r.add_argument("job_dir")
-    r.add_argument("--from", dest="start", default=None, help="resume from this stage")
-    r.add_argument(
-        "--redo",
-        default="",
-        help="comma-separated stages to reopen before the walk; a resume names the stages the fix touched",
-    )
-    r.add_argument("--dry-run", action="store_true", help="author nothing, run nothing, report decisions and holds")
-    r.add_argument("--firm-config", default=None)
-    r.add_argument("--pricing", default=None)
-    r.add_argument("--json", action="store_true")
-    r.set_defaults(fn=_cmd_run)
-    rh = sub.add_parser("rehearse", help="run every $0 gate against a copy of the workdir; spend nothing")
-    rh.add_argument("job_dir")
-    rh.add_argument("--redo", default="", help="comma-separated $0 stages to reopen in the copy before the walk")
-    rh.add_argument("--firm-config", default=None)
-    rh.add_argument("--pricing", default=None)
-    rh.add_argument("--json", action="store_true")
-    rh.set_defaults(fn=_cmd_rehearse)
-    dm = sub.add_parser("demand", help="run one demand job (gap audit + draft demand) from pull to read-back")
-    dm.add_argument("job_dir")
-    dm.add_argument("--inputs", default=None, help="the demand firm-inputs dir (default: MEDCHRON_DEMAND_INPUTS)")
-    dm.add_argument("--pricing", default=None)
-    dm.set_defaults(fn=_cmd_demand)
-    dr = sub.add_parser("draft", help="run one drafting job (one document of one class) from pull to read-back")
-    dr.add_argument("job_dir")
-    dr.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: MEDCHRON_DRAFTING_INPUTS)")
-    dr.add_argument("--pricing", default=None)
-    dr.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
-    dr.set_defaults(fn=_cmd_draft)
+def _add_litigate(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    """``litigate`` (one litigation job) and ``litigate-d12-seed`` (the discovery
+    breakdown's saved records from a delivered job)."""
     lt = sub.add_parser("litigate", help="run one litigation status job, inventory to read-back")
     lt.add_argument("job_dir")
     lt.add_argument("--inputs", default=None, help="the litigation inputs dir (default: MEDCHRON_LITIGATION_INPUTS)")
@@ -587,6 +556,43 @@ def main(argv: list[str] | None = None) -> int:
     sd.add_argument("--inputs", default=None)
     sd.add_argument("--state-dir", default=None)
     sd.set_defaults(fn=_cmd_d12_seed)
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="medchron")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run", help="run a job envelope through the DAG")
+    r.add_argument("job_dir")
+    r.add_argument("--from", dest="start", default=None, help="resume from this stage")
+    r.add_argument(
+        "--redo",
+        default="",
+        help="comma-separated stages to reopen before the walk; a resume names the stages the fix touched",
+    )
+    r.add_argument("--dry-run", action="store_true", help="author nothing, run nothing, report decisions and holds")
+    r.add_argument("--firm-config", default=None)
+    r.add_argument("--pricing", default=None)
+    r.add_argument("--json", action="store_true")
+    r.set_defaults(fn=_cmd_run)
+    rh = sub.add_parser("rehearse", help="run every $0 gate against a copy of the workdir; spend nothing")
+    rh.add_argument("job_dir")
+    rh.add_argument("--redo", default="", help="comma-separated $0 stages to reopen in the copy before the walk")
+    rh.add_argument("--firm-config", default=None)
+    rh.add_argument("--pricing", default=None)
+    rh.add_argument("--json", action="store_true")
+    rh.set_defaults(fn=_cmd_rehearse)
+    dm = sub.add_parser("demand", help="run one demand job (gap audit + draft demand) from pull to read-back")
+    dm.add_argument("job_dir")
+    dm.add_argument("--inputs", default=None, help="the demand firm-inputs dir (default: MEDCHRON_DEMAND_INPUTS)")
+    dm.add_argument("--pricing", default=None)
+    dm.set_defaults(fn=_cmd_demand)
+    dr = sub.add_parser("draft", help="run one drafting job (one document of one class) from pull to read-back")
+    dr.add_argument("job_dir")
+    dr.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (default: MEDCHRON_DRAFTING_INPUTS)")
+    dr.add_argument("--pricing", default=None)
+    dr.add_argument("--redo", default="", help="comma-separated stages to reopen (a resume request)")
+    dr.set_defaults(fn=_cmd_draft)
+    _add_litigate(sub)
     from .casefile.cli import add_parser as _casefile_parser
 
     _casefile_parser(sub)
