@@ -75,7 +75,7 @@ describe('vendor-invoice-intake: the skill body', () => {
     expect(b).toContain('### 3. Ask which matter it is; never decide')
     expect(b).toContain('**The verdict decides, not you**')
     expect(b).toContain(
-      '`resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss, date_of_birth)`'
+      '`resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss, date_of_birth, case_number)`'
     )
     // Each of the four verdicts has a row saying what to do, and the two that
     // are easiest to blur are pinned by name.
