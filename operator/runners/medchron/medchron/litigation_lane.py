@@ -367,7 +367,7 @@ class LitigationLane(DraftingLane):
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
             load_line(SKILL),
-            "Kind: litigation.",
+            "Kind: litigation." + (" Report: discovery breakdown." if env.get("report") == "discovery12" else ""),
             f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
             f"Outcome: {state}.",
             f"Matters: {int(fields.get('matters_total') or 0)}; re-read this run: {int(fields.get('matters_reread') or 0)}; new flags: {int(fields.get('flags_new') or 0)}.",

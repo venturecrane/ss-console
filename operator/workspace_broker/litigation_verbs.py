@@ -98,6 +98,9 @@ from .litigation_intake import (
     operator_library_number,
     paralegal_roster,
     requested_report,
+    wants_discovery12,
+    DISCOVERY12_KEY,
+    DISCOVERY12_ON,
     named_attorneys,
     named_paralegals,
     scheduled_recipients,
@@ -336,7 +339,7 @@ class LitigationVerbs:
             requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
             report, extra = self._kind(given["trigger"], request_text, settings)
             library, file_to, folder = self._filing_target(settings, report)
-            firm, cents = self._budget(spends=report == "status")
+            firm, cents = self._budget(spends=report in ("status", "discovery12"))
             envelope = {
                 "trigger": given["trigger"],
                 "requester": requester,
@@ -420,6 +423,13 @@ class LitigationVerbs:
         code. A reassignment is checked first: it is the only kind that writes
         to the firm's matters, so it must be switched on for the seat and its
         shape read exactly, or nothing is queued."""
+        if wants_discovery12(text):
+            # A request's own words, or (2026-10-29) the text root authored for
+            # a scheduled run: the cron's pre_run never carries text, so its
+            # scheduled run stays the status list.
+            if str(settings.get(DISCOVERY12_KEY) or "").strip() != DISCOVERY12_ON:
+                raise _Refused("the discovery breakdown is not switched on for this seat; nothing was queued")
+            return "discovery12", {"report": "discovery12"}
         if trigger != "request":
             return "status", {}
         if is_reassignment(text):

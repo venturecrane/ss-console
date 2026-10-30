@@ -33,6 +33,7 @@ CSS = """
 body { font-size: 8.5pt; }
 h1 { font-size: 13pt; margin: 0 0 4pt 0; }
 h2 { font-size: 10pt; margin: 8pt 0 3pt 0; }
+h3 { font-size: 9pt; margin: 5pt 0 2pt 0; }
 p { margin: 0 0 3pt 0; }
 table { border-collapse: collapse; width: 100%; }
 th { background-color: #dddddd; text-align: left; font-weight: bold; }
@@ -135,14 +136,78 @@ def case_html(m: dict[str, Any], drows: list[list[Any]], disc: list[list[Any]], 
         parts.append(f"<p>{_e(CAL_UNREAD)}</p>")
     parts.append("<h2>Defendants</h2>")
     parts.append(_table(percase.DEF_COLS, drows) if drows else f"<p>{_e(percase.NO_DEFENDANTS)}</p>")
-    parts.append("<h2>Discovery</h2>")
-    if discovery_note:
-        parts.append(f"<p>{_e(discovery_note)}</p>")
-    parts.append(_table(DISC_HDR, disc) if disc else "<p>None listed.</p>")
+    if isinstance(m.get("discovery12"), dict):
+        parts.append(discovery12_html(m["discovery12"]))
+    else:
+        parts.append("<h2>Discovery</h2>")
+        if discovery_note:
+            parts.append(f"<p>{_e(discovery_note)}</p>")
+        parts.append(_table(DISC_HDR, disc) if disc else "<p>None listed.</p>")
     notes = book.case_notes_text(m)
     if notes:
         parts.append(f"<h2>Case notes</h2><p>{_e(notes)}</p>")
     return "<body>" + "".join(parts) + "</body>"
+
+
+#: The 12-section discovery breakdown on a case's pages (``discovery12/``).
+D12_HDR = ["Item", "Direction", "Party", "Served", "Due", "Response", "Extension", "Notes"]
+D12_NOT_READ = "No discovery paper was found by name in the file; not read."
+
+
+def _dated(v: Any, extra: str = "") -> str:
+    """A date with the paper it was read from: '2026-03-05 (paper.pdf, 2026-03-05)'."""
+    v = v if isinstance(v, dict) else {}
+    d = str(v.get("date") or "")
+    if not d:
+        return extra
+    src = book._src(v)
+    return " ".join(x for x in (d, f"({src})" if src else "", extra) if x)
+
+
+def d12_rows(entries: list[dict[str, Any]]) -> list[list[Any]]:
+    rows = []
+    for e in entries:
+        resp = e.get("response") or {}
+        ext = e.get("extension") or {}
+        rows.append(
+            [
+                e.get("item"),
+                e.get("direction"),
+                e.get("party"),
+                _dated(e.get("served")),
+                _dated(e.get("due")),
+                " ".join(x for x in (str(resp.get("value") or ""), _dated(resp)) if x),
+                _dated(ext, str(ext.get("detail") or "")),
+                e.get("notes"),
+            ]
+        )
+    return rows
+
+
+def discovery12_html(d: dict[str, Any]) -> str:
+    """Every section with its entries, or 'None in file'; every date naming its paper."""
+    from .discovery12 import sections as d12
+
+    parts = ["<h2>Discovery (12 sections)</h2>"]
+    if not d.get("read"):
+        return parts[0] + f"<p>{_e(D12_NOT_READ)}</p>"
+    for key, label in d12.SECTIONS:
+        got = (d.get("sections") or {}).get(key) or []
+        parts.append(f"<h3>{_e(label)}</h3>")
+        parts.append(_table(D12_HDR, d12_rows(got)) if got else f"<p>{_e(d12.NONE_IN_FILE)}</p>")
+    for f in d.get("flags") or []:
+        parts.append(f"<p class='flag'>{_e(f)}</p>")
+    return "".join(parts)
+
+
+def d12_dates(m: dict[str, Any]) -> list[str]:
+    """Every date the case's discovery sections print (the check reads them back)."""
+    from .discovery12 import sections as d12
+
+    d = m.get("discovery12")
+    if not isinstance(d, dict) or not d.get("read"):
+        return []
+    return [str(v.get("date")) for _p, v in d12.dated_values(d)]
 
 
 def _cover(ms: list[dict[str, Any]], as_of: dt.date, discovery_note: str) -> str:
@@ -158,6 +223,11 @@ def _cover(ms: list[dict[str, Any]], as_of: dt.date, discovery_note: str) -> str
     ]
     if discovery_note:
         lines.append(discovery_note)
+    if any(isinstance(m.get("discovery12"), dict) for m in ms):
+        lines.append(
+            "Discovery is shown in twelve sections. Each date names the paper it was read from; "
+            "a section with nothing found reads None in file."
+        )
     body = "".join(f"<p>{_e(x)}</p>" for x in lines)
     return f"<body><h1>Litigation status, court dates, as of {_e(as_of.isoformat())}</h1>{body}</body>"
 
@@ -255,6 +325,9 @@ def check(pdf: Path, ms: list[dict[str, Any]]) -> list[str]:
         missing = [d for d in sorted(dates) if str(d) not in whole]
         if missing:
             out.append(f"matter {m.get('number')}: {len(missing)} court dates are not printed")
+        lost = [d for d in sorted(set(d12_dates(m))) if d not in whole]
+        if lost:
+            out.append(f"matter {m.get('number')}: {len(lost)} discovery dates are not printed")
     return out
 
 

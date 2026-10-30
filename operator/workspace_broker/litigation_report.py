@@ -18,7 +18,7 @@ from typing import Any
 from .litigation_reassign import validate as _reassign
 
 #: The report kinds, and the deadlines report's workbooks in filing order.
-REPORTS = ("status", "deadlines", "reassign")
+REPORTS = ("status", "deadlines", "reassign", "discovery12")
 WORKBOOKS = ("deadlines", "statute")
 #: The named counts the deadlines runner reports (``deadlines/book.py``).
 DEADLINES_COUNTS = (
@@ -64,13 +64,17 @@ def report_keys(req: dict[str, Any]) -> dict[str, Any]:
     extra = set(req) & {"report", "workbooks", "reassign"}
     if not extra:
         return {}
+    if req.get("report") == "discovery12" and extra == {"report"}:
+        return {"report": "discovery12"}
     if req.get("report") == "reassign" and extra == {"report", "reassign"}:
         try:
             return {"report": "reassign", "reassign": _reassign(req["reassign"])}
         except ValueError as exc:
             raise EnvelopeError(str(exc)) from exc
     if req.get("report") != "deadlines" or extra != {"report", "workbooks"}:
-        raise EnvelopeError('report must be "deadlines" with workbooks, or "reassign" with reassign')
+        raise EnvelopeError(
+            'report must be "deadlines" with workbooks, "reassign" with reassign, or "discovery12" alone'
+        )
     books = req["workbooks"]
     if not (isinstance(books, list) and books and set(books) <= set(WORKBOOKS) and len(set(books)) == len(books)):
         raise EnvelopeError(f"workbooks must be a non-empty subset of {list(WORKBOOKS)}")
