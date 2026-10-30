@@ -49,6 +49,35 @@ def test_each_kind_is_the_set_event_never_a_rule_deadline_reminder_or_deleted_en
     assert got["trial"]["source"] == cd.LTB and got["mediation"]["source"] == cd.STAFF
 
 
+def test_a_timed_hearing_outranks_an_all_day_task_of_the_same_kind():
+    """2026-10-30 review: an all-day staff task about the CMC printed as the
+    next court date two weeks before the hearing itself."""
+    cal = [
+        ev("2026-11-03T00:00:00", "Register for Remote Appearance to CMC", all_day=True),
+        ev("2026-11-17T10:00:00", "CMC"),
+        ev("2027-09-21T00:00:00", "TRIAL- Trial Date", all_day=True, ltb=True),
+        ev("2027-09-21T08:30:00", "TRIAL"),
+    ]
+    got = cd.upcoming(cal, TODAY)
+    assert (got["cmc"]["date"], got["cmc"]["time"]) == ("2026-11-17", "10:00 AM")
+    assert (got["trial"]["date"], got["trial"]["time"]) == ("2027-09-21", "8:30 AM")
+    assert cd.merge({}, cal, TODAY)["next"]["date"] == "2026-11-17"
+    # an all-day entry still stands when its kind has no timed one
+    assert cd.upcoming([ev("2027-01-11T00:00:00", "TRIAL- Trial date", all_day=True, ltb=True)], TODAY)["trial"]
+
+
+def test_a_staff_reminder_about_an_event_is_not_the_event():
+    for subj in (
+        "2/8-EXAMPLE. THREE MONTHS BEFORE TRIAL",
+        "3/8-EXAMPLE. ONE WEEK BEFORE MSC",
+        "L/D M&C w/Def Counsel Prior to MSC",
+        "L/D to Req (1) Remote Appearance at MSC",
+        "Check Tentative CMC Ruling 2 pm",
+    ):
+        assert cd.kind(ev("2027-02-08T14:00:00", subj)) is None, subj
+    assert cd.kind(ev("2027-02-05T09:00:00", "CMC")) == "cmc"
+
+
 def test_the_rules_that_exclude():
     assert cd.kind(ev("2027-01-08T00:00:00", "Hold summary judgment hearing", all_day=True, ltb=True)) is None
     assert cd.kind(ev("2027-01-08T09:00:00", "Hearing on motion to compel")) == "hearing"

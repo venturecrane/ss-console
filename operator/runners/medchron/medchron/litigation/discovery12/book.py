@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import book as lit_book
-from . import sections
+from . import complete, sections
 
 HEADER = [
     "Responsible (Smokeball)", "Matter #", "Case", "Section", "Item", "Direction", "Party",
@@ -45,29 +45,28 @@ def rows(ms: list[dict[str, Any]]) -> list[list[Any]]:
     out: list[list[Any]] = []
     for m in order(ms):
         base = [m.get("responsible") or "", m.get("number"), m.get("title") or ""]
-        if m.get("declined"):
-            out.append([*base, "", DECLINED] + [""] * (len(HEADER) - 5))
-            continue
-        if not m.get("read"):
-            out.append([*base, "", NOT_READ] + [""] * (len(HEADER) - 5))
-            continue
-        for key in sections.KEYS:
-            got = (m.get("sections") or {}).get(key) or []
-            label = sections.LABEL[key]
-            if not got:
-                out.append([*base, label, sections.NONE_IN_FILE] + [""] * (len(HEADER) - 5))
-            for e in got:
-                ext = e.get("extension") or {}
-                resp = e.get("response") or {}
-                out.append(
-                    [
-                        *base, label, e.get("item"), e.get("direction"), e.get("party"),
-                        _d(e.get("served")), _s(e.get("served")), _d(e.get("due")), _s(e.get("due")),
-                        resp.get("value") or "", _d(resp), _s(resp),
-                        " ".join(x for x in (_d(ext), ext.get("detail") or "") if x), _s(ext), e.get("notes") or "",
-                    ]
-                )  # fmt: skip
+        if m.get("declined") or not m.get("read"):
+            out.append([*base, "", DECLINED if m.get("declined") else NOT_READ] + [""] * (len(HEADER) - 5))
+        else:
+            for key in sections.KEYS:
+                got = (m.get("sections") or {}).get(key) or []
+                if not got:
+                    out.append([*base, sections.LABEL[key], sections.NONE_IN_FILE] + [""] * (len(HEADER) - 5))
+                out.extend(_entry_row(base, sections.LABEL[key], e) for e in got)
+        # complete.py: sets the status list holds that no section took
+        out.extend(_entry_row(base, complete.STATUS_LABEL, e) for e in m.get("status_rows") or [])
     return out
+
+
+def _entry_row(base: list[Any], label: str, e: dict[str, Any]) -> list[Any]:
+    ext = e.get("extension") or {}
+    resp = e.get("response") or {}
+    return [
+        *base, label, e.get("item"), e.get("direction"), e.get("party"),
+        _d(e.get("served")), _s(e.get("served")), _d(e.get("due")), _s(e.get("due")),
+        resp.get("value") or "", _d(resp), _s(resp),
+        " ".join(x for x in (_d(ext), ext.get("detail") or "") if x), _s(ext), e.get("notes") or "",
+    ]  # fmt: skip
 
 
 def build(ms: list[dict[str, Any]], out: Path, as_of: dt.date) -> dict[str, Any]:

@@ -194,28 +194,41 @@ def discovery12_html(d: dict[str, Any]) -> str:
     """Every section with its entries, or 'None in file'; every date naming its paper."""
     from .discovery12 import sections as d12
 
+    from .discovery12.complete import STATUS_LABEL
+
     parts = ["<h2>Discovery (12 sections)</h2>"]
     if d.get("declined"):
-        return parts[0] + f"<p class='flag'>{_e(D12_DECLINED)}</p>"
-    if not d.get("read"):
-        return parts[0] + f"<p>{_e(D12_NOT_READ)}</p>"
-    for key, label in d12.SECTIONS:
-        got = (d.get("sections") or {}).get(key) or []
-        parts.append(f"<h3>{_e(label)}</h3>")
-        parts.append(_table(D12_HDR, d12_rows(got)) if got else f"<p>{_e(d12.NONE_IN_FILE)}</p>")
+        parts.append(f"<p class='flag'>{_e(D12_DECLINED)}</p>")
+    elif not d.get("read"):
+        parts.append(f"<p>{_e(D12_NOT_READ)}</p>")
+    else:
+        for key, label in d12.SECTIONS:
+            got = (d.get("sections") or {}).get(key) or []
+            parts.append(f"<h3>{_e(label)}</h3>")
+            parts.append(_table(D12_HDR, d12_rows(got)) if got else f"<p>{_e(d12.NONE_IN_FILE)}</p>")
+    if d.get("status_rows"):  # complete.py: sets the status list holds that no section took
+        parts.append(f"<h3>{_e(STATUS_LABEL)}</h3>" + _table(D12_HDR, d12_rows(d["status_rows"])))
+    if d.get("declined") or not d.get("read"):
+        return "".join(parts)
     for f in d.get("flags") or []:
         parts.append(f"<p class='flag'>{_e(f)}</p>")
     return "".join(parts)
 
 
 def d12_dates(m: dict[str, Any]) -> list[str]:
-    """Every date the case's discovery sections print (the check reads them back)."""
+    """Every date the case's discovery prints, sections and the status-list
+    block alike (the check reads them back)."""
     from .discovery12 import sections as d12
 
     d = m.get("discovery12")
-    if not isinstance(d, dict) or not d.get("read"):
+    if not isinstance(d, dict):
         return []
-    return [str(v.get("date")) for _p, v in d12.dated_values(d)]
+    loose = [
+        str(v.get("date")) for e in d.get("status_rows") or [] for f in d12.DATED if (v := e.get(f) or {}).get("date")
+    ]
+    if not d.get("read") or d.get("declined"):
+        return loose
+    return [str(v.get("date")) for _p, v in d12.dated_values(d)] + loose
 
 
 def _cover(ms: list[dict[str, Any]], as_of: dt.date, discovery_note: str) -> str:

@@ -62,7 +62,11 @@ COURT = ("trial", "msc", "hearing", "cmc")
 DISAGREE = "Check: the court papers give a court date the calendar does not have"
 
 _SKIP = re.compile(
-    r"^\W*(HIDDEN|OFF\b|CANCEL)|\b(RMDR|REMINDERS?|REMIND|vacated|cancell?ed|possible latest|approx|suggested)\b",
+    r"^\W*(HIDDEN|OFF\b|CANCEL)|\b(RMDR|REMINDERS?|REMIND|vacated|cancell?ed|possible latest|approx|suggested)\b"
+    # Staff reminders about an event, never the event (2026-10-30, the calendar
+    # read on 230 cases): "TWO MONTHS BEFORE TRIAL", "M&C ... Prior to MSC",
+    # "L/D to Req Remote Appearance at MSC", "Check Tentative CMC Ruling".
+    r"|\b(months?|weeks?|days?)\s+before\b|\bprior\s+to\b|\bcheck\s+tentative\b|^\W*(\d+/\d+\W*)?L/D\b",
     re.I,
 )
 _CUTOFF = re.compile(r"discovery\s+cut-?\s?off", re.I)
@@ -133,22 +137,35 @@ def _time(e: dict[str, Any]) -> str:
     return f"{(h - 1) % 12 + 1}:{mi} {'AM' if h < 12 else 'PM'}"
 
 
+#: Kinds whose set event is a timed entry: when the matter's calendar has a
+#: timed one, an all-day entry of the same kind is a task or reminder about it,
+#: never the event (2026-10-30: a case printed an all-day CMC task on 11-03 as
+#: its next court date; the hearing was the timed entry on 11-17).
+TIMED_FIRST = (*COURT, "mediation")
+
+
 def upcoming(events: list[dict[str, Any]], today: dt.date) -> dict[str, dict[str, Any]]:
-    """Per kind, the earliest entry on or after ``today``:
+    """Per kind, the earliest entry on or after ``today``, a timed entry
+    outranking every all-day one of a ``TIMED_FIRST`` kind:
     ``{kind: {date, time, what, source}}``."""
-    out: dict[str, dict[str, Any]] = {}
+    cands: dict[str, list[dict[str, Any]]] = {}
     for e in events:
         k, day = kind(e), _day(e)
         if k is None or day is None or day < today:
             continue
-        row = {
-            "date": day.isoformat(),
-            "time": _time(e),
-            "what": " ".join(str(e.get("subject") or "").split()),
-            "source": LTB if _ltb(e) else STAFF,
-        }
-        if k not in out or (row["date"], row["time"] or "99") < (out[k]["date"], out[k]["time"] or "99"):
-            out[k] = row
+        cands.setdefault(k, []).append(
+            {
+                "date": day.isoformat(),
+                "time": _time(e),
+                "what": " ".join(str(e.get("subject") or "").split()),
+                "source": LTB if _ltb(e) else STAFF,
+            }
+        )
+    out: dict[str, dict[str, Any]] = {}
+    for k, rows in cands.items():
+        if k in TIMED_FIRST and any(r["time"] for r in rows):
+            rows = [r for r in rows if r["time"]]
+        out[k] = min(rows, key=lambda r: (r["date"], r["time"] or "99"))
     return out
 
 

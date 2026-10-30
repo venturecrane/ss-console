@@ -475,6 +475,31 @@ def test_a_case_refused_twice_is_declined_printed_for_a_hand_check_and_does_not_
     assert r._kept()["d12_declined"] == 1
 
 
+def test_a_refused_chunk_is_asked_once_on_opus_and_read_when_opus_answers(tmp_path):
+    """Captain, 2026-10-30: a refusal on the read model is asked once more on
+    claude-opus-5-5 before the case is declined."""
+    from litigation_testkit import M2
+
+    from medchron.litigation.discovery12.run import REFUSAL_RETRY_MODEL
+
+    seat = _two_cases()
+    client = Scripted12(
+        refuse=lambda cid, system: cid.startswith(M2) and "last check before" in system,
+    )
+    real = client._answer
+    client._answer = lambda r: (  # type: ignore[method-assign]
+        client._msg(**r["params"]) if r["params"].get("model") == REFUSAL_RETRY_MODEL else real(r)
+    )
+    r = _run(tmp_path, seat, client)
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    g = json.loads((r.data / "gates.json").read_text())
+    assert g["declined_count"] == 0
+    on_opus = [q for b in client.submitted for q in b if q["params"].get("model") == REFUSAL_RETRY_MODEL]
+    assert on_opus and all(q["custom_id"].startswith(M2) for q in on_opus)
+    assert printout.D12_DECLINED not in " ".join("\n".join(printout.text_of(r._pdf())).split())
+
+
 def test_a_resume_asks_only_the_refused_cases_missing_chunks_and_keeps_every_other_result(tmp_path):
     """The job of 2026-10-30 held on refusal markers written by the code before
     this one. Resumed with --redo gates, it asks again ONLY the refused case's
