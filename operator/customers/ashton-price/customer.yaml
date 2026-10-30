@@ -837,24 +837,34 @@ personas:
           # A comma-separated string (settings are scalars, ADR 0075). The
           # first entry receives the scheduled run; it must be in scope.admins.
           scheduled_recipients: 'christa@ashtonandprice.com'
-      # ---- the Case File Manager: BOUND ON REQUEST ONLY 2026-10-26 (case-file-manager) ----
-      # Increment 1 of the Case File Manager plan: a Named Administrator asks
-      # for a caseload (the files a person assists on) or named matters; the
-      # job reads each file, files a current File Status in it, files the
-      # ranked list in the Operator Library, and numbers the changes it
-      # proposes (a task the file proves done, a Medicals row from a bill whose
-      # text was read). A reply approving numbers is applied by the job after a
-      # fresh read; nothing changes without it. ON REQUEST only: there is NO
-      # cron row and scheduled is false (a standing schedule is the firm's yes,
-      # then the Captain's grid change). The lane holds every kind of job until
-      # its lane proof is accepted (case-file-manager.full / .apply). The
-      # per-job and monthly caps live in the firm's casefile-firm.yaml
-      # (engagements). Reserved to scope.admins.
-      - name: case-file-manager # admin-requested caseload review, queued as a job; never read in a turn
+      # ---- the Case File Manager: SCHEDULED (case-file-manager) ----
+      # LANE ACTIVATION RECORD. Bound on request 2026-10-26; the weekday
+      # schedule is the firm's yes to SMD's 10-27 proposal ("Re: Irma's
+      # files"). Christa Barrera, 2026-10-29 (letter 415, message
+      # 1a189a60510519de): "We would like to start the Case File Manager on
+      # Irma's caseload as a pilot, with the weekday check and the monthly full
+      # read running automatically." Her five conditions were confirmed in
+      # writing the same day (letter 416); billing starts only on a date
+      # confirmed with her after she has seen it work.
+      # A Named Administrator may still ask for a caseload or named matters on
+      # request. On schedule, the cron row below fires hourly on weekday
+      # mornings and wakes no model: each business day queues one re-check of
+      # what changed on each scheduled caseload, and the first business day of
+      # the month queues a full read instead. Each job files a current File
+      # Status in each file it read, files the ranked list in the Operator
+      # Library, and emails the list to the first scheduled_recipients entry,
+      # numbering the changes it proposes (a task the file proves done, a
+      # Medicals row from a bill whose text was read, a calendar entry). A reply
+      # approving numbers is applied by the job after a fresh read; nothing
+      # changes without it. The lane holds every kind of job until its proof is
+      # accepted (case-file-manager.full / .recheck / .apply). The per-job and
+      # monthly caps live in the firm's casefile-firm.yaml (engagements).
+      # Reserved to scope.admins.
+      - name: case-file-manager # admin-requested or weekday caseload review, queued as a job; never read in a turn
         version: pending
         initiation:
           manual: true
-          scheduled: false
+          scheduled: true
           webhook: false
         enabled: true
         settings:
@@ -862,6 +872,10 @@ personas:
           # The Operator Library matter's id, the same matter the litigation
           # lane files to; the broker pairs it with the library number.
           file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+          # Smokeball's staff display name for the Person Assisting (one staff
+          # row carries it; 94 Open+Pending matters on 2026-10-28).
+          scheduled_caseloads: 'Irma Campos'
+          scheduled_recipients: 'christa@ashtonandprice.com'
       # ---- the negotiation watch: ENABLED 2026-10-09 (negotiation-watch) ----
       # LANE ACTIVATION RECORD. On 2026-10-09 the Operator filled the
       # Negotiation Details tab on the firm's open matters from every offer
@@ -981,6 +995,13 @@ personas:
       # email goes out when the job enters it.
       - skill: negotiation-watch
         schedule: '7 8,12,16 * * 1-5' # weekdays 0807, 1207 and 1607 seat-local
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # The Case File Manager's weekday schedule (the firm's yes, quoted on the
+      # skill entry above). Hourly on weekday mornings; the broker queues at most
+      # one job per caseload per business day and wakes no turn.
+      - skill: case-file-manager
+        schedule: '19 6-13 * * 1-5' # weekdays hourly 0619-1319 seat-local, off :13 (auth check) and 14:17 (help review)
         pre_run: pre_run.py
         wake_policy: pre_run_decides
       # SMD ops (Captain, 2026-10-13), not a firm routine: the hourly Smokeball

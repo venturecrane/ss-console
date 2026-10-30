@@ -295,6 +295,16 @@ skills:
       sends the notice's message word for word. Declared compositional because
       the send is the woken turn's, not a pre_run dispatch, so the body-hash
       stamps do not apply; the cross-run invariants (one recipient) do.
+  case-file-manager:
+    render: compositional
+    note: >-
+      The cron's pre_run submits the day's casefile job per caseload and wakes
+      no turn; the job files each File Status and the ranked list in
+      Smokeball. Its completion wake binds one new email (recipient and
+      subject the broker's) and the turn composes a COUNTS-ONLY message, the
+      list itself attached, never a matter fact in the body. Declared
+      compositional because the turn writes the body; the cross-run
+      invariants (one recipient) apply.
 
   # ---- scott seat cron rows ----
   status-report-assembler:
