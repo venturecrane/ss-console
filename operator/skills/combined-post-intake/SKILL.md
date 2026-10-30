@@ -442,7 +442,7 @@ re-read is not needed; what the list carries comes from the record.
 
 Do this with the other keying, before step 4c. After a settlement offer's
 pages are `filed` (step 4), and only then, call
-`add_negotiation_rows(matter_id, rows, plaintiff_index)` with the filing's own
+`add_negotiation_rows(matter_id, rows, plaintiff_index, operator_tab)` with the filing's own
 `matter_id` and ONE entry in `rows`:
 
 - `offer_amount` is the offer as the letter prints it, with only the dollar
@@ -466,8 +466,16 @@ same amount on another date is already on that row) is placed with the issue
 `readback_mismatch` is `figure_not_saved`; a `refused` is `offer_not_written`
 with its reason in plain words. A letter that is an offer but has no amount or
 no date files as a letter and records `offer_not_written` ("the letter states
-no amount"). On a firm whose negotiation watch also reads offer documents, the
-watch finds this row already present and does not enter it twice.
+no amount"). A refusal that the tab is kept by the firm is `offer_not_written`
+too: the firm keeps that matter's Negotiation Details itself, and the Operator
+never writes there.
+
+`operator_tab` is always `true` here. It keeps a tab the Operator starts
+under its own summary line, which is what lets a firm's negotiation watch (if
+it runs one) recognize the row as the Operator's: the watch then finds the
+offer already present and neither enters it again nor emails about it. Without
+it the watch would read the tab as the firm's and email "not entered" about
+every later offer on that matter.
 
 ### 5. Record the bundle (HARD STEP, never skip), then reply or stay silent
 

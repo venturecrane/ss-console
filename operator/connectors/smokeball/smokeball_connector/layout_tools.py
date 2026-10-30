@@ -19,10 +19,14 @@ signed or settled."""
 from __future__ import annotations
 
 import json
+import os
 import time
+from datetime import date, datetime, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from .layout_config import load_layout_config
+from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .layout_sections import (
     AMOUNT_FIELDS,
     DETAILS_KEY,
@@ -56,6 +60,36 @@ def _client() -> Any:
     from . import server
 
     return server._get_client()
+
+
+def _seat_today() -> date:
+    """The seat's calendar day: ``HERMES_TIMEZONE``, else the authored
+    ``business_hours.timezone``, else UTC."""
+    zone = os.environ.get("HERMES_TIMEZONE", "").strip()
+    if not zone:
+        try:
+            import yaml
+
+            with open(os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh) or {}
+            hours = doc.get("business_hours") if isinstance(doc, dict) else None
+            zone = str((hours or {}).get("timezone") or "").strip() if isinstance(hours, dict) else ""
+        except Exception:  # noqa: BLE001 - an unreadable config dates the summary in UTC
+            zone = ""
+    try:
+        return datetime.now(ZoneInfo(zone or "UTC")).date()
+    except Exception:  # noqa: BLE001 - an unknown zone dates the summary in UTC
+        return datetime.now(timezone.utc).date()
+
+
+#: The seat's day; module-level so a test pins it.
+TODAY: Callable[[], date] = _seat_today
+
+
+def operator_summary(day: date) -> str:
+    """The Operator's own opening sentence for a tab it starts, the one
+    ``layout_sections.OPERATOR_DETAILS`` (and the negotiation watch) recognize."""
+    return f"Entered {day.month}/{day.day}/{day.year % 100:02d} from the offer letters and emails saved in this file."
 
 
 def _refused(reason: str, **extra: Any) -> dict[str, Any]:
@@ -312,6 +346,7 @@ def add_negotiation_rows(
     plaintiff_index: int | None = None,
     details: str = "",
     minimum_settlement: str = "",
+    operator_tab: bool = False,
 ) -> Any:
     """Add demand and offer rows to a matter's Negotiation Details tab.
     Classified INTERNAL_WRITE: the firm's own record; nothing is sent.
@@ -327,6 +362,15 @@ def add_negotiation_rows(
 
     ``plaintiff_index`` is needed only when the matter has a tab for more than
     one plaintiff; the refusal lists them, and the sender says which.
+
+    ``operator_tab`` true is for an offer the Operator found in a document
+    (the day's post), not one a person dictated: the tab must be one the
+    Operator keeps (empty, or under its own "Entered <date> ..." summary), so
+    a tab the firm keeps itself refuses and nothing is written; and an empty
+    tab gets that summary with the row, so it stays the Operator's. Without
+    the summary the negotiation watch reads the tab as the firm's own, emails
+    "not entered" about every later offer on that matter and enters none.
+    ``details`` is ignored with it.
 
     Returns ``status``: ``written`` (every value read back as written; each
     entry's ``row``); ``readback_mismatch`` (``mismatch`` names what did not
@@ -353,6 +397,11 @@ def add_negotiation_rows(
     if found.get("status") == "refused":
         return found
     item, values = found["item"], found["values"]
+    if operator_tab:
+        summary = values.get(DETAILS_KEY)
+        if negotiation_rows(values) and not operator_details(summary):
+            return _refused("this matter's Negotiation Details are kept by the firm; nothing was written")
+        details = "" if filled(summary) else operator_summary(TODAY())
     plan = _plan(parsed, negotiation_rows(values))
     if plan.get("status") == "refused":
         return plan
