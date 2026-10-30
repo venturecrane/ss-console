@@ -39,7 +39,7 @@ from . import (
 )
 from . import carry, manifest, parity, passes, read, seedcheck, textcache, update, vocab
 from .progress import Progress
-from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported
+from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported for tests and callers that import these from run
 from .runbase import RunBase
 from .outcome import REASON, LitigationFailed, LitigationHold, Verdict
 from .tools import MatterContext, ReadIncomplete, dump
