@@ -135,7 +135,8 @@ class Discovery12Run(LitigationRun):
         before = {"verify": "read", "audit": "verify"}[role]
         return self._mjson(mid, batch.FILE.format(p=before, k=k))
 
-    def _pass(self, role: str) -> None:
+    def _items(self, role: str) -> tuple[list[Item], dict[str, Any], dict[str, int]]:
+        """(the pass's requests still to answer, each case's context, its chunk count)."""
         items: list[Item] = []
         ctxs: dict[str, Any] = {}
         want: dict[str, int] = {}
@@ -154,8 +155,7 @@ class Discovery12Run(LitigationRun):
                     if prev is None:
                         continue
                     check = "\nTHE RESULT TO CHECK:\n" + book.for_model(prev["result"], ctx)
-                body = batch.papers(ctx.line, docs)
-                text = batch.user_text(self._header(m), body, k, len(parts), check)
+                text = batch.user_text(self._header(m), batch.papers(ctx.line, docs), k, len(parts), check)
                 items.append(
                     Item(
                         f"{mid}-{k}",
@@ -163,64 +163,65 @@ class Discovery12Run(LitigationRun):
                         {"mid": mid, "k": k},
                     )
                 )
+        return items, ctxs, want
 
-        #: Items answered without the tool on the first round; asked once more
-        #: (2026-10-29 review: one such reply marked a whole case unread, and an
-        #: unread case holds the report). An ERRORED item the doorway already
-        #: retries once (``Doorway.batch_call``); a no-tool answer is a success
-        #: to it, so the retry is here.
-        notool: list[Item] = []
-        final_round = [False]
+    def _record(self, role: str, ctxs: dict[str, Any], it: Item, r: Result | None, err: str | None, last: bool) -> bool:
+        """Write one answered chunk. False when the answer did not call the
+        pass's tool and this is not the last round (the caller asks again)."""
+        mid, k = it.meta["mid"], it.meta["k"]
+        if r is None:
+            dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"})
+            return True
+        name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
+        got = batch.tool_input(r.message, name)
+        if got is None:
+            if not last:
+                return False
+            dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
+            return True
+        ctx = ctxs[mid]
+        if role == "read":
+            rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
+        else:
+            prev = self._prev(mid, role, k) or {}
+            result = copy.deepcopy(prev["result"])
+            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
+            rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
+        dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
+        return True
 
-        def on_result(it: Item, r: Result | None, err: str | None) -> None:
-            mid, k = it.meta["mid"], it.meta["k"]
-            if r is None:
-                dump(
-                    self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"}
-                )
-                return
-            name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
-            got = batch.tool_input(r.message, name)
-            if got is None:
-                if not final_round[0]:
-                    notool.append(it)
-                    return
-                dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
-                return
-            ctx = ctxs[mid]
-            if role == "read":
-                rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
-            else:
-                prev = self._prev(mid, role, k) or {}
-                result = copy.deepcopy(prev["result"])
-                log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
-                rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
-            dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
-
-        def submit(todo: list[Item], where: str) -> None:
-            summary = self.doorway.batch_call(
-                batch.STAGES[role],
-                todo,
-                on_result,
-                model=self.firm.model(role),
-                max_tokens=batch.MAX_TOKENS,
-                batch_dir=self.data / where,
-                system=sections.system_for(role, self.today) + batch.only_by_tool(role),
-                **batch.shape(role),
+    def _submit(self, role: str, todo: list[Item], where: str, on_result: Any) -> None:
+        summary = self.doorway.batch_call(
+            batch.STAGES[role],
+            todo,
+            on_result,
+            model=self.firm.model(role),
+            max_tokens=batch.MAX_TOKENS,
+            batch_dir=self.data / where,
+            system=sections.system_for(role, self.today) + batch.only_by_tool(role),
+            **batch.shape(role),
+        )
+        if summary.timed_out:
+            raise LitigationFailed(
+                f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
             )
-            if summary.timed_out:
-                raise LitigationFailed(
-                    f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
-                )
 
+    def _pass(self, role: str) -> None:
+        """One pass over every chunk still to answer. A chunk answered without
+        the pass's tool is asked ONCE more, in its own batch dir (the doorway
+        resumes a dir's batches by custom id, so the same dir would hand back the
+        same answer), before its case is marked unread (2026-10-29 review: one
+        such reply marked a whole case unread, and an unread case holds the
+        report). An ERRORED item the doorway already retries once."""
+        items, ctxs, want = self._items(role)
+        notool: list[Item] = []
         if items:
-            submit(items, "batches")
+            self._submit(
+                role, items, "batches", lambda it, r, e: self._record(role, ctxs, it, r, e, False) or notool.append(it)
+            )
         if notool:
-            # Its own batch dir: the doorway resumes a dir's batches by custom id,
-            # so the same dir would hand back the same no-tool answer.
-            final_round[0] = True
             self.log(f"[{role}] {len(notool)} answers did not call the tool; asking those once more")
-            submit(list(notool), "batches-notool")
+            self._submit(role, notool, "batches-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True))
         dump(self.data / f"d12-{role}-chunks.json", want)
 
     def _read1(self) -> None:
