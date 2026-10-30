@@ -86,3 +86,20 @@ def test_no_insurance_section_when_none_recorded() -> None:
     assert "<h2>Insurance</h2>" not in render_html(
         _rec({"first_party": [], "third_party": []}), "2026-10-27", {}, RANK, {}
     )
+
+
+def test_letters_print_in_the_firms_words_ready_first() -> None:
+    rec = {
+        **_rec({}),
+        "letters": [
+            {"type": "health_insurer_notice", "status": "needs_fact", "missing": ["health plan name"]},
+            {"type": "police_report_request", "status": "draft", "addressee": "Sacramento Police Department"},
+            {"type": "wage_loss_letter", "status": "not_needed", "reason": "Client was not working."},
+        ],
+    }
+    page = render_html(rec, "2026-10-30", {}, RANK, {})
+    assert "needs_fact" not in page and "police_report_request" not in page
+    ready = page.index("Police report request, to Sacramento Police Department")
+    assert ready < page.index("Health insurer notice") < page.index("Wage loss letter")
+    assert "Ready to go out" in page and "Waiting on a fact" in page and "health plan name" in page
+    assert "Client was not working." in page

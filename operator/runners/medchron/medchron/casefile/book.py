@@ -50,6 +50,40 @@ ACTION_WORDS = {
     "draft_letter": "Letter drafted",
     "question": "Question for the firm",
 }
+# Letter readiness in the firm's words (letter 416: "which letters are ready to
+# go out and which are waiting on a fact"). The reader's codes never print.
+LETTER_TYPE_WORDS = {
+    "police_report_request": "Police report request",
+    "first_party_rep_letter": "1st party rep letter",
+    "third_party_rep_letter": "3rd party rep letter",
+    "health_insurer_notice": "Health insurer notice",
+    "medical_records_request": "Medical records request",
+    "wage_loss_letter": "Wage loss letter",
+    "dec_page_request": "Dec page request",
+}
+LETTER_STATUS_WORDS = {"draft": "Ready to go out", "needs_fact": "Waiting on a fact", "not_needed": "Not needed"}
+_LETTER_ORDER = {"draft": 0, "needs_fact": 1, "not_needed": 2}
+
+
+def letter_rows(rec: dict[str, Any]) -> list[list[str]]:
+    """Letters ready first, then waiting on a fact (naming it), then not needed."""
+    rows = []
+    for x in sorted(
+        (x for x in rec.get("letters") or [] if isinstance(x, dict)),
+        key=lambda x: _LETTER_ORDER.get(str(x.get("status")), 3),
+    ):
+        kind = str(x.get("type") or "")
+        name = (x.get("label") if kind == "other" else None) or LETTER_TYPE_WORDS.get(kind) or kind.replace("_", " ")
+        if x.get("addressee"):
+            name = f"{name}, to {x['addressee']}"
+        status = str(x.get("status") or "")
+        detail = (
+            ", ".join(x.get("missing") or []) if status == "needs_fact" else (x.get("reason") or x.get("note") or "")
+        )
+        rows.append([e(name), e(LETTER_STATUS_WORDS.get(status, status)), e(detail)])
+    return rows
+
+
 CSS = """
 @page { size: Letter; margin: 0.6in; }
 * { box-sizing: border-box; }
@@ -263,11 +297,9 @@ def _lists(rec: dict[str, Any], verdicts: dict[str, Any]) -> str:
     looks = [f"{e(f.get('finding'))}" for f in [*(rec.get("injury_flags") or []), *(rec.get("time_sensitive") or [])]]
     if looks:
         parts.append("<h2>Worth a look</h2>\n<ul>\n" + "".join(f"<li>{x}</li>\n" for x in looks) + "</ul>\n")
-    letters = [
-        [e(x.get("type")), e(x.get("status")), e(", ".join(x.get("missing") or []))] for x in rec.get("letters") or []
-    ]
+    letters = letter_rows(rec)
     if letters:
-        parts.append("<h2>Letters</h2>\n" + table(["Letter", "Status", "Missing"], letters))
+        parts.append("<h2>Letters</h2>\n" + table(["Letter", "Status", "What it needs or why"], letters))
     qs = questions_kept(rec, verdicts)
     if qs:
         parts.append("<h2>Questions</h2>\n<ol>\n" + "".join(f"<li>{e(q)}</li>\n" for q in qs) + "</ol>\n")
