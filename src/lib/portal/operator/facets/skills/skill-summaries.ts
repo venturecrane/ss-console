@@ -138,6 +138,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Stores the visitors you describe after an open house, answers who you met, and emails you follow-up drafts on a fixed cadence. Never contacts a visitor.',
   'post-intake-daily-list':
     'Emails the person you name one list a day of the post that needs a word: letters it could not place, keying to check, court papers to calendar. Nothing on a quiet day.',
+  'records-order-chase':
+    'Emails the person you name a weekly list of records orders placed through the Operator that have not come in, each with a follow-up ready for a person to send. Sends nothing itself.',
   'operator-help':
     'Answers "how do we work together?" for anyone at your firm: how to ask for things, the requests that person may make, and when to send examples to train it. Never changes your files.',
   'operator-introduce':

@@ -403,6 +403,14 @@ skill_bindings:
       - { artifact: post_list, seam: email_send, class: staff }
       - { artifact: post_list_record, seam: local_file, class: record }
     outbound: derived # the list to the authored recipient; a firm address, so the send resolves internal
+  # The weekly records chase (letter 416 #10): one email a week to the firm's
+  # authored recipient listing the records orders the Operator placed that the
+  # vendor does not show as completed, each with a follow-up for a person to
+  # send. Rendered by the pre-run; nothing goes to the vendor or a provider.
+  records-order-chase:
+    internal:
+      - { artifact: records_chase_list, seam: email_send, class: staff }
+    outbound: derived # the list to the authored recipient; a firm address, so the send resolves internal
   service-confirmation-watcher:
     internal:
       - { artifact: capture_surface, seam: session_output, class: staff }

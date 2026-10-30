@@ -193,6 +193,9 @@ const EXPECTED_VERBS = [
   'ops_close_by_smd',
   'ops_propose',
   'ops_resolve',
+  // Letter 416 #10, the weekly records chase: the records orders the Operator
+  // placed (committed acts), read-only, no facility or client. Agent uid and root.
+  'records_orders_placed',
   // ADR 0089 staff send-as on the staff member's emailed approval.
   'send_as_decide',
   // The approve buttons (amendment 5a). Not gateway-only: the seat's web gate is
