@@ -1,7 +1,7 @@
 """The three passes as single-shot requests, so they can go through the Batch
 API at half price (2026-10-29). A tool loop cannot be batched: each request
 carries its papers' TEXT (from the job's extracted text and the text cache)
-and is answered with one forced tool call.
+and is answered with one call of its pass's tool.
 
 The unit is one CHUNK of one case: a case's discovery papers, newest first,
 cut into chunks of at most ``CHUNK_CHARS`` (one paper is never split; a paper
@@ -13,13 +13,25 @@ result is its chunks' results together. Every pass writes one file per chunk
 
 from __future__ import annotations
 
+import copy
 import json
+import re
 from typing import Any, Callable
 
 from . import sections
 
-#: Characters of paper text one request carries (about 100k tokens).
-CHUNK_CHARS = 400_000
+#: Characters of paper text one request carries. A case that fits is read as
+#: ONE request (no split). Measured 2026-10-29 on the real API: 382,668
+#: characters were 176,349 input tokens (2.17 per token), so 400k came to about
+#: 184k input + the 16k output budget + the system prompt, over a 200k window.
+#: The repo records no larger window for the read model, so 360k (about 166k
+#: input tokens) keeps a measured margin; a split case is reconciled case-wide
+#: (``merge``).
+CHUNK_CHARS = 360_000
+#: Characters per input token for the cost projection: measured 2.17 on the
+#: real API (2026-10-29), taken low so the projection errs high. It was 4,
+#: which under-projected a batch's input by almost half against the job cap.
+CHARS_PER_TOKEN = 2.0
 STAGES = {"read": "litigation_d12_read", "verify": "litigation_d12_verify", "audit": "litigation_d12_audit"}
 PASSES = ("read", "verify", "audit")
 FILE = "d12-{p}-c{k}.json"
@@ -47,6 +59,13 @@ def chunk(docs: list[tuple[int, str]], limit: int = CHUNK_CHARS) -> list[list[tu
 
 
 ATTACHMENT = "\n\n[ATTACHMENT] "
+
+
+def text_hash(text: str) -> str:
+    """The whole normalized text's digest: two papers with this equal are one paper."""
+    import hashlib
+
+    return hashlib.sha256(" ".join(text.lower().split()).encode()).hexdigest()
 
 
 def paper_key(text: str) -> str:
@@ -119,24 +138,81 @@ def only_by_tool(role: str) -> str:
     )
 
 
+#: Which response wins when chunks disagree about one request: a response
+#: found in ANY chunk is a response (a split case reads part 2's requests
+#: without part 1's responses, 2026-10-29 design review).
+_RESPONSE_RANK = {"yes": 3, "not yet due": 2, "unclear": 1, "no": 0}
+
+
+def _norm(s: Any) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).split())
+
+
+def _same_request(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """One set or event, read in two chunks: same item, direction and party,
+    and served on the same date or one chunk did not see the date."""
+    if (_norm(a.get("item")), a.get("direction"), _norm(a.get("party"))) != (
+        _norm(b.get("item")),
+        b.get("direction"),
+        _norm(b.get("party")),
+    ):
+        return False
+    da, db = (a.get("served") or {}).get("date"), (b.get("served") or {}).get("date")
+    return not da or not db or da == db
+
+
+def _first_dated(a: Any, b: Any) -> Any:
+    """The value with a date; when both have one, the earlier."""
+    da, db = (a or {}).get("date"), (b or {}).get("date")
+    if not db:
+        return a
+    if not da:
+        return b
+    return a if str(da) <= str(db) else b
+
+
+def _rank(r: dict[str, Any]) -> tuple[int, bool]:
+    return _RESPONSE_RANK.get(str(r.get("value")), 1), bool(r.get("date"))
+
+
+def _join(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Two chunks' entries for one request as one entry."""
+    ra, rb = a.get("response") or {}, b.get("response") or {}
+    notes = [n for n in (a.get("notes"), b.get("notes")) if n]
+    return {
+        **a,
+        "served": _first_dated(a.get("served"), b.get("served")),
+        "due": _first_dated(a.get("due"), b.get("due")),
+        "response": ra if _rank(ra) >= _rank(rb) else rb,
+        "extension": _first_dated(a.get("extension"), b.get("extension")),
+        "notes": " ".join(dict.fromkeys(notes)),
+    }
+
+
 def merge(chunks: list[dict[str, Any]]) -> dict[str, Any]:
-    """A case's chunk results together: each section's entries in chunk order,
-    an identical entry once; flags once each."""
+    """A case's chunk results together, RECONCILED case-wide: one request read
+    in several chunks is one entry, and a response found in any chunk is its
+    response (with that chunk's source); each section's entries otherwise in
+    chunk order; flags once each."""
     out: dict[str, Any] = {"sections": {k: [] for k in sections.KEYS}, "flags": []}
     for c in chunks:
         for k in sections.KEYS:
+            rows = out["sections"][k]
             for e in (c.get("sections") or {}).get(k) or []:
-                if e not in out["sections"][k]:
-                    out["sections"][k].append(e)
+                at = next((i for i, x in enumerate(rows) if _same_request(x, e)), None)
+                if at is None:
+                    rows.append(copy.deepcopy(e))
+                elif rows[at] != e:
+                    rows[at] = _join(rows[at], e)
         out["flags"] += [f for f in c.get("flags") or [] if f not in out["flags"]]
     return out
 
 
 def project_usd(rate: Any, chars: int, items: int, batch_multiplier: float) -> float:
-    """A batch's projected cost before it is submitted: its input at about four
-    characters a token, every item's whole output budget, at the batch rate.
-    The output side is the ceiling, so the projection errs high."""
-    tokens_in = chars / 4
+    """A batch's projected cost before it is submitted: its input at
+    ``CHARS_PER_TOKEN``, every item's whole output budget, at the batch rate.
+    Both sides err high, so the cap check binds before the spend, never after."""
+    tokens_in = chars / CHARS_PER_TOKEN
     cents = tokens_in * rate.input_per_million_cents / 1e6 + items * MAX_TOKENS * rate.output_per_million_cents / 1e6
     return cents / 100 * batch_multiplier
 

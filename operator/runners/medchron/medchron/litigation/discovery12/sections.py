@@ -112,7 +112,7 @@ or a stipulation state it; null when no document states it), response (whether a
 {responses}, and its date), extension (a stipulated or granted extension, its date and what it extends to), and
 plain notes. Supplemental and amended responses go under supplemental, naming the set they supplement. A
 nonparty deposition subpoena (records or testimony) goes under nonparty_subpoenas, not depositions. Before you
-record "no" response or an empty section, search the file for what would contradict it, including emails.
+record "no" response or an empty section, search the papers for what would contradict it.
 Write plain sentences: facts only, no legal advice, no doc numbers, no file ids. Today is {today}."""
 
 TAILS = {
