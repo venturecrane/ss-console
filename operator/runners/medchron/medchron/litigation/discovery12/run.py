@@ -114,6 +114,7 @@ class Discovery12Run(LitigationRun):
         by = {str(f["id"]): f for f in inventory.files_of(self.data, mid)}
         docs: list[tuple[int, str]] = []
         seen: set[str] = set()
+        hashes: set[str] = set()
         mail: list[tuple[int, str]] = []
         for fid in self._plan()[mid]["candidates"]:
             n = ctx.by_id.get(fid)
@@ -122,9 +123,15 @@ class Discovery12Run(LitigationRun):
                 continue
             if manifest.is_email(by.get(fid) or {}):
                 mail.append((n, text))
-            else:
-                seen.add(batch.paper_key(text))
-                docs.append((n, text))
+                continue
+            # An exact copy of a paper already in the set (a served copy, a
+            # re-save) is read once: the first, newest, is the one cited.
+            whole = batch.text_hash(text)
+            if whole in hashes:
+                continue
+            hashes.add(whole)
+            seen.add(batch.paper_key(text))
+            docs.append((n, text))
         for n, text in mail:
             kept = batch.attachments_only(text, self.firm.discovery_rx, seen)
             if kept:
@@ -135,7 +142,8 @@ class Discovery12Run(LitigationRun):
         before = {"verify": "read", "audit": "verify"}[role]
         return self._mjson(mid, batch.FILE.format(p=before, k=k))
 
-    def _pass(self, role: str) -> None:
+    def _items(self, role: str) -> tuple[list[Item], dict[str, Any], dict[str, int]]:
+        """(the pass's requests still to answer, each case's context, its chunk count)."""
         items: list[Item] = []
         ctxs: dict[str, Any] = {}
         want: dict[str, int] = {}
@@ -154,8 +162,7 @@ class Discovery12Run(LitigationRun):
                     if prev is None:
                         continue
                     check = "\nTHE RESULT TO CHECK:\n" + book.for_model(prev["result"], ctx)
-                body = batch.papers(ctx.line, docs)
-                text = batch.user_text(self._header(m), body, k, len(parts), check)
+                text = batch.user_text(self._header(m), batch.papers(ctx.line, docs), k, len(parts), check)
                 items.append(
                     Item(
                         f"{mid}-{k}",
@@ -163,44 +170,65 @@ class Discovery12Run(LitigationRun):
                         {"mid": mid, "k": k},
                     )
                 )
+        return items, ctxs, want
 
-        def on_result(it: Item, r: Result | None, err: str | None) -> None:
-            mid, k = it.meta["mid"], it.meta["k"]
-            if r is None:
-                dump(
-                    self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"}
-                )
-                return
-            name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
-            got = batch.tool_input(r.message, name)
-            if got is None:
-                dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
-                return
-            ctx = ctxs[mid]
-            if role == "read":
-                rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
-            else:
-                prev = self._prev(mid, role, k) or {}
-                result = copy.deepcopy(prev["result"])
-                log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
-                rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
-            dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
+    def _record(self, role: str, ctxs: dict[str, Any], it: Item, r: Result | None, err: str | None, last: bool) -> bool:
+        """Write one answered chunk. False when the answer did not call the
+        pass's tool and this is not the last round (the caller asks again)."""
+        mid, k = it.meta["mid"], it.meta["k"]
+        if r is None:
+            dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": f"read_error (batch): {str(err)[:200]}"})
+            return True
+        name = sections.RECORD_RESULT["name"] if role == "read" else sections.RECORD_VERDICTS["name"]
+        got = batch.tool_input(r.message, name)
+        if got is None:
+            if not last:
+                return False
+            dump(self._mfile(mid, passes.UNREAD), {"stage": role, "reason": "read_incomplete: no recorded answer"})
+            return True
+        ctx = ctxs[mid]
+        if role == "read":
+            rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
+        else:
+            prev = self._prev(mid, role, k) or {}
+            result = copy.deepcopy(prev["result"])
+            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
+            rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
+        dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
+        return True
 
-        if items:
-            summary = self.doorway.batch_call(
-                batch.STAGES[role],
-                items,
-                on_result,
-                model=self.firm.model(role),
-                max_tokens=batch.MAX_TOKENS,
-                batch_dir=self.data / "batches",
-                system=sections.system_for(role, self.today) + batch.only_by_tool(role),
-                **batch.shape(role),
+    def _submit(self, role: str, todo: list[Item], where: str, on_result: Any) -> None:
+        summary = self.doorway.batch_call(
+            batch.STAGES[role],
+            todo,
+            on_result,
+            model=self.firm.model(role),
+            max_tokens=batch.MAX_TOKENS,
+            batch_dir=self.data / where,
+            system=sections.system_for(role, self.today) + batch.only_by_tool(role),
+            **batch.shape(role),
+        )
+        if summary.timed_out:
+            raise LitigationFailed(
+                f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
             )
-            if summary.timed_out:
-                raise LitigationFailed(
-                    f"stage_unfinished: {role}: {len(summary.timed_out)} requests are still processing; resume later"
-                )
+
+    def _pass(self, role: str) -> None:
+        """One pass over every chunk still to answer. A chunk answered without
+        the pass's tool is asked ONCE more, in its own batch dir (the doorway
+        resumes a dir's batches by custom id, so the same dir would hand back the
+        same answer), before its case is marked unread (2026-10-29 review: one
+        such reply marked a whole case unread, and an unread case holds the
+        report). An ERRORED item the doorway already retries once."""
+        items, ctxs, want = self._items(role)
+        notool: list[Item] = []
+        if items:
+            self._submit(
+                role, items, "batches", lambda it, r, e: self._record(role, ctxs, it, r, e, False) or notool.append(it)
+            )
+        if notool:
+            self.log(f"[{role}] {len(notool)} answers did not call the tool; asking those once more")
+            self._submit(role, notool, "batches-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True))
         dump(self.data / f"d12-{role}-chunks.json", want)
 
     def _read1(self) -> None:
@@ -348,6 +376,41 @@ class Discovery12Run(LitigationRun):
     def _report(self) -> None:
         return None
 
+    # ---- the per-chunk results: kept, listed, reopened only on purpose ----------------------------
+    def _kept(self) -> dict[str, int]:
+        """Every per-chunk result on disk, listed in ``data/d12-results.json``
+        (case id -> pass -> files, relative to ``data``) so a later list can
+        reuse them: discovery12 has no incremental carry, and nothing in the
+        lane prunes a job dir. Returns the verdict's counts per pass."""
+        listing: dict[str, dict[str, list[str]]] = {}
+        counts = {f"d12_{p}_chunks": 0 for p in batch.PASSES}
+        root = self.data / "m"
+        for mdir in sorted(root.iterdir()) if root.is_dir() else []:
+            for p in batch.PASSES:
+                got = sorted(x.name for x in mdir.glob(batch.FILE.format(p=p, k="*")))
+                if got:
+                    listing.setdefault(mdir.name, {})[p] = [f"m/{mdir.name}/{x}" for x in got]
+                    counts[f"d12_{p}_chunks"] += len(got)
+        dump(self.data / "d12-results.json", listing)
+        return counts
+
+    def reopen(self, stages: list[str]) -> None:
+        """The run's reopen, plus each reopened pass's per-chunk results: the
+        pass skips a chunk whose file exists, so a redo that left them would
+        silently re-use the answers it was asked to redo."""
+        super().reopen(stages)
+        order: list[str] = list(STAGES)
+        known = [s for s in stages if s in order]
+        if not known:
+            return
+        redo = {"read1": "read", "read2": "verify", "read3": "audit"}
+        passes_ = [redo[s] for s in order[min(order.index(s) for s in known) :] if s in redo]
+        root = self.data / "m"
+        for mdir in root.iterdir() if root.is_dir() else []:
+            for p in passes_:
+                for x in mdir.glob(batch.FILE.format(p=p, k="*")):
+                    x.unlink(missing_ok=True)
+
     def _walk(self) -> Verdict:
         for name in STAGES:
             if name == "file" and proof_mode.active():
@@ -358,6 +421,7 @@ class Discovery12Run(LitigationRun):
                         {"role": role, "name": p.name, "size": p.stat().st_size}
                         for role, p in ((ROLE, self._out()), (PRINTOUT_ROLE, self._pdf()))
                     ],
+                    counts=self._kept(),
                 )
             self._stage(name, getattr(self, f"_{name}"))
             if name == "inventory" and not self._matters():
@@ -369,6 +433,7 @@ class Discovery12Run(LitigationRun):
             stage="report",
             files=[{"role": role, **{k: f[k] for k in keep}} for role, f in both],
             folder_id=both[0][1]["folder_id"],
+            counts=self._kept(),
             proof={
                 "readback": "confirmed",
                 "files": [{k: f[k] for k in ("name", "file_id", "size", "sha256")} for _r, f in both],

@@ -335,6 +335,92 @@ def test_an_email_contributes_only_its_discovery_attachments_never_its_body():
     assert batch.attachments_only("From: a\n\nonly a body", rx, set()) == ""
 
 
+def test_two_copies_of_one_paper_hash_alike_and_a_different_paper_does_not():
+    a = "FORM INTERROGATORIES\nSet One   served 3/5/2026"
+    assert batch.text_hash(a) == batch.text_hash("form interrogatories set one served 3/5/2026")
+    assert batch.text_hash(a) != batch.text_hash(a.replace("One", "Two"))
+
+
 def test_the_fake_refuses_a_forced_tool_as_the_api_does():
     with pytest.raises(ValueError, match="not supported for this model"):
         Scripted12()._msg(tool_choice={"type": "tool", "name": "record_discovery"}, system="x", messages=[])
+
+
+# ---- the 2026-10-29 design review --------------------------------------------------------------
+def _e(item: str, served: Any, value: str, rdate: Any = None, party: str = "Delta") -> dict[str, Any]:
+    return {
+        "item": item,
+        "direction": "propounded by the firm",
+        "party": party,
+        "served": {"date": served, "source": {"file_id": "a"} if served else None},
+        "due": {"date": None, "source": None},
+        "response": {"value": value, "date": rdate, "source": {"file_id": "r"} if rdate else None},
+        "extension": {"date": None, "detail": "", "source": None},
+        "notes": "",
+    }
+
+
+def test_a_request_answered_in_any_chunk_is_answered_case_wide():
+    """A split case read part 2's request without part 1's response, and printed 'no'."""
+    part1 = {"sections": {"frogs": [_e("Form Interrogatories, Set One", None, "yes", "2026-04-04")]}, "flags": []}
+    part2 = {"sections": {"frogs": [_e("Form interrogatories - set one", "2026-03-05", "no")]}, "flags": []}
+    got = batch.merge([part2, part1])["sections"]["frogs"]
+    assert len(got) == 1
+    assert got[0]["response"]["value"] == "yes" and got[0]["response"]["date"] == "2026-04-04"
+    assert got[0]["served"]["date"] == "2026-03-05"
+
+
+def test_two_sets_served_on_different_dates_or_parties_stay_apart():
+    a = {"sections": {"frogs": [_e("Form Interrogatories, Set One", "2026-03-05", "yes", "2026-04-04")]}}
+    b = {"sections": {"frogs": [_e("Form Interrogatories, Set One", "2026-06-01", "no")]}}
+    c = {"sections": {"frogs": [_e("Form Interrogatories, Set One", "2026-03-05", "no", party="Echo")]}}
+    assert len(batch.merge([a, b, c])["sections"]["frogs"]) == 3
+
+
+class NoToolOnce(Scripted12):
+    """The first read answers in text only, as a model may with tool_choice auto."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(**kw)
+        self.texted = False
+
+    def _msg(self, **params: Any) -> Any:
+        if not self.texted and "YOUR PASS: determine all twelve" in json.dumps(params.get("system")):
+            self.texted = True
+            self.calls.append(params)
+            text = {"type": "text", "text": "Here it is."}
+            return SimpleNamespace(content=[text], stop_reason="end_turn", usage=_usage())
+        return super()._msg(**params)
+
+
+def test_a_reply_without_the_tool_is_asked_once_more_before_the_case_is_unread(tmp_path):
+    seat = LitSeat({M1: disc_docs()})
+    client = NoToolOnce()
+    r = _run(tmp_path, seat, client)
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    assert client.texted and len(client.submitted) == 4  # read, the read asked again, verify, audit
+    assert (r.data / "batches-notool").is_dir()
+
+
+def test_the_per_chunk_results_are_listed_and_a_redo_clears_only_its_passes(tmp_path):
+    seat = LitSeat({M1: disc_docs()})
+    r = _run(tmp_path, seat, Scripted12())
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    assert v.counts == {"d12_read_chunks": 1, "d12_verify_chunks": 1, "d12_audit_chunks": 1}
+    listing = json.loads((r.data / "d12-results.json").read_text())
+    assert listing[M1]["audit"] == [f"m/{M1}/d12-audit-c0.json"]
+    r.reopen(["read2"])
+    left = sorted(x.name for x in (r.data / "m" / M1).glob("d12-*-c*.json"))
+    assert left == ["d12-read-c0.json"]
+
+
+def test_the_cost_projection_uses_the_measured_token_ratio():
+    rate = SimpleNamespace(input_per_million_cents=200, output_per_million_cents=0)
+    # 2,000,000 characters at 2.0 per token is 1M tokens: $2.00 at $2/M input.
+    assert batch.project_usd(rate, 2_000_000, 0, 1.0) == pytest.approx(2.0)
+
+
+def test_the_prompt_no_longer_sends_the_reader_to_email_bodies():
+    assert "including emails" not in sections.system_for("read", TODAY)
