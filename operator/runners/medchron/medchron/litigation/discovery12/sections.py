@@ -215,6 +215,29 @@ def dated_values(result: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
+#: What a date the gates could not confirm prints instead of the date
+#: (2026-10-29): an unconfirmed date is never shown as fact, and one such value
+#: no longer holds the whole report (the 10-23 list held on 34 of them, 11 of
+#: which the paper did carry in a form the matcher missed).
+UNCONFIRMED = "date not confirmed in the cited paper"
+#: The share of a report's dates that may be unconfirmed before it holds.
+MAX_UNCONFIRMED_SHARE = 0.10
+
+
+def unconfirm(result: dict[str, Any], paths: set[str]) -> int:
+    """Move each named value's date out of ``date`` (kept as
+    ``unconfirmed_date``, marked ``unconfirmed``); returns how many moved."""
+    n = 0
+    for key in KEYS:
+        for i, e in enumerate(result.get("sections", {}).get(key) or []):
+            for f in DATED:
+                v = e.get(f)
+                if isinstance(v, dict) and v.get("date") and f"{key}[{i}].{f}" in paths:
+                    v["unconfirmed_date"], v["date"], v["unconfirmed"] = v["date"], None, True
+                    n += 1
+    return n
+
+
 def findings(
     number: str, result: dict[str, Any], text_of: Callable[[str], str | None], on_matter: set[str]
 ) -> list[tuple[str, str, str]]:

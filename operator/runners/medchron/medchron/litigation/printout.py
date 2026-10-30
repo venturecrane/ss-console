@@ -157,10 +157,14 @@ D12_NOT_READ = "No discovery paper was found by name in the file; not read."
 def _dated(v: Any, extra: str = "") -> str:
     """A date with the paper it was read from: '2026-03-05 (paper.pdf, 2026-03-05)'."""
     v = v if isinstance(v, dict) else {}
+    src = book._src(v)
+    if v.get("unconfirmed"):  # the gates could not find it in its paper (discovery12/sections.py)
+        from .discovery12.sections import UNCONFIRMED
+
+        return " ".join(x for x in (UNCONFIRMED, f"({src})" if src else "", extra) if x)
     d = str(v.get("date") or "")
     if not d:
         return extra
-    src = book._src(v)
     return " ".join(x for x in (d, f"({src})" if src else "", extra) if x)
 
 

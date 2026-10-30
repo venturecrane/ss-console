@@ -70,6 +70,10 @@ class Scripted12:
         )  # fmt: skip
 
     def _msg(self, **params: Any) -> Any:
+        # The real API refuses a forced tool on this model (2026-10-29 proof:
+        # every batched read failed with this message); so does the fake.
+        if (params.get("tool_choice") or {}).get("type") in ("tool", "any"):
+            raise ValueError("tool_choice: type 'tool' and 'any' are not supported for this model")
         self.calls.append(params)
         system = json.dumps(params.get("system"))
         if "YOUR PASS: determine all twelve" in system:
@@ -174,11 +178,28 @@ def test_the_interactive_path_gives_the_same_result(tmp_path):
     assert all(not x["batch"] for x in _ledger(r))
 
 
-def test_a_date_not_in_its_cited_paper_holds_the_report(tmp_path):
+def test_a_report_whose_dates_are_mostly_unconfirmed_holds(tmp_path):
     seat = LitSeat({M1: disc_docs()})
-    v = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09"))).run()
-    assert v.verdict == "held" and v.reason.startswith("gate_refused:") and "date not in the cited document" in v.reason
+    r = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09")))
+    v = r.run()
+    assert v.verdict == "held" and v.reason.startswith("gate_refused:") and "of dates unconfirmed" in v.reason
     assert seat.sent == []
+    g = json.loads((r.data / "gates.json").read_text())
+    assert g["unconfirmed_count"] == 1 and "date not in the cited document" in g["unconfirmed"]
+
+
+def test_one_unconfirmed_date_is_printed_as_unconfirmed_and_never_as_fact(tmp_path, monkeypatch):
+    """2026-10-29: one value no longer holds every case; it prints as unconfirmed, with its paper."""
+    monkeypatch.setattr(sections, "MAX_UNCONFIRMED_SHARE", 1.0)
+    seat = LitSeat({M1: disc_docs()})
+    r = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09")))
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    rows = _discovery_rows(r._out().read_bytes())
+    frogs = next(x for x in rows if x[3] == sections.LABEL["frogs"])
+    assert frogs[7] == sections.UNCONFIRMED and "Form Interrogatories Set One.pdf" in frogs[8]
+    text = "".join("\n".join(printout.text_of(r._pdf())).split())
+    assert "".join(sections.UNCONFIRMED.split()) in text and "2026-03-09" not in text
 
 
 def test_a_verify_overturn_replaces_the_section_whole(tmp_path):
@@ -288,3 +309,32 @@ def test_the_envelope_and_the_proof_key():
     with pytest.raises(job_mod.LitigationJobError):
         job_mod.parse({**env, "workbooks": ["deadlines"]}, Path("/x"))
     assert lane_proof.lane_key("litigation", env) == "litigation-status.discovery12"
+
+
+def test_no_pass_forces_its_tool_and_each_asks_for_it_by_name():
+    """2026-10-29: a forced tool_choice was refused on every batched read."""
+    for role in ("read", "verify", "audit"):
+        s = batch.shape(role)
+        assert s["tool_choice"] == {"type": "auto"}
+        assert s["tools"][0]["name"] in batch.only_by_tool(role)
+
+
+def test_an_email_contributes_only_its_discovery_attachments_never_its_body():
+    """The Captain, 2026-10-29: the read set is the discovery papers, plus a
+    paper that exists only as an email attachment; email bodies are out."""
+    rx = [re.compile(r"interrogator", re.I), re.compile(r"\bRFPs?\b", re.I)]
+    seen = {batch.paper_key("FORM INTERROGATORIES SET ONE text")}
+    email = (
+        "From: a\nSubject: b\n\nThe body says the responses are late."
+        "\n\n[ATTACHMENT] Form Interrogatories.pdf\nFORM INTERROGATORIES SET ONE text"  # already a paper
+        "\n\n[ATTACHMENT] RFP Set Two.pdf\nREQUESTS FOR PRODUCTION SET TWO text"  # only here
+        "\n\n[ATTACHMENT] invoice.pdf\nan invoice"  # not discovery by name
+    )
+    kept = batch.attachments_only(email, rx, seen)
+    assert "SET TWO" in kept and "body says" not in kept and "invoice" not in kept and "SET ONE" not in kept
+    assert batch.attachments_only("From: a\n\nonly a body", rx, set()) == ""
+
+
+def test_the_fake_refuses_a_forced_tool_as_the_api_does():
+    with pytest.raises(ValueError, match="not supported for this model"):
+        Scripted12()._msg(tool_choice={"type": "tool", "name": "record_discovery"}, system="x", messages=[])

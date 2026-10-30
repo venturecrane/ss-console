@@ -31,6 +31,8 @@ def order(ms: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _d(v: Any) -> str:
+    if (v or {}).get("unconfirmed"):
+        return sections.UNCONFIRMED
     return str((v or {}).get("date") or "")
 
 
