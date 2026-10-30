@@ -46,6 +46,33 @@ def chunk(docs: list[tuple[int, str]], limit: int = CHUNK_CHARS) -> list[list[tu
     return out
 
 
+ATTACHMENT = "\n\n[ATTACHMENT] "
+
+
+def paper_key(text: str) -> str:
+    """Two copies of one paper (a filed PDF and the same PDF on an email) share this."""
+    return " ".join(text.lower().split())[:3000]
+
+
+def attachments_only(text: str, rx: list[Any], seen: set[str]) -> str:
+    """An email's discovery attachments and nothing else (the Captain, 2026-10-29:
+    the read covers the discovery PAPERS the quote priced, plus a paper that
+    exists only as an attachment; email bodies are out). Keeps an attachment
+    whose NAME matches a discovery pattern, that carries text, and whose text
+    is not already one of the case's papers (``seen``, updated)."""
+    out = []
+    for seg in text.split(ATTACHMENT)[1:]:
+        name, _, body = seg.partition("\n")
+        if not body.strip() or not any(r.search(name) for r in rx):
+            continue
+        key = paper_key(body)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f"[ATTACHMENT] {name}\n{body.strip()}")
+    return "\n\n".join(out)
+
+
 def papers(lines: Callable[[int], str], docs: list[tuple[int, str]]) -> str:
     return "\n\n".join(f"===== {lines(n)}\n{t}" for n, t in docs)
 

@@ -319,6 +319,22 @@ def test_no_pass_forces_its_tool_and_each_asks_for_it_by_name():
         assert s["tools"][0]["name"] in batch.only_by_tool(role)
 
 
+def test_an_email_contributes_only_its_discovery_attachments_never_its_body():
+    """The Captain, 2026-10-29: the read set is the discovery papers, plus a
+    paper that exists only as an email attachment; email bodies are out."""
+    rx = [re.compile(r"interrogator", re.I), re.compile(r"\bRFPs?\b", re.I)]
+    seen = {batch.paper_key("FORM INTERROGATORIES SET ONE text")}
+    email = (
+        "From: a\nSubject: b\n\nThe body says the responses are late."
+        "\n\n[ATTACHMENT] Form Interrogatories.pdf\nFORM INTERROGATORIES SET ONE text"  # already a paper
+        "\n\n[ATTACHMENT] RFP Set Two.pdf\nREQUESTS FOR PRODUCTION SET TWO text"  # only here
+        "\n\n[ATTACHMENT] invoice.pdf\nan invoice"  # not discovery by name
+    )
+    kept = batch.attachments_only(email, rx, seen)
+    assert "SET TWO" in kept and "body says" not in kept and "invoice" not in kept and "SET ONE" not in kept
+    assert batch.attachments_only("From: a\n\nonly a body", rx, set()) == ""
+
+
 def test_the_fake_refuses_a_forced_tool_as_the_api_does():
     with pytest.raises(ValueError, match="not supported for this model"):
         Scripted12()._msg(tool_choice={"type": "tool", "name": "record_discovery"}, system="x", messages=[])

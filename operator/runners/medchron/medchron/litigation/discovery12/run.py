@@ -45,9 +45,17 @@ PRINTOUT_ROLE = "printout_pdf"
 CLASSES = ("discovery", "email")
 
 
+def _paper(f: dict[str, Any], firm: Any) -> bool:
+    """A discovery PAPER as the quote counted it (part 4, 2026-10-29): not an
+    email, and its name matches a firm discovery pattern, whatever its class
+    (a motion to compel classes as court)."""
+    name = manifest.full_name(f)
+    return not manifest.is_email(f) and any(r.search(name) for r in firm.discovery_rx)
+
+
 def plan_for(files: list[dict[str, Any]], firm: Any, today: Any) -> dict[str, Any]:
     """One case's plan: the discovery papers and named emails, newest first."""
-    picked = [f for f in files if manifest.classify(f, firm, today) in CLASSES]
+    picked = [f for f in files if manifest.classify(f, firm, today) in CLASSES or _paper(f, firm)]
     picked.sort(key=manifest.file_date, reverse=True)
     cands = [str(f["id"]) for f in picked]
     return {
@@ -100,13 +108,27 @@ class Discovery12Run(LitigationRun):
 
     # ---- the three passes, batched ---------------------------------------------------------------
     def _chunks(self, mid: str) -> tuple[Any, list[list[tuple[int, str]]]]:
+        """The case's discovery papers, then the discovery attachments of its
+        emails that are not already one of those papers; no email body."""
         ctx = self._ctx(mid)
-        docs = []
+        by = {str(f["id"]): f for f in inventory.files_of(self.data, mid)}
+        docs: list[tuple[int, str]] = []
+        seen: set[str] = set()
+        mail: list[tuple[int, str]] = []
         for fid in self._plan()[mid]["candidates"]:
             n = ctx.by_id.get(fid)
             text = self._text_of(mid, fid)
-            if n is not None and text:
+            if n is None or not text:
+                continue
+            if manifest.is_email(by.get(fid) or {}):
+                mail.append((n, text))
+            else:
+                seen.add(batch.paper_key(text))
                 docs.append((n, text))
+        for n, text in mail:
+            kept = batch.attachments_only(text, self.firm.discovery_rx, seen)
+            if kept:
+                docs.append((n, kept))
         return ctx, batch.chunk(docs)
 
     def _prev(self, mid: str, role: str, k: int) -> dict[str, Any] | None:
