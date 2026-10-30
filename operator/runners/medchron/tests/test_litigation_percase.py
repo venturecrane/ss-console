@@ -17,8 +17,8 @@ import pytest
 from openpyxl import load_workbook
 
 from litigation_testkit import JOB, M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
-from medchron.litigation import book, gates, percase, review, vocab
-from medchron.litigation.run import PER_CASE_ROLE, LitigationRun
+from medchron.litigation import book, gates, percase, printout, review, vocab
+from medchron.litigation.run import PER_CASE_ROLE, PRINTOUT_ROLE, LitigationRun
 from medchron_testkit import doc_row
 from test_litigation_gates import good
 
@@ -267,9 +267,13 @@ def test_a_delivered_run_files_the_per_case_copy_after_the_list_in_its_folder(tm
     r = _run(tmp_path, seat)
     v = r.run()
     assert v.verdict == "delivered", v.reason
-    assert [s["name"] for s in seat.sent] == [r._out().name, percase.path_for(r._out()).name]
-    assert seat.sent[0]["folderId"] == seat.sent[1]["folderId"] == v.folder_id
-    assert [f["role"] for f in v.files] == ["workbook", PER_CASE_ROLE]
+    assert [s["name"] for s in seat.sent] == [
+        r._out().name,
+        percase.path_for(r._out()).name,
+        printout.path_for(r._out()).name,
+    ]
+    assert seat.sent[0]["folderId"] == seat.sent[1]["folderId"] == seat.sent[2]["folderId"] == v.folder_id
+    assert [f["role"] for f in v.files] == ["workbook", PER_CASE_ROLE, PRINTOUT_ROLE]
     assert all(f["sha256"] and f["file_id"] for f in v.files)
     assert [f["name"] for f in v.proof["files"]] == [f["name"] for f in v.files]
     built = json.loads((r.data / "book-percase.json").read_text())
@@ -328,7 +332,12 @@ def test_a_job_built_before_the_copy_existed_gets_it_on_resume(tmp_path, last):
     for stage in (*stages, "review") if last == "review" else stages:
         r._stage(stage, getattr(r, f"_{stage}"))
     percase.path_for(r._out()).unlink()  # as a stage that ran on the old code left it
+    printout.path_for(r._out()).unlink()
     v = _run(tmp_path, seat).run()
     assert v.verdict == "delivered", v.reason
-    assert [f["role"] for f in v.files] == ["workbook", PER_CASE_ROLE]
-    assert [s["name"] for s in seat.sent] == [r._out().name, percase.path_for(r._out()).name]
+    assert [f["role"] for f in v.files] == ["workbook", PER_CASE_ROLE, PRINTOUT_ROLE]
+    assert [s["name"] for s in seat.sent] == [
+        r._out().name,
+        percase.path_for(r._out()).name,
+        printout.path_for(r._out()).name,
+    ]

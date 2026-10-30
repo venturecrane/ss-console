@@ -104,6 +104,9 @@ class Client:
             return {"value": rows[off : off + 500]}
         if path == "/staff":
             return {"value": [dict(s) for s in self.seat.staff]}
+        if path == "/events":
+            # GET /events?MatterId=: the matter's calendar (``courtdates.pull``).
+            return {"value": [dict(e) for e in self.seat.events.get(str(params.get("MatterId")), [])]}
         if path.startswith("/matters/") and path.count("/") == 2:
             # GET /matters/{id}: the one read that carries a matter's tags.
             mid = path.split("/")[2]
@@ -170,6 +173,8 @@ class LitSeat(FakeSeat):
         #: matter id -> exceptions the next GET /matters/{id} calls raise, in order.
         self.tag_errors: dict[str, list[Exception]] = {}
         self.matter_reads: list[str] = []
+        #: matter id -> its calendar entries (GET /events?MatterId=).
+        self.events: dict[str, list[dict[str, Any]]] = {}
         self.client = Client(self)
         self.library_rows: list[dict] = []
 

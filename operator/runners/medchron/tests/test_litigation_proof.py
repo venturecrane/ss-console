@@ -132,7 +132,7 @@ def test_an_smd_release_files_past_the_hold_and_says_released(tmp_path, monkeypa
     (tmp_path / "job" / proof_review.RELEASE_MARKER).write_text(json.dumps({"reason": "checked by hand"}))
     v = _run(tmp_path, seat).run()
     assert v.verdict == "delivered", v.reason
-    assert v.proof["review"] == "released" and len(seat.sent) == 2  # the list, then its one-sheet-per-case copy
+    assert v.proof["review"] == "released" and len(seat.sent) == 3  # the list, its one-sheet-per-case copy, the PDF
 
 
 def test_a_redo_on_a_still_wrong_workbook_holds_again(tmp_path, monkeypatch):
