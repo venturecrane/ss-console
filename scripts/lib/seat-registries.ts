@@ -30,8 +30,10 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 # next starts; any seat that FAILS (smoke red, so it is rolled back) halts the
 # whole rollout, so a defect stops at the smallest ring that shows it. A seat
 # that ends in a TOOLING ERROR (nothing decided) stalls only itself and is
-# retried; it never holds the rings after it back. Ring 0 is SMD's own staging seat; the last ring is the paying
-# client's seat and always deploys one seat at a time.
+# retried; it never holds the rings after it back. Ring 0 is SMD's own staging
+# seat. The client's seat follows it at once, with no bake (2026-10-30: with one
+# client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
+# come after. The last ring always deploys one seat at a time.
 #
 # Holds are NOT authored here. \`fleet hold <slug> --reason "..."\` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped

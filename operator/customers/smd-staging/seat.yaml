@@ -11,6 +11,9 @@
 fly_app: hermes-smd-staging
 # Release ring (operator/bin/fleet release walks rings in order).
 ring: 0
+# No wait after staging (Captain, 2026-10-30): with one client, each seat's own
+# self-test and automatic rollback are the gate; a bake only delayed fixes.
+bake_minutes: 0
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.
 authored: '2026-06-11'
 # The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).

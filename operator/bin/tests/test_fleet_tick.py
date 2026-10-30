@@ -223,6 +223,23 @@ def _promote(w: World, minutes_after_done: float, candidates: list[dict]) -> int
     return ticker.run_promoting(RINGS, candidates, do_seat_for, "h")
 
 
+def test_with_no_bake_one_tick_takes_staging_then_the_client_seat(tmp_path) -> None:
+    """2026-10-30 rings: staging, then ashton-price at once, then SMD's own seats."""
+    w = _tick_world(tmp_path)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price"], None, 0),
+        Ring(2, ["pilot-smokeball", "scott", "brokery"], 1, 10),
+    ]
+    w.clock.t = T0
+    plan = ImagePlan(w.rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    code = ticker.run_promoting(rings, [w.rel], lambda rel: lambda s, r: w.roll.run(s, r, plan), "h")
+    assert code == TICK_PROGRESS
+    # FALSIFIER: a bake of even one minute on ring 0 and the client seat waits for the next tick.
+    assert _deployed(w)[:2] == ["hermes-smd-staging", "hermes-ashton-price"]
+
+
 def _done_releases(w: World, seat: str) -> list[str]:
     return [r["release_id"] for r in w.store.rollouts.values() if r["customer_slug"] == seat and r["state"] == "done"]
 

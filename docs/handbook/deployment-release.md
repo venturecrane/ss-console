@@ -449,9 +449,14 @@ Two workflows run the release (ADR 0096).
   both kinds stepped, a halt in either wins, then a standing halt, then
   progress.
 
-There is no approval step before the client ring. The bake, the busy gate and
-holds protect it, and a hold set by any session is read before every seat; a
-required approval would put a person back on every release.
+There is no approval step before the client ring. Since 2026-10-30 the client
+seat is ring 1, straight after smd-staging with no bake on either, and SMD's
+other seats follow it: with one client, a fix waited about an hour behind four
+rings of bakes, and the bakes protected nothing a seat's own self-test and
+automatic rollback did not. So a merged fix reaches ashton-price in the same
+tick that takes staging, about 15 minutes after the image is built. Staging's
+self-test, the busy gate and holds protect it; a required approval would put a
+person back on every release. When a second client signs, revisit the order.
 
 **An urgent fix for one seat skips the queue.** Merge the fix, let Deploy build
 the image (about 6 minutes), then run `release-tick` by hand (Actions, Run

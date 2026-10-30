@@ -9,7 +9,7 @@
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-pilot-smokeball
 # Release ring (operator/bin/fleet release walks rings in order).
-ring: 1
+ring: 2
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.
 authored: '2026-06-15'
 # The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).
