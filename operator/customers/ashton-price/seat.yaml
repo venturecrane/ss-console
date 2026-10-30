@@ -3,13 +3,16 @@
 # seat at boot. After editing run `npm run gen:seat-registries`;
 # tests/seat-inventory.test.ts fails while a generated registry is stale.
 #
-# The production pilot firm (Smokeball Operator, ADR 0053). The last ring: it
-# always deploys one seat at a time.
+# The production pilot firm (Smokeball Operator, ADR 0053). Ring 1, straight
+# after staging (Captain, 2026-10-30): with one client, a fix must not wait an
+# hour behind our own seats; staging's self-test is the proof before this seat.
 
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-ashton-price
 # Release ring (operator/bin/fleet release walks rings in order).
-ring: 3
+ring: 1
+# The internal seats follow at once, not after a wait.
+bake_minutes: 0
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.
 authored: '2026-06-24'

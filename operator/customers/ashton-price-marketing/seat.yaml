@@ -21,8 +21,8 @@ unprovisioned_reason: >-
   The firm has not yet created the seat's mailbox, its two Microsoft Graph app
   registrations or the WordPress Contributor user; the seat is provisioned the
   week the firm engages (scope letter 385, 2026-10-15).
-# Release ring once provisioned: the firm's seats deploy last, one at a time.
-ring: 3
+# Release ring once provisioned: the firm's seats go straight after staging.
+ring: 1
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.
 authored: '2026-10-25'
 # The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).
