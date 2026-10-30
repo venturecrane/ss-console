@@ -69,6 +69,24 @@ function instant(ts: string | null | undefined): number {
 }
 
 /**
+ * A tooling_error is worth a page only when it is the seat's second on the same
+ * release (2026-10-30). Since then a tooling_error stalls one seat and the
+ * release controller tries it again on a later tick (operator/bin/lib/fleet,
+ * rollout.STALLED); one Fly deploy that failed without a reason and then went
+ * through is not something a person must act on. Twice is stuck.
+ */
+function isStuck(row: FailedRolloutRow, seatRows: FailedRolloutRow[]): boolean {
+  const at = instant(row.finished_at)
+  return seatRows.some(
+    (r) =>
+      r.rollout_id !== row.rollout_id &&
+      r.release_id === row.release_id &&
+      r.state === 'tooling_error' &&
+      instant(r.finished_at) <= at
+  )
+}
+
+/**
  * Decide one seat's page. Pure.
  *
  * Holds (null) when nothing is newer than the marker, or, with no marker, when
@@ -83,9 +101,10 @@ export function decideRolloutFailedPage(
 ): RolloutFailedPage | null {
   const seenMs = instant(lastSeenMarker)
   const floor = Number.isNaN(seenMs) ? nowMs - FIRST_PAGE_WINDOW_MS : seenMs
-  const fresh = rows
-    .filter((r) => r.customer_slug === slug)
+  const mine = rows.filter((r) => r.customer_slug === slug)
+  const fresh = mine
     .filter((r) => (FAILED_ROLLOUT_STATES as readonly string[]).includes(r.state))
+    .filter((r) => r.state !== 'tooling_error' || isStuck(r, mine))
     .filter((r) => {
       const at = instant(r.finished_at)
       return !Number.isNaN(at) && at > floor

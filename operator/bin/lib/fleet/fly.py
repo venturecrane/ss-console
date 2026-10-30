@@ -297,6 +297,25 @@ def classify_deploy(res: Result) -> str:
     return "fail" if any(m in low for m in DEPLOY_SEAT_FAILURE_MARKERS) else "tooling_error"
 
 
+DEPLOY_EXCERPT_LINES = 6
+DEPLOY_EXCERPT_CHARS = 600
+# A line naming a credential is never copied into a record, a log or a page.
+_CREDENTIAL_LINE_RE = re.compile(r"token|secret|password|authorization|bearer|macaroon", re.IGNORECASE)
+
+
+def deploy_excerpt(res: Result) -> str:
+    """The last lines a failed ``fly deploy`` printed, for the rollout record and the page.
+
+    stderr first (where flyctl puts its error), else stdout. Lines naming a
+    credential are dropped. Never empty: an exit code is always something to go on.
+    """
+    for text in (res.stderr, res.stdout):
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not _CREDENTIAL_LINE_RE.search(ln)]
+        if lines:
+            return f"rc={res.rc}: " + " / ".join(lines[-DEPLOY_EXCERPT_LINES:])[-DEPLOY_EXCERPT_CHARS:]
+    return f"rc={res.rc}, no output"
+
+
 def digest_from_build_output(text: str) -> str | None:
     found = DIGEST_IN_OUTPUT_RE.findall(text)
     return found[-1] if found else None

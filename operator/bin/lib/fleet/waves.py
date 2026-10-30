@@ -19,9 +19,11 @@
 * RESUME. A full run skips a seat whose latest rollout of THIS release is
   ``done`` (reported, not recorded again), so re-running a release after a halt
   continues from where it stopped. ``--only`` still redeploys on request.
-* HALT. A seat that ends rolled_back / failed / tooling_error stops the
-  rollout: seats already started finish, nothing new starts, and every seat not
-  reached is recorded halted.
+* HALT. A seat that ends rolled_back / failed stops the rollout: seats already
+  started finish, nothing new starts, and every seat not reached is recorded
+  halted. A tooling_error (Fly or the self-test decided nothing about the
+  release) stalls only its own seat, like waiting_idle, and the rollout goes on
+  (rollout.STALLED, 2026-10-30).
 * COMPLETION. Read from the records, not from one run: after any real run,
   a release whose latest rollout on EVERY ringed seat is ``done`` gets
   fleet_releases.completed_last_ring_at. So a release repaired seat by seat
