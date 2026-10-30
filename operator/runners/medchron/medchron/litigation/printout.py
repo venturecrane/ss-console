@@ -316,7 +316,10 @@ def build(ms: list[dict[str, Any]], out: Path, as_of: dt.date, *, discovery_note
         foot = f"{head}    page {i + 1} of {doc.page_count}".strip()
         page.insert_text((MARGIN, PAGE_H - MARGIN / 2), foot, fontsize=7)
     out.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(out, garbage=3, deflate=True)
+    # garbage=4 merges identical objects: each case is laid out alone and
+    # carries its own copy of the fonts, which made a 1,005-page book 50.7 MB
+    # instead of 4.1 MB (2026-10-30).
+    doc.save(out, garbage=4, deflate=True)
     doc.close()
     return {
         "as_of": as_of.isoformat(),

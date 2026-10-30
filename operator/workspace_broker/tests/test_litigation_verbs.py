@@ -509,6 +509,21 @@ def test_the_record_audit_carries_counts_and_never_a_file_list(seat) -> None:
     assert audit_rows(db)[-1][1]["matters_total"] == 4
 
 
+def test_a_discovery_breakdowns_delivered_record_with_its_counts_lands(seat) -> None:
+    """2026-10-30: the broker refused these counts, so a filed discovery run's
+    row stayed ``running`` and its DELIVERED audit row was never written."""
+    broker, db, _, _, _ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    counts = {"d12_read_chunks": 350, "d12_verify_chunks": 346, "d12_audit_chunks": 344, "d12_declined": 3}
+    out = call(
+        broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="delivered",
+        fields={"stage": "report", "cents": 100, "counts": counts},
+    )  # fmt: skip
+    assert out["job"]["state"] == "delivered" and out["job"]["counts"] == counts
+    assert [k for k, _ in audit_rows(db)][-1] == "LITIGATION_JOB_DELIVERED"
+
+
 def test_record_refuses_an_unknown_field_and_an_illegal_move(seat) -> None:
     broker, _, _, _, _ = seat
     job = submit(broker)["job_id"]
