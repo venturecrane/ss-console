@@ -35,7 +35,7 @@ from .. import courtdates, deliver, gates, inventory, manifest, passes, printout
 from ..outcome import LitigationFailed, LitigationHold, Verdict
 from ..run import STAGES, LitigationRun
 from ..tools import dump
-from . import batch, book, sections
+from . import batch, book, complete, sections
 
 GROUP = "discovery12"
 ROLE = "discovery_workbook"
@@ -45,6 +45,9 @@ PRINTOUT_ROLE = "printout_pdf"
 REFUSAL = "refusal"
 #: The unread marker of a case declined twice: printed for a hand check, no hold.
 DECLINED_REASON = "declined: the reading service declined this file twice (refusal)"
+#: A refused chunk is asked once more on this model before its case is declined
+#: (Captain, 2026-10-30: three cases of 230 refused twice on the read model).
+REFUSAL_RETRY_MODEL = "claude-opus-5-5"
 #: The classes a breakdown reads: discovery papers, and recent emails named
 #: for the case (``manifest.classify``).
 CLASSES = ("discovery", "email")
@@ -89,7 +92,7 @@ class Discovery12Run(LitigationRun):
         """A batch is one commitment: its projected cost at the batch rate,
         against the job's cap and the month's budget, before it is submitted."""
         role = next(r for r, s in batch.STAGES.items() if s == stage)
-        rate = self.pricing.rate_for(self.firm.model(role))
+        rate = self.pricing.rate_for(getattr(self, "_model_override", None) or self.firm.model(role))
         projected = batch.project_usd(rate, chars, items, self.pricing.batch_multiplier)
         self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(), stage=stage, batch=True)
 
@@ -180,11 +183,18 @@ class Discovery12Run(LitigationRun):
                 )
         return items, ctxs, want
 
-    def _record(self, role: str, ctxs: dict[str, Any], it: Item, r: Result | None, err: str | None, last: bool) -> bool:
+    def _record(
+        self, role: str, ctxs: dict[str, Any], it: Item, r: Result | None, err: str | None, last: bool,
+        refused: list[Item] | None = None,
+    ) -> bool:  # fmt: skip
         """Write one answered chunk. False when the answer did not call the
-        pass's tool and this is not the last round (the caller asks again)."""
+        pass's tool and this is not the last round (the caller asks again). A
+        refusal with ``refused`` given is collected for the retry model."""
         mid, k = it.meta["mid"], it.meta["k"]
         if r is None:
+            if str(err or "").strip() == REFUSAL and refused is not None:
+                refused.append(it)
+                return True
             if str(err or "").strip() == REFUSAL:
                 # The doorway already asked once more (llm.py batch_call's retry
                 # round): refused twice, the case is DECLINED, printed for a hand
@@ -211,12 +221,13 @@ class Discovery12Run(LitigationRun):
         dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
         return True
 
-    def _submit(self, role: str, todo: list[Item], where: str, on_result: Any) -> None:
+    def _submit(self, role: str, todo: list[Item], where: str, on_result: Any, model: str | None = None) -> None:
+        self._model_override = model  # _before_batch projects the batch at this model's rate
         summary = self.doorway.batch_call(
             batch.STAGES[role],
             todo,
             on_result,
-            model=self.firm.model(role),
+            model=model or self.firm.model(role),
             max_tokens=batch.MAX_TOKENS,
             batch_dir=self.data / where,
             system=sections.system_for(role, self.today) + batch.only_by_tool(role),
@@ -239,13 +250,28 @@ class Discovery12Run(LitigationRun):
     def _run_pass(self, role: str, only: set[str] | None = None, where: str = "batches") -> None:
         items, ctxs, want = self._items(role, only)
         notool: list[Item] = []
+        refused: list[Item] = []
         if items:
             self._submit(
-                role, items, where, lambda it, r, e: self._record(role, ctxs, it, r, e, False) or notool.append(it)
+                role,
+                items,
+                where,
+                lambda it, r, e: self._record(role, ctxs, it, r, e, False, refused) or notool.append(it),
             )
         if notool:
             self.log(f"[{role}] {len(notool)} answers did not call the tool; asking those once more")
-            self._submit(role, notool, f"{where}-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True))
+            self._submit(
+                role, notool, f"{where}-notool", lambda it, r, e: self._record(role, ctxs, it, r, e, True, refused)
+            )
+        if refused:
+            self.log(f"[{role}] {len(refused)} answers were refused; asking those once on {REFUSAL_RETRY_MODEL}")
+            self._submit(
+                role,
+                refused,
+                f"{where}-opus",
+                lambda it, r, e: self._record(role, ctxs, it, r, e, True),
+                model=REFUSAL_RETRY_MODEL,
+            )
         path = self.data / f"d12-{role}-chunks.json"
         if only is not None and path.is_file():  # a subset redo keeps every other case's count
             want = {**self._json(path.name), **want}
@@ -386,6 +412,7 @@ class Discovery12Run(LitigationRun):
                         "declined": bool(f.get("declined")),
                         "sections": f.get("sections") or {},
                         "flags": f.get("flags") or [],
+                        "status_rows": f.get("status_rows") or [],
                     },
                 }
             )
@@ -396,8 +423,22 @@ class Discovery12Run(LitigationRun):
         cal = courtdates.pull(seat, [str(m["matter_id"]) for m in out], self.data, self.log)
         return courtdates.shown(out, cal, self.today)
 
+    def _completed(self) -> list[dict[str, Any]]:
+        """final.json completed from the status list's own values (``complete.py``),
+        kept as final-complete.json: the workbook, the print-out and the review
+        all read this one."""
+        out = []
+        for f in self._json("final.json"):
+            d12 = {"read": f["read"], "declined": bool(f.get("declined")), "sections": f.get("sections") or {}}
+            got = complete.merge(manifest.load_prior(self.state, f["matter_id"]) or {}, d12)
+            out.append(
+                {**f, "sections": got["sections"], "status_rows": got["status_rows"], "completed": got["completed"]}
+            )
+        dump(self.data / "final-complete.json", out)
+        return out
+
     def _book(self) -> None:
-        finals = self._json("final.json")
+        finals = self._completed()
         stats = book.build(finals, self._out(), self.today)
         gates.leak_gate(self._out(), self.data / "book.json", stats)
         shown = self._status_values(finals)
@@ -411,7 +452,7 @@ class Discovery12Run(LitigationRun):
 
     def _review(self) -> None:
         built = self._json("book.json")
-        problems = book.check(self._out().read_bytes(), self._json("final.json"))
+        problems = book.check(self._out().read_bytes(), self._json("final-complete.json"))
         problems += printout.check(self._pdf(), self._json("shown.json"))
         dump(self.data / "review.json", {"problems": problems, "rows": built.get("rows")})
         if problems:
