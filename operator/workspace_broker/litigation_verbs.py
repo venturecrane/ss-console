@@ -98,6 +98,9 @@ from .litigation_intake import (
     operator_library_number,
     paralegal_roster,
     requested_report,
+    wants_discovery12,
+    DISCOVERY12_KEY,
+    DISCOVERY12_ON,
     named_attorneys,
     named_paralegals,
     scheduled_recipients,
@@ -336,7 +339,7 @@ class LitigationVerbs:
             requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
             report, extra = self._kind(given["trigger"], request_text, settings)
             library, file_to, folder = self._filing_target(settings, report)
-            firm, cents = self._budget(spends=report == "status")
+            firm, cents = self._budget(spends=report in ("status", "discovery12"))
             envelope = {
                 "trigger": given["trigger"],
                 "requester": requester,
@@ -429,6 +432,10 @@ class LitigationVerbs:
                 return "reassign", {"report": "reassign", "reassign": parse_reassignment(text)}
             except ReassignUnreadable as exc:
                 raise _Refused(str(exc)) from exc
+        if wants_discovery12(text):
+            if str(settings.get(DISCOVERY12_KEY) or "").strip() != DISCOVERY12_ON:
+                raise _Refused("the discovery breakdown is not switched on for this seat; nothing was queued")
+            return "discovery12", {"report": "discovery12"}
         report, books = requested_report(text)
         return report, ({"report": report, "workbooks": list(books)} if report == "deadlines" else {})
 

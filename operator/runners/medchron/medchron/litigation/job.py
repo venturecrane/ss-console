@@ -18,7 +18,9 @@ plus, for the deadlines report only (a $0 kind with its own runner,
 subset of ``["deadlines", "statute"]``. An envelope without ``report`` is the
 status list, exactly as before. A staff reassignment (``reassign/``) carries
 ``"report": "reassign"`` and ``"reassign"``: who the cases move from, to whom,
-the attorneys, litigation-only and the statuses (``reassign/spec.py``).
+the attorneys, litigation-only and the statuses (``reassign/spec.py``). The
+12-section discovery breakdown (``discovery12/``, paid, billed as it reads)
+carries ``"report": "discovery12"`` and nothing else.
 
 Re-validated here (the broker's package is not on the runner's venv): the
 runner refuses an envelope it cannot read the same way the broker refused to
@@ -42,7 +44,7 @@ _NUMBER = re.compile(r"^[A-Za-z0-9 ._-]{1,64}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,253}$")
 _SCHEDULED_REF = re.compile(r"^scheduled:\d{4}-\d{2}-\d{2}$")
 _FOLDER = re.compile(r"^[^/\\\x00-\x1f]{1,120}$")
-REPORTS = ("status", "deadlines", "reassign")
+REPORTS = ("status", "deadlines", "reassign", "discovery12")
 WORKBOOKS = ("deadlines", "statute")
 
 
@@ -175,10 +177,10 @@ def _report(data: dict[str, Any]) -> tuple[str, tuple[str, ...], dict[str, Any] 
             return "reassign", (), validate(data.get("reassign"))
         except SpecError as exc:
             raise LitigationJobError(str(exc)) from exc
-    if report == "status":
+    if report in ("status", "discovery12"):
         if raw is not None:
             raise LitigationJobError("workbooks belongs to the deadlines report only")
-        return "status", (), None
+        return report, (), None
     if not (isinstance(raw, list) and raw and set(raw) <= set(WORKBOOKS)):
         raise LitigationJobError(f"workbooks must be a non-empty subset of {list(WORKBOOKS)}")
     return "deadlines", tuple(w for w in WORKBOOKS if w in raw), None
