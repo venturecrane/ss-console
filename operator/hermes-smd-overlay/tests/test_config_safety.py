@@ -472,6 +472,16 @@ def test_seat_and_output_classes_apply_live() -> None:
     assert live_writable("output_classes.outbound_client.format_spec")
 
 
+def test_firm_filing_rules_apply_live() -> None:
+    """The connector reads these off the live yaml on every write, so a firm's
+    new folder or expense staff takes effect on apply, not at the next boot."""
+    assert live_writable("vendor_invoice_intake.folder_name")
+    assert live_writable("vendor_invoice_intake.staff_id")
+    assert live_writable("combined_post_intake.medical_folder")
+    # The prefix is the block, not a substring: a sibling key is not admitted.
+    assert not live_writable("vendor_invoice_intake_extra")
+
+
 def test_persona_tone_is_never_live_writable() -> None:
     """A live tone apply would report APPLIED while the agent kept the old register.
 

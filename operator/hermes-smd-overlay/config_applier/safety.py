@@ -288,6 +288,16 @@ _LIVE_WRITABLE_PREFIXES: tuple[str, ...] = (
     # volume yaml by the spec loader, never baked into the profile — so unlike
     # `tone` below, changing it live is complete on its own.
     "output_classes",
+    # The firm's filing rules for its mail and vendor invoices: folder names,
+    # billable, staff, cost type, activity code. The Smokeball connector reads
+    # them off the live yaml (SMD_CUSTOMER_YAML_PATH, the file this applier
+    # writes) on every write (vendor_invoice.load_expense_config,
+    # post_intake_config), so a live write is complete on its own. Before this
+    # entry a firm's new filing rule waited for the next boot: on 2026-10-29 the
+    # office manager set new folders and the staff member for expenses, the
+    # change merged, and the seat kept filing to the old folders.
+    "vendor_invoice_intake",
+    "combined_post_intake",
 )
 
 # Rebuild-class paths that must NEVER apply live, even if a future allow-list
