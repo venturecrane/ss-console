@@ -194,7 +194,7 @@ def discovery12_html(d: dict[str, Any]) -> str:
     """Every section with its entries, or 'None in file'; every date naming its paper."""
     from .discovery12 import sections as d12
 
-    from .discovery12.complete import STATUS_LABEL
+    from .discovery12.complete import STATUS_LABEL, none_text
 
     parts = ["<h2>Discovery (12 sections)</h2>"]
     if d.get("declined"):
@@ -205,7 +205,7 @@ def discovery12_html(d: dict[str, Any]) -> str:
         for key, label in d12.SECTIONS:
             got = (d.get("sections") or {}).get(key) or []
             parts.append(f"<h3>{_e(label)}</h3>")
-            parts.append(_table(D12_HDR, d12_rows(got)) if got else f"<p>{_e(d12.NONE_IN_FILE)}</p>")
+            parts.append(_table(D12_HDR, d12_rows(got)) if got else f"<p>{_e(none_text(d, key))}</p>")
     if d.get("status_rows"):  # complete.py: sets the status list holds that no section took
         parts.append(f"<h3>{_e(STATUS_LABEL)}</h3>" + _table(D12_HDR, d12_rows(d["status_rows"])))
     if d.get("declined") or not d.get("read"):

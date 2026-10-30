@@ -39,7 +39,12 @@ def test_a_breakdown_value_with_its_own_paper_is_never_overwritten():
     own = {"date": "2026-02-01", "source": {"file_id": "f9", "name": "own.pdf"}}
     d12 = {"read": True, "sections": {"rfps": [_e("RFP Set One", served=own)]}}
     got = complete.merge({"discovery_served_on_client": [_row("Requests for Production, Set One", "2026-03-01")]}, d12)
-    assert got["sections"]["rfps"][0]["served"] == own and got["completed"] == {"filled": 0, "added": 0, "unplaced": 0}
+    assert got["sections"]["rfps"][0]["served"] == own and got["completed"] == {
+        "filled": 0,
+        "added": 0,
+        "unplaced": 0,
+        "twin": 0,
+    }
 
 
 def test_a_set_the_breakdown_printed_twice_is_filled_in_both_rows():
@@ -54,7 +59,52 @@ def test_two_different_sets_tied_for_the_best_match_are_not_filled():
         {"discovery_served_on_client": [_row("Special Interrogatories", "2026-05-01", by="Acme")]}, d12
     )
     assert [e["served"].get("date") for e in got["sections"]["srogs"]] == [None, None]
-    assert got["completed"] == {"filled": 0, "added": 0, "unplaced": 0}
+    assert got["completed"] == {"filled": 0, "added": 0, "unplaced": 0, "twin": 0}
+
+
+def test_a_set_under_another_party_name_is_not_added_beside_the_breakdowns_own_row():
+    """Second review, 2026-10-30: a status row whose party is named differently
+    was added as a second row for the same set, carrying a stale response."""
+    d12 = {"read": True, "sections": {"rfps": [_e("RFP Set One", party="Acme Holdings")]}}
+    prior = {"discovery_served_on_client": [_row("Requests for Production, Set One", "2026-03-01", by="Zenith Inc",
+                                                 resp={"value": "no"})]}  # fmt: skip
+    got = complete.merge(prior, d12)
+    assert len(got["sections"]["rfps"]) == 1 and got["completed"]["added"] == 0
+
+
+def test_a_status_set_the_breakdown_holds_by_date_under_another_name_is_never_printed():
+    """Second review, 2026-10-30: the breakdown read the set under another
+    kind name; the status row was added beside it with a stale response."""
+    own = {"date": "2026-03-01", "source": {"file_id": "f9", "name": "own.pdf"}}
+    d12 = {"read": True, "sections": {"frogs": [_e("Interrogatories", served=own, party="Acme Corp")]}}
+    prior = {"discovery_served_on_client": [_row("Requests for Admission, Set Two", "2026-03-01", by="Acme",
+                                                 resp={"value": "no"})]}  # fmt: skip
+    got = complete.merge(prior, d12)
+    assert not got["sections"].get("rfas") and got["completed"]["twin"] == 1 and got["completed"]["added"] == 0
+
+
+def test_a_blank_twin_of_a_set_already_dated_from_its_paper_is_not_filled():
+    own = {"date": "2026-05-01", "source": {"file_id": "f9", "name": "own.pdf"}}
+    d12 = {
+        "read": True,
+        "sections": {"srogs": [_e("Special Interrogatories, Set One", served=own), _e("SROGs Set One")]},
+    }
+    got = complete.merge({"discovery_served_on_client": [_row("Special Interrogatories, Set One", "2026-05-01")]}, d12)
+    assert got["sections"]["srogs"][1]["served"] == {} and got["completed"]["filled"] == 0
+
+
+def test_an_empty_section_whose_kind_a_paper_names_prints_a_hand_check_not_none_in_file(tmp_path: Path):
+    """Second review, 2026-10-30: three sections printed None in file beside a
+    paper of that kind."""
+    d12 = complete.merge({}, {"read": True, "sections": {}}, {"depositions": ["Notice of depo.pdf"], "frogs": ["x"]})
+    d12["sections"]["frogs"] = [_e("Form Interrogatories, Set One")]
+    d12 = complete.merge({}, d12, {"depositions": ["Notice of depo.pdf"], "frogs": ["x"]})
+    assert set(d12["kind_hits"]) == {"depositions"}
+    out, shown = _shown(tmp_path, {**d12, "read": True})
+    text = " ".join("\n".join(printout.text_of(out)).split())
+    assert f"{sections.LABEL['depositions']} {complete.KIND_HIT} Notice of depo.pdf" in text
+    rows = d12book.rows([{"number": "1001", "title": "A v. B", "responsible": "Lee", "read": True, **d12}])
+    assert [r[4] for r in rows if r[3] == sections.LABEL["depositions"]] == [f"{complete.KIND_HIT} Notice of depo.pdf"]
 
 
 def test_an_unconfirmed_breakdown_date_is_not_replaced():

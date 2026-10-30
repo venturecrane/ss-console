@@ -66,6 +66,16 @@ def test_a_timed_hearing_outranks_an_all_day_task_of_the_same_kind():
     assert cd.upcoming([ev("2027-01-11T00:00:00", "TRIAL- Trial date", all_day=True, ltb=True)], TODAY)["trial"]
 
 
+def test_a_lawtoolbox_entry_headed_by_its_kind_agrees_with_the_papers_despite_its_deadline_note():
+    """2026-10-30 review: the calendar held the CMC as an all-day LawToolBox
+    entry whose note says to serve and file before it; the papers' date was
+    flagged as missing from the calendar."""
+    cal = [ev("2027-05-21T00:00:00", "**CMC- Additional CMC (Need to serve defendants and file POS before)",
+              all_day=True, ltb=True)]  # fmt: skip
+    papers = {"date": "2027-05-21", "event": "Case management conference", "source": {"name": "order.pdf"}}
+    assert cd.merge({"next_court_date": papers}, cal, TODAY)["flag"] == ""
+
+
 def test_a_staff_reminder_about_an_event_is_not_the_event():
     for subj in (
         "2/8-EXAMPLE. THREE MONTHS BEFORE TRIAL",

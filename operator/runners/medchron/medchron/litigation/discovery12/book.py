@@ -51,7 +51,7 @@ def rows(ms: list[dict[str, Any]]) -> list[list[Any]]:
             for key in sections.KEYS:
                 got = (m.get("sections") or {}).get(key) or []
                 if not got:
-                    out.append([*base, sections.LABEL[key], sections.NONE_IN_FILE] + [""] * (len(HEADER) - 5))
+                    out.append([*base, sections.LABEL[key], complete.none_text(m, key)] + [""] * (len(HEADER) - 5))
                 out.extend(_entry_row(base, sections.LABEL[key], e) for e in got)
         # complete.py: sets the status list holds that no section took
         out.extend(_entry_row(base, complete.STATUS_LABEL, e) for e in m.get("status_rows") or [])
