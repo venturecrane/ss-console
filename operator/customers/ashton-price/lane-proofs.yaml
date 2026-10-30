@@ -121,4 +121,14 @@ lanes:
       2026-10-26T03:14Z; the live run filed the review, read it back by hash,
       and replied in the requester's thread at 03:22Z
       (vfy_01M5V3TKX51CRNS37YW765QTTA).
+  litigation-status.discovery12:
+    proven_at: '2026-10-30'
+    evidence: >-
+      The 12-section discovery breakdown (ss#3628, #3632, #3634, #3635).
+      Trusted 5-case proof on rel-86f4e963 (2026-10-30T07:46Z to 08:34Z,
+      rehearsal, nothing filed): batched read, verify and audit with 0 no-tool
+      replies and 0 unread, gates passed, a case with no discovery paper
+      printed not read without holding, $28.49
+      (vfy_01M660T111F1Z3QTXEDHSAPZQF). Accepted on the Captain's go,
+      2026-10-30 02:05 MST.
 revoked: []
