@@ -174,11 +174,28 @@ def test_the_interactive_path_gives_the_same_result(tmp_path):
     assert all(not x["batch"] for x in _ledger(r))
 
 
-def test_a_date_not_in_its_cited_paper_holds_the_report(tmp_path):
+def test_a_report_whose_dates_are_mostly_unconfirmed_holds(tmp_path):
     seat = LitSeat({M1: disc_docs()})
-    v = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09"))).run()
-    assert v.verdict == "held" and v.reason.startswith("gate_refused:") and "date not in the cited document" in v.reason
+    r = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09")))
+    v = r.run()
+    assert v.verdict == "held" and v.reason.startswith("gate_refused:") and "of dates unconfirmed" in v.reason
     assert seat.sent == []
+    g = json.loads((r.data / "gates.json").read_text())
+    assert g["unconfirmed_count"] == 1 and "date not in the cited document" in g["unconfirmed"]
+
+
+def test_one_unconfirmed_date_is_printed_as_unconfirmed_and_never_as_fact(tmp_path, monkeypatch):
+    """2026-10-29: one value no longer holds every case; it prints as unconfirmed, with its paper."""
+    monkeypatch.setattr(sections, "MAX_UNCONFIRMED_SHARE", 1.0)
+    seat = LitSeat({M1: disc_docs()})
+    r = _run(tmp_path, seat, Scripted12(fn=lambda n: frogs_result(n, served="2026-03-09")))
+    v = r.run()
+    assert v.verdict == "delivered", v.reason
+    rows = _discovery_rows(r._out().read_bytes())
+    frogs = next(x for x in rows if x[3] == sections.LABEL["frogs"])
+    assert frogs[7] == sections.UNCONFIRMED and "Form Interrogatories Set One.pdf" in frogs[8]
+    text = "".join("\n".join(printout.text_of(r._pdf())).split())
+    assert "".join(sections.UNCONFIRMED.split()) in text and "2026-03-09" not in text
 
 
 def test_a_verify_overturn_replaces_the_section_whole(tmp_path):

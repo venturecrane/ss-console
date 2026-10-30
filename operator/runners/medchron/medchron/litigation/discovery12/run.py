@@ -214,22 +214,43 @@ class Discovery12Run(LitigationRun):
         return [self.final(m) for m in self._matters()]  # type: ignore[misc]
 
     def _gates(self) -> None:
+        """A date the gates cannot confirm (not ISO, no source on the matter,
+        not in its cited paper) is printed as unconfirmed, never as fact, and
+        counted. The report HOLDS on a case that could not be read, or when
+        more than ``MAX_UNCONFIRMED_SHARE`` of its dates are unconfirmed (the
+        reads, not one value, are then in doubt). 2026-10-29: one value used to
+        hold every case, with no way for SMD to accept it."""
         ms = self._finals()
-        dump(self.data / "final.json", ms)
-        issues: dict[str, list[Any]] = {}
+        found: dict[str, list[Any]] = {}
+        holds: dict[str, list[Any]] = {}
+        dated = 0
         for m in ms:
             on = {str(f["id"]) for f in inventory.files_of(self.data, m["matter_id"])}
-            for n, path, why in sections.findings(
-                m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on
-            ):
-                issues.setdefault(why, []).append((n, path))
+            dated += len(sections.dated_values(m))
+            bad = sections.findings(m["number"], m, lambda fid, mid=m["matter_id"]: self._text_of(mid, fid), on)
+            for n, path, why in bad:
+                found.setdefault(why, []).append((n, path))
+            sections.unconfirm(m, {path for _n, path, _w in bad})
             if self._plan()[m["matter_id"]]["read_groups"] and not m["read"]:
-                issues.setdefault("matter could not be read", []).append((m["number"], "audit"))
-        dump(self.data / "gates.json", {"passed": not issues, "issues": issues})
-        if issues:
+                holds.setdefault("matter could not be read", []).append((m["number"], "audit"))
+        unconfirmed = sum(len(v) for v in found.values())
+        if dated and unconfirmed / dated > sections.MAX_UNCONFIRMED_SHARE:
+            holds[f"more than {sections.MAX_UNCONFIRMED_SHARE:.0%} of dates unconfirmed"] = [(unconfirmed, dated)]
+        dump(self.data / "final.json", ms)
+        dump(
+            self.data / "gates.json",
+            {
+                "passed": not holds,
+                "issues": holds,
+                "unconfirmed": found,
+                "dates": dated,
+                "unconfirmed_count": unconfirmed,
+            },
+        )
+        if holds:
             raise LitigationHold(
                 "gate_refused: the gates refused the breakdown: "
-                + "; ".join(f"{k} ({len(v)})" for k, v in issues.items())[:400]
+                + "; ".join(f"{k} ({len(v)})" for k, v in holds.items())[:400]
             )
 
     def _parity(self) -> None:
