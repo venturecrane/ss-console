@@ -40,7 +40,10 @@ def _rx(tmp_path: Path) -> list[re.Pattern[str]]:
         ("request", REQUEST + " Also the discovery we propounded.", False),
         ("request", REQUEST + " And any interrogatories served on us.", False),
         ("request", "Send me a fresh litigation status list.", False),  # names no columns: everything
-        ("scheduled", REQUEST, False),  # the weekday list always reads everything
+        # The weekday list reads everything: the cron's text names no column.
+        ("scheduled", "scheduled weekday litigation status run", False),
+        # A scheduled run whose text root authored (2026-10-29) is read by its words.
+        ("scheduled", REQUEST, True),
     ],
 )
 def test_court_only_is_a_request_naming_court_columns_and_no_discovery(tmp_path, trigger, text, expected):

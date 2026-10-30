@@ -268,7 +268,9 @@ any case.
      folder "Litigation Status", as the file named exactly as the job row names it
      (when the job row's `files` also lists a `per_case_workbook`, add that the same
      list, one sheet per case for printing, is filed beside it, named exactly as that
-     row names it); it
+     row names it; when it also lists a `printout_pdf`, add that a printable PDF of
+     every case's court dates, with the source of each date, is filed beside it, named
+     exactly as that row names it); it
      covers `<matters_total>` matters, `<matters_reread>` of them re-read because their
      files changed since the last list, and it carries `<flags_new>` new flags for
      review. An empty count is left out, never announced as "none". Say that nothing

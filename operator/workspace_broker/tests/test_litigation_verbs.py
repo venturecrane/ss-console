@@ -435,6 +435,27 @@ def test_a_scheduled_envelope_names_nothing_else(seat) -> None:
     assert out["accepted"] is False
 
 
+def test_root_may_author_a_scheduled_runs_text_and_the_requester_stays_the_recipient(seat) -> None:
+    """2026-10-29: SMD sends the firm a court-only list nobody emailed for. The
+    text narrows what is read; the person told is still the authored recipient."""
+    broker, _, _, queue, _ = seat
+    text = "Litigation status list: complaint filed, served, answers, and every court date."
+    out = call(broker, "litigation_job_submit", pid=1, uid=0, envelope={"trigger": "scheduled", "request_text": text})
+    assert out["accepted"] is True and out["report"] == "status"
+    job = json.loads(queued(queue)[0].read_text())
+    assert job["request_text"] == text and job["requester"] == ADMIN and job["trigger"] == "scheduled"
+
+
+def test_only_root_authors_a_scheduled_runs_text(seat) -> None:
+    broker, _, yaml_path, _, _ = seat
+    yaml_path.write_text(_yaml(cron=LIVE_CRON))
+    out = call(broker, "litigation_job_submit", pid=CRON_PID, uid=AGENT_UID,
+               envelope={"trigger": "scheduled", "request_text": "complaint filed only"})  # fmt: skip
+    assert out["accepted"] is False
+    blank = call(broker, "litigation_job_submit", pid=1, uid=0, envelope={"trigger": "scheduled", "request_text": " "})
+    assert blank["accepted"] is False
+
+
 # -- status, record, resume ---------------------------------------------------
 
 
