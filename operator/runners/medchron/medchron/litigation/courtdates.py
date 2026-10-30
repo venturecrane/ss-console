@@ -172,7 +172,20 @@ def upcoming(events: list[dict[str, Any]], today: dt.date) -> dict[str, dict[str
 def _dates_on(events: list[dict[str, Any]]) -> set[str]:
     """The days the calendar holds a court date or mediation on (a rule
     deadline on the same day is not agreement)."""
-    return {d.isoformat() for e in events if kind(e) in (*COURT, "mediation") and (d := _day(e)) is not None}
+    return {
+        d.isoformat()
+        for e in events
+        if (kind(e) in (*COURT, "mediation") or _headed_event(e)) and (d := _day(e)) is not None
+    }
+
+
+def _headed_event(e: dict[str, Any]) -> bool:
+    """A LawToolBox entry headed by its event's kind ("**CMC- Additional case
+    management conference (Need to serve ... and file POS before)") is that
+    event on that day, though its note carries deadline words that keep it out
+    of ``kind`` (2026-10-30: a false "calendar does not have it" flag)."""
+    subj = str(e.get("subject") or "")
+    return _ltb(e) and not e.get("isDeleted") and not _SKIP.search(subj) and bool(_LTB_EVENT.search(subj))
 
 
 def merge(m: dict[str, Any], events: list[dict[str, Any]] | None, today: dt.date) -> dict[str, Any]:

@@ -12,10 +12,12 @@ The rules, conservative by design:
 * A breakdown value with its own cited paper is never overwritten. Only a
   served date that is blank (and not marked unconfirmed) is filled, from the
   status list's matching set, with the status list's source.
-* A status-list set with no plausible match in its section is added to that
-  section, marked as coming from the status list. A plausible match is the
-  same section, the same direction, no conflicting set number, and a shared
-  party word (or a party missing on either side).
+* A status-list set is added to its section, marked as coming from the status
+  list, only when the section holds nothing in the same direction with a
+  compatible set number. A differing party name is NOT a missing set (the
+  second review, 2026-10-30: such additions printed stale status values beside
+  the breakdown's own row for the same set). Filling a blank date also needs a
+  shared party word (or a party missing on either side).
 * "None in file" therefore prints only when neither the breakdown nor the
   status list has anything for that section.
 * A status-list set whose name does not say which kind of discovery it is,
@@ -35,6 +37,10 @@ STATUS_NOTE = "From the status list"
 FILLED_NOTE = "Served date from the status list"
 STATUS_LABEL = "From the status list"
 NO_PAPER = {"name": "status list, no paper named"}
+#: Printed instead of "None in file" when no set was read or listed but a
+#: paper's title names the kind (2026-10-30 second review: three sections
+#: printed None in file beside such a paper). No date is inferred.
+KIND_HIT = "No set was read, but a paper in the file names this kind; check by hand:"
 
 _DIRS = (
     ("discovery_propounded", "propounded by the firm", "served_on"),
@@ -143,15 +149,39 @@ def _fill(row: dict[str, Any], party: str, cands: list[dict[str, Any]]) -> int:
     return filled
 
 
-def merge(prior: dict[str, Any], d12: dict[str, Any]) -> dict[str, Any]:
+def _dated_twin(row: dict[str, Any], party: str, direction: str, entries: list[dict[str, Any]]) -> bool:
+    """True when the breakdown already holds this set from its own paper: an
+    entry in any section, the same direction, the same served date, and a
+    shared party word (or a party missing on either side). The status list's
+    value is then never printed, as an addition or a fill (2026-10-30 second
+    review: a status value beside the breakdown's own row for the same set)."""
+    d = row.get("date")
+    if not d:
+        return False
+    mine = _words(party)
+    for e in entries:
+        was = e.get("served")
+        s: dict[str, Any] = was if isinstance(was, dict) else {}
+        if e.get("from_status") or s.get("from_status") or s.get("date") != d:
+            continue
+        if str(e.get("direction") or "") != direction:
+            continue
+        if not mine or not _words(e.get("party")) or mine & (_words(e.get("party")) | _words(e.get("item"))):
+            return True
+    return False
+
+
+def merge(prior: dict[str, Any], d12: dict[str, Any], hits: dict[str, list[str]] | None = None) -> dict[str, Any]:
     """The case's twelve sections completed from ``prior`` (the status list's
     values); returns a new dict with ``sections``, ``status_rows`` (sets with no
-    section, or every set of a case not read) and ``completed`` counts."""
+    section, or every set of a case not read), ``kind_hits`` (an empty section
+    whose kind a paper's title names: ``hits``, from the job's kind_hits.json)
+    and ``completed`` counts."""
     out = copy.deepcopy(d12)
     secs: dict[str, list[dict[str, Any]]] = out.setdefault("sections", {}) or {}
     out["sections"] = secs
     loose: list[dict[str, Any]] = []
-    n = {"filled": 0, "added": 0, "unplaced": 0}
+    n = {"filled": 0, "added": 0, "unplaced": 0, "twin": 0}
     readable = bool(out.get("read")) and not out.get("declined")
     for field, direction, who in _DIRS:
         for row in prior.get(field) or []:
@@ -159,18 +189,35 @@ def merge(prior: dict[str, Any], d12: dict[str, Any]) -> dict[str, Any]:
                 continue
             party = str(row.get(who) or "")
             key = kind_of(str(row.get("set") or ""))
+            if readable and _dated_twin(row, party, direction, [e for v in secs.values() for e in v]):
+                n["twin"] += 1
+                continue
             if not readable or key is None:
                 loose.append(entry(row, direction, party))
                 n["unplaced"] += 1
                 continue
             got = secs.setdefault(key, [])
-            cands = [e for e in got if _plausible(row, party, direction, e)]
-            if not cands:
+            # A set is added only when the section has nothing in that direction
+            # with a compatible set number: a differing party name is not a missing
+            # set (2026-10-30 second review: 46 status values the papers contradict
+            # printed beside the breakdown's own row for the same set).
+            if not [e for e in got if _plausible(row, "", direction, e)]:
                 got.append(entry(row, direction, party))
                 n["added"] += 1
                 continue
-            if row.get("date"):
+            cands = [e for e in got if _plausible(row, party, direction, e)]
+            if cands and row.get("date"):
                 n["filled"] += _fill(row, party, cands)
     out["status_rows"] = loose
+    out["kind_hits"] = {k: list(v) for k, v in (hits or {}).items() if readable and v and not secs.get(k)}
     out["completed"] = n
     return out
+
+
+def none_text(d12: dict[str, Any], key: str) -> str:
+    """What an empty section prints: "None in file", or the check-by-hand line
+    naming the paper whose title names the kind."""
+    from .sections import NONE_IN_FILE
+
+    names = (d12.get("kind_hits") or {}).get(key) or []
+    return f"{KIND_HIT} {'; '.join(names)}" if names else NONE_IN_FILE

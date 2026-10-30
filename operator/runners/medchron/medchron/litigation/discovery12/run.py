@@ -413,6 +413,7 @@ class Discovery12Run(LitigationRun):
                         "sections": f.get("sections") or {},
                         "flags": f.get("flags") or [],
                         "status_rows": f.get("status_rows") or [],
+                        "kind_hits": f.get("kind_hits") or {},
                     },
                 }
             )
@@ -428,12 +429,12 @@ class Discovery12Run(LitigationRun):
         kept as final-complete.json: the workbook, the print-out and the review
         all read this one."""
         out = []
+        # kind_hits.json (optional): sections whose kind a paper's title names
+        hits = self._json("kind_hits.json") if (self.data / "kind_hits.json").is_file() else {}
         for f in self._json("final.json"):
             d12 = {"read": f["read"], "declined": bool(f.get("declined")), "sections": f.get("sections") or {}}
-            got = complete.merge(manifest.load_prior(self.state, f["matter_id"]) or {}, d12)
-            out.append(
-                {**f, "sections": got["sections"], "status_rows": got["status_rows"], "completed": got["completed"]}
-            )
+            got = complete.merge(manifest.load_prior(self.state, f["matter_id"]) or {}, d12, hits.get(f["matter_id"]))
+            out.append({**f, **{k: got[k] for k in ("sections", "status_rows", "kind_hits", "completed")}})
         dump(self.data / "final-complete.json", out)
         return out
 
