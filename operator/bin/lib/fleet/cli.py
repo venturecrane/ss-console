@@ -598,6 +598,18 @@ def cmd_latest_image(ctx: Ctx, _a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_status(ctx: Ctx, a: argparse.Namespace) -> int:
+    rings = ctx.rings()
+    seats = [seat for ring in rings for seat in ring.seats]
+    rows = status.seat_rows(ctx.store, rings, status.lever_flags(ctx.fly, seats))
+    if a.json:
+        print(json.dumps(rows, indent=1, default=str))
+        return 0
+    print(status.render_table(rows))
+    print(status.render_holds(ctx.store.holds()))
+    return 0
+
+
 def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "build":
         return cmd_build(ctx, a)
@@ -610,15 +622,7 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
             raise ValueError("--tick takes no --skills: `fleet release latest --tick` steps skills releases too")
         return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
     if a.cmd == "status":
-        rings = ctx.rings()
-        seats = [seat for ring in rings for seat in ring.seats]
-        rows = status.seat_rows(ctx.store, rings, status.lever_flags(ctx.fly, seats))
-        if a.json:
-            print(json.dumps(rows, indent=1, default=str))
-        else:
-            print(status.render_table(rows))
-            print(status.render_holds(ctx.store.holds()))
-        return 0
+        return cmd_status(ctx, a)
     if a.cmd == "releases":
         print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
         return 0
