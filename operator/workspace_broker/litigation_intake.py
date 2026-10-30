@@ -79,6 +79,19 @@ _NAMED_REPORT = re.compile(
 )
 
 
+#: THE 12-SECTION DISCOVERY BREAKDOWN (2026-10-29): a paid read of every case's
+#: discovery papers, asked for only by these words, and queued only when the
+#: seat's skill settings switch it on (``discovery_breakdown: "on"``). Unauthored
+#: is off: the firm agrees the price before any is queued.
+_DISCOVERY12_WORDS = re.compile(r"(?i)\b(12|twelve)[- ]section discovery\b|\bdiscovery breakdown\b")
+DISCOVERY12_KEY = "discovery_breakdown"
+DISCOVERY12_ON = "on"
+
+
+def wants_discovery12(text: str) -> bool:
+    return bool(_DISCOVERY12_WORDS.search(str(text or "")))
+
+
 def requested_report(text: str) -> tuple[str, tuple[str, ...]]:
     """``("status", ())`` or ``("deadlines", workbooks)`` from the request's own
     words. Workbooks: ``deadlines`` when the words name deadlines or dates,

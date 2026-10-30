@@ -253,18 +253,28 @@ rows:
   # ---------------------------------------- MEDICAL RECORDS AND CHRONOLOGY
   - routine: 'Records chase'
     letter_section: MEDICAL RECORDS AND CHRONOLOGY
-    skills: [medical-records-chaser]
+    skills: [records-order-chase]
     start_tier: prepare-and-route
     ceiling_tier: auto-handle
     start_verbatim: 'Prepare-and-route'
     ceiling_verbatim: 'Auto-handle (once you are comfortable)'
     enforcement:
-      initiation: 'manual + scheduled (weekly provider chase)'
+      initiation: 'scheduled (weekly vendor check; cron row commented until the firm switches it on)'
       exposure_keys:
         external_send_vendor: draft_for_review
       content_floor: false
       banned_tools: []
       notes: >-
+        Since letter 416 (2026-10-29, #10) the row's skill is records-order-chase:
+        each week it reads the orders placed through the Operator, asks the vendor
+        where each request stands, and emails the firm's authored recipient every
+        request not shown as completed with a follow-up note for a PERSON to send.
+        It sends nothing to the vendor or a provider, so today the row runs below
+        its prepare-and-route start (tighter than committed, ADR 0035). The
+        exposure key below is kept as the seat authors it, because it feeds the
+        exposure_ceiling derivation; narrowing it is an entitlement change, not
+        part of this row's skill swap. The text that follows describes the
+        provider-and-vendor send the earlier skill was built for.
         The medical-records chase goes to the firm's records VENDOR
         (external_send_vendor), which the "a person sends it" rule does not cover.
         Allowed state reads are matter-metadata only (non-fenced, get_files_on_matter);

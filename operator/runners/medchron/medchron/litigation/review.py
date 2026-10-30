@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from ..proof import checks, review as proof_review
-from . import book, percase
+from . import book, percase, printout as printout_mod
 
 CASE_NOTES = "Case notes"
 ALL_DEFENDANTS = "All defendants"
@@ -200,6 +200,18 @@ def _per_case(xlsx: bytes, finals: list[dict[str, Any]]) -> list[proof_review.Fi
     return [proof_review.code(proof_review.MUST, "per_case", p) for p in problems] + _vocabulary(sheets, first=1)
 
 
+def _printout(pdf: Path, finals: list[dict[str, Any]]) -> list[proof_review.Finding]:
+    """The printable PDF: a page for every case, every court date it shows
+    printed, and no system wording on any page."""
+    if not pdf.is_file():
+        return [proof_review.code(proof_review.MUST, "printout", "the print-out is not on disk")]
+    try:
+        problems = printout_mod.check(pdf, finals) + [f"{c}: {w}" for c, w, _ in printout_mod.scan(pdf)]
+    except Exception as exc:  # noqa: BLE001 - an unreadable PDF is the finding
+        return [proof_review.code(proof_review.MUST, "printout", f"the print-out does not open: {exc}"[:300])]
+    return [proof_review.code(proof_review.MUST, "printout", p) for p in problems]
+
+
 def run(
     data: Path,
     job_dir: Path,
@@ -209,6 +221,7 @@ def run(
     *,
     tagged: tuple[list[str], list[list[Any]]] | None = None,
     per_case: Path | None = None,
+    printout: Path | None = None,
 ) -> str:
     """Review, record and decide. Returns ``code_only`` or ``released``;
     raises ``LitigationFailed`` (``review_held: ...``) on a hold. ``per_case``,
@@ -221,6 +234,8 @@ def run(
     fs = findings(xlsx.read_bytes(), finals, in_scope, tagged)
     if per_case is not None:
         fs += _per_case(per_case.read_bytes(), finals)
+    if printout is not None:
+        fs += _printout(printout, finals)
     proof_review.save(data, fs, model="", lane="litigation")
     # The code review is re-run on every attempt, so a redo needs nothing
     # forgotten; consuming it here would forget the record just saved and

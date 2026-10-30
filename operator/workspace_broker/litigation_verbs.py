@@ -98,6 +98,9 @@ from .litigation_intake import (
     operator_library_number,
     paralegal_roster,
     requested_report,
+    wants_discovery12,
+    DISCOVERY12_KEY,
+    DISCOVERY12_ON,
     named_attorneys,
     named_paralegals,
     scheduled_recipients,
@@ -298,6 +301,15 @@ class LitigationVerbs:
                 raise PermissionError(
                     "a scheduled litigation run is submitted by its cron's pre_run or root, never a turn"
                 )
+            # 2026-10-29: root may author a scheduled run's request text (SMD
+            # sending the firm a list nobody emailed for, e.g. "court columns
+            # only"); the cron's pre_run never does, and the text only narrows
+            # what is read (the runner's ``court_only``), never who is told.
+            if peer_uid == 0 and set(raw) == {"trigger", "request_text"}:
+                text = raw["request_text"]
+                if not isinstance(text, str) or not text.strip() or len(text) > MAX_REQUEST_TEXT:
+                    raise EnvelopeError(f"request_text must be 1 to {MAX_REQUEST_TEXT} characters")
+                return {"trigger": "scheduled", "request_text": text}
             if set(raw) != {"trigger"}:
                 raise EnvelopeError('a scheduled envelope carries only {"trigger": "scheduled"}')
             return {"trigger": "scheduled"}
@@ -327,7 +339,7 @@ class LitigationVerbs:
             requester, message_ref, request_text, scope_in = self._who(given, settings, admins)
             report, extra = self._kind(given["trigger"], request_text, settings)
             library, file_to, folder = self._filing_target(settings, report)
-            firm, cents = self._budget(spends=report == "status")
+            firm, cents = self._budget(spends=report in ("status", "discovery12"))
             envelope = {
                 "trigger": given["trigger"],
                 "requester": requester,
@@ -396,7 +408,7 @@ class LitigationVerbs:
                     "one of the firm's Named Administrators; none is, so nothing was queued"
                 )
             ref = f"scheduled:{pacific_today(self._now()).isoformat()}"
-            return recipients[0], ref, SCHEDULED_TEXT, {"all": True}
+            return recipients[0], ref, given.get("request_text") or SCHEDULED_TEXT, {"all": True}
         requester = str(given["requester"] or "").strip().lower()
         if requester not in admins:
             raise _Refused(
@@ -411,6 +423,13 @@ class LitigationVerbs:
         code. A reassignment is checked first: it is the only kind that writes
         to the firm's matters, so it must be switched on for the seat and its
         shape read exactly, or nothing is queued."""
+        if wants_discovery12(text):
+            # A request's own words, or (2026-10-29) the text root authored for
+            # a scheduled run: the cron's pre_run never carries text, so its
+            # scheduled run stays the status list.
+            if str(settings.get(DISCOVERY12_KEY) or "").strip() != DISCOVERY12_ON:
+                raise _Refused("the discovery breakdown is not switched on for this seat; nothing was queued")
+            return "discovery12", {"report": "discovery12"}
         if trigger != "request":
             return "status", {}
         if is_reassignment(text):

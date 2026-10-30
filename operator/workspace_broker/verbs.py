@@ -48,7 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import casefile_verbs, delivery_proof, help_signals, msgraph_drafts, note_verbs
+from . import casefile_verbs, delivery_proof, help_signals, msgraph_drafts, note_verbs, records_order_acts
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -163,6 +163,9 @@ VERBS: tuple[Verb, ...] = (
     # hold class and request ref per held/failed job, read-only, no matter content.
     # The agent uid (the initiation plugin's review tool) and root may read it.
     Verb("help_job_signals", GATEWAY_ROOT_OR_AGENT, help_signals.help_job_signals),
+    # The weekly records chase (letter 416 #10): the records orders the Operator
+    # placed (committed acts), read-only, no facility or client. Agent uid and root.
+    Verb("records_orders_placed", ROOT_OR_AGENT, records_order_acts.records_orders_placed),
     Verb("medchron_job_record", _only(ROOT), _medchron),
     Verb("medchron_backfill_covered", _only(ROOT), _medchron),
     # Keeps a pre-2026-10-29 job's units from its job dir. Root only, no agent tool.

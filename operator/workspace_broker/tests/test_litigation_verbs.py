@@ -435,6 +435,27 @@ def test_a_scheduled_envelope_names_nothing_else(seat) -> None:
     assert out["accepted"] is False
 
 
+def test_root_may_author_a_scheduled_runs_text_and_the_requester_stays_the_recipient(seat) -> None:
+    """2026-10-29: SMD sends the firm a court-only list nobody emailed for. The
+    text narrows what is read; the person told is still the authored recipient."""
+    broker, _, _, queue, _ = seat
+    text = "Litigation status list: complaint filed, served, answers, and every court date."
+    out = call(broker, "litigation_job_submit", pid=1, uid=0, envelope={"trigger": "scheduled", "request_text": text})
+    assert out["accepted"] is True and out["report"] == "status"
+    job = json.loads(queued(queue)[0].read_text())
+    assert job["request_text"] == text and job["requester"] == ADMIN and job["trigger"] == "scheduled"
+
+
+def test_only_root_authors_a_scheduled_runs_text(seat) -> None:
+    broker, _, yaml_path, _, _ = seat
+    yaml_path.write_text(_yaml(cron=LIVE_CRON))
+    out = call(broker, "litigation_job_submit", pid=CRON_PID, uid=AGENT_UID,
+               envelope={"trigger": "scheduled", "request_text": "complaint filed only"})  # fmt: skip
+    assert out["accepted"] is False
+    blank = call(broker, "litigation_job_submit", pid=1, uid=0, envelope={"trigger": "scheduled", "request_text": " "})
+    assert blank["accepted"] is False
+
+
 # -- status, record, resume ---------------------------------------------------
 
 
@@ -486,6 +507,21 @@ def test_the_record_audit_carries_counts_and_never_a_file_list(seat) -> None:
     kinds = [k for k, _ in audit_rows(db)]
     assert kinds == ["LITIGATION_JOB_SUBMITTED", "LITIGATION_JOB_RUNNING", "LITIGATION_JOB_HELD"]
     assert audit_rows(db)[-1][1]["matters_total"] == 4
+
+
+def test_a_discovery_breakdowns_delivered_record_with_its_counts_lands(seat) -> None:
+    """2026-10-30: the broker refused these counts, so a filed discovery run's
+    row stayed ``running`` and its DELIVERED audit row was never written."""
+    broker, db, _, _, _ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    counts = {"d12_read_chunks": 350, "d12_verify_chunks": 346, "d12_audit_chunks": 344, "d12_declined": 3}
+    out = call(
+        broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="delivered",
+        fields={"stage": "report", "cents": 100, "counts": counts},
+    )  # fmt: skip
+    assert out["job"]["state"] == "delivered" and out["job"]["counts"] == counts
+    assert [k for k, _ in audit_rows(db)][-1] == "LITIGATION_JOB_DELIVERED"
 
 
 def test_record_refuses_an_unknown_field_and_an_illegal_move(seat) -> None:

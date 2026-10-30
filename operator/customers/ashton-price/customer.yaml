@@ -620,6 +620,21 @@ personas:
           scheduled: true
           webhook: false
         enabled: true
+      # The weekly records chase as letter 416 (#10, base fee) committed it: the
+      # records orders placed through the Operator that the vendor does not show
+      # as completed, each with a follow-up for a person to send. Rendered and
+      # sent by the pre-run to the one recipient below; nothing goes to the
+      # vendor or a provider. Its cron row ships commented (below): the firm
+      # switches it on.
+      - name: records-order-chase
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: christa@ashtonandprice.com
       - name: medical-chronology-maintainer # routine 11: a run or an update, on request
         version: pending
         initiation:
@@ -843,6 +858,12 @@ personas:
           # its open tasks in Smokeball, reading every change back. A setting,
           # not a new skill: unauthored or any other value, it is refused.
           staff_reassignment: 'enabled'
+          # The 12-section discovery breakdown (PRs 3628/3632/3634/3635): a
+          # request or a root-authored scheduled run naming it queues the
+          # discovery12 report. Switched on 2026-10-30 on the Captain's go,
+          # after the 5-case proof vfy_01M660T111F1Z3QTXEDHSAPZQF. Any other
+          # value refuses.
+          discovery_breakdown: 'on'
           # The Operator Library matter's id (the same matter the demand and
           # drafting lanes author); the broker pairs it with the library number.
           file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
@@ -1051,7 +1072,11 @@ personas:
     #   schedule: '51 7 * * 1-5' # weekday 0751 seat-local
     #   pre_run: pre_run.py
     #   wake_policy: pre_run_decides
-    # - skill: medical-records-chaser
+    # letter 416 #10; switch on with the firm's go-ahead. The records chase as
+    # letter 416 defined it (the vendor's open requests, a follow-up prepared for
+    # a person), replacing the provider chase (medical-records-chaser) this row
+    # used to name, which letter 416 does not include.
+    # - skill: records-order-chase
     #   schedule: '9 8 * * 2' # weekly Tue 0809 seat-local
     #   pre_run: pre_run.py
     #   wake_policy: pre_run_decides
@@ -1487,7 +1512,7 @@ routine_names:
   discovery-response-staging: 'Response inputs staged'
   matter-initiation-setup: 'New matter setup'
   service-confirmation-watcher: 'Service confirmation'
-  medical-records-chaser: 'Records chase'
+  records-order-chase: 'Records chase'
   medical-chronology-maintainer: 'Medical chronology'
   motion-calendar-tracker: 'Motion calendar'
   motion-package-assembler: 'Motion package'

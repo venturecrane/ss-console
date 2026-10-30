@@ -367,7 +367,7 @@ class LitigationLane(DraftingLane):
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for litigation job {job_id}.",
             load_line(SKILL),
-            "Kind: litigation.",
+            "Kind: litigation." + (" Report: discovery breakdown." if env.get("report") == "discovery12" else ""),
             f"Trigger: {trig if trig in ('request', 'scheduled') else 'unknown'}.",
             f"Outcome: {state}.",
             f"Matters: {int(fields.get('matters_total') or 0)}; re-read this run: {int(fields.get('matters_reread') or 0)}; new flags: {int(fields.get('flags_new') or 0)}.",
@@ -375,6 +375,12 @@ class LitigationLane(DraftingLane):
             f"Files: {files}.",
             f"Requested by: {env.get('requester') or ''}.",
         ]
+        if env.get("report") == "discovery12":
+            # A count, never a matter: files the reading service declined twice,
+            # printed in the breakdown for a hand check (discovery12/run.py).
+            counts = (read_verdict(self.job_dir(job_id), "") or {}).get("counts") or {}
+            declined = int(counts.get("d12_declined") or 0)
+            lines.append(f"Declined by the reading service (marked for a hand check): {declined}.")
         if state != "delivered":
             where = str(fields.get("stage") or stage or "")
             lines.append(

@@ -277,12 +277,23 @@ class ReassignRun:
         return d
 
     def _delivered(self) -> Verdict:
+        """Delivered only when the read-back shows every change took. A case or
+        task that did not take holds the job as ours (``readback_mismatch``,
+        SMD paged, the firm told SMD is finishing it) and reopens the stage it
+        stuck in, so the next run retries only what is left: on 2026-10-30 a
+        hand run whose 7 writes were all refused before sending reported
+        "delivered" with the read-back "confirmed"."""
         c = self._counts()
+        cases, tasks = c.get("cases_not_moved", 0), c.get("tasks_not_moved", 0)
+        if cases or tasks:
+            self.reopen(["matters"] if cases else ["tasks"])
+            raise LitigationHold(
+                f"readback_mismatch: {cases} of {c.get('cases_to_move', 0)} case(s) and {tasks} task(s) "
+                "did not take the change on the read-back"
+            )
         reads = sum(int(self._load(n).get("reads") or 0) for n in ("matters.json", "tasks.json"))
-        stuck = c.get("cases_not_moved", 0) + c.get("tasks_not_moved", 0)
         proof = {"readback": "confirmed", "rows": reads, "nothing_to_file": not c.get("cases_to_move"),
-                 "review": "code_only", "review_cents": 0, "review_model": "",
-                 **({"alerts": ["readback_mismatch"]} if stuck else {})}  # fmt: skip
+                 "review": "code_only", "review_cents": 0, "review_model": ""}  # fmt: skip
         return Verdict("delivered", stage="report", counts=c, detail=self._detail(), proof=proof)
 
     def _current(self) -> str:

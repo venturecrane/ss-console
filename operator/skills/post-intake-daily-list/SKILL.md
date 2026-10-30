@@ -72,6 +72,24 @@ list cannot be sent (an unreadable journal, an envelope that cannot be
 written) sends nothing and records why on its heartbeat row; that is SMD's to
 fix, and the next run lists everything since the last list that did go.
 
+## Arming it on a seat (what an agent should expect)
+
+Arming is a `customer.yaml` change (the skill entry, its recipient, the cron
+row), and none of those three is live-writable (`config_applier/safety.py`):
+the seat adopts them at its next boot. In order, observed on the pilot
+2026-10-29:
+
+1. The merge's config publish is REFUSED for a seat whose running image does
+   not carry this skill yet (the image guard; the Deploy run shows a failed
+   publish job for that seat). That is expected, not a defect.
+2. Once release-tick rolls the seat onto an image that carries the skill, the
+   next push to main publishes the config.
+3. The seat adopts it at its next boot, which is the next release roll. No
+   reprovision is needed; one more merge that builds an image does both 2 and 3.
+
+Until then the intake still replies per scan, because `record_post_batch`
+reads the seat's running config.
+
 ## What you do when woken
 
 Nothing. The list was rendered and dispatched before your first tool call;

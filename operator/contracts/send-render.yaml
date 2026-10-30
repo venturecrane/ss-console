@@ -284,6 +284,19 @@ skills:
       envelope's in_turn declares the skeleton as the only body the woken
       turn may send. Stamps: body_sha256 entries on EMITTED_WAKE (full and
       skeleton).
+  records-order-chase:
+    render: templated
+    template: operator/skills/records-order-chase/report.py
+    note: >-
+      The weekly records chase (letter 416 #10) is rendered deterministically
+      in pre_run (report.py: render, subject, skeleton) from the committed
+      records-order acts and the vendor's read of each matter: every request
+      not shown as completed, with a follow-up note for a person to send, and
+      every matter or order that could not be checked. Dispatched out of turn
+      by the overlay's prerendered-dispatch hook to the recipient authored in
+      the skill's settings; the model composes nothing, and the envelope's
+      in_turn declares the skeleton as the only body the woken turn may send.
+      Stamps: body_sha256 entries on EMITTED_WAKE (full and skeleton).
   negotiation-watch:
     render: compositional
     note: >-

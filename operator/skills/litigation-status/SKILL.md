@@ -147,6 +147,24 @@ status list. Word your one reply by that same rule: the job queued is the one
 the email's words name. (When the tool's answer carries `report` and
 `workbooks`, those are the broker's own decision; follow them.)
 
+## The discovery breakdown (the same request, the same tool)
+
+A Named Administrator may ask for the **12-section discovery breakdown**: every
+litigated case's discovery laid out in twelve sections (form and special
+interrogatories, requests for production and for admission, depositions,
+nonparty subpoenas, examinations, expert discovery, ESI, inspection, initial
+disclosures, supplemental responses), each date citing its paper. It is paid
+reading, billed as it reads, so the seat queues it only when its settings switch
+it on; until then the broker refuses it and you say it is not set up yet. Submit
+it exactly as above, with `litigation_job_submit`; the broker tells it apart by
+the email's own words ("12-section discovery", "discovery breakdown"). Its wake
+says `Kind: litigation. Report: discovery breakdown.`; word the delivered reply as
+for the status list, naming the one file exactly as the job row names it. When the
+wake's `Declined by the reading service (marked for a hand check): N.` line has N
+above zero, add one sentence with that count only: "N files were marked for a hand
+check in the print-out because the reading service declined them." Never name the
+files or matters; they are marked on their own pages.
+
 ## Moving cases between staff (the same request, the same tool)
 
 A Named Administrator may instead ask the Operator to **move cases from one or
@@ -268,7 +286,9 @@ any case.
      folder "Litigation Status", as the file named exactly as the job row names it
      (when the job row's `files` also lists a `per_case_workbook`, add that the same
      list, one sheet per case for printing, is filed beside it, named exactly as that
-     row names it); it
+     row names it; when it also lists a `printout_pdf`, add that a printable PDF of
+     every case's court dates, with the source of each date, is filed beside it, named
+     exactly as that row names it); it
      covers `<matters_total>` matters, `<matters_reread>` of them re-read because their
      files changed since the last list, and it carries `<flags_new>` new flags for
      review. An empty count is left out, never announced as "none". Say that nothing
@@ -295,18 +315,16 @@ any case.
    - **delivered, a staff reassignment** (`Report: reassign.`): say how many cases
      moved (`cases_moved`) from the `Moved from:` names to the `Moved to:` name, which
      cases they were in words (the `Scope:` line, and the `Attorneys:` names when not
-     `all`), and how many of their open tasks moved with them (`tasks_moved`). Then,
-     each only when it applies: the cases that did not take the change, by the matter
-     numbers on `Cases not moved:`; the tasks that still name the earlier person, by
-     matter number and count from `Tasks not moved:`, adding that SMD has been told
-     and is finishing them; the cases left as they were because they are outside
+     `all`), and how many of their open tasks moved with them (`tasks_moved`). A
+     reassignment is delivered only when Smokeball's read-back shows every change
+     took; one that did not take holds as `smd_finishing`, so `Cases not moved:` and
+     `Tasks not moved:` read `none` here. Then, each only when it applies: the cases left as they were because they are outside
      this request (`cases_outside_scope`, with the count per attorney from `Left
 outside the scope:`), so the firm can ask for those too; a person on `Nothing
 to move for:` had no cases that fit; and `cases_skipped` cases already had
      someone else assigned before the move, so they were left alone. When
      `cases_moved` is zero, say no case was changed and why from those same lines.
-     Matter numbers appear only for what did not move; never a client or party
-     name, a task's words or a date.
+     No matter number, client or party name, task's words or date.
    - **held**: worded by the wake's `Hold class:` line, never by the job's
      `reason`. The reason is SMD's technical record (gates, seed values, matter
      numbers, codes), and SMD already has it: every hold our side caused pages
@@ -406,10 +424,8 @@ no rule-format strings.
 - No em dashes anywhere, in any channel. Use commas, colons, or periods.
 - No matter number, no client name, no party name and no date from a court paper in any
   message from this skill. The counts and the workbook's file name are the whole of the
-  facts. The one exception: a staff reassignment names the matter numbers of the cases
-  and tasks that did not take the change, so the firm can find them; never a name or a
-  date with them. If a content gate holds that reply, the minimal note keeps the counts
-  and drops the numbers.
+  facts. A staff reassignment is no exception: one whose changes did not all take is
+  held for SMD to finish, never delivered with a list of what is left.
 - A message about a litigation job names no dollar figure at all.
 
 If the message is held by a content gate: do not retry the same content and do not drop

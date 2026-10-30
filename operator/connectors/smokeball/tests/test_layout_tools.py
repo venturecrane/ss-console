@@ -414,3 +414,49 @@ def test_the_summary_write_is_not_a_tool() -> None:
 
     lt.register(_Server())
     assert "refresh_operator_details" not in registered and "add_negotiation_rows" in registered
+
+
+# ---- an offer the Operator found in the day's post (operator_tab) -----------
+#
+# 2026-10-29: post intake enters offer letters from the scanned mail. A row
+# written into an EMPTY tab with no summary made the tab read as the firm's own
+# to the negotiation watch (medchron negotiation/rows.py operator_kept), which
+# then emailed "not entered ... kept by the firm" about every later offer on
+# that matter and entered none. So the Operator's write keeps the tab its own.
+
+
+def _empty_tab_tenant() -> _Tenant:
+    return _Tenant([_item("neg", f"{DESIGN}_404f")], {"neg": {}})
+
+
+def test_an_empty_tab_gets_the_operators_summary_with_the_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import date
+
+    monkeypatch.setattr(lt, "TODAY", lambda: date(2026, 10, 29))
+    t = _use(monkeypatch, _empty_tab_tenant())
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "18500.00", "offer_date": "2026-10-27"}], operator_tab=True)
+    assert out["status"] == "written", out
+    want = "Entered 10/29/26 from the offer letters and emails saved in this file."
+    assert t.values["neg"][ls.DETAILS_KEY] == want
+    assert ls.operator_details(want), "the watch and the connector must read it as the Operator's"
+
+
+def test_a_tab_the_firm_keeps_refuses_an_operator_offer(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _filled_tenant()
+    t.values["neg"][ls.DETAILS_KEY] = "Paralegal notes: client wants 50k floor"
+    _use(monkeypatch, t)
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True)
+    assert out["status"] == "refused" and "kept by the firm" in out["reason"]
+    assert t.patches() == []
+    # Rows with no summary at all are the firm's too.
+    t2 = _use(monkeypatch, _filled_tenant())
+    again = lt.add_negotiation_rows(MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True)
+    assert again["status"] == "refused" and t2.patches() == []
+
+
+def test_an_operator_tab_keeps_its_summary_and_takes_the_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _summary_tenant(OURS))
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "956000", "offer_date": "2026-09-23"}], operator_tab=True)
+    assert out["status"] == "written", out
+    assert t.values["neg"][f"{B}/Details"] == OURS, "an existing Operator summary is never rewritten here"
+    assert all(p["key"] != f"{B}/Details" for patch in t.patches() for p in patch["values"])

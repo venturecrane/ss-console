@@ -20,14 +20,29 @@ from typing import Any, Callable
 from . import ids, smoke
 from .busy import BusyGate
 from .d1 import FleetStore
-from .fly import Fly, classify_deploy
+from .fly import Fly, classify_deploy, deploy_excerpt
 from .ledger import VerifyLedger
 from .preflight import PreflightChecker
 from .runner import ToolingError
 from .smoke import Check, SmokeRunner
 
-# Outcome of one seat: whether the rollout continues past it.
-HALTING = frozenset({"rolled_back", "failed", "tooling_error"})
+# Outcome of one seat: whether the rollout continues past it. Only a seat that
+# showed the RELEASE is bad halts: it came up broken (rolled_back) or was refused
+# or broken and left as is (failed). A tooling_error decided nothing about the
+# release (Fly said no without saying why, or no verdict came back), so it stalls
+# that one seat and never the rest: on 2026-10-29 a Fly deploy that failed with
+# no reason, on smd-staging and then on brokery, froze every later seat, the
+# client's included, for hours.
+HALTING = frozenset({"rolled_back", "failed"})
+# A seat that did not take the release and showed nothing wrong with it: the
+# next tick tries it again, and it never holds the rings after it back
+# (tick.plan_tick). The pager reads repeated tooling_error rows as stuck.
+STALLED = frozenset({"tooling_error", "waiting_idle"})
+
+# A `fly deploy` that fails with no seat-failure marker is tried once more after
+# this pause before the seat is called a tooling_error. Re-deploying the same
+# image is safe: nothing was rolled back, and the second call converges on it.
+DEPLOY_RETRY_PAUSE_S = 60.0
 
 
 @dataclass
@@ -102,11 +117,29 @@ class ImageRollout:
         return rel.get("image_digest") if rel else None
 
     def _deploy(self, seat: str, image: str, toml_text: str) -> str:
+        return self._deploy_saying(seat, image, toml_text)[0]
+
+    def _deploy_saying(self, seat: str, image: str, toml_text: str) -> tuple[str, str]:
+        """``fly deploy``: its class, and what Fly said when it decided nothing.
+
+        A tooling_error is tried once more after DEPLOY_RETRY_PAUSE_S. What Fly
+        printed is kept, because before 2026-10-30 it was thrown away and three
+        halts in one day could not say why.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "fly.toml")
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(toml_text)
-            return classify_deploy(self.fly.deploy(ids.app_name(seat), image, path))
+            res = self.fly.deploy(ids.app_name(seat), image, path)
+            cls = classify_deploy(res)
+            if cls != "tooling_error":
+                return cls, ""
+            first = deploy_excerpt(res)
+            self.log(f"{seat}: fly deploy decided nothing ({first}); trying once more in {DEPLOY_RETRY_PAUSE_S:.0f}s")
+            self.sleep(DEPLOY_RETRY_PAUSE_S)
+            res = self.fly.deploy(ids.app_name(seat), image, path)
+            cls = classify_deploy(res)
+            return cls, (deploy_excerpt(res) if cls == "tooling_error" else "")
 
     def _verify(self, seat: str, plan: ImagePlan, since_iso: str) -> Check:
         since = ids.parse_iso(since_iso)
@@ -264,7 +297,7 @@ class ImageRollout:
         self.store.update_rollout(rid, "deploying", from_image=from_image, from_toml=from_toml, snapshot_id=snap)
         since = ids.iso(ids.utc_now())
         try:
-            deployed = self._deploy(seat, plan.release["image_ref"], toml_text)
+            deployed, said = self._deploy_saying(seat, plan.release["image_ref"], toml_text)
             if deployed == "tooling_error":
                 return self._finish(
                     rid,
@@ -272,7 +305,8 @@ class ImageRollout:
                     SeatOutcome(
                         seat,
                         "tooling_error",
-                        "fly deploy failed without saying the release was unhealthy; the seat was not rolled back",
+                        "fly deploy failed twice without saying the release was unhealthy; the seat was not "
+                        f"rolled back. Fly said: {said}",
                     ),
                 )
             self.store.update_rollout(rid, "smoking")

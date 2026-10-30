@@ -79,8 +79,9 @@ function laneLines(slug: string, card: RequestCard): string[] {
   if (!lane.heldJob) {
     return [
       head,
-      'An in-turn ask: the Operator answered it in the turn (nothing is held). Read that answer;',
-      "once it is right, add the skill to the seat's lane-proofs.yaml with its evidence.",
+      'An in-turn ask: the Operator answered it in the turn (nothing is held). Read that answer',
+      "on this request's first-reply card; once it is right, add the skill to the seat's",
+      'lane-proofs.yaml with its evidence.',
     ]
   }
   return [
@@ -248,12 +249,23 @@ export function cardText(slug: string, card: RequestCard): string {
   } else if (card.kind === 'replied' || card.kind === 'followup') {
     lines.push('', "THE OPERATOR'S REPLY", '  (the seat did not record the words of this reply)')
   }
-  const did = actionLines(card)
   lines.push('', 'WHAT THE OPERATOR DID')
-  if (did.length > 0) lines.push(...did.map((l) => `  ${l}`))
-  else lines.push('  No tools ran for this card.')
+  if (card.kind === 'lane_unproven') {
+    // The seat builds this card with no tools and zero counts by construction
+    // (overlay shared/request_cards.py _lane_card), so tallies here would read
+    // as "did nothing". On 2026-10-30 a first-use card said "No tools ran" and
+    // "Replies sent: 0" for a mail bundle the Operator had filed 8 letters from.
+    lines.push(
+      "  Not counted on this card. The request's first-reply card carries the Operator's reply",
+      '  and every tool it ran.'
+    )
+  } else {
+    const did = actionLines(card)
+    if (did.length > 0) lines.push(...did.map((l) => `  ${l}`))
+    else lines.push('  No tools ran for this card.')
+    lines.push(`  Replies sent: ${card.replies}. Refused: ${card.refused}. Failed: ${card.failed}.`)
+  }
   lines.push(
-    `  Replies sent: ${card.replies}. Refused: ${card.refused}. Failed: ${card.failed}.`,
     '',
     `Card: ${card.cardKey}`,
     'List recent requests from a terminal: .claude/bin/requests',

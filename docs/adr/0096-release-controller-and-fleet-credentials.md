@@ -63,8 +63,9 @@ ADR 0007 exists to prevent.
 2. **A tick is resumable and advances at most one ring**
    (`operator/bin/lib/fleet/tick.py`). It takes the fleet lease (another holder
    means wait, exit 5), reads each seat's latest rollout of this release, and:
-   a seat whose latest is `rolled_back`, `failed` or `tooling_error` is a
-   standing halt (exit 6) until a person acts; otherwise it rolls the remaining
+   a seat whose latest is `rolled_back` or `failed` is a standing halt (exit 6)
+   until a person acts (amended 2026-10-30: a `tooling_error` stalls only its
+   own seat, which is retried, and no longer holds later rings back); otherwise it rolls the remaining
    seats of the first ring that has any, but only after the ring before it has
    baked. A seat already `done` on the release is never redeployed, in a tick
    or in a laptop rerun; `--only` still redeploys on request. Holds are re-read
@@ -120,8 +121,8 @@ ADR 0007 exists to prevent.
 
 4. **The seat's self-test decides; there is no ssh boot smoke in a tick.** A
    tick verifies with `--verify selftest` and no fallback: a self-test that
-   gives no verdict in its window is a `tooling_error`, which halts and pages
-   through the existing `rollout_failed` pager, and a rollback is re-verified by
+   gives no verdict in its window is a `tooling_error`, which stalls that seat
+   and pages through the existing `rollout_failed` pager once it repeats, and a rollback is re-verified by
    the self-test the rollback image runs at boot. A release whose image does
    not carry the self-test is refused by a tick. The laptop path keeps its
    current behaviour (`--verify bash` by default, with the fallback), and
