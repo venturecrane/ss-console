@@ -34,9 +34,10 @@ seat:
   kind: customer
   product: hosted-agent
 
-vertical: mixed
-# The open-house add-on is the skill below. No real-estate vertical exists in
-# the addon catalog, and none is built ahead of need.
+vertical: real-estate
+# The market preset (operator/verticals/real-estate, ADR 0100). A vertical names
+# the market; what the seat runs is the skills it enables, here the open-house
+# skill below. No addon is built ahead of need.
 addons: []
 practice_areas:
   - general
