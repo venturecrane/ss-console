@@ -32,8 +32,8 @@ from workspace_broker import help_signals, verbs
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc)
 
 
-def _iso(delta_days: float) -> str:
-    return (NOW - timedelta(days=delta_days)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+def _iso(delta_days: float, now: datetime = NOW) -> str:
+    return (now - timedelta(days=delta_days)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 _COLS = "(id TEXT, state TEXT, reason TEXT, request_ref TEXT, updated_at TEXT, matter_number TEXT)"
@@ -61,9 +61,11 @@ def _ledger(tmp_path: Path, *, tables=("demand_jobs", "medchron_jobs", "litigati
     return path
 
 
-def _job(path: Path, table: str, state: str, reason: str | None, ref: str | None, days_ago: float) -> None:
+def _job(
+    path: Path, table: str, state: str, reason: str | None, ref: str | None, days_ago: float, now: datetime = NOW
+) -> None:
     conn = sqlite3.connect(path)
-    conn.execute(_INSERT[table], ("J", state, reason, ref, _iso(days_ago), "123456"))
+    conn.execute(_INSERT[table], ("J", state, reason, ref, _iso(days_ago, now), "123456"))
     conn.commit()
     conn.close()
 
@@ -126,7 +128,9 @@ def test_help_job_signals_dispatches_for_the_agent_uid(tmp_path):
     from workspace_broker.server import Broker
 
     path = _ledger(tmp_path)
-    _job(path, "demand_jobs", "failed", "runner exited 1", "<b@x>", 0.5)
+    # The verb reads the real clock (no `now` seam), so the job is dated from it:
+    # dated from the fixed NOW, it left the 7-day window on 2026-10-31.
+    _job(path, "demand_jobs", "failed", "runner exited 1", "<b@x>", 0.5, now=datetime.now(timezone.utc))
     broker = Broker.__new__(Broker)
     broker.gateway_pid = 4242
     broker.agent_uid = 1001
