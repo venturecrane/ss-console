@@ -2717,8 +2717,9 @@ def test_commitment_confirm_renders_the_call_first_line_not_the_send_line(tmp_pa
 def test_destructive_confirm_renders_the_prepare_then_delete_line(tmp_path):
     """The only destructive act shape is the calendar-event deletion. At
     `destructive: confirm` the model is told the two calls, in order, and to
-    relay the gate's [act line verbatim, not to ask in its own words."""
-    with_destructive = VALID_YAML.replace(
+    relay the gate's [act line verbatim, not to ask in its own words. The act
+    shape's tools are Smokeball's, so the seat authors the Smokeball connector."""
+    with_destructive = SMOKEBALL_YAML.replace(
         "internal_write: autonomous", "internal_write: autonomous\n        destructive: confirm"
     )
     assert "destructive: confirm" in with_destructive  # guard: replace landed
@@ -2734,3 +2735,38 @@ def test_destructive_confirm_renders_the_prepare_then_delete_line(tmp_path):
     assert "mcp_smokeball_delete_events" in line
     assert '"[act ' in line
     assert "request explicit approval in the same turn" not in line
+
+
+def test_destructive_confirm_on_a_seat_without_smokeball_renders_no_line(tmp_path):
+    """ADR 0100: the destructive act shape's only tools are Smokeball's. A seat
+    that does not author the Smokeball connector is told nothing about it, not
+    told to call tools it does not have, and the generic confirm sentence does not
+    stand in for it. The rest of the autonomy section renders as before.
+    FALSIFIER: drop the connector check and the Smokeball tool names appear."""
+    with_destructive = VALID_YAML.replace(
+        "internal_write: autonomous", "internal_write: autonomous\n        destructive: confirm"
+    )
+    assert "destructive: confirm" in with_destructive  # guard: replace landed
+    assert "mcp:smokeball" not in with_destructive
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, with_destructive)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    soul = (hermes_home / "profiles" / "marcus" / "SOUL.md").read_text()
+    assert "**destructive**" not in soul
+    assert "mcp_smokeball" not in soul
+    assert "## Authored autonomy (set by the people you work for)" in soul
+    assert "- **internal_write**: autonomous" in soul
+
+
+def test_a_section_whose_only_line_is_gated_away_renders_nothing():
+    """Well-formed when the gated line was the only one: no heading over an empty
+    list. The function is called directly because the fixture authors more."""
+    from bootstrap.translate import _send_posture_soul_section
+
+    persona = {"entitlements": {"exposure": {"destructive": "confirm"}}}
+    assert _send_posture_soul_section(persona, {"connectors": {}}) == ""
+    smokeball = {"connectors": {"smokeball": {"backend": "mcp:smokeball"}}}
+    assert "mcp_smokeball_delete_events" in _send_posture_soul_section(persona, smokeball)

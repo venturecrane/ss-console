@@ -207,7 +207,14 @@ def _resolve_session(kwargs: dict[str, Any]) -> str:
 
 
 def register(ctx: Any) -> None:
-    """Register the drafting lane's declared exit."""
+    """Register the drafting lane's declared exit, on every seat.
+
+    Not gated on the Smokeball connector (ADR 0100), deliberately: it performs no
+    write and names no Smokeball tool, and the seams it authorizes are not all
+    Smokeball's. Its own schema offers ``session_output``, and the ``record``
+    class it delivers lists ``local_file`` among its seams
+    (operator/contracts/output-classes.yaml), so a seat without Smokeball can
+    still need it."""
     register_wrapped_tool(
         ctx,
         name=_TOOL_NAME,

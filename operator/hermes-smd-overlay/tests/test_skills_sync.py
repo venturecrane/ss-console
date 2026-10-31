@@ -94,9 +94,32 @@ def test_omitted_prune_removes_unenabled_repo_skills_only(src, tmp_path):
 
 def test_unreadable_config_prunes_nothing(src, tmp_path):
     dest = tmp_path / "dest"
-    assert sync.read_enabled(tmp_path / "missing.yaml") == set()
-    result = sync.sync_skills(src, dest, enabled=set())
+    _skill(dest, "beta", "beta old")
+    for bad in (tmp_path / "missing.yaml", tmp_path / "list.yaml", tmp_path / "broken.yaml"):
+        if bad.name == "list.yaml":
+            bad.write_text("- not\n- a mapping\n")
+        if bad.name == "broken.yaml":
+            bad.write_text("personas: [unclosed\n")
+        assert sync.read_enabled(bad) is None
+    result = sync.sync_skills(src, dest, enabled=sync.read_enabled(tmp_path / "missing.yaml"))
     assert result.seeded == ["alpha", "beta"] and result.pruned_omitted == []
+
+
+def test_a_readable_config_that_enables_no_skill_prunes_every_omitted_skill(src, tmp_path):
+    """ADR 0100: a seat that authored no skill gets none (fail closed), told apart
+    from an unreadable config. FALSIFIER: treat the empty set as "unknown" again
+    and alpha and beta are seeded onto a seat that enables neither."""
+    dest = tmp_path / "dest"
+    _skill(dest, "beta", "beta old")
+    _skill(dest, "my-own")
+    cfg = _customer(tmp_path / "customer.yaml", [], disabled=["alpha"])
+    enabled = sync.read_enabled(cfg)
+    assert enabled == set()
+    result = sync.sync_skills(src, dest, enabled=enabled)
+    assert result.seeded == []
+    assert result.pruned_omitted == ["beta"]  # alpha was never on the volume
+    assert not (dest / "alpha").exists() and not (dest / "beta").exists()
+    assert (dest / "my-own").is_dir()  # agent-authored skills are never touched
 
 
 def test_symlink_in_source_refuses_before_writing(src, tmp_path):

@@ -497,29 +497,30 @@ fi
 # on the authored set. Agent-authored skills (only on the volume, ADR 0017) are
 # never iterated. The image copy under /app/skills is NOT locked (the seed above
 # copies from it as the hermes user under set -e, and a root-only directory
-# there would stop the boot); the overlay's skill read fence covers it. FAIL-SAFE: a
-# config that cannot be read, or that enables no skill at all, prunes NOTHING
-# (an empty allowlist must never read as "remove every skill"); never a `die`.
+# there would stop the boot); the overlay's skill read fence covers it. The
+# enabled set comes from the one predicate (shared.capabilities, ADR 0100).
+# FAIL-SAFE on a READ: a config that cannot be read (the reader exits non-zero)
+# prunes NOTHING, so a transient read never costs the seat its skills; never a
+# `die`. FAIL-CLOSED on what was AUTHORED: a config that reads and enables no
+# skill prunes every repo skill, because that is what the seat authored.
 # boot-smoke-test.sh step 6e asserts the absence on the seat.
 # omitted-skill-prune:begin (tests/operator-skill-deploy.test.ts runs this block)
 _omit_app_skills=/app/skills
 _omit_py=/opt/hermes/.venv/bin/python3
-_enabled_names="$("${_omit_py}" - "${CUSTOMER_YAML}" <<'OMITTED_SKILLS_PY' 2>/dev/null || true
+_enabled_read=0
+_enabled_names="$("${_omit_py}" - "${CUSTOMER_YAML}" <<'OMITTED_SKILLS_PY' 2>/dev/null
 import sys
 
-import yaml
+from shared.capabilities import enabled_skills, read
 
-doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
-names = set()
-for persona in doc.get("personas") or []:
-    for skill in (persona or {}).get("skills") or []:
-        if isinstance(skill, dict) and skill.get("enabled") is not False and isinstance(skill.get("name"), str):
-            names.add(skill["name"].strip())
-print(" ".join(sorted(names)))
+doc = read(sys.argv[1])
+if doc is None:
+    sys.exit(3)
+print(" ".join(sorted(enabled_skills(doc))))
 OMITTED_SKILLS_PY
-)"
-if [ -z "${_enabled_names// /}" ]; then
-  log "WARNING: omitted-skill prune: no enabled skill read from ${CUSTOMER_YAML}; pruning nothing"
+)" && _enabled_read=1
+if [ "${_enabled_read}" != 1 ]; then
+  log "WARNING: omitted-skill prune: ${CUSTOMER_YAML} unreadable; pruning nothing"
 else
   for _src in "${_omit_app_skills}"/*/; do
     [ -e "${_src}" ] || continue

@@ -129,3 +129,38 @@ def load_plugin(plugin_name: str) -> ModuleType:
         sys.modules.pop(sanitized, None)
         raise
     return module
+
+
+def write_seat_yaml(
+    path: Path, *, lanes: Any = (), smokeball: bool = False, skills: Any = ()
+) -> Path:
+    """A minimal customer.yaml authoring ``lanes`` (by enabling each lane's skill),
+    any extra ``skills``, and the Smokeball connector when ``smokeball`` is set
+    (ADR 0100: authored is derived from config, so a test authors the same way)."""
+    import yaml
+
+    from shared import capabilities
+
+    names = [capabilities.JOB_LANES[lane] for lane in lanes] + list(skills)
+    doc: dict[str, Any] = {
+        "customer_id": "test-seat",
+        "personas": [{"name": "operator", "skills": [{"name": n} for n in names]}],
+        "connectors": {"smokeball": {"backend": "mcp:smokeball"}} if smokeball else {},
+    }
+    path.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def authors_everything(monkeypatch, tmp_path_factory) -> Path:
+    """Point the live config at a seat that authors every job lane and Smokeball:
+    the shape every seat had before ADR 0100 gated tools on what it authors."""
+    from shared import capabilities
+
+    path = write_seat_yaml(
+        tmp_path_factory.mktemp("seat") / "customer.yaml",
+        lanes=list(capabilities.JOB_LANES),
+        smokeball=True,
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    return path
