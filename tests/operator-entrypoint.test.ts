@@ -18,7 +18,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -524,5 +524,159 @@ describe('Operator customer Machine entrypoint — gateway liveness supervisor (
         new RegExp(`gateway_liveness_state ${word}\\b`)
       )
     }
+  })
+})
+
+/**
+ * ADR 0100 W3: the jobs bundle. A seat that authors a job lane installs the
+ * published bundle (overlay bundle_installer) and bind-mounts it over
+ * /opt/medchron and /opt/connectors/smokeball BEFORE anything runs either: the
+ * lane fragments (casefile checks its inputs with /opt/medchron's python), the
+ * medchron daemon, and the gateway (which spawns the Smokeball MCP from
+ * /opt/connectors/smokeball). The behavioural half drives the real fragment
+ * with mount/setpriv stubbed, so it proves what is called in each case rather
+ * than that the source contains certain words.
+ */
+describe('entrypoint: the jobs bundle mount (ADR 0100 W3)', () => {
+  const BUNDLES_PATH = resolve('operator/templates/entrypoint-bundles.sh')
+  const BUNDLES_CODE = readFileSync(BUNDLES_PATH, 'utf8')
+    .split('\n')
+    .filter((l) => !/^\s*#/.test(l))
+    .join('\n')
+
+  it('is sourced after the authored lanes are known and before every user of the job code', () => {
+    const lanesSource = LANES_CODE.indexOf('. /app/entrypoint-bundles.sh')
+    expect(lanesSource).toBeGreaterThan(LANES_CODE.indexOf('export SMD_AUTHORED_LANES'))
+    // The last thing the lanes file does.
+    expect(LANES_CODE.slice(lanesSource).trim()).toBe('. /app/entrypoint-bundles.sh')
+    const lanes = ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')
+    for (const later of [
+      'for _lane in fetch-inputs', // the lane fragments (casefile runs /opt/medchron python)
+      '-m medchron.daemon', // the runner launch
+      'smd_supervisor_boot', // the gateway fork (it later spawns the Smokeball MCP)
+    ]) {
+      expect(ENTRYPOINT_CODE.indexOf(later), later).toBeGreaterThan(lanes)
+    }
+    expect(ENTRYPOINT_CODE.search(/^smd_supervise$/m)).toBeGreaterThan(lanes)
+  })
+
+  it('is in the image, beside the lanes file', () => {
+    const dockerfile = readFileSync(resolve('operator/templates/Dockerfile'), 'utf8')
+    expect(dockerfile).toMatch(
+      /^COPY operator\/templates\/entrypoint-bundles\.sh \/app\/entrypoint-bundles\.sh$/m
+    )
+    // The installer's import check is the image's own script (ADR 0100 W3,
+    // bundle-release). On an image without it the installer refuses every
+    // bundle (bundle_installer.run_import_check: "not in this image"), so the
+    // image copy runs; once the script is COPYed it must be to this path.
+    const installer = readFileSync(
+      resolve('operator/hermes-smd-overlay/bundle_installer/installer.py'),
+      'utf8'
+    )
+    const runtime = /^DEFAULT_JOBS_RUNTIME = "([^"]+)"$/m.exec(installer)?.[1]
+    expect(runtime).toBe('/app/jobs-runtime.sh')
+    const copied = /^COPY operator\/templates\/jobs-runtime\.sh (\S+)$/m.exec(dockerfile)?.[1]
+    if (copied !== undefined) expect(copied).toBe(runtime)
+  })
+
+  type Case = {
+    lanes: string
+    out?: 'none' | 'empty-dir' | 'v1'
+    failMountOf?: string
+    unreachable?: boolean
+  }
+  const runFragment = (c: Case) => {
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-boot-'))
+    const calls = join(dir, 'calls')
+    const out =
+      c.out === 'v1'
+        ? `202610310101-aaaaaaaa\t${dir}/v1`
+        : c.out === 'empty-dir'
+          ? `202610310101-aaaaaaaa\t${dir}/empty`
+          : ''
+    const py = join(dir, 'python')
+    writeFileSync(py, `#!/bin/bash\necho "installer $*" >> "${calls}"\nprintf '%s' '${out}'\n`, {
+      mode: 0o755,
+    })
+    const script = `
+set -e
+log() { echo "log $*" >> "${calls}"; }
+install() { mkdir -p "\${@: -1}"; }
+mountpoint() { [ -f "${dir}/m\${2//\\//_}" ]; }
+mount() {
+  echo "mount $*" >> "${calls}"
+  [ "$1" = -o ] && return 0
+  case "$3" in *${c.failMountOf ?? 'NEVER'}) return 1 ;; esac
+  touch "${dir}/m\${3//\\//_}"
+}
+umount() { echo "umount $1" >> "${calls}"; rm -f "${dir}/m\${1//\\//_}"; }
+setpriv() { echo "setpriv $1" >> "${calls}"; ${c.unreachable ? 'return 1' : 'return 0'}; }
+mkdir -p "${dir}/root/opt/medchron" "${dir}/root/opt/connectors/smokeball" "${dir}/empty"
+mkdir -p "${dir}/v1/medchron" "${dir}/v1/connectors/smokeball"
+SMD_AUTHORED_LANES="${c.lanes}"
+SMD_BUNDLE_STATE_DIR="${dir}/state"
+SMD_BUNDLE_PYTHON="${py}"
+SMD_BUNDLE_TARGET_ROOT="${dir}/root"
+. "${BUNDLES_PATH}"
+`
+    const driver = join(dir, 'driver.sh')
+    writeFileSync(driver, script)
+    const r = spawnSync('bash', [driver], { encoding: 'utf8', timeout: 10000 })
+    expect(r.status, r.stderr).toBe(0)
+    const stateFile = join(dir, 'state', 'jobs')
+    const state = existsSync(stateFile) ? readFileSync(stateFile, 'utf8') : null
+    const log = existsSync(calls) ? readFileSync(calls, 'utf8') : ''
+    return { calls: log, state }
+  }
+
+  it('a seat that authors no lane runs no installer, mounts nothing and reports no bundle', () => {
+    const r = runFragment({ lanes: ' ', out: 'v1' })
+    expect(r.calls).not.toMatch(/^(installer|mount|setpriv) /m)
+    expect(r.calls).toMatch(/authors no job lane/)
+    expect(r.state).toBeNull()
+  })
+
+  it('an installer that names nothing leaves the image copy, reported as image', () => {
+    const r = runFragment({ lanes: 'medchron', out: 'none' })
+    expect(r.calls).toMatch(/installer -I -m bundle_installer jobs/)
+    expect(r.calls).not.toMatch(/^mount /m)
+    expect(r.calls).toMatch(/JOBS BUNDLE NOT MOUNTED/)
+    expect(r.state).toBe('image\n')
+  })
+
+  it('a version dir without both trees mounts nothing: never half a bundle', () => {
+    const r = runFragment({ lanes: 'note', out: 'empty-dir' })
+    expect(r.calls).not.toMatch(/^mount --bind/m)
+    expect(r.state).toBe('image\n')
+  })
+
+  it('the happy path: both bind mounts, the read-only remounts, both uid probes, the version', () => {
+    const r = runFragment({ lanes: 'medchron demand', out: 'v1' })
+    expect(r.calls).toMatch(/mount --bind \S+\/v1\/medchron \S+\/root\/opt\/medchron\n/)
+    expect(r.calls).toMatch(
+      /mount --bind \S+\/v1\/connectors\/smokeball \S+\/root\/opt\/connectors\/smokeball\n/
+    )
+    expect(r.calls).toMatch(/mount -o remount,bind,ro \S+\/opt\/medchron/)
+    expect(r.calls).toMatch(/setpriv --reuid=medchron[\s\S]*setpriv --reuid=hermes/)
+    expect(r.calls).not.toMatch(/umount/)
+    expect(r.state).toBe('202610310101-aaaaaaaa\n')
+  })
+
+  it('a failed second mount unmounts the first: the image copy runs whole', () => {
+    const r = runFragment({ lanes: 'medchron', out: 'v1', failMountOf: 'smokeball' })
+    expect(r.calls).toMatch(/umount \S+\/opt\/medchron/)
+    expect(r.calls).toMatch(/JOBS BUNDLE NOT MOUNTED/)
+    expect(r.state).toBe('image\n')
+  })
+
+  it('a mount the job uids cannot run is taken down again', () => {
+    const r = runFragment({ lanes: 'medchron', out: 'v1', unreachable: true })
+    expect(r.calls).toMatch(/umount \S+\/opt\/connectors\/smokeball/)
+    expect(r.calls).toMatch(/umount \S+\/opt\/medchron/)
+    expect(r.state).toBe('image\n')
+  })
+
+  it('never fails the boot', () => {
+    expect(BUNDLES_CODE).not.toMatch(/FATAL|exit /)
   })
 })

@@ -732,6 +732,9 @@ COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.
 # Which job lanes this seat authors (ADR 0100) and only their shared tree: the
 # chronology firm config and controls, the run dir and its bind mount.
 COPY operator/templates/entrypoint-lanes.sh /app/entrypoint-lanes.sh
+# Sourced at the end of entrypoint-lanes.sh (ADR 0100 W3): the jobs bundle's root
+# install and its bind mounts over /opt/medchron and /opt/connectors/smokeball.
+COPY operator/templates/entrypoint-bundles.sh /app/entrypoint-bundles.sh
 # Sourced by entrypoint.sh (the demand lane's queue, job dirs and firm inputs);
 # its own file because entrypoint.sh sits at its shell size ratchet.
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh

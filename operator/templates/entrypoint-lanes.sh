@@ -131,3 +131,9 @@ if [ -d "${MEDCHRON_CONTROLS_DIR}" ]; then
   find "${MEDCHRON_CONTROLS_DIR}" -type d -exec chmod 0750 {} +
   find "${MEDCHRON_CONTROLS_DIR}" -type f -exec chmod 0640 {} +
 fi
+
+# ADR 0100 W3: the jobs bundle, installed and bind-mounted over /opt/medchron and
+# /opt/connectors/smokeball on a seat that authors a lane. Last in this file so it
+# runs before the lane fragments, the medchron daemon and the gateway use either.
+# shellcheck source=/dev/null
+. /app/entrypoint-bundles.sh

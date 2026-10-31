@@ -105,6 +105,10 @@ include = [
     # volume sync bootstrap.sh calls (`python -m skills_applier.sync`). An
     # absent module would leave a skills release with no way onto the seat.
     "skills_applier*",
+    # ADR 0100 W3 — the root boot installer for capability bundles (the jobs
+    # bundle). entrypoint-bundles.sh runs `python -I -m bundle_installer jobs`
+    # as root; an absent module means the image's job runner copy runs.
+    "bundle_installer*",
 ]
 
 [tool.setuptools.package-data]

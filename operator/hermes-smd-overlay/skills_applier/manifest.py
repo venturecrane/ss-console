@@ -143,8 +143,16 @@ def _load_object(data: bytes, what: str, cap: int) -> dict[str, Any]:
     return doc
 
 
-def parse_pointer(data: bytes) -> Pointer:
-    doc = _load_object(data, "skills pointer", MAX_POINTER_BYTES)
+def parse_pointer(
+    data: bytes, *, manifest_prefix: str = MANIFEST_PREFIX, what: str = "skills pointer"
+) -> Pointer:
+    """A pointer whose ``manifest_key`` is a ``<manifest_prefix><v>.json`` key.
+
+    The prefix is a parameter so every release artifact that rides a pointer
+    (skills, and the ADR 0100 bundles in :mod:`bundle_installer`) shares one
+    parser and one set of refusal rules.
+    """
+    doc = _load_object(data, what, MAX_POINTER_BYTES)
     reasons: list[str] = []
     version = doc.get("version")
     key = doc.get("manifest_key")
@@ -153,13 +161,13 @@ def parse_pointer(data: bytes) -> Pointer:
         reasons.append(f"pointer.version {version!r} is not a valid version")
     if (
         not isinstance(key, str)
-        or not key.startswith(MANIFEST_PREFIX)
+        or not key.startswith(manifest_prefix)
         or not key.endswith(".json")
         or key.startswith(OBJECT_PREFIX)
         or ".." in key
         or "//" in key
     ):
-        reasons.append(f"pointer.manifest_key {key!r} is not a {MANIFEST_PREFIX}<v>.json key")
+        reasons.append(f"pointer.manifest_key {key!r} is not a {manifest_prefix}<v>.json key")
     if not isinstance(sha, str) or not _SHA256.match(sha):
         reasons.append("pointer.manifest_sha256 must be 64 lowercase hex characters")
     if reasons:
