@@ -729,6 +729,9 @@ COPY operator/templates/entrypoint.sh /app/entrypoint.sh
 # inputs share (2026-10-14: a single silent failed fetch at boot left a lane
 # without inputs for a whole release). Sourced before the lane files.
 COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.sh
+# Which job lanes this seat authors (ADR 0100) and only their shared tree: the
+# chronology firm config and controls, the run dir and its bind mount.
+COPY operator/templates/entrypoint-lanes.sh /app/entrypoint-lanes.sh
 # Sourced by entrypoint.sh (the demand lane's queue, job dirs and firm inputs);
 # its own file because entrypoint.sh sits at its shell size ratchet.
 COPY operator/templates/entrypoint-demand.sh /app/entrypoint-demand.sh
