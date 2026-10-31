@@ -440,6 +440,54 @@ def test_from_a_hotfix_worktree_a_hotfix_image_is_still_not_built_from_main(
     assert cli._built_from_main(ctx, hotfix_sha) is False
 
 
+def test_a_hotfix_image_that_carries_the_skills_commit_takes_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """2026-10-31: A&P on a hotfix image waited ~15 h per skills release ("not a
+    recorded release built from main") though the hotfix carried the skills' code.
+    Real git. FALSIFIER: require the image to be on main and the first assertion fails."""
+    import subprocess
+
+    from bin.lib.fleet.runner import CommandRunner
+
+    for key in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(key)
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp_path), "PATH": os.environ["PATH"]}  # fmt: skip
+
+    def git(*args: str) -> str:
+        out = subprocess.run(["git", "-C", str(tmp_path), *args], env=env, check=True, capture_output=True, text=True)  # noqa: S603 - argv list of fixed git args, never a shell
+        return out.stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "before the skills")
+    before = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "skills")
+    skills_sha = git("rev-parse", "HEAD")
+    git("update-ref", "refs/remotes/origin/main", skills_sha)
+    git("checkout", "-q", "-b", "hotfix/new")
+    git("commit", "-q", "--allow-empty", "-m", "hotfix on top")
+    carries = git("rev-parse", "HEAD")
+    git("checkout", "-q", "-b", "hotfix/old", before)
+    git("commit", "-q", "--allow-empty", "-m", "hotfix before the skills")
+    lacks = git("rev-parse", "HEAD")
+
+    class Store:
+        def fleet_status(self) -> dict:
+            return {"ashton-price": {"image_ref": "img:carries"}, "scott": {"image_ref": "img:lacks"},
+                    "brokery": {"image_ref": "img:unrecorded"}}  # fmt: skip
+
+        def release_for_image(self, ref: str) -> dict | None:
+            return {"img:carries": {"ss_console_sha": carries}, "img:lacks": {"ss_console_sha": lacks}}.get(ref)
+
+    ctx = cli.Ctx(tmp_path, CommandRunner(), Store(), None, None)  # type: ignore[arg-type]
+    rel = {"ss_console_sha": skills_sha, "skills_version": "202610311200-" + skills_sha[:8]}
+    waiting = cli._skills_defer(ctx, ["ashton-price", "scott", "brokery"])(rel)
+    assert "ashton-price" not in waiting
+    assert "waiting for the image" in waiting["scott"]
+    assert "not a recorded release" in waiting["brokery"]
+
+
 def test_the_in_flight_window_reaches_the_release_ready_for_the_client_ring() -> None:
     # 2026-10-26: the release ready for ring 3 was the 7th newest of those in
     # flight and the window held 6, so a tick skipped the client seat.

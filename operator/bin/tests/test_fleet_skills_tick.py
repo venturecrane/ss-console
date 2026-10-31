@@ -140,7 +140,7 @@ def test_a_seat_on_an_image_not_from_main_waits_rather_than_being_assumed_curren
     status = {s: fresh_status() for s in SEATS}
     # FALSIFIER: read an unknown image as current and the hotfix-lane seat is pending.
     waiting = deferrals(skills_rel(OLD, OLD_SKILLS_SHA), SEATS, status, lambda ref: None, ancestor)
-    assert "not a recorded release built from main" in waiting["scott"]
+    assert "not a recorded release whose commit this controller holds" in waiting["scott"]
 
 
 def test_a_deferred_seat_does_not_stop_its_ring_once_another_seat_there_is_done() -> None:

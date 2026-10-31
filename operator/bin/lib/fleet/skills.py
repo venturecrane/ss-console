@@ -84,8 +84,9 @@ def deferrals(
 
     ORDERING RULE (the release controller, 2026-10-28). A skills release goes to
     a seat only once the seat runs an image built from the commit the skills
-    were published at, or a later one on main: ``at_or_after(skills_sha,
-    image_sha)``. Skills are written against the code in their own commit, and
+    were published at, or a descendant of it: ``at_or_after(skills_sha,
+    image_sha)``. A hotfix-branch image counts when its commit descends from the
+    skills' commit (2026-10-31): it carries their code as surely as a main image. Skills are written against the code in their own commit, and
     the capability gate sees only what a skill NAMES (paths, tools, verbs,
     action classes), not a changed argument or behaviour, so this is the rule
     that keeps a skill from reaching code older than it. Every merge that
@@ -112,7 +113,9 @@ def deferrals(
             continue
         image_sha = image_sha_of(row.get("image_ref"))
         if not image_sha:
-            out[seat] = "its image is not a recorded release built from main; the skills wait for one"
+            out[seat] = (
+                "its image is not a recorded release whose commit this controller holds; the skills wait for one"
+            )
         elif not at_or_after(sha, image_sha):
             out[seat] = f"waiting for the image: it runs {image_sha[:8]}, the skills were written at {sha[:8]}"
     return out
