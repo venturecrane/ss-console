@@ -70,7 +70,11 @@ def _registered_tools(plugin_name: str) -> dict:
 
 
 @pytest.mark.parametrize("plugin_name,expected_count", _PLUGINS.items())
-def test_every_registered_tool_is_function_shaped(plugin_name, expected_count):
+def test_every_registered_tool_is_function_shaped(plugin_name, expected_count, request):
+    if plugin_name == "hermes-smd-medchron":
+        # ADR 0100: lane tools register only where a lane is authored, so the
+        # pinned count is a seat that authors every lane.
+        request.getfixturevalue("authors_everything")
     tools = _registered_tools(plugin_name)
     assert tools, f"{plugin_name} registered no tools"
     if expected_count is not None:

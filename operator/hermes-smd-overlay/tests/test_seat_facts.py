@@ -1319,9 +1319,10 @@ def test_help_never_raises_and_degrades_to_an_unread_section(sf, tmp_path):
         "guide": None,
         "tips": [],
     }
-    # The shape and rules are authored in code, so even a degraded section
-    # carries them: the model can still answer in the guide's order.
-    assert degraded["answer_shape"] and degraded["answer_rules"]
+    # The shape and rules are operator-help's wording (ADR 0100): a section that
+    # could not read whether the seat enables the skill carries none of them,
+    # the same as a seat that does not enable it.
+    assert degraded["answer_shape"] == [] and degraded["answer_rules"] == []
 
     raw = _help_raw()
     raw["personas"] = "not a list"

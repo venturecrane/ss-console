@@ -221,11 +221,14 @@ def test_the_volume_copy_of_the_guide_wins(sf, tmp_path):
 
 def test_a_seat_that_does_not_enable_operator_help_gets_no_guide_and_no_fault(sf, tmp_path):
     """The skill fence's rule: a skill the seat does not enable is not read.
-    That is a fact about the seat, not a failed read."""
+    That is a fact about the seat, not a failed read. Nor does it get the answer
+    shape or rules (ADR 0100): they are the skill's wording.
+    FALSIFIER: fill them before the bound check and this seat gets both."""
     facts = _help(sf, tmp_path, raw=_help_raw())
     assert facts["help"]["guide"] is None
     assert facts["help"]["tips"] == []
-    assert facts["help"]["answer_shape"]
+    assert facts["help"]["answer_shape"] == []
+    assert facts["help"]["answer_rules"] == []
     assert not any("operator-help" in u["reason"] for u in facts["unreadable"])
 
 

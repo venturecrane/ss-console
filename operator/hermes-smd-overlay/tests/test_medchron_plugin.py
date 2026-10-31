@@ -11,10 +11,10 @@ import threading
 
 import pytest
 
-from shared import runtime_read
+from shared import capabilities, runtime_read
 from shared.action_classes import ActionClass, classify_tool
 from shared.medchron_client import SOCKET_ENV, MedchronBrokerClient, MedchronBrokerError
-from tests.conftest import FakePluginContext, load_plugin
+from tests.conftest import FakePluginContext, load_plugin, write_seat_yaml
 
 
 class _FakeBroker:
@@ -126,6 +126,13 @@ def broker(monkeypatch):
     monkeypatch.setenv(SOCKET_ENV, sock)
     yield b
     b.close()
+
+
+@pytest.fixture(autouse=True)
+def _seat_authors_every_lane(authors_everything):
+    """These tests exercise every lane's tools, so the seat authors every lane
+    (ADR 0100). What a seat that authors fewer lanes gets is pinned below."""
+    return authors_everything
 
 
 def _tools() -> dict:
@@ -424,3 +431,52 @@ def test_the_submit_description_carries_the_ask_and_the_reservation():
     assert "named administrator" in text
     assert "requested_by" in text
     assert "medchron_allowance" in text
+
+
+# ---------------------------------------------------------------------------
+# ADR 0100: a seat registers only the tools of the lanes it authors
+# ---------------------------------------------------------------------------
+
+
+def _tools_for_seat(monkeypatch, tmp_path, **seat) -> dict:
+    path = write_seat_yaml(tmp_path / "customer.yaml", **seat)
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    return _tools()
+
+
+def test_every_tool_has_exactly_one_lane_owner_and_every_lane_is_a_job_lane():
+    """FALSIFIER: merge a new module's TOOLS into register() without adding it to
+    LANE_TOOLS and that tool has no owner, so no seat can author it."""
+    plugin = load_plugin("hermes-smd-medchron")
+    assert set(plugin.LANE_TOOLS) == set(capabilities.JOB_LANES)
+    owners: dict[str, list[str]] = {}
+    for lane, tools in plugin.LANE_TOOLS.items():
+        for name in tools:
+            owners.setdefault(name, []).append(lane)
+    every = {
+        **plugin.TOOLS,
+        **plugin.demand.TOOLS,
+        **plugin.drafting.TOOLS,
+        **plugin.litigation.TOOLS,
+        **plugin.negotiation.TOOLS,
+        **plugin.note.TOOLS,
+        **plugin.casefile.TOOLS,
+    }
+    assert set(owners) == set(every), "a tool with no lane owner"
+    assert all(len(v) == 1 for v in owners.values()), {
+        k: v for k, v in owners.items() if len(v) > 1
+    }
+
+
+def test_a_seat_registers_only_its_authored_lanes_tools(monkeypatch, tmp_path):
+    tools = _tools_for_seat(monkeypatch, tmp_path, lanes=["note", "litigation"])
+    assert set(tools) == {"note_job_status", "litigation_job_submit", "litigation_job_status"}
+
+
+def test_a_seat_with_no_lane_registers_no_lane_tool(monkeypatch, tmp_path):
+    assert _tools_for_seat(monkeypatch, tmp_path, skills=["inbox-triage"]) == {}
+
+
+def test_an_unreadable_config_registers_no_lane_tool(monkeypatch, tmp_path):
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
+    assert _tools() == {}

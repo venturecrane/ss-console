@@ -102,7 +102,7 @@ class _Client:
 
 
 @pytest.fixture
-def seat(monkeypatch, fake_ctx):
+def seat(monkeypatch, fake_ctx, authors_everything):
     from tests.conftest import load_plugin
 
     provenance._reset_for_tests()

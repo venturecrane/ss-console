@@ -87,6 +87,7 @@ from bootstrap.cron_materialize import (
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
+from shared import capabilities
 from shared.cron_containment import containment_active, containment_reason, sentinel_path
 from shared.routine_change_spool import append_routine_change
 from shared.secrets import get_secret
@@ -1950,7 +1951,18 @@ _ACTION_CEILING_SOUL_LINE: dict[tuple[str, str], str] = {
 }
 
 
-def _send_posture_soul_section(persona: dict[str, Any]) -> str:
+#: Act shapes whose SOUL line names one connector's tools: the line renders only
+#: on a seat that authors that connector (ADR 0100). Elsewhere the act shape has
+#: no tools to call, so the seat is told nothing about it rather than told to
+#: call tools it does not have.
+_ACTION_CEILING_CONNECTOR: dict[tuple[str, str], str] = {
+    ("destructive", "confirm"): "smokeball",
+}
+
+
+def _send_posture_soul_section(
+    persona: dict[str, Any], customer: dict[str, Any] | None = None
+) -> str:
     """Render the persona's AUTHORED exposure into SOUL.md (ADR 0035 / ss ADR 0073).
 
     The trust plugin enforces these ceilings in code regardless of this text.
@@ -1972,6 +1984,9 @@ def _send_posture_soul_section(persona: dict[str, Any]) -> str:
         if not isinstance(action, str) or not isinstance(ceiling, str):
             continue
         key = ceiling.strip().lower()
+        connector = _ACTION_CEILING_CONNECTOR.get((action.strip().lower(), key))
+        if connector is not None and not capabilities.authors_connector(customer, connector):
+            continue
         desc = _ACTION_CEILING_SOUL_LINE.get(
             (action.strip().lower(), key)
         ) or _CEILING_SOUL_LINE.get(key)
@@ -2019,7 +2034,7 @@ def _soul_body(persona: dict[str, Any], customer: dict[str, Any], role_persona: 
         f"{vertical}\n\n"
         f"## Tone\n\n"
         f"{tone_block}\n"
-        f"{_send_posture_soul_section(persona)}"
+        f"{_send_posture_soul_section(persona, customer)}"
         f"{_relationship_soul_section(customer)}"
         f"{_digest_home_soul_section(customer)}"
         f"{_escalation_soul_section(customer)}"

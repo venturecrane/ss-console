@@ -361,7 +361,12 @@ describe('bootstrap omitted-skill prune', () => {
     }
   }
 
-  function omitScript(hermesHome: string, appSkills: string, enabled: string): string {
+  function omitScript(
+    hermesHome: string,
+    appSkills: string,
+    enabled: string,
+    readerExit = 0
+  ): string {
     const src = readFileSync(BOOTSTRAP_SH, 'utf8')
     const begin = src.indexOf('# omitted-skill-prune:begin')
     const end = src.indexOf('# omitted-skill-prune:end')
@@ -371,9 +376,11 @@ describe('bootstrap omitted-skill prune', () => {
     expect(block).toContain('_omit_app_skills=/app/skills\n')
     expect(block).toContain('_omit_py=/opt/hermes/.venv/bin/python3\n')
     const stub = join(hermesHome, '..', 'fake-python.sh')
-    writeFileSync(stub, `#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '${enabled}'\n`, {
-      mode: 0o755,
-    })
+    writeFileSync(
+      stub,
+      `#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '${enabled}'\nexit ${readerExit}\n`,
+      { mode: 0o755 }
+    )
     return [
       'set -euo pipefail',
       'log() { printf "%s\\n" "$*" >&2; }',
@@ -423,14 +430,44 @@ describe('bootstrap omitted-skill prune', () => {
   )
 
   it(
-    'prunes nothing when no enabled skill could be read',
+    'prunes nothing when customer.yaml could not be read',
+    () => {
+      const { hermesHome, appSkills, vol } = fixture()
+      execFileSync('bash', ['-c', omitScript(hermesHome, appSkills, '', 3)], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      expect(lexists(join(vol, 'demand-letter-drafter'))).toBe(true)
+      expect(lexists(join(vol, 'matter-inbox-router'))).toBe(true)
+      expect(lexists(join(vol, 'mediation-brief-drafter'))).toBe(true)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+
+  it(
+    'prunes every repo skill when a readable customer.yaml enables none (ADR 0100, fail closed)',
     () => {
       const { hermesHome, appSkills, vol } = fixture()
       execFileSync('bash', ['-c', omitScript(hermesHome, appSkills, '')], {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      expect(lexists(join(vol, 'demand-letter-drafter'))).toBe(true)
-      expect(lexists(join(vol, 'matter-inbox-router'))).toBe(true)
+      expect(lexists(join(vol, 'demand-letter-drafter'))).toBe(false)
+      expect(lexists(join(vol, 'matter-inbox-router'))).toBe(false)
+      expect(lexists(join(vol, 'mediation-brief-drafter'))).toBe(false)
+      expect(lexists(join(appSkills, 'mediation-brief-drafter'))).toBe(true)
+      expect(lexists(join(vol, 'agent-authored-skill'))).toBe(true)
+    },
+    SUBPROCESS_TIMEOUT_MS
+  )
+
+  it(
+    'reads the enabled set through the one predicate (shared.capabilities)',
+    () => {
+      const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+      const block = src.slice(
+        src.indexOf('# omitted-skill-prune:begin'),
+        src.indexOf('# omitted-skill-prune:end')
+      )
+      expect(block).toContain('from shared.capabilities import enabled_skills, read')
     },
     SUBPROCESS_TIMEOUT_MS
   )

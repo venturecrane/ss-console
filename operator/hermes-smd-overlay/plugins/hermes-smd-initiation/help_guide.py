@@ -188,7 +188,9 @@ def guide_fields(
 
     ``bound`` is whether this seat enables ``operator-help``. A seat that does
     not carry the skill gets no guide text (the skill fence's rule: a skill the
-    seat does not enable is not read), and that is a fact, not a fault.
+    seat does not enable is not read), and that is a fact, not a fault. Nor does
+    it get the answer shape or rules: they are the skill's wording (ADR 0100), so
+    a seat without the skill is not handed them.
     """
     fields: dict[str, Any] = {
         "guide": None,
@@ -196,11 +198,13 @@ def guide_fields(
         # ss-console#3423 increment 3: the tip ids the review has emphasized,
         # in order. The help answer leads with these tips' own words.
         "emphasis": [],
-        "answer_shape": [dict(p) for p in ANSWER_SHAPE],
-        "answer_rules": list(ANSWER_RULES),
+        "answer_shape": [],
+        "answer_rules": [],
     }
     if not bound:
         return fields
+    fields["answer_shape"] = [dict(p) for p in ANSWER_SHAPE]
+    fields["answer_rules"] = list(ANSWER_RULES)
     try:
         fields["guide"] = read_guide(roots)
     except Exception as exc:  # noqa: BLE001 -- the guide degrades, never the section
