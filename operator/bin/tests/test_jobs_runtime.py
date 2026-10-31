@@ -97,7 +97,7 @@ def _run(box: dict[str, Path], *args: str, extra: dict[str, str] | None = None) 
         "LOG": str(box["log"]),
         **(extra or {}),
     }
-    return subprocess.run(["/bin/sh", str(SCRIPT), *args], env=env, capture_output=True, text=True, check=False)  # noqa: S603 - fixed argv
+    return subprocess.run(["/bin/sh", str(SCRIPT), *args], env=env, capture_output=True, text=True, check=False)  # noqa: S603 - a fixed /bin/sh argv list, never a shell string
 
 
 def _log(box: dict[str, Path]) -> list[str]:

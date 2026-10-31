@@ -55,6 +55,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/tick.py
   - label: operator/bin/lib/fleet/skills.py (a skills release, and when a seat may take one)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/skills.py
+  - label: operator/bin/lib/fleet/bundles.py (a jobs bundle release, and which seats take one)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/bundles.py
+  - label: operator/bin/lib/fleet/ordering.py (when a seat may take a skills or bundle release)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/ordering.py
+  - label: scripts/ci-publish-bundle.sh
+    href: https://github.com/venturecrane/ss-console/blob/main/scripts/ci-publish-bundle.sh
   - label: ADR 0096 (the release controller and its fleet credentials)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0096-release-controller-and-fleet-credentials.md
 ---
@@ -127,6 +133,9 @@ parallel, kept separate so one failing does not stop the others:
   skills release (see "A skills release" below).
 - **`build-seat-image`** runs `fleet build` when the merge changed the seat
   image (see "The release controller" below).
+- **`publish-bundle`** (`scripts/ci-publish-bundle.sh`) builds and publishes a
+  candidate jobs bundle after `build-seat-image` (see "A jobs bundle release"
+  below).
 
 A separate `ss-web-staging` Worker is declared under `[env.staging]` in
 `wrangler.toml`, with its own staging D1, R2 and KV resources; the Deploy
@@ -390,7 +399,9 @@ Two workflows run the release (ADR 0096).
 - **Build on merge.** The `build-seat-image` job of `deploy.yml` runs
   `fleet build` at the merged commit when the tree differs from the newest
   recorded image release under an image path (the
-  `.github/operator-substrate-paths.txt` list without its `.github/` lines). It
+  `.github/operator-substrate-paths.txt` list without its `.github/` lines and
+  without the artifact paths in `.github/operator-artifact-paths.txt`, today
+  `operator/skills/**`: `substrate-paths-changed.py --image`). It
   compares with the last BUILT commit, so a runtime merge followed quickly by a
   docs merge is still built. When main has already moved past the commit, the
   build-source guard refuses it and the job ends green: the newer merge's own
@@ -448,6 +459,9 @@ Two workflows run the release (ADR 0096).
     image step that refuses or errors does not stop the skills step; the run
     then reports the image error. A run dispatched with an explicit image
     release id steps that image only.
+  - **jobs bundle releases** take the same step after the skills step, on rings
+    holding only the seats that author a job lane (see "A jobs bundle release"
+    below). A step that refuses or errors does not stop the later steps.
 
   A tick exits 0 on progress, 5 when it is waiting (a bake running, the lease
   held by a laptop run, nothing to do) and 6 on a standing halt; all three are
@@ -597,16 +611,51 @@ previous pointer back and the rollout halts. **Rolling a skill back is a
 skills release of the previous version** (`fleet release --skills
 <previous>`); `rollback-skill.sh` is gone.
 
-**Skills follow the image.** The controller gives a seat a skills release only
-once that seat runs an image built from the skills' commit or a later commit on
-main (`deferrals` in `operator/bin/lib/fleet/skills.py`). A skill is written
-against the code in its own commit, and the capability check sees only what a
-skill names, not a changed argument or behaviour. Every merge that touches
-`operator/skills/**` also builds an image, so in practice the skills reach each
-ring a tick after that merge's image does. A seat whose image is older waits;
-it never halts, and the tick log says which seat waits and for what. A seat on
-an image not built from main (a hotfix lane) waits too, and a seat whose
+**Skills follow the image.** The controller gives a seat a skills release
+published at commit S only once that seat's image commit is base(S) or
+descends from it, where base(S) is the last commit at or before S that changed
+an image path (`operator/bin/lib/fleet/ordering.py`, the same image path list
+`build-seat-image` uses). A skill is written against the code in the image, and
+the capability check sees only what a skill names, not a changed argument or
+behaviour. Since ADR 0100 W3 `operator/skills/**` is an artifact path, not an
+image path: a skills-only merge builds no image, and its skills go to every
+seat already on the newest image before it. A merge that changes skills and
+image code together waits for its own image. A seat whose image is older waits;
+it never halts, and the tick log says which seat waits and for what. A seat on a
+hotfix image counts when its commit descends from base(S), and a seat whose
 heartbeat already reports a newer skills version is never moved back.
+
+### A jobs bundle release
+
+The job runner (`/opt/medchron`, with its pricing table) and the Smokeball
+connector venv (`/opt/connectors/smokeball`) also ship as a versioned artifact,
+the jobs bundle (ADR 0100 W3), so a change to them reaches only the seats that
+run jobs. A merge touching a path in `.github/operator-bundle-paths.txt` makes
+the deploy workflow's `publish-bundle` job (`scripts/ci-publish-bundle.sh`)
+build the two venvs inside the seat image this merge built (else the newest
+completed image built from main), at the same paths, with
+`operator/templates/jobs-runtime.sh`, the script the Dockerfile itself runs. It
+uploads `fleet/bundles/jobs/<version>.tar.zst`, reads it back, then the manifest
+`fleet/bundles/jobs/<version>.json` (name, version, sha256, size, source
+commit, base image, Python version), and records `fleet_releases` kind
+`bundle`, release id `bnd-<version>`. It writes no seat pointer. Until the cut
+those paths are image paths too, so the image keeps its own copy as the
+fallback.
+
+The release controller steps bundle releases after skills, ring by ring with
+the same bake, holds, halt and lease, but only on the seats whose
+`customer.yaml` authors a job lane (`operator/hermes-smd-overlay/shared/capabilities.py`).
+Other seats are not in the bundle rings at all: they are never touched and never
+keep a release incomplete. A seat reads its pointer only at boot, so per seat
+the controller waits for the seat to be idle (the image rollout's busy gate),
+writes `vaults/<slug>/bundles/jobs-pointer.json`, restarts the Machine
+(`fly machine restart`), and waits up to 15 minutes for a heartbeat reporting
+`bundles.jobs` at the version, then, on an image that carries it, the boot
+self-test passing. Anything else puts the previous pointer back (or removes it),
+restarts the seat again behind the busy gate, and records it `rolled_back`
+(which halts the release) or `tooling_error` (retried). `fleet status` shows
+what each seat runs in its bundles column: a version, `image` when the image's
+own copy runs, `-` when the seat reports none.
 
 A seat's config reaches R2 by one writer, the deploy job's publisher
 (`scripts/ci-publish-customer-configs.sh`, job `publish-customer-configs`). On

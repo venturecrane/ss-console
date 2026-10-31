@@ -335,7 +335,9 @@ def test_a_seat_already_on_a_newer_bundle_is_not_moved_back() -> None:
 
 
 # -- the CLI ----------------------------------------------------------------------------------
-def test_bundle_record_writes_a_bundle_row_and_base_prefers_this_merges_image() -> None:
+def test_bundle_record_writes_a_bundle_row_and_base_prefers_this_merges_image(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     store = FakeStore()
     sha = "1" * 40
     store.insert_release(release(ss_console_sha=sha))
@@ -346,7 +348,29 @@ def test_bundle_record_writes_a_bundle_row_and_base_prefers_this_merges_image() 
     row = store.releases[f"bnd-{V1}"]
     assert row["kind"] == "bundle" and row["artifact_name"] == "jobs" and row["artifact_version"] == V1
     assert cli.main(["bundle-record", "--version", "nope", "--sha", sha, "--image-ref", "x"], ctx=ctx) == 2
+    capsys.readouterr()
     assert cli.main(["bundle-base", "--sha", sha], ctx=ctx) == 0
+    assert capsys.readouterr().out.strip() == f"{release()['image_ref']}@{DIGEST}"
+    # No image built at this commit and none completed: refused, never a guess.
+    assert cli.main(["bundle-base", "--sha", "2" * 40], ctx=ctx) == 4
+
+
+def test_fleet_status_shows_what_each_seat_runs_its_bundles_at() -> None:
+    from bin.lib.fleet import status
+
+    store = FakeStore()
+    store.status = {
+        "lane-a": {**fresh_status(), "bundles_json": json.dumps({"jobs": V1})},
+        "lane-b": {**fresh_status(), "bundles_json": json.dumps({"jobs": "image"})},
+        "core-c": fresh_status(),
+    }
+    rows = status.seat_rows(store, [Ring(0, ["lane-a", "lane-b", "core-c"], None, 0)])  # type: ignore[arg-type]
+    assert [r["bundles"] for r in rows] == [f"jobs={V1}", "jobs=image", "-"]
+    table = status.render_table(rows).splitlines()
+    assert "bundles" in table[0] and f"jobs={V1}" in table[1]
+    assert status.bundles_cell("not json") == "?"
+    rel = [{"release_id": f"bnd-{V1}", "kind": "bundle", "artifact_name": "jobs", "artifact_version": V1}]
+    assert f"bundle jobs {V1}" in status.render_releases(rel, False)
 
 
 def test_a_latest_tick_with_no_bundle_in_flight_waits(tmp_path: Path) -> None:

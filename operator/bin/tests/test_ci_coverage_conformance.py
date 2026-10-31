@@ -447,7 +447,8 @@ def test_release_tick_checks_out_full_history_for_the_latest_resolution() -> Non
     ancestor of main (cli._built_from_main, `git merge-base --is-ancestor`). On a
     shallow clone any commit but main's head is missing, git exits 128, and every
     tick halts as a tooling error once main has moved (run 40362697118)."""
-    cli = (OPERATOR_DIR / "bin/lib/fleet/cli.py").read_text(encoding="utf-8")
+    # The git questions moved to artifact_tick.py with the bundle step (ADR 0100 W3).
+    cli = (OPERATOR_DIR / "bin/lib/fleet/artifact_tick.py").read_text(encoding="utf-8")
     assert "--is-ancestor" in cli, "latest no longer walks history; drop this test with it"
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
     checkout = next(s for s in wf["jobs"]["tick"]["steps"] if str(s.get("uses", "")).startswith("actions/checkout@"))
@@ -794,11 +795,11 @@ def test_base_of_s_and_the_image_trigger_read_the_same_list() -> None:
     assert specs == _detect.git_pathspecs(include, exclude)
     assert any(sp.startswith(":(glob,exclude)") for sp in specs), "the artifact paths must be excluded"
     env = {k: v for k, v in __import__("os").environ.items() if not k.startswith("GIT_")}
-    listed = subprocess.run(  # noqa: S603 - fixed git argv
+    listed = subprocess.run(  # noqa: S603 - a fixed git argv list, never a shell
         ["git", "-C", str(REPO_ROOT), "ls-files", "-z"], capture_output=True, text=True, check=True, env=env
     ).stdout.split("\0")
     tracked = [p for p in listed if p]
-    by_git = subprocess.run(  # noqa: S603 - fixed git argv
+    by_git = subprocess.run(  # noqa: S603 - a fixed git argv list, never a shell
         ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "--", *specs],
         capture_output=True,
         text=True,

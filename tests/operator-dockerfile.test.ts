@@ -473,7 +473,9 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
 
   it('every requirements file the Dockerfile installs from exists, is hashed, and carries no ranges', () => {
     const referenced = new Set<string>()
-    for (const m of IMAGE_BUILD_CODE.matchAll(/(?:\/app|\$\{SRC\})\/requirements\/([a-z0-9_.-]+\.txt)/g)) {
+    for (const m of IMAGE_BUILD_CODE.matchAll(
+      /(?:\/app|\$\{SRC\})\/requirements\/([a-z0-9_.-]+\.txt)/g
+    )) {
       referenced.add(m[1])
     }
     // The connector loop references its file by name at build time.
