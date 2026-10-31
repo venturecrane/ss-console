@@ -65,6 +65,40 @@ def test_stale_heartbeat_with_live_daemon_is_never_idle() -> None:
     assert not busy.decide(_facts(lanes=[dead])).busy
 
 
+def test_a_beat_the_live_daemon_never_wrote_is_not_busy() -> None:
+    # 2026-10-31, pilot-smokeball: the W1 image stopped running drafting,
+    # litigation and negotiation there; their old beats stayed on the volume,
+    # named the live daemon's pid, and held four releases "busy" for 3 h.
+    # FALSIFIER: drop the leftover rule and this lane is busy again.
+    lane = {
+        "file": "drafting-heartbeat.json",
+        "age_s": 10532,
+        "running": None,
+        "wakes_pending": 0,
+        "daemon_alive": True,
+        "written_before_daemon": True,
+    }
+    assert not busy.decide(_facts(lanes=[lane])).busy
+    # Unknown start time (an old probe, no /proc) keeps the stale rule.
+    assert busy.decide(_facts(lanes=[dict(lane, written_before_daemon=None)])).busy
+    assert busy.decide(_facts(lanes=[dict(lane, written_before_daemon=False)])).busy
+    # A leftover that names a running job is still busy.
+    assert busy.decide(_facts(lanes=[dict(lane, running="job-1")])).busy
+
+
+def test_the_probe_marks_a_beat_older_than_its_daemon(tmp_path: Path) -> None:
+    run, _ = _seat(tmp_path)
+    now = time.time()
+    (run / "drafting-heartbeat.json").write_text(json.dumps({"pid": os.getpid(), "last_poll_at": now - 10**7}))
+    (run / "heartbeat.json").write_text(json.dumps({"pid": os.getpid(), "last_poll_at": now}))
+    lanes = {lane["file"]: lane for lane in busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))["lanes"]}
+    if Path("/proc/self/stat").exists():  # Linux, as on a seat
+        assert lanes["drafting-heartbeat.json"]["written_before_daemon"] is True
+        assert lanes["heartbeat.json"]["written_before_daemon"] is False
+    else:  # no /proc: unknown, never a guess
+        assert lanes["drafting-heartbeat.json"]["written_before_daemon"] is None
+
+
 def test_cron_window_and_recent_fire() -> None:
     soon = {"name": "op-managed:operator:inbox-triage", "next_in_s": 300, "last_ago_s": 3000}
     later = {"name": "op-managed:operator:inbox-triage", "next_in_s": 1200, "last_ago_s": 3000}
@@ -108,7 +142,7 @@ def _run_remote(name: str, tmp: Path, prefix: str = "") -> str:
     src = src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")
     if name == "remote_quiesce.py":
         src = src.replace("os.chown(tmp, 0, 0)", "pass")  # not root in the test
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 - argv is this interpreter; stdin is the shipped script from this tree
         [sys.executable, "-I", "-"], input=prefix + src, capture_output=True, text=True, timeout=30, check=False
     )
     assert proc.returncode == 0, proc.stderr

@@ -10,7 +10,9 @@ BUSY means any of:
   * a lane's job child pid is alive, or a lane heartbeat names a running job;
   * a lane has wakes pending (a finished job's notice not yet sent);
   * a lane daemon is alive but its heartbeat is STALE: it cannot be shown idle,
-    so it is treated as busy (a stale heartbeat never reads as idle);
+    so it is treated as busy (a stale heartbeat never reads as idle), unless
+    the live daemon started after that beat was written: then it is a lane the
+    daemon does not run, left on the volume, and says nothing about now;
   * a managed cron (``op-managed:``) fires within the window, or fired within
     the last few minutes (its turn may still be running in the gateway);
   * a store the probe needed could not be read (cannot evaluate is not idle).
@@ -76,7 +78,11 @@ def _lane_reasons(lane: dict[str, Any], stale_after: float) -> list[str]:
     if int(lane.get("wakes_pending") or 0) > 0:
         out.append(f"{name}: {lane['wakes_pending']} wake(s) pending")
     age = lane.get("age_s")
-    if lane.get("daemon_alive") and (age is None or float(age) > stale_after):
+    # A file the live daemon never wrote is a lane it does not run (ADR 0100: a
+    # seat that stopped authoring a lane keeps the old beat on the volume). A
+    # running job still shows as its child pid above.
+    leftover = lane.get("written_before_daemon") is True
+    if lane.get("daemon_alive") and not leftover and (age is None or float(age) > stale_after):
         out.append(f"{name}: heartbeat stale ({age}s) with its daemon alive; cannot show it idle")
     return out
 
