@@ -148,8 +148,7 @@ smd_skills_applier() {
   else
     log "WARN: skills release boot fetch exited non-zero; bootstrap seeds from what is installed, else /app/skills"
   fi
-  smd_root_poller skills_applier "skills applier"
-  log "Root skills applier launched (uid 0; polls this seat's skills pointer)"
+  # The poll loop runs in the one root poller process (entrypoint.sh, root_pollers).
 }
 
 _smd_alive() {

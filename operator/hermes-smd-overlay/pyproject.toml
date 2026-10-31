@@ -109,6 +109,9 @@ include = [
     # bundle). entrypoint-bundles.sh runs `python -I -m bundle_installer jobs`
     # as root; an absent module means the image's job runner copy runs.
     "bundle_installer*",
+    # ADR 0100 - the one root process that runs the four root poll loops above
+    # (entrypoint.sh: `smd_root_poller root_pollers`).
+    "root_pollers*",
 ]
 
 [tool.setuptools.package-data]

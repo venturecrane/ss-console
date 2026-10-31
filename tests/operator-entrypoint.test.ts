@@ -145,11 +145,13 @@ describe('Operator customer Machine entrypoint — ADR 0085 establishment spool 
   it('launches the root intake under an import-gated respawn loop, before the exec-drop', () => {
     // Gated: a lagging overlay (no establish_intake module) must degrade to
     // "not launched", never a broken boot.
-    expect(ENTRYPOINT_CODE).toMatch(/python -c "import establish_intake"/)
+    // ADR 0100: it runs in the one root poller process, whose launch is gated
+    // on importing every loop it runs, establish_intake among them.
     expect(ENTRYPOINT_CODE).toMatch(
-      /while\s+true;?\s*do[\s\S]*?-m establish_intake[\s\S]*?done\s*\)\s*&/
+      /python -c "import root_pollers,[^"]*\bestablish_intake\b[^"]*"/
     )
-    const launchIdx = ENTRYPOINT_CODE.indexOf('-m establish_intake')
+    expect(ENTRYPOINT_CODE).not.toMatch(/-m establish_intake/)
+    const launchIdx = ENTRYPOINT_CODE.indexOf('smd_root_poller root_pollers')
     const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(launchIdx).toBeGreaterThan(-1)
     expect(

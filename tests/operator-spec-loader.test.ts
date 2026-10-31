@@ -61,8 +61,9 @@ describe('Operator entrypoint — authored-spec tree delivery', () => {
   })
 
   it('forks the spec poller as a supervised root child before the drop', () => {
-    expect(CODE).toMatch(/smd_root_poller spec_applier "spec applier"/)
-    const forkIdx = CODE.indexOf('smd_root_poller spec_applier')
+    // ADR 0100: the spec poll loop runs in the one root poller process.
+    expect(CODE).toMatch(/smd_root_poller root_pollers "root pollers"/)
+    const forkIdx = CODE.indexOf('smd_root_poller root_pollers')
     const dropIdx = CODE.search(/^smd_supervise$/m)
     expect(forkIdx).toBeGreaterThan(-1)
     expect(forkIdx).toBeLessThan(dropIdx)
