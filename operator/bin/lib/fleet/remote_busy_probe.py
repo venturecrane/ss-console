@@ -44,6 +44,18 @@ def pid_alive(pid):
     return True
 
 
+def started_at(pid):
+    """When process ``pid`` started (epoch seconds), from /proc; None if unknown."""
+    try:
+        with open("/proc/%d/stat" % int(pid)) as fh:
+            ticks = int(fh.read().rsplit(")", 1)[1].split()[19])
+        with open("/proc/stat") as fh:
+            btime = next(int(line.split()[1]) for line in fh if line.startswith("btime "))
+        return btime + ticks / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, TypeError, IndexError, StopIteration):
+        return None
+
+
 def epoch(value):
     if value is None or value == "":
         return None
@@ -71,6 +83,8 @@ def lanes(now, errors):
             errors.append("%s unreadable: %s" % (path, exc))
             continue
         polled = epoch(hb.get("last_poll_at"))
+        alive = pid_alive(hb.get("pid"))
+        began = started_at(hb.get("pid")) if alive else None
         out.append(
             {
                 "file": os.path.basename(path),
@@ -78,7 +92,10 @@ def lanes(now, errors):
                 "running": hb.get("running"),
                 "queued": hb.get("queued"),
                 "wakes_pending": hb.get("wakes_pending"),
-                "daemon_alive": pid_alive(hb.get("pid")),
+                "daemon_alive": alive,
+                # A beat last written before this daemon started was written by
+                # its predecessor: a lane the running daemon does not run.
+                "written_before_daemon": None if polled is None or began is None else polled < began - 5,
                 "quiesced": hb.get("quiesced"),
             }
         )

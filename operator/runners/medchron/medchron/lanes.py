@@ -51,6 +51,20 @@ def authored(lane: str) -> bool:
     return words is None or lane.removesuffix("_lane") in words.replace(",", " ").split()
 
 
+def _forget(d: Any, name: str) -> None:
+    """Remove a lane's beat and tick left by an earlier boot that ran it: the
+    files sit on the volume and would claim a lane this daemon does not run
+    (2026-10-31, pilot-smokeball: four releases waited 3 h on them)."""
+    run_dir = getattr(d, "run_dir", None)
+    if run_dir is None:
+        return
+    for leftover in (f"{name}-heartbeat.json", f"{name}-tick"):
+        try:
+            (run_dir / leftover).unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("could not remove %s: %s", leftover, exc)
+
+
 def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> list[Any]:
     """Start each authored lane; returns the threads that started, which the daemon
     joins on a Machine stop so a lane's child drains instead of being cut."""
@@ -58,6 +72,7 @@ def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) 
     for lane in LANES:
         if not authored(lane):
             logger.info("%s not started: this seat does not author it", lane)
+            _forget(d, lane.removesuffix("_lane"))
             continue
         try:
             t = _module(lane).start_lane(d, stop=stop, poll_seconds=poll_seconds)
