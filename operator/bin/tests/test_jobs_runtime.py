@@ -75,7 +75,9 @@ def box(tmp_path: Path) -> dict[str, Path]:
         (stubs / tool).symlink_to(real)
     real_chmod = shutil.which("chmod")
     assert real_chmod
-    (stubs / "chmod_real").symlink_to(real_chmod)
+    # A wrapper, not a symlink: a multi-call coreutils (Ubuntu's) dispatches on
+    # the name it was invoked as, and refuses "chmod_real".
+    _exe(stubs / "chmod_real", f'#!/bin/sh\nexec "{real_chmod}" "$@"\n')
     _exe(stubs / "uv", UV_STUB)
     for name in ("chown", "chmod", "antiword"):
         _exe(stubs / name, RECORD_STUB)

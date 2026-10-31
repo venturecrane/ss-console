@@ -139,6 +139,14 @@ class Ctx:
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="fleet", description="Build one Operator image and roll releases out in rings.")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    _add_build_parsers(sub)
+    _add_release_parser(sub)
+    _add_seat_parsers(sub)
+    _add_ci_parsers(sub)
+    return ap
+
+
+def _add_build_parsers(sub: Any) -> None:
     b = sub.add_parser("build", help="build and push one image for every seat; record the release")
     b.add_argument("--notes", default="")
     b.add_argument(
@@ -149,6 +157,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     art = sub.add_parser("artifacts", help="re-read an image release's manifest/capabilities into R2")
     art.add_argument("release_id")
+
+
+def _add_release_parser(sub: Any) -> None:
     r = sub.add_parser("release", help="roll a release out through the rings")
     r.add_argument("release_id", nargs="?")
     r.add_argument("--skills", metavar="VERSION")
@@ -181,6 +192,9 @@ def _parser() -> argparse.ArgumentParser:
         help="one resumable scheduler step (release-tick.yml): advance at most one ring, after the bake; "
         "release id 'latest' means the newest image release. Exit 0 progress, 1 halt, 5 waiting, 6 standing halt",
     )
+
+
+def _add_seat_parsers(sub: Any) -> None:
     st = sub.add_parser("selftest", help="staging only: re-prove the self-test alert path with a planted violation")
     st.add_argument("--plant", required=True, metavar="CHECK_ID")
     st.add_argument("slug")
@@ -205,6 +219,9 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("latest-image")
     si = sub.add_parser("seat-image", help="the image a seat's Machine runs now")
     si.add_argument("slug")
+
+
+def _add_ci_parsers(sub: Any) -> None:
     bb = sub.add_parser("bundle-base", help="the image a bundle built at SHA is built inside (CI)")
     bb.add_argument("--sha", required=True)
     br = sub.add_parser("bundle-record", help="record a published jobs bundle in fleet_releases (CI)")
@@ -215,7 +232,6 @@ def _parser() -> argparse.ArgumentParser:
     wl = sub.add_parser("with-seat-lease", help="run a command holding one seat's lease")
     wl.add_argument("slug")
     wl.add_argument("command", nargs=argparse.REMAINDER)
-    return ap
 
 
 def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -565,52 +581,63 @@ def cmd_status(ctx: Ctx, a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_release(ctx: Ctx, a: argparse.Namespace) -> int:
+    if sum(bool(x) for x in (a.release_id, a.skills, a.bundle)) != 1:
+        raise Refusal("give exactly one of <release-id>, --skills <version> or --bundle <version>")
+    if a.tick and (a.skills or a.bundle):
+        raise ValueError("--tick takes no --skills/--bundle: `fleet release latest --tick` steps them too")
+    if a.bundle:
+        return cmd_release_bundle(ctx, a)
+    return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
+
+
+def cmd_releases(ctx: Ctx, a: argparse.Namespace) -> int:
+    print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
+    return 0
+
+
+def cmd_hold(ctx: Ctx, a: argparse.Namespace) -> int:
+    # The reason carries when to lift it, so whoever finds the hold can tell
+    # whether it is still needed without finding the session that set it.
+    reason = f"{a.reason.rstrip('. ')}. Lift when: {a.until}"
+    by = owner.held_by()
+    ctx.store.hold(ids.slug(a.slug), reason, by)
+    ctx.log(f"{a.slug}: held by {by} ({reason})")
+    return 0
+
+
+def cmd_unhold(ctx: Ctx, a: argparse.Namespace) -> int:
+    ctx.store.unhold(ids.slug(a.slug))
+    ctx.log(f"{a.slug}: hold removed")
+    return 0
+
+
+def cmd_unquiesce(ctx: Ctx, a: argparse.Namespace) -> int:
+    ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
+    return 0
+
+
+COMMANDS: dict[str, Callable[[Ctx, argparse.Namespace], int]] = {
+    "build": cmd_build,
+    "artifacts": cmd_artifacts,
+    "release": cmd_release,
+    "status": cmd_status,
+    "releases": cmd_releases,
+    "hold": cmd_hold,
+    "unhold": cmd_unhold,
+    "busy": cmd_busy,
+    "selftest": cmd_selftest,
+    "unquiesce": cmd_unquiesce,
+    "seat-image": cmd_seat_image,
+    "with-seat-lease": cmd_with_seat_lease,
+    "bundle-base": cmd_bundle_base,
+    "bundle-record": cmd_bundle_record,
+    "latest-image": cmd_latest_image,
+}
+
+
 def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
-    if a.cmd == "build":
-        return cmd_build(ctx, a)
-    if a.cmd == "artifacts":
-        return cmd_artifacts(ctx, a)
-    if a.cmd == "release":
-        if sum(bool(x) for x in (a.release_id, a.skills, a.bundle)) != 1:
-            raise Refusal("give exactly one of <release-id>, --skills <version> or --bundle <version>")
-        if a.tick and (a.skills or a.bundle):
-            raise ValueError("--tick takes no --skills/--bundle: `fleet release latest --tick` steps them too")
-        if a.bundle:
-            return cmd_release_bundle(ctx, a)
-        return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
-    if a.cmd == "status":
-        return cmd_status(ctx, a)
-    if a.cmd == "releases":
-        print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
-        return 0
-    if a.cmd == "hold":
-        # The reason carries when to lift it, so whoever finds the hold can tell
-        # whether it is still needed without finding the session that set it.
-        reason = f"{a.reason.rstrip('. ')}. Lift when: {a.until}"
-        by = owner.held_by()
-        ctx.store.hold(ids.slug(a.slug), reason, by)
-        ctx.log(f"{a.slug}: held by {by} ({reason})")
-        return 0
-    if a.cmd == "unhold":
-        ctx.store.unhold(ids.slug(a.slug))
-        ctx.log(f"{a.slug}: hold removed")
-        return 0
-    if a.cmd == "busy":
-        return cmd_busy(ctx, a)
-    if a.cmd == "selftest":
-        return cmd_selftest(ctx, a)
-    if a.cmd == "unquiesce":
-        ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
-        return 0
-    if a.cmd == "seat-image":
-        return cmd_seat_image(ctx, a)
-    if a.cmd == "with-seat-lease":
-        return cmd_with_seat_lease(ctx, a)
-    if a.cmd == "bundle-base":
-        return cmd_bundle_base(ctx, a)
-    if a.cmd == "bundle-record":
-        return cmd_bundle_record(ctx, a)
-    return cmd_latest_image(ctx, a)
+    return COMMANDS[a.cmd](ctx, a)
 
 
 class Terminated(SystemExit):
