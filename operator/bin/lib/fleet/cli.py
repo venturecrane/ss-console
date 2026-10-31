@@ -257,6 +257,14 @@ def _summary(
 MAIN_REF = "refs/remotes/origin/main"
 
 
+def _known_commit(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is a commit this clone holds (main or any fetched branch)."""
+    if not sha or not ids.SHA_RE.match(sha):
+        return False
+    present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
+    return present.rc == 0
+
+
 def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
     """Whether ``sha`` is an ancestor of origin/main (MAIN_REF).
 
@@ -395,7 +403,7 @@ def _in_flight(ctx: Ctx, newest: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _at_or_after(ctx: Ctx, older: str, newer: str) -> bool:
-    """Whether commit ``older`` is ``newer`` or one of its ancestors (both on main).
+    """Whether commit ``older`` is ``newer`` or one of its ancestors (any commits this clone holds).
 
     A commit this clone has never seen is not on main (see _built_from_main), so
     it answers no rather than raising; any other git failure is a tooling error.
@@ -445,7 +453,11 @@ def _skills_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict
             return None
         if ref not in shas:
             sha = (ctx.store.release_for_image(ref) or {}).get("ss_console_sha")
-            shas[ref] = sha if _built_from_main(ctx, sha) else None
+            # Any recorded image whose commit this clone holds, main or a hotfix
+            # branch: the ancestry check below then asks whether that image
+            # carries the skills' commit (2026-10-31, ADR 0100: A&P on a hotfix
+            # image that contained the skills' code waited ~15 h per release).
+            shas[ref] = sha if _known_commit(ctx, sha) else None
         return shas[ref]
 
     def at_or_after(older: str, newer: str) -> bool:
