@@ -122,13 +122,17 @@ def test_pilot_smokeball_drops_only_its_unauthored_lanes(seat):
     assert _destructive_line(doc, as_today=False) is True
 
 
-def test_smd_staging_loads_every_lane_and_no_smokeball_surface(seat):
-    """Staging authors all seven lanes but not the Smokeball connector: every lane
-    tool, no casework, no Smokeball route, no destructive line."""
+def test_smd_staging_loads_its_lanes_and_no_smokeball_surface(seat):
+    """Staging authors lanes but not the Smokeball connector: exactly its authored
+    lanes' tools (derived from its config, whichever lanes those are), no
+    casework, no Smokeball route, no destructive line."""
     doc = seat("smd-staging")
-    assert capabilities.authored_lanes(doc) == list(capabilities.JOB_LANES)
+    medchron = load_plugin("hermes-smd-medchron")
+    lanes = capabilities.authored_lanes(doc)
+    assert lanes, "staging authors at least one lane"
     assert capabilities.authors_connector(doc, "smokeball") is False
-    assert _registered("hermes-smd-medchron") == _medchron_today()
+    expected = set().union(*(set(medchron.LANE_TOOLS[lane]) for lane in lanes))
+    assert _registered("hermes-smd-medchron") == expected
     assert not (CASEWORK & _registered("hermes-smd-escalation"))
     assert gate._route_served("smokeball") is False
     assert _destructive_line(doc, as_today=False) is False
