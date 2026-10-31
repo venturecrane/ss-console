@@ -715,8 +715,8 @@ fi
 # of medchron, demand, drafting, litigation). The laptop smoke asks the
 # engagements checkout (working tree or origin/main; boot-smoke-test.sh says
 # why both). The in-image self-test has no engagements checkout, so it asks
-# the live customer.yaml whether the lane's skill is enabled and, for demand,
-# drafting and litigation, narrows that by the boot fetch's recorded verdict
+# the live customer.yaml whether the lane's skill is enabled and, for medchron,
+# demand, drafting and litigation, narrows that by the boot fetch's recorded verdict
 # (/run/smd-lanes/<lane>.inputs): a clean `absent` vault listing is not
 # authored, an `unreachable` vault still is (selftest.sh lane_authored says
 # why). Where the two disagree on a seat, the release that records both
