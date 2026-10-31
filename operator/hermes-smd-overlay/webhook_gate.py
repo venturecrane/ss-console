@@ -454,6 +454,29 @@ _VERIFIERS: dict[str, Any] = {
     "smokeball": _smokeball_route_verify,
 }
 
+# Route slug -> the connector capability a seat must author for the gate to serve
+# it (ADR 0100). A seat that does not author it answers exactly as it does for a
+# route it has never heard of, so nothing on the wire says the route exists.
+_ROUTE_CONNECTOR: dict[str, str] = {"smokeball": "smokeball"}
+
+
+def _seat_authors_connector(name: str) -> bool:
+    """True iff the live customer.yaml authors connector capability ``name``. Read
+    per request, like the gate's other live-config checks. A config that will not
+    read authors nothing: the route is not served (a vendor retries a 404)."""
+    from shared import capabilities, seat_doc
+
+    doc = seat_doc.live_doc()
+    if doc is None:
+        logger.warning("gate: live config unreadable; %s routes not served", name)
+        return False
+    return capabilities.authors_connector(doc, name)
+
+
+def _route_served(route: str) -> bool:
+    connector = _ROUTE_CONNECTOR.get(route)
+    return connector is None or _seat_authors_connector(connector)
+
 
 # ---- MCP CHANNEL (Claude as an inbound channel) ------------------------------
 # Beat-1 synchronous-return spine. The /mcp route terminates a JSON-RPC MCP
@@ -1041,7 +1064,9 @@ class _Handler(BaseHTTPRequestHandler):
         path = split.path
         if path.rstrip("/") == "/health":
             self._json(200, {"status": "ok", "platform": "webhook-gate"})
-        elif path.rstrip("/") == "/oauth/smokeball/callback":
+        elif path.rstrip("/") == "/oauth/smokeball/callback" and _seat_authors_connector(
+            "smokeball"
+        ):
             # Machine-hosted firm-delegated OAuth consent landing (ADR 0054).
             # Public, authorized solely by the signed per-customer state; the
             # firm's browser lands here after Allow. No agent work is triggered.
@@ -1404,7 +1429,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "unknown path"})
             return
         route = self.path[len("/webhooks/") :].strip("/").split("/")[0]
-        if not _ROUTE_RE.match(route):
+        if not _ROUTE_RE.match(route) or not _route_served(route):
             self._json(404, {"error": "unknown route"})
             return
         secret = _route_secret(route)

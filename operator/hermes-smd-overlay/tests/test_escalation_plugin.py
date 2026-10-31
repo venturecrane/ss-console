@@ -17,7 +17,7 @@ import pytest
 
 from shared import escalation_ledger
 from shared.action_classes import ActionClass, classify_tool
-from tests.conftest import load_plugin
+from tests.conftest import load_plugin, write_seat_yaml
 
 
 @pytest.fixture
@@ -742,8 +742,7 @@ def test_state_missing_file_is_empty_not_error(escalation, monkeypatch, tmp_path
     assert out == {"event_count": 0, "item_count": 0, "items": {}}
 
 
-def test_register_registers_every_tool(escalation):
-    plugin, _ = escalation
+def _registered(plugin) -> list[dict]:
     registered: list[dict] = []
 
     class Ctx:
@@ -751,18 +750,35 @@ def test_register_registers_every_tool(escalation):
             registered.append(kw)
 
     plugin.register(Ctx())
+    return registered
+
+
+_LEDGER_TOOLS = {"escalation_append", "escalation_state", "escalation_reply_ack"}
+_CASEWORK_TOOLS = {"casework_finish", "casework_brief", "reply_verdicts", "casework_step_done"}
+
+
+def test_register_registers_every_tool(escalation, authors_everything):
+    plugin, _ = escalation
+    registered = _registered(plugin)
     names = {r["name"] for r in registered}
-    assert names == {
-        "escalation_append",
-        "escalation_state",
-        "escalation_reply_ack",
-        "casework_finish",
-        "casework_brief",
-        "reply_verdicts",
-        "casework_step_done",
-    }
+    assert names == _LEDGER_TOOLS | _CASEWORK_TOOLS
     for r in registered:
         assert "parameters" in r["schema"]  # function shape, not bare JSON-schema
+
+
+def test_casework_tools_register_only_where_the_seat_authors_smokeball(
+    escalation, monkeypatch, tmp_path
+):
+    """ADR 0100: the casework tools hand the model mcp_smokeball_update_task calls,
+    so a seat without the Smokeball connector is never offered them. FALSIFIER:
+    register TOOLS unconditionally and the no-Smokeball seat gets all seven."""
+    plugin, _ = escalation
+    assert plugin.SMOKEBALL_TOOLS == _CASEWORK_TOOLS
+    path = write_seat_yaml(tmp_path / "customer.yaml", lanes=["note"])
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    assert {r["name"] for r in _registered(plugin)} == _LEDGER_TOOLS
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
+    assert {r["name"] for r in _registered(plugin)} == _LEDGER_TOOLS
 
 
 def test_tools_are_mapped_in_action_class_registry():

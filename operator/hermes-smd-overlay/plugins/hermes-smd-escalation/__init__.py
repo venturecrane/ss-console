@@ -44,7 +44,7 @@ from collections import OrderedDict
 from dataclasses import asdict
 from typing import Any
 
-from shared import escalation_ledger, inbound, provenance
+from shared import capabilities, escalation_ledger, inbound, provenance, seat_doc
 from shared.audit_contract import sender_key
 from shared.customer_config import CustomerConfig
 from shared.tool_registration import register_wrapped_tool
@@ -794,10 +794,30 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
 }
 
 
+#: The casework tools: each hands the model ``mcp_smokeball_update_task`` calls to
+#: make, so they exist only on a seat that authors the Smokeball connector (ADR 0100).
+SMOKEBALL_TOOLS: frozenset[str] = frozenset(
+    {"casework_finish", "casework_brief", "reply_verdicts", "casework_step_done"}
+)
+
+
+def tools_for(doc: dict[str, Any] | None) -> dict[str, Any]:
+    """The tools a seat whose config is ``doc`` registers: the ledger tools always,
+    the casework tools only where the seat authors Smokeball."""
+    if capabilities.authors_connector(doc, "smokeball"):
+        return dict(TOOLS)
+    return {name: spec for name, spec in TOOLS.items() if name not in SMOKEBALL_TOOLS}
+
+
 def register(ctx: Any) -> None:
-    """Register the escalation-ledger tools. Both require the broker socket env
-    (the state read wants the same Machine layout even though it reads a file)."""
-    for name, (description, schema, handler) in TOOLS.items():
+    """Register the escalation-ledger tools, and the casework tools where the seat
+    authors Smokeball (ADR 0100). All require the broker socket env (the state
+    read wants the same Machine layout even though it reads a file)."""
+    doc = seat_doc.live_doc()
+    if doc is None:
+        logger.info("hermes-smd-escalation: customer.yaml unreadable; no casework tools")
+    tools = tools_for(doc)
+    for name, (description, schema, handler) in tools.items():
         register_wrapped_tool(
             ctx,
             name=name,
@@ -808,4 +828,4 @@ def register(ctx: Any) -> None:
             description=description,
             emoji="",
         )
-    logger.info("hermes-smd-escalation registered %d ledger tools", len(TOOLS))
+    logger.info("hermes-smd-escalation registered %d ledger tools", len(tools))
