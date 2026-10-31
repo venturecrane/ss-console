@@ -30,6 +30,14 @@ const ENTRYPOINT_CODE = ENTRYPOINT.split('\n')
   .filter((l) => !/^\s*#/.test(l))
   .join('\n')
 
+// ADR 0100: the lanes' shared boot work (authored lanes, the chronology firm config
+// and controls, the run dir and its bind mount) is sourced from entrypoint-lanes.sh.
+const LANES_CODE = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+  .split('\n')
+  .filter((l) => !/^\s*#/.test(l))
+  .join('\n')
+const BOOT_CODE = `${ENTRYPOINT_CODE}\n${LANES_CODE}`
+
 describe('Operator customer Machine entrypoint — broker respawn supervisor', () => {
   it('defines the broker launch once, as a reusable function', () => {
     expect(ENTRYPOINT_CODE).toMatch(/launch_broker\(\)\s*\{/)
@@ -166,21 +174,17 @@ describe('Operator customer Machine entrypoint — ADR 0085 establishment spool 
  */
 describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   it('converges the queue and jobs dirs with explicit owners and modes, then binds them', () => {
-    expect(ENTRYPOINT_CODE).toMatch(
+    expect(BOOT_CODE).toMatch(
       /install -d -o root -g workspace-broker -m 0770 "\$\{MEDCHRON_DATA_DIR\}\/queue"/
     )
-    expect(ENTRYPOINT_CODE).toMatch(
+    expect(BOOT_CODE).toMatch(
       // 0710 group medchron: the driver child traverses to its own job dir but
       // cannot list or open siblings (live-caught 2026-08-31 at 0700).
       /install -d -o root -g medchron -m 0710 "\$\{MEDCHRON_DATA_DIR\}\/jobs"/
     )
-    expect(ENTRYPOINT_CODE).toMatch(
-      /mount --bind "\$\{MEDCHRON_DATA_DIR\}" "\$\{MEDCHRON_RUN_DIR\}"/
-    )
+    expect(BOOT_CODE).toMatch(/mount --bind "\$\{MEDCHRON_DATA_DIR\}" "\$\{MEDCHRON_RUN_DIR\}"/)
     // Pruned from the hermes chown sweep like the audit subtree.
-    expect(ENTRYPOINT_CODE).toMatch(
-      /-o -path "\$\{MEDCHRON_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/
-    )
+    expect(BOOT_CODE).toMatch(/-o -path "\$\{MEDCHRON_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/)
   })
 
   it('carries the queue path into the broker env allowlist', () => {
@@ -192,10 +196,10 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   })
 
   it('fetches the firm config from the vault without a FATAL arm and fences it to root:medchron', () => {
-    expect(ENTRYPOINT_CODE).toMatch(/vaults\/\$\{CUSTOMER_SLUG\}\/medchron-firm\.yaml/)
-    expect(ENTRYPOINT_CODE).toMatch(/chown root:medchron "\$\{MEDCHRON_FIRM_CONFIG\}"/)
-    expect(ENTRYPOINT_CODE).toMatch(/chmod 0640 "\$\{MEDCHRON_FIRM_CONFIG\}"/)
-    expect(ENTRYPOINT_CODE).toMatch(/the chronology runner will refuse jobs/)
+    expect(BOOT_CODE).toMatch(/vaults\/\$\{CUSTOMER_SLUG\}\/medchron-firm\.yaml/)
+    expect(BOOT_CODE).toMatch(/chown root:medchron "\$\{MEDCHRON_FIRM_CONFIG\}"/)
+    expect(BOOT_CODE).toMatch(/chmod 0640 "\$\{MEDCHRON_FIRM_CONFIG\}"/)
+    expect(BOOT_CODE).toMatch(/the chronology runner will refuse jobs/)
   })
 
   // 2026-09-04: the classifier's controls and the ICD tables are INSTALL-level
@@ -204,37 +208,31 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   // firm config, into a root-owned tree the medchron uid can read and not
   // write. Boot smoke asserts the result on the seat; this pins the shape.
   it('seeds the medchron controls tree from the vault on every boot, root-owned and medchron-readable, without a FATAL arm', () => {
-    expect(ENTRYPOINT_CODE).toMatch(/MEDCHRON_CONTROLS_DIR="\$\{MEDCHRON_DATA_DIR\}\/controls"/)
-    expect(ENTRYPOINT_CODE).toMatch(
+    expect(BOOT_CODE).toMatch(/MEDCHRON_CONTROLS_DIR="\$\{MEDCHRON_DATA_DIR\}\/controls"/)
+    expect(BOOT_CODE).toMatch(
       /aws s3 cp[\s\S]*?--recursive[\s\S]*?"s3:\/\/\$\{R2_BUCKET_CONFIG\}\/vaults\/\$\{CUSTOMER_SLUG\}\/medchron-controls\/"/
     )
     // The swap is gated on the authored index arriving: an empty prefix or a
     // partial copy never replaces a good tree.
-    expect(ENTRYPOINT_CODE).toMatch(
+    expect(BOOT_CODE).toMatch(
       /&& \[ -f "\$\{MEDCHRON_CONTROLS_DIR\}\.r2\.tmp\/controls\.json" \]; then/
     )
-    expect(ENTRYPOINT_CODE).toMatch(/chown -R root:medchron "\$\{MEDCHRON_CONTROLS_DIR\}"/)
-    expect(ENTRYPOINT_CODE).toMatch(
-      /find "\$\{MEDCHRON_CONTROLS_DIR\}" -type d -exec chmod 0750 \{\} \+/
-    )
-    expect(ENTRYPOINT_CODE).toMatch(
-      /find "\$\{MEDCHRON_CONTROLS_DIR\}" -type f -exec chmod 0640 \{\} \+/
-    )
-    expect(ENTRYPOINT_CODE).toMatch(
-      /the chronology runner will refuse the classify stage of every job/
-    )
-    // Seeded AFTER the data dir is established and BEFORE the daemon forks.
-    const seedIdx = ENTRYPOINT_CODE.indexOf('medchron-controls/')
+    expect(BOOT_CODE).toMatch(/chown -R root:medchron "\$\{MEDCHRON_CONTROLS_DIR\}"/)
+    expect(BOOT_CODE).toMatch(/find "\$\{MEDCHRON_CONTROLS_DIR\}" -type d -exec chmod 0750 \{\} \+/)
+    expect(BOOT_CODE).toMatch(/find "\$\{MEDCHRON_CONTROLS_DIR\}" -type f -exec chmod 0640 \{\} \+/)
+    expect(BOOT_CODE).toMatch(/the chronology runner will refuse the classify stage of every job/)
+    // Seeded AFTER the data dir is established (inside entrypoint-lanes.sh) and
+    // BEFORE the daemon forks (the entrypoint sources the fragment before it).
+    const seedIdx = LANES_CODE.indexOf('medchron-controls/')
     expect(seedIdx).toBeGreaterThan(
-      ENTRYPOINT_CODE.indexOf('install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"')
+      LANES_CODE.indexOf('install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"')
     )
-    expect(seedIdx).toBeLessThan(ENTRYPOINT_CODE.indexOf('-m medchron.daemon'))
-    // No FATAL arm anywhere in the block.
-    const block = ENTRYPOINT_CODE.slice(
-      seedIdx,
-      ENTRYPOINT_CODE.indexOf('SMOKEBALL_TOKEN_DIR="/opt/data/.smokeball-mcp"')
+    expect(ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')).toBeGreaterThan(-1)
+    expect(ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')).toBeLessThan(
+      ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
     )
-    expect(block).not.toMatch(/FATAL/)
+    // No FATAL arm anywhere in the controls block (it runs to the end of the fragment).
+    expect(LANES_CODE.slice(seedIdx)).not.toMatch(/FATAL/)
   })
 
   it('launches the daemon from its own venv under an import-gated respawn loop, before the exec-drop', () => {

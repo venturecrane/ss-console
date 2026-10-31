@@ -40,6 +40,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES = REPO_ROOT / "operator" / "templates"
 PM_STATE = REPO_ROOT / "operator" / "hermes-smd-overlay" / "bootstrap" / "pm_state.py"
+OVERLAY = REPO_ROOT / "operator" / "hermes-smd-overlay"
 SELFTEST = TEMPLATES / "selftest.sh"
 HERMES = "3" * 40
 
@@ -94,6 +95,17 @@ def _write(path: Path, text: str, mode: int = 0o644) -> Path:
     return path
 
 
+ALL_LANE_SKILLS = [
+    "medical-chronology-maintainer",
+    "demand-letter-drafter",
+    "document-drafter",
+    "litigation-status",
+    "case-file-manager",
+    "negotiation-watch",
+    "smd-note",
+]
+
+
 def _customer_yaml(skills: list[str]) -> str:
     rows = "".join(f"      - name: {s}\n" for s in skills)
     return f"machine:\n  memory_mb: 2048\npersonas:\n  - slug: operator\n    skills:\n{rows}"
@@ -109,7 +121,16 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     venv_bin.mkdir(parents=True)
     # A wrapper, not a symlink: a venv python reached through a symlink in
     # another directory loses its venv (pyvenv.cfg is found beside argv[0]).
-    _write(venv_bin / "python3", f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', 0o755)
+    # ``-I -m shared.capabilities`` is the ADR 0100 lane predicate, importable from
+    # the image's Hermes venv; here it is the repo's own module, reached on PYTHONPATH.
+    _write(
+        venv_bin / "python3",
+        "#!/bin/sh\n"
+        f'if [ "$1" = -I ] && [ "$2" = -m ] && [ "$3" = shared.capabilities ]; then shift; '
+        f'exec env PYTHONPATH="{OVERLAY}" "{sys.executable}" "$@"; fi\n'
+        f'exec "{sys.executable}" "$@"\n',
+        0o755,
+    )
     _write(root / "opt/hermes/HERMES_SHA", HERMES + "\n")
     _write(root / "var/lib/smd-config/customer.yaml", _customer_yaml(["inbox-triage"]))
     _write(root / "app/retired-skills.txt", "# retired\nold-tracker\n")
@@ -160,6 +181,8 @@ def _check(doc: dict, cid: str) -> dict:
 
 
 def test_schema_and_atomic_0644_write(seat: dict[str, Path]) -> None:
+    # Every job lane authored, so the full check list runs (ADR 0100 gates lane checks).
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(ALL_LANE_SKILLS))
     doc = _once(seat, "boot")
     assert doc["schema_version"] == 1 and doc["run_kind"] == "boot"
     assert doc["version"] == "1" * 40 and doc["image_ref"].startswith("registry.fly.io/hermes-fleet:")
@@ -193,6 +216,40 @@ def test_unauthored_lane_passes_with_a_note_and_an_authored_one_is_checked(seat:
     doc = _once(seat, "hourly")
     assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-absent"]
     assert _check(doc, "demand-firm-inputs-present")["ok"] is False
+
+
+LANE_RUNTIME_CHECKS = {
+    "medchron-daemon-ticking",
+    "demand-lane-ticking",
+    "drafting-lane-ticking",
+    "litigation-lane-ticking",
+    "casefile-lane-ticking",
+    "negotiation-lane-ticking",
+    "note-lane-ticking",
+}
+
+
+def _ran(doc: dict) -> set[str]:
+    return {c["id"] for c in doc["checks"]}
+
+
+# ADR 0100 (2026-10-31): a seat that authors no job lane boots no runner, so the
+# runner's checks do not run there; before, captain-mark ran seven of them on
+# work it never does, and the fix for the 1 GB stall needed them gone.
+def test_a_seat_that_authors_no_lane_runs_no_lane_runtime_check(seat: dict[str, Path]) -> None:
+    assert not LANE_RUNTIME_CHECKS & _ran(_once(seat, "hourly"))
+
+
+def test_a_seat_runs_the_runtime_checks_of_exactly_the_lanes_it_authors(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter", "smd-note"]))
+    ran = LANE_RUNTIME_CHECKS & _ran(_once(seat, "hourly"))
+    assert ran == {"medchron-daemon-ticking", "demand-lane-ticking", "note-lane-ticking"}
+
+
+def test_an_unreadable_config_runs_every_lane_runtime_check(seat: dict[str, Path]) -> None:
+    """Cannot evaluate must never pass-skip a client's lane: every check runs and says why."""
+    (seat["root"] / "var/lib/smd-config/customer.yaml").write_text(": not yaml : [")
+    assert LANE_RUNTIME_CHECKS <= _ran(_once(seat, "hourly"))
 
 
 def _lane_state(seat: dict[str, Path], lane: str, word: str) -> None:
@@ -266,6 +323,7 @@ def test_unreadable_customer_yaml_reads_as_authored_never_as_absent(seat: dict[s
 
 
 def test_busy_lane_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
     assert _check(_once(seat, "boot"), "medchron-daemon-idle")["ok"] is True
     _write(seat["root"] / "run/smd-medchron/child.pid", "4242\n")
     boot = _check(_once(seat, "boot"), "medchron-daemon-idle")

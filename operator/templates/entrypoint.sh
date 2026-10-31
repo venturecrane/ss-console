@@ -131,32 +131,6 @@ chown root:root "${LIVE_CUSTOMER_YAML}"
 chmod 0644 "${LIVE_CUSTOMER_YAML}"
 rm -f /opt/data/customer.yaml
 
-# ss#2614: the chronology runner's per-firm config rides the same vault prefix.
-# Same fail-static shape as customer.yaml above, without the FATAL arm: a seat
-# without it boots fine and the runner refuses every job with one loud line.
-# Root-owned, group medchron read-only (the driver child reads it; the agent
-# uid has no group membership and no need to read the firm's tables).
-MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/medchron-firm.yaml" \
-         "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
-  mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"
-  log "medchron-firm.yaml refreshed from R2 into ${CONFIG_DIR}"
-elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
-else
-  log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
-fi
-rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
-if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  chown root:medchron "${MEDCHRON_FIRM_CONFIG}"
-  chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
-fi
-
 # OP-P1-4 audit ledger: owned by the broker uid, readable (not writable) by the
 # agent uid via the audit-readers group. The agent's only write path is the
 # broker's append-only audit_append verb.
@@ -259,26 +233,7 @@ mountpoint -q "${AUDIT_BIND_DIR}" \
   || mount --bind "${AUDIT_DIR}" "${AUDIT_BIND_DIR}" \
   || { log "FATAL: could not bind-mount ${AUDIT_DIR} -> ${AUDIT_BIND_DIR}"; exit 1; }
 
-# ss#2614: the chronology runner's tree, converged on every boot with explicit
-# owners and modes (never mkdir -p defaults; the establish-spool note below
-# explains why). queue/ is written by the broker uid (submit) and read by root
-# (the daemon); jobs/ is root only; both reach their users through the bind
-# mount, exactly like the audit ledger. The Smokeball refresh token becomes
-# group-shared (setgid dir, 0660 file) so the medchron uid can mint and rotate
-# it alongside the connector; the connector preserves that mode on rotation.
-install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"
-install -d -o root -g workspace-broker -m 0770 "${MEDCHRON_DATA_DIR}/queue"
-# jobs/: root-owned, group medchron EXECUTE-ONLY (0710) — the driver child
-# must traverse it to reach its own job dir (live-caught 2026-08-31: 0700
-# gave the child PermissionError on its job.yaml) but must not be able to
-# list or open sibling jobs; each job dir is 0700 medchron.
-install -d -o root -g medchron -m 0710 "${MEDCHRON_DATA_DIR}/jobs"
-MEDCHRON_RUN_DIR="/run/smd-medchron"
-mkdir -p "${MEDCHRON_RUN_DIR}"
-mountpoint -q "${MEDCHRON_RUN_DIR}" \
-  || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
-  || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
-export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
+. /app/entrypoint-lanes.sh  # ADR 0100: authored lanes, firm config, controls, lane tree
 # The demand lane's (2026-10-06), the drafting lane's and the litigation status
 # lane's (2026-10-07), the negotiation watch's (2026-10-09) and the case file manager's (2026-10-26) queues, job dirs
 # and inputs: sourced, same shell, so their exports reach the broker launch and
@@ -289,46 +244,8 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # litigation lane with no inputs for a whole release), so it is sourced first.
 # marketing is a marketing seat's advertising-gate registers (ADR 0098), root:hermes.
 # shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,casefile,negotiation,marketing,lane-proofs,image-manifest}.sh
-for _lane in fetch-inputs demand drafting litigation casefile negotiation marketing lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
+for _lane in fetch-inputs demand drafting litigation casefile negotiation marketing lane-proofs image-manifest; do case "${_lane}" in demand|drafting|litigation|casefile|negotiation) lane_on "${_lane}" || continue ;; esac; . "/app/entrypoint-${_lane}.sh"; done
 
-# The chronology runner's INSTALL-level artifacts — the scanned-page
-# classifier's authored control pages (`controls.json` + the PDFs it names) and
-# the vendored ICD tables (`icd/`) — ride the same vault prefix as the firm
-# config, under medchron-controls/. Every job gets a fresh data_root under
-# jobs/<id>/, so no job can carry them; the runner resolves them against this
-# tree (Job.install_root, which the daemon points at the run dir). Seeded from
-# the vault on EVERY boot, so a volume recreate converges on the authored set
-# instead of refusing every job until someone copies files in by hand. Same
-# fail-static shape as medchron-firm.yaml, no FATAL arm: a seat with nothing in
-# its vault boots fine and the runner refuses the classify stage of each job
-# with one loud line. Root-owned, group medchron read-only: the child reads
-# its falsifier and can never rewrite it (a classifier that can edit its own
-# controls measures nothing).
-MEDCHRON_CONTROLS_DIR="${MEDCHRON_DATA_DIR}/controls"
-rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         --recursive \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/medchron-controls/" \
-         "${MEDCHRON_CONTROLS_DIR}.r2.tmp/" 2>/dev/null \
-   && [ -f "${MEDCHRON_CONTROLS_DIR}.r2.tmp/controls.json" ]; then
-  rm -rf "${MEDCHRON_CONTROLS_DIR}"
-  mv "${MEDCHRON_CONTROLS_DIR}.r2.tmp" "${MEDCHRON_CONTROLS_DIR}"
-  log "medchron controls refreshed from R2 into ${MEDCHRON_CONTROLS_DIR}"
-elif [ -f "${MEDCHRON_CONTROLS_DIR}/controls.json" ]; then
-  log "WARN: R2 fetch of medchron-controls/ failed; keeping the existing root-owned copy"
-else
-  log "No medchron-controls/ in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse the classify stage of every job"
-fi
-rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
-if [ -d "${MEDCHRON_CONTROLS_DIR}" ]; then
-  chown -R root:medchron "${MEDCHRON_CONTROLS_DIR}"
-  find "${MEDCHRON_CONTROLS_DIR}" -type d -exec chmod 0750 {} +
-  find "${MEDCHRON_CONTROLS_DIR}" -type f -exec chmod 0640 {} +
-fi
 SMOKEBALL_TOKEN_DIR="/opt/data/.smokeball-mcp"
 SMOKEBALL_TOKEN_RUN_DIR="/run/smd-smokeball-token"
 if [ -d "${SMOKEBALL_TOKEN_DIR}" ]; then
@@ -730,7 +647,11 @@ fi
 # cgroup (medchron.lane_memory prints the NAME=BYTES words; nothing when
 # unauthored, so the code defaults stand). Re-read on every respawn so a live
 # config change reaches the next daemon start. The words are digits only.
-if [ -x /opt/medchron/.venv/bin/python ] \
+# ADR 0100: only a seat that authors a job lane runs the runner, and the runner
+# starts only the lanes this seat authors (SMD_AUTHORED_LANES, exported above).
+if [ -z "${SMD_AUTHORED_LANES// /}" ]; then
+  log "Root medchron daemon NOT launched (this seat authors no job lane)"
+elif [ -x /opt/medchron/.venv/bin/python ] \
    && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
   # The stop flag: the supervisor (and tini's group signal) TERMs this loop
   # and the daemon together; the loop waits for the daemon's drain, then ends.

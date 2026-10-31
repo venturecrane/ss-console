@@ -364,6 +364,7 @@ fi
 # list's verbs to the ssh transport above; behaviour per check is what it was
 # when the checks lived here. Read seat-checks.sh for what each check proves.
 TEMPLATES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../templates" && pwd)"
+CAPABILITIES_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../hermes-smd-overlay/shared" && pwd)/capabilities.py"
 # shellcheck disable=SC2034 # read by seat-checks.sh: seat paths are the Machine's own
 SEAT_ROOT=""
 
@@ -466,6 +467,24 @@ lane_authored() {
     authored "operator/customers/${SLUG}/$1/$1-firm.yaml" && return 0
   fi
   lane_skill_enabled "$1"
+}
+# lane_runs <lane> (ADR 0100): this checkout's customer.yaml authors the lane, so the
+# image booted its thread. The same predicate the entrypoint uses. Cannot evaluate
+# reads as runs.
+running_lanes() {
+  uv run --quiet --no-project --with pyyaml python3 -I "${CAPABILITIES_PY}" lanes "${CUSTOMER_YAML}" 2>/dev/null
+}
+lane_runs() {
+  [ -f "${CUSTOMER_YAML}" ] || return 0
+  local out
+  out="$(running_lanes)" || return 0
+  printf '%s\n' "${out}" | grep -qxF "$1"
+}
+any_lane_runs() {
+  [ -f "${CUSTOMER_YAML}" ] || return 0
+  local out
+  out="$(running_lanes)" || return 0
+  [ -n "${out}" ]
 }
 lane_skill_enabled() {
   local skill
