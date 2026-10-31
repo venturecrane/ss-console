@@ -24,6 +24,7 @@ import json
 import logging
 from typing import Any
 
+from shared import capabilities, seat_doc
 from shared.medchron_client import MedchronBrokerClient
 from shared.tool_registration import register_wrapped_tool
 
@@ -314,18 +315,38 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
 }
 
 
+#: Job lane (``shared.capabilities.JOB_LANES``) -> the tools that lane offers the
+#: model. Every tool belongs to exactly one lane; tests/test_medchron_plugin.py
+#: fails on a tool with no owner or two.
+LANE_TOOLS: dict[str, dict[str, Any]] = {
+    "medchron": TOOLS,
+    "demand": demand.TOOLS,
+    "drafting": drafting.TOOLS,
+    "litigation": litigation.TOOLS,
+    "casefile": casefile.TOOLS,
+    "negotiation": negotiation.TOOLS,
+    "note": note.TOOLS,
+}
+
+
+def tools_for(doc: dict[str, Any] | None) -> dict[str, Any]:
+    """The tools of every lane ``doc`` authors (ADR 0100), in lane order."""
+    tools: dict[str, Any] = {}
+    for lane in capabilities.authored_lanes(doc):
+        tools.update(LANE_TOOLS[lane])
+    return tools
+
+
 def register(ctx: Any) -> None:
-    """Register the chronology-package, demand, drafting, litigation, negotiation and SMD note
-    tools. All require the broker socket."""
-    tools = {
-        **TOOLS,
-        **demand.TOOLS,
-        **drafting.TOOLS,
-        **litigation.TOOLS,
-        **negotiation.TOOLS,
-        **note.TOOLS,
-        **casefile.TOOLS,
-    }
+    """Register the tools of each job lane this seat authors (ADR 0100): a lane is
+    authored when a persona enables its skill. A seat that authors no lane, or
+    whose config will not read, registers none. All require the broker socket."""
+    doc = seat_doc.live_doc()
+    if doc is None:
+        logger.info("hermes-smd-medchron: customer.yaml unreadable; no lane tools")
+        return
+    lanes = capabilities.authored_lanes(doc)
+    tools = tools_for(doc)
     for name, (description, schema, handler) in tools.items():
         register_wrapped_tool(
             ctx,
@@ -338,13 +359,7 @@ def register(ctx: Any) -> None:
             emoji="",
         )
     logger.info(
-        "hermes-smd-medchron registered %d chronology-package, %d demand, %d drafting, %d "
-        "litigation, %d negotiation, %d note and %d case file tools",
-        len(TOOLS),
-        len(demand.TOOLS),
-        len(drafting.TOOLS),
-        len(litigation.TOOLS),
-        len(negotiation.TOOLS),
-        len(note.TOOLS),
-        len(casefile.TOOLS),
+        "hermes-smd-medchron registered %d tools for authored lanes: %s",
+        len(tools),
+        ", ".join(lanes) or "none",
     )

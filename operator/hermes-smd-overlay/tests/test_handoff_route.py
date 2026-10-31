@@ -252,7 +252,7 @@ def test_a_500_forward_stays_a_retryable_failure(gate):
 # ---------------------------------------------------------------------------
 
 
-def test_submit_passes_include_file_ids_through(monkeypatch):
+def test_submit_passes_include_file_ids_through(monkeypatch, authors_everything):
     mod = load_plugin("hermes-smd-medchron")
     sent: dict = {}
 
@@ -282,7 +282,7 @@ def test_submit_passes_include_file_ids_through(monkeypatch):
     assert "include_file_ids" in schema["properties"]["selection"]["properties"]
 
 
-def test_submit_omits_selection_when_not_given(monkeypatch):
+def test_submit_omits_selection_when_not_given(monkeypatch, authors_everything):
     mod = load_plugin("hermes-smd-medchron")
     sent: dict = {}
 

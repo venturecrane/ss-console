@@ -23,8 +23,10 @@ omitted prune) so the final state is the same one the boot produced:
    Never fatal.
 3. OMITTED PRUNE. A source skill no persona in ``--enabled-skills-from``
    (customer.yaml) enables is removed from the volume, and is not seeded in the
-   first place. An unreadable config, or one that enables nothing, prunes
-   nothing: an empty allowlist must never read as "remove every skill".
+   first place. An UNREADABLE config prunes nothing (a transient read must
+   never cost the seat its skills). A config that reads and enables no skill
+   prunes every source skill: that is what the seat authored (ADR 0100, fail
+   closed), and it is told apart from an unreadable one by ``None``.
 
 SYMLINKS ARE NEVER FOLLOWED. A symlink anywhere in the source refuses the whole
 sync before anything is written. On the volume, a symlink where a skill or the
@@ -177,26 +179,21 @@ def read_retired(paths: Iterable[str | Path]) -> list[str]:
     return names
 
 
-def read_enabled(customer_yaml: str | Path) -> set[str]:
-    """Names any persona enables (``enabled`` absent counts as enabled), or an
-    empty set when the config cannot be read, which prunes nothing."""
-    try:
-        import yaml
+def read_enabled(customer_yaml: str | Path) -> set[str] | None:
+    """Names any persona enables (``enabled`` absent counts as enabled), via the
+    one predicate (:mod:`shared.capabilities`, ADR 0100).
 
-        doc = yaml.safe_load(Path(customer_yaml).read_text(encoding="utf-8")) or {}
-        names: set[str] = set()
-        for persona in doc.get("personas") or []:
-            for skill in (persona or {}).get("skills") or []:
-                if (
-                    isinstance(skill, dict)
-                    and skill.get("enabled") is not False
-                    and isinstance(skill.get("name"), str)
-                ):
-                    names.add(skill["name"].strip())
-        return names
-    except Exception as exc:  # noqa: BLE001 — unreadable config prunes nothing
-        logger.warning("sync: could not read enabled skills from %s: %s", customer_yaml, exc)
-        return set()
+    ``None`` when the config cannot be read, which prunes nothing: a transient
+    read must never cost the seat its skills. A config that READS and enables no
+    skill returns an empty set, which prunes every omitted skill, because that
+    is what the seat authored (fail closed)."""
+    from shared import capabilities
+
+    doc = capabilities.read(customer_yaml)
+    if doc is None:
+        logger.warning("sync: could not read enabled skills from %s", customer_yaml)
+        return None
+    return capabilities.enabled_skills(doc)
 
 
 def sync_skills(
@@ -210,17 +207,18 @@ def sync_skills(
     names = _scan_source(source)
     _prepare_dest(dest)
     result = SyncResult()
-    allow = enabled or set()
+    # None: no config, or one that would not read; prune nothing. A set (even an
+    # empty one) is what the seat authored; every other skill is pruned.
     for name in names:
-        if allow and name not in allow:
+        if enabled is not None and name not in enabled:
             if _remove_entry(dest / name):
                 result.pruned_omitted.append(name)
                 logger.info("sync: pruned omitted skill %s (not enabled in customer.yaml)", name)
             continue
         _replace_skill(source / name, dest, name)
         result.seeded.append(name)
-    if not allow:
-        logger.warning("sync: no enabled skill read; omitted-skill prune skipped")
+    if enabled is None:
+        logger.warning("sync: no readable customer.yaml; omitted-skill prune skipped")
     for name in retired:
         if name in names:
             logger.warning("sync: retired skill %s is still in the source catalog; kept", name)

@@ -351,7 +351,7 @@ class _SbHandler:
         pass
 
 
-def test_a_smokeball_retry_after_a_failed_forward_is_not_a_replay(monkeypatch):
+def test_a_smokeball_retry_after_a_failed_forward_is_not_a_replay(monkeypatch, authors_everything):
     """J1: the RequestId used to be recorded at verification, before the
     forward. A forward that failed answered 503 ("retry"), and the vendor's retry
     of that same delivery then met 401 as a replay: the one delivery never
@@ -365,6 +365,8 @@ def test_a_smokeball_retry_after_a_failed_forward_is_not_a_replay(monkeypatch):
     monkeypatch.setattr(gate, "_INBOUND_GUARD", None)
     monkeypatch.setattr(gate.gate_trigger_exclusions, "live_exclusions", lambda: {})
     monkeypatch.setattr(gate.gate_trigger_throttle, "live_throttles", lambda: {})
+    # The seat authors Smokeball (fixture) and triggers on it.
+    monkeypatch.setattr(gate, "_route_untriggered", lambda route: False)
 
     outcomes = iter(["down", 200, 200])
 
@@ -441,7 +443,7 @@ def test_route_untriggered_reads_the_live_triggers(monkeypatch):
     assert gate._route_untriggered("smokeball") is False  # cannot tell: forward
 
 
-def test_an_untriggered_route_is_acknowledged_and_not_forwarded(monkeypatch):
+def test_an_untriggered_route_is_acknowledged_and_not_forwarded(monkeypatch, authors_everything):
     """OY-2 gate half: translate emits no Hermes route for an untriggered
     connector, so the gate answers 202 and forwards nothing (no 404, no vendor
     retry storm)."""
@@ -543,3 +545,97 @@ def test_smokeball_boot_self_check_passes_under_freshness_window():
     from webhook_gate import smokeball_self_check
 
     assert smokeball_self_check() is True
+
+
+# ---------------------------------------------------------------------------
+# ADR 0100: the Smokeball routes are served only where the seat authors Smokeball
+# ---------------------------------------------------------------------------
+
+
+def _sb_post(monkeypatch) -> list[int]:
+    gate._replay_seen.clear()
+    monkeypatch.setenv("WEBHOOK_SECRET_SMOKEBALL", _SB_SECRET)
+    monkeypatch.setenv("WEBHOOK_SMOKEBALL_CLIENT_ID", _SB_CID)
+    monkeypatch.setattr(gate, "_INBOUND_GUARD", None)
+    monkeypatch.setattr(gate, "_route_untriggered", lambda route: True)
+    ticks = str((int(time.time()) + 62_135_596_800) * 10_000_000)
+    rid = "authored-1"
+    headers = {
+        "Timestamp": ticks,
+        "RequestId": rid,
+        "Signature": _sb_sig(ticks, rid, _SB_CID, _SB_SECRET),
+    }
+    h = _SbHandler(headers, b'{"type":"matter.updated","payload":{"id":"m"}}')
+    gate._Handler.do_POST(h)
+    gate._replay_seen.clear()
+    return h.answers
+
+
+def _unknown_route_answer() -> list[int]:
+    h = _SbHandler({}, b"")
+    h.path = "/webhooks/not..a..route"
+    gate._Handler.do_POST(h)
+    return h.answers
+
+
+def _seat(monkeypatch, tmp_path, *, smokeball: bool) -> None:
+    from tests.conftest import write_seat_yaml
+
+    path = write_seat_yaml(tmp_path / "customer.yaml", lanes=["note"], smokeball=smokeball)
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+
+
+def test_a_seat_without_smokeball_answers_the_smokeball_route_as_unknown(monkeypatch, tmp_path):
+    """A correctly signed Smokeball delivery to a seat that does not author the
+    connector gets the 404 an unknown route gets, before any secret or signature
+    is looked at. FALSIFIER: drop _route_served and it is verified and answered."""
+    _seat(monkeypatch, tmp_path, smokeball=False)
+    assert _sb_post(monkeypatch) == [404]
+    assert _unknown_route_answer() == [404]
+    _seat(monkeypatch, tmp_path, smokeball=True)
+    assert _sb_post(monkeypatch) == [202]
+
+
+def test_an_unreadable_config_keeps_serving_the_smokeball_route(monkeypatch, tmp_path):
+    """A transient read failure must never drop a live client's Smokeball
+    delivery: only a READABLE config that does not author Smokeball 404s.
+    FALSIFIER: return False on an unreadable read and this delivery is 404."""
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
+    assert gate._route_served("smokeball") is True
+    assert _sb_post(monkeypatch) == [202]
+    assert gate._route_served("agentmail") is True  # other routes are unchanged
+
+
+class _GetHandler:
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.headers: dict = {"Host": "x.fly.dev"}
+        self.answers: list[tuple[str, int]] = []
+
+    def _json(self, status: int, payload: dict) -> None:
+        self.answers.append(("json", status))
+
+    def _html(self, status: int, body: str) -> None:
+        self.answers.append(("html", status))
+
+
+def test_the_oauth_callback_is_served_only_where_the_seat_authors_smokeball(monkeypatch, tmp_path):
+    """A non-authoring seat answers the callback exactly as an unknown GET path."""
+    monkeypatch.setattr(
+        gate.oauth_callback, "handle_smokeball_callback", lambda *a, **k: (200, "ok")
+    )
+    _seat(monkeypatch, tmp_path, smokeball=False)
+    h = _GetHandler("/oauth/smokeball/callback?state=s&code=c")
+    gate._Handler.do_GET(h)
+    unknown = _GetHandler("/no/such/path")
+    gate._Handler.do_GET(unknown)
+    assert h.answers == unknown.answers == [("json", 404)]
+    _seat(monkeypatch, tmp_path, smokeball=True)
+    h = _GetHandler("/oauth/smokeball/callback?state=s&code=c")
+    gate._Handler.do_GET(h)
+    assert h.answers == [("html", 200)]
+    # An unreadable config keeps the callback served (today's behaviour).
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
+    h = _GetHandler("/oauth/smokeball/callback?state=s&code=c")
+    gate._Handler.do_GET(h)
+    assert h.answers == [("html", 200)]
