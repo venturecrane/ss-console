@@ -625,6 +625,28 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('every lane a seat can author is recorded, with no table copy of the list (0145)', async () => {
+    // FALSIFIER: drop migration 0145 and the old job_lane CHECK rejects 'note'
+    // (500); drop a lane from the capability table and the parse refuses it (400).
+    const res = await post(
+      body({
+        card_key: `${'d'.repeat(64)}:job_done`,
+        kind: 'job_done',
+        job: { lane: 'note', state: 'delivered', reason: null },
+      })
+    )
+    expect(res.status).toBe(200)
+    const unknown = await post(
+      body({
+        card_key: `${'e'.repeat(64)}:job_done`,
+        kind: 'job_done',
+        job: { lane: 'not-a-lane', state: 'delivered', reason: null },
+      })
+    )
+    expect(unknown.status).toBe(400)
+    expect((await rows()).map((r) => r.job_lane)).toEqual(['note'])
+  })
+
   it('a lane_unproven card is recorded with its lane and job lane, and its email says how to prove it (0125)', async () => {
     // FALSIFIER: drop migration 0125 and the kind CHECK rejects the INSERT
     // (500); drop 'lane_unproven' from CARD_KINDS and the parse refuses (400).

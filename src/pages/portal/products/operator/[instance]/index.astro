@@ -296,7 +296,7 @@ const EMPTY: Record<Exclude<SurfaceState, 'active'>, { title: string; body: stri
   },
   no_role: {
     title: 'Access pending',
-    body: "The Operator is set up for your firm, but you haven't been granted a role yet. Contact your firm's principal to be added.",
+    body: "The Operator is set up for your organization, but you haven't been granted a role yet. Ask your administrator to add you.",
   },
 }
 const empty = surfaceState !== 'active' ? EMPTY[surfaceState] : null

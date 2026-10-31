@@ -1639,6 +1639,9 @@ export type ValidationErrorCode =
   | 'InvalidPeople'
   /** A cron `space` that is missing on a space-mode seat or names no space. */
   | 'InvalidCronSpace'
+  /** A block owned by a capability (a job lane or connector, ADR 0100) the
+   * seat does not author: the block would be read by nothing. */
+  | 'CapabilityNotAuthored'
 
 export interface ValidationError {
   code: ValidationErrorCode

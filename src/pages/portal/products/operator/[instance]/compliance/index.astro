@@ -160,8 +160,8 @@ const agreements = await listAgreementsForInstance(env.DB, client.id, instance)
           Compliance view not enabled
         </p>
         <p class="mt-3 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
-          This firm has not opted in to the dedicated Compliance dashboard. The audit log is still
-          available directly to authorized roles.
+          Your organization has not opted in to the dedicated Compliance dashboard. The audit log is
+          still available directly to authorized roles.
         </p>
         <p class="mt-6 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--ss-color-text-secondary)]">
           <a
@@ -235,7 +235,7 @@ const agreements = await listAgreementsForInstance(env.DB, client.id, instance)
           <div class="px-5 md:px-7 py-6">
             {view.retention === null ? (
               <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
-                Retention posture is not yet on file for this firm.
+                Retention posture is not yet on file for your organization.
               </p>
             ) : (
               <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -265,7 +265,7 @@ const agreements = await listAgreementsForInstance(env.DB, client.id, instance)
                 </div>
                 <div>
                   <dt class="font-mono text-label uppercase tracking-[0.14em] font-bold text-[color:var(--ss-color-text-secondary)]">
-                    Firm override
+                    Your override
                   </dt>
                   <dd class="mt-1 font-body text-base text-[color:var(--ss-color-text-primary)]">
                     {view.retention.overrideDays === null
