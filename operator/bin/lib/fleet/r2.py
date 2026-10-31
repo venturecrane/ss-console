@@ -73,6 +73,11 @@ class R2:
         self._auth = {
             "AWS_ACCESS_KEY_ID": src.get("R2_ACCESS_KEY_ID", ""),
             "AWS_SECRET_ACCESS_KEY": src.get("R2_SECRET_ACCESS_KEY", ""),
+            # R2 signs in region "auto". A runner that sets any other AWS region
+            # gets 400 Bad Request on every call (2026-10-31: release-tick's first
+            # bundle release could not read the manifest Deploy had just published).
+            "AWS_REGION": "auto",
+            "AWS_DEFAULT_REGION": "auto",
         }
 
     def _require_creds(self) -> None:

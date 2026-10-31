@@ -184,6 +184,23 @@ def test_r2_refuses_writes_outside_the_fleet_key_spaces() -> None:
         r2.delete("vaults/scott/customer.yaml")
 
 
+def test_r2_signs_in_region_auto_whatever_the_runner_sets() -> None:
+    """2026-10-31: release-tick's runner region made every R2 call 400 Bad Request.
+
+    FALSIFIER: drop the region from R2's env and AWS_REGION is the runner's.
+    """
+    seen: dict = {}
+
+    class EnvRunner:
+        def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None):
+            seen.update(env or {})
+            return Result(0, "{}", "")
+
+    creds = {"R2_ENDPOINT_URL": "https://x", "R2_ACCESS_KEY_ID": "k", "R2_SECRET_ACCESS_KEY": "s"}
+    R2(EnvRunner(), {**creds, "AWS_REGION": "us-west-2"}).head("fleet/bundles/jobs/x.json")
+    assert seen["AWS_REGION"] == "auto" and seen["AWS_DEFAULT_REGION"] == "auto"
+
+
 def test_r2_without_credentials_is_a_tooling_error() -> None:
     with pytest.raises(ToolingError, match="infisical"):
         R2(ScriptRunner(), {}).get_bytes("fleet/skills/x.json")

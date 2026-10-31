@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # r2-creds.sh: R2 S3 credentials for a CI job, without minting a credential.
 # Sourced; defines derive_r2_creds, which sets R2_ACCESS_KEY_ID,
-# R2_SECRET_ACCESS_KEY and R2_ENDPOINT_URL.
+# R2_SECRET_ACCESS_KEY and R2_ENDPOINT_URL, and exports AWS_REGION=auto.
 #
 # R2_* already set (the operator-local path, `infisical run --env=prod
 # --path=/ss -- ...`): used as they are. Otherwise derived from
@@ -34,4 +34,7 @@ derive_r2_creds() {
     : "${CLOUDFLARE_ACCOUNT_ID:?R2_ENDPOINT_URL unset and CLOUDFLARE_ACCOUNT_ID not available to build it}"
     R2_ENDPOINT_URL="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
   fi
+  # R2 signs in region "auto"; an AWS region the runner sets (us-west-2) makes
+  # every call 400 Bad Request. Exported so the aws CLI and fleet both see it.
+  export AWS_REGION=auto AWS_DEFAULT_REGION=auto
 }
