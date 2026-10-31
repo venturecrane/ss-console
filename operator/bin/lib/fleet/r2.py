@@ -14,6 +14,9 @@ smd-customer-config):
   fleet/images/<digest-hex>/lane-inputs.json        fleet build writes (same commit)
   fleet/skills/<version>.json                       CI writes (scripts/ci-publish-skills.sh)
   vaults/<slug>/skills-pointer.json                 ONLY `fleet release --skills` writes
+  fleet/bundles/<name>/<version>.json               CI writes (scripts/ci-publish-bundle.sh)
+  fleet/bundles/<name>/<version>.tar.zst            CI writes
+  vaults/<slug>/bundles/<name>-pointer.json         ONLY the bundle step (bundles.py) writes
 
 The pointer key is assembled from a validated slug and checked against a
 whole-string pattern before every write, the same belt as the CI config
@@ -31,7 +34,9 @@ from typing import Any
 from . import ids
 from .runner import Runner, ToolingError
 
-POINTER_KEY_RE = re.compile(r"^vaults/[a-z0-9][a-z0-9-]{0,38}[a-z0-9]/skills-pointer\.json$")
+POINTER_KEY_RE = re.compile(
+    r"^vaults/[a-z0-9][a-z0-9-]{0,38}[a-z0-9]/(skills-pointer|bundles/[a-z][a-z0-9-]{0,31}-pointer)\.json$"
+)
 FLEET_KEY_RE = re.compile(r"^fleet/(images/[0-9a-f]{64}/[a-z-]+\.json|skills/[0-9]{12}-[0-9a-f]{8}\.json)$")
 
 
@@ -45,6 +50,18 @@ def skills_manifest_key(version: str) -> str:
 
 def pointer_key(seat: str) -> str:
     return f"vaults/{ids.slug(seat)}/skills-pointer.json"
+
+
+def bundle_manifest_key(name: str, version: str) -> str:
+    return f"fleet/bundles/{ids.bundle_name(name)}/{ids.bundle_version(version)}.json"
+
+
+def bundle_tarball_key(name: str, version: str) -> str:
+    return f"fleet/bundles/{ids.bundle_name(name)}/{ids.bundle_version(version)}.tar.zst"
+
+
+def bundle_pointer_key(seat: str, name: str) -> str:
+    return f"vaults/{ids.slug(seat)}/bundles/{ids.bundle_name(name)}-pointer.json"
 
 
 class R2:

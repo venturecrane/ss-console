@@ -37,6 +37,12 @@ const stripHashComments = (s: string): string =>
     .filter((l) => !/^\s*#/.test(l))
     .join('\n')
 const DOCKERFILE_CODE = stripHashComments(DOCKERFILE)
+// The job runtime's install steps (connector venvs, the medchron venv, the
+// build-time import smoke) live in operator/templates/jobs-runtime.sh since ADR
+// 0100 W3, which the Dockerfile runs and CI's jobs bundle build runs too. The
+// image is built from both, so assertions about what the image installs read both.
+const JOBS_RUNTIME = readFileSync(resolve('operator/templates/jobs-runtime.sh'), 'utf8')
+const IMAGE_BUILD_CODE = `${DOCKERFILE_CODE}\n${stripHashComments(JOBS_RUNTIME)}`
 const BOOTSTRAP_CODE = stripHashComments(BOOTSTRAP)
 
 describe('Operator customer Machine Dockerfile', () => {
@@ -413,7 +419,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
   // Join backslash-continued lines so a multi-line RUN reads as one command,
   // then split on newlines, `&&` and `;` so each `uv pip install` is judged
   // on its own.
-  const commands = DOCKERFILE_CODE.replace(/\\\n/g, ' ')
+  const commands = IMAGE_BUILD_CODE.replace(/\\\n/g, ' ')
     .split(/\n|&&|;/)
     .map((c) => c.trim().replace(/^RUN\s+/, ''))
     .filter((c) => /^uv pip install\b/.test(c))
@@ -448,12 +454,12 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     for (const cmd of commands) {
       const hashed =
         /--require-hashes/.test(cmd) &&
-        /-r\s+("?\/app\/requirements\/[^\s"]+\.txt"?|"\$reqs")/.test(cmd) &&
+        /-r\s+("?(\/app|\$\{SRC\})\/requirements\/[^\s"]+\.txt"?|"\$reqs")/.test(cmd) &&
         operands(cmd).length === 0
       const localOnly =
         /--no-deps/.test(cmd) &&
         operands(cmd).length > 0 &&
-        operands(cmd).every((t) => /^(\/app\/|"\$cdir"|-e "\.")/.test(t))
+        operands(cmd).every((t) => /^(\/app\/|"\$\{SRC\}\/|"\$cdir"|-e "\.")/.test(t))
       if (!hashed && !localOnly) offenders.push(cmd)
     }
     expect(offenders, 'an install line names a package without a hash-locked file').toEqual([])
@@ -467,7 +473,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
 
   it('every requirements file the Dockerfile installs from exists, is hashed, and carries no ranges', () => {
     const referenced = new Set<string>()
-    for (const m of DOCKERFILE_CODE.matchAll(/\/app\/requirements\/([a-z0-9_.-]+\.txt)/g)) {
+    for (const m of IMAGE_BUILD_CODE.matchAll(/(?:\/app|\$\{SRC\})\/requirements\/([a-z0-9_.-]+\.txt)/g)) {
       referenced.add(m[1])
     }
     // The connector loop references its file by name at build time.
@@ -494,7 +500,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
   it('imports the SMD note lane and command at build', () => {
     // FALSIFIER: drop either module from the build-time import smoke and an
     // image whose note lane cannot import boots, and no note wake is ever sent.
-    expect(DOCKERFILE_CODE).toContain(
+    expect(IMAGE_BUILD_CODE).toContain(
       'medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane'
     )
   })
@@ -504,10 +510,10 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // line, or the entrypoint COPY, and a seat boots a lane that cannot read
     // a .doc or .rtf court paper or never makes its queue.
     expect(DOCKERFILE_CODE).toMatch(/poppler-utils fonts-dejavu-core antiword/)
-    expect(DOCKERFILE_CODE).toContain(
+    expect(IMAGE_BUILD_CODE).toContain(
       'medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf'
     )
-    expect(DOCKERFILE_CODE).toContain('command -v antiword >/dev/null')
+    expect(IMAGE_BUILD_CODE).toContain('command -v antiword >/dev/null')
     expect(DOCKERFILE_CODE).toContain(
       'COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh'
     )
@@ -520,7 +526,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // FALSIFIER: drop the casefile modules from the build-time import smoke or
     // the entrypoint COPY, and a seat boots a lane that cannot import, or whose
     // queue and inputs were never made.
-    expect(DOCKERFILE_CODE).toContain(
+    expect(IMAGE_BUILD_CODE).toContain(
       'medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm'
     )
     expect(DOCKERFILE_CODE).toContain(

@@ -1,7 +1,8 @@
 """`fleet status`: what each seat runs, from D1, in one table (or --json).
 
 Per seat: ring, hold, image (and the release it is), overlay ref, skills
-version, config digest, jobs (running / queued / wakes pending), heartbeat age,
+version, bundles (what each bundle runs at: a version, "image" when the image's
+own copy runs, "-" when the seat reports none because it authors no lane), config digest, jobs (running / queued / wakes pending), heartbeat age,
 the last rollout's state, DRIFT against the newest release that completed
 its last ring, and whether the identifier-gate rollback lever is set. NULL means
 unknown and is shown as "?", never as 0.
@@ -36,6 +37,19 @@ def _lever(value: bool | None) -> str:
 
 def _q(value: Any) -> str:
     return "?" if value is None else str(value)
+
+
+def bundles_cell(raw: str | None) -> str:
+    """fleet_status.bundles_json as one cell: ``jobs=<version>``, ``jobs=image``, ``-`` for none."""
+    if raw is None:
+        return "-"
+    try:
+        doc = json.loads(raw)
+    except (TypeError, ValueError):
+        return "?"
+    if not isinstance(doc, dict):
+        return "?"
+    return ",".join(f"{k}={v}" for k, v in sorted(doc.items())) or "-"
 
 
 LEVER = "SMD_IDENTIFIER_GATE_MODE"
@@ -82,6 +96,7 @@ def seat_rows(
             rows.append({
                 "seat": seat, "ring": ring.number, "hold": (holds.get(seat) or {}).get("reason"),
                 "image_ref": image, "overlay": st.get("version"), "skills_version": st.get("skills_version"),
+                "bundles": bundles_cell(st.get("bundles_json")),
                 "config_digest": st.get("config_digest"), "jobs_running": st.get("jobs_running"),
                 "jobs_queued": st.get("jobs_queued"), "wakes_pending": st.get("wakes_pending"),
                 "heartbeat_ts": st.get("last_heartbeat_ts"), "heartbeat_status": st.get("heartbeat_status"),
@@ -99,6 +114,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         "image",
         "overlay",
         "skills",
+        "bundles",
         "config",
         "jobs r/q/w",
         "beat",
@@ -111,7 +127,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         image = (r["image_ref"] or "?").rsplit("/", 1)[-1]
         lines.append([
             r["seat"], str(r["ring"]), "HELD" if r["hold"] else "", image[:40], (r["overlay"] or "?")[:8],
-            _q(r["skills_version"]), (r["config_digest"] or "?")[:10],
+            _q(r["skills_version"]), r.get("bundles") or "-", (r["config_digest"] or "?")[:10],
             f"{_q(r['jobs_running'])}/{_q(r['jobs_queued'])}/{_q(r['wakes_pending'])}",
             f"{_age(r['heartbeat_ts'])} {r['heartbeat_status'] or ''}".strip(), _q(r["last_rollout"]),
             ",".join(r["drift"]) or "-", _lever(r.get("identifier_gate_lever")),
@@ -137,7 +153,14 @@ def render_releases(rows: list[dict[str, Any]], as_json: bool) -> str:
         return json.dumps(rows, indent=1, default=str)
     out = []
     for r in rows:
-        what = r.get("image_ref") if r.get("kind") == "image" else f"skills {r.get('skills_version')}"
+        kind = r.get("kind")
+        what = (
+            r.get("image_ref")
+            if kind == "image"
+            else f"bundle {r.get('artifact_name')} {r.get('artifact_version')}"
+            if kind == "bundle"
+            else f"skills {r.get('skills_version')}"
+        )
         done = r.get("completed_last_ring_at") or "not completed"
         out.append(f"{r['release_id']}  {r.get('kind')}  {what}  created {r.get('created_at')}  completed {done}")
     return "\n".join(out) or "(no releases)"

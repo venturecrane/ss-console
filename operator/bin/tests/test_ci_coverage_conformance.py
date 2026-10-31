@@ -176,6 +176,8 @@ def test_path_list_covers_the_mechanism_itself() -> None:
     for repo_rel in (
         ".github/workflows/operator-substrate.yml",
         ".github/operator-substrate-paths.txt",
+        ".github/operator-artifact-paths.txt",
+        ".github/operator-bundle-paths.txt",
         "operator/bin/substrate-paths-changed.py",
     ):
         assert any(_matches(p, repo_rel) for p in paths), (
@@ -541,7 +543,7 @@ def test_every_job_that_enters_fleet_release_is_gated_on_the_enable_variable_at_
                 assert "secrets." not in str(job) or "FLY_" not in str(job), (
                     f"{path.name} job {name} reads a Fly secret outside the fleet-release environment"
                 )
-    assert sorted(gated) == ["build-seat-image", "tick"]
+    assert sorted(gated) == ["build-seat-image", "publish-bundle", "tick"]
     disabled = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))["jobs"].get("disabled") or {}
     assert disabled.get("if") == "vars.FLEET_RELEASE_ENABLED != 'true'" and "environment" not in disabled, (
         "a disabled run says why, without entering the environment"
@@ -573,6 +575,11 @@ def test_build_seat_image_job_builds_at_the_merge_from_the_protected_environment
     assert (steps[0].get("with") or {}).get("fetch-depth") == 0, "the build guard needs full history"
     detect = next(s for s in steps if s.get("id") == "changes")
     assert "substrate-paths-changed.py" in detect["run"] and "operator-substrate-paths.txt" in detect["run"]
+    # ADR 0100 W3: the image list comes from image_patterns (--image), the one
+    # definition base(S) reads too, never from a list the step builds itself.
+    assert "--image" in detect["run"] and "grep" not in detect["run"], (
+        "build-seat-image must ask substrate-paths-changed.py --image for the image path list"
+    )
     build = next(s for s in steps if "fleet build" in (s.get("run") or ""))
     assert build.get("if") == "steps.changes.outputs.relevant == 'true'"
     assert '"$rc" -eq 4' in build["run"] and "HEAD..origin/main" in build["run"], (
@@ -601,10 +608,19 @@ def _image_dockerfile() -> Path:
     return path
 
 
-def _image_path_patterns() -> list[str]:
-    """deploy.yml's build-seat-image list: the substrate list minus its .github/
-    lines (`grep -v '^\\.github/'`), so a workflow-only change never builds."""
-    return [p for p in _detect.load_patterns(PATHS_FILE) if not p.startswith(".github/")]
+ARTIFACT_PATHS_FILE = REPO_ROOT / ".github" / "operator-artifact-paths.txt"
+BUNDLE_PATHS_FILE = REPO_ROOT / ".github" / "operator-bundle-paths.txt"
+
+
+def _image_path_patterns() -> tuple[list[str], list[str]]:
+    """deploy.yml's build-seat-image list (`--image`): the substrate list minus its
+    .github/ lines, minus the artifact paths. (include, exclude)."""
+    return _detect.image_patterns(PATHS_FILE, ARTIFACT_PATHS_FILE)
+
+
+def _is_image_path(path: str) -> bool:
+    include, exclude = _image_path_patterns()
+    return bool(_detect.relevant_paths([path], include, exclude))
 
 
 def _dockerfile_context_sources(dockerfile: Path) -> list[str]:
@@ -695,9 +711,14 @@ def test_every_file_the_seat_image_copies_is_on_the_image_path_list() -> None:
     until some unrelated substrate merge. Found 2026-10-27: operator/roles/ (the
     ADR 0093 role policy layer) and operator/npm/clio-mcp/ were both copied into
     the image and both off the list. Every context file every COPY/ADD reaches
-    must match, by the detect script's own matcher."""
+    must match, by the detect script's own matcher.
+
+    ADR 0100 W3: or be a declared ARTIFACT path (.github/operator-artifact-paths.txt).
+    The image still COPYs operator/skills/ as the seed a seat with no pointer
+    runs, but a skills change ships as a skills release, not an image, so a COPY
+    source on the artifact list is covered by its artifact's own publisher."""
     dockerfile = _image_dockerfile()
-    patterns = _image_path_patterns()
+    artifacts = _detect.load_patterns(ARTIFACT_PATHS_FILE)
     sources = _dockerfile_context_sources(dockerfile)
     assert sources, f"parsed no COPY/ADD sources from {dockerfile}"
 
@@ -708,7 +729,7 @@ def test_every_file_the_seat_image_copies_is_on_the_image_path_list() -> None:
         if not files:
             missing_sources.append(source)
             continue
-        off = [f for f in files if not any(_matches(p, f) for p in patterns)]
+        off = [f for f in files if not _is_image_path(f) and not any(_matches(p, f) for p in artifacts)]
         if off:
             uncovered[source] = off[:5]
     assert not missing_sources, f"{dockerfile.name} copies sources that do not exist in the tree: {missing_sources}"
@@ -716,3 +737,112 @@ def test_every_file_the_seat_image_copies_is_on_the_image_path_list() -> None:
         "these seat-image COPY sources reach files no image-path pattern in "
         f".github/operator-substrate-paths.txt matches (add a `dir/**` entry): {uncovered}"
     )
+
+
+# -- ADR 0100 W3: artifacts leave the image trigger; base(S) reads the same list ----------
+
+
+def test_skills_left_the_image_trigger_but_not_the_suites() -> None:
+    """A skills-only merge builds no image (a skills release ships it) and still runs
+    the suites. FALSIFIER: drop operator/skills/** from the artifact list and the
+    first assertion fails; drop it from the substrate list and the second does."""
+    assert not _is_image_path("operator/skills/demand-letter-drafter/SKILL.md")
+    assert _detect.relevant_paths(["operator/skills/x/SKILL.md"], _detect.load_patterns(PATHS_FILE))
+    assert _is_image_path("operator/templates/Dockerfile")
+    assert not _is_image_path(".github/workflows/deploy.yml")
+
+
+def test_bundle_paths_stay_image_paths_until_the_cut() -> None:
+    """The contract's six jobs-bundle trigger paths each publish a bundle, and each
+    is still an image path (the image keeps its own copy as the fallback)."""
+    patterns = _detect.load_patterns(BUNDLE_PATHS_FILE)
+    contract = [
+        "operator/runners/medchron/**",
+        "operator/connectors/smokeball/**",
+        "operator/connectors/_sdk/**",
+        "operator/requirements/medchron.txt",
+        "operator/requirements/connector-smokeball.txt",
+        "operator/adapter/cost_telemetry/anthropic_pricing.json",
+    ]
+    assert set(contract) <= set(patterns)
+    samples = [
+        "operator/runners/medchron/medchron/daemon.py",
+        "operator/connectors/smokeball/pyproject.toml",
+        "operator/connectors/_sdk/pyproject.toml",
+        "operator/requirements/medchron.txt",
+        "operator/requirements/connector-smokeball.txt",
+        "operator/adapter/cost_telemetry/anthropic_pricing.json",
+    ]
+    for path in samples:
+        assert _detect.relevant_paths([path], patterns), path
+        assert _is_image_path(path), f"{path} must stay an image path until the cut"
+    assert not _detect.relevant_paths(["operator/connectors/ga4/pyproject.toml"], patterns)
+
+
+def test_base_of_s_and_the_image_trigger_read_the_same_list() -> None:
+    """ordering.base_commit asks git for the last commit touching an image path; the
+    build-seat-image step asks substrate-paths-changed.py --image. Both come from
+    image_patterns, and git's pathspec match equals the detect script's matcher on
+    every tracked file, so "an image path" means one thing. FALSIFIER: give
+    ordering.py its own list, or drop the exclude pathspecs, and this fails."""
+    import subprocess
+
+    from bin.lib.fleet import ordering
+
+    include, exclude = _image_path_patterns()
+    specs = ordering.image_pathspecs(REPO_ROOT)
+    assert specs == _detect.git_pathspecs(include, exclude)
+    assert any(sp.startswith(":(glob,exclude)") for sp in specs), "the artifact paths must be excluded"
+    env = {k: v for k, v in __import__("os").environ.items() if not k.startswith("GIT_")}
+    listed = subprocess.run(  # noqa: S603 - fixed git argv
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z"], capture_output=True, text=True, check=True, env=env
+    ).stdout.split("\0")
+    tracked = [p for p in listed if p]
+    by_git = subprocess.run(  # noqa: S603 - fixed git argv
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "--", *specs],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    ).stdout.split("\0")
+    assert sorted(p for p in by_git if p) == sorted(_detect.relevant_paths(tracked, include, exclude))
+    assert ordering.ARTIFACT_PATHS == str(ARTIFACT_PATHS_FILE.relative_to(REPO_ROOT))
+    assert ordering.SUBSTRATE_PATHS == str(PATHS_FILE.relative_to(REPO_ROOT))
+
+
+def test_publish_bundle_builds_after_the_image_from_the_protected_environment() -> None:
+    wf = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))
+    job = wf["jobs"].get("publish-bundle")
+    assert job, "deploy.yml has no publish-bundle job"
+    assert job.get("environment") == FLEET_RELEASE_ENVIRONMENT
+    assert "build-seat-image" in job.get("needs") and "deploy" in job.get("needs")
+    assert "!cancelled()" in job.get("if") and "needs.deploy.result == 'success'" in job.get("if")
+    assert ((job.get("concurrency") or {}).get("cancel-in-progress")) is False
+    steps = job["steps"]
+    assert (steps[0].get("with") or {}).get("fetch-depth") == 0
+    detect = next(s for s in steps if s.get("id") == "changes")
+    assert "substrate-paths-changed.py" in detect["run"] and "operator-bundle-paths.txt" in detect["run"]
+    build = next(s for s in steps if "ci-publish-bundle.sh" in (s.get("run") or ""))
+    assert build.get("if") == "steps.changes.outputs.relevant == 'true'"
+    env = build.get("env") or {}
+    assert env.get("FLY_REGISTRY_TOKEN") == "${{ secrets.FLY_REGISTRY_TOKEN }}"
+    assert env.get("AFTER_SHA") == "${{ github.sha }}"
+    assert not any(k.startswith("FLY_DEPLOY_TOKEN__") for k in env), "the bundle build never holds a seat token"
+
+
+def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> None:
+    """One build script for the image and the bundle. FALSIFIER: let either inline
+    its own install steps and this fails."""
+    text = (REPO_ROOT / "scripts" / "ci-publish-bundle.sh").read_text(encoding="utf-8")
+    script = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+    assert "jobs-runtime.sh connector smokeball" in script and "jobs-runtime.sh medchron" in script
+    assert "uv pip install" not in script and "uv venv" not in script
+    assert "operator/bin/fleet bundle-base" in script and "operator/bin/fleet bundle-record" in script
+    tarball_up = script.index('/${TARBALL_KEY}" --only-show-errors --content-type')
+    manifest_up = script.index('/${MANIFEST_KEY}" --only-show-errors --content-type')
+    assert tarball_up < manifest_up < script.index("fleet bundle-record"), (
+        "the tarball goes up before the manifest that names it, and the record comes last"
+    )
+    dockerfile = (OPERATOR_DIR / "templates" / "Dockerfile").read_text(encoding="utf-8")
+    assert "RUN sh /app/jobs-runtime.sh connectors" in dockerfile
+    assert "RUN sh /app/jobs-runtime.sh medchron" in dockerfile

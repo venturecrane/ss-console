@@ -46,9 +46,10 @@
  *     "jobs_running":            <integer>         // optional (0129 busy gate)
  *     "jobs_queued":             <integer>         // optional (0129 busy gate)
  *     "wakes_pending":           <integer>         // optional (0129 busy gate)
+ *     "bundles":                 <map name → version, <=8> // optional (0144, ADR 0100)
  *   }
  *
- * The six 0129 fields overwrite every beat, absent included: the overlay omits
+ * The six 0129 fields and `bundles` (0144) overwrite every beat, absent included: the overlay omits
  * what it does not know, so absent stores NULL = unknown. 0 = none.
  *
  * `audit_head` / `audit_rows` are the one pair here that does NOT land only in

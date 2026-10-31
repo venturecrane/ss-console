@@ -9,7 +9,11 @@
                                                       at most one ring, after the bake; self-test decides.
                                                       `latest` then steps the skills releases the same
                                                       way, each seat only once its image has the
-                                                      skills' commit
+                                                      skills' commit, then the jobs bundle releases,
+                                                      only to seats that author a job lane
+  fleet bundle-base --sha SHA                         print the image a bundle built at SHA is built in
+  fleet bundle-record --version V --sha SHA --image-ref REF
+                                                      record a published jobs bundle (CI)
   fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
                                                       staging only: plant one real violation, prove
                                                       the self-test alert opens and resolves
@@ -51,7 +55,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ids, owner, status
+from . import bundles, ids, ordering, owner, status
 from .build import BuildOptions, Builder, ImageExtractor
 from .busy import BusyGate
 from .d1 import D1, FleetStore
@@ -183,6 +187,13 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("latest-image")
     si = sub.add_parser("seat-image", help="the image a seat's Machine runs now")
     si.add_argument("slug")
+    bb = sub.add_parser("bundle-base", help="the image a bundle built at SHA is built inside (CI)")
+    bb.add_argument("--sha", required=True)
+    br = sub.add_parser("bundle-record", help="record a published jobs bundle in fleet_releases (CI)")
+    br.add_argument("--version", required=True)
+    br.add_argument("--sha", required=True)
+    br.add_argument("--image-ref", required=True)
+    br.add_argument("--notes", default="published by CI")
     wl = sub.add_parser("with-seat-lease", help="run a command holding one seat's lease")
     wl.add_argument("slug")
     wl.add_argument("command", nargs=argparse.REMAINDER)
@@ -350,10 +361,21 @@ def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     except (Refusal, ToolingError) as exc:
         ctx.log(f"tick: the image step stopped ({exc}); stepping the skills releases before reporting it")
         image_error = exc
-    skills_code = _skills_tick(ctx, a)
-    if image_error is not None:
-        raise image_error
-    return combine(image_code, skills_code)
+    skills_code, skills_error = _isolated(ctx, "skills", lambda: _skills_tick(ctx, a))
+    bundle_code, bundle_error = _isolated(ctx, "bundle", lambda: _bundles_tick(ctx, a))
+    for err in (image_error, skills_error, bundle_error):
+        if err is not None:
+            raise err
+    return combine(image_code, skills_code, bundle_code)
+
+
+def _isolated(ctx: Ctx, what: str, step: Callable[[], int]) -> tuple[int, Exception | None]:
+    """Run one step of a `latest` tick; a refusal or tooling error is kept for after the later steps."""
+    try:
+        return step(), None
+    except (Refusal, ToolingError) as exc:
+        ctx.log(f"tick: the {what} step stopped ({exc}); stepping the rest before reporting it")
+        return TICK_WAITING, exc
 
 
 def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -440,32 +462,54 @@ def _skills_in_flight(ctx: Ctx) -> list[dict[str, Any]]:
     return out
 
 
-def _skills_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
-    """skills.deferrals bound to this tick's reads: fleet_status once (after the
-    image step, so a seat it just moved counts), each image's commit and each
-    ancestry question once."""
-    status = ctx.store.fleet_status()
-    shas: dict[str, str | None] = {}
-    pairs: dict[tuple[str, str], bool] = {}
+class _Reads:
+    """One tick's cached reads for the ordering rule: each image's commit, each
+    ancestry question and each base(S) asked once."""
 
-    def image_sha_of(ref: str | None) -> str | None:
+    def __init__(self, ctx: Ctx) -> None:
+        self.ctx = ctx
+        self.shas: dict[str, str | None] = {}
+        self.pairs: dict[tuple[str, str], bool] = {}
+        self.bases: dict[str, str | None] = {}
+
+    def image_sha_of(self, ref: str | None) -> str | None:
         if not ref:
             return None
-        if ref not in shas:
-            sha = (ctx.store.release_for_image(ref) or {}).get("ss_console_sha")
+        if ref not in self.shas:
+            sha = (self.ctx.store.release_for_image(ref) or {}).get("ss_console_sha")
             # Any recorded image whose commit this clone holds, main or a hotfix
-            # branch: the ancestry check below then asks whether that image
-            # carries the skills' commit (2026-10-31, ADR 0100: A&P on a hotfix
-            # image that contained the skills' code waited ~15 h per release).
-            shas[ref] = sha if _known_commit(ctx, sha) else None
-        return shas[ref]
+            # branch: the ancestry check then asks whether that image carries
+            # base(S) (2026-10-31, ADR 0100: A&P on a hotfix image that contained
+            # the skills' code waited ~15 h per release, #3657).
+            self.shas[ref] = sha if _known_commit(self.ctx, sha) else None
+        return self.shas[ref]
 
-    def at_or_after(older: str, newer: str) -> bool:
-        if (older, newer) not in pairs:
-            pairs[(older, newer)] = _at_or_after(ctx, older, newer)
-        return pairs[(older, newer)]
+    def at_or_after(self, older: str, newer: str) -> bool:
+        if (older, newer) not in self.pairs:
+            self.pairs[(older, newer)] = _at_or_after(self.ctx, older, newer)
+        return self.pairs[(older, newer)]
 
-    return lambda rel: deferrals(rel, seats, status, image_sha_of, at_or_after)
+    def base_of(self, sha: str) -> str | None:
+        """base(S): ordering.base_commit, the last commit at or before S touching an image path."""
+        if sha not in self.bases:
+            self.bases[sha] = ordering.base_commit(self.ctx.runner, self.ctx.repo, sha)
+        return self.bases[sha]
+
+
+def _skills_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
+    """skills.deferrals bound to this tick's reads: fleet_status once (after the
+    image step, so a seat it just moved counts), each image's commit, each
+    ancestry question and each base(S) once."""
+    status = ctx.store.fleet_status()
+    reads = _Reads(ctx)
+    return lambda rel: deferrals(rel, seats, status, reads.image_sha_of, reads.at_or_after, reads.base_of)
+
+
+def _bundles_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
+    """bundles.deferrals bound to this tick's reads, as _skills_defer."""
+    status = ctx.store.fleet_status()
+    reads = _Reads(ctx)
+    return lambda rel: bundles.deferrals(rel, seats, status, reads.image_sha_of, reads.at_or_after, reads.base_of)
 
 
 def _skills_tick(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -488,6 +532,100 @@ def _skills_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     seats = [seat for ring in rings for seat in ring.seats]
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_skills_defer(ctx, seats))
     return ticker.run_promoting(rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run)
+
+
+def _bundles_in_flight(ctx: Ctx, name: str = bundles.JOBS) -> list[dict[str, Any]]:
+    """The bundle releases a tick may move, newest first: published from main, back
+    to the newest completed one (anything older is superseded by it)."""
+    out: list[dict[str, Any]] = []
+    for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
+        if rel.get("kind") != "bundle" or rel.get("artifact_name") != name:
+            continue
+        if rel.get("completed_last_ring_at"):
+            break
+        version = rel.get("artifact_version") or ""
+        if ids.BUNDLE_VERSION_RE.match(version) and _built_from_main(ctx, rel.get("ss_console_sha")):
+            out.append(rel)
+        if len(out) >= IN_FLIGHT_MAX:
+            break
+    return out
+
+
+def _bundles_tick(ctx: Ctx, a: argparse.Namespace) -> int:
+    """The jobs bundle step of a `latest` tick: rings FILTERED to the seats that author a job lane.
+
+    Filtered, not deferred: a deferred seat keeps a release incomplete for ever
+    (tick.plan_tick), and a seat that authors no lane never takes a jobs bundle,
+    so it must neither be touched nor block completion (bundles.py).
+    """
+    candidates = _bundles_in_flight(ctx)
+    if not candidates:
+        ctx.log("tick: no bundle release in flight (the newest published from main has completed)")
+        return TICK_WAITING
+    holder = holder_id()
+    roll = bundles.BundleRollout(
+        ctx.store, ctx.r2, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), ctx.log, ctx.sleep, ctx.clock,
+        a.max_idle_wait,
+    )  # fmt: skip
+    manifests: dict[str, tuple[dict[str, Any], str, str]] = {}
+
+    def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
+        version = rel["artifact_version"]
+        if version not in manifests:
+            manifests[version] = roll.load_manifest(rel["artifact_name"], version)
+        manifest, key, sha = manifests[version]
+        return lambda seat, ring: roll.run(seat, ring, rel, manifest, key, sha, a.dry_run)
+
+    every = ctx.rings()
+    authoring = bundles.authoring_seats(ctx.repo, [s for ring in every for s in ring.seats])
+    rings = bundles.authoring_rings(every, authoring)
+    seats = [seat for ring in rings for seat in ring.seats]
+    if not seats:
+        ctx.log("tick: no ringed seat authors a job lane; no seat takes a jobs bundle")
+        return TICK_WAITING
+    ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_bundles_defer(ctx, seats))
+    return ticker.run_promoting(rings, candidates, do_seat_for, holder, dry_run=a.dry_run)
+
+
+def cmd_bundle_base(ctx: Ctx, a: argparse.Namespace) -> int:
+    """The image a bundle built at ``--sha`` is built inside: the image that commit
+    built, else the newest completed image built from main. Prints its ref."""
+    sha = a.sha
+    if not ids.SHA_RE.match(sha):
+        raise ValueError(f"--sha must be a 40-hex commit: {sha!r}")
+    rel = ctx.store.release_for_sha("image", sha)
+    if not rel:
+        for cand in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
+            if (
+                cand.get("kind") == "image"
+                and cand.get("completed_last_ring_at")
+                and _built_from_main(ctx, cand.get("ss_console_sha"))
+            ):
+                rel = cand
+                break
+    if not rel or not rel.get("image_ref"):
+        raise Refusal(f"no image built at {sha[:8]} and no completed image built from main to build a bundle in")
+    ref = ids.image_ref(rel["image_ref"])
+    digest = rel.get("image_digest")
+    print(f"{ref.split('@', 1)[0]}@{ids.digest(digest)}" if digest and "@" not in ref else ref)
+    return 0
+
+
+def cmd_bundle_record(ctx: Ctx, a: argparse.Namespace) -> int:
+    """Record a jobs bundle CI just published (kind 'bundle', release id bnd-<version>)."""
+    version = ids.bundle_version(a.version)
+    if not ids.SHA_RE.match(a.sha):
+        raise ValueError(f"--sha must be a 40-hex commit: {a.sha!r}")
+    rid = ids.release_id(f"bnd-{version}")
+    if ctx.store.release(rid):
+        ctx.log(f"{rid} is already recorded")
+        return 0
+    ctx.store.insert_release({
+        "release_id": rid, "kind": "bundle", "artifact_name": bundles.JOBS, "artifact_version": version,
+        "ss_console_sha": a.sha, "image_ref": ids.image_ref(a.image_ref), "notes": a.notes,
+    })  # fmt: skip
+    ctx.log(f"recorded fleet_releases {rid}")
+    return 0
 
 
 def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
@@ -663,6 +801,10 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
         return cmd_seat_image(ctx, a)
     if a.cmd == "with-seat-lease":
         return cmd_with_seat_lease(ctx, a)
+    if a.cmd == "bundle-base":
+        return cmd_bundle_base(ctx, a)
+    if a.cmd == "bundle-record":
+        return cmd_bundle_record(ctx, a)
     return cmd_latest_image(ctx, a)
 
 

@@ -72,6 +72,11 @@ operator/ruff.toml
 # runs the mechanism.
 .github/workflows/operator-substrate.yml
 .github/operator-substrate-paths.txt
+# ADR 0100 W3: the artifact paths subtracted from the image list, and the jobs
+# bundle's trigger list. test_ci_coverage_conformance pins both; like every
+# .github/ line here they never build an image on their own.
+.github/operator-artifact-paths.txt
+.github/operator-bundle-paths.txt
 # ADR 0096: the release controller's two workflows. test_ci_coverage_conformance
 # pins their shape (protected environment, concurrency, never --force-mid-job),
 # so a change to either must run it. deploy.yml's build-seat-image job strips
