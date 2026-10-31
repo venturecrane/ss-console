@@ -225,6 +225,8 @@ interface FakeState {
   releases?: ImageRelease[]
   /** fleet_rollouts rows of the blessed release, oldest first. */
   rollouts?: Array<{ customer_slug: string; state: string }>
+  /** Each seat's newest fleet_rollouts row, for ./restart-hold. Absent = none. */
+  latestRollouts?: Array<{ customer_slug: string; state: string; started_at: string | null }>
 }
 
 function sinkRow(over: Partial<FakeSinkRow> = {}): FakeSinkRow {
@@ -302,6 +304,11 @@ function makeEnv(state: FakeState, withResend = true, extra: Partial<Env> = {}):
           }
           if (sql.includes('FROM fleet_releases')) {
             return Promise.resolve({ results: state.releases ?? [] })
+          }
+          if (sql.includes('FROM fleet_rollouts')) {
+            // ./restart-hold: each seat's newest rollout. Its SQL runs against
+            // real SQLite in restart-hold.test.ts.
+            return Promise.resolve({ results: state.latestRollouts ?? [] })
           }
           if (sql.includes('FROM edge_poll_state')) {
             // Retirement lists every counters row (wave 8.2 follow-up).
@@ -449,6 +456,35 @@ describe('runOnce edge triggering', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.to).toBe('team@smd.services')
     expect(body.subject).toContain('ALERT smd')
+  })
+
+  it('red seat its release is restarting: held, no page (2026-10-31 captain-mark)', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: [row({ last_heartbeat_ts: '2026-07-04T11:00:00.000Z' })],
+      alertState: new Map(),
+      writes: [],
+      latestRollouts: [
+        {
+          customer_slug: 'smd',
+          state: 'deploying',
+          started_at: new Date(NOW - 300_000).toISOString(),
+        },
+      ],
+    }
+    const summary = await runOnce(makeEnv(state), NOW)
+    expect(summary.transitions).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+    // FALSIFIER: the same seat once its rollout has finished pages as before.
+    state.latestRollouts = [
+      {
+        customer_slug: 'smd',
+        state: 'rolled_back',
+        started_at: new Date(NOW - 300_000).toISOString(),
+      },
+    ]
+    const after = await runOnce(makeEnv(state), NOW)
+    expect(after.transitions.map((x) => x.condition)).toEqual(['heartbeat_red'])
   })
 
   it('still-red seat with an open alert: SILENT (no storm)', async () => {

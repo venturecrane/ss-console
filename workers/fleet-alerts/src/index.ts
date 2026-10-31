@@ -95,6 +95,7 @@ import { selftestConditions } from './selftest'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
 import { hardStopDetail } from './conditions'
+import { readRestartingSeats, withoutRestartPages } from './restart-hold'
 import { listFleetStatus, type FleetStatusRow } from './fleet-status'
 export { listFleetStatus, type FleetStatusRow } from './fleet-status'
 export { conditionLabel, hardStopDetail } from './conditions'
@@ -635,12 +636,15 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     gatewayLoopRedSeconds: gatewayLoopRedSeconds(env.GATEWAY_LOOP_RED_SECONDS),
   })
   const transitions: Transition[] = []
+  // A seat its release is restarting pages nothing boot-shaped (./restart-hold).
+  const restarting = await readRestartingSeats(env.DB, nowMs)
+  const seatStates = withoutRestartPages(conditions, restarting)
 
   // Group by seat so one bad row (a throwing DB op, a malformed value) can't
   // abort evaluation of every OTHER seat — the whole reason this loop exists is
   // to page on failure, so it must survive a single seat's failure.
   const bySeat = new Map<string, ConditionState[]>()
-  for (const c of conditions) {
+  for (const c of seatStates.kept) {
     const arr = bySeat.get(c.customer_slug)
     if (arr) arr.push(c)
     else bySeat.set(c.customer_slug, [c])
@@ -676,7 +680,11 @@ export async function runOnce(env: Env, nowMs: number = Date.now()): Promise<Run
     redSeconds: redSeconds(env),
     graceSeconds: driftGraceSeconds(env.DRIFT_GRACE_SECONDS),
   })
-  await transitionEach(env, spec, nowMs, 'spec', transitions)
+  const specStates = withoutRestartPages(spec, restarting)
+  await transitionEach(env, specStates.kept, nowMs, 'spec', transitions)
+  for (const h of [...seatStates.held, ...specStates.held]) {
+    console.log(`[fleet-alerts] held during release restart: ${h.customer_slug} ${h.condition}`)
+  }
 
   const staleHolds = await getStaleHolds(env.DB)
 
