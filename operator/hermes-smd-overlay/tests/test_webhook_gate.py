@@ -596,9 +596,13 @@ def test_a_seat_without_smokeball_answers_the_smokeball_route_as_unknown(monkeyp
     assert _sb_post(monkeypatch) == [202]
 
 
-def test_an_unreadable_config_serves_no_smokeball_route(monkeypatch, tmp_path):
+def test_an_unreadable_config_keeps_serving_the_smokeball_route(monkeypatch, tmp_path):
+    """A transient read failure must never drop a live client's Smokeball
+    delivery: only a READABLE config that does not author Smokeball 404s.
+    FALSIFIER: return False on an unreadable read and this delivery is 404."""
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
-    assert _sb_post(monkeypatch) == [404]
+    assert gate._route_served("smokeball") is True
+    assert _sb_post(monkeypatch) == [202]
     assert gate._route_served("agentmail") is True  # other routes are unchanged
 
 
@@ -627,6 +631,11 @@ def test_the_oauth_callback_is_served_only_where_the_seat_authors_smokeball(monk
     gate._Handler.do_GET(unknown)
     assert h.answers == unknown.answers == [("json", 404)]
     _seat(monkeypatch, tmp_path, smokeball=True)
+    h = _GetHandler("/oauth/smokeball/callback?state=s&code=c")
+    gate._Handler.do_GET(h)
+    assert h.answers == [("html", 200)]
+    # An unreadable config keeps the callback served (today's behaviour).
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "absent.yaml"))
     h = _GetHandler("/oauth/smokeball/callback?state=s&code=c")
     gate._Handler.do_GET(h)
     assert h.answers == [("html", 200)]

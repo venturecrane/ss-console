@@ -461,15 +461,18 @@ _ROUTE_CONNECTOR: dict[str, str] = {"smokeball": "smokeball"}
 
 
 def _seat_authors_connector(name: str) -> bool:
-    """True iff the live customer.yaml authors connector capability ``name``. Read
-    per request, like the gate's other live-config checks. A config that will not
-    read authors nothing: the route is not served (a vendor retries a 404)."""
+    """False only when the live customer.yaml READS and does not author connector
+    capability ``name``. Read per request, like the gate's other live-config
+    checks. A config that will not read keeps the route served (today's
+    behaviour, as ``_route_untriggered`` forwards on a read failure): a transient
+    read must never drop a live client's delivery, and on a seat that does not
+    author the connector the route still fails closed at its secret/signature."""
     from shared import capabilities, seat_doc
 
     doc = seat_doc.live_doc()
     if doc is None:
-        logger.warning("gate: live config unreadable; %s routes not served", name)
-        return False
+        logger.warning("gate: live config unreadable; serving %s routes as before", name)
+        return True
     return capabilities.authors_connector(doc, name)
 
 
