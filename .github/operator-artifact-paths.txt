@@ -1,0 +1,23 @@
+# Paths that ship to seats as a versioned ARTIFACT, not inside the seat image
+# (ADR 0100 W3). Subtracted from the image path list: a merge touching only
+# these builds no image, and base(S), the commit an artifact published at S
+# needs a seat's image to descend from, skips them.
+#
+# The image path list is .github/operator-substrate-paths.txt minus its .github/
+# lines minus every path matched here, computed in ONE place:
+# operator/bin/substrate-paths-changed.py `image_patterns()`. Its consumers:
+#   - deploy.yml build-seat-image (`substrate-paths-changed.py --image`)
+#   - operator/bin/lib/fleet/ordering.py base_commit (skills and bundles)
+#   - operator/bin/tests/test_ci_coverage_conformance.py (pins both, and that
+#     every Dockerfile COPY source is an image path or an artifact path)
+#
+# The suites still run on these paths: this file does not touch the test list.
+# The image still COPYs operator/skills/ as a seed for a seat with no pointer.
+#
+# The jobs bundle's paths (.github/operator-bundle-paths.txt) are NOT here yet:
+# they stay image paths, so the image keeps its own copy as the fallback, until
+# the cut.
+#
+# Glob shapes: as in operator-substrate-paths.txt.
+
+operator/skills/**

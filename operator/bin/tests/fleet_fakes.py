@@ -66,6 +66,17 @@ class FakeStore:
             (r for r in self.releases.values() if r.get("skills_version") == version and r["kind"] == "skills"), None
         )
 
+    def bundle_release(self, name: str, version: str) -> dict[str, Any] | None:
+        hits = [
+            r for r in self.releases.values()
+            if r["kind"] == "bundle" and r.get("artifact_name") == name and r.get("artifact_version") == version
+        ]  # fmt: skip
+        return hits[-1] if hits else None
+
+    def release_for_sha(self, kind: str, sha: str) -> dict[str, Any] | None:
+        hits = [r for r in self.releases.values() if r["kind"] == kind and r.get("ss_console_sha") == sha]
+        return hits[-1] if hits else None
+
     def release_for_image(self, ref: str) -> dict[str, Any] | None:
         d = ids.digest_in_ref(ref)
         for r in self.releases.values():
@@ -234,6 +245,10 @@ class FakeFly:
         self.guest_value: dict[str, Any] = {"cpu_kind": "shared", "cpus": 1, "memory_mb": 2048}
         self.plant_calls: list[tuple[str, str]] = []
         self.plant_answer = "ok"
+        self.restarts: list[str] = []
+        self.restart_results: list[Result] = []
+        # Called after each restart (a test makes the seat's heartbeat answer here).
+        self.on_restart: Any = None
 
     def app_exists(self, app: str) -> bool:
         return True
@@ -266,6 +281,13 @@ class FakeFly:
         with open(config_path, encoding="utf-8") as fh:
             self.deploys.append((app, image, fh.read()))
         return self.deploy_results.pop(0) if self.deploy_results else Result(0, "deployed", "")
+
+    def restart(self, app: str) -> Result:
+        self.restarts.append(app)
+        res = self.restart_results.pop(0) if self.restart_results else Result(0, "restarted", "")
+        if res.ok and self.on_restart is not None:
+            self.on_restart(app)
+        return res
 
     def run_python(self, app: str, source: str, timeout: float = 90) -> Result:
         seat = app.removeprefix("hermes-")

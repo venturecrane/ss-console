@@ -74,6 +74,7 @@ class FleetStore:
         cols = (
             "release_id", "kind", "image_ref", "image_digest", "skills_version", "ss_console_sha",
             "overlay_ref", "volume_forward_compatible", "declared_secrets", "notes",
+            "artifact_name", "artifact_version",
         )  # fmt: skip
         ids.release_id(rec["release_id"])
         values = [
@@ -96,6 +97,26 @@ class FleetStore:
         )
         return rows[0] if rows else None
 
+    def bundle_release(self, name: str, version: str) -> dict[str, Any] | None:
+        rows = self.d1.query(
+            "SELECT * FROM fleet_releases WHERE kind = 'bundle' AND artifact_name = "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            f"{ids.sql_str(ids.bundle_name(name))} AND artifact_version = {ids.sql_str(ids.bundle_version(version))} "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        return rows[0] if rows else None
+
+    def release_for_sha(self, kind: str, sha: str) -> dict[str, Any] | None:
+        """The newest release of ``kind`` built from commit ``sha``."""
+        if kind not in ("image", "skills", "bundle"):
+            raise ValueError(kind)
+        if not ids.SHA_RE.match(sha):
+            raise ValueError(f"not a commit sha: {sha!r}")
+        rows = self.d1.query(
+            f"SELECT * FROM fleet_releases WHERE kind = '{kind}' AND ss_console_sha = {ids.sql_str(sha)} "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        return rows[0] if rows else None
+
     def release_for_image(self, image_ref: str) -> dict[str, Any] | None:
         """The image release a seat's reported FLY_IMAGE_REF names (by digest or by ref)."""
         digest = ids.digest_in_ref(image_ref)
@@ -109,7 +130,7 @@ class FleetStore:
         return rows[0] if rows else None
 
     def latest_completed(self, kind: str) -> dict[str, Any] | None:
-        if kind not in ("image", "skills"):
+        if kind not in ("image", "skills", "bundle"):
             raise ValueError(kind)
         rows = self.d1.query(
             f"SELECT * FROM fleet_releases WHERE kind = '{kind}' AND completed_last_ring_at IS NOT NULL "  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants

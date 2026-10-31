@@ -17,8 +17,11 @@ from datetime import datetime, timezone
 from bin.lib.console_d1 import sql_text
 from bin.lib.seat_dirs import SLUG_RE
 
-RELEASE_ID_RE = re.compile(r"^(img|skl)-[A-Za-z0-9-]{6,80}$")
+RELEASE_ID_RE = re.compile(r"^(img|skl|bnd)-[A-Za-z0-9-]{6,80}$")
 SKILLS_VERSION_RE = re.compile(r"^[0-9]{12}-[0-9a-f]{8}$")
+# A bundle (ADR 0100 W3): its name, and its version (the skills version shape).
+BUNDLE_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+BUNDLE_VERSION_RE = SKILLS_VERSION_RE
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_REF_RE = re.compile(
@@ -46,6 +49,14 @@ def release_id(value: str) -> str:
 
 def skills_version(value: str) -> str:
     return _check(value, SKILLS_VERSION_RE, "skills version")
+
+
+def bundle_name(value: str) -> str:
+    return _check(value, BUNDLE_NAME_RE, "bundle name")
+
+
+def bundle_version(value: str) -> str:
+    return _check(value, BUNDLE_VERSION_RE, "bundle version")
 
 
 def digest(value: str) -> str:

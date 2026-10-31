@@ -1,0 +1,22 @@
+# Paths whose change publishes a new `jobs` bundle (ADR 0100 W3): deploy.yml
+# publish-bundle diffs the merge against the commit the newest bundle was built
+# from, by operator/bin/substrate-paths-changed.py, and builds one when any
+# path here moved. The bundle holds what the image installs at /opt/medchron
+# (the runner venv and the pricing table) and /opt/connectors/smokeball (the
+# connector venv), built by operator/templates/jobs-runtime.sh.
+#
+# These are ALSO image paths until the cut (they are not in
+# .github/operator-artifact-paths.txt): every such merge builds an image too,
+# and the image keeps its own copy as the fallback.
+#
+# Glob shapes: as in operator-substrate-paths.txt.
+
+operator/runners/medchron/**
+operator/connectors/smokeball/**
+operator/connectors/_sdk/**
+operator/requirements/medchron.txt
+operator/requirements/connector-smokeball.txt
+operator/adapter/cost_telemetry/anthropic_pricing.json
+# The build itself: a change to how the bundle is built builds a new bundle.
+operator/templates/jobs-runtime.sh
+scripts/ci-publish-bundle.sh

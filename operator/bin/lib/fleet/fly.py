@@ -278,6 +278,14 @@ class Fly:
             raise ToolingError(f"{app} has no Machine to run a command on")
         return ids_[0]
 
+    def restart(self, app: str) -> Result:
+        """Restart the app's one Machine in place (same image, same config): ``fly machine restart``.
+
+        Returns the raw Result: the caller decides what a failure means. Used by
+        the bundle step (bundles.py), whose pointer a seat reads only at boot.
+        """
+        return self._fly("machine", "restart", self.machine_id(app), "-a", app, timeout=600)
+
     # -- build -------------------------------------------------------------------------
     def build_push(self, config_path: str, label: str, ss_sha: str) -> Result:
         return self._fly(

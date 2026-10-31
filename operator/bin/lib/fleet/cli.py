@@ -9,11 +9,19 @@
                                                       at most one ring, after the bake; self-test decides.
                                                       `latest` then steps the skills releases the same
                                                       way, each seat only once its image has the
-                                                      skills' commit
+                                                      skills' commit, then the jobs bundle releases,
+                                                      only to seats that author a job lane
+  fleet bundle-base --sha SHA                         print the image a bundle built at SHA is built in
+  fleet bundle-record --version V --sha SHA --image-ref REF
+                                                      record a published jobs bundle (CI)
   fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
                                                       staging only: plant one real violation, prove
                                                       the self-test alert opens and resolves
   fleet release --skills <version> [--only SLUG] [--parallel N] [--dry-run]
+  fleet release --bundle <version>|latest --only SLUG [--max-idle-wait SECONDS] [--dry-run]
+                                                      urgent: one jobs bundle to one seat that
+                                                      authors a lane (release-tick.yml ARTIFACT=bundle);
+                                                      runs whatever BUNDLE_RELEASE_ENABLED says
   fleet status [--json]
   fleet releases [--json] [--limit N]
   fleet hold SLUG --reason TEXT --until TEXT          records the session that set it (owner.py)
@@ -52,6 +60,25 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ids, owner, status
+from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use cli.<name>
+    IN_FLIGHT_MAX,
+    MAIN_REF,
+    _at_or_after,
+    _built_from_main,
+    _bundles_defer,
+    _bundles_in_flight,
+    _bundles_tick,
+    bundle_release_named,
+    bundle_rings,
+    bundle_seat_runner,
+    _known_commit,
+    _Reads,
+    _skills_defer,
+    _skills_in_flight,
+    _skills_tick,
+    cmd_bundle_base,
+    cmd_bundle_record,
+)
 from .build import BuildOptions, Builder, ImageExtractor
 from .busy import BusyGate
 from .d1 import D1, FleetStore
@@ -63,18 +90,12 @@ from .rings import load_rings
 from .rollout import ImagePlan, ImageRollout
 from .runner import CommandRunner, Refusal, Runner, ToolingError
 from .selftest_plant import SelftestPlant
-from .skills import SkillsRollout, deferrals
+from .skills import SkillsRollout
 from .smoke import FleetSideChecks, SmokeRunner
 from .tick import TICK_WAITING, Ticker, combine
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
-# How many image releases a `latest` tick weighs at once (tick.Ticker.run_promoting).
-# The real bound is the newest completed release (older ones are moot); this cap
-# only limits a tick's reads. It was 6, and on 2026-10-26 seven merges in two
-# hours pushed the one release ready for the client ring (1e696594) out of the
-# window for a tick. 20 covers a full working day of merges at that pace.
-IN_FLIGHT_MAX = 20
 
 
 def log(msg: str) -> None:
@@ -118,6 +139,14 @@ class Ctx:
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="fleet", description="Build one Operator image and roll releases out in rings.")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    _add_build_parsers(sub)
+    _add_release_parser(sub)
+    _add_seat_parsers(sub)
+    _add_ci_parsers(sub)
+    return ap
+
+
+def _add_build_parsers(sub: Any) -> None:
     b = sub.add_parser("build", help="build and push one image for every seat; record the release")
     b.add_argument("--notes", default="")
     b.add_argument(
@@ -128,9 +157,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     art = sub.add_parser("artifacts", help="re-read an image release's manifest/capabilities into R2")
     art.add_argument("release_id")
+
+
+def _add_release_parser(sub: Any) -> None:
     r = sub.add_parser("release", help="roll a release out through the rings")
     r.add_argument("release_id", nargs="?")
     r.add_argument("--skills", metavar="VERSION")
+    r.add_argument("--bundle", metavar="VERSION", help="a jobs bundle version, or latest (needs --only)")
     r.add_argument("--only", metavar="SLUG")
     r.add_argument("--parallel", type=int, default=1)
     r.add_argument("--force-mid-job", action="store_true")
@@ -159,6 +192,9 @@ def _parser() -> argparse.ArgumentParser:
         help="one resumable scheduler step (release-tick.yml): advance at most one ring, after the bake; "
         "release id 'latest' means the newest image release. Exit 0 progress, 1 halt, 5 waiting, 6 standing halt",
     )
+
+
+def _add_seat_parsers(sub: Any) -> None:
     st = sub.add_parser("selftest", help="staging only: re-prove the self-test alert path with a planted violation")
     st.add_argument("--plant", required=True, metavar="CHECK_ID")
     st.add_argument("slug")
@@ -183,10 +219,19 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("latest-image")
     si = sub.add_parser("seat-image", help="the image a seat's Machine runs now")
     si.add_argument("slug")
+
+
+def _add_ci_parsers(sub: Any) -> None:
+    bb = sub.add_parser("bundle-base", help="the image a bundle built at SHA is built inside (CI)")
+    bb.add_argument("--sha", required=True)
+    br = sub.add_parser("bundle-record", help="record a published jobs bundle in fleet_releases (CI)")
+    br.add_argument("--version", required=True)
+    br.add_argument("--sha", required=True)
+    br.add_argument("--image-ref", required=True)
+    br.add_argument("--notes", default="published by CI")
     wl = sub.add_parser("with-seat-lease", help="run a command holding one seat's lease")
     wl.add_argument("slug")
     wl.add_argument("command", nargs=argparse.REMAINDER)
-    return ap
 
 
 def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -246,45 +291,6 @@ def _summary(
         "release done on every seat" if completed else "finished; release not yet done on every seat (fleet status)"
     )
     return 0
-
-
-# What "main" is when asking whether an image was built from it. Never HEAD: on
-# a laptop HEAD is whatever branch the worktree is on, and from a hotfix-lane
-# worktree a hotfix image IS an ancestor of HEAD, so `latest` would pick it and
-# roll it to every ring. origin/main is main on CI (checkout fetch-depth: 0
-# writes refs/remotes/origin/*) and on a laptop (stale at worst, which only
-# makes `latest` older, never a hotfix).
-MAIN_REF = "refs/remotes/origin/main"
-
-
-def _known_commit(ctx: Ctx, sha: str | None) -> bool:
-    """Whether ``sha`` is a commit this clone holds (main or any fetched branch)."""
-    if not sha or not ids.SHA_RE.match(sha):
-        return False
-    present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
-    return present.rc == 0
-
-
-def _built_from_main(ctx: Ctx, sha: str | None) -> bool:
-    """Whether ``sha`` is an ancestor of origin/main (MAIN_REF).
-
-    A commit this clone has never seen is not on main: the tick checks out main
-    with full history, so main's commits are all present, and an image built
-    from an unpushed or hotfix commit names one that is absent. merge-base exits
-    128 on such a commit, which halted every tick for an hour on 2026-10-26 once
-    `latest` began weighing several releases (one was a drill image built from a
-    local commit). So presence is asked first; 128 after that is still a tooling
-    error (a broken clone, or no origin/main), never a guess.
-    """
-    if not sha or not ids.SHA_RE.match(sha):
-        return False
-    present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
-    if present.rc != 0:
-        return False
-    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", sha, MAIN_REF], timeout=60)
-    if res.rc not in (0, 1):
-        raise ToolingError(f"git merge-base --is-ancestor failed (rc={res.rc})")
-    return res.rc == 0
 
 
 def _image_release(ctx: Ctx, release_id: str) -> dict[str, Any]:
@@ -350,10 +356,21 @@ def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     except (Refusal, ToolingError) as exc:
         ctx.log(f"tick: the image step stopped ({exc}); stepping the skills releases before reporting it")
         image_error = exc
-    skills_code = _skills_tick(ctx, a)
-    if image_error is not None:
-        raise image_error
-    return combine(image_code, skills_code)
+    skills_code, skills_error = _isolated(ctx, "skills", lambda: _skills_tick(ctx, a))
+    bundle_code, bundle_error = _isolated(ctx, "bundle", lambda: _bundles_tick(ctx, a))
+    for err in (image_error, skills_error, bundle_error):
+        if err is not None:
+            raise err
+    return combine(image_code, skills_code, bundle_code)
+
+
+def _isolated(ctx: Ctx, what: str, step: Callable[[], int]) -> tuple[int, Exception | None]:
+    """Run one step of a `latest` tick; a refusal or tooling error is kept for after the later steps."""
+    try:
+        return step(), None
+    except (Refusal, ToolingError) as exc:
+        ctx.log(f"tick: the {what} step stopped ({exc}); stepping the rest before reporting it")
+        return TICK_WAITING, exc
 
 
 def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
@@ -400,94 +417,6 @@ def _in_flight(ctx: Ctx, newest: dict[str, Any]) -> list[dict[str, Any]]:
         if len(out) >= IN_FLIGHT_MAX:
             break
     return out
-
-
-def _at_or_after(ctx: Ctx, older: str, newer: str) -> bool:
-    """Whether commit ``older`` is ``newer`` or one of its ancestors (any commits this clone holds).
-
-    A commit this clone has never seen is not on main (see _built_from_main), so
-    it answers no rather than raising; any other git failure is a tooling error.
-    """
-    if older == newer:
-        return True
-    for sha in (older, newer):
-        if not ids.SHA_RE.match(sha):
-            return False
-        present = ctx.runner.run(["git", "-C", str(ctx.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
-        if present.rc != 0:
-            return False
-    res = ctx.runner.run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", older, newer], timeout=60)
-    if res.rc not in (0, 1):
-        raise ToolingError(f"git merge-base --is-ancestor failed (rc={res.rc})")
-    return res.rc == 0
-
-
-def _skills_in_flight(ctx: Ctx) -> list[dict[str, Any]]:
-    """The skills releases a tick may move, newest first: published from main, back
-    to the newest completed one (anything older is superseded by it)."""
-    out: list[dict[str, Any]] = []
-    # Image releases share the table (one per substrate merge), so read past the cap.
-    for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
-        if rel.get("kind") != "skills":
-            continue
-        if rel.get("completed_last_ring_at"):
-            break
-        version = rel.get("skills_version") or ""
-        if ids.SKILLS_VERSION_RE.match(version) and _built_from_main(ctx, rel.get("ss_console_sha")):
-            out.append(rel)
-        if len(out) >= IN_FLIGHT_MAX:
-            break
-    return out
-
-
-def _skills_defer(ctx: Ctx, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
-    """skills.deferrals bound to this tick's reads: fleet_status once (after the
-    image step, so a seat it just moved counts), each image's commit and each
-    ancestry question once."""
-    status = ctx.store.fleet_status()
-    shas: dict[str, str | None] = {}
-    pairs: dict[tuple[str, str], bool] = {}
-
-    def image_sha_of(ref: str | None) -> str | None:
-        if not ref:
-            return None
-        if ref not in shas:
-            sha = (ctx.store.release_for_image(ref) or {}).get("ss_console_sha")
-            # Any recorded image whose commit this clone holds, main or a hotfix
-            # branch: the ancestry check below then asks whether that image
-            # carries the skills' commit (2026-10-31, ADR 0100: A&P on a hotfix
-            # image that contained the skills' code waited ~15 h per release).
-            shas[ref] = sha if _known_commit(ctx, sha) else None
-        return shas[ref]
-
-    def at_or_after(older: str, newer: str) -> bool:
-        if (older, newer) not in pairs:
-            pairs[(older, newer)] = _at_or_after(ctx, older, newer)
-        return pairs[(older, newer)]
-
-    return lambda rel: deferrals(rel, seats, status, image_sha_of, at_or_after)
-
-
-def _skills_tick(ctx: Ctx, a: argparse.Namespace) -> int:
-    """The skills half of a `latest` tick: the same promotion an image gets, no restart."""
-    candidates = _skills_in_flight(ctx)
-    if not candidates:
-        ctx.log("tick: no skills release in flight (the newest published from main has completed)")
-        return TICK_WAITING
-    roll = SkillsRollout(ctx.store, ctx.r2, ctx.log, ctx.sleep, ctx.clock)
-    manifests: dict[str, tuple[dict[str, Any], str, str]] = {}
-
-    def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
-        version = rel["skills_version"]
-        if version not in manifests:
-            manifests[version] = roll.load_manifest(version)
-        manifest, key, sha = manifests[version]
-        return lambda seat, ring: roll.run(seat, ring, rel, manifest, key, sha, a.dry_run)
-
-    rings = ctx.rings()
-    seats = [seat for ring in rings for seat in ring.seats]
-    ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_skills_defer(ctx, seats))
-    return ticker.run_promoting(rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run)
 
 
 def _image_has_selftest(ctx: Ctx, release: dict[str, Any]) -> bool:
@@ -542,15 +471,43 @@ def cmd_release_skills(ctx: Ctx, a: argparse.Namespace) -> int:
     )
 
 
+def cmd_release_bundle(ctx: Ctx, a: argparse.Namespace) -> int:
+    """One jobs bundle to ONE seat, now: the urgent path (release-tick.yml ARTIFACT=bundle).
+
+    The same seat lease, busy gate, pointer write, restart, read-back and
+    rollback as the tick's bundle step, with no ring order and no bake, and
+    regardless of BUNDLE_RELEASE_ENABLED (it is how the first bundle is walked
+    seat by seat). Only a seat that authors a job lane may take one.
+    """
+    if not a.only:
+        raise Refusal("--bundle goes to one seat: give --only SLUG (the tick rolls bundles ring by ring)")
+    if a.parallel != 1 or a.force_mid_job or a.accept_lane_inputs:
+        raise ValueError("--bundle takes none of --parallel, --force-mid-job, --accept-lane-inputs")
+    seat = ids.slug(a.only)
+    rings = bundle_rings(ctx)
+    if not any(seat in ring.seats for ring in rings):
+        raise Refusal(f"{seat} authors no job lane (or is in no ring), so it takes no jobs bundle")
+    release = bundle_release_named(ctx, a.bundle)
+    holder = holder_id()
+    do_seat = bundle_seat_runner(ctx, holder, a.max_idle_wait, a.dry_run)(release)
+    return _run_waves(ctx, a, release, do_seat, holder, rings)
+
+
 def _run_waves(
-    ctx: Ctx, a: argparse.Namespace, release: dict[str, Any], do_seat: Callable[[str, int], Any], holder: str
+    ctx: Ctx,
+    a: argparse.Namespace,
+    release: dict[str, Any],
+    do_seat: Callable[[str, int], Any],
+    holder: str,
+    rings: list[Any] | None = None,
 ) -> int:
-    """Walk the rings. Only a full real run takes the fleet lease; every seat takes its own."""
+    """Walk the rings (``rings``, default ctx.rings()). Only a full real run takes the fleet lease."""
     waves = Waves(ctx.store, ctx.log)
     seat_holder = None if a.dry_run else holder
+    walked = rings if rings is not None else ctx.rings()
 
     def walk(lease: Lease | None) -> Any:
-        return waves.run(ctx.rings(), do_seat, release=release, only=a.only, parallel=a.parallel,
+        return waves.run(walked, do_seat, release=release, only=a.only, parallel=a.parallel,
                          dry_run=a.dry_run, lease=lease, holder=seat_holder)  # fmt: skip
 
     if a.dry_run or a.only:
@@ -624,46 +581,63 @@ def cmd_status(ctx: Ctx, a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_release(ctx: Ctx, a: argparse.Namespace) -> int:
+    if sum(bool(x) for x in (a.release_id, a.skills, a.bundle)) != 1:
+        raise Refusal("give exactly one of <release-id>, --skills <version> or --bundle <version>")
+    if a.tick and (a.skills or a.bundle):
+        raise ValueError("--tick takes no --skills/--bundle: `fleet release latest --tick` steps them too")
+    if a.bundle:
+        return cmd_release_bundle(ctx, a)
+    return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
+
+
+def cmd_releases(ctx: Ctx, a: argparse.Namespace) -> int:
+    print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
+    return 0
+
+
+def cmd_hold(ctx: Ctx, a: argparse.Namespace) -> int:
+    # The reason carries when to lift it, so whoever finds the hold can tell
+    # whether it is still needed without finding the session that set it.
+    reason = f"{a.reason.rstrip('. ')}. Lift when: {a.until}"
+    by = owner.held_by()
+    ctx.store.hold(ids.slug(a.slug), reason, by)
+    ctx.log(f"{a.slug}: held by {by} ({reason})")
+    return 0
+
+
+def cmd_unhold(ctx: Ctx, a: argparse.Namespace) -> int:
+    ctx.store.unhold(ids.slug(a.slug))
+    ctx.log(f"{a.slug}: hold removed")
+    return 0
+
+
+def cmd_unquiesce(ctx: Ctx, a: argparse.Namespace) -> int:
+    ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
+    return 0
+
+
+COMMANDS: dict[str, Callable[[Ctx, argparse.Namespace], int]] = {
+    "build": cmd_build,
+    "artifacts": cmd_artifacts,
+    "release": cmd_release,
+    "status": cmd_status,
+    "releases": cmd_releases,
+    "hold": cmd_hold,
+    "unhold": cmd_unhold,
+    "busy": cmd_busy,
+    "selftest": cmd_selftest,
+    "unquiesce": cmd_unquiesce,
+    "seat-image": cmd_seat_image,
+    "with-seat-lease": cmd_with_seat_lease,
+    "bundle-base": cmd_bundle_base,
+    "bundle-record": cmd_bundle_record,
+    "latest-image": cmd_latest_image,
+}
+
+
 def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
-    if a.cmd == "build":
-        return cmd_build(ctx, a)
-    if a.cmd == "artifacts":
-        return cmd_artifacts(ctx, a)
-    if a.cmd == "release":
-        if bool(a.skills) == bool(a.release_id):
-            raise Refusal("give exactly one of <release-id> or --skills <version>")
-        if a.tick and a.skills:
-            raise ValueError("--tick takes no --skills: `fleet release latest --tick` steps skills releases too")
-        return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
-    if a.cmd == "status":
-        return cmd_status(ctx, a)
-    if a.cmd == "releases":
-        print(status.render_releases(ctx.store.recent_releases(a.limit), a.json))
-        return 0
-    if a.cmd == "hold":
-        # The reason carries when to lift it, so whoever finds the hold can tell
-        # whether it is still needed without finding the session that set it.
-        reason = f"{a.reason.rstrip('. ')}. Lift when: {a.until}"
-        by = owner.held_by()
-        ctx.store.hold(ids.slug(a.slug), reason, by)
-        ctx.log(f"{a.slug}: held by {by} ({reason})")
-        return 0
-    if a.cmd == "unhold":
-        ctx.store.unhold(ids.slug(a.slug))
-        ctx.log(f"{a.slug}: hold removed")
-        return 0
-    if a.cmd == "busy":
-        return cmd_busy(ctx, a)
-    if a.cmd == "selftest":
-        return cmd_selftest(ctx, a)
-    if a.cmd == "unquiesce":
-        ctx.log(f"{a.slug}: {BusyGate(ctx.fly, holder_id()).clear_any_fleet(ids.slug(a.slug))}")
-        return 0
-    if a.cmd == "seat-image":
-        return cmd_seat_image(ctx, a)
-    if a.cmd == "with-seat-lease":
-        return cmd_with_seat_lease(ctx, a)
-    return cmd_latest_image(ctx, a)
+    return COMMANDS[a.cmd](ctx, a)
 
 
 class Terminated(SystemExit):

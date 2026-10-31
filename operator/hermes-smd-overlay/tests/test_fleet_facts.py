@@ -217,3 +217,20 @@ def test_read_fleet_facts_carries_bundles(tmp_path):
     (tmp_path / "jobs").write_text("image\n")
     facts = ff.read_fleet_facts(env={}, bundle_state_dir=tmp_path, run_dir=tmp_path)
     assert facts.bundles == {"jobs": "image"}
+
+
+def test_payload_carries_bundles_only_when_known():
+    """ADR 0100 W3: `bundles` ships when the seat knows it, and is absent otherwise."""
+    assert hb.build_payload(**_BASE, bundles={"jobs": "image"})["bundles"] == {"jobs": "image"}
+    assert "bundles" not in hb.build_payload(**_BASE, bundles=None)
+    assert "bundles" not in hb.build_payload(**_BASE)
+
+
+def test_emitter_posts_bundles(monkeypatch):
+    from tests.test_heartbeat import _emitter
+
+    facts = ff.FleetFacts("img", "c" * 64, "v9", 0, 0, 0, {"jobs": "202610310101-aaaaaaaa"})
+    monkeypatch.setattr(hb, "_read_fleet_facts", lambda: facts)
+    em, calls = _emitter()
+    em._tick()
+    assert json.loads(calls["posts"][0][2])["bundles"] == {"jobs": "202610310101-aaaaaaaa"}

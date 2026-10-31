@@ -269,6 +269,10 @@ class LinearMain:
         assert argv[:2] == ["git", "-C"]
         if "cat-file" in argv:
             return Result(0 if argv[-1].split("^")[0] in MAIN else 128, "", "")
+        if "log" in argv:
+            # base(S): every commit on this MAIN touches an image path, so base(S) = S.
+            sha = argv[argv.index("--format=%H") + 1]
+            return Result(0, sha + "\n", "") if sha in MAIN else Result(128, "", "bad revision")
         older, newer = argv[-2], argv[-1]
         newer = MAIN[-1] if newer == cli.MAIN_REF else newer
         if older not in MAIN or newer not in MAIN:

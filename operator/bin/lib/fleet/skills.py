@@ -32,7 +32,7 @@ import hashlib
 import json
 from typing import Any, Callable
 
-from . import ids, smoke
+from . import ids, ordering, smoke
 from .d1 import FleetStore
 from .r2 import R2, image_key, pointer_key, skills_manifest_key
 from .rollout import SeatOutcome
@@ -68,57 +68,64 @@ def unmet_needs(manifest: dict[str, Any], caps: dict[str, Any]) -> list[str]:
     return missing
 
 
-def _stamp(version: str | None) -> str | None:
-    """A skills version's publish time (yyyymmddHHMM), or None when it is not one."""
-    return version.split("-", 1)[0] if version and ids.SKILLS_VERSION_RE.match(version) else None
-
-
 def deferrals(
     release: dict[str, Any],
     seats: list[str],
     status: dict[str, dict[str, Any]],
     image_sha_of: Callable[[str | None], str | None],
     at_or_after: Callable[[str, str], bool],
+    base_of: Callable[[str], str | None] = lambda sha: sha,
 ) -> dict[str, str]:
     """The seats that may not take this skills release on this tick, with why.
 
-    ORDERING RULE (the release controller, 2026-10-28). A skills release goes to
-    a seat only once the seat runs an image built from the commit the skills
-    were published at, or a descendant of it: ``at_or_after(skills_sha,
-    image_sha)``. A hotfix-branch image counts when its commit descends from the
-    skills' commit (2026-10-31): it carries their code as surely as a main image. Skills are written against the code in their own commit, and
-    the capability gate sees only what a skill NAMES (paths, tools, verbs,
-    action classes), not a changed argument or behaviour, so this is the rule
-    that keeps a skill from reaching code older than it. Every merge that
-    touches operator/skills/** also builds an image (operator/skills/** is on
-    the image path list), so the wait is the image's own rollout, and skills
-    follow it ring by ring. Waiting is a deferral, never a halt.
+    ORDERING RULE: ordering.deferrals, shared with the jobs bundle. A skills
+    release published at S goes to a seat only once the seat's image commit is
+    base(S) or descends from it (``base_of``; the CLI binds ordering.base_commit,
+    the last commit at or before S touching an image path). Skills are written
+    against the code in the image, and the capability gate sees only what a
+    skill NAMES (paths, tools, verbs, action classes), not a changed argument or
+    behaviour, so this is the rule that keeps a skill from reaching code older
+    than it. Since ADR 0100 W3 operator/skills/** is an artifact path, not an
+    image path, so a skills-only merge builds no image and its base is the
+    newest image commit before it. A hotfix-branch image counts when its
+    commit descends from base(S) (#3657): it carries that code as surely as a
+    main image. Waiting is a deferral, never a halt.
 
     A seat whose heartbeat already reports a NEWER skills version is deferred
     too: promotion never moves a seat backwards, even one pointed by hand at a
     release newer than any the tick weighs.
     """
-    sha = release.get("ss_console_sha")
-    mine = _stamp(release.get("skills_version"))
-    out: dict[str, str] = {}
-    for seat in seats:
-        row = status.get(seat) or {}
-        current = row.get("skills_version")
-        theirs = _stamp(current)
-        if mine and theirs and theirs > mine:
-            out[seat] = f"already runs newer skills {current}"
-            continue
-        if not sha or not ids.SHA_RE.match(sha):
-            out[seat] = "the skills release names no source commit"
-            continue
-        image_sha = image_sha_of(row.get("image_ref"))
-        if not image_sha:
-            out[seat] = (
-                "its image is not a recorded release whose commit this controller holds; the skills wait for one"
-            )
-        elif not at_or_after(sha, image_sha):
-            out[seat] = f"waiting for the image: it runs {image_sha[:8]}, the skills were written at {sha[:8]}"
-    return out
+    return ordering.deferrals(
+        "skills",
+        release.get("ss_console_sha"),
+        release.get("skills_version"),
+        seats,
+        status,
+        lambda row: row.get("skills_version"),
+        image_sha_of,
+        at_or_after,
+        base_of,
+    )
+
+
+def image_capabilities(store: FleetStore, r2: R2, seat: str) -> tuple[dict[str, Any] | None, str]:
+    """The seat's image's baked capabilities and its digest, or None and why not.
+
+    Found from the heartbeat's image_ref; an unknown image, or no capabilities
+    file for it, is None (refused, never assumed). Shared with bundles.py.
+    """
+    row = store.seat_status(seat) or {}
+    ref = row.get("image_ref")
+    if not ref:
+        return None, "the seat's heartbeat reports no image_ref"
+    digest = ids.digest_in_ref(ref)
+    if not digest:
+        rel = store.release_for_image(ref)
+        digest = rel.get("image_digest") if rel else None
+    if not digest:
+        return None, f"image {ref} is not a recorded fleet release"
+    caps = r2.get_json(image_key(digest, "image-capabilities.json"))
+    return (caps, digest) if caps else (None, f"no image-capabilities.json for {digest}")
 
 
 class SkillsRollout:
@@ -143,18 +150,7 @@ class SkillsRollout:
         return manifest, key, hashlib.sha256(raw).hexdigest()
 
     def capabilities_for(self, seat: str) -> tuple[dict[str, Any] | None, str]:
-        row = self.store.seat_status(seat) or {}
-        ref = row.get("image_ref")
-        if not ref:
-            return None, "the seat's heartbeat reports no image_ref"
-        digest = ids.digest_in_ref(ref)
-        if not digest:
-            rel = self.store.release_for_image(ref)
-            digest = rel.get("image_digest") if rel else None
-        if not digest:
-            return None, f"image {ref} is not a recorded fleet release"
-        caps = self.r2.get_json(image_key(digest, "image-capabilities.json"))
-        return (caps, digest) if caps else (None, f"no image-capabilities.json for {digest}")
+        return image_capabilities(self.store, self.r2, seat)
 
     def run(
         self, seat: str, ring: int, release: dict[str, Any], manifest: dict[str, Any], key: str, sha: str, dry_run: bool

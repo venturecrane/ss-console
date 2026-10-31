@@ -658,22 +658,12 @@ COPY operator/connectors/ /app/connectors/
 # the catalog that no persona enables). The `*-mcp` assertion fails the build
 # loudly rather than letting a missing console-script surface as a runtime
 # MCP-spawn failure on a live Machine.
-RUN set -eu; \
-    for cdir in /app/connectors/*/; do \
-      name=$(basename "$cdir"); \
-      [ "$name" = "_sdk" ] && continue; \
-      [ -f "${cdir}pyproject.toml" ] || continue; \
-      venv="/opt/connectors/${name}/.venv"; \
-      echo "== installing author-built connector: ${name} =="; \
-      mkdir -p "/opt/connectors/${name}"; \
-      uv venv "$venv"; \
-      reqs="/app/requirements/connector-${name}.txt"; \
-      [ -f "$reqs" ] || { echo "FATAL: connector ${name} has no pinned requirements at operator/requirements/connector-${name}.txt; run operator/requirements/compile.sh and commit the result"; exit 1; }; \
-      uv pip install --python "$venv/bin/python" --no-cache --no-config --require-hashes -r "$reqs"; \
-      uv pip install --python "$venv/bin/python" --no-cache --no-deps /app/connectors/_sdk "$cdir"; \
-      ls "$venv"/bin/*-mcp >/dev/null 2>&1 || { echo "FATAL: connector ${name} produced no *-mcp console-script"; exit 1; }; \
-    done; \
-    chmod -R a+rX /opt/connectors
+# The install steps live in operator/templates/jobs-runtime.sh (ADR 0100 W3):
+# CI's `jobs` bundle build runs the same file inside this image, so the image's
+# job runtime and the bundle a seat mounts over it are built by one script.
+# operator/bin/tests/test_jobs_runtime.py pins it to the steps it replaced here.
+COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh
+RUN sh /app/jobs-runtime.sh connectors
 
 # ---------- The chronology runner (routine 11, ss#2614) ----------
 # operator/runners/medchron is installed into its OWN root-owned venv from the
@@ -702,17 +692,7 @@ COPY operator/runners/ /app/runners/
 # venv (NOT under /opt/smd, which is the establishment compilers' contract
 # tree and is pinned file-by-file by tests/shipped-runtime-paths.test.ts).
 COPY operator/adapter/cost_telemetry/anthropic_pricing.json /opt/medchron/anthropic_pricing.json
-RUN set -eu; \
-    uv venv /opt/medchron/.venv; \
-    uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-config \
-      --require-hashes -r /app/requirements/medchron.txt; \
-    uv pip install --python /opt/medchron/.venv/bin/python --no-cache --no-deps \
-      /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron; \
-    [ -x /opt/medchron/.venv/bin/medchron ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }; \
-    /opt/medchron/.venv/bin/python -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm"; \
-    command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }; \
-    chown -R root:root /opt/medchron; \
-    chmod -R a+rX /opt/medchron
+RUN sh /app/jobs-runtime.sh medchron
 
 # Safety-substrate tests — bootstrap.sh runs these on container start
 COPY operator/safety_substrate/ /app/safety_substrate/

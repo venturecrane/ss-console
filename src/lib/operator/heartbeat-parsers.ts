@@ -56,6 +56,7 @@ export interface HeartbeatBody {
   wakes_pending?: unknown
   selftest?: unknown
   spec?: unknown
+  bundles?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -718,6 +719,8 @@ export interface ParsedFleetRelease {
   jobsRunning: number | null
   jobsQueued: number | null
   wakesPending: number | null
+  /** Migration 0144. `{name: version}` as JSON text, or NULL. Plain overwrite. */
+  bundlesJson: string | null
 }
 
 // The receiver's own bound on the three identity strings, for the same reason
@@ -749,5 +752,36 @@ export function parseFleetRelease(body: HeartbeatBody): ParsedFleetRelease {
     jobsRunning: parseNonNegInt(body.jobs_running),
     jobsQueued: parseNonNegInt(body.jobs_queued),
     wakesPending: parseNonNegInt(body.wakes_pending),
+    bundlesJson: parseBundles(body.bundles),
   }
+}
+
+// ADR 0100 W3: a bundle name, and what the seat runs it at. A version is the
+// artifact shape CI publishes (YYYYMMDDHHMM-<sha8>, the skills version shape),
+// or the literal 'image' when the image's own copy runs because nothing was
+// mounted. The bound on entries keeps a seat running unexpected code from
+// writing an unbounded column.
+const BUNDLE_NAME_RE = /^[a-z][a-z0-9-]{0,31}$/
+const BUNDLE_VERSION_RE = /^(?:[0-9]{12}-[0-9a-f]{8}|image)$/
+export const BUNDLES_MAX_ENTRIES = 8
+
+/**
+ * What bundle each bundle runs at, as the seat reports it (migration 0144):
+ * `{"jobs": "<version>"}` when mounted, `{"jobs": "image"}` when the image copy
+ * runs, absent when the seat authors no lane. Validated whole: one bad entry
+ * stores NULL (unknown) rather than a partial map the release controller's
+ * read-back could misjudge. An empty map is a seat saying "no bundles" and is
+ * stored as `{}`. Keys are sorted so the stored text is canonical.
+ */
+export function parseBundles(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length > BUNDLES_MAX_ENTRIES) return null
+  const out: Record<string, string> = {}
+  for (const [name, version] of entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (!BUNDLE_NAME_RE.test(name)) return null
+    if (typeof version !== 'string' || !BUNDLE_VERSION_RE.test(version)) return null
+    out[name] = version
+  }
+  return JSON.stringify(out)
 }

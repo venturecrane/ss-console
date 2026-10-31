@@ -459,11 +459,28 @@ def test_a_hotfix_image_that_carries_the_skills_commit_takes_them(
         out = subprocess.run(["git", "-C", str(tmp_path), *args], env=env, check=True, capture_output=True, text=True)  # noqa: S603 - argv list of fixed git args, never a shell
         return out.stdout.strip()
 
+    # base(S) (ADR 0100 W3) reads the repo's own image path lists, so the clone
+    # carries them, and both main commits change the image (an operator/templates
+    # file): the skills here are written against code their own commit changed.
+    import shutil
+
+    from bin.lib.fleet import ordering
+
+    repo = Path(cli.REPO)
+    for rel in (ordering.SUBSTRATE_PATHS, ordering.ARTIFACT_PATHS, ordering.DETECT_SCRIPT):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(repo / rel, tmp_path / rel)
+    (tmp_path / "operator/templates").mkdir(parents=True)
+
+    def image_commit(label: str) -> str:
+        (tmp_path / "operator/templates" / label.replace(" ", "-")).write_text(label)
+        git("add", "-A")
+        git("commit", "-q", "-m", label)
+        return git("rev-parse", "HEAD")
+
     git("init", "-q", "-b", "main")
-    git("commit", "-q", "--allow-empty", "-m", "before the skills")
-    before = git("rev-parse", "HEAD")
-    git("commit", "-q", "--allow-empty", "-m", "skills")
-    skills_sha = git("rev-parse", "HEAD")
+    before = image_commit("before the skills")
+    skills_sha = image_commit("skills")
     git("update-ref", "refs/remotes/origin/main", skills_sha)
     git("checkout", "-q", "-b", "hotfix/new")
     git("commit", "-q", "--allow-empty", "-m", "hotfix on top")
