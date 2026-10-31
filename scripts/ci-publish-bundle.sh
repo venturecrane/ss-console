@@ -82,10 +82,16 @@ docker run --rm --platform linux/amd64 --user 0 --entrypoint /bin/sh \
 
 PYTHON_VERSION="$(tr -d '[:space:]' < "${work}/out/python")"
 [[ "$PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::the bundle venv reports python ${PYTHON_VERSION}"; exit 1; }
-tar -tf "${work}/out/bundle.tar" | grep -qx 'medchron/.venv/bin/medchron' \
-  || { echo "::error::the tarball holds no medchron/.venv/bin/medchron"; exit 1; }
-tar -tf "${work}/out/bundle.tar" | grep -qx 'connectors/smokeball/.venv/bin/smokeball-mcp' \
-  || { echo "::error::the tarball holds no connectors/smokeball/.venv/bin/smokeball-mcp"; exit 1; }
+# List once into a file, then search it: `tar -tf | grep -q` under pipefail
+# fails on a FOUND entry, because grep exits at the first match and tar dies
+# writing to the closed pipe (the first real publish, 2026-10-31, run 41238271283).
+tar -tf "${work}/out/bundle.tar" > "${work}/listing.txt"
+for entry in medchron/.venv/bin/medchron connectors/smokeball/.venv/bin/smokeball-mcp; do
+  grep -qxF "${entry}" "${work}/listing.txt" \
+    || { echo "::error::the tarball holds no ${entry} ($(wc -l < "${work}/listing.txt") entries; nearest below)"
+         grep -F "$(basename "${entry}")" "${work}/listing.txt" | head -5 || true
+         exit 1; }
+done
 zstd -q -19 -T0 "${work}/out/bundle.tar" -o "${work}/bundle.tar.zst"
 SHA256="$(sha256sum "${work}/bundle.tar.zst" | awk '{print $1}')"
 SIZE="$(wc -c < "${work}/bundle.tar.zst" | tr -d ' ')"
