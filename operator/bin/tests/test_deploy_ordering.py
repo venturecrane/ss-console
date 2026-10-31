@@ -303,14 +303,15 @@ def test_config_applier_launches_as_root_before_exec_drop() -> None:
     lines = _code_lines(_ENTRYPOINT)
     # Launched through the supervisor's root respawn loop (smd_root_poller,
     # operator/runners/supervisor/entrypoint-supervisor.sh), which no longer
-    # respawns on the applier's stopped exit 130.
-    launch_idx = _first_index(lines, r"^\s*smd_root_poller\s+config_applier\b")
+    # respawns on the applier's stopped exit 130. Since ADR 0100 the applier's
+    # loop runs inside the one root poller process (root_pollers).
+    launch_idx = _first_index(lines, r"^\s*smd_root_poller\s+root_pollers\b")
     # The drop: the entrypoint no longer execs into the gateway; `smd_supervise`
     # releases the held gateway process (setpriv --reuid=hermes inside it) and
     # supervises it. Everything before that line runs as root.
     exec_idx = _first_index(lines, r"^smd_supervise$")
 
-    assert launch_idx != -1, "could not find the `smd_root_poller config_applier` launch in entrypoint.sh"
+    assert launch_idx != -1, "could not find the `smd_root_poller root_pollers` launch in entrypoint.sh"
     assert exec_idx != -1, "could not find the `smd_supervise` release (the drop to hermes) in entrypoint.sh"
     assert launch_idx < exec_idx, (
         f"the config-applier launch (line {launch_idx + 1}) must run BEFORE the "
