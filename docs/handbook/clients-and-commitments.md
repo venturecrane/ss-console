@@ -35,7 +35,7 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 |---|---|---|---|
 | `ashton-price` | operator | none | law-firm |
 | `ashton-price-marketing` | operator | marketing | law-firm |
-| `brokery` | hosted-agent | none | mixed |
+| `brokery` | hosted-agent | none | real-estate |
 | `captain-mark` | hosted-agent | couples | mixed |
 
 **SMD's own: proving**
