@@ -122,6 +122,18 @@ def test_pilot_smokeball_drops_only_its_unauthored_lanes(seat):
     assert _destructive_line(doc, as_today=False) is True
 
 
+def test_smd_staging_loads_every_lane_and_no_smokeball_surface(seat):
+    """Staging authors all seven lanes but not the Smokeball connector: every lane
+    tool, no casework, no Smokeball route, no destructive line."""
+    doc = seat("smd-staging")
+    assert capabilities.authored_lanes(doc) == list(capabilities.JOB_LANES)
+    assert capabilities.authors_connector(doc, "smokeball") is False
+    assert _registered("hermes-smd-medchron") == _medchron_today()
+    assert not (CASEWORK & _registered("hermes-smd-escalation"))
+    assert gate._route_served("smokeball") is False
+    assert _destructive_line(doc, as_today=False) is False
+
+
 @pytest.mark.parametrize("name", sorted(NO_LANE_SEATS))
 def test_seats_that_author_nothing_load_none_of_the_gated_surface(seat, name):
     doc = seat(name)
