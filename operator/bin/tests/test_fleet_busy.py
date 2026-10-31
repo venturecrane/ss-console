@@ -142,7 +142,7 @@ def _run_remote(name: str, tmp: Path, prefix: str = "") -> str:
     src = src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")
     if name == "remote_quiesce.py":
         src = src.replace("os.chown(tmp, 0, 0)", "pass")  # not root in the test
-    proc = subprocess.run(  # noqa: S603 - argv is this interpreter; stdin is the shipped script from this tree
+    proc = subprocess.run(
         [sys.executable, "-I", "-"], input=prefix + src, capture_output=True, text=True, timeout=30, check=False
     )
     assert proc.returncode == 0, proc.stderr
