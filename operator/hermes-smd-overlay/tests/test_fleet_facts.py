@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from typing import Any
 
 import pytest
 
@@ -124,7 +125,7 @@ def test_read_fleet_facts_composes(tmp_path):
     assert facts == ff.FleetFacts("img", hashlib.sha256(b"a: 1\n").hexdigest(), "v7", 1, 1, 0)
 
 
-_BASE = dict(
+_BASE: dict[str, Any] = dict(
     heartbeat_ts="t", last_audit_ts=None, last_skill_ts=None, uptime_seconds=None, version=None
 )
 
@@ -186,3 +187,33 @@ def test_emitter_omits_fleet_fields_when_the_read_crashes(monkeypatch):
     em._tick()
     body = json.loads(calls["posts"][0][2])
     assert "jobs_running" not in body and "image_ref" not in body
+
+
+# ADR 0100 W3: which copy of each capability bundle runs. The boot writes one
+# file per bundle under /run/smd-bundles (entrypoint-bundles.sh); a seat that
+# authors no lane writes none, and the field is absent.
+def test_bundles_read_from_the_boot_state_dir(tmp_path):
+    state = tmp_path / "smd-bundles"
+    assert ff.read_bundles(state) is None
+    state.mkdir()
+    assert ff.read_bundles(state) is None
+    (state / "jobs").write_text("202610310101-aaaaaaaa\n")
+    assert ff.read_bundles(state) == {"jobs": "202610310101-aaaaaaaa"}
+    (state / "jobs").write_text("image\n")
+    assert ff.read_bundles(state) == {"jobs": "image"}
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("jobs", "latest"), ("jobs", ""), ("Jobs", "image"), (".x", "image")],
+)
+def test_bundle_entries_the_ingest_would_refuse_are_left_out(tmp_path, name, value):
+    (tmp_path / name).write_text(value)
+    (tmp_path / "other").write_text("image")
+    assert ff.read_bundles(tmp_path) == {"other": "image"}
+
+
+def test_read_fleet_facts_carries_bundles(tmp_path):
+    (tmp_path / "jobs").write_text("image\n")
+    facts = ff.read_fleet_facts(env={}, bundle_state_dir=tmp_path, run_dir=tmp_path)
+    assert facts.bundles == {"jobs": "image"}

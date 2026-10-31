@@ -611,6 +611,11 @@ check_idle "medchron-daemon-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/child
 # 2026-08-31: v2 is mounted bare at /sys/fs/cgroup/unified with no
 # controllers; memory is on the v1 mount). `none` is the failure.
 check "medchron-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/smd-medchron/heartbeat.json"
+# ADR 0100 W3: what the heartbeat's bundles.jobs says runs is what is mounted. A
+# version means both image paths are bind mounts; "image" means neither is. Fails
+# when the boot wrote no state, or the state and the mounts disagree (a release
+# controller reading bundles.jobs back would otherwise trust a wrong answer).
+check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}/opt/medchron && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}/opt/medchron && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
 fi
 if lane_runs medchron; then
 check "medchron-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/queue)\" = root:workspace-broker:770 ]"

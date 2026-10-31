@@ -1,6 +1,6 @@
 """What a seat is running and how busy it is, for the fleet table (ss seat fleet scaling).
 
-Six heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
+Seven heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
 
 * ``image_ref`` — the Fly image the Machine booted (``FLY_IMAGE_REF``, which Fly
   sets on every Machine). A rollout's read-back compares this to the release it
@@ -9,6 +9,14 @@ Six heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
   so the console can tell which published config a seat has adopted.
 * ``skills_version`` — the skills release the root ``skills_applier`` committed
   (``/var/lib/smd-skills/current/VERSION``).
+* ``bundles`` — which copy of each capability bundle runs (ADR 0100 W3):
+  ``{"jobs": "<version>"}`` when the boot mounted a published bundle,
+  ``{"jobs": "image"}`` when the image's own copy runs, and absent on a seat
+  that authors no job lane. Written by ``entrypoint-bundles.sh`` into
+  ``/run/smd-bundles/<name>`` (a fresh tmpfs every boot, so it can only describe
+  this boot). The release controller reads it back after a bundle restart.
+  ``build_payload`` puts it on the wire together with the ingest column that
+  stores it (ss-console#3661), so the field and its reader land in one change.
 * ``jobs_running`` / ``jobs_queued`` / ``wakes_pending`` — sums over every lane's
   heartbeat file. The rollout's busy gate reads these before it restarts a seat.
 
@@ -29,6 +37,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -39,6 +48,11 @@ logger = logging.getLogger("hermes-smd-fleet-facts")
 DEFAULT_CONFIG_PATH = "/var/lib/smd-config/customer.yaml"
 DEFAULT_SKILLS_VERSION_PATH = "/var/lib/smd-skills/current/VERSION"
 DEFAULT_LANE_RUN_DIR = "/run/smd-medchron"
+DEFAULT_BUNDLE_STATE_DIR = "/run/smd-bundles"
+#: Bundle names and values the ingest accepts (src/pages/api/internal/heartbeat.ts).
+_BUNDLE_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,31}\Z")
+_BUNDLE_VALUE = re.compile(r"\A(?:image|[0-9]{12}-[0-9a-f]{8})\Z")
+MAX_BUNDLES = 8
 #: Same env var the lanes read, so a seat that moves its run dir moves both.
 LANE_RUN_DIR_ENV = "SMD_MEDCHRON_RUN_DIR"
 
@@ -69,6 +83,7 @@ class FleetFacts(NamedTuple):
     jobs_running: int | None
     jobs_queued: int | None
     wakes_pending: int | None
+    bundles: dict[str, str] | None = None
 
 
 class LaneCounts(NamedTuple):
@@ -99,6 +114,31 @@ def read_skills_version(path: str | Path = DEFAULT_SKILLS_VERSION_PATH) -> str |
     except (OSError, UnicodeDecodeError):
         return None
     return text[:MAX_TEXT] or None
+
+
+def read_bundles(path: str | Path = DEFAULT_BUNDLE_STATE_DIR) -> dict[str, str] | None:
+    """``{name: version | "image"}`` from the boot's state dir; None when absent.
+
+    A file whose name or value the ingest would refuse is left out rather than
+    sent: one bad entry must not cost the beat its other fields.
+    """
+    try:
+        entries = sorted(os.scandir(path), key=lambda e: e.name)
+    except OSError:
+        return None
+    bundles: dict[str, str] = {}
+    for entry in entries:
+        if len(bundles) >= MAX_BUNDLES or not _BUNDLE_NAME.match(entry.name):
+            continue
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+            value = Path(entry.path).read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError):
+            continue
+        if _BUNDLE_VALUE.match(value):
+            bundles[entry.name] = value
+    return bundles or None
 
 
 def _count(value: object) -> int | None:
@@ -178,6 +218,7 @@ def read_fleet_facts(
     env: dict[str, str] | None = None,
     config_path: str | Path = DEFAULT_CONFIG_PATH,
     skills_version_path: str | Path = DEFAULT_SKILLS_VERSION_PATH,
+    bundle_state_dir: str | Path = DEFAULT_BUNDLE_STATE_DIR,
     run_dir: str | Path | None = None,
     clock: Callable[[], float] = time.time,
 ) -> FleetFacts:
@@ -189,10 +230,12 @@ def read_fleet_facts(
         jobs_running=lanes.running,
         jobs_queued=lanes.queued,
         wakes_pending=lanes.wakes_pending,
+        bundles=read_bundles(bundle_state_dir),
     )
 
 
 __all__ = [
+    "DEFAULT_BUNDLE_STATE_DIR",
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_LANE_RUN_DIR",
     "DEFAULT_SKILLS_VERSION_PATH",
@@ -200,6 +243,7 @@ __all__ = [
     "LANE_STALE_SECONDS",
     "FleetFacts",
     "LaneCounts",
+    "read_bundles",
     "read_config_digest",
     "read_fleet_facts",
     "read_image_ref",
