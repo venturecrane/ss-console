@@ -624,12 +624,22 @@ log "Workspace broker started as uid $(id -u workspace-broker); dropping gateway
 # and its enforced ceilings are untouched). v1 is instant-tier only (the
 # live-writable fields are read fresh per action; no gateway reload). Launched
 # only when the R2 config credentials are present.
+# The four root poll loops (config applier, spec applier, skills applier,
+# establishment intake) run in ONE root process (ADR 0100): each was its own
+# ~55-67 MB interpreter on a 1 GB seat. root_pollers restarts a loop that ends
+# on its own after 5 s, on its own thread, and the respawn loop restarts the
+# process if it dies; a Machine stop ends all four (exit 130).
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import config_applier" 2>/dev/null; then
-  smd_root_poller config_applier "config applier"
+   && /opt/hermes/.venv/bin/python -c "import root_pollers, config_applier, spec_applier, skills_applier, establish_intake" 2>/dev/null; then
+  smd_root_poller root_pollers "root pollers"
   log "Root config applier launched (uid 0; polls R2 for live customer.yaml changes)"
+  log "Root authored-spec applier launched (uid 0; polls R2 for live spec changes)"
+  log "Root skills applier launched (uid 0; polls this seat's skills pointer)"
+  log "Root establishment intake launched (uid 0; polls ${ESTABLISH_SPOOL_DIR}/runs for admin-instructed voice/shape submissions)"
 else
-  log "Root config applier NOT launched (R2 config creds absent, or config_applier not in this overlay)"
+  log "Root config applier NOT launched (R2 config creds absent, or an applier is not in this overlay)"
+  log "Root authored-spec applier NOT launched (R2 config creds absent, or an applier is not in this overlay)"
+  log "Root establishment intake NOT launched (R2 config creds absent, or an applier is not in this overlay); establish_submit runs will queue unprocessed"
 fi
 
 # Root-side chronology runner daemon (routine 11, ss#2614). Same fork point and
@@ -690,13 +700,6 @@ fi
 # vaults/<slug>/customer.yaml, the portal owns vaults/<slug>/output-classes.json.
 # A dead applier never blocks the gateway — fail-static, not fail-open: spec
 # updates simply stop arriving and the installed tree keeps serving.
-if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import spec_applier" 2>/dev/null; then
-  smd_root_poller spec_applier "spec applier"
-  log "Root authored-spec applier launched (uid 0; polls R2 for live spec changes)"
-else
-  log "Root authored-spec applier NOT launched (R2 config creds absent, or spec_applier not in this overlay)"
-fi
 
 # Root-side establishment intake (ADR 0085, ss#2161/#2162). Same shape, same
 # principal, same respawn discipline as the appliers above, forked at the same
@@ -711,17 +714,8 @@ fi
 # spec tree keeps serving). The intake emits its own boot line on launch; the
 # rehearsal pre-flight asserts one of these two lines, so a silent
 # not-launched cannot read as healthy.
-if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import establish_intake" 2>/dev/null; then
-  ( while true; do
-      /opt/hermes/.venv/bin/python -m establish_intake || true
-      log "establishment intake exited; restarting in 5s"
-      sleep 5
-    done ) &
-  log "Root establishment intake launched (uid 0; polls ${ESTABLISH_SPOOL_DIR}/runs for admin-instructed voice/shape submissions)"
-else
-  log "Root establishment intake NOT launched (R2 config creds absent, or establish_intake not in this overlay); establish_submit runs will queue unprocessed"
-fi
+# Both the spec applier's poll loop and the intake run in the one root poller
+# process launched above (root_pollers); their launch lines print there.
 
 # Root-side gateway liveness supervisor (P0 ss#2488). On 2026-08-20 the paying
 # client's seat wedged for 33 minutes and recovered only because a human

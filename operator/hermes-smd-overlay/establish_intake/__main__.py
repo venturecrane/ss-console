@@ -36,6 +36,7 @@ import os
 import signal
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -154,12 +155,12 @@ def build_intake() -> EstablishIntake:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(
-        level=os.environ.get("SMD_ESTABLISH_LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+def serve(stop: Callable[[], bool]) -> int:
+    """Run the intake until ``stop()`` is true: the boot line, then the poll loop.
 
+    Shared by :func:`main` and the one root poller process (``root_pollers``),
+    which runs every root poll loop in one interpreter (ADR 0100).
+    """
     try:
         intake = build_intake()
     except SystemExit as exc:
@@ -187,18 +188,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     write_heartbeat(intake.spool_dir, started_at=started_at, runs_processed=0, missing=missing)
 
-    stopped = {"flag": False}
-
-    def _request_stop(signum: int, _frame: Any) -> None:
-        logger.info("establish_intake: received signal %s; requesting clean stop", signum)
-        stopped["flag"] = True
-
-    signal.signal(signal.SIGTERM, _request_stop)
-    signal.signal(signal.SIGINT, _request_stop)
-
     poll_seconds = _poll_seconds()
     runs_processed = 0
-    while not stopped["flag"]:
+    while not stop():
         try:
             runs_processed += len(intake.poll_once())
         except Exception:  # noqa: BLE001 — the loop must outlive any single tick
@@ -211,13 +203,29 @@ def main(argv: list[str] | None = None) -> int:
             missing=missing,
         )
         slept = 0.0
-        while slept < poll_seconds and not stopped["flag"]:
+        while slept < poll_seconds and not stop():
             time.sleep(min(1.0, poll_seconds - slept))
             slept += 1.0
     logger.info("establish_intake: stop requested; poll loop exiting cleanly")
     # 130, not 0: the loop only ends on a signal, which means the Machine is
     # going down; the entrypoint's respawn loop must not restart it.
     return 130
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(
+        level=os.environ.get("SMD_ESTABLISH_LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    stopped = {"flag": False}
+
+    def _request_stop(signum: int, _frame: Any) -> None:
+        logger.info("establish_intake: received signal %s; requesting clean stop", signum)
+        stopped["flag"] = True
+
+    signal.signal(signal.SIGTERM, _request_stop)
+    signal.signal(signal.SIGINT, _request_stop)
+    return serve(lambda: stopped["flag"])
 
 
 if __name__ == "__main__":

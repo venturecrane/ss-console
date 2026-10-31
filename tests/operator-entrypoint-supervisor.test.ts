@@ -471,8 +471,9 @@ describe('entrypoint.sh wires the supervisor', () => {
   it('launches the skills applier before the drop and the appliers through the 130-aware poller', () => {
     expect(code).toContain('smd_skills_applier')
     expect(code.indexOf('smd_skills_applier')).toBeLessThan(code.indexOf('\nsmd_supervise'))
-    expect(code).toContain('smd_root_poller config_applier "config applier"')
-    expect(code).toContain('smd_root_poller spec_applier "spec applier"')
+    // ADR 0100: the four root poll loops run in one root process.
+    expect(code).toContain('smd_root_poller root_pollers "root pollers"')
+    expect(code).not.toMatch(/smd_root_poller (config|spec|skills)_applier/)
     expect(code).not.toMatch(/-m (config|spec)_applier \|\| true/)
   })
 
