@@ -2757,7 +2757,7 @@ def test_destructive_confirm_on_a_seat_without_smokeball_renders_no_line(tmp_pat
     soul = (hermes_home / "profiles" / "marcus" / "SOUL.md").read_text()
     assert "**destructive**" not in soul
     assert "mcp_smokeball" not in soul
-    assert "## Authored autonomy (set by the firm)" in soul
+    assert "## Authored autonomy (set by the people you work for)" in soul
     assert "- **internal_write**: autonomous" in soul
 
 
