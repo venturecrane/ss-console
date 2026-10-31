@@ -1665,6 +1665,7 @@ def build_payload(
     jobs_running: int | None = None,
     jobs_queued: int | None = None,
     wakes_pending: int | None = None,
+    bundles: dict[str, str] | None = None,
     selftest: dict | None = None,
     spec: dict | None = None,
 ) -> dict[str, object]:
@@ -1833,6 +1834,10 @@ def build_payload(
         payload["jobs_queued"] = jobs_queued
     if wakes_pending is not None:
         payload["wakes_pending"] = wakes_pending
+    # ADR 0100 W3: which copy of each capability bundle runs ("image" or a
+    # version). Absent on a seat that authors no job lane.
+    if bundles:
+        payload["bundles"] = bundles
     # The in-image self-test's verdict (shared/selftest_check.py). None is
     # "nothing to say yet" (the boot run has not finished) and stays absent so
     # the console holds; a dead loop or an unreadable file is not None, it ships
@@ -2320,6 +2325,7 @@ class HeartbeatEmitter:
             jobs_running=fleet.jobs_running if fleet is not None else None,
             jobs_queued=fleet.jobs_queued if fleet is not None else None,
             wakes_pending=fleet.wakes_pending if fleet is not None else None,
+            bundles=fleet.bundles if fleet is not None else None,
             selftest=self._read_selftest(),
             spec=self._read_spec(),
         )

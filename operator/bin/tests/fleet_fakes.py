@@ -66,6 +66,13 @@ class FakeStore:
             (r for r in self.releases.values() if r.get("skills_version") == version and r["kind"] == "skills"), None
         )
 
+    def bundle_release(self, name: str, version: str) -> dict[str, Any] | None:
+        hits = [
+            r for r in self.releases.values()
+            if r["kind"] == "bundle" and r.get("artifact_name") == name and r.get("artifact_version") == version
+        ]  # fmt: skip
+        return hits[-1] if hits else None
+
     def release_for_sha(self, kind: str, sha: str) -> dict[str, Any] | None:
         hits = [r for r in self.releases.values() if r["kind"] == kind and r.get("ss_console_sha") == sha]
         return hits[-1] if hits else None

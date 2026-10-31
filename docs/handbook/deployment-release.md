@@ -461,7 +461,8 @@ Two workflows run the release (ADR 0096).
     release id steps that image only.
   - **jobs bundle releases** take the same step after the skills step, on rings
     holding only the seats that author a job lane (see "A jobs bundle release"
-    below). A step that refuses or errors does not stop the later steps.
+    below), and only while the repository variable `BUNDLE_RELEASE_ENABLED` is
+    `true`. A step that refuses or errors does not stop the later steps.
 
   A tick exits 0 on progress, 5 when it is waiting (a bake running, the lease
   held by a laptop run, nothing to do) and 6 on a standing halt; all three are
@@ -653,7 +654,17 @@ writes `vaults/<slug>/bundles/jobs-pointer.json`, restarts the Machine
 `bundles.jobs` at the version, then, on an image that carries it, the boot
 self-test passing. Anything else puts the previous pointer back (or removes it),
 restarts the seat again behind the busy gate, and records it `rolled_back`
-(which halts the release) or `tooling_error` (retried). `fleet status` shows
+(which halts the release) or `tooling_error` (retried).
+
+The tick's bundle step is off unless the repository variable
+`BUNDLE_RELEASE_ENABLED` is `true`; off, it logs "bundle releases not enabled"
+and rolls nothing, while CI still publishes candidates. To send one bundle to
+one seat, run release-tick by hand with the seat and `artifact: bundle`
+(`fleet release --bundle latest --only <seat>`): the same lease, busy gate,
+read-back and rollback, with no ring order and no bake, whatever the switch
+says, and only to a seat that authors a job lane. That is how the first bundle
+goes to smd-staging, then pilot-smokeball (a real job), then ashton-price, while
+the rings run staging, ashton-price, pilot. `fleet status` shows
 what each seat runs in its bundles column: a version, `image` when the image's
 own copy runs, `-` when the seat reports none.
 

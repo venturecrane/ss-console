@@ -10,10 +10,12 @@ module past the 500-line ceiling. cli.py re-exports every name here, so
 from __future__ import annotations
 
 import argparse
-from typing import Any, Callable
+import os
+from typing import Any, Callable, Mapping
 
 from . import bundles, ids, ordering
 from .busy import BusyGate
+from .rings import Ring
 from .runner import Refusal, ToolingError
 from .skills import SkillsRollout, deferrals
 from .tick import TICK_WAITING, Ticker
@@ -193,21 +195,33 @@ def _bundles_in_flight(ctx: Any, name: str = bundles.JOBS) -> list[dict[str, Any
     return out
 
 
-def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
-    """The jobs bundle step of a `latest` tick: rings FILTERED to the seats that author a job lane.
+# The off switch for the tick's bundle step (repo variable, passed into the Tick
+# step's env by release-tick.yml). Absent or anything but 'true': the tick rolls
+# no bundle. CI still publishes candidates, and the urgent one-seat path
+# (`fleet release --bundle ... --only SEAT`) still runs: that is how the first
+# bundle goes staging -> pilot (a real job) -> ashton-price while the rings run
+# staging -> ashton-price -> pilot.
+BUNDLE_SWITCH = "BUNDLE_RELEASE_ENABLED"
 
-    Filtered, not deferred: a deferred seat keeps a release incomplete for ever
-    (tick.plan_tick), and a seat that authors no lane never takes a jobs bundle,
-    so it must neither be touched nor block completion (bundles.py).
-    """
-    candidates = _bundles_in_flight(ctx)
-    if not candidates:
-        ctx.log("tick: no bundle release in flight (the newest published from main has completed)")
-        return TICK_WAITING
-    holder = holder_id()
+
+def bundle_releases_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    return (os.environ if environ is None else environ).get(BUNDLE_SWITCH) == "true"
+
+
+def bundle_rings(ctx: Any) -> list[Ring]:
+    """The rings with only the seats whose customer.yaml authors a job lane."""
+    every = ctx.rings()
+    authoring = bundles.authoring_seats(ctx.repo, [s for ring in every for s in ring.seats])
+    return bundles.authoring_rings(every, authoring)
+
+
+def bundle_seat_runner(
+    ctx: Any, holder: str, max_idle_wait: float, dry_run: bool
+) -> Callable[[dict[str, Any]], Callable[[str, int], Any]]:
+    """``do_seat_for(release)``: one seat's bundle rollout (bundles.BundleRollout), manifests read once."""
     roll = bundles.BundleRollout(
         ctx.store, ctx.r2, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), ctx.log, ctx.sleep, ctx.clock,
-        a.max_idle_wait,
+        max_idle_wait,
     )  # fmt: skip
     manifests: dict[str, tuple[dict[str, Any], str, str]] = {}
 
@@ -216,16 +230,52 @@ def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
         if version not in manifests:
             manifests[version] = roll.load_manifest(rel["artifact_name"], version)
         manifest, key, sha = manifests[version]
-        return lambda seat, ring: roll.run(seat, ring, rel, manifest, key, sha, a.dry_run)
+        return lambda seat, ring: roll.run(seat, ring, rel, manifest, key, sha, dry_run)
 
-    every = ctx.rings()
-    authoring = bundles.authoring_seats(ctx.repo, [s for ring in every for s in ring.seats])
-    rings = bundles.authoring_rings(every, authoring)
+    return do_seat_for
+
+
+def bundle_release_named(ctx: Any, version: str, name: str = bundles.JOBS) -> dict[str, Any]:
+    """A recorded bundle release by version, or ``latest``: the newest one published from main."""
+    if version == "latest":
+        for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3):
+            if (
+                rel.get("kind") == "bundle"
+                and rel.get("artifact_name") == name
+                and ids.BUNDLE_VERSION_RE.match(rel.get("artifact_version") or "")
+                and _built_from_main(ctx, rel.get("ss_console_sha"))
+            ):
+                return rel
+        raise Refusal(f"no {name} bundle release published from main is recorded in fleet_releases")
+    rel = ctx.store.bundle_release(name, ids.bundle_version(version))
+    if not rel:
+        raise Refusal(f"no {name} bundle release {version} in fleet_releases (fleet releases lists them)")
+    return rel
+
+
+def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
+    """The jobs bundle step of a `latest` tick: rings FILTERED to the seats that author a job lane.
+
+    Filtered, not deferred: a deferred seat keeps a release incomplete for ever
+    (tick.plan_tick), and a seat that authors no lane never takes a jobs bundle,
+    so it must neither be touched nor block completion (bundles.py). Off unless
+    BUNDLE_RELEASE_ENABLED is 'true' (:data:`BUNDLE_SWITCH`).
+    """
+    if not bundle_releases_enabled():
+        ctx.log(f"tick: bundle releases not enabled ({BUNDLE_SWITCH} is not 'true'); no bundle rolls")
+        return TICK_WAITING
+    candidates = _bundles_in_flight(ctx)
+    if not candidates:
+        ctx.log("tick: no bundle release in flight (the newest published from main has completed)")
+        return TICK_WAITING
+    holder = holder_id()
+    rings = bundle_rings(ctx)
     seats = [seat for ring in rings for seat in ring.seats]
     if not seats:
         ctx.log("tick: no ringed seat authors a job lane; no seat takes a jobs bundle")
         return TICK_WAITING
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_bundles_defer(ctx, seats))
+    do_seat_for = bundle_seat_runner(ctx, holder, a.max_idle_wait, a.dry_run)
     return ticker.run_promoting(rings, candidates, do_seat_for, holder, dry_run=a.dry_run)
 
 

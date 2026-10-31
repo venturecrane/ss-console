@@ -377,3 +377,85 @@ def test_a_latest_tick_with_no_bundle_in_flight_waits(tmp_path: Path) -> None:
     ctx = cli.Ctx(tmp_path, CommandRunner(), FakeStore(), FakeR2(), FakeFly(), log=lambda m: None)  # type: ignore[arg-type]
     args = cli._parser().parse_args(["release", "latest", "--tick"])
     assert cli._bundles_tick(ctx, args) == TICK_WAITING
+
+
+# -- the off switch and the urgent one-seat path -------------------------------------------
+class _MainGit:
+    """git as a clone of main where every commit is on main and every commit touches an image path."""
+
+    def run(self, argv: list[str], **_kw: Any) -> Result:
+        if "log" in argv:
+            return Result(0, argv[argv.index("--format=%H") + 1] + "\n", "")
+        return Result(0, "", "")
+
+
+class _CliWorld:
+    """cli.main against fakes, on a repo whose seats are lane-a, lane-b (both author a lane) and core-c."""
+
+    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.repo = _repo_with(tmp_path, {"lane-a": LANE_YAML, "lane-b": LANE_YAML, "core-c": NO_LANE_YAML})
+        for rel in (ordering.SUBSTRATE_PATHS, ordering.ARTIFACT_PATHS, ordering.DETECT_SCRIPT):
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(REPO / rel, tmp_path / rel)
+        self.w = World(["lane-a", "lane-b", "core-c"])
+        self.rel = self.w.publish(V1)
+        self.ctx = cli.Ctx(self.repo, _MainGit(), self.w.store, self.w.r2, self.w.fly,  # type: ignore[arg-type]
+                           self.w.clock.sleep, self.w.clock, self.w.logs.append)  # fmt: skip
+        self.ctx.rings = lambda: [Ring(0, ["lane-a"], None, 30), Ring(1, ["core-c", "lane-b"], 1, 0)]  # type: ignore[method-assign]
+        monkeypatch.delenv("BUNDLE_RELEASE_ENABLED", raising=False)
+        # A rollout finishes at the tick's own time, so ring 0's 30-minute bake is real.
+        self.w.store.now_iso = datetime.fromtimestamp(T0, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def pointers(self) -> list[str]:
+        return sorted({k for k in self.w.r2.writes if k.startswith("vaults/") and "/bundles/" in k})
+
+
+def test_with_the_switch_off_the_tick_writes_no_bundle_pointer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FALSIFIER: drop the switch check in _bundles_tick and lane-a gets a pointer."""
+    cw = _CliWorld(tmp_path, monkeypatch)
+    args = cli._parser().parse_args(["release", "latest", "--tick"])
+    assert cli._bundles_tick(cw.ctx, args) == TICK_WAITING
+    assert cw.pointers() == [] and cw.w.fly.restarts == []
+    assert any("bundle releases not enabled" in line for line in cw.w.logs)
+    for off in ("false", "1", "TRUE", ""):
+        monkeypatch.setenv("BUNDLE_RELEASE_ENABLED", off)
+        assert cli._bundles_tick(cw.ctx, args) == TICK_WAITING and cw.pointers() == []
+    monkeypatch.setenv("BUNDLE_RELEASE_ENABLED", "true")
+    assert cli._bundles_tick(cw.ctx, args) == TICK_PROGRESS
+    assert cw.pointers() == [bundle_pointer_key("lane-a", "jobs")], "on: ring 0 first, nothing else"
+
+
+def test_the_urgent_bundle_release_touches_only_the_named_seat_and_ignores_the_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`fleet release --bundle latest --only lane-b` (release-tick.yml ARTIFACT=bundle):
+    the ring-1 seat, before ring 0, with the switch off. FALSIFIER: walk the rings
+    without --only and lane-a gets a pointer too."""
+    cw = _CliWorld(tmp_path, monkeypatch)
+    assert cli.main(["release", "--bundle", "latest", "--only", "lane-b"], ctx=cw.ctx) == 0
+    assert cw.pointers() == [bundle_pointer_key("lane-b", "jobs")]
+    assert cw.w.fly.restarts == ["hermes-lane-b"] and cw.w.pointer("lane-b") == V1
+    assert ("lane-b", "clear") in cw.w.fly.quiesce_calls, "behind the busy gate"
+    assert cw.w.store.states() == {"lane-b": "done"}
+    assert cli.main(["release", "--bundle", V1, "--only", "lane-a", "--dry-run"], ctx=cw.ctx) == 0
+    assert cw.w.pointer("lane-a") is None, "a dry run writes nothing"
+
+
+def test_the_urgent_bundle_release_refuses_a_seat_that_authors_no_lane_and_a_release_it_cannot_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cw = _CliWorld(tmp_path, monkeypatch)
+    assert cli.main(["release", "--bundle", "latest", "--only", "core-c"], ctx=cw.ctx) == 4
+    assert cli.main(["release", "--bundle", "latest"], ctx=cw.ctx) == 4
+    assert cli.main(["release", "--bundle", "202601010000-00000000", "--only", "lane-a"], ctx=cw.ctx) == 4
+    assert cli.main(["release", "latest", "--bundle", V1, "--only", "lane-a"], ctx=cw.ctx) == 4
+    assert cw.pointers() == [] and cw.w.fly.restarts == []
+
+
+def test_a_bundle_the_urgent_seat_never_reports_is_rolled_back_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cw = _CliWorld(tmp_path, monkeypatch)
+    cw.w.refuses.add("lane-b")
+    assert cli.main(["release", "--bundle", "latest", "--only", "lane-b"], ctx=cw.ctx) == 1
+    assert cw.w.pointer("lane-b") is None and cw.w.store.states() == {"lane-b": "rolled_back"}

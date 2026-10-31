@@ -18,6 +18,10 @@
                                                       staging only: plant one real violation, prove
                                                       the self-test alert opens and resolves
   fleet release --skills <version> [--only SLUG] [--parallel N] [--dry-run]
+  fleet release --bundle <version>|latest --only SLUG [--max-idle-wait SECONDS] [--dry-run]
+                                                      urgent: one jobs bundle to one seat that
+                                                      authors a lane (release-tick.yml ARTIFACT=bundle);
+                                                      runs whatever BUNDLE_RELEASE_ENABLED says
   fleet status [--json]
   fleet releases [--json] [--limit N]
   fleet hold SLUG --reason TEXT --until TEXT          records the session that set it (owner.py)
@@ -64,6 +68,9 @@ from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use 
     _bundles_defer,
     _bundles_in_flight,
     _bundles_tick,
+    bundle_release_named,
+    bundle_rings,
+    bundle_seat_runner,
     _known_commit,
     _Reads,
     _skills_defer,
@@ -145,6 +152,7 @@ def _parser() -> argparse.ArgumentParser:
     r = sub.add_parser("release", help="roll a release out through the rings")
     r.add_argument("release_id", nargs="?")
     r.add_argument("--skills", metavar="VERSION")
+    r.add_argument("--bundle", metavar="VERSION", help="a jobs bundle version, or latest (needs --only)")
     r.add_argument("--only", metavar="SLUG")
     r.add_argument("--parallel", type=int, default=1)
     r.add_argument("--force-mid-job", action="store_true")
@@ -447,15 +455,43 @@ def cmd_release_skills(ctx: Ctx, a: argparse.Namespace) -> int:
     )
 
 
+def cmd_release_bundle(ctx: Ctx, a: argparse.Namespace) -> int:
+    """One jobs bundle to ONE seat, now: the urgent path (release-tick.yml ARTIFACT=bundle).
+
+    The same seat lease, busy gate, pointer write, restart, read-back and
+    rollback as the tick's bundle step, with no ring order and no bake, and
+    regardless of BUNDLE_RELEASE_ENABLED (it is how the first bundle is walked
+    seat by seat). Only a seat that authors a job lane may take one.
+    """
+    if not a.only:
+        raise Refusal("--bundle goes to one seat: give --only SLUG (the tick rolls bundles ring by ring)")
+    if a.parallel != 1 or a.force_mid_job or a.accept_lane_inputs:
+        raise ValueError("--bundle takes none of --parallel, --force-mid-job, --accept-lane-inputs")
+    seat = ids.slug(a.only)
+    rings = bundle_rings(ctx)
+    if not any(seat in ring.seats for ring in rings):
+        raise Refusal(f"{seat} authors no job lane (or is in no ring), so it takes no jobs bundle")
+    release = bundle_release_named(ctx, a.bundle)
+    holder = holder_id()
+    do_seat = bundle_seat_runner(ctx, holder, a.max_idle_wait, a.dry_run)(release)
+    return _run_waves(ctx, a, release, do_seat, holder, rings)
+
+
 def _run_waves(
-    ctx: Ctx, a: argparse.Namespace, release: dict[str, Any], do_seat: Callable[[str, int], Any], holder: str
+    ctx: Ctx,
+    a: argparse.Namespace,
+    release: dict[str, Any],
+    do_seat: Callable[[str, int], Any],
+    holder: str,
+    rings: list[Any] | None = None,
 ) -> int:
-    """Walk the rings. Only a full real run takes the fleet lease; every seat takes its own."""
+    """Walk the rings (``rings``, default ctx.rings()). Only a full real run takes the fleet lease."""
     waves = Waves(ctx.store, ctx.log)
     seat_holder = None if a.dry_run else holder
+    walked = rings if rings is not None else ctx.rings()
 
     def walk(lease: Lease | None) -> Any:
-        return waves.run(ctx.rings(), do_seat, release=release, only=a.only, parallel=a.parallel,
+        return waves.run(walked, do_seat, release=release, only=a.only, parallel=a.parallel,
                          dry_run=a.dry_run, lease=lease, holder=seat_holder)  # fmt: skip
 
     if a.dry_run or a.only:
@@ -535,10 +571,12 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.cmd == "artifacts":
         return cmd_artifacts(ctx, a)
     if a.cmd == "release":
-        if bool(a.skills) == bool(a.release_id):
-            raise Refusal("give exactly one of <release-id> or --skills <version>")
-        if a.tick and a.skills:
-            raise ValueError("--tick takes no --skills: `fleet release latest --tick` steps skills releases too")
+        if sum(bool(x) for x in (a.release_id, a.skills, a.bundle)) != 1:
+            raise Refusal("give exactly one of <release-id>, --skills <version> or --bundle <version>")
+        if a.tick and (a.skills or a.bundle):
+            raise ValueError("--tick takes no --skills/--bundle: `fleet release latest --tick` steps them too")
+        if a.bundle:
+            return cmd_release_bundle(ctx, a)
         return cmd_release_skills(ctx, a) if a.skills else cmd_release_image(ctx, a)
     if a.cmd == "status":
         return cmd_status(ctx, a)

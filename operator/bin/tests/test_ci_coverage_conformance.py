@@ -847,3 +847,24 @@ def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> No
     dockerfile = (OPERATOR_DIR / "templates" / "Dockerfile").read_text(encoding="utf-8")
     assert "RUN sh /app/jobs-runtime.sh connectors" in dockerfile
     assert "RUN sh /app/jobs-runtime.sh medchron" in dockerfile
+
+
+def test_the_tick_rolls_bundles_only_behind_the_switch_and_the_urgent_path_can_send_one() -> None:
+    """ADR 0100 W3: the tick's bundle step reads BUNDLE_RELEASE_ENABLED from the repo
+    variable, and the urgent one-seat dispatch can send a bundle (ARTIFACT=bundle)
+    with the seat safeguards. FALSIFIER: drop the env line, the artifact input, or
+    --only from the bundle branch, and this fails."""
+    from bin.lib.fleet.artifact_tick import BUNDLE_SWITCH
+
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    tick = next(s for s in wf["jobs"]["tick"]["steps"] if s.get("name") == "Tick")
+    assert (tick.get("env") or {}).get(BUNDLE_SWITCH) == f"${{{{ vars.{BUNDLE_SWITCH} }}}}"
+    artifact = _on_block(wf)["workflow_dispatch"]["inputs"]["artifact"]
+    assert artifact.get("type") == "choice" and artifact.get("default") == "image"
+    assert artifact["options"] == ["image", "bundle"]
+    assert wf["jobs"]["tick"]["env"]["ARTIFACT"] == "${{ inputs.artifact || 'image' }}"
+    runs = _job_runs(wf["jobs"]["tick"])
+    urgent = runs.split('if [ "$SEAT" != "none" ]; then', 1)[1].split("\nfi\n", 1)[0]
+    branch = urgent.split('if [ "$ARTIFACT" = "bundle" ]; then', 1)[1].split("else", 1)[0]
+    assert '--bundle "$RELEASE"' in branch and '--only "$SEAT"' in branch and "--max-idle-wait" in branch
+    assert "--tick" not in branch
