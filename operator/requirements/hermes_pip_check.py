@@ -48,7 +48,7 @@ from pathlib import Path
 
 #: package -> the single requirer whose exact pin our override breaks.
 #: Each row is a line in hermes-security.in; nothing else is negotiable.
-TOLERATED: dict[str, str] = {"brotlicffi": "hermes-agent"}
+TOLERATED: dict[str, str] = {"brotlicffi": "hermes-agent", "pyasn1": "hermes-agent"}
 
 _COUNT = re.compile(r"^Found (\d+) incompatibilit(?:y|ies)$")
 _LINE = re.compile(r"^The package `([^`]+)` requires `([^`]+)`, but (.+)$")

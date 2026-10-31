@@ -167,6 +167,7 @@ while IFS= read -r name; do
 done < <(sed -n 's/^\([A-Za-z0-9][A-Za-z0-9._-]*\)==.*/\1/p' "${work}/hermes-rest.txt")
 (cd "${work}" && uv pip compile hermes-security.in hermes-rest.txt \
   "${rest_no_emit[@]}" \
+  ${EXTRA[@]+"${EXTRA[@]}"} \
   --override hermes-lock-overrides.txt \
   --generate-hashes \
   --python-version "${HERMES_PY}" \
@@ -193,6 +194,7 @@ sed -n 's/^\([a-z0-9][a-z0-9._-]*==[^ ]*\).*/\1/p' "${HERE}/hermes-security.txt"
 # relative path overlay/pyproject.toml, not this machine's temp directory.
 (cd "${work}" && uv pip compile overlay/pyproject.toml \
   -c hermes-effective.txt \
+  ${EXTRA[@]+"${EXTRA[@]}"} \
   --override hermes-lock-overrides.txt \
   "${no_emit[@]}" \
   --generate-hashes \

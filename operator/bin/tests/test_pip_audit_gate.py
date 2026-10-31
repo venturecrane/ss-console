@@ -49,6 +49,7 @@ gate = _load_gate()
 EXPORT = """\
 brotlicffi==1.2.0.2
 certifi==2026.10.19
+pyasn1==0.6.4
 pyjwt==2.13.0
 tornado==6.5.10
 tzdata==2025.3 ; sys_platform == 'win32'
@@ -142,7 +143,7 @@ def test_the_override_file_moves_only_near_zero_risk_packages() -> None:
     # Admission rule (hermes-security.in header): PyJWT and every fix that
     # changes an API Hermes calls is a Hermes promotion, not an override.
     overrides = gate.pins((REQUIREMENTS / "hermes-security.txt").read_text(encoding="utf-8"))
-    assert set(overrides) == {"brotlicffi", "tornado"}
+    assert set(overrides) == {"brotlicffi", "pyasn1", "tornado"}
 
 
 # --- The floor: a marker-skipped audit is not a clean audit (ss-console#3564) ---
@@ -154,15 +155,16 @@ def test_the_override_file_moves_only_near_zero_risk_packages() -> None:
 # pip-audit 2.10.1 on v0.22.5's export so marked: 117 audited on 3.14, 7 on
 # 3.13, exit 0).
 
-MARKED = "brotlicffi==1.2.0.2 ; python_version >= '3.14'\ntornado==6.5.10 ; python_version >= '3.14'\n" + "".join(
-    f"pkg-{i}==1.0.{i} ; python_version >= '3.14'\n" for i in range(gate.HERMES_MIN_AUDITED + 20)
+MARKED = (
+    "brotlicffi==1.2.0.2 ; python_version >= '3.14'\npyasn1==0.6.4 ; python_version >= '3.14'\ntornado==6.5.10 ; python_version >= '3.14'\n"
+    + "".join(f"pkg-{i}==1.0.{i} ; python_version >= '3.14'\n" for i in range(gate.HERMES_MIN_AUDITED + 20))
 )
 PY313 = {"python_version": "3.13", "python_full_version": "3.13.5"}
 PY314 = {"python_version": "3.14", "python_full_version": "3.14.10"}
 
 
 def test_a_314_marked_export_evaluated_on_313_has_nothing_live() -> None:
-    assert gate.live_pin_count(MARKED, PY314) == gate.HERMES_MIN_AUDITED + 22
+    assert gate.live_pin_count(MARKED, PY314) == gate.HERMES_MIN_AUDITED + 23
     assert gate.live_pin_count(MARKED, PY313) == 0
     assert gate.live_pin_count(EXPORT + FILLER, PY313) >= gate.HERMES_MIN_AUDITED
 

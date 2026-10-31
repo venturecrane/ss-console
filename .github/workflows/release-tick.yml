@@ -173,6 +173,21 @@ jobs:
           source scripts/lib/r2-creds.sh
           derive_r2_creds
           export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          # A cancelled run signals this shell, not its child; a foreground fleet
+          # never hears it and is SIGKILLed with its seat lease still in D1 for
+          # the 2 h TTL (2026-10-30: A&P, and every seat behind it, stalled).
+          # Run fleet in the background and pass the signal on, so its lease
+          # context managers release before the runner's kill.
+          run_fleet() {
+            operator/bin/fleet "$@" &
+            local pid=$! rc
+            trap 'kill -TERM "$pid" 2>/dev/null' INT TERM
+            wait "$pid"; rc=$?
+            # wait returns early when a trapped signal arrives; collect the real exit.
+            while kill -0 "$pid" 2>/dev/null; do wait "$pid"; rc=$?; done
+            trap - INT TERM
+            return "$rc"
+          }
           if [ "$SEAT" != "none" ]; then
             # Urgent one-seat release: the same rollout a tick runs for that seat,
             # judged by the seat's self-test with no ssh fallback, and a running
@@ -180,7 +195,7 @@ jobs:
             args=(release "$RELEASE" --only "$SEAT" --verify selftest --no-ssh-fallback --max-idle-wait 1800)
             if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
             set +e
-            operator/bin/fleet "${args[@]}"
+            run_fleet "${args[@]}"
             rc=$?
             set -e
             case "$rc" in
@@ -198,7 +213,7 @@ jobs:
           args=(release "$RELEASE" --tick --max-idle-wait 600)
           if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
           set +e
-          operator/bin/fleet "${args[@]}"
+          run_fleet "${args[@]}"
           rc=$?
           set -e
           case "$rc" in

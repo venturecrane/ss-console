@@ -42,8 +42,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -652,8 +654,33 @@ def dispatch(ctx: Ctx, a: argparse.Namespace) -> int:
     return cmd_latest_image(ctx, a)
 
 
+class Terminated(SystemExit):
+    """A termination signal, raised where the main thread is so leases unwind."""
+
+
+def _exit_on_signal(signum: int, _frame: object) -> None:
+    raise Terminated(128 + signum)
+
+
+def install_signal_exits() -> None:
+    """Turn SIGTERM/SIGHUP into an exception so every ``with`` lease is released.
+
+    Python's default SIGTERM kills the process where it stands: no ``__exit__``
+    runs, and a seat or fleet lease stays in D1 for its full 2 h TTL. On
+    2026-10-30 a cancelled release-tick run died that way holding A&P's seat
+    lease, and every tick for the next two hours recorded A&P waiting_idle and
+    shipped nothing to any seat behind it. SIGINT already raises
+    KeyboardInterrupt, which unwinds the same way.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _exit_on_signal)
+
+
 def main(argv: list[str] | None = None, ctx: Ctx | None = None) -> int:
     a = _parser().parse_args(argv)
+    install_signal_exits()
     try:
         return dispatch(ctx or Ctx.default(), a)
     except Refusal as exc:

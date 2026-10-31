@@ -32,3 +32,13 @@ brotlicffi>=1.2.1.0
 # library Hermes never calls directly; python-telegram-bot's requirement is a
 # range, so the override resolves without a Hermes promotion.
 tornado>=6.6
+
+# pyasn1 0.6.4 -> fix: CVE-2026-119194, CVE-2026-119195, CVE-2026-119196,
+# CVE-2026-119197 (fixed in 0.6.5). Reachable: google-auth decodes service
+# account keys with it through pyasn1-modules. A patch release of a decoder with
+# no API change Hermes calls. hermes-agent exact-pins pyasn1==0.6.4 in its
+# google extra (pyproject.toml, v0.22.5) as a security FLOOR ("must carry the
+# same fixed floors as uv.lock"), not for compatibility, so moving it up keeps
+# their intent; hermes_pip_check.py tolerates that one requirement, and only
+# while the installed version is the pin below.
+pyasn1>=0.6.5

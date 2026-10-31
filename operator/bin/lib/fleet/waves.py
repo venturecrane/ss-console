@@ -10,7 +10,10 @@
   captain-mark restart queued behind a six-seat release for most of an hour).
   A full rollout that reaches a seat whose lease another holder has records it
   waiting_idle (no halt) and moves on; an ``--only`` against a held seat is
-  refused.
+  refused. A killed holder frees its leases: cli.install_signal_exits turns
+  SIGTERM into an unwinding exit, and release-tick.yml's run_fleet forwards the
+  runner's cancel signal to fleet (2026-10-30). The holder names its Actions
+  run (``run-<id>``) so a stale lease can be traced to a finished run.
 * RINGS. operator/fleet/rings.yaml order; a ring finishes before the next
   starts. ``--parallel N`` applies within a ring; the last ring is always 1.
 * HOLDS. A seat in fleet_holds is skipped and recorded skipped_held. Holds are
@@ -55,7 +58,11 @@ def holder_id() -> str:
         user = getpass.getuser()
     except Exception:  # noqa: BLE001 - a username is decoration, never a reason to stop
         user = "unknown"
-    return f"{user}@{socket.gethostname().split('.')[0]}:{os.getpid()}:{ids.new_id('l')}"
+    # A lease outlives a killed holder for its TTL, so name the Actions run that
+    # took it: the person reading "being deployed by" can then see that run is over.
+    run = os.environ.get("GITHUB_RUN_ID", "")
+    where = f"run-{run}:" if run.isdigit() else ""
+    return f"{user}@{socket.gethostname().split('.')[0]}:{os.getpid()}:{where}{ids.new_id('l')}"
 
 
 @dataclass
