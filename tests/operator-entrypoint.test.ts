@@ -196,7 +196,15 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   })
 
   it('fetches the firm config from the vault without a FATAL arm and fences it to root:medchron', () => {
-    expect(BOOT_CODE).toMatch(/vaults\/\$\{CUSTOMER_SLUG\}\/medchron-firm\.yaml/)
+    expect(BOOT_CODE).toMatch(
+      /_vault="s3:\/\/\$\{R2_BUCKET_CONFIG\}\/vaults\/\$\{CUSTOMER_SLUG\}\/"/
+    )
+    expect(BOOT_CODE).toMatch(/"\$\{_vault\}medchron-firm\.yaml"/)
+    // The verdict is recorded like every lane's inputs, so the self-test can tell a
+    // cleanly empty vault (a note) from an unreachable one (a failure).
+    for (const verdict of ['fetched', 'kept', 'absent', 'unreachable']) {
+      expect(BOOT_CODE).toMatch(new RegExp(`_record_lane_inputs_state medchron ${verdict}`))
+    }
     expect(BOOT_CODE).toMatch(/chown root:medchron "\$\{MEDCHRON_FIRM_CONFIG\}"/)
     expect(BOOT_CODE).toMatch(/chmod 0640 "\$\{MEDCHRON_FIRM_CONFIG\}"/)
     expect(BOOT_CODE).toMatch(/the chronology runner will refuse jobs/)

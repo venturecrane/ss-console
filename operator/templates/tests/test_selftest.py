@@ -269,6 +269,26 @@ def test_enabled_lane_whose_vault_is_cleanly_empty_passes_with_a_note(seat: dict
     assert not [c for c in doc["checks"] if c["id"] == "demand-firm-inputs-present"]
 
 
+# 2026-10-31: smd-staging enabled the chronology skill with no firm config in its
+# vault and failed five chronology input checks, halting ring 0. A cleanly empty
+# vault is not authored, as for demand. FALSIFIER: drop medchron from selftest.sh
+# lane_authored's narrowing list and the first test fails.
+def test_chronology_enabled_with_a_cleanly_empty_vault_passes_with_a_note(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
+    _lane_state(seat, "medchron", "absent")
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    note = _check(doc, "medchron-firm-config-absent")
+    assert note["ok"] is True and "not authored" in note["detail"]
+    assert not [c for c in doc["checks"] if c["id"] == "medchron-firm-config-present"]
+
+
+def test_chronology_enabled_with_an_unreachable_vault_still_fails_the_presence_check(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
+    _lane_state(seat, "medchron", "unreachable")
+    doc = _once(seat, "boot", SMD_SELFTEST_ROOT_UID=str(os.getuid()))
+    assert _check(doc, "medchron-firm-config-present")["ok"] is False
+
+
 # The 2026-10-14 A&P v141 falsifier: the inputs are in the vault and the
 # boot's fetch failed. `unreachable` keeps the lane authored, so the check fails.
 def test_enabled_lane_whose_fetch_was_unreachable_still_fails(seat: dict[str, Path]) -> None:

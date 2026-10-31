@@ -213,7 +213,7 @@ any_lane_runs() {
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
   printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
-  case "$1" in demand|drafting|litigation|casefile|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
+  case "$1" in medchron|demand|drafting|litigation|casefile|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
 }
 
 # ---------- one run ----------

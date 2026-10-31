@@ -39,21 +39,32 @@ SMD_LITIGATION_FIRM_CONFIG="" SMD_CASEFILE_QUEUE_DIR="" SMD_CASEFILE_FIRM_CONFIG
 # Root-owned, group medchron read-only (the driver child reads it; the agent
 # uid has no group membership and no need to read the firm's tables).
 MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
+# The fetch verdict is recorded like every other lane's inputs (fetched | kept |
+# absent | unreachable in /run/smd-lanes/medchron.inputs; entrypoint-fetch-inputs.sh
+# defines the recorder and why): a seat that enables the chronology skill with no
+# firm config in its vault (a cleanly empty listing) passes the self-test with a
+# note, as demand does, while an unreachable vault still fails it (2026-10-31,
+# smd-staging halted ring 0 on five chronology input checks).
+# shellcheck source=/dev/null
+. /app/entrypoint-fetch-inputs.sh
+_vault="s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/"
+_r2() { AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" aws "$@" --endpoint-url "${_seed_endpoint}"; }
+rm -f "${SMD_LANE_INPUTS_STATE_DIR:-/run/smd-lanes}/medchron.inputs"
 if ! lane_on medchron; then
   log "medchron lane not authored; medchron-firm.yaml not fetched"
-elif AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
-     AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
-       aws s3 cp \
-         --endpoint-url "${_seed_endpoint}" \
-         --only-show-errors \
-         "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/medchron-firm.yaml" \
-         "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
+elif _r2 s3 cp --only-show-errors "${_vault}medchron-firm.yaml" "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
   mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"
+  _record_lane_inputs_state medchron fetched || true
   log "medchron-firm.yaml refreshed from R2 into ${CONFIG_DIR}"
 elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
+  _record_lane_inputs_state medchron kept || true
   log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
-else
+elif ! _r2 s3 ls "${_vault}medchron-firm.yaml" >/dev/null 2>&1 && _r2 s3 ls "${_vault}" >/dev/null 2>&1; then
+  _record_lane_inputs_state medchron absent || true
   log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
+else
+  _record_lane_inputs_state medchron unreachable || true
+  log "WARN: medchron-firm.yaml could not be fetched and the vault could not be read cleanly; the chronology runner will refuse jobs"
 fi
 rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
 if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
