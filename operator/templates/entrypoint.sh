@@ -649,7 +649,7 @@ fi
 # config change reaches the next daemon start. The words are digits only.
 # ADR 0100: only a seat that authors a job lane runs the runner, and the runner
 # starts only the lanes this seat authors (SMD_AUTHORED_LANES, exported above).
-if [ -z "${SMD_AUTHORED_LANES// /}" ]; then
+if [ -z "${SMD_AUTHORED_LANES//,/}" ]; then
   log "Root medchron daemon NOT launched (this seat authors no job lane)"
 elif [ -x /opt/medchron/.venv/bin/python ] \
    && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then

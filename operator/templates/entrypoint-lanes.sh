@@ -18,16 +18,20 @@
 # and a minute of fetch retries for work it never does (2026-10-31, captain-mark).
 # If the predicate cannot run, every lane boots, as before ADR 0100: a client seat
 # must never lose a lane to a broken read.
-_ALL_LANES="medchron demand drafting litigation casefile negotiation note"
+# A COMMA list, never spaces: it is exported (the runner reads it), so every child
+# inherits it, the gateway included, and seat-probe rebuilds the gateway's env by
+# word-splitting; a space-separated value broke every probe on smd-staging
+# (2026-10-31). tests/operator-entrypoint.test.ts pins the separator.
+_ALL_LANES="medchron,demand,drafting,litigation,casefile,negotiation,note"
 if _lanes="$(/opt/hermes/.venv/bin/python -I -m shared.capabilities lanes "${LIVE_CUSTOMER_YAML}")"; then
-  SMD_AUTHORED_LANES="$(printf '%s' "${_lanes}" | tr '\n' ' ')"
+  SMD_AUTHORED_LANES="$(printf '%s' "${_lanes}" | paste -sd, -)"
 else
   SMD_AUTHORED_LANES="${_ALL_LANES}"
   log "WARN: could not read authored lanes; booting every lane (${_ALL_LANES})"
 fi
 export SMD_AUTHORED_LANES
 log "authored job lanes: ${SMD_AUTHORED_LANES:-none}"
-lane_on() { case " ${SMD_AUTHORED_LANES} " in *" $1 "*) return 0 ;; esac; return 1; }
+lane_on() { case ",${SMD_AUTHORED_LANES}," in *",$1,"*) return 0 ;; esac; return 1; }
 # Every lane's broker env is passed on below whether or not the lane booted; an
 # empty queue dir makes its verbs answer fail-closed (medchron_verbs.py build).
 SMD_MEDCHRON_QUEUE_DIR="" SMD_DEMAND_QUEUE_DIR="" SMD_DRAFTING_QUEUE_DIR="" SMD_LITIGATION_QUEUE_DIR=""
@@ -70,7 +74,7 @@ fi
 # it alongside the connector; the connector preserves that mode on rotation.
 MEDCHRON_RUN_DIR="/run/smd-medchron"
 # ADR 0100: the lane tree exists only on a seat that authors a lane.
-if [ -n "${SMD_AUTHORED_LANES// /}" ]; then
+if [ -n "${SMD_AUTHORED_LANES//,/}" ]; then
 install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"
 mkdir -p "${MEDCHRON_RUN_DIR}"
 mountpoint -q "${MEDCHRON_RUN_DIR}" \

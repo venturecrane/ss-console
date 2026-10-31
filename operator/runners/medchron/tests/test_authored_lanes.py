@@ -20,7 +20,7 @@ def _record_starts(monkeypatch) -> list[str]:
 
 def test_only_the_authored_lanes_start(monkeypatch) -> None:
     started = _record_starts(monkeypatch)
-    monkeypatch.setenv(lanes.AUTHORED_ENV, "medchron note litigation")
+    monkeypatch.setenv(lanes.AUTHORED_ENV, "medchron,note,litigation")  # the entrypoint passes a comma list
     lanes.start_other_lanes(object(), stop=lambda: True, poll_seconds=1.0)
     assert started == ["litigation", "note"]
 

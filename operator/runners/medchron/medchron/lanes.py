@@ -48,7 +48,7 @@ AUTHORED_ENV = "SMD_AUTHORED_LANES"
 def authored(lane: str) -> bool:
     """True when the seat authors ``lane`` (``note_lane`` -> ``note``)."""
     words = os.environ.get(AUTHORED_ENV)
-    return words is None or lane.removesuffix("_lane") in words.split()
+    return words is None or lane.removesuffix("_lane") in words.replace(",", " ").split()
 
 
 def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> list[Any]:

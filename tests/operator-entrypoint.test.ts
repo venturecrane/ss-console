@@ -235,6 +235,17 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     expect(LANES_CODE.slice(seedIdx)).not.toMatch(/FATAL/)
   })
 
+  // 2026-10-31: a space-separated lane list was exported, reached the gateway's
+  // env, and seat-probe (which rebuilds that env by word-splitting) broke on
+  // smd-staging. FALSIFIER: join with spaces again and these fail.
+  it('exports the authored-lane list with commas, never spaces', () => {
+    expect(LANES_CODE).toMatch(/_ALL_LANES="[a-z,]+"/)
+    expect(LANES_CODE).toMatch(
+      /SMD_AUTHORED_LANES="\$\(printf '%s' "\$\{_lanes\}" \| paste -sd, -\)"/
+    )
+    expect(LANES_CODE).toMatch(/lane_on\(\) \{ case ",\$\{SMD_AUTHORED_LANES\}," in \*",\$1,"\*\)/)
+  })
+
   it('launches the daemon from its own venv under an import-gated respawn loop, before the exec-drop', () => {
     expect(ENTRYPOINT_CODE).toMatch(
       /\/opt\/medchron\/\.venv\/bin\/python -c "import medchron\.daemon"/
