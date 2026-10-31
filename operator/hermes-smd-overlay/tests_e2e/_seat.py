@@ -127,6 +127,29 @@ def filled_template() -> str:
     return _fill(TEMPLATE, PLACEHOLDERS).replace(_TEMPLATE_EXPOSURE, _HARNESS_EXPOSURE)
 
 
+def with_every_lane(text: str) -> str:
+    """The seat authors every job lane, by enabling each lane's skill on the one
+    persona (ADR 0100: a seat registers only the lane tools it authors). The
+    dispatch contract checks every lane tool, so the harness seat is the one that
+    has them all; a lane added to ``JOB_LANES`` joins the harness by itself."""
+    from shared import capabilities
+
+    doc: dict[str, Any] = yaml.safe_load(text)
+    skills = doc["personas"][0]["skills"]
+    have = {s.get("name") for s in skills}
+    for skill in capabilities.JOB_LANES.values():
+        if skill not in have:
+            skills.append(
+                {
+                    "name": skill,
+                    "version": "pending",
+                    "initiation": {"manual": True, "scheduled": False, "webhook": False},
+                    "enabled": True,
+                }
+            )
+    return yaml.safe_dump(doc, sort_keys=False)
+
+
 def write_couples_seat(path: Path) -> Path:
     """Fill the couples template into ``path`` and prove the real validator
     accepts it, so the space-mode test reads an authored seat config rather
@@ -146,7 +169,7 @@ def build_seat_home(root: Path, *, model_base_url: str, extra_plugins: list[Path
     from bootstrap.translate import translate_customer_yaml
 
     customer_yaml = root / "customer.yaml"
-    customer_yaml.write_text(filled_template(), encoding="utf-8")
+    customer_yaml.write_text(with_every_lane(filled_template()), encoding="utf-8")
     hermes_root = root / "home"
     slugs = translate_customer_yaml(
         str(customer_yaml),
