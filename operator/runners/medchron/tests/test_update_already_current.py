@@ -30,8 +30,19 @@ from test_update_e2e import _driver, _job, _Model, _seat
 import update_testkit as K
 
 PHOTOS_WHY = "outside the firm's folder rules (an excluded folder or kind)"
-#: The records review an already-current update files (the driver stamps today's date).
+#: A records review name for the record-only cases below; any stamp will do there.
 REVIEW = review_list.name("Alpha Example", time.strftime("%m-%d-%y"))
+
+
+def _review(data_root: Path) -> str:
+    """The records review the run staged, read back rather than predicted.
+
+    The driver stamps the day it runs. A name computed at import is a day off
+    for a suite that crosses midnight (CI, 2026-10-31 00:0xZ: the module was
+    collected on the 30th and the run stamped the 31st)."""
+    found = sorted((data_root / "example-matter" / "out" / "alpha").glob(review_list.name("Alpha Example", "??-??-??")))
+    assert len(found) == 1, found
+    return found[0].name
 
 
 def _run(tmp_path: Path, data_root: Path, firm: Path, pricing: Path, ids: list[str]) -> tuple[Any, Any, _Model]:
@@ -60,7 +71,8 @@ def test_an_update_whose_files_the_delivery_already_holds_is_delivered_already_c
     chronology and proven by hash, and the proof the gate believes."""
     o, seat, model = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n2", "n3"])
     assert o.outcome == "delivered" and o.stage == "update_select", o
-    assert [f["name"] for f in seat.sent] == [REVIEW] and seat.deleted == [] and model.calls == []
+    review = _review(data_root)
+    assert [f["name"] for f in seat.sent] == [review] and seat.deleted == [] and model.calls == []
     rec = _record(data_root)
     reasons = {f["id"]: f["reason"] for f in rec["files"]}
     assert reasons == {"n2": UO.DUPLICATE, "n3": UO.EXCLUDED}
@@ -68,10 +80,10 @@ def test_an_update_whose_files_the_delivery_already_holds_is_delivered_already_c
     assert rec["entries_added"] == 0 and rec["exhibits_added"] == 0 and UO.problem(rec) is None
     assert o.current == UO.summary(rec) and o.current["by_reason"][UO.DUPLICATE]["files"] == 1
     # The records review is the one file proven, and the daemon's gate believes it.
-    assert o.proof["readback"] == "confirmed" and [f["name"] for f in o.proof["files"]] == [REVIEW]
-    assert o.proof["review"] == "code_only" and o.current["review_file"] == REVIEW
+    assert o.proof["readback"] == "confirmed" and [f["name"] for f in o.proof["files"]] == [review]
+    assert o.proof["review"] == "code_only" and o.current["review_file"] == review
     assert gate.check([o.to_dict()]) is None
-    text = docx_text(data_root / "example-matter" / "out" / "alpha" / REVIEW)
+    text = docx_text(data_root / "example-matter" / "out" / "alpha" / review)
     assert "a byte-identical copy of an exhibit the delivered chronology already holds" in text
     assert f"excluded by the firm's rule: {PHOTOS_WHY}" in text and "2 added nothing" in text
     # The covered record still names both, so the next update does not read them again.
@@ -100,7 +112,7 @@ def test_a_proof_run_stops_before_filing_the_records_review_and_says_what_it_wou
     o, seat, model = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n2", "n3"])
     assert o.outcome == proof_mode.OUTCOME and o.stage == "update_select", o
     assert seat.sent == [] and seat.deleted == [] and model.calls == []
-    assert (data_root / "example-matter" / "out" / "alpha" / REVIEW).is_file()
+    assert _review(data_root)
     assert "would file the records review" in (o.reason or "") and o.current is not None
     from medchron import proof_run
 
@@ -147,7 +159,7 @@ def test_every_named_file_excluded_by_the_firms_rules_is_delivered_already_curre
     coverage counts it."""
     o, seat, _ = _run(tmp_path, data_root, firm_config_path, pricing_path, ["n3"])
     assert o.outcome == "delivered" and o.stage == "download", o
-    assert [f["name"] for f in seat.sent] == [REVIEW] and seat.deleted == []
+    assert [f["name"] for f in seat.sent] == [_review(data_root)] and seat.deleted == []
     assert not any("n3" in m for m in seat.mints)
     rec = _record(data_root)
     assert [(f["id"], f["reason"]) for f in rec["files"]] == [("n3", UO.EXCLUDED)]
