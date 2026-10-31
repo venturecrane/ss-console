@@ -123,10 +123,9 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     assert cap.authored_lanes(seat("ashton-price")) == list(cap.JOB_LANES)
     assert cap.authors_connector(seat("ashton-price"), "smokeball")
     assert cap.authors_connector(seat("pilot-smokeball"), "smokeball")
-    # smd-staging authors the SMD note only until a lane without staged firm inputs
-    # passes the self-test with a note (2026-10-31: authoring medchron there failed
-    # five input checks and halted ring 0).
-    assert cap.authored_lanes(seat("smd-staging")) == ["note"]
+    # smd-staging is ring 0: it authors every lane A&P runs (manual only, no firm
+    # inputs, so each lane's self-test notes "absent" by the boot fetch verdict).
+    assert cap.authored_lanes(seat("smd-staging")) == list(cap.JOB_LANES)
     assert not cap.authors_connector(seat("smd-staging"), "smokeball")
     for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug
