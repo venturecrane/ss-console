@@ -79,7 +79,11 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
 
   it('is sourced before the lane files and shipped in the image', () => {
     expect(ENTRYPOINT).toMatch(
-      /for _lane in fetch-inputs demand drafting litigation casefile [a-z -]*; do \. "\/app\/entrypoint-\$\{_lane\}\.sh"; done/
+      /for _lane in fetch-inputs demand drafting litigation casefile [a-z -]*; do (case .*; esac; )?\. "\/app\/entrypoint-\$\{_lane\}\.sh"; done/
+    )
+    // ADR 0100: a lane's boot tree and fetch run only on a seat that authors the lane.
+    expect(ENTRYPOINT).toMatch(
+      /case "\$\{_lane\}" in demand\|drafting\|litigation\|casefile\|negotiation\) lane_on "\$\{_lane\}" \|\| continue ;; esac;/
     )
     expect(DOCKERFILE).toContain(
       'COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.sh'

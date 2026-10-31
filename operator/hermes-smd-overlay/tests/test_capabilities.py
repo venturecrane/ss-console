@@ -103,14 +103,15 @@ def test_the_cli_is_what_boot_reads(tmp_path: Path) -> None:
     assert no.returncode == 1
 
 
-def test_an_unreadable_config_authors_nothing_and_says_why(tmp_path: Path) -> None:
+def test_an_unreadable_config_is_cannot_evaluate_never_no_lanes(tmp_path: Path) -> None:
+    """Exit 3, nothing on stdout: boot then starts every lane and the self-test runs every check."""
     script = OVERLAY / "shared" / "capabilities.py"
     out = subprocess.run(  # noqa: S603 - the module under test, by path
         [sys.executable, "-I", str(script), "lanes", str(tmp_path / "missing.yaml")],
         capture_output=True,
         text=True,
     )
-    assert out.returncode == 0 and out.stdout == "" and "cannot read" in out.stderr
+    assert out.returncode == 3 and out.stdout == "" and "cannot read" in out.stderr
 
 
 def test_the_real_seats_author_what_their_configs_say() -> None:
@@ -122,6 +123,11 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     assert cap.authored_lanes(seat("ashton-price")) == list(cap.JOB_LANES)
     assert cap.authors_connector(seat("ashton-price"), "smokeball")
     assert cap.authors_connector(seat("pilot-smokeball"), "smokeball")
+    # Ring 0 proves every lane the client seat runs before the client seat gets it.
+    assert set(cap.authored_lanes(seat("ashton-price"))) <= set(
+        cap.authored_lanes(seat("smd-staging"))
+    )
+    assert not cap.authors_connector(seat("smd-staging"), "smokeball")
     for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug
         assert not cap.authors_connector(seat(slug), "smokeball"), slug

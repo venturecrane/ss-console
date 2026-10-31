@@ -131,13 +131,37 @@ chown root:root "${LIVE_CUSTOMER_YAML}"
 chmod 0644 "${LIVE_CUSTOMER_YAML}"
 rm -f /opt/data/customer.yaml
 
+# ADR 0100: what this seat authors decides what boots. A job lane is authored when a
+# persona enables its skill (shared/capabilities.py: the one predicate the gateway,
+# the self-test and the release controller ask too). A seat that authors no lane
+# boots no runner, no lane dirs and no lane fetches: on a 1 GB seat that was 45 MB
+# and a minute of fetch retries for work it never does (2026-10-31, captain-mark).
+# If the predicate cannot run, every lane boots, as before ADR 0100: a client seat
+# must never lose a lane to a broken read.
+_ALL_LANES="medchron demand drafting litigation casefile negotiation note"
+if _lanes="$(/opt/hermes/.venv/bin/python -I -m shared.capabilities lanes "${LIVE_CUSTOMER_YAML}")"; then
+  SMD_AUTHORED_LANES="$(printf '%s' "${_lanes}" | tr '\n' ' ')"
+else
+  SMD_AUTHORED_LANES="${_ALL_LANES}"
+  log "WARN: could not read authored lanes; booting every lane (${_ALL_LANES})"
+fi
+export SMD_AUTHORED_LANES
+log "authored job lanes: ${SMD_AUTHORED_LANES:-none}"
+lane_on() { case " ${SMD_AUTHORED_LANES} " in *" $1 "*) return 0 ;; esac; return 1; }
+# Every lane's broker env is passed on below whether or not the lane booted; an
+# empty queue dir makes its verbs answer fail-closed (medchron_verbs.py build).
+SMD_MEDCHRON_QUEUE_DIR="" SMD_DEMAND_QUEUE_DIR="" SMD_DRAFTING_QUEUE_DIR="" SMD_LITIGATION_QUEUE_DIR=""
+SMD_LITIGATION_FIRM_CONFIG="" SMD_CASEFILE_QUEUE_DIR="" SMD_CASEFILE_FIRM_CONFIG="" SMD_NEGOTIATION_QUEUE_DIR=""
+
 # ss#2614: the chronology runner's per-firm config rides the same vault prefix.
 # Same fail-static shape as customer.yaml above, without the FATAL arm: a seat
 # without it boots fine and the runner refuses every job with one loud line.
 # Root-owned, group medchron read-only (the driver child reads it; the agent
 # uid has no group membership and no need to read the firm's tables).
 MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
+if ! lane_on medchron; then
+  log "medchron lane not authored; medchron-firm.yaml not fetched"
+elif AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
      AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
        aws s3 cp \
          --endpoint-url "${_seed_endpoint}" \
@@ -266,19 +290,29 @@ mountpoint -q "${AUDIT_BIND_DIR}" \
 # mount, exactly like the audit ledger. The Smokeball refresh token becomes
 # group-shared (setgid dir, 0660 file) so the medchron uid can mint and rotate
 # it alongside the connector; the connector preserves that mode on rotation.
+MEDCHRON_RUN_DIR="/run/smd-medchron"
+# ADR 0100: the lane tree exists only on a seat that authors a lane.
+if [ -n "${SMD_AUTHORED_LANES// /}" ]; then
 install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"
+mkdir -p "${MEDCHRON_RUN_DIR}"
+mountpoint -q "${MEDCHRON_RUN_DIR}" \
+  || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
+  || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
+fi
+if lane_on medchron; then
 install -d -o root -g workspace-broker -m 0770 "${MEDCHRON_DATA_DIR}/queue"
 # jobs/: root-owned, group medchron EXECUTE-ONLY (0710) — the driver child
 # must traverse it to reach its own job dir (live-caught 2026-08-31: 0700
 # gave the child PermissionError on its job.yaml) but must not be able to
 # list or open sibling jobs; each job dir is 0700 medchron.
 install -d -o root -g medchron -m 0710 "${MEDCHRON_DATA_DIR}/jobs"
-MEDCHRON_RUN_DIR="/run/smd-medchron"
-mkdir -p "${MEDCHRON_RUN_DIR}"
-mountpoint -q "${MEDCHRON_RUN_DIR}" \
-  || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
-  || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
 export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
+fi
+# The SMD note lane (2026-10-15, medchron/note_lane.py): no queue and no child.
+# note-jobs/ is written by root's note_by_smd command and read by the root
+# daemon's note lane, which sends each note's wake and watches its reply; no
+# other uid touches it, so it is root-only.
+if lane_on note; then install -d -o root -g root -m 0700 "${MEDCHRON_DATA_DIR}/note-jobs"; fi
 # The demand lane's (2026-10-06), the drafting lane's and the litigation status
 # lane's (2026-10-07), the negotiation watch's (2026-10-09) and the case file manager's (2026-10-26) queues, job dirs
 # and inputs: sourced, same shell, so their exports reach the broker launch and
@@ -289,7 +323,7 @@ export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
 # litigation lane with no inputs for a whole release), so it is sourced first.
 # marketing is a marketing seat's advertising-gate registers (ADR 0098), root:hermes.
 # shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,casefile,negotiation,marketing,lane-proofs,image-manifest}.sh
-for _lane in fetch-inputs demand drafting litigation casefile negotiation marketing lane-proofs image-manifest; do . "/app/entrypoint-${_lane}.sh"; done
+for _lane in fetch-inputs demand drafting litigation casefile negotiation marketing lane-proofs image-manifest; do case "${_lane}" in demand|drafting|litigation|casefile|negotiation) lane_on "${_lane}" || continue ;; esac; . "/app/entrypoint-${_lane}.sh"; done
 
 # The chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
@@ -306,7 +340,9 @@ for _lane in fetch-inputs demand drafting litigation casefile negotiation market
 # controls measures nothing).
 MEDCHRON_CONTROLS_DIR="${MEDCHRON_DATA_DIR}/controls"
 rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
-if AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
+if ! lane_on medchron; then
+  :
+elif AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
      AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
        aws s3 cp \
          --endpoint-url "${_seed_endpoint}" \
@@ -730,7 +766,11 @@ fi
 # cgroup (medchron.lane_memory prints the NAME=BYTES words; nothing when
 # unauthored, so the code defaults stand). Re-read on every respawn so a live
 # config change reaches the next daemon start. The words are digits only.
-if [ -x /opt/medchron/.venv/bin/python ] \
+# ADR 0100: only a seat that authors a job lane runs the runner, and the runner
+# starts only the lanes this seat authors (SMD_AUTHORED_LANES, exported above).
+if [ -z "${SMD_AUTHORED_LANES// /}" ]; then
+  log "Root medchron daemon NOT launched (this seat authors no job lane)"
+elif [ -x /opt/medchron/.venv/bin/python ] \
    && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
   # The stop flag: the supervisor (and tini's group signal) TERMs this loop
   # and the daemon together; the loop waits for the daemon's drain, then ends.

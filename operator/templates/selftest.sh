@@ -193,6 +193,23 @@ ok = (stat.S_ISDIR(ds.st_mode) and ds.st_uid == uid and not stat.S_IMODE(ds.st_m
 sys.exit(0 if ok else 1)
 PY
 }
+# lane_runs <lane> (ADR 0100): the seat authors the lane, so the boot started its
+# thread and made its dirs. The same predicate the entrypoint used
+# (shared/capabilities.py). Cannot evaluate reads as runs: its checks then run and
+# say why, never pass-skipped.
+RUNNING_LANES=""
+RUNNING_READ=0
+read_running_lanes() {
+  RUNNING_LANES="$("${SEAT_ROOT}/opt/hermes/.venv/bin/python3" -I -m shared.capabilities lanes "${SEAT_ROOT}/var/lib/smd-config/customer.yaml" 2>/dev/null)" && RUNNING_READ=1
+}
+lane_runs() {
+  [ "${RUNNING_READ}" = 1 ] || return 0
+  printf '%s\n' "${RUNNING_LANES}" | grep -qxF "$1"
+}
+any_lane_runs() {
+  [ "${RUNNING_READ}" = 1 ] || return 0
+  [ -n "${RUNNING_LANES}" ]
+}
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
   printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
@@ -265,6 +282,7 @@ run_once() { # <boot|hourly>
   RECORDS="$(mktemp "${RUN_DIR}/.records.XXXXXX")" || return 1
   started="$(now_iso)"
   read_enabled_skills || true
+  read_running_lanes || true
   # The staged-scripts program reads its data root from this variable.
   if [ -n "${SEAT_ROOT}" ]; then export SMD_SMOKE_DATA_ROOT="${SEAT_ROOT}/opt/data"; fi
   # A check list that cannot be loaded ran nothing, and a run of nothing must

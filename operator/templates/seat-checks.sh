@@ -604,32 +604,41 @@ check_lever "for e in ${SEAT_ROOT}/proc/[0-9]*/environ; do if tr \"\\000\" \"\\n
 # `none`; loosen an install -d mode in entrypoint.sh and the stat reads it;
 # drop the chown of the firm config and the write test passes.
 check "medchron-uid-exists" "id -u medchron >/dev/null"
+if any_lane_runs; then
 check "medchron-daemon-ticking" "t=${SEAT_ROOT}/run/smd-medchron/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "medchron-daemon-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/child.pid"
 # cgroup2 on a unified guest, cgroup1 on Fly's hybrid layout (live-probed
 # 2026-08-31: v2 is mounted bare at /sys/fs/cgroup/unified with no
 # controllers; memory is on the v1 mount). `none` is the failure.
 check "medchron-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/smd-medchron/heartbeat.json"
+fi
+if lane_runs medchron; then
 check "medchron-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/queue)\" = root:workspace-broker:770 ]"
 check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/jobs)\" = root:medchron:710 ]"
+fi
 # The demand lane (2026-10-06): its own thread in the same daemon, its own tick,
 # queue and job dirs. A lane thread that died leaves the chronology ticking and
 # this tick aging, which is the only way that death would be seen.
+if lane_runs demand; then
 check "demand-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "demand-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/demand-child.pid"
 check "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/demand-queue)\" = root:workspace-broker:770 ]"
 check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/demand-jobs)\" = root:medchron:710 ]"
+fi
 # The drafting lane (2026-10-07): the daemon's third thread, the same four checks.
-# Every seat runs it (entrypoint-drafting.sh always makes the queue); a seat with
+# A seat that authors document-drafter runs it (ADR 0100); one with
 # no drafting inputs ticks and defers, so a silent tick is still a dead thread.
+if lane_runs drafting; then
 check "drafting-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "drafting-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/drafting-child.pid"
 check "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/drafting-queue)\" = root:workspace-broker:770 ]"
 check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/drafting-jobs)\" = root:medchron:710 ]"
+fi
 # The litigation status lane (2026-10-07): the daemon's fourth thread, the same
 # four checks plus its state dir (client facts: the child's alone, 0700) and the
 # broker's copy of the firm config (present exactly when the runner's is, and
 # group workspace-broker read-only, never writable by it).
+if lane_runs litigation; then
 check "litigation-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/litigation-child.pid"
 check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-queue)\" = root:workspace-broker:770 ]"
@@ -639,16 +648,19 @@ check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/ru
 # the child must be able to write it (its parent is root-owned).
 check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\" = medchron:medchron:700 ]"
 check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/litigation/litigation-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+fi
 # The case file manager: the litigation lane's checks for its own thread,
 # queue, job dir, state dir (client facts: the child's alone, 0700) and the
 # broker's copy of its firm config. It reads through the litigation lane's text
 # cache, which the litigation checks above already hold.
+if lane_runs casefile; then
 check "casefile-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/casefile-child.pid"
 check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-queue)\" = root:workspace-broker:770 ]"
 check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-jobs)\" = root:medchron:710 ]"
 check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile/state)\" = medchron:medchron:700 ]"
 check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/casefile/casefile-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+fi
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
 # and the gateway runs under none, so the caps must leave the gateway room: the
 # sum of every lane cgroup's limit must not exceed the authored machine memory
@@ -674,14 +686,18 @@ check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config
 check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/medchron/.venv/bin/python" "lane-memory-caps-probe.py"
 # The negotiation watch (2026-10-09): its own daemon thread, the same checks,
 # and its state dir (file cursors: the child's alone, 0700).
+if lane_runs negotiation; then
 check "negotiation-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/negotiation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation-queue)\" = root:workspace-broker:770 ]"
 check "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation-jobs)\" = root:medchron:710 ]"
 check "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation/state)\" = medchron:medchron:700 ]"
+fi
 # The SMD note lane (2026-10-15): its own daemon thread (wakes and reply
 # watches only, no child) and its root-only job dir.
+if lane_runs note; then
 check "note-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/note-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check "note-jobs-dir-root-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/note-jobs)\" = root:root:700 ]"
+fi
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
 # provision-customer.sh step 2b reads the SAME path and continues without it

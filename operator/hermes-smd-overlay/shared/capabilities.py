@@ -111,7 +111,12 @@ def authors_connector(doc: dict[str, Any] | None, name: str) -> bool:
 
 def _main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[0] == "lanes":
-        for lane in authored_lanes(read(argv[1])):
+        doc = read(argv[1])
+        if doc is None:
+            # Cannot evaluate is not "no lanes": boot then starts every lane and the
+            # self-test runs every lane check (a client must not lose one to a bad read).
+            return 3
+        for lane in authored_lanes(doc):
             print(lane)
         return 0
     if len(argv) == 3 and argv[0] == "connector":
