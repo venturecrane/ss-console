@@ -51,6 +51,7 @@ import { checkConnectors } from './sections-connectors'
 import { checkCustodyExceptions, checkCustodyGuard } from './sections-custody-guard'
 import { checkScope } from './sections-scope'
 import { checkStaffMailboxReads } from './sections-staff-send-as'
+import { checkCapabilityOwnedBlocks } from './sections-capabilities'
 import {
   checkBusinessHours,
   checkDigest,
@@ -301,6 +302,7 @@ function validateSections(
   checkRecordStores(root, errors) // optional record_stores block; validate-only (#2793)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
   checkFirmIdentity(root, errors) // optional firm_identity (letterhead); validate-only
+  checkCapabilityOwnedBlocks(root, errors) // ADR 0100: a capability's block needs the capability
   const escalation = checkEscalation(root, errors)
   const sendPolicy = checkSendPolicy(root, errors)
   const memory = checkMemory(root, customerId, verticalResult.vertical, errors)

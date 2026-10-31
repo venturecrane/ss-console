@@ -113,9 +113,9 @@ ADJUSTMENTS_HEADING = "## Adjustments"
 #: the model reads only the file — it never sees the vault entry that produced
 #: it, so the precedence rule has to be IN the bytes.
 ADJUSTMENTS_PREAMBLE = (
-    "Standing instructions from the firm, in effect from the date shown. Each "
+    "Standing instructions from the people you work for, in effect from the date shown. Each "
     "applies on top of everything above; where an adjustment and the text above "
-    "disagree, the adjustment is the firm's later instruction and wins."
+    "disagree, the adjustment is their later instruction and wins."
 )
 
 #: Ownership + permissions of everything this package installs. The dir is

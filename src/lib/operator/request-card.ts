@@ -31,6 +31,11 @@
  * that does not match the contract is a 400, never a partial card.
  */
 
+import {
+  JOB_LANES as CAPABILITY_JOB_LANES,
+  type JobLane,
+} from './customer-yaml/sections-capabilities'
+
 export const CARD_KINDS = [
   'replied',
   'no_reply',
@@ -40,14 +45,12 @@ export const CARD_KINDS = [
   'followup',
 ] as const
 export type CardKind = (typeof CARD_KINDS)[number]
-export const JOB_LANES = [
-  'demand',
-  'drafting',
-  'litigation',
-  'medchron',
-  'negotiation',
-  'casefile',
-] as const
+// The job lanes a card may name: every lane a seat can author (ADR 0100), from
+// the one table (sections-capabilities.ts, pinned to the overlay's
+// shared/capabilities.py by tests/customer-yaml-capabilities.test.ts). The D1
+// column no longer carries its own copy (migration 0145), so a new lane is one
+// table entry, not a table rebuild.
+export const JOB_LANES = Object.keys(CAPABILITY_JOB_LANES) as readonly JobLane[]
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
 
 // `<sha256 of the request>:<kind>`. A job_done key may carry its job ENDING

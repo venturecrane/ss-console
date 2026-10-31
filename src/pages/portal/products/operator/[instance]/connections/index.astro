@@ -75,7 +75,7 @@ const RETURN_TO = `${operatorBase}/connections`
 const cs = Astro.url.searchParams.get('cs')
 const CS_MESSAGES: Record<string, string> = {
   saved: 'API key saved.',
-  not_permitted: 'Connector self-service is managed by SMD for your firm. Use Request a change.',
+  not_permitted: 'Our team manages connectors for your organization. Use Request a change.',
   not_enabled: 'Secret entry is not available yet. Use Request a change and SMD will set it up.',
   empty_secret: 'Enter a key before saving.',
   write_failed: 'The key could not be saved. Please try again.',

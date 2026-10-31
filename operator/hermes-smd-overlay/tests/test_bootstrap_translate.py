@@ -191,7 +191,7 @@ def test_translate_renders_authored_exposure_into_soul_md(tmp_path):
         skills_dir=str(skills_dir),
     )
     soul = (hermes_home / "profiles" / "marcus" / "SOUL.md").read_text()
-    assert "## Authored autonomy (set by the firm)" in soul
+    assert "## Authored autonomy (set by the people you work for)" in soul
     # the autonomous line is actionable: send, don't draft
     assert "**external_send**: autonomous" in soul
     assert "do not leave a draft" in soul

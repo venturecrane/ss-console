@@ -104,9 +104,9 @@ def _doc(entry: dict, *, klass: str = "outbound_client", prop: str = "voice") ->
 EXPECTED_BLOCK = (
     "## Adjustments\n"
     "\n"
-    "Standing instructions from the firm, in effect from the date shown. Each "
+    "Standing instructions from the people you work for, in effect from the date shown. Each "
     "applies on top of everything above; where an adjustment and the text above "
-    "disagree, the adjustment is the firm's later instruction and wins.\n"
+    "disagree, the adjustment is their later instruction and wins.\n"
     "\n"
     "- [rule 7f3a2c1d] (instructed by chris@firm.com, applied by chris@firm.com, "
     "2026-08-21T18:04:00Z): In client letters and letters to opposing counsel, be "

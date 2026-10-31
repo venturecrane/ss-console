@@ -29,6 +29,14 @@
 # materializer: where the runtime effect is produced (file/function), or — for
 #              inert, where it is validated.
 # note:        for inert, WHY it is not wired (deliberate vs not-yet); free text.
+# owner:       (top-level only; absent = core) the capability whose code is
+#              the block's ONLY reader (ADR 0100): a job lane key or a connector
+#              capability key from overlay shared/capabilities.py, or `core`.
+#              A seat that authors a block without authoring its owner is
+#              refused by the conformance test and the console validator
+#              (BLOCK_OWNERS in src/lib/operator/customer-yaml/
+#              sections-capabilities.ts, pinned to this file). A block any core
+#              code reads stays core.
 #
 # Two scopes: customer.yaml TOP-LEVEL keys, and persona-level keys (entries of
 # personas[]).
@@ -256,6 +264,7 @@ top_level:
       taken from an email.
   case_manager:
     status: implemented
+    owner: core # read by core skill pre_runs (date-prep-brief, task-list-keeper, deadline-miss-escalator) and operator/bin/lib/deadline_replies.py
     materializer: >-
       no translate step by design, the self_initiation shape: three skills'
       pre_run scripts read the block directly off the seat's own
@@ -279,6 +288,7 @@ top_level:
       agreement names the routines.
   firm_identity:
     status: implemented
+    owner: smokeball # only reader: smokeball_connector/letterhead.py load_firm_identity
     materializer: >-
       no translate step by design, the self_initiation shape: the Smokeball
       connector reads the block directly off the seat's own
@@ -300,6 +310,7 @@ top_level:
       on-box validator does not inspect unknown top-level blocks.
   vendor_invoice_intake:
     status: implemented
+    owner: smokeball # only reader: smokeball_connector/vendor_invoice.py load_expense_config
     materializer: >-
       no translate step by design, the self_initiation shape: the Smokeball
       connector reads the block directly off the seat's own
@@ -320,6 +331,7 @@ top_level:
       find_folder_id); a path matching no folder or several files at the root.
   combined_post_intake:
     status: implemented
+    owner: smokeball # only reader: smokeball_connector/post_intake_config.py load_post_intake_config
     materializer: >-
       no translate step by design, the vendor_invoice_intake shape: the
       Smokeball connector reads the block directly off the seat's own
@@ -335,6 +347,7 @@ top_level:
       malformed block is reported on the filing and the letter still files.
   smokeball_layouts:
     status: implemented
+    owner: smokeball # readers: smokeball_connector/layout_config.py and the negotiation lane's broker edge (workspace_broker/negotiation_intake.py), which hands it to a runner that reads Smokeball
     materializer: >-
       no translate step by design, the vendor_invoice_intake shape: the
       Smokeball connector reads the block directly off the seat's own
@@ -350,6 +363,7 @@ top_level:
       filled tab carries; a malformed value is reported in the result.
   form_letters:
     status: implemented
+    owner: smokeball # only readers: smokeball_connector/form_letter_facts.py, sr19_form.py, police_request.py
     materializer: >-
       no translate step by design, the vendor_invoice_intake shape: the
       Smokeball connector reads the block directly off the seat's own
@@ -378,6 +392,7 @@ top_level:
       render_funding_case_eval fills using `firm_identity` for the firm block).
   records_orders:
     status: implemented
+    owner: smokeball # only reader: smokeball_connector/records_orders.py
     materializer: >-
       no translate step by design, the form_letters shape: the Smokeball
       connector reads the block directly off the seat's own
@@ -392,6 +407,7 @@ top_level:
       Authored only from the firm's own vendor confirmations.
   staff_mailbox_reads:
     status: implemented
+    owner: core # read by the core overlay (shared/staff_mailboxes.py) and the msgraph-mail connector, which is no capability in shared/capabilities.py
     materializer: >-
       no translate step by design, the vendor_invoice_intake shape: the
       msgraph-mail connector reads the block directly off the seat's own

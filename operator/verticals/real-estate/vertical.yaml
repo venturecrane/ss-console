@@ -1,0 +1,29 @@
+# Vertical pack manifest: real-estate
+#
+# Schema: docs/specs/operator/vertical-manifest-schema.md (ADR 0022 Stream 1).
+#
+# `name` MUST match ACCEPTED_VERTICALS in src/lib/operator/customer-yaml/types.ts
+# (real-estate is already registered). All list fields are required; [] is valid.
+#
+# The minimal preset (ADR 0100 W4): it exists so a brokerage seat can declare
+# the market it is in instead of `mixed`. It lists only what exists in the tree
+# today. A vertical names a market; it changes nothing a seat runs. What a seat
+# runs is the capabilities it authors (overlay shared/capabilities.py).
+
+name: real-estate
+version: 0.1.0
+
+compliance: []
+
+personas: []
+
+skills:
+  - open-house-visitor-capture # captures open-house visitors and drafts follow-ups for the agent (operator/skills/)
+
+connectors: []
+
+templates: []
+
+fixtures: []
+
+evals: []

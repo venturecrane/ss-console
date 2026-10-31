@@ -1981,7 +1981,7 @@ def _send_posture_soul_section(persona: dict[str, Any]) -> str:
     if not lines:
         return ""
     return (
-        "\n## Authored autonomy (set by the firm)\n\n"
+        "\n## Authored autonomy (set by the people you work for)\n\n"
         "Your authorization for each action class, authored in the engagement "
         "config. Work AT this level: do not hold back below it, and never try to "
         "exceed it. Enforcement gates every action in code regardless of this "
