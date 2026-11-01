@@ -301,12 +301,11 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     items += src.connector_items(slug, status, now)
     items += src.alert_items(slug, console.alerts.get(slug, []), now)
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
-    product = seat_product(customer_yaml(slug))
-    if product != "operator":
-        # A hosted agent (seat.product: hosted-agent; scott, brokery) has no
-        # request cards, job lanes or Smokeball: grading it against Operator
-        # expectations would invent findings. Machine checks only, said so.
-        return items, [f"{product or 'unknown product'}, machine checks only"], 0
+    # ADR 0100 W6: one product. Every seat gets the same checks; each check
+    # grades only what the seat authors (Smokeball sign-in only with that
+    # connector, the mailbox probe only with an msgraph mailbox, missed slots
+    # only for authored schedules, jobs only where jobs ran). Until 2026-10-31
+    # a seat.product of hosted-agent got machine checks only.
     if console.error:
         items.append(
             wh.item(
