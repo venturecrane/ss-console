@@ -100,7 +100,7 @@ if ! tree_paths=$(git ls-tree -r --name-only HEAD -- operator/customers 2>/dev/n
 fi
 paths=()
 while IFS= read -r _line; do
-  case "$_line" in */customer.yaml) paths+=("$_line") ;; esac
+  case "$_line" in */customer.yaml) seat_dir_of_path "$_line" >/dev/null && paths+=("$_line") ;; esac
 done <<<"$tree_paths"
 if [[ ${#paths[@]} -eq 0 ]]; then
   echo "::error::HEAD carries no operator/customers/*/customer.yaml; that is not a converged state, it is an unreadable one"

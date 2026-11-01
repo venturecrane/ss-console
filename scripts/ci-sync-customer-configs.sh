@@ -64,7 +64,7 @@ fi
 declare -A seen_slug=()
 slugs=()
 for path in "${changed[@]}"; do
-  slug=$(basename "$(dirname "$path")")
+  slug=$(seat_dir_of_path "$path") || continue
   [[ -n "${seen_slug[$slug]:-}" ]] && continue
   seen_slug[$slug]=1
   slugs+=("$slug")
