@@ -758,10 +758,11 @@ def test_a_mailbox_sign_in_failure_pages():
     assert items[0].page == f"ACTION: {SEAT} mailbox sign-in is dead"
 
 
-def test_a_hosted_agent_seat_gets_machine_checks_only():
-    """brokery and scott are hosted agents: no request cards, job lanes or
-    Smokeball. Rows that would be Operator findings on an Operator seat must
-    produce nothing there, and the email says why."""
+def test_a_self_serve_seat_gets_the_same_checks_as_any_seat():
+    """ADR 0100 W6: one product. scott (seat.product hosted-agent, the
+    self-serve preset) is checked like every seat: the rows that are findings
+    on an Operator seat are findings there too. FALSIFIER: restore the
+    product branch and scott's items come back empty."""
     import yaml
 
     customers = Path(__file__).resolve().parents[2] / "customers"
@@ -771,16 +772,13 @@ def test_a_hosted_agent_seat_gets_machine_checks_only():
         if cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
     ]
     assert "scott" in hosted
-    console = cli.Console(cli._NoD1())
     rows = [_inbound(NOW - timedelta(hours=1)), _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=5))]
     for seat in hosted:
+        console = _console()
         console.status[seat] = {"last_heartbeat_ts": (NOW - timedelta(minutes=1)).isoformat()}
         items, gaps, _ = cli.evaluate_seat(seat, CFG, console, NOW, rows)
-        assert items == [] and "machine checks only" in gaps[0]
-    # The same rows on an Operator seat ARE findings (the falsifier).
-    console.status[SEAT] = {"last_heartbeat_ts": (NOW - timedelta(minutes=1)).isoformat()}
-    items, _gaps, _ = cli.evaluate_seat(SEAT, CFG, _console(), NOW, rows)
-    assert {"no_reply", "job_stuck"} <= set(_kinds(items))
+        assert {"no_reply", "job_stuck"} <= set(_kinds(items)), seat
+        assert not any("machine checks only" in g for g in gaps)
 
 
 def test_a_job_held_for_an_unproven_lane_is_waiting_not_stuck():
