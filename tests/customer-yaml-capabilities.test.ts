@@ -111,10 +111,13 @@ describe('enforcement', () => {
     )
     const doc = { ...pilot, connectors }
     expect(pilot['smokeball_layouts']).toBeDefined()
+    expect(pilot['form_letters']).toBeDefined()
     const res = validate(doc)
     expect(res.ok).toBe(false)
     const refused = res.ok ? [] : res.errors.filter((e) => e.code === 'CapabilityNotAuthored')
-    expect(refused.map((e) => e.path)).toEqual(['smokeball_layouts'])
+    // Both Smokeball-owned blocks the pilot authors (form_letters since its
+    // form catalog moved into config, ADR 0100 W4).
+    expect(refused.map((e) => e.path)).toEqual(['smokeball_layouts', 'form_letters'])
   })
 })
 

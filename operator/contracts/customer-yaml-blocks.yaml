@@ -368,9 +368,17 @@ top_level:
       no translate step by design, the vendor_invoice_intake shape: the
       Smokeball connector reads the block directly off the seat's own
       /var/lib/smd-config/customer.yaml at render time
-      (smokeball_connector/form_letter_facts.py load_signers).
+      (smokeball_connector/form_letter_facts.py load_signers, and
+      form_letters.py load_forms for `forms`).
     note: >-
-      `signers`: how the matter's responsible staff member signs the firm's
+      `forms` (ADR 0100 W4): the firm's form catalog, one entry per toolbar
+      letter render_firm_form_letter makes: `label`, `document_class`,
+      `default_template`, `file_name`, `side`, `client_side`, `fax_label`,
+      `email_label`, `paragraph_fields`, `signer_name_from` (authored | staff
+      | preparer) and `facts_kind` (rep | health | fax | wage), every field
+      required. Unauthored offers no form letter; a malformed entry refuses
+      and files nothing. Until W4 this catalog was A&P's, hardcoded in the
+      connector and offered on every Smokeball seat. `signers`: how the matter's responsible staff member signs the firm's
       rep letters, keyed by the staff member's name as Smokeball holds it or
       by their staff id, each `{name, title, initials}`. The only source of
       the 1st party letter's signer on render_firm_form_letter; the 3rd party
