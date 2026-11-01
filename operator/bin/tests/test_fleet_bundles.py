@@ -289,25 +289,29 @@ def _git_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dic
     commit("docs-only", "docs/readme.md")
     commit("ci-only", ".github/workflows/deploy.yml")
     commit("runner", "operator/runners/medchron/x.py")
-    commit("skills-after-runner", "operator/skills/y/SKILL.md")
-    git("update-ref", "refs/remotes/origin/main", shas["skills-after-runner"])
+    commit("core", "operator/hermes-smd-overlay/x.py")
+    commit("skills-after-core", "operator/skills/y/SKILL.md")
+    git("update-ref", "refs/remotes/origin/main", shas["skills-after-core"])
     return git, shas
 
 
 def test_base_of_s_skips_artifact_docs_and_ci_commits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """FALSIFIER: base(S) = S (the pre-W3 rule) and a skills-only merge waits for an
     image that merge never builds; drop the artifact exclude and base(skills-only)
-    is skills-only itself."""
+    is skills-only itself. Since the cut a runner-only merge builds no image either,
+    so its base is the image before it (put the runner back among the image paths
+    and base(runner) is runner)."""
     _, shas = _git_repo(tmp_path, monkeypatch)
     runner = CommandRunner()
     assert ordering.base_commit(runner, tmp_path, shas["skills-only"]) == shas["image-1"]
     assert ordering.base_commit(runner, tmp_path, shas["ci-only"]) == shas["image-1"]
-    assert ordering.base_commit(runner, tmp_path, shas["runner"]) == shas["runner"]
-    assert ordering.base_commit(runner, tmp_path, shas["skills-after-runner"]) == shas["runner"]
+    assert ordering.base_commit(runner, tmp_path, shas["runner"]) == shas["image-1"]
+    assert ordering.base_commit(runner, tmp_path, shas["core"]) == shas["core"]
+    assert ordering.base_commit(runner, tmp_path, shas["skills-after-core"]) == shas["core"]
     assert ordering.base_commit(runner, tmp_path, "9" * 40) is None
 
 
-def test_a_skills_only_merge_goes_to_a_seat_on_the_image_before_it(
+def test_skills_and_runner_only_merges_go_to_a_seat_on_the_image_before_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Through the CLI's own reads (cli._skills_defer and cli._bundles_defer), on real git."""
@@ -318,14 +322,18 @@ def test_a_skills_only_merge_goes_to_a_seat_on_the_image_before_it(
     ctx = cli.Ctx(tmp_path, CommandRunner(), store, FakeR2(), FakeFly())  # type: ignore[arg-type]
     skills = {"ss_console_sha": shas["skills-only"], "skills_version": "202610310100-" + shas["skills-only"][:8]}
     assert cli._skills_defer(ctx, ["on-image-1"])(skills) == {}
-    later = {"ss_console_sha": shas["skills-after-runner"], "skills_version": "202610310200-abcdef12"}
+    later = {"ss_console_sha": shas["skills-after-core"], "skills_version": "202610310200-abcdef12"}
     assert "need an image at or after" in cli._skills_defer(ctx, ["on-image-1"])(later)["on-image-1"]
-    bundle = bundle_rel("202610310300-" + shas["runner"][:8], shas["runner"])
+    # The cut: a runner-only bundle goes to the seat on the image before it.
+    runner_bundle = bundle_rel("202610310250-" + shas["runner"][:8], shas["runner"])
+    assert cli._bundles_defer(ctx, ["on-image-1"])(runner_bundle) == {}
+    # A bundle built after a core change waits for that core's image.
+    bundle = bundle_rel("202610310300-" + shas["core"][:8], shas["core"])
     assert "waiting for the image" in cli._bundles_defer(ctx, ["on-image-1"])(bundle)["on-image-1"]
     store.insert_release(release(release_id="img-202610310400-bbbbbbbb", image_ref="registry.fly.io/hermes-fleet:r",
-                                 image_digest="sha256:" + "c" * 64, ss_console_sha=shas["runner"]))  # fmt: skip
-    store.status = {"on-runner": fresh_status(image="registry.fly.io/hermes-fleet:r@sha256:" + "c" * 64)}
-    assert cli._bundles_defer(ctx, ["on-runner"])(bundle) == {}
+                                 image_digest="sha256:" + "c" * 64, ss_console_sha=shas["core"]))  # fmt: skip
+    store.status = {"on-core": fresh_status(image="registry.fly.io/hermes-fleet:r@sha256:" + "c" * 64)}
+    assert cli._bundles_defer(ctx, ["on-core"])(bundle) == {}
 
 
 def test_a_seat_already_on_a_newer_bundle_is_not_moved_back() -> None:

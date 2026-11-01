@@ -753,9 +753,14 @@ def test_skills_left_the_image_trigger_but_not_the_suites() -> None:
     assert not _is_image_path(".github/workflows/deploy.yml")
 
 
-def test_bundle_paths_stay_image_paths_until_the_cut() -> None:
-    """The contract's six jobs-bundle trigger paths each publish a bundle, and each
-    is still an image path (the image keeps its own copy as the fallback)."""
+def test_the_cut_runner_and_connector_changes_build_no_image() -> None:
+    """ADR 0100 W3, the cut: the contract's six jobs-bundle trigger paths each
+    publish a bundle; the runner, the Smokeball connector and their two pins build
+    NO image (only the seats that author a job lane take them, as a bundle), while
+    the SDK and the pricing table stay image paths because the image's other
+    connectors and the overlay use them too. FALSIFIER: drop the four lines from
+    operator-artifact-paths.txt and every runner merge restarts all six seats
+    again; add the SDK and ga4/msgraph-mail stop getting rebuilt with it."""
     patterns = _detect.load_patterns(BUNDLE_PATHS_FILE)
     contract = [
         "operator/runners/medchron/**",
@@ -774,10 +779,20 @@ def test_bundle_paths_stay_image_paths_until_the_cut() -> None:
         "operator/requirements/connector-smokeball.txt",
         "operator/adapter/cost_telemetry/anthropic_pricing.json",
     ]
+    bundle_only = {
+        "operator/runners/medchron/medchron/daemon.py",
+        "operator/connectors/smokeball/pyproject.toml",
+        "operator/requirements/medchron.txt",
+        "operator/requirements/connector-smokeball.txt",
+    }
     for path in samples:
         assert _detect.relevant_paths([path], patterns), path
-        assert _is_image_path(path), f"{path} must stay an image path until the cut"
+        if path in bundle_only:
+            assert not _is_image_path(path), f"{path} ships in the jobs bundle, never in an image"
+        else:
+            assert _is_image_path(path), f"{path} is used by the image itself and must build one"
     assert not _detect.relevant_paths(["operator/connectors/ga4/pyproject.toml"], patterns)
+    assert _is_image_path("operator/connectors/ga4/pyproject.toml")
 
 
 def test_base_of_s_and_the_image_trigger_read_the_same_list() -> None:

@@ -4,8 +4,9 @@ Every R2 call goes to an in-memory fake, every write to tmp_path, and the
 ownership checks run against this test's own uid. The falsifiers that matter:
 a tarball or manifest that does not match its digest, an import check that
 fails, a member outside the bundle and a link into the agent's volume must each
-mount NOTHING and leave ``current`` where it was; R2 being unreachable must
-still mount what is verified on disk; no pointer must mean the image copy.
+leave ``current`` where it was and mount it (N-1) when it still verifies, else
+NOTHING; R2 being unreachable must still mount what is verified on disk; no
+pointer must mean the image copy.
 """
 
 from __future__ import annotations
@@ -200,13 +201,15 @@ def test_rollback_to_the_kept_version_needs_no_download(tmp_path):
     ],
     ids=["tarball-sha", "size", "name", "version"],
 )
-def test_a_manifest_the_tarball_does_not_match_mounts_nothing(tmp_path, patch):
+def test_a_manifest_the_tarball_does_not_match_keeps_the_previous_version(tmp_path, patch):
     s3 = FakeS3()
     publish(s3, V1)
     run(s3, tmp_path)
     publish(s3, V2, manifest_patch=patch)
     d = run(s3, tmp_path)
-    assert d.path is None and d.source == "image" and d.reasons
+    # N-1, not the image: the image's copy is a seed frozen at its last build.
+    assert (d.source, d.version, d.path) == ("on-disk", V1, store(tmp_path) / V1)
+    assert f"jobs {V2} refused" in d.reasons[0]
     assert current(tmp_path) == V1 and not (store(tmp_path) / V2).exists()
     assert not [p for p in os.listdir(store(tmp_path)) if p.startswith(".")]
 
@@ -216,17 +219,29 @@ def test_manifest_bytes_must_match_the_pointer(tmp_path):
     publish(s3, V1)
     s3.objects["fleet/bundles/jobs/" + V1 + ".json"] += b" "
     d = run(s3, tmp_path)
-    assert d.path is None and "pointer.manifest_sha256" in d.reasons[-1]
+    # Nothing on disk to fall back to: the image's copy runs.
+    assert d.path is None and "pointer.manifest_sha256" in d.reasons[0]
+    assert "no installed bundle on disk" in d.reasons[0]
 
 
-def test_import_check_failure_never_flips(tmp_path):
+def test_import_check_failure_never_flips_and_keeps_the_previous_version(tmp_path):
     s3 = FakeS3()
     publish(s3, V1)
     run(s3, tmp_path)
     publish(s3, V2)
     d = run(s3, tmp_path, Checks(ok=False))
-    assert d.path is None and "No module named" in d.reasons[-1]
+    assert (d.source, d.version) == ("on-disk", V1) and "No module named" in d.reasons[0]
     assert current(tmp_path) == V1 and not (store(tmp_path) / V2).exists()
+
+
+def test_an_unreadable_pointer_keeps_the_previous_version(tmp_path):
+    s3 = FakeS3()
+    publish(s3, V1)
+    run(s3, tmp_path)
+    s3.objects[pointer_key(SLUG, "jobs")] = b"not json"
+    d = run(s3, tmp_path)
+    assert (d.source, d.version) == ("on-disk", V1)
+    assert current(tmp_path) == V1
 
 
 def test_no_pointer_runs_the_image_and_drops_current(tmp_path):
