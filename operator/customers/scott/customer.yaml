@@ -2,8 +2,9 @@ schema_version: 1
 
 # HOSTED AGENT seat: Scott Durgan (founding seat #1, the live dry-run of
 # ADR 0067). Authored from the intake row in the admin queue on
-# 2026-07-06 per docs/runbooks/hosted-agent/concierge.md; template
-# operator/customers/_hosted-template/.
+# 2026-07-06 per docs/runbooks/hosted-agent/concierge.md, from the
+# template since folded into operator/customers/_template/ (preset
+# presets/self-serve, ADR 0100).
 #
 # Intake: agent name "Agent Crane"; use cases "chief of staff — email,
 # calendar, daily routine"; timezone MST; allowed sender
