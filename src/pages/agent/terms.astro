@@ -1,7 +1,8 @@
 ---
 /**
- * Hosted Agent subscription terms (ADR 0067). The product-specific ToS,
- * acceptable-use, and refund policy for the self-serve Hosted Agent SKU.
+ * Self-serve Operator subscription terms (ADR 0067; named the Hosted Agent
+ * until ADR 0100 W6, 2026-10-31, a rename only). The product-specific ToS,
+ * acceptable-use, and refund policy for the self-serve Operator plan.
  * Includes the plan-retirement clause that bounds the founding-price
  * obligation (ADR 0067 section 1) and the Anthropic flow-down clause
  * required by the BYO-key compliance check (verify ledger
@@ -23,8 +24,8 @@ const inlineLink =
 ---
 
 <Base
-  title="Hosted Agent Terms | SMD Services"
-  description="Subscription terms, acceptable use, and refund policy for the SMD Services Hosted Agent."
+  title="Self-serve Operator Terms | SMD Services"
+  description="Subscription terms, acceptable use, and refund policy for the SMD Services Self-serve Operator."
 >
   <Nav />
   <main id="main" role="main" class="bg-[color:var(--ss-color-background)] px-6 py-20 md:py-24">
@@ -32,7 +33,7 @@ const inlineLink =
       <h1
         class="font-body text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-[color:var(--ss-color-text-primary)]"
       >
-        Hosted Agent Terms
+        Self-serve Operator Terms
       </h1>
 
       <p
@@ -45,9 +46,10 @@ const inlineLink =
         class="mt-10 space-y-10 font-body text-lg leading-relaxed text-[color:var(--ss-color-text-primary)]"
       >
         <p>
-          These terms govern the Hosted Agent subscription offered by SMDurgan, LLC. By purchasing a
-          subscription you agree to them. The site-wide <a href="/terms" class={inlineLink}
-            >terms of use</a
+          These terms govern the Self-serve Operator subscription offered by SMDurgan, LLC. By
+          purchasing a subscription you agree to them. The site-wide <a
+            href="/terms"
+            class={inlineLink}>terms of use</a
           > also apply; where they conflict, these product terms control for the subscription.
         </p>
 
@@ -118,15 +120,16 @@ const inlineLink =
           <h2 class={sectionHeading}>Founding pricing and plan retirement</h2>
           <p>
             Founding seats carry a discounted monthly rate that does not increase for as long as the
-            subscription remains continuously active and the Hosted Agent plan remains offered. If a
-            founding subscription lapses or is cancelled, the founding rate does not carry back to a
-            later subscription.
+            subscription remains continuously active and the Self-serve Operator plan remains
+            offered. If a founding subscription lapses or is cancelled, the founding rate does not
+            carry back to a later subscription.
           </p>
           <p class="mt-4">
-            We may retire or materially change the Hosted Agent plan. If we do, we will give at
-            least sixty days written notice, and you may choose between moving to whatever offering
-            replaces it at its then-current terms or ending the subscription. The founding-rate
-            commitment applies within the life of the plan and ends when the plan is retired.
+            We may retire or materially change the Self-serve Operator plan. If we do, we will give
+            at least sixty days written notice, and you may choose between moving to whatever
+            offering replaces it at its then-current terms or ending the subscription. The
+            founding-rate commitment applies within the life of the plan and ends when the plan is
+            retired.
           </p>
         </section>
 
