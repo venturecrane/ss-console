@@ -281,6 +281,9 @@ def test_a_failed_apply_frees_only_lines_it_never_began_writing(seat) -> None:
 
 def test_root_status_carries_the_month_spend(seat) -> None:
     deliver_with_lines(seat)
+    # The ledger stamps rows with the wall clock, so the month is read on it too:
+    # a clock pinned to October read a $0 month from November on.
+    seat["broker"].casefile._now = lambda: datetime.now(timezone.utc)
     got = call(seat["broker"], "casefile_job_status", pid=1, uid=0)
     assert got["month_cents"] == 120 and got["monthly_budget_cents"] == 20000
 
