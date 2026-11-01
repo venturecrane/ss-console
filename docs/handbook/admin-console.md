@@ -39,7 +39,7 @@ The admin console at `admin.smd.services` is where SMD runs the business: client
 | See fleet alerts | Fleet, then Alerts (`/admin/operator/alerts`) |
 | Clear a seat that stopped itself, after investigating | Fleet, the seat's Overview, **Clear stop** |
 | Issue or revoke a person's Claude-connector access | Fleet, the seat's Connectors tab |
-| Activate a Hosted Agent after it is built | Hosted Agent queue (`/admin/hosted-agent`) |
+| Activate a self-serve Operator after it is built | Self-serve intake queue (`/admin/operator/intake`, inside Fleet) |
 
 ## What the admin console is
 
@@ -59,7 +59,7 @@ The navigation is a fixed five-destination spine (ADR 0077, 2026-07-14, which su
 | **Billing** | `/admin/billing` | The bi-modal money surface (ADR 0046): one-time invoices and the recurring Operator line. |
 | **Playbook** | `/admin/playbook` | This handbook. |
 
-**Settings** (`/admin/settings`) is an icon in the header, not a tab. **Leads** (`/admin/entities`), **Services** (`/admin/services`), **Hosted Agent** (`/admin/hosted-agent`), engagement pages (`/admin/engagements/<id>`), **Follow-ups** (`/admin/follow-ups`) and the old `/admin/assessments/<id>` redirect also live under `src/pages/admin/` and are reached from inside the flow (a home card, a client, a lead's meeting) rather than from a tab.
+**Settings** (`/admin/settings`) is an icon in the header, not a tab. **Leads** (`/admin/entities`), **Services** (`/admin/services`), engagement pages (`/admin/engagements/<id>`), **Follow-ups** (`/admin/follow-ups`) and the old `/admin/assessments/<id>` redirect also live under `src/pages/admin/` and are reached from inside the flow (a home card, a client, a lead's meeting) rather than from a tab.
 
 ## Home: the launchpad
 
@@ -164,9 +164,9 @@ Each operator drills into `src/pages/admin/operator/[customer]/*`:
 | **Chronology** | `chronology.astro` | The seat's medical-chronology packages this month (routine 11): counts, states, pages, cents, and the delivery folder, read live over the runtime-read seam (kind `medchron_jobs`), audited, fail-closed, never a document or page of text. |
 | **Runtime** | `runtime.astro` | Live detail (activity and drafts, audit log, matters) read from one seat at a time (ADR 0043 path A). Each read is audited; if the read path is not configured, the page says so and reads nothing. |
 
-### Hosted Agent queue (`/admin/hosted-agent`)
+### Self-serve intake queue (`/admin/operator/intake`)
 
-The concierge queue for the self-serve Hosted Agent (ADR 0067): one card per purchase, copy-paste-ready for authoring `customer.yaml` from `operator/customers/_hosted-template/`. Two actions live on each card: **assign slug** (names the seat and its Fly app and unlocks the customer's key form) and **activate** (marks the subscription active and the intake live and sends the authored go-live email). Activate runs after `reprovision.sh` and the boot smoke test pass; the button does not provision.
+The concierge queue for self-serve Operator purchases (ADR 0067; one product, ADR 0100), reached from a link on the Fleet page. The old `/admin/hosted-agent` URL 301s here. One card per purchase, copy-paste-ready for authoring `customer.yaml` from the self-serve preset, `operator/customers/_template/presets/self-serve/customer.yaml`. Two actions live on each card: **assign slug** (names the seat and its Fly app and unlocks the customer's key form) and **activate** (marks the subscription active and the intake live and sends the authored go-live email). Activate runs after `reprovision.sh` and the boot smoke test pass; the button does not provision.
 
 All per-customer runtime detail comes through the read seam in `src/lib/operator/runtime-read.ts`: single customer per call, read-only, audited, fail-closed. The console observes a running operator; it governs what the operator may do through the authored config it writes, not by querying or mutating the Machine live. The architecture behind these surfaces is at `/admin/playbook/operator-platform` and `/admin/playbook/architecture-map`.
 

@@ -1,6 +1,6 @@
 /**
  * Shared access gate for the Hosted Agent product surfaces under
- * `/portal/products/hosted-agent/*` (ADR 0067).
+ * `/portal/products/operator/setup/*` (ADR 0067).
  *
  * Same four-check shape as the Operator gate (operator-access.ts):
  *
@@ -24,7 +24,7 @@ import { getProductSubscription, listProductRoles, type SubscriptionRow } from '
 
 export const HOSTED_AGENT_PRODUCT_SLUG = 'hosted-agent'
 
-const HOSTED_AGENT_LANDING_PATH = '/portal/products/hosted-agent'
+const HOSTED_AGENT_LANDING_PATH = '/portal/products/operator/setup'
 const PORTAL_SIGN_IN_PATH = '/auth/sign-in'
 const PORTAL_SIGN_IN_NO_SUBSCRIPTION_PATH = `${PORTAL_SIGN_IN_PATH}?status=no_subscription`
 

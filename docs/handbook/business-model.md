@@ -25,7 +25,7 @@ sources:
     href: docs/adr/decision-stack.md
 ---
 
-SMD sells three things: the Operator (the flagship, a managed AI worker on a monthly fee), consulting projects at a fixed price, and the Hosted Agent (a personal AI agent at a published price). This page explains how a prospect reaches each one, the vocabulary we use to understand a business, and how a consulting project runs.
+SMD has three offers: the Operator built with a business (the flagship, a managed AI worker on a monthly fee), consulting projects at a fixed price, and the Operator bought self-serve (a personal agent at a published price). The two Operator offers are one product; only their commercial terms and starting capabilities differ (ADR 0100; the self-serve terms are ADR 0067). This page explains how a prospect reaches each one, the vocabulary we use to understand a business, and how a consulting project runs.
 
 ## Who buys
 
@@ -37,13 +37,13 @@ The buyer is the owner of an established, owner-led business with real operation
 |---|---|---|---|
 | **The Operator** (flagship) | A business whose people and systems leave recurring work falling through the gap between them | The assessment conversation, or directly when the prospect already knows it wants an agent | ADR 0004 (Decision #44); price ADR 0063 (Decision #50) |
 | **Consulting** | A business with a bounded need: a process, a tool, an integration, a dashboard | The assessment conversation, then a proposal | Decisions #16 and #18 |
-| **The Hosted Agent** | An individual or household who wants an always-on agent and will not run a server | Self-serve checkout on `/agent`; SMD then sets the agent up by hand | ADR 0067 (Decision #51) |
+| **The Operator, self-serve** | An individual or household who wants an always-on agent and will not run a server | Self-serve checkout on `/agent`; SMD then sets the Operator up by hand from the self-serve preset | ADR 0067 (Decision #51), ADR 0100 |
 
 **The assessment is the one front door on the website.** Every page except `/agent` leads to a single action, "start with an assessment," and the assessment leads to a recommendation, a project, or an Operator (Captain decision 2026-06-29, recorded at the top of `docs/marketing/positioning-spine.md`). The Operator is the flagship: the home page is built around it, and as of 2026-10-21 SMD's one paying client is an Operator client, a personal-injury law firm (seat `ashton-price`, `operator/customers/`).
 
-**One firm, one voice.** The Operator and the Hosted Agent are things the firm delivers, not separate identities. The firm's voice and positioning are the same across all three (ADR 0004, positioning guardrails; see [Positioning & Voice](/admin/playbook/positioning-voice)).
+**One firm, one voice, one product.** The Operator, however it is bought, and consulting are things the firm delivers, not separate identities. The firm's voice and positioning are the same across every offer (ADR 0004, positioning guardrails; see [Positioning & Voice](/admin/playbook/positioning-voice)).
 
-**Roles.** A Hosted Agent can be sold as a **role**: a packaged job with its own persona, skills, routines and privacy rules, chosen per seat. The first role is `couples` (`operator/roles/couples/`). A role is not a **pack**: a pack tailors the Operator to an industry (`operator/verticals/`, see [Vertical Packs](/admin/playbook/vertical-packs)), a role defines a job a hosted agent does for a person or household (ADR 0090).
+**Roles.** An Operator can be sold as a **role**: a packaged job with its own persona, skills, routines and privacy rules, chosen per seat. The first role is `couples` (`operator/roles/couples/`). A role is not a **pack**: a pack tailors the Operator to an industry (`operator/verticals/`, see [Vertical Packs](/admin/playbook/vertical-packs)), a role defines a job an Operator does for a person or household (ADR 0090).
 
 **What replaced the old retainer.** Decision #12 (an undefined post-project retainer) is superseded. After a consulting project, the client gets two weeks of included support (Decision #27); after that, further work is a new project or, if it fits, an Operator subscription (ADR 0004, lock 4).
 

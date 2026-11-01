@@ -143,7 +143,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **vertical pack.** A quick-start template that configures an Operator for a specific industry (law, marketing, insurance, etc.). Packs turn the universal capability into something recognizable to a customer (ADR 0037 Tenet 5; architecture in ADR 0022). A pack is a starting point, not a claim of expertise in the client's business. See [Vertical Packs](/admin/playbook/vertical-packs).
 
-**role (hosted-agent role).** A packaged hosted-agent job: persona and safety rules, skills, default routines, privacy model, required connections and seat template, kept at `operator/roles/<role>/` and selected by `seat.role` (ADR 0090). It is a different axis from `seat.product` (how a seat is sold and governed), a surface (the interface, ADR 0084) and a vertical pack (an industry). Couples is the first role. The word never means a permission role.
+**role.** A packaged Operator job: persona and safety rules, skills, default routines, privacy model, required connections and seat template, kept at `operator/roles/<role>/` and selected by `seat.role` (ADR 0090). It is a different axis from `seat.product` (how a seat is sold and governed), a surface (the interface, ADR 0084) and a vertical pack (an industry). Couples is the first role. The word never means a permission role.
 
 **space.** On a seat shared by several people, the privacy partition a turn runs in: `shared`, or one person's own space. A person sees the shared space plus their own; the shared space sees only itself (ADR 0091).
 
@@ -153,7 +153,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **Named Administrator.** The client's person, named in the signed agreement, who may administer their Operator: apply firm-wide rules, establish its voice, and change routine levels. In configuration these people are `scope.admins` (ADR 0085).
 
-**hosted agent.** SMD's second recurring product: a self-serve, published-price personal agent subscription bought at `/agent` and provisioned by SMD on the Operator substrate (ADR 0067). Distinct from the Operator, whose pricing stays internal.
+**hosted agent.** Retired name for the Operator's self-serve offering: a published-price personal agent subscription bought at `/agent` and set up by SMD from the self-serve preset (ADR 0067). It is the same Operator, not a second product (ADR 0100); only its commercial terms differ. The stored value `hosted-agent` survives as a `subscriptions.product_slug` and a `seat.product` value, read as an Operator.
 
 **heartbeat.** The status report each seat posts to `POST /api/internal/heartbeat` about every 60 seconds. The console upserts it into `fleet_status`, and the `ss-fleet-alerts` pager pages when it goes stale (ADR 0023; `src/pages/api/internal/heartbeat.ts`).
 

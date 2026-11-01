@@ -78,12 +78,14 @@ function canStart(sub: SubscriptionRow): boolean {
   return canStartOperatorSubscription(sub, seatPriceCents(sub))
 }
 
-const SERIALS: Record<string, string> = { operator: 'OP', 'hosted-agent': 'AG' }
+// One product (ADR 0100): the self-serve offering's stored slug is an Operator.
+const SERIALS: Record<string, string> = { operator: 'OP', 'hosted-agent': 'OP' }
 
 function subscriptionHref(sub: SubscriptionRow): string {
   if (sub.product_slug === 'operator' && sub.instance_slug) {
     return operatorSubscriptionHref(sub.instance_slug)
   }
+  if (sub.product_slug === 'hosted-agent') return '/portal/products/operator/setup'
   return `/portal/products/${sub.product_slug}`
 }
 

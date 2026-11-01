@@ -265,8 +265,8 @@ async function dispatchCheckoutEvent(eventType: string, parsed: unknown): Promis
   return handleHostedAgentCheckoutCompleted(
     env.DB,
     env.RESEND_API_KEY,
-    `${portalBase}/portal/products/hosted-agent`,
-    `${adminBase}/admin/hosted-agent`,
+    `${portalBase}/portal/products/operator/setup`,
+    `${adminBase}/admin/operator/intake`,
     eventResult.data.data.object
   )
 }

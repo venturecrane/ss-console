@@ -177,14 +177,14 @@ describe('POST /api/portal/billing/manage', () => {
 
     const res = await callRoute({ product_slug: 'hosted-agent' })
     expect(res.status).toBe(303)
-    expect(res.headers.get('Location')).toBe('/portal/products/hosted-agent?cs=billing_forbidden')
+    expect(res.headers.get('Location')).toBe('/portal/products/operator/setup?cs=billing_forbidden')
     expect(createBillingPortalSession).not.toHaveBeenCalled()
   })
 
   it('refuses when there is no subscription at all (no access resolves)', async () => {
     await seedRole('principal', 'hosted-agent')
     const res = await callRoute({ product_slug: 'hosted-agent' })
-    expect(res.headers.get('Location')).toBe('/portal/products/hosted-agent?cs=billing_forbidden')
+    expect(res.headers.get('Location')).toBe('/portal/products/operator/setup?cs=billing_forbidden')
   })
 
   it('reports billing_unavailable when the subscription has no Stripe customer id', async () => {
@@ -192,7 +192,9 @@ describe('POST /api/portal/billing/manage', () => {
     await seedRole('principal', 'hosted-agent')
 
     const res = await callRoute({ product_slug: 'hosted-agent' })
-    expect(res.headers.get('Location')).toBe('/portal/products/hosted-agent?cs=billing_unavailable')
+    expect(res.headers.get('Location')).toBe(
+      '/portal/products/operator/setup?cs=billing_unavailable'
+    )
     expect(createBillingPortalSession).not.toHaveBeenCalled()
   })
 
@@ -209,7 +211,7 @@ describe('POST /api/portal/billing/manage', () => {
     expect(createBillingPortalSession).toHaveBeenCalledWith(
       'sk_test_fake',
       'cus_test_1',
-      'https://portal.smd.services/portal/products/hosted-agent'
+      'https://portal.smd.services/portal/products/operator/setup'
     )
   })
 
@@ -240,6 +242,6 @@ describe('POST /api/portal/billing/manage', () => {
 
     const res = await callRoute({ product_slug: 'hosted-agent' })
     expect(res.status).toBe(303)
-    expect(res.headers.get('Location')).toBe('/portal/products/hosted-agent?cs=billing_error')
+    expect(res.headers.get('Location')).toBe('/portal/products/operator/setup?cs=billing_error')
   })
 })

@@ -13,7 +13,7 @@ import { trimString } from '../../../../../lib/api/helpers'
  * mirrored into subscriptions.settings_json for cross-referencing.
  */
 
-const QUEUE = '/admin/hosted-agent'
+const QUEUE = '/admin/operator/intake'
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
 
 function back(st: string): Response {

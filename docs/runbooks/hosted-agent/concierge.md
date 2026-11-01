@@ -1,10 +1,12 @@
-# Hosted Agent — concierge runbook (ADR 0067)
+# Self-serve Operator: concierge runbook (ADR 0067)
+
+The self-serve offering of the one Operator (ADR 0100). This folder keeps its old `hosted-agent/` name so links to it keep resolving.
 
 Per-sale, Captain-side. The storefront and webhook automate everything up to the work item; this runbook is the manual half. Every numbered step is a named automation seam (ADR 0067 §Concierge seams).
 
 ## Trigger
 
-Email to team@smd.services ("Hosted Agent purchase") + a new row in the admin queue at `admin.smd.services/admin/hosted-agent`. The subscription row exists at `provisioning`; the buyer has portal access showing "Setup in progress."
+Email to team@smd.services ("Self-serve purchase") + a new row in the self-serve intake queue at `admin.smd.services/admin/operator/intake` (linked from the Fleet page; the old `/admin/hosted-agent` URL 301s there). The subscription row exists at `provisioning`; the buyer has portal access showing "Setup in progress."
 
 ## Steps
 
@@ -34,7 +36,7 @@ On the open-house seat, a new agent needs only `inbound_allow_from`: `owner_fiel
 ## Hard rules
 
 - `external_send: confirm` (ADR 0071, supersedes ADR 0067's launch draft-only posture) and a non-empty `inbound_allow_from` are the tier's channel constraint (ADR 0032 deferred list). `confirm` means the agent prepares the send and completes it only after an explicit in-turn owner approval over channel; the taint-gate still blocks even a confirmed send on a tainted turn. Do not raise to `autonomous` per customer during authoring — promotion is a per-skill control-plane act the owner performs later (ADR 0071 decision 5). Tightening to `draft_for_review` (agent never sends) is allowed if a customer asks for it.
-- The Machine's `ANTHROPIC_API_KEY` is the CUSTOMER'S key. Never stage an SMD org key on a hosted seat.
+- The Machine's `ANTHROPIC_API_KEY` is the CUSTOMER'S key. Never stage an SMD org key on a self-serve seat.
 - Payment failure handling follows ADR 0065: alert-and-wait, Captain decides, never a webhook side effect.
 
 ## Decommission

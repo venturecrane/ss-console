@@ -52,7 +52,7 @@ The list below is what the evaluation produces and what the triage agent reads. 
 - **Test seats are a count, not a list.** Seats whose `customer.yaml` says `seat.kind` is not `customer` (`pilot-smokeball`, `smd-staging`, `scott`) are counted on one "Test seats, not listed" line. A seat that could not be read, or a missed hourly run, is listed wherever it happens, because it usually means something every seat shares is broken.
 - **Open work only.** A refusal or failure followed by delivered work is counted on one "Answered by later work" line, never listed.
 - **A seat that could not be read is an item**, never silence: "Could not read this seat's work ledger" means nothing about that seat is known.
-- **Not checked** names what the run could not vouch for: a seat that has never reported a heartbeat (being built, not broken) and a hosted agent, which gets machine checks only.
+- **Not checked** names what the run could not vouch for: a seat that has never reported a heartbeat (being built, not broken) and a seat on the self-serve offering (`seat.product: hosted-agent`), which gets machine checks only.
 - **The daily all-clear** (`[SMD Ops] Work health: all clear` at 08:00 Phoenix) still exists in the evaluation but has not been emailed since 2026-10-16: neither run sends the list or the all-clear. A silent triage agent is caught by its healthchecks.io check instead.
 
 ## ACTION pages

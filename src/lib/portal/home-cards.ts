@@ -166,7 +166,7 @@ async function hostedAgentCard(
   offerings: PortalOfferings,
   userId: string
 ): Promise<OfferingCard | null> {
-  const sub = offerings.hostedAgent
+  const sub = offerings.selfServe
   if (!sub) return null
 
   const state = await resolveHostedAgentState(db, sub.entity_id, userId)
@@ -181,19 +181,20 @@ async function hostedAgentCard(
   if (state.needsIntake) {
     needsYou = {
       label: 'Complete the setup questionnaire',
-      href: '/portal/products/hosted-agent/intake',
+      href: '/portal/products/operator/setup/intake',
     }
   } else if (state.needsKey) {
     needsYou = {
       label: 'Add your Anthropic API key',
-      href: '/portal/products/hosted-agent/api-key',
+      href: '/portal/products/operator/setup/api-key',
     }
   }
 
   return {
-    key: 'hosted-agent',
-    label: 'Agent',
-    href: '/portal/products/hosted-agent',
+    key: 'self-serve',
+    // One product (ADR 0100): a self-serve subscription is an Operator.
+    label: 'Operator',
+    href: '/portal/products/operator/setup',
     statusLabel,
     meta: [],
     needsYou,

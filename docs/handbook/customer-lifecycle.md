@@ -5,7 +5,7 @@ order: 7
 owner: captain
 review_every: 180
 last_reviewed: "2026-10-21"
-summary: How a prospect becomes a live client and, eventually, leaves - one track for an Operator client, one for a consulting client, a short one for the Hosted Agent - with who acts at each step and what the system does on its own.
+summary: How a prospect becomes a live client and, eventually, leaves - one track for an Operator client, one for a consulting client, a short one for a self-serve Operator - with who acts at each step and what the system does on its own.
 sources:
   - label: Operator implementation playbook
     href: docs/runbooks/operator/implementation-playbook.md
@@ -41,11 +41,11 @@ sources:
     href: docs/adr/0060-retire-automated-lead-gen-machine.md
 ---
 
-A prospect becomes a client by one of two main paths: an Operator client is won through letters and a proposal, signs an agreement drafted for them, and then starts paying in the portal once their Operator is stood up; a consulting client goes through an assessment, a quote and an e-signed SOW in the admin console. This page walks both, plus the short Hosted Agent path, and ends with how an Operator client leaves.
+A prospect becomes a client by one of two main paths: an Operator client is won through letters and a proposal, signs an agreement drafted for them, and then starts paying in the portal once their Operator is stood up; a consulting client goes through an assessment, a quote and an e-signed SOW in the admin console. This page walks both, plus the short self-serve path, and ends with how an Operator client leaves.
 
 ## Which track you are on
 
-| | Operator | Consulting | Hosted Agent |
+| | Operator | Consulting | Operator, self-serve |
 |---|---|---|---|
 | Has it happened? | Yes: SMD's one paying client (seat `ashton-price`) | Built and documented; see [The Consulting Engagement](/admin/playbook/consulting-engagement) | SMD's own seats only so far (ADR 0090) |
 | Where the paper lives | The private `venturecrane/engagements` repository | The admin console (quote, SOW PDF, SignWell) | Stripe checkout and the product terms |
@@ -133,9 +133,9 @@ Moving the engagement to **handoff** does three things on its own: it sets the h
 
 A prospect that falls out at any stage before signing is marked `lost` with a reason, shown on the Lost tab.
 
-## Track 3: a Hosted Agent
+## Track 3: a self-serve Operator
 
-A buyer checks out on `/agent`. Checkout creates the client record, a subscription waiting to be set up, and an intake item, and emails team@. The seat is then set up by hand from a template and switched on; a payment alone never switches anything on (ADR 0067). A seat built on a role such as `couples` is written by hand from that role's template, merged and reprovisioned, and the agent then introduces itself to each person by email (ADR 0090, superseded decision 4; `docs/runbooks/hosted-agent/couples-setup.md`). Payment failures follow the same human-run steps as the Operator.
+A buyer checks out on `/agent`. Checkout creates the client record, a subscription waiting to be set up, and an intake item, and emails team@. The seat is then set up by hand from the self-serve preset of the one template and switched on; a payment alone never switches anything on (ADR 0067). A seat built on a role such as `couples` is written by hand from that role's template, merged and reprovisioned, and the agent then introduces itself to each person by email (ADR 0090, superseded decision 4; `docs/runbooks/hosted-agent/couples-setup.md`). Payment failures follow the same human-run steps as the Operator.
 
 ## Offboarding an Operator client
 

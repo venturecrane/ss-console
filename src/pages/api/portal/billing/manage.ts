@@ -22,7 +22,7 @@ import { getPortalBaseUrl } from '../../../../lib/config/app-url'
 
 const ALLOWED: Record<string, { returnPath: string }> = {
   operator: { returnPath: '/portal/products/operator/account' },
-  'hosted-agent': { returnPath: '/portal/products/hosted-agent' },
+  'hosted-agent': { returnPath: '/portal/products/operator/setup' },
 }
 
 function back(path: string, cs: string): Response {

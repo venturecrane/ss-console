@@ -1,9 +1,11 @@
 ---
 /**
- * Hosted Agent — concierge queue (ADR 0067).
+ * Self-serve intake — the concierge queue for self-serve Operator purchases
+ * (ADR 0067 offering; ADR 0100 moved it under Fleet from /admin/hosted-agent,
+ * which 301s).
  *
  * One card per purchase (HostedAgentQueueCard), copy-paste-ready for
- * customer.yaml authoring from operator/customers/_hosted-template/. The
+ * customer.yaml authoring from operator/customers/_template/presets/self-serve/. The
  * two admin actions live on the card:
  *
  *   assign slug — unlocks the customer's key form (the write needs a
@@ -12,9 +14,9 @@
  *                 authored go-live email. Run AFTER reprovision.sh and the
  *                 boot smoke test pass; the button does not provision.
  */
-import AdminLayout from '../../../layouts/AdminLayout.astro'
-import HostedAgentQueueCard from '../../../components/admin/HostedAgentQueueCard.astro'
-import { listHostedAgentQueue } from '../../../lib/db/hosted-agent-intake'
+import AdminLayout from '../../../../layouts/AdminLayout.astro'
+import HostedAgentQueueCard from '../../../../components/admin/HostedAgentQueueCard.astro'
+import { listHostedAgentQueue } from '../../../../lib/db/hosted-agent-intake'
 import { env } from 'cloudflare:workers'
 
 const queue = await listHostedAgentQueue(env.DB)
@@ -36,8 +38,8 @@ const openCount = queue.filter((r) => openStatuses.has(r.status)).length
 ---
 
 <AdminLayout
-  title="Hosted Agent Queue"
-  breadcrumbs={[{ label: 'Home', href: '/admin' }, { label: 'Hosted Agent' }]}
+  title="Self-serve Intake"
+  breadcrumbs={[{ label: 'Fleet', href: '/admin/operator' }, { label: 'Self-serve intake' }]}
   maxWidth="max-w-6xl"
 >
   {

@@ -26,7 +26,7 @@ import {
  *   - the transport must be configured — honest `not_enabled` until wired
  */
 
-const RETURN_TO = '/portal/products/hosted-agent/api-key'
+const RETURN_TO = '/portal/products/operator/setup/api-key'
 
 function back(cs: string): Response {
   return new Response(null, { status: 303, headers: { Location: `${RETURN_TO}?cs=${cs}` } })

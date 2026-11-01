@@ -6,6 +6,8 @@
 - **Scope:** how SMD Services builds products from here. Draft Crane is the first, and moves from the `dc` venture into `ss`.
 - **Not in scope:** pricing, the layout vocabulary, and any build. This ADR records a model and a home, not a plan.
 
+> **Amended 2026-10-31 by [ADR 0100](./0100-one-operator-core-and-authored-capabilities.md) W6.** The "Hosted Agent" this ADR builds on is not a separate product or base: there is one Operator, and what a seat is for is the capabilities it authors (ADR 0100). Read "the Hosted Agent" below as the Operator, and its self-serve terms as an offering (ADR 0067, as amended). What changed for this ADR's model: a product built here is still a surface on a shared seat, and the seat it sits on is an Operator started from a preset of the one template (`operator/customers/_template/presets/`), not from a separate hosted-agent template; the client reaches it in the Operator section of the portal. The rest of this ADR stands.
+
 ## Context
 
 The question that opened this was whether the Hosted Agent could serve as the base for an application — specifically Draft Crane, a shelved `dc` venture product for nonfiction authors — instead of building a conventional web application with a fixed set of screens and forms.

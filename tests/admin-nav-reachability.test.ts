@@ -36,7 +36,6 @@ const REACHED_FROM_ELSEWHERE: Record<string, string> = {
   entities: 'linked from Clients',
   engagements: 'linked from a client record',
   'follow-ups': 'linked from Home',
-  'hosted-agent': 'linked from Fleet',
   services: 'linked from Home (Delivery card)',
 }
 

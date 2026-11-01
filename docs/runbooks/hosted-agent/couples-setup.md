@@ -1,6 +1,6 @@
 # Couples seat setup runbook
 
-How SMD sets up a seat for the couples hosted-agent role (ADR 0090, ADR 0091).
+How SMD sets up a seat for the couples role of the Operator (ADR 0090, ADR 0091, ADR 0100).
 SMD-paid proof of concept: there is no checkout and no price.
 
 There is no web setup. The couple never visits the portal. Everything after

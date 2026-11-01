@@ -19,7 +19,7 @@ import { getAdminBaseUrl } from '../../../../../lib/config/app-url'
  * statuses accept writes (the UPDATE itself is status-guarded too).
  */
 
-const LANDING = '/portal/products/hosted-agent'
+const LANDING = '/portal/products/operator/setup'
 
 function back(st: string): Response {
   return new Response(null, { status: 303, headers: { Location: `${LANDING}?st=${st}` } })
@@ -87,11 +87,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const adminBase = getAdminBaseUrl(env) ?? 'https://admin.smd.services'
     await sendEmail(env.RESEND_API_KEY, {
       to: 'team@smd.services',
-      subject: `Hosted Agent intake submitted: ${access.client.name}`,
+      subject: `Self-serve intake submitted: ${access.client.name}`,
       html: hostedAgentIntakeNotificationEmailHtml({
         entityName: access.client.name,
         agentName: parsed.agentName,
-        adminQueueUrl: `${adminBase}/admin/hosted-agent`,
+        adminQueueUrl: `${adminBase}/admin/operator/intake`,
       }),
     })
   } catch (err) {

@@ -49,7 +49,7 @@ Reach profitability (`CLAUDE.md`). No date or revenue target for it is recorded 
 | **Litigation status work** | A litigation status lane on the firm's seat, activated 2026-10-07. A seat can cap the status lists included in each billing cycle (`litigation_list_allowance_per_cycle`, on the chronology cycle's anchor; unset is no cap): only delivered lists count, a scheduled weekday list counts as one, and a list past the cap is held before it starts while SMD quotes it | `customer.yaml`; `operator/workspace_broker/litigation_verbs.py` |
 | **What we owe the client** | Tracked in the obligation register, with overdue or unprovable rows flagged nightly | ADR 0088; [What We Owe Clients](/admin/playbook/obligation-register) |
 | **Monitoring** | Work-liveness and connector-outage alerting to team@ | ADR 0079, ADR 0080; [Work Health](/admin/playbook/work-health) |
-| **Hosted Agent** | Storefront and self-serve checkout at `/agent`; two hosted seats, both paid for by SMD while they are proven, one of them the first `couples` role seat | ADR 0067, ADR 0090; [Clients & Commitments](/admin/playbook/clients-and-commitments) |
+| **Operator, self-serve** | Storefront and self-serve checkout at `/agent`; two hosted seats, both paid for by SMD while they are proven, one of them the first `couples` role seat | ADR 0067, ADR 0090; [Clients & Commitments](/admin/playbook/clients-and-commitments) |
 | **Website** | Firm with flagship: home, `/operator`, industry packs, `/book`, `/about`, and a case study from the first client | `docs/marketing/positioning-spine.md`; `src/pages/case-studies/personal-injury-law-firm.astro` |
 | **Consulting** | The full lead-to-handoff flow is built in the admin console and the collateral is written | [Customer Lifecycle](/admin/playbook/customer-lifecycle) |
 
@@ -74,14 +74,14 @@ Each item is an open GitHub issue or an open register row on 2026-10-21.
 ## Decided next steps
 
 - **More Operator clients from the law-firm proof.** The flagship goes to market law-first (ADR 0040) and packs are how it is made recognizable for each industry (ADR 0037, Tenet 5). No second client or date is recorded.
-- **Hosted Agent roles.** Brokery and Draft Crane are to move under `operator/roles/` when work next touches their packaging (ADR 0090, decision 6).
+- **Roles.** Brokery and Draft Crane are to move under `operator/roles/` when work next touches their packaging (ADR 0090, decision 6).
 - **The paid assessment** switches on after the first delivered consulting engagement (Decision #13).
 
 Nothing else forward-looking is recorded. Do not let an agent fill this section with plans that no decision or open item supports.
 
 ## Constraints
 
-- No dollar amounts on any public page except the Hosted Agent's (Decision #51).
+- No dollar amounts on any public page except the self-serve Operator's (Decision #51).
 - Client material stays in the private `venturecrane/engagements` repository; `ss-console` is public (Decision #52).
 - Consulting is Phoenix-first, in person for the first engagements (Decision #5).
 - The Captain, the administrator, and AI agents: the agents add throughput, and the decisions listed on [Who Does What](/admin/playbook/who-does-what) stay with people ([Operating Model](/admin/playbook/operating-model)).
