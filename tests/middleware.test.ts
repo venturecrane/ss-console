@@ -125,6 +125,31 @@ describe('legacy redirects: retired paths', () => {
     expect(pre('https://smd.services/operator')).toBeNull()
   })
 
+  it('one Operator (ADR 0100): the self-serve pages moved into the Operator section, old URLs 301', () => {
+    expect(pre('https://portal.smd.services/portal/products/hosted-agent')?.location).toBe(
+      '/portal/products/operator/setup'
+    )
+    expect(
+      pre('https://portal.smd.services/portal/products/hosted-agent/api-key?cs=saved')?.location
+    ).toBe('/portal/products/operator/setup/api-key?cs=saved')
+    // Subdomain-relative forms stay subdomain-relative.
+    expect(pre('https://portal.smd.services/products/hosted-agent/intake')?.location).toBe(
+      '/products/operator/setup/intake'
+    )
+    expect(pre('https://admin.smd.services/admin/hosted-agent?st=activated')?.location).toBe(
+      '/admin/operator/intake?st=activated'
+    )
+    expect(pre('https://admin.smd.services/hosted-agent')?.location).toBe('/operator/intake')
+    // API routes and the new homes are untouched (no self-loop).
+    expect(pre('https://portal.smd.services/api/portal/products/hosted-agent/intake')).toBeNull()
+    expect(pre('https://admin.smd.services/api/admin/hosted-agent/x/activate')).toBeNull()
+    expect(pre('https://portal.smd.services/portal/products/operator/setup')).toBeNull()
+    expect(pre('https://admin.smd.services/admin/operator/intake')).toBeNull()
+    // `/hosted-agent` names nothing on the marketing host.
+    expect(pre('https://smd.services/hosted-agent')).toBeNull()
+    expect(pre('https://portal.smd.services/portal/products/hosted-agents')).toBeNull()
+  })
+
   it('every rule is permanent, and none targets its own source (no self-loop)', () => {
     for (const rule of [...PRE_REWRITE_REDIRECTS, ...POST_REWRITE_REDIRECTS]) {
       expect(rule.status, rule.label).toBe(301)

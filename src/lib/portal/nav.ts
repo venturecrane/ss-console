@@ -7,8 +7,8 @@
  *   Home        unless a pre-go-live operator-only client (then hidden; they
  *               land on the operator itself — see offerings.preGoLiveLanding)
  *   Engagement  when any engagement or proposal exists
- *   Operator    ONE tab when the client owns any operator (the list lives inside)
- *   Agent       when a hosted-agent subscription exists
+ *   Operator    ONE tab when the client owns any operator, self-serve included
+ *               (ADR 0100: one product); the list lives inside
  *   Billing     once a billing relationship exists (invoice history or a live subscription)
  */
 
@@ -41,22 +41,17 @@ export function buildPortalNav(offerings: PortalOfferings): PortalNavDestination
     })
   }
   // ONE "Operator" destination for the product, regardless of how many operators
-  // the client owns — the same category-per-tab shape as Engagement/Agent/Billing.
+  // the client owns — the same category-per-tab shape as Engagement/Billing.
   // It opens the operator list (which auto-forwards to the sole operator when
   // there is only one); per-operator navigation lives inside that destination, not
   // across the top (a client with 50 operators must not get 50 tabs).
-  if (offerings.operators.length > 0) {
+  // A self-serve subscription is one of the client's Operators (ADR 0100: one
+  // product; self-serve is an offering), so it shares this one destination.
+  if (offerings.operators.length > 0 || offerings.selfServe) {
     destinations.push({
       href: '/portal/products/operator',
       label: 'Operator',
       matchPrefix: '/portal/products/operator',
-    })
-  }
-  if (offerings.hostedAgent) {
-    destinations.push({
-      href: '/portal/products/hosted-agent',
-      label: 'Agent',
-      matchPrefix: '/portal/products/hosted-agent',
     })
   }
   // Billing renders only once a billing relationship EXISTS (invoice history,

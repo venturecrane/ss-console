@@ -55,7 +55,7 @@ The Pack Production Operating Model defines a pack as five concrete artifacts, a
 | 4 | **GTM surface** (landing page + intake hook) | `src/pages/packs/<slug>.astro` + the interest allow-list in `src/lib/booking/config.ts` |
 | 5 | **Delivery SOP** (honed per client) | `docs/templates/delivery-sops/` + spec notes |
 
-The vertical-specific skill **bodies** are not in this list. They live in this repo under `operator/skills/<skill>/SKILL.md` (72 skill directories on 2026-10-21, a count that includes the hosted-agent and couples skills), not in the overlay, and are baked into the fleet image; the vertical's `operator/verticals/<slug>/vertical.yaml` (and an add-on's `addon.yaml`) declares which of them the pack uses. The operating model document still says skill bodies go in the overlay; that line predates the move and is out of date. See [Operator Platform Architecture](/admin/playbook/operator-platform) for the overlay boundary.
+The vertical-specific skill **bodies** are not in this list. They live in this repo under `operator/skills/<skill>/SKILL.md` (72 skill directories on 2026-10-21, a count that includes the self-serve and couples skills), not in the overlay, and are baked into the fleet image; the vertical's `operator/verticals/<slug>/vertical.yaml` (and an add-on's `addon.yaml`) declares which of them the pack uses. The operating model document still says skill bodies go in the overlay; that line predates the move and is out of date. See [Operator Platform Architecture](/admin/playbook/operator-platform) for the overlay boundary.
 
 ## The shared spine
 

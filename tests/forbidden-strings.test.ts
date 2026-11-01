@@ -598,12 +598,12 @@ const LIST_INDEX_ALLOWLIST: string[] = [
   // a repeating card — a different primitive than `PortalListItem`. Track
   // as a follow-up if milestone rail drifts or gains a second use.
   resolve('src/pages/portal/engagement/index.astro'),
-  // `products/hosted-agent/index.astro` is the Hosted Agent status surface
+  // `products/operator/setup/index.astro` is the self-serve status surface
   // (one subscription per render), not a list of products. Its `.map(` is
   // the setup-journey stepper: numbered steps with whose-move state badges
   // (done / your turn / our team / up next) — milestone-rail semantics like
   // the engagement surface above, not list-row cards.
-  resolve('src/pages/portal/products/hosted-agent/index.astro'),
+  resolve('src/pages/portal/products/operator/setup/index.astro'),
   // `products/operator/index.astro` is the Operator dashboard
   // landing (one customer per render), not a list of products. The
   // small `.map(roles, …)` inside the sidebar renders a bullet list of

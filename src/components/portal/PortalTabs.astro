@@ -35,15 +35,9 @@ interface Props {
    * that don't yet pass the prop keep their current 4-tab layout.
    */
   operatorActive?: boolean
-  /**
-   * When true, render an "Agent" tab pointing at the Hosted Agent surface
-   * at /portal/products/hosted-agent. Same contract as operatorActive:
-   * set by pages that detected a hosted-agent subscription.
-   */
-  hostedAgentActive?: boolean
 }
 
-const { pathname, operatorActive = false, hostedAgentActive = false } = Astro.props
+const { pathname, operatorActive = false } = Astro.props
 
 interface TabDef {
   href: string
@@ -87,16 +81,6 @@ const productTabs: TabDef[] = [
           label: 'Operator',
           anchor: '05',
           matchPrefix: '/portal/products/operator',
-        },
-      ]
-    : []),
-  ...(hostedAgentActive
-    ? [
-        {
-          href: '/portal/products/hosted-agent',
-          label: 'Agent',
-          anchor: operatorActive ? '06' : '05',
-          matchPrefix: '/portal/products/hosted-agent',
         },
       ]
     : []),

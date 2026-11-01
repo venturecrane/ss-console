@@ -282,11 +282,11 @@ async function sendPurchaseEmails(
   try {
     await sendEmail(resendApiKey, {
       to: input.buyerEmail,
-      subject: 'Your Hosted Agent subscription is active',
+      subject: 'Your Operator subscription is active',
       // Deep-link the product page on the portal host, not the portal root.
       html: hostedAgentWelcomeEmailHtml(
         input.buyerName,
-        `${portalUrl}/portal/products/hosted-agent`
+        `${portalUrl}/portal/products/operator/setup`
       ),
     })
   } catch (err) {
@@ -300,7 +300,7 @@ async function sendPurchaseEmails(
       .first<{ name: string }>()
     await sendEmail(resendApiKey, {
       to: ALERT_EMAIL,
-      subject: `Hosted Agent purchase: ${entity?.name ?? input.entityId} (${input.plan})`,
+      subject: `Self-serve purchase: ${entity?.name ?? input.entityId} (${input.plan})`,
       html: hostedAgentOrderNotificationEmailHtml({
         entityName: entity?.name ?? input.entityId,
         buyerEmail: input.buyerEmail,
@@ -322,9 +322,9 @@ async function sendUnresolvedBuyerAlert(
   try {
     await sendEmail(resendApiKey, {
       to: ALERT_EMAIL,
-      subject: 'Hosted Agent purchase needs manual reconciliation',
+      subject: 'Self-serve purchase needs manual reconciliation',
       html:
-        `<p>A completed Hosted Agent checkout could not be bound to a local user.</p>` +
+        `<p>A completed self-serve checkout could not be bound to a local user.</p>` +
         `<ul><li>Checkout session: ${payload.id}</li>` +
         `<li>Buyer email: ${payload.customer_details?.email ?? 'unknown'}</li>` +
         `<li>Stripe subscription: ${payload.subscription ?? 'unknown'}</li></ul>` +

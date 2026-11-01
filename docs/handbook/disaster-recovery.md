@@ -72,7 +72,7 @@ first heading states its job; grouped by when an agent would reach for it:
 | | `operator/keyless-build-handoff.md` | Building a seat without client keys, injecting them at handoff |
 | | `operator/ms-graph-azure-ad-setup.md` | Microsoft Graph app registration for a client's Microsoft tenant |
 | | `operator/voice-distillation.md` | Distilling a firm's voice for its Operator |
-| | `hosted-agent/concierge.md`, `hosted-agent/couples-setup.md` | Standing up a Hosted Agent seat, and the couples role |
+| | `hosted-agent/concierge.md`, `hosted-agent/couples-setup.md` | Standing up a self-serve Operator seat, and the couples role |
 | Changing what a seat does | `operator/routine-lifecycle.md` | Defining, changing, adding and retiring a routine |
 | | `operator/enable-gate-checklist.md` | The checks before a routine is promoted to a higher level |
 | | `operator/lane-proof.md` | A firm asked for a kind of job its seat has never done |

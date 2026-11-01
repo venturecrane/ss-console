@@ -7,7 +7,9 @@ import Footer from '../components/Footer.astro'
 import { serializeJsonLd } from '../lib/seo/json-ld'
 
 /**
- * Hosted Agent — the self-serve product storefront (ADR 0067).
+ * Self-serve Operator: the storefront for the Operator's self-serve offering
+ * (ADR 0067 terms; ADR 0100: one product, so this page sells an Operator, not a
+ * second product).
  *
  * PRICING EXEMPTION: this page publishes the subscription price. That is a
  * recorded Captain decision (positioning-spine decision log, 2026-07-06)
@@ -26,7 +28,7 @@ import { serializeJsonLd } from '../lib/seo/json-ld'
 const productSchema = {
   '@context': 'https://schema.org',
   '@type': 'Product',
-  name: 'Hosted Agent',
+  name: 'Self-serve Operator',
   description:
     'An always-on personal agent running the open-source Hermes Agent runtime, hosted on isolated infrastructure and run as a managed subscription by SMD Services.',
   brand: { '@type': 'Brand', name: 'SMD Services' },
@@ -42,7 +44,7 @@ const productSchema = {
 const faqs = [
   {
     q: 'What exactly am I subscribing to?',
-    a: 'Your own instance of the open-source Hermes Agent runtime from Nous Research, running around the clock on its own isolated machine, wrapped in the safety controls we built for our managed Operator clients. We keep it updated, monitored, and alive. You talk to it over Telegram and email.',
+    a: 'Your own Operator: the open-source Hermes Agent runtime from Nous Research, running around the clock on its own isolated machine, wrapped in the same safety controls as every Operator we run. We keep it updated, monitored, and alive. You talk to it over Telegram and email.',
   },
   {
     q: 'Why not just run it myself?',
@@ -80,7 +82,7 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
 ---
 
 <Base
-  title="Hosted Agent | SMD Services"
+  title="Self-serve Operator | SMD Services"
   description="Your own always-on agent, hosted, safety-gated, and kept alive by SMD Services. The open-source Hermes Agent runtime as a managed subscription."
 >
   <script is:inline type="application/ld+json" set:html={serializeJsonLd(productSchema)} />
@@ -107,7 +109,7 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
       <p
         class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ss-color-primary)]"
       >
-        Hosted Agent
+        Self-serve Operator
       </p>
       <h1
         class="mt-4 font-body font-black uppercase tracking-[-0.02em] text-4xl md:text-6xl text-[color:var(--ss-color-text-primary)]"
@@ -116,8 +118,8 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
       </h1>
       <p class="mt-6 max-w-3xl text-lg md:text-xl text-[color:var(--ss-color-text-secondary)]">
         The open-source Hermes Agent, hosted on its own isolated machine, set up from a short
-        questionnaire, and fenced by the same safety controls we build for our managed Operator
-        clients. It works while your laptop sleeps. We keep it alive, updated, and watched.
+        questionnaire, and fenced by the same safety controls as every Operator we run. It works
+        while your laptop sleeps. We keep it alive, updated, and watched.
       </p>
       <div class="mt-8 flex flex-wrap gap-4">
         <a
@@ -179,9 +181,9 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
 
     <!-- Permission bands: what it does on its own, what waits for you, what it never does.
          Grounded in the trust-ceiling enforcement (operator/adapter/trust_ceiling.py) and the
-         authored Hosted Agent entitlements (external_send: draft_for_review). This copy is
+         self-serve preset's authored entitlements (external_send: confirm). This copy is
          deliberately NOT framed as staging/prod/go-live or a "tap to approve spend" flow: the
-         Hosted Agent has no deployment surface and no purchasing tool, so those bands would be
+         self-serve preset has no deployment surface and no purchasing tool, so those bands would be
          fabrication for this SKU. Every claim below maps to an enforced, boot-probed control. -->
     <section class="border-t-[3px] border-[color:var(--ss-color-text-primary)]">
       <div class="max-w-5xl mx-auto px-6 py-12 md:py-16">
@@ -368,7 +370,7 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
           checkout. Subscriptions are governed by the <a
             href="/agent/terms"
             class="underline decoration-[color:var(--ss-color-primary)] decoration-2 underline-offset-4 hover:text-[color:var(--ss-color-text-primary)]"
-            >Hosted Agent terms</a
+            >subscription terms</a
           >.
         </p>
       </div>
@@ -395,9 +397,9 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
           }
         </div>
         <p class="mt-10 text-base text-[color:var(--ss-color-text-secondary)]">
-          Running a business and sizing up something bigger? The
+          Running a business and sizing up something bigger? We also build an
           <a href="/operator" class="underline text-[color:var(--ss-color-primary)]">Operator</a>
-          is the managed worker we build for a specific role in a specific business.
+          alongside you for a specific role in your business.
         </p>
       </div>
     </section>

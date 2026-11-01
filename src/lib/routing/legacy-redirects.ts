@@ -9,8 +9,9 @@
  * Two lists exist because the rules fire at two different points in the pipeline:
  *
  *   PRE_REWRITE_REDIRECTS  run BEFORE the subdomain rewrite (the rewrite
- *                          terminates the chain, so the product-rename redirect
- *                          must precede it to catch subdomain-relative forms).
+ *                          terminates the chain, so the product-rename and
+ *                          one-Operator redirects must precede it to catch
+ *                          subdomain-relative forms).
  *   POST_REWRITE_REDIRECTS run AFTER the rewrite (host canonicalization, legacy
  *                          auth paths, and retired marketing surfaces).
  *
@@ -60,6 +61,41 @@ const OPERATOR_RENAME: RedirectRule = {
     isPathOrDescendant(pathname, '/products/ai-employee') ||
     isPathOrDescendant(pathname, '/admin/ai-employee'),
   location: ({ pathname }) => pathname.replace('/ai-employee', '/operator'),
+  status: 301,
+}
+
+/**
+ * One Operator (ADR 0100 W6). The self-serve subscription's portal pages moved
+ * from `/portal/products/hosted-agent[/intake|/api-key]` into the Operator
+ * section at `/portal/products/operator/setup[...]`, and the admin intake queue
+ * from `/admin/hosted-agent` to `/admin/operator/intake`. Welcome emails, the
+ * checkout thanks page and bookmarks carry the old URLs, so they 301 forever.
+ * Runs before the subdomain rewrite to catch the subdomain-relative forms
+ * (portal host `/products/hosted-agent`, admin host `/hosted-agent`). Query
+ * strings (the `?cs=` status banners) are carried. API routes are unchanged.
+ */
+const ONE_OPERATOR_MOVES: ReadonlyArray<{ host?: string; from: string; to: string }> = [
+  { from: '/portal/products/hosted-agent', to: '/portal/products/operator/setup' },
+  { host: 'portal.', from: '/products/hosted-agent', to: '/products/operator/setup' },
+  { from: '/admin/hosted-agent', to: '/admin/operator/intake' },
+  { host: 'admin.', from: '/hosted-agent', to: '/operator/intake' },
+]
+
+function oneOperatorMove({ hostname, pathname }: RedirectContext) {
+  return (
+    ONE_OPERATOR_MOVES.find(
+      (m) => (!m.host || hostname.startsWith(m.host)) && isPathOrDescendant(pathname, m.from)
+    ) ?? null
+  )
+}
+
+const ONE_OPERATOR: RedirectRule = {
+  label: 'one-operator',
+  match: (ctx) => oneOperatorMove(ctx) !== null,
+  location: (ctx) => {
+    const move = oneOperatorMove(ctx)!
+    return move.to + ctx.pathname.slice(move.from.length) + ctx.url.search
+  },
   status: 301,
 }
 
@@ -199,7 +235,7 @@ const RETIRED_GET_STARTED: RedirectRule = {
 }
 
 /** Redirects that must run BEFORE the subdomain rewrite terminates the chain. */
-export const PRE_REWRITE_REDIRECTS: readonly RedirectRule[] = [OPERATOR_RENAME]
+export const PRE_REWRITE_REDIRECTS: readonly RedirectRule[] = [OPERATOR_RENAME, ONE_OPERATOR]
 
 /** Redirects that run AFTER the subdomain rewrite. Order is significant. */
 export const POST_REWRITE_REDIRECTS: readonly RedirectRule[] = [

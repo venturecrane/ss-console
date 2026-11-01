@@ -36,7 +36,7 @@ describe('deriveOfferings', () => {
     const o = deriveOfferings(NOTHING)
     expect(o.engagement.present).toBe(false)
     expect(o.operators).toEqual([])
-    expect(o.hostedAgent).toBeNull()
+    expect(o.selfServe).toBeNull()
     expect(o.hasInvoices).toBe(false)
   })
 
@@ -88,7 +88,7 @@ describe('deriveOfferings', () => {
     expect(o.engagement.present).toBe(false)
     expect(o.operators).toHaveLength(1)
     expect(o.operators[0].slug).toBe('operator')
-    expect(o.hostedAgent?.status).toBe('provisioning')
+    expect(o.selfServe?.status).toBe('provisioning')
   })
 
   it('multi-operator: one entry per operator subscription, addressed by instance_slug', () => {
@@ -124,7 +124,7 @@ describe('buildPortalNav', () => {
     expect(nav.map((d) => d.label)).toEqual(['Home'])
   })
 
-  it('everything owned: all five destinations in fixed order', () => {
+  it('everything owned: four destinations in fixed order, one Operator tab for both Operators (ADR 0100)', () => {
     const nav = buildPortalNav(
       deriveOfferings({
         engagements: [engagement('in_progress')],
@@ -134,14 +134,18 @@ describe('buildPortalNav', () => {
         hasInvoices: true,
       })
     )
-    expect(nav.map((d) => d.label)).toEqual(['Home', 'Engagement', 'Operator', 'Agent', 'Billing'])
+    expect(nav.map((d) => d.label)).toEqual(['Home', 'Engagement', 'Operator', 'Billing'])
   })
 
-  it('agent-only subscriber: Home, Agent, Billing (subscription implies billing)', () => {
+  it('self-serve-only subscriber: Home, Operator, Billing (one product; subscription implies billing)', () => {
     const nav = buildPortalNav(
       deriveOfferings({ ...NOTHING, subscriptions: [subscription('hosted-agent')] })
     )
-    expect(nav.map((d) => d.label)).toEqual(['Home', 'Agent', 'Billing'])
+    expect(nav.map((d) => d.label)).toEqual(['Home', 'Operator', 'Billing'])
+    // The Operator tab owns the setup pages: they light it, nothing else.
+    const operatorTab = nav.find((d) => d.label === 'Operator')!
+    expect(operatorTab.href).toBe('/portal/products/operator')
+    expect(isNavDestinationActive(operatorTab, '/portal/products/operator/setup/intake')).toBe(true)
   })
 
   it('invoices alone light up Billing', () => {

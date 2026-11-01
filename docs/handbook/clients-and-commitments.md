@@ -70,7 +70,7 @@ Every seat declares a kind, and the kind never changes over the seat's life (`sr
 | internal | A seat that works on SMD itself rather than in a client's business | No |
 | sandbox | Disposable, realistic, no real data | No |
 
-The **product** column says which offer the seat is: `operator` (the governed AI employee) or `hosted-agent` (the always-on personal agent). A **role** is a packaged hosted-agent job, such as `couples` ([ADR 0090](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0090-hosted-agent-roles.md)).
+The **product** column says which offering's commercial terms the seat is on: `operator` (built with the client) or `hosted-agent` (the stored value for the self-serve offering). Both are the one Operator; nothing on a seat branches on this column (ADR 0100). A **role** is a packaged job, such as `couples` ([ADR 0090](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0090-hosted-agent-roles.md)).
 
 Only `customer` seats appear in the hourly work-health checks as individual lines; SMD's own seats are counted together, so a problem on a client seat is never buried under test noise.
 

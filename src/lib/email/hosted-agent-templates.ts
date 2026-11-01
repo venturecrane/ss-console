@@ -1,5 +1,6 @@
 /**
- * Hosted Agent transactional emails (ADR 0067). Separate module (rather
+ * Self-serve Operator transactional emails (ADR 0067 offering; ADR 0100: one
+ * product, so the buyer reads "Operator", never a second product name). Separate module (rather
  * than templates.ts) to respect that file's 500-line ceiling; composes the
  * same shared portal shell helpers so the emails render identically.
  */
@@ -15,7 +16,7 @@ import {
 } from './templates'
 
 /**
- * Sent to the buyer when their Hosted Agent checkout completes. Status
+ * Sent to the buyer when their self-serve checkout completes. Status
  * framing only: no timeline promises, no outreach promises (Pattern A
  * guards). The portal is the single place setup progresses.
  */
@@ -23,7 +24,7 @@ export function hostedAgentWelcomeEmailHtml(clientName: string, portalUrl: strin
   return portalDocument(
     [
       paragraph(greeting(clientName), '0 0 8px'),
-      paragraph('Your Hosted Agent subscription is active. Setup is underway.', '0 0 8px'),
+      paragraph('Your Operator subscription is active. Setup is underway.', '0 0 8px'),
       paragraph(
         'Next step: complete the short setup questionnaire in your portal. It covers what to call your agent, what you want it working on, and which senders it should accept email from.'
       ),
@@ -43,13 +44,13 @@ export interface HostedAgentOrderNotificationInput {
   adminQueueUrl: string
 }
 
-/** Operational alert to team@ when a Hosted Agent purchase lands. */
+/** Operational alert to team@ when a self-serve purchase lands. */
 export function hostedAgentOrderNotificationEmailHtml(
   input: HostedAgentOrderNotificationInput
 ): string {
   return portalDocument(
     [
-      paragraph('A Hosted Agent subscription was purchased.', '0 0 8px'),
+      paragraph('A self-serve Operator subscription was purchased.', '0 0 8px'),
       detailPanel('Customer', escapeEmailHtml(input.entityName)),
       detailPanel('Buyer email', escapeEmailHtml(input.buyerEmail)),
       detailPanel('Plan', input.plan === 'founding' ? 'Founding ($49/mo)' : 'Standard ($79/mo)'),
@@ -73,7 +74,7 @@ export function hostedAgentIntakeNotificationEmailHtml(
 ): string {
   return portalDocument(
     [
-      paragraph('A Hosted Agent setup questionnaire was submitted.', '0 0 8px'),
+      paragraph('A self-serve setup questionnaire was submitted.', '0 0 8px'),
       detailPanel('Customer', escapeEmailHtml(input.entityName)),
       detailPanel('Agent name', escapeEmailHtml(input.agentName ?? 'not provided')),
       paragraph('Next concierge steps: assign the customer slug, then provision.'),

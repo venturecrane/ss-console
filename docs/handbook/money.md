@@ -25,7 +25,7 @@ sources:
     href: src/pages/admin/operator/costs/index.astro
 ---
 
-Clients pay SMD in three ways: a monthly Operator subscription the client starts themselves, invoices SMD issues from the admin console, and self-serve Hosted Agent checkout. The amounts are set in each client's signed agreement and are never published; this page covers how money moves and who may move it.
+Clients pay SMD in three ways: a monthly Operator subscription the client starts themselves, invoices SMD issues from the admin console, and self-serve Operator checkout. The amounts are set in each client's signed agreement and are never published; this page covers how money moves and who may move it.
 
 ## What you may approve
 

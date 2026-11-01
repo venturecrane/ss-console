@@ -43,7 +43,7 @@ From `CLAUDE.md`, Tone & Positioning Standard.
 
 **3. No fixed timeframes in marketing.** No published durations for the call, the build, training or support. Signed documents (an SOW, an invoice, an agreement) keep the timeframes that were agreed. Do: "We start with a conversation." Don't: "1-hour call," "2-week support window."
 
-**4. No published dollar amounts.** The client sees a price in their proposal, never on a public page. The one exception is the Hosted Agent's price on `/agent`, a deliberate, page-only exemption (ADR 0067, Decision #51).
+**4. No published dollar amounts.** The client sees a price in their proposal, never on a public page. The one exception is the self-serve Operator price on `/agent`, a deliberate, page-only exemption (ADR 0067, Decision #51).
 
 **5. "Solution," not "systems," when positioning.** "Systems" sounds like more software to learn. "System" is fine for a specific tool ("data migration and system setup").
 

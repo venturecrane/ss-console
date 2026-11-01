@@ -2,6 +2,7 @@
 import PortalShell from '../../../../layouts/PortalShell.astro'
 import { getPortalClient } from '../../../../lib/portal/session'
 import { resolvePortalOfferings } from '../../../../lib/portal/offerings'
+import { resolveHostedAgentState } from '../../../../lib/portal/hosted-agent-state'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -25,14 +26,42 @@ if (!portalData) {
 if (!portalData.client) {
   return Astro.redirect('/auth/sign-in?status=no_subscription')
 }
-const { client } = portalData
+const { user, client } = portalData
 
 const offerings = await resolvePortalOfferings(env.DB, client.org_id, client.id)
-const operators = offerings.operators
+
+// A self-serve subscription is one of the client's Operators (ADR 0100). It has
+// no instance slug until SMD names its seat, so its page is the setup surface.
+const selfServeRow = offerings.selfServe
+  ? await (async () => {
+      const state = await resolveHostedAgentState(env.DB, client.id, user.id)
+      return {
+        slug: 'setup',
+        href: '/portal/products/operator/setup',
+        displayName: state.intake?.agent_name ?? 'Your Operator',
+        status:
+          state.surfaceState === 'live'
+            ? 'live'
+            : state.surfaceState === 'paused'
+              ? 'paused'
+              : 'setup in progress',
+      }
+    })()
+  : null
+
+const operators = [
+  ...offerings.operators.map((op) => ({
+    slug: op.slug,
+    href: `/portal/products/operator/${op.slug}`,
+    displayName: op.displayName,
+    status: op.status,
+  })),
+  ...(selfServeRow ? [selfServeRow] : []),
+]
 
 // One operator → go straight in; no reason to make the client pick from a list of one.
 if (operators.length === 1) {
-  return Astro.redirect(`/portal/products/operator/${operators[0].slug}`)
+  return Astro.redirect(operators[0].href)
 }
 
 const seclabelClass =
@@ -67,7 +96,7 @@ const seclabelClass =
       <div class="mt-3 border-[3px] border-[color:var(--color-text-primary)] bg-[color:var(--color-background)]">
         {operators.map((op, i) => (
           <a
-            href={`/portal/products/operator/${op.slug}`}
+            href={op.href}
             class={`group flex items-center justify-between gap-6 px-5 py-5 transition-colors hover:bg-[color:var(--color-border-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action)] focus-visible:ring-inset md:px-7 ${
               i > 0 ? 'border-t-[2px] border-[color:var(--color-border)]' : ''
             }`}

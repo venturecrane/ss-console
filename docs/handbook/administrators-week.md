@@ -67,8 +67,8 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 | `[SMD Ops] <seat> send refused: ...` | When a safety gate stopped an outgoing email | A routine could not reach a person, on purpose | An agent investigates; you decide whether the client needs telling |
 | `ALERT <seat>: Sentry issue alert` / `healthchecks.io grace expired` / `Audit-log integrity violation` / `obligation alert` | When it happens | An error, a stopped watcher, a tampered record, or overdue client work | You: ask an agent to investigate and report |
 | `Retainer payment failed - <client>` | When a monthly charge fails | No automatic action was taken | The Captain: the steps that follow are in [Money](/admin/playbook/money) |
-| `Hosted Agent purchase ...`, `Stripe webhook: unreadable ...` | On a purchase or a billing record that could not be matched | A new self-serve customer, or billing data to reconcile by hand | You |
-| `New inquiry`, `Contact form`, `New booking`, `Rescheduled`, `Cancelled`, `Operator change request`, `Hosted Agent intake submitted` | When someone acts on the website or portal | Business, not alarms | You: reply, schedule, or route a change request ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)) |
+| `Self-serve purchase ...`, `Stripe webhook: unreadable ...` | On a purchase or a billing record that could not be matched | A new self-serve customer, or billing data to reconcile by hand | You |
+| `New inquiry`, `Contact form`, `New booking`, `Rescheduled`, `Cancelled`, `Operator change request`, `Self-serve intake submitted` | When someone acts on the website or portal | Business, not alarms | You: reply, schedule, or route a change request ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)) |
 | `[SMD] Booking system alert` | When calendar sync or booking email breaks | Prospects may not be able to book | You: ask an agent |
 | A healthchecks.io failure notice | When a watcher stops | One of the watchers above went silent; until fixed, an empty inbox means nothing | You: ask an agent at once |
 

@@ -165,10 +165,14 @@ export function formatWholeDollars(amountCents: number): string {
   }).format(Math.round(amountCents / 100))
 }
 
-/** Display names for subscription rows on the Billing surface. */
+/**
+ * Display names for subscription rows on the Billing surface. One product
+ * (ADR 0100): the self-serve offering's stored slug `hosted-agent` is an
+ * Operator too.
+ */
 const PRODUCT_DISPLAY_NAMES: Record<string, string> = {
   operator: 'Operator',
-  'hosted-agent': 'Hosted Agent',
+  'hosted-agent': 'Operator',
 }
 
 export function productDisplayName(sub: SubscriptionRow): string {

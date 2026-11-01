@@ -35,16 +35,16 @@ SMD Services is a venture of SMDurgan, LLC. It is a services business, not a sof
 
 | Offer | What the client gets | How it is priced |
 |---|---|---|
-| **The Operator** (the flagship) | A managed AI worker built for one business, running on its own isolated machine, working inside the client's own systems under limits the client sets ([The Operator Thesis](/admin/playbook/operator-thesis)) | A flat monthly fee plus a one-time stand-up fee. The figures are internal and never published (ADR 0063, Decision #50) |
+| **The Operator** (the flagship, built with a business) | A managed AI worker built for one business, running on its own isolated machine, working inside the client's own systems under limits the client sets ([The Operator Thesis](/admin/playbook/operator-thesis)) | A flat monthly fee plus a one-time stand-up fee. The figures are internal and never published (ADR 0063, Decision #50) |
 | **Consulting** | A bounded project: we learn where the business is trying to go, design the right solution, build it, train the team and hand it off ([The Consulting Engagement](/admin/playbook/consulting-engagement)) | A fixed project price per engagement, quoted after the assessment (Decision #16) |
-| **The Hosted Agent** | An always-on personal AI agent run safely by SMD on the same machinery as the Operator. Some are sold as a packaged job called a **role**; the first role is `couples` (ADR 0090) | The one published price, on the `/agent` page, with self-serve checkout (ADR 0067, Decision #51) |
+| **The Operator, self-serve** | The same Operator, bought self-serve as an always-on personal AI agent and run safely by SMD (ADR 0100: one product). Some are sold as a packaged job called a **role**; the first role is `couples` (ADR 0090) | The one published price, on the `/agent` page, with self-serve checkout (ADR 0067, Decision #51) |
 
 On the website, every path except the `/agent` page leads to one conversation, the assessment, and the assessment leads to whichever of these fits: a recommendation, a project, or an Operator (`docs/marketing/positioning-spine.md`, Captain decision 2026-06-29).
 
 ## Where the business stands (2026-10-21)
 
 - **One paying client, an Operator client.** A personal-injury law firm, seat `ashton-price`, started its paid service in the client portal on 2026-09-15 after a pilot (`operator/customers/ashton-price/customer.yaml`, the billing-cycle note). Everything we owe that client is in the [obligation register](/admin/playbook/obligation-register).
-- **The other seats.** Two hosted-agent seats are set up as client seats but paid for by SMD while they are proven (ADR 0090). The rest are SMD's own: a proving seat, the pre-production seat and an internal seat. The full list is in [Clients & Commitments](/admin/playbook/clients-and-commitments).
+- **The other seats.** Two self-serve seats are set up as client seats but paid for by SMD while they are proven (ADR 0090). The rest are SMD's own: a proving seat, the pre-production seat and an internal seat. The full list is in [Clients & Commitments](/admin/playbook/clients-and-commitments).
 - **Acquisition is founder-run and law-first.** The automated lead-generation machine was retired on 2026-07-01 (ADR 0060); the Operator goes to market through law firms first (ADR 0040). See [Roadmap & Current Phase](/admin/playbook/roadmap).
 
 ## Who SMD serves

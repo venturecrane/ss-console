@@ -56,8 +56,8 @@ How SMD talks about it is set by ADR 0040. The line is "it runs on your firm's e
 | Shape | What it is | Source |
 |---|---|---|
 | **The Operator** | A governed worker for a business, set up with the client and run by SMD as a managed service. The law-firm Operator is the one in production. | ADR 0004, ADR 0040 |
-| **The Hosted Agent** | An always-on personal agent on the same platform, for a person or a household rather than a firm. It is reached over Telegram and email from approved senders only. | ADR 0067 |
-| **A hosted-agent role** | A packaged job for a Hosted Agent, chosen per seat. The first role is `couples`, a shared agent for two people; SMD sets each one up by hand and all setup happens in the agent's own channels. | ADR 0090 |
+| **The Operator, self-serve** | The same Operator, bought self-serve as an always-on personal agent for a person or a household rather than a firm (ADR 0100: one product; ADR 0067 terms). It is reached over Telegram and email from approved senders only. | ADR 0067 |
+| **A role** | A packaged job for an Operator, chosen per seat. The first role is `couples`, a shared agent for two people; SMD sets each one up by hand and all setup happens in the agent's own channels. | ADR 0090 |
 
 Prices are never published and are not in this handbook; see [Pricing & Economics](/admin/playbook/pricing-economics) for where they live.
 

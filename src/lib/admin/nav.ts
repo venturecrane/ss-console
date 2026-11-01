@@ -8,7 +8,7 @@
  *
  *   Home      the cockpit — what needs the Captain today
  *   Clients   the roster; delivery + operators + billing drill in per-client
- *   Fleet     running products across all clients (Operator + Hosted Agent)
+ *   Fleet     every running Operator across all clients, self-serve included
  *   Billing   money across all clients
  *   Playbook  the venture handbook (reference)
  *
@@ -30,9 +30,9 @@ export function buildAdminNav(): AdminNavDestination[] {
   const destinations: Omit<AdminNavDestination, 'anchor'>[] = [
     { href: '/admin', label: 'Home', matchPrefix: '/admin', exact: true },
     { href: '/admin/clients', label: 'Clients', matchPrefix: '/admin/clients' },
-    // "Fleet" is the operational lens over both running products. It seeds from
-    // the existing operator fleet page; folding the Hosted Agent view in is a
-    // later surface rebuild (ADR 0077 §3).
+    // "Fleet" is the operational lens over every running Operator (ADR 0100: one
+    // product). The self-serve intake queue lives inside it at
+    // /admin/operator/intake.
     { href: '/admin/operator', label: 'Fleet', matchPrefix: '/admin/operator' },
     { href: '/admin/billing', label: 'Billing', matchPrefix: '/admin/billing' },
     { href: '/admin/playbook', label: 'Playbook', matchPrefix: '/admin/playbook' },

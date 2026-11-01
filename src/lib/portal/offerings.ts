@@ -53,7 +53,13 @@ export interface PortalOfferings {
   engagement: EngagementOfferings
   /** Every operator the client owns, in subscription created_at order. */
   operators: OperatorInstance[]
-  hostedAgent: SubscriptionRow | null
+  /**
+   * The self-serve offering's subscription (stored product_slug 'hosted-agent'),
+   * or null. It is one of the client's Operators (ADR 0100: one product, the
+   * offering is commercial terms plus a starting preset); it is listed apart
+   * from `operators` only because it has no instance slug until SMD names it.
+   */
+  selfServe: SubscriptionRow | null
   /** Any portal-visible invoice exists (drives the Billing destination). */
   hasInvoices: boolean
   /**
@@ -81,8 +87,8 @@ export interface PortalOfferings {
    *                      operators at once, mid-onboarding, is a valid state)
    * The instant ANY subscription goes live (`hasBillingRelationship` flips true)
    * or an engagement appears, this is null again — Home and the full tab set
-   * (including Billing) return. Hosted-agent never triggers it: a hosted-agent
-   * client only receives portal access after implementation, when the
+   * (including Billing) return. A self-serve subscription never triggers it: a
+   * self-serve client only receives portal access after implementation, when the
    * subscription is already initiated, so they are never in this window.
    */
   preGoLiveLanding: string | null
@@ -151,7 +157,7 @@ export function deriveOfferings(input: {
       pastEngagements,
     },
     operators,
-    hostedAgent: bySlug('hosted-agent'),
+    selfServe: bySlug('hosted-agent'),
     hasInvoices: input.hasInvoices,
     hasBillingRelationship,
     subscriptions: input.subscriptions,

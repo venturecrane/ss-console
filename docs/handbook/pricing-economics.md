@@ -5,7 +5,7 @@ order: 5
 owner: captain
 review_every: 180
 last_reviewed: "2026-10-21"
-summary: How each of the three offers is priced and why, where the private Operator figures live, how new work is priced, and the cost lines the Captain watches. All consulting and Operator figures are internal; the Hosted Agent price is the one published exception (ADR 0067).
+summary: How each offer is priced and why, where the private Operator figures live, how new work is priced, and the cost lines the Captain watches. All consulting and engagement-built Operator figures are internal; the self-serve Operator price is the one published exception (ADR 0067).
 sources:
   - label: Decision Stack (Decisions #13, #14, #16, #25, #27, #50, #51)
     href: docs/adr/decision-stack.md
@@ -23,11 +23,11 @@ sources:
     href: src/lib/pricing/card-fee.ts
 ---
 
-Each offer has its own pricing shape: consulting is a fixed project price built from an internal hourly rate, the Operator is a flat monthly fee plus a one-time stand-up fee, and the Hosted Agent has a published monthly price. Prices are the Captain's to set; you invoice at prices already set, and anything new, discounted or changed goes to the Captain ([Who Does What](/admin/playbook/who-does-what)).
+Each offer has its own pricing shape: consulting is a fixed project price built from an internal hourly rate, an Operator built with a client is a flat monthly fee plus a one-time stand-up fee, and a self-serve Operator has a published monthly price. Prices are the Captain's to set; you invoice at prices already set, and anything new, discounted or changed goes to the Captain ([Who Does What](/admin/playbook/who-does-what)).
 
 ## The governing rule
 
-No dollar amount appears on the website or in marketing (Decision #16; [Positioning & Voice](/admin/playbook/positioning-voice), rule 4). The client sees a price in their proposal or agreement, never on a public page, and never the hourly rate. The one exception is the Hosted Agent price on `/agent` (ADR 0067).
+No dollar amount appears on the website or in marketing (Decision #16; [Positioning & Voice](/admin/playbook/positioning-voice), rule 4). The client sees a price in their proposal or agreement, never on a public page, and never the hourly rate. The one exception is the self-serve Operator price on `/agent` (ADR 0067).
 
 This handbook is in a public repository (Decision #52), so the Operator's figures are not written here at all. They live in the private `venturecrane/engagements` repository under `pricing/`, and `tests/pricing-figures.test.ts` fails the build if they reappear in this one. The consulting figures below are internal policy; do not quote them to a client.
 
@@ -92,9 +92,9 @@ The planning model assumes an average engagement around $7,500 against a $200k a
 
 **New kinds of work (change requests).** The monthly fee covers the work named in the client's agreement: the routines and settings recorded for the client, the connected systems, and the ordinary questions and tasks staff bring the Operator. A request for a new kind of work is a change request. In the agreement drafted for SMD's one Operator client (section 2.7, in the private repository), SMD may do the first instances as a trial, says so when it accepts, and measures what each costs. It then proposes written terms: included as ordinary work, included up to an allowance with anything beyond it quoted first, or a change to the fee. Nothing becomes a regular part of the service until the client accepts in writing. Every open change request is a row in the [obligation register](/admin/playbook/obligation-register). Proposing terms sets a price, so it is the Captain's.
 
-## The Hosted Agent
+## The Operator, self-serve
 
-The one published price: **$79 a month**, with the first 25 founding subscriptions at **$49 a month for as long as they stay active**, enforced by a Stripe coupon capped at 25 uses (ADR 0067, Decision #51; the price shows on `src/pages/agent.astro`). The customer brings their own Anthropic key with a spend limit they set, so the AI usage cost is theirs; SMD's cost is the machine and support time. A plan-retirement clause in the product terms bounds the founding-price promise. The two hosted-agent seats running today are SMD's own and SMD pays for them (ADR 0090; [Clients & Commitments](/admin/playbook/clients-and-commitments)).
+The one published price: **$79 a month**, with the first 25 founding subscriptions at **$49 a month for as long as they stay active**, enforced by a Stripe coupon capped at 25 uses (ADR 0067, Decision #51; the price shows on `src/pages/agent.astro`). The customer brings their own Anthropic key with a spend limit they set, so the AI usage cost is theirs; SMD's cost is the machine and support time. A plan-retirement clause in the product terms bounds the founding-price promise. The two self-serve seats running today are SMD's own and SMD pays for them (ADR 0090; [Clients & Commitments](/admin/playbook/clients-and-commitments)).
 
 ## The cost lines the Captain watches
 

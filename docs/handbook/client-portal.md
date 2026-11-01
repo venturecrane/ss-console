@@ -31,13 +31,13 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/migrations/0038_portal_clerk_subscriptions_substrate.sql
 ---
 
-The client portal at `portal.smd.services` is where a paying client sees what they have with SMD: their consulting engagement and proposals, their Operator or Hosted Agent, and their invoices and subscription, each appearing only once it exists. A client starts their own Operator subscription here and pays invoices here; nothing in the portal is invented, so a section with no authored data is simply absent.
+The client portal at `portal.smd.services` is where a paying client sees what they have with SMD: their consulting engagement and proposals, their Operators, and their invoices and subscription, each appearing only once it exists. A client starts their own Operator subscription here and pays invoices here; nothing in the portal is invented, so a section with no authored data is simply absent.
 
 ## What the portal is
 
 The portal is served at `portal.smd.services` from `src/pages/portal/`. It is one Astro app and one Worker; the `portal.` subdomain is a front door, not a separate deployment (the mechanics are on [The Website](/admin/playbook/the-website)). Pages are marked `noindex, nofollow`, and changes are HTML forms checked on the server.
 
-A client can arrive through a consulting engagement, as an Operator subscriber, or as a Hosted Agent subscriber, in any combination, and the portal shows exactly what they own (ADR 0068). This page covers the shared shell, the engagement and billing pages, and sign-in. The Operator console is its own page, [The Operator Console](/admin/playbook/operator-console). How a business becomes a portal client is [Customer Lifecycle](/admin/playbook/customer-lifecycle).
+A client can arrive through a consulting engagement, or as an Operator subscriber (built with SMD or bought self-serve), in any combination, and the portal shows exactly what they own (ADR 0068). This page covers the shared shell, the engagement and billing pages, and sign-in. The Operator console is its own page, [The Operator Console](/admin/playbook/operator-console). How a business becomes a portal client is [Customer Lifecycle](/admin/playbook/customer-lifecycle).
 
 ## The tabs
 
@@ -48,7 +48,7 @@ The tabs are worked out in one place: `resolvePortalOfferings` (`src/lib/portal/
 | Home | Always, except for a client whose only product is an Operator not yet live; they land on the Operator itself |
 | Engagement | Any engagement or proposal exists |
 | Operator | The client has any Operator (one tab, however many) |
-| Agent | The client has a Hosted Agent subscription |
+| Operator | The client has any Operator, a self-serve subscription included (one product, ADR 0100) |
 | Billing | A billing relationship exists: an invoice sent, paid or overdue, or a subscription past set-up |
 
 Every page is limited to the signed-in client's own records and shows authored data only.
@@ -99,7 +99,7 @@ No alert takes an action. Pausing, ending or offboarding a client stays a human 
 
 ## Product consoles
 
-The Operator console (`products/operator/`) and the Hosted Agent pages (`products/hosted-agent/`) keep their own paths, because email links and registered sign-in callbacks point at them. The Hosted Agent pages show where the client is: no subscription, set-up (complete the questionnaire, or answers received), paused, or live, with the channel details SMD authored; and a write-only page for the client's own AI key (ADR 0067). Operator activity shown to a client uses authored wording only: `src/lib/portal/operator/activity-language.ts` maps each kind of recorded action to a sentence, unmapped actions show nothing, and tests keep the raw labels off client pages.
+The Operator console lives under `products/operator/`. A self-serve subscription's pages live there too, at `products/operator/setup/`, because it has no seat name until SMD assigns one; the old `products/hosted-agent/` URLs 301 there (`src/lib/routing/legacy-redirects.ts`), so email links keep working. The setup pages show where the client is: no subscription, set-up (complete the questionnaire, or answers received), paused, or live, with the channel details SMD authored; and a write-only page for the client's own AI key (ADR 0067). Operator activity shown to a client uses authored wording only: `src/lib/portal/operator/activity-language.ts` maps each kind of recorded action to a sentence, unmapped actions show nothing, and tests keep the raw labels off client pages.
 
 ## Sign-in
 

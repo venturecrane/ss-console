@@ -23,7 +23,7 @@ A consulting engagement is one bounded project: we learn where a business is try
 
 ## What it is
 
-Consulting is one of SMD's three offers, beside the Operator (the flagship, a monthly managed worker; see [The Operator Thesis](/admin/playbook/operator-thesis)) and the Hosted Agent ([Business Model](/admin/playbook/business-model)). It is one project, one scope, one price; not a retainer and not a subscription. On the website a prospect reaches it through the assessment, which may end in a recommendation, a project, or an Operator (`docs/marketing/positioning-spine.md`).
+Consulting is one of SMD's three offers, beside the Operator in its two offers (the flagship, a monthly managed worker built with a business, and the same Operator bought self-serve; see [The Operator Thesis](/admin/playbook/operator-thesis) and [Business Model](/admin/playbook/business-model)). It is one project, one scope, one price; not a retainer and not a subscription. On the website a prospect reaches it through the assessment, which may end in a recommendation, a project, or an Operator (`docs/marketing/positioning-spine.md`).
 
 The buyer is an owner-led business that has outgrown how it runs today, with real operational load and the ability to pay. There is no revenue-band gate (ADR 0003); we qualify in conversation.
 

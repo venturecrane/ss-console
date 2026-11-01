@@ -19,7 +19,7 @@ import { getPortalBaseUrl } from '../../../../../lib/config/app-url'
  * what was written, never templated channel copy.
  */
 
-const QUEUE = '/admin/hosted-agent'
+const QUEUE = '/admin/operator/intake'
 
 function back(st: string): Response {
   return new Response(null, { status: 303, headers: { Location: `${QUEUE}?st=${st}` } })
@@ -48,7 +48,7 @@ async function sendGoLiveEmail(
       html: hostedAgentLiveEmailHtml(
         buyer.name?.trim() || buyer.email,
         escapeHtml(channelDetails).replace(/\n/g, '<br>'),
-        `${portalBase}/portal/products/hosted-agent`
+        `${portalBase}/portal/products/operator/setup`
       ),
     })
   } catch (err) {

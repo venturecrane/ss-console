@@ -1,15 +1,15 @@
 ---
-import PortalShell from '../../../../layouts/PortalShell.astro'
-import { resolveHostedAgentAccess } from '../../../../lib/portal/hosted-agent-access'
-import { getIntakeByEntity } from '../../../../lib/db/hosted-agent-intake'
-import PortalPageHead from '../../../../components/portal/PortalPageHead.astro'
-import Field from '../../../../components/portal/form/Field.astro'
-import TextInput from '../../../../components/portal/form/TextInput.astro'
-import SubmitButton from '../../../../components/portal/form/SubmitButton.astro'
+import PortalShell from '../../../../../layouts/PortalShell.astro'
+import { resolveHostedAgentAccess } from '../../../../../lib/portal/hosted-agent-access'
+import { getIntakeByEntity } from '../../../../../lib/db/hosted-agent-intake'
+import PortalPageHead from '../../../../../components/portal/PortalPageHead.astro'
+import Field from '../../../../../components/portal/form/Field.astro'
+import TextInput from '../../../../../components/portal/form/TextInput.astro'
+import SubmitButton from '../../../../../components/portal/form/SubmitButton.astro'
 import { env } from 'cloudflare:workers'
 
 /**
- * Hosted Agent — write-only Anthropic key entry (ADR 0067, custody per
+ * Self-serve Operator — write-only Anthropic key entry (ADR 0067, custody per
  * ADR 0042). Password-type input, plain 0-JS form POST; the endpoint 303s
  * back here with a `?cs=` status. The value never appears in a URL, a
  * response, or this page's rendered output.
@@ -26,7 +26,7 @@ if (access.kind === 'redirect') {
 
 const intake = await getIntakeByEntity(env.DB, access.client.id)
 if (!intake) {
-  return Astro.redirect('/portal/products/hosted-agent')
+  return Astro.redirect('/portal/products/operator/setup')
 }
 
 const cs = Astro.url.searchParams.get('cs')
@@ -62,8 +62,8 @@ const keyReceived = intake.anthropic_key_status === 'received'
   pathname={Astro.url.pathname}
 >
   <PortalPageHead
-    crumbHref="/portal/products/hosted-agent"
-    crumbLabel="Hosted Agent"
+    crumbHref="/portal/products/operator/setup"
+    crumbLabel="Operator"
     tag="Setup"
     h1="Anthropic API Key"
     meta={null}

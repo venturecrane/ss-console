@@ -40,7 +40,7 @@ export const GET: APIRoute = async ({ locals }) => {
       const portalBase = getPortalBaseUrl(env) ?? ''
       return new Response(null, {
         status: 303,
-        headers: { Location: `${portalBase}/portal/products/hosted-agent` },
+        headers: { Location: `${portalBase}/portal/products/operator/setup` },
       })
     }
   }

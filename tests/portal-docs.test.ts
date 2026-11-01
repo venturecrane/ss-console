@@ -200,7 +200,7 @@ describe('portal offerings', () => {
     expect(offerings.engagement.pastEngagements.map((e) => e.id)).toEqual(['done', 'gone'])
     expect(offerings.engagement.openProposal?.id).toBe('q2')
     expect(offerings.operators).toEqual([])
-    expect(offerings.hostedAgent).toBeNull()
+    expect(offerings.selfServe).toBeNull()
     expect(offerings.preGoLiveLanding).toBeNull()
   })
 
@@ -245,7 +245,7 @@ describe('portal offerings', () => {
       ['alpha', 'Rae'],
       ['beta-law', 'Beta Law'],
     ])
-    expect(offerings.hostedAgent?.id).toBe('s4')
+    expect(offerings.selfServe?.id).toBe('s4')
   })
 
   it('pre-go-live, an operators-only client lands on the instance (one) or the list (many); anything live or engaged cancels it', () => {

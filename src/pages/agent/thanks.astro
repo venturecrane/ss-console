@@ -9,14 +9,14 @@ import { getPortalBaseUrl } from '../../lib/config/app-url'
 import { env } from 'cloudflare:workers'
 
 /**
- * Hosted Agent — post-checkout landing (ADR 0067). Reads the session id
+ * Self-serve Operator: post-checkout landing (ADR 0067). Reads the session id
  * Stripe substitutes into the success URL and confirms the payment state
  * honestly. The portal is the durable home; this page is a signpost.
  */
 
 // Absolute portal-host URL: a relative /portal link from this marketing page
 // would keep the buyer on the apex host (found in the live dry-run).
-const portalProductUrl = `${getPortalBaseUrl(env) ?? ''}/portal/products/hosted-agent`
+const portalProductUrl = `${getPortalBaseUrl(env) ?? ''}/portal/products/operator/setup`
 
 const sessionId = Astro.url.searchParams.get('session_id')
 
