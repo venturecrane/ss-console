@@ -31,6 +31,7 @@ from typing import Any
 import pytest
 from smokeball_connector import cited_facts, extract, form_letters as fl, sr1_form, sr19_form, vision
 from smokeball_connector.form_docx import document_paragraphs, placeholders_in
+from form_catalog import CATALOG, UNDER_FORM_LETTERS
 from smokeball_connector.library import NotResolved, ResolvedTemplate
 
 FORMS_DIR = Path(__file__).parent / "fixtures" / "forms"
@@ -163,7 +164,7 @@ class _Record:
 @pytest.fixture
 def seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "customer.yaml"
-    path.write_text("form_letters:\n  preparer_title: 'Legal Assistant'\n", encoding="utf-8")
+    path.write_text("form_letters:\n" + UNDER_FORM_LETTERS + "  preparer_title: 'Legal Assistant'\n", encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
     return path
 
@@ -350,7 +351,7 @@ def test_an_unset_preparer_title_prints_the_marker(
     documents: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "customer.yaml"
-    path.write_text("form_letters: {}\n", encoding="utf-8")
+    path.write_text("form_letters:\n" + UNDER_FORM_LETTERS, encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
     _out, text = _file_health(_Record(), monkeypatch, None)
     assert "[Not in the file: how Alex Barnes signs: title]" in text
@@ -417,7 +418,7 @@ def test_a_pdf_template_name_keeps_its_extension() -> None:
 
 
 def test_the_letter_date_default_is_unchanged_for_rep_letters() -> None:
-    assert fl.FORMS["first_party_rep"].facts_kind == "rep" and date(2026, 10, 6)
+    assert CATALOG["first_party_rep"].facts_kind == "rep" and date(2026, 10, 6)
 
 
 def test_a_company_client_is_never_the_driver(seat: Path, documents: None) -> None:
@@ -487,7 +488,7 @@ class _Faxed(_Record):
 def firm_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "customer.yaml"
     path.write_text(
-        "form_letters:\n  preparer_title: 'Legal Assistant'\n"
+        "form_letters:\n" + UNDER_FORM_LETTERS + "  preparer_title: 'Legal Assistant'\n"
         "  firm:\n    name: 'Example & Firm, LLP'\n    address: ['1 Firm Way', 'Lawtown, CA 90000']\n",
         encoding="utf-8",
     )

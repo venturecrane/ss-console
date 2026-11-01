@@ -12,7 +12,7 @@ it is opened), and the source matter's binding is emptied from the document
 properties. Every other part of the package is copied byte for byte, which is
 what keeps the firm's exact formatting. ``smokeball_connector.form_letters``
 fills these forms; the result is filed into the firm's Document Library under
-the names ``form_letters.FORMS`` expects.
+the names the seat's ``form_letters.forms`` catalog expects.
 
 THE SPEC IS CLIENT DATA AND NEVER LIVES IN THIS REPOSITORY. It names the source
 letters and the exact text each merged value printed (a client's name, a claim

@@ -13,7 +13,7 @@ from typing import Any
 
 from . import form_letter_facts as facts
 from .form_letter_facts import Fact
-from .form_letters import FORMS, MARKER, FormSpec, _claim_number, _side_word
+from .form_letters import MARKER, FormSpec, _claim_number, _side_word
 
 #: Requests the firm makes by EMAIL, not on a form: the person sends them from
 #: their own mailbox, so they carry no signer (their mail signature applies).
@@ -37,6 +37,25 @@ EMAILS: dict[str, dict[str, str]] = {
         ),
     },
 }
+
+
+#: Whose carrier an email request goes to: the client's own (the med pay side).
+#: Only ``side`` and ``client_side`` are read (``_carrier_email``,
+#: ``_claim_number``); until the form catalog moved to customer.yaml (ADR 0100
+#: W4) this was the catalog's med pay fax entry, and its values are unchanged.
+CLIENT_CARRIER = FormSpec(
+    label="med pay request (fax cover)",
+    document_class="med_pay_fax",
+    default_template="Form - Fax Medpay.docx",
+    file_name="Fax Cover Sheet Medpay.docx",
+    side="Plaintiffs",
+    client_side=True,
+    fax_label="",
+    email_label="",
+    paragraph_fields=frozenset(),
+    signer_name_from="preparer",
+    facts_kind="fax",
+)
 
 
 def _carrier_email(client: Any, matter_id: str, spec: FormSpec) -> tuple[Fact, str]:
@@ -63,7 +82,7 @@ def draft_firm_email(client: Any, matter_id: str, form: str) -> dict[str, Any]:
     is filed or sent. ``drafted`` when every fact was in the file, else
     ``incomplete`` with the markers in place and listed in ``unfilled``."""
     words = EMAILS[form]
-    spec = FORMS["med_pay_fax"]  # the client's own carrier, the med pay side
+    spec = CLIENT_CARRIER
     matter = client.get(f"/matters/{matter_id}")
     matter = matter if isinstance(matter, dict) else {}
     layout = facts.matter_layout_values(client, matter_id)

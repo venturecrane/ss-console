@@ -8,10 +8,13 @@ word. It opens the FIRM'S form from its Document Library, replaces the form's
 ``{{field}}`` placeholders with facts read from the matter's own record, and
 files the result on the matter under the name the firm's own toolbar uses.
 
+THE CATALOG. Which forms exist is the firm's, authored in its customer.yaml
+(``form_letters.forms``, :func:`parse_forms`); this module holds none.
+
 THE FORM. Resolved the way every library template is (``library.py``): the
 library matter, its folder, then the file named
 ``self_initiation.document_library.templates[<class>]`` or, unauthored, the
-name in ``FORMS``. A form that does not resolve REFUSES and files nothing,
+catalog entry's ``default_template``. A form that does not resolve REFUSES and files nothing,
 naming what was looked for. There is no fallback letter: a rep letter on the
 wrong form is the defect this tool exists to end.
 
@@ -77,103 +80,82 @@ class FormSpec:
     facts_kind: str = "rep"
 
 
-FORMS: dict[str, FormSpec] = {
-    "first_party_rep": FormSpec(
-        label="1st party rep letter",
-        document_class="first_party_rep_letter",
-        default_template="Form - 1st Party Rep Letter.docx",
-        file_name="1st party letter.docx",
-        side="Plaintiffs",
-        client_side=True,
-        fax_label="VIA FAX: ",
-        email_label="Email: ",
-        paragraph_fields=frozenset({"delivery_lines"}),
-        signer_name_from="authored",
-    ),
-    "third_party_rep": FormSpec(
-        label="3rd party rep letter",
-        document_class="third_party_rep_letter",
-        default_template="Form - 3rd Party Rep Letter.docx",
-        file_name="3rd Party Letter.docx",
-        side="Defendants",
-        client_side=False,
-        fax_label="Via Fax: ",
-        email_label="Via Email: ",
-        paragraph_fields=frozenset({"delivery_lines", "carrier_address"}),
-        signer_name_from="staff",
-    ),
-    # The firm's health-insurer notice for a Blue Shield of California member:
-    # Blue Shield's recovery vendor is the addressee; its address and fax are
-    # fixed text in the firm's form (6 firm letters, 2026-08-05 to 10-02).
-    "health_blue_shield": FormSpec(
-        label="health insurer notice (Blue Shield)",
-        document_class="health_notice_blue_shield",
-        default_template="Form - Med Ins Blue Shield.docx",
-        file_name="Med Ins Req. Blue Shield.docx",
-        side="Plaintiffs",
-        client_side=True,
-        fax_label="",
-        email_label="",
-        paragraph_fields=frozenset(),
-        signer_name_from="preparer",
-        facts_kind="health",
-    ),
-    # The firm's toolbar FAX COVER SHEETS (2026-10-06). The dec page cover
-    # follows up the 1st party rep letter, whose form already asks the carrier
-    # to "include a declarations page with your letter of acknowledgement"
-    # (the firm's own dec page faxes are 1st party; no 3rd party cover is
-    # made). The med pay cover goes with the bills the person attaches.
-    "dec_page_fax": FormSpec(
-        label="dec page request (fax cover)",
-        document_class="dec_page_fax",
-        default_template="Form - Fax Dec Page.docx",
-        file_name="Fax Cover Sheet - Req Dec Page.docx",
-        side="Plaintiffs",
-        client_side=True,
-        fax_label="",
-        email_label="",
-        paragraph_fields=frozenset(),
-        signer_name_from="preparer",
-        facts_kind="fax",
-    ),
-    "med_pay_fax": FormSpec(
-        label="med pay request (fax cover)",
-        document_class="med_pay_fax",
-        default_template="Form - Fax Medpay.docx",
-        file_name="Fax Cover Sheet Medpay.docx",
-        side="Plaintiffs",
-        client_side=True,
-        fax_label="",
-        email_label="",
-        paragraph_fields=frozenset(),
-        signer_name_from="preparer",
-        facts_kind="fax",
-    ),
-    # The firm's toolbar wage loss letter to the client's employer, with the
-    # WAGE LOSS VERIFICATION page the employer fills (18 firm letters; the
-    # form is rebuilt from the latest, 2026-07-07). The employer is the client
-    # role's Employer relationship, else as the person wrote it; with neither,
-    # nothing is filed and the person is asked.
-    "wage_loss": FormSpec(
-        label="wage loss letter",
-        document_class="wage_loss_letter",
-        default_template="Form - Wage Loss Letter.docx",
-        file_name="Wage Loss Letter.docx",
-        side="Plaintiffs",
-        client_side=True,
-        fax_label="",
-        email_label="",
-        paragraph_fields=frozenset({"employer_address"}),
-        signer_name_from="preparer",
-        facts_kind="wage",
-    ),
-}
+#: How each catalog field is read. Every field is required: a form whose signer
+#: or fact source were defaulted would be a letter nobody authored.
+_STRING_FIELDS = ("label", "document_class", "default_template", "file_name", "side")
+_LABEL_FIELDS = ("fax_label", "email_label")  # printed verbatim; "" is a form without the line
+_SIGNER_SOURCES = frozenset({"authored", "staff", "preparer"})
+#: The fact readers ``_gather`` has. ``police`` is not here: the police request
+#: builds its own spec per agency (``police_request.py``).
+_FACTS_KINDS = frozenset({"rep", "health", "fax", "wage"})
+_FIELDS = frozenset(
+    {*_STRING_FIELDS, *_LABEL_FIELDS, "client_side", "paragraph_fields", "signer_name_from", "facts_kind"}
+)
+
+
+class CatalogError(ValueError):
+    """The seat's ``form_letters.forms`` is authored but cannot be read as a catalog."""
+
+
+def _check_entry(where: str, entry: Any) -> None:
+    """Raise :class:`CatalogError` naming the first thing wrong with one entry."""
+    if not isinstance(entry, dict):
+        raise CatalogError(f"{where} must be a mapping")
+    unknown = sorted(set(entry) - _FIELDS)
+    missing = sorted(_FIELDS - set(entry))
+    if unknown or missing:
+        raise CatalogError(f"{where}: unknown {unknown or 'none'}, missing {missing or 'none'}")
+    for field in _STRING_FIELDS:
+        if not isinstance(entry[field], str) or not entry[field].strip():
+            raise CatalogError(f"{where}.{field} must be a non-empty string")
+    for field in _LABEL_FIELDS:
+        if not isinstance(entry[field], str):
+            raise CatalogError(f"{where}.{field} must be a string")
+    if not isinstance(entry["client_side"], bool):
+        raise CatalogError(f"{where}.client_side must be true or false")
+    fields = entry["paragraph_fields"]
+    if not isinstance(fields, list) or not all(isinstance(f, str) and f for f in fields):
+        raise CatalogError(f"{where}.paragraph_fields must be a list of placeholder names")
+    if entry["signer_name_from"] not in _SIGNER_SOURCES:
+        raise CatalogError(f"{where}.signer_name_from must be one of {sorted(_SIGNER_SOURCES)}")
+    if entry["facts_kind"] not in _FACTS_KINDS:
+        raise CatalogError(f"{where}.facts_kind must be one of {sorted(_FACTS_KINDS)}")
+
+
+def parse_forms(block: Any) -> dict[str, FormSpec]:
+    """``form_letters.forms`` -> ``{form name: FormSpec}``.
+
+    THE CATALOG IS THE FIRM'S. Which letters a firm makes on its own forms, the
+    name each files under, which side's carrier it addresses, how its delivery
+    lines are labelled and who signs it are the firm's toolbar, so they are
+    authored per seat in customer.yaml (ADR 0100 W4), never a list in this
+    module. The code keeps only what a form can do: the fact readers
+    (``facts_kind``) and the signer sources (``signer_name_from``). Unauthored
+    is an empty catalog (no form letter is offered); a malformed entry raises
+    and nothing is filed."""
+    if block is None:
+        return {}
+    if not isinstance(block, dict):
+        raise CatalogError("form_letters.forms must be a mapping of form name to its entry")
+    out: dict[str, FormSpec] = {}
+    for name, entry in block.items():
+        _check_entry(f"form_letters.forms.{name}", entry)
+        out[str(name)] = FormSpec(
+            **{k: entry[k] for k in _FIELDS if k != "paragraph_fields"},
+            paragraph_fields=frozenset(entry["paragraph_fields"]),
+        )
+    return out
+
+
+def load_forms(path: str | None = None) -> dict[str, FormSpec]:
+    """The seat's form catalog, read off its live customer.yaml at call time
+    (``form_letters.forms``, the shape of ``form_letter_facts.load_signers``)."""
+    block = facts._load_yaml(path).get(facts.CONFIG_BLOCK)
+    return parse_forms(block.get("forms") if isinstance(block, dict) else None)
+
 
 _MAX_EMPLOYER = 200
 
-#: The 1st party form's paragraph fields (each delivery channel its own line);
-#: each form's own set is ``FormSpec.paragraph_fields``.
-PARAGRAPH_FIELDS = FORMS["first_party_rep"].paragraph_fields
 MARKER = "[Not in the file: {}]"
 
 #: Read-back waits after the upload, in seconds. Since 2026-10-13 every form
@@ -532,11 +514,17 @@ def render_firm_form_letter(
     lists so the person checks it against the card) and ``cited_refused``. It
     does not send, fax or mail the letter, and does not complete any task."""
     name = str(form or "").strip()
-    spec = FORMS.get(name)
     from .form_emails import EMAILS, draft_firm_email
 
+    try:
+        forms = load_forms()
+    except CatalogError as exc:
+        if name not in EMAILS and name != "police_report":
+            return _refused(f"the firm's form catalog could not be read ({exc}); nothing was filed")
+        forms = {}
+    spec = forms.get(name)
     if spec is None and name not in EMAILS and name != "police_report":
-        return _refused(f"form must be one of {sorted([*FORMS, *EMAILS, 'police_report'])}")
+        return _refused(f"form must be one of {sorted([*forms, *EMAILS, 'police_report'])}")
     matter = str(matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
@@ -671,11 +659,12 @@ def register(server: Any) -> None:
 
 
 __all__ = [
-    "FORMS",
+    "CatalogError",
     "MARKER",
-    "PARAGRAPH_FIELDS",
     "READBACK_WAITS",
     "gather_facts",
+    "load_forms",
+    "parse_forms",
     "register",
     "render_firm_form_letter",
 ]

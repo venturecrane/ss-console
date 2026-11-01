@@ -36,6 +36,7 @@ from smokeball_connector.form_docx import (
     fill_form,
     placeholders_in,
 )
+from form_catalog import CATALOG, UNDER_FORM_LETTERS
 from smokeball_connector.library import NotResolved, ResolvedTemplate
 
 FORMS_DIR = Path(__file__).parent / "fixtures" / "forms"
@@ -153,7 +154,9 @@ class _Record:
 def signers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "customer.yaml"
     path.write_text(
-        "form_letters:\n  signers:\n    Sam Signer: {name: 'Samuel Q. Signer', title: 'Attorney at Law', initials: 'SQS'}\n",
+        "form_letters:\n"
+        + UNDER_FORM_LETTERS
+        + "  signers:\n    Sam Signer: {name: 'Samuel Q. Signer', title: 'Attorney at Law', initials: 'SQS'}\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
@@ -161,7 +164,7 @@ def signers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _values(record: _Record, form: str) -> dict[str, str]:
-    found = fl.gather_facts(record, MATTER, fl.FORMS[form], date(2026, 10, 5))
+    found = fl.gather_facts(record, MATTER, CATALOG[form], date(2026, 10, 5))
     return {k: f.value if f.value is not None else fl.MARKER.format(f.missing) for k, f in found.items()}
 
 
@@ -218,14 +221,14 @@ def test_the_committed_forms_carry_no_source_matter_binding() -> None:
 
 
 def test_only_the_body_changes_when_filled(signers: Path) -> None:
-    filled = fill_form(FIRST, _values(_Record(), "first_party_rep"), fl.PARAGRAPH_FIELDS).data
+    filled = fill_form(FIRST, _values(_Record(), "first_party_rep"), CATALOG["first_party_rep"].paragraph_fields).data
     with zipfile.ZipFile(io.BytesIO(FIRST)) as a, zipfile.ZipFile(io.BytesIO(filled)) as b:
         assert a.namelist() == b.namelist()
         assert [n for n in a.namelist() if a.read(n) != b.read(n)] == [DOCUMENT_PART]
 
 
 def test_first_party_letter_reads_as_the_firms_letter(signers: Path) -> None:
-    filled = fill_form(FIRST, _values(_Record(), "first_party_rep"), fl.PARAGRAPH_FIELDS)
+    filled = fill_form(FIRST, _values(_Record(), "first_party_rep"), CATALOG["first_party_rep"].paragraph_fields)
     assert filled.unknown == []
     assert _texts(filled.data) == [
         "October 5, 2026",
@@ -260,7 +263,7 @@ def test_first_party_letter_reads_as_the_firms_letter(signers: Path) -> None:
 
 
 def _third(record: _Record) -> list[str]:
-    spec = fl.FORMS["third_party_rep"]
+    spec = CATALOG["third_party_rep"]
     filled = fill_form(THIRD, _values(record, "third_party_rep"), spec.paragraph_fields)
     assert filled.unknown == []
     return _texts(filled.data)
