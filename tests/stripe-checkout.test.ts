@@ -83,7 +83,7 @@ const PARAMS = {
 }
 
 const VALID_COUPON = { valid: true, times_redeemed: 3, max_redemptions: 25 }
-const TAXED_PRODUCT = { id: 'prod_ha', tax_code: 'txcd_10103000' }
+const TAXED_PRODUCT = { id: 'prod_ha', tax_code: 'txcd_10103000', name: 'SMD Self-serve Operator' }
 
 function session(id: string) {
   return { id, url: `https://checkout.stripe.com/c/${id}` }
@@ -234,7 +234,7 @@ describe('createHostedAgentCheckoutSession', () => {
     ])
     await createHostedAgentCheckoutSession(KEY, PARAMS)
     const [product] = postBodies(calls, '/products')
-    expect(product.get('name')).toBe('SMD Hosted Agent')
+    expect(product.get('name')).toBe('SMD Self-serve Operator')
     expect(product.get('metadata[smd_product]')).toBe('hosted-agent')
     expect(product.get('tax_code')).toBe('txcd_10103000')
     const [body] = postBodies(calls, '/checkout/sessions')
@@ -251,6 +251,36 @@ describe('createHostedAgentCheckoutSession', () => {
     await createHostedAgentCheckoutSession(KEY, PARAMS)
     const [patch] = postBodies(calls, '/products/prod_old')
     expect(patch.get('tax_code')).toBe('txcd_10103000')
+  })
+
+  it('renames the live product made under the old name, and only the name (ADR 0100 W6)', async () => {
+    // FALSIFIER: drop the name check from the self-heal and no POST is made,
+    // so buyers keep reading "SMD Hosted Agent" on Checkout and receipts.
+    const { calls } = stubStripe([
+      {
+        match: '/products/search',
+        reply: { data: [{ id: 'prod_live', tax_code: 'txcd_10103000', name: 'SMD Hosted Agent' }] },
+      },
+      { match: '/products/prod_live', method: 'POST', reply: { id: 'prod_live' } },
+      { match: '/coupons/hosted-agent-founding', method: 'GET', reply: VALID_COUPON },
+      { match: '/checkout/sessions', method: 'POST', reply: session('cs_r') },
+    ])
+    await createHostedAgentCheckoutSession(KEY, PARAMS)
+    const [patch] = postBodies(calls, '/products/prod_live')
+    expect([...patch.keys()]).toEqual(['name'])
+    expect(patch.get('name')).toBe('SMD Self-serve Operator')
+  })
+
+  it('makes no product write when the product is already named and taxed', async () => {
+    const { calls } = stubStripe([
+      { match: '/products/search', reply: { data: [TAXED_PRODUCT] } },
+      { match: '/coupons/hosted-agent-founding', method: 'GET', reply: VALID_COUPON },
+      { match: '/checkout/sessions', method: 'POST', reply: session('cs_n') },
+    ])
+    await createHostedAgentCheckoutSession(KEY, PARAMS)
+    expect(
+      calls.filter((c) => c.url.includes('/products/prod_ha') && c.method === 'POST')
+    ).toHaveLength(0)
   })
 
   it("surfaces a product-creation failure with Stripe's status", async () => {

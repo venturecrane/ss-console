@@ -7,7 +7,7 @@
  *
  *   * **Raw REST, no SDK** — same as client.ts.
  *   * **Resolve-or-create product + coupon by fixed identity.** No dashboard
- *     prerequisites: the shared "SMD Hosted Agent" product is resolved by a
+ *     prerequisites: the shared "SMD Self-serve Operator" product is resolved by a
  *     metadata marker (created on first use), and the founding-seat coupon is
  *     created with a FIXED id (`hosted-agent-founding`) so Stripe enforces
  *     both the 25-redemption cap and the for-life ($30 off forever) discount
@@ -44,7 +44,10 @@ const HOSTED_AGENT_FOUNDING_SEATS = 25
 const SAAS_TAX_CODE = 'txcd_10103000'
 
 const PRODUCT_MARKER = { key: 'smd_product', value: 'hosted-agent' } as const
-const PRODUCT_NAME = 'SMD Hosted Agent'
+/** What the buyer reads on Checkout and receipts (ADR 0100 W6: one product, the
+ * Operator; the self-serve plan was "SMD Hosted Agent" until 2026-10-31). The
+ * marker above, not the name, is the product's identity. */
+const PRODUCT_NAME = 'SMD Self-serve Operator'
 /** Fixed coupon id — Stripe treats coupon ids as idempotent identities. */
 const FOUNDING_COUPON_ID = 'hosted-agent-founding'
 
@@ -55,13 +58,16 @@ async function resolveHostedAgentProductId(apiKey: string): Promise<string> {
     { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } }
   )
   if (searchRes.ok) {
-    const data: { data: Array<{ id: string; tax_code: string | null }> } = await searchRes.json()
+    const data: { data: Array<{ id: string; tax_code: string | null; name?: string }> } =
+      await searchRes.json()
     if (data.data.length > 0) {
       const product = data.data[0]
-      // Self-heal a product created before tax wiring existed.
-      if (product.tax_code !== SAAS_TAX_CODE) {
+      // Self-heal a product created before tax wiring existed, or under an
+      // earlier name (the name is set only at creation otherwise).
+      if (product.tax_code !== SAAS_TAX_CODE || product.name !== PRODUCT_NAME) {
         const patch = new URLSearchParams()
-        patch.append('tax_code', SAAS_TAX_CODE)
+        if (product.tax_code !== SAAS_TAX_CODE) patch.append('tax_code', SAAS_TAX_CODE)
+        if (product.name !== PRODUCT_NAME) patch.append('name', PRODUCT_NAME)
         await fetch(`${STRIPE_API_BASE}/products/${product.id}`, {
           method: 'POST',
           headers: stripeHeaders(apiKey),
