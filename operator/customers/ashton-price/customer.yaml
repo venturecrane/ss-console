@@ -1741,6 +1741,83 @@ form_letters:
     address:
       - '8243 Greenback Lane'
       - 'Fair Oaks, CA 95628'
+  # forms: the firm's own form catalog, one entry per toolbar letter
+  # render_firm_form_letter makes (ADR 0100 W4; until then hardcoded in the
+  # Smokeball connector). Templates resolve through
+  # self_initiation.document_library.templates[document_class] first.
+  forms:
+    first_party_rep:
+      label: '1st party rep letter'
+      document_class: first_party_rep_letter
+      default_template: 'Form - 1st Party Rep Letter.docx'
+      file_name: '1st party letter.docx'
+      side: Plaintiffs
+      client_side: true
+      fax_label: 'VIA FAX: '
+      email_label: 'Email: '
+      paragraph_fields: [delivery_lines]
+      signer_name_from: authored
+      facts_kind: rep
+    third_party_rep:
+      label: '3rd party rep letter'
+      document_class: third_party_rep_letter
+      default_template: 'Form - 3rd Party Rep Letter.docx'
+      file_name: '3rd Party Letter.docx'
+      side: Defendants
+      client_side: false
+      fax_label: 'Via Fax: '
+      email_label: 'Via Email: '
+      paragraph_fields: [delivery_lines, carrier_address]
+      signer_name_from: staff
+      facts_kind: rep
+    health_blue_shield:
+      label: 'health insurer notice (Blue Shield)'
+      document_class: health_notice_blue_shield
+      default_template: 'Form - Med Ins Blue Shield.docx'
+      file_name: 'Med Ins Req. Blue Shield.docx'
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: health
+    dec_page_fax:
+      label: 'dec page request (fax cover)'
+      document_class: dec_page_fax
+      default_template: 'Form - Fax Dec Page.docx'
+      file_name: 'Fax Cover Sheet - Req Dec Page.docx'
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    med_pay_fax:
+      label: 'med pay request (fax cover)'
+      document_class: med_pay_fax
+      default_template: 'Form - Fax Medpay.docx'
+      file_name: 'Fax Cover Sheet Medpay.docx'
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    wage_loss:
+      label: 'wage loss letter'
+      document_class: wage_loss_letter
+      default_template: 'Form - Wage Loss Letter.docx'
+      file_name: 'Wage Loss Letter.docx'
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: [employer_address]
+      signer_name_from: preparer
+      facts_kind: wage
   # police_agencies: the agencies the firm's police report requests go to,
   # each with ONE current channel. Every value is from the firm's own letters
   # ("Police Rept Req. Sac PD", "... North Sac CHP. Letter") or the agencies'
