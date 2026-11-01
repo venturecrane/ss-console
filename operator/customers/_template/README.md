@@ -1,6 +1,6 @@
-# `_template/` -- customer config scaffold
+# `_template/` -- the one Operator seat scaffold
 
-This directory is the canonical starting point for a new customer's per-firm config. It is never a real customer slug; the leading underscore reserves the name. Production tooling (`bin/provision-customer.sh`, `bin/decommission-customer.sh`) skips any directory whose name starts with `_`.
+This directory is the canonical starting point for every new seat. There is one product, the Operator (ADR 0100), so there is one template. What differs between a law firm, a couple and a self-serve buyer is a **preset**: a starting `customer.yaml` under `presets/` that names the starting capabilities and defaults. The commercial terms of an offering are not in this directory; they live with the offering (ADR 0067 for self-serve). It is never a real customer slug; the leading underscore reserves the name. Production tooling (`bin/provision-customer.sh`, `bin/decommission-customer.sh`) skips any directory whose name starts with `_`.
 
 ## Files
 
@@ -8,7 +8,20 @@ This directory is the canonical starting point for a new customer's per-firm con
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dossier.md`        | Engagement dossier template (merged contract, 2026-07-26): relationship map, commercial rationale, firm research, canonical-document ledger, recorded absences, Captain-only facts. The read gate (`.claude/hooks/engagement-guard.mjs`) blocks engagement writes until the slug's dossier has been read; `tests/doctrine-integrity.test.ts` requires one for any engagement with a `correspondence/` archive. (This file was previously documented against Platform PRD §16.2, a citation that no longer resolves; the firm-research section absorbs that intent.) |
 | `routine-grid.yaml` | The firm's routine grid (ADR 0075): every routine with the source's own verbatim wording, mapped onto this seat's skills and enforcement. It is what the client portal's Duties page renders. Authored from the letter that committed the matrix, then pinned to the agreement's Schedule A-1 once one exists. Lifecycle, including how a routine is changed, added and retired: `docs/runbooks/operator/routine-lifecycle.md`.                                                                                                                                     |
-| `customer.yaml`     | Per-customer configuration template. Validates against `docs/specs/operator/customer-yaml-schema.md` once bracketed values are replaced.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `lane-proofs.yaml`  | The kinds of job proven on this seat (the lane-proof gate). Starts empty on every seat.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `customer.yaml`     | The seat's configuration. Copied from ONE preset below, never written from scratch. Validates against `docs/specs/operator/customer-yaml-schema.md` once bracketed values are replaced.                                                                                                                                                                                                                                                                                                                                                                             |
+
+## Presets
+
+A preset is the starting set of capabilities and defaults for a market or an offering. Every preset is the same Operator: the same core, the same trust layer, the same portal. Pick the closest one; a seat can author more capabilities later.
+
+| Preset                                                                   | Starts with                                                                                                                                          | Use when                                                                                                        |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`presets/pi-law-firm/customer.yaml`](presets/pi-law-firm/customer.yaml) | The fully bracketed law-firm default: practice-management, email, calendar and document bindings left for the assessment call to fill in             | A firm engagement whose capability bindings are not yet known                                                   |
+| [`presets/self-serve/customer.yaml`](presets/self-serve/customer.yaml)   | One general-assistant persona, Telegram plus allowlisted-sender email, web search, the day-one jobs the product page sells; `external_send: confirm` | A self-serve purchase, authored from the buyer's intake row (runbook `docs/runbooks/hosted-agent/concierge.md`) |
+| [`presets/couples/customer.yaml`](presets/couples/customer.yaml)         | The couples role (ADR 0090): two partners, spaces (ADR 0091), the role's skills                                                                      | A couples seat (runbook `docs/runbooks/hosted-agent/couples-setup.md`)                                          |
+
+The seat's `seat.product` value names the offering whose commercial terms the seat is on (`operator` or `hosted-agent`, the stored values). Nothing on a seat branches on it: what a seat runs is derived from the skills it enables and the connectors it binds (`operator/hermes-smd-overlay/shared/capabilities.py`).
 
 ## Usage
 
@@ -17,8 +30,12 @@ This directory is the canonical starting point for a new customer's per-firm con
 3. Copy the scaffold:
 
    ```bash
-   cp -r operator/customers/_template operator/customers/{firm-slug}
+   mkdir operator/customers/{firm-slug}
+   cp operator/customers/_template/{routine-grid.yaml,lane-proofs.yaml} operator/customers/{firm-slug}/
+   cp operator/customers/_template/presets/{preset}/customer.yaml operator/customers/{firm-slug}/
    ```
+
+   The dossier is copied into the private engagements repo under the same `operator/customers/{firm-slug}/` path, never into ss-console (ADR 0081).
 
 4. Replace every bracketed field in `dossier.md`.
 5. Replace every bracketed field in `customer.yaml`. Validate (canonical TS validator per ADR 0019):

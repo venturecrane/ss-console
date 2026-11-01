@@ -496,7 +496,7 @@ def test_zero_seats_is_a_hold(monkeypatch, tmp_path):
 
 def test_authored_seats_skips_template_dirs(tmp_path):
     base = tmp_path / "operator" / "customers"
-    for name in ("_template", "_hosted-template", "real-seat", "no-yaml"):
+    for name in ("_template", "_other-scaffold", "real-seat", "no-yaml"):
         (base / name).mkdir(parents=True)
     for name in ("_template", "real-seat"):
         (base / name / "customer.yaml").write_text("slug: x\n")

@@ -835,7 +835,7 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # Clio sandbox, authored 2026-06-05, never provisioned, retired in full
     # 2026-08-25; demo-law has no seat directory either), and as of that date no
     # customer.yaml binds Clio at all — the only remaining mention is the option
-    # menu in operator/customers/_template/customer.yaml.
+    # menu in operator/customers/_template/presets/pi-law-firm/customer.yaml.
     #
     # An earlier version of this comment read "bound by pilot-law (Ashton &
     # Price)". That was wrong and worth correcting rather than deleting: Ashton

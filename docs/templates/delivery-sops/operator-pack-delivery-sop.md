@@ -27,7 +27,7 @@ These map directly to `customer.yaml` fields (`connectors`, `voice_library`, `pe
 
 ### 1. Configure
 
-Copy `operator/customers/_template/customer.yaml`, set `vertical:` to the pack (e.g. `law-firm`) and any `addons:` (e.g. `law-firm/pi@...`), and fill the customer-specific fields from the onboarding checklist. Validate:
+Copy `operator/customers/_template/presets/pi-law-firm/customer.yaml`, set `vertical:` to the pack (e.g. `law-firm`) and any `addons:` (e.g. `law-firm/pi@...`), and fill the customer-specific fields from the onboarding checklist. Validate:
 
 ```
 npx tsx scripts/validate-customer-yaml.ts operator/customers/<slug>/customer.yaml

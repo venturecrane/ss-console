@@ -74,7 +74,7 @@ function makeFixture(): Fixture {
   writeConfig(root, 'seat-alpha', 'customer_id: seat-alpha\nformat_spec: none\n')
   writeConfig(root, 'seat-beta', configBody('seat-beta'))
   writeConfig(root, '_template', 'customer_id: REPLACE_ME\n')
-  writeConfig(root, '_hosted-template', 'customer_id: REPLACE_ME\n')
+  writeConfig(root, '_other-scaffold', 'customer_id: REPLACE_ME\n')
   git(root, ['add', '-A'])
   git(root, ['commit', '-q', '-m', 'author configs'])
   writeConfig(root, 'seat-alpha', configBody('seat-alpha'))

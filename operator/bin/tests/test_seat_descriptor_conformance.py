@@ -35,7 +35,9 @@ _PRODUCTS = {"operator", "hosted-agent"}
 
 
 def _customer_files() -> list[Path]:
-    files = sorted(_CUSTOMERS.glob("*/customer.yaml"))
+    # Every seat, plus every preset of the one template (ADR 0100): a preset is
+    # what a new seat inherits before anyone thinks about it, so it is checked too.
+    files = sorted([*_CUSTOMERS.glob("*/customer.yaml"), *_CUSTOMERS.glob("_template/presets/*/customer.yaml")])
     assert files, "no customer.yaml files found to check"
     return files
 
@@ -84,12 +86,22 @@ def test_templates_default_to_the_most_cautious_kind() -> None:
     it holds a real client's data, never as a proving rig that can be handled
     casually. So templates carry `customer`.
     """
-    for name in ("_template", "_hosted-template"):
-        path = _CUSTOMERS / name / "customer.yaml"
-        if not path.is_file():
-            continue
+    presets = sorted(_CUSTOMERS.glob("_template/presets/*/customer.yaml"))
+    # A check over an empty set measures nothing: the one template keeps its presets.
+    assert {p.parent.name for p in presets} >= {"pi-law-firm", "self-serve", "couples"}, presets
+    for path in presets:
         kind = (_load(path).get("seat") or {}).get("kind")
         assert kind == "customer", (
-            f"{name} declares seat.kind={kind!r}. Templates must default to `customer` so a seat "
-            "nobody has relabelled inherits the MOST caution, not the least."
+            f"preset {path.parent.name} declares seat.kind={kind!r}. Templates must default to "
+            "`customer` so a seat nobody has relabelled inherits the MOST caution, not the least."
         )
+
+
+def test_one_template_no_per_offering_scaffolds() -> None:
+    """ADR 0100: one Operator, one template; an offering is a preset inside it.
+
+    A second scaffold directory beside ``_template`` is how "Hosted Agent" and
+    "Operator" drifted into two products. Presets live under _template/presets/.
+    """
+    scaffolds = sorted(p.name for p in _CUSTOMERS.iterdir() if p.is_dir() and p.name.startswith("_"))
+    assert scaffolds == ["_template"], scaffolds

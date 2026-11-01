@@ -1,7 +1,7 @@
 """Materialize a seat home the way a seat's boot does, in a temp dir.
 
 The profile is produced by the REAL ``bootstrap.translate.translate_customer_yaml``
-from ``operator/customers/_hosted-template/customer.yaml`` (placeholders filled
+from ``operator/customers/_template/presets/self-serve/customer.yaml`` (placeholders filled
 with synthetic values), against the repo's real skill catalog and role
 packages. The overlay is then laid into the profile's plugins dir the way
 ``bootstrap.sh`` lays ``/app/overlay-pack`` there, and enabled in
@@ -36,8 +36,10 @@ import yaml
 
 OVERLAY_ROOT = Path(__file__).resolve().parents[1]
 REPO_OPERATOR = OVERLAY_ROOT.parent
-TEMPLATE = REPO_OPERATOR / "customers" / "_hosted-template" / "customer.yaml"
-COUPLES_TEMPLATE = REPO_OPERATOR / "customers" / "_couples-template" / "customer.yaml"
+TEMPLATE = REPO_OPERATOR / "customers" / "_template" / "presets" / "self-serve" / "customer.yaml"
+COUPLES_TEMPLATE = (
+    REPO_OPERATOR / "customers" / "_template" / "presets" / "couples" / "customer.yaml"
+)
 
 SEAT_SLUG = "e2e-seat"
 PERSONA_SLUG = "rowan"

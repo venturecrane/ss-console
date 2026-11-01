@@ -5,7 +5,7 @@ READ FILES"): translate rendered a couples persona whose disabled toolsets
 stripped ``read_file`` from the webhook surface, and the activation gate died.
 
 ``tests/fixtures/roles/couples/customer.yaml`` is a byte-identical twin of
-ss-console ``operator/customers/_couples-template/customer.yaml`` (tracked in
+ss-console ``operator/customers/_template/presets/couples/customer.yaml`` (tracked in
 ss-console ``operator/contracts/overlay-pairs.json``; regenerate by copying).
 The test fills the bracketed placeholders, runs the real translate, and runs
 the two activation checks on the rendered config: the webhook read-surface

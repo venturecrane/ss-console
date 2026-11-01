@@ -85,11 +85,11 @@
       "overlaySha256": "09ec02d5c77c1073a7264e99138b3f8b2024289bb3398005fb0fd5fcbbc8bf6c"
     },
     {
-      "adapterPath": "operator/customers/_couples-template/customer.yaml",
+      "adapterPath": "operator/customers/_template/presets/couples/customer.yaml",
       "overlayPath": "tests/fixtures/roles/couples/customer.yaml",
-      "syncNote": "The couples seat template (ss#3264). The overlay's tests/test_couples_template_boots.py runs the real translate and the activation checks on a byte copy of it, so a template that cannot boot fails CI here before a seat is copied from it. Paired so an edit on either side fails CI until both copies move together; both hashes are equal. Current skill set: the role's skills in operator/roles/couples/role.yaml, including partner-messages (ADR 0097).",
-      "sha256": "f9b3ee09c21e0ec227738f48cf2096dc0cd6ff01df8569f1ddc7294c74d96e3e",
-      "overlaySha256": "f9b3ee09c21e0ec227738f48cf2096dc0cd6ff01df8569f1ddc7294c74d96e3e"
+      "syncNote": "The couples preset (ss#3264). The overlay's tests/test_couples_template_boots.py runs the real translate and the activation checks on a byte copy of it, so a template that cannot boot fails CI here before a seat is copied from it. Paired so an edit on either side fails CI until both copies move together; both hashes are equal. Current skill set: the role's skills in operator/roles/couples/role.yaml, including partner-messages (ADR 0097).",
+      "sha256": "385f3704731340e10965ebcc92d471998c2ac61abb91e9943ef12703a8b6ea15",
+      "overlaySha256": "385f3704731340e10965ebcc92d471998c2ac61abb91e9943ef12703a8b6ea15"
     }
   ]
 }

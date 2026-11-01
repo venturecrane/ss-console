@@ -14,7 +14,7 @@
 # shared space reads shared items only; no turn reads the other partner's space.
 #
 # Kept in step with the seat template by tests/couples-role.test.ts: every skill
-# and routine named here appears in operator/customers/_couples-template, and
+# and routine named here appears in operator/customers/_template/presets/couples, and
 # every `built:` flag below matches whether operator/skills/<name>/SKILL.md exists.
 
 role: couples
@@ -24,7 +24,7 @@ schema_version: 1
 persona: persona.md
 
 # The template a seat's customer.yaml is copied from.
-seat_template: operator/customers/_couples-template/customer.yaml
+seat_template: operator/customers/_template/presets/couples/customer.yaml
 
 # Skills the role's persona carries. `built: false` would mean the skill body
 # does not exist yet under operator/skills/. An enabled skill with no body fails

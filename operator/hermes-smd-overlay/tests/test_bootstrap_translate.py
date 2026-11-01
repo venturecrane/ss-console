@@ -1842,7 +1842,7 @@ def test_telegram_block_lands_in_persona_config():
 
 
 # ---- telegram.allowed_users: deprecated alias of allow_from (phase 1 of 3) ----
-# Seats authored ``telegram.allowed_users`` (ss-console _hosted-template, scott)
+# Seats authored ``telegram.allowed_users`` (ss-console self-serve preset, scott)
 # while the materializer read only ``enabled`` + ``allow_from``, so the authored
 # allowlist was silently ignored and the Fly secret was the only gate. The alias
 # is now read; an alias-only block (no ``enabled``) is live only when the seat has

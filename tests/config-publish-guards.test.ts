@@ -398,7 +398,7 @@ describe('ci-publish-customer-configs: validation and template dirs', () => {
     // The templates carry deliberate placeholder values and fail validation;
     // reaching the validator at all would fail the whole job. A decommissioned
     // seat's tombstone is a record, never a seat (scripts/lib/seat-dir.sh).
-    const fx = makeFixture(['_template', '_hosted-template', 'gone.decommissioned.2026-10-01'])
+    const fx = makeFixture(['_template', '_other-scaffold', 'gone.decommissioned.2026-10-01'])
 
     const res = runPublisher(fx)
 
@@ -406,7 +406,7 @@ describe('ci-publish-customer-configs: validation and template dirs', () => {
     expect(res.awsCalls).toHaveLength(0)
     expect(res.npxCalls).toHaveLength(0)
     expect(res.stdout).toContain('Skipping scaffold dir: _template')
-    expect(res.stdout).toContain('Skipping scaffold dir: _hosted-template')
+    expect(res.stdout).toContain('Skipping scaffold dir: _other-scaffold')
     expect(res.stdout).toContain('Skipping tombstone dir: gone.decommissioned.2026-10-01')
   })
 

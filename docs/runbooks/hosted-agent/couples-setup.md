@@ -9,7 +9,7 @@ the agent over its channels: email now, Telegram later.
 
 ## 1. Author the seat
 
-1. Copy `operator/customers/_couples-template/customer.yaml` to
+1. Copy `operator/customers/_template/presets/couples/customer.yaml` (the couples preset of the one template) to
    `operator/customers/<slug>/customer.yaml` (the Fly app is `hermes-<slug>`).
    Copy the template, never another couple's seat.
 2. Fill in every bracketed value. The two partners go in `people:` (name,
