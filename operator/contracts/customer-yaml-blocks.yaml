@@ -178,7 +178,7 @@ top_level:
       consumer is the overlay space resolver (shared/space.py) and the space
       enforcement points, built in the overlay privacy-core and channels
       workstreams (#3264). Implemented since OVERLAY_REF 8a6e2f25, which ships
-      those consumers. Authored by the _couples-template scaffold and by the live
+      those consumers. Authored by the couples preset (_template/presets/couples) and by the live
       captain-mark seat.
   spaces:
     status: implemented
@@ -191,7 +191,7 @@ top_level:
       ADR 0091. `shared_telegram_chat` is the shared group chat id that resolves to
       space `shared`. Consumed by the overlay space resolver (#3264, overlay
       privacy-core workstream), implemented since OVERLAY_REF 8a6e2f25. Authored
-      by the _couples-template scaffold and by the live captain-mark seat.
+      by the couples preset (_template/presets/couples) and by the live captain-mark seat.
   output_classes:
     status: inert
     materializer: >-

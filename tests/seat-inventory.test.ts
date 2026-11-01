@@ -86,8 +86,8 @@ describe('one seat-dir rule across TypeScript, Python and bash', () => {
     seatDir(root, 'beta-firm', SEAT_YAML('hermes-beta-firm', 0, '2026-01-01'))
     // Not seats, every kind, each WITH a customer.yaml so only the rule excludes it.
     seatDir(root, '_template', null)
-    seatDir(root, '_hosted-template', null)
-    seatDir(root, '_couples-template', null)
+    seatDir(root, '_other-scaffold', null)
+    seatDir(root, '_another-scaffold', null)
     seatDir(root, '.hidden', null)
     // A decommissioned tombstone keeps its customer.yaml AND its seat.yaml
     // (decommission.py renames the whole dir); it must still not be a seat.
@@ -102,7 +102,7 @@ describe('one seat-dir rule across TypeScript, Python and bash', () => {
     expect(seatSlugs(root)).toEqual(['acme', 'beta-firm'])
     expect(loadSeatInventory(root).map((s) => s.slug)).toEqual(['acme', 'beta-firm'])
     expect(skipReason('gone.decommissioned.2026-10-01')).toBe('tombstone')
-    expect(skipReason('_couples-template')).toBe('scaffold')
+    expect(skipReason('_another-scaffold')).toBe('scaffold')
   })
 
   it('Python (operator/bin/lib/seat_dirs.py) agrees', () => {
@@ -134,8 +134,8 @@ describe('one seat-dir rule across TypeScript, Python and bash', () => {
       'acme',
       'beta-firm',
       '_template',
-      '_hosted-template',
-      '_couples-template',
+      '_other-scaffold',
+      '_another-scaffold',
       '.hidden',
       'gone.decommissioned.2026-10-01',
       'no-yaml',

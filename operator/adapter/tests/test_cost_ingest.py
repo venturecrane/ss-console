@@ -349,7 +349,8 @@ def test_every_declared_model_has_a_pricing_entry():
 
     customers_dir = _HERE.parents[2] / "customers"
     declared: dict[str, str] = {}
-    for cfg in sorted(customers_dir.glob("*/customer.yaml")):
+    presets = customers_dir.glob("_template/presets/*/customer.yaml")  # ADR 0100 presets
+    for cfg in sorted([*customers_dir.glob("*/customer.yaml"), *presets]):
         doc = yaml.safe_load(cfg.read_text())
         if not isinstance(doc, dict):
             continue

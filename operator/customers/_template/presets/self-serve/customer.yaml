@@ -1,21 +1,23 @@
 schema_version: 1
 
-# HOSTED AGENT template customer.yaml (ADR 0067).
+# SELF-SERVE preset of the one Operator template (ADR 0067 offering, ADR 0100).
 #
-# The slim self-serve variant of _template: one general-assistant persona,
-# no vertical pack, Telegram plus allowlisted-sender email only, and the
-# named day-one jobs the product page sells (owner-facing digest, research
-# briefs, monitoring reports). Authoring source is the customer's intake
-# row in the admin queue (admin.smd.services/admin/hosted-agent), NOT an
-# interview transcript. Target authoring time: minutes.
+# The starting capabilities for the self-serve offering: one general-assistant
+# persona, no vertical pack, Telegram plus allowlisted-sender email only, and
+# the named day-one jobs the product page sells (owner-facing digest, research
+# briefs, monitoring reports). It is the same Operator as every other preset;
+# only the starting set and the commercial terms differ. Authoring source is
+# the customer's intake row in the admin console's self-serve intake queue,
+# NOT an interview transcript. Target authoring time: minutes.
 #
-# Copy to operator/customers/{slug}/customer.yaml, replace every bracketed
+# Copy to operator/customers/{slug}/customer.yaml (the shared files come from
+# operator/customers/_template/, see its README), replace every bracketed
 # value from the intake row, then validate:
 #
 #   npx tsx scripts/validate-customer-yaml.ts \
 #     operator/customers/{slug}/customer.yaml
 #
-# Hard rules for this SKU (do not loosen per customer):
+# Hard rules for this offering (do not loosen per customer):
 #   - inbound_allow_from MUST be non-empty and MUST NOT contain a bare '@'
 #     domain wildcard for a public mail provider. No public inbound
 #     address is offered at this tier (ADR 0067 channel constraint).
@@ -37,7 +39,8 @@ customer_name: '[CUSTOMER NAME from intake / Stripe]'
 # What this seat IS. Kind and product only; lifecycle state is DERIVED from
 # probes of the running system and is deliberately absent here — a state field
 # is a claim an agent can write, and a claim an agent can write is one that rots.
-# Same fail-safe default as _template.
+# Same fail-safe default as every preset. `product` names the offering whose
+# commercial terms the seat is on; nothing on the seat branches on it (ADR 0100).
 seat:
   kind: customer
   product: hosted-agent

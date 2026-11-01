@@ -216,6 +216,22 @@ describe('fail-closed: no real customer ships a zero-tool capability', () => {
         .map((d) => join(customersDir, d.name, 'customer.yaml'))
         .filter((p) => existsSync(p))
     : []
+  // The presets of the one template (ADR 0100) are checked as `_template/presets/<name>`.
+  const presetsDir = join(customersDir, '_template', 'presets')
+  const presetFiles = existsSync(presetsDir)
+    ? readdirSync(presetsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => join(presetsDir, d.name, 'customer.yaml'))
+        .filter((p) => existsSync(p))
+    : []
+  const slugOf = (file: string) =>
+    file.includes('/_template/presets/')
+      ? `_template/presets/${file.split('/').slice(-2)[0]}`
+      : file.split('/').slice(-2)[0]
+
+  it('discovers the presets of the one template', () => {
+    expect(presetFiles.length).toBeGreaterThan(0)
+  })
 
   it('discovers customer.yaml files', () => {
     expect(customerFiles.length).toBeGreaterThan(0)
@@ -223,8 +239,8 @@ describe('fail-closed: no real customer ships a zero-tool capability', () => {
 
   it('every non-exempt customer capability has at least one materializable backend option', () => {
     const violations: string[] = []
-    for (const file of customerFiles) {
-      const slug = file.split('/').slice(-2)[0]
+    for (const file of [...customerFiles, ...presetFiles]) {
+      const slug = slugOf(file)
       if (exempt.has(slug)) continue
       const doc = parseYaml(readFileSync(file, 'utf-8')) as {
         connectors?: Record<string, { backend?: unknown; enabled?: unknown }>

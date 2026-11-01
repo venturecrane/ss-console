@@ -74,7 +74,8 @@ function makeFixture(): Fixture {
   writeConfig(root, 'seat-alpha', 'customer_id: seat-alpha\nformat_spec: none\n')
   writeConfig(root, 'seat-beta', configBody('seat-beta'))
   writeConfig(root, '_template', 'customer_id: REPLACE_ME\n')
-  writeConfig(root, '_hosted-template', 'customer_id: REPLACE_ME\n')
+  writeConfig(root, '_other-scaffold', 'customer_id: REPLACE_ME\n')
+  writeConfig(root, '_template/presets/self-serve', 'customer_id: REPLACE_ME\n')
   git(root, ['add', '-A'])
   git(root, ['commit', '-q', '-m', 'author configs'])
   writeConfig(root, 'seat-alpha', configBody('seat-alpha'))
@@ -337,6 +338,9 @@ describe('ci-reconcile-r2-customer-configs: never creates, never deletes', () =>
     const res = run(fx)
     expect(res.out).toContain('Skipping scaffold dir: _template')
     expect(res.awsCalls.some((c) => c.includes('_template'))).toBe(false)
+    // A preset one level down is no seat: never reconciled under its own name.
+    expect(res.out).not.toContain('self-serve')
+    expect(res.awsCalls.some((c) => c.includes('self-serve'))).toBe(false)
   })
 
   it('refuses a slug that could name any other object', () => {

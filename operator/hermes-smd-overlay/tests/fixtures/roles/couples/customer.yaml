@@ -1,8 +1,9 @@
 schema_version: 1
 
-# COUPLES seat template customer.yaml (ADR 0090 role `couples`, ADR 0091 spaces).
+# COUPLES preset of the one Operator template (ADR 0090 role `couples`, ADR 0091
+# spaces, ADR 0100 presets).
 #
-# Derived from _hosted-template. The role package is operator/roles/couples/
+# Derived from the self-serve preset. The role package is operator/roles/couples/
 # (role.yaml, persona.md); this file is the seat it describes. Set up like any
 # hand-authored seat: copy this template (never another couple's seat), SMD
 # fills in the names and emails, merge through a PR, reprovision. The agent

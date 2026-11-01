@@ -122,7 +122,7 @@ HERMES_AGENT_SRC=<a NousResearch/hermes-agent checkout at ARG HERMES_UPSTREAM_SH
 The overlay suite tests the seat runtime's parts. The `overlay-e2e` job of
 `operator-substrate.yml` runs them together, through the real Hermes, the way a
 seat does: `operator/hermes-smd-overlay/tests_e2e/` translates
-`operator/customers/_hosted-template/customer.yaml` into a temporary seat with
+`operator/customers/_template/presets/self-serve/customer.yaml` into a temporary seat with
 the real `bootstrap.translate`, lets Hermes' own plugin loader discover the
 overlay, builds the agent the way the seat's job worker builds it, and then, for
 every tool the overlay registers, has a scripted model call that tool once and

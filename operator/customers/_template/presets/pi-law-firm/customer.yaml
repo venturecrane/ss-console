@@ -1,10 +1,12 @@
 schema_version: 1
 
-# TEMPLATE customer.yaml for a PI law firm demo.
+# PI LAW FIRM preset of the one Operator template (ADR 0100 presets).
 #
-# Copy this file to operator/customers/{firm-slug}/customer.yaml, then
-# replace every bracketed value. Validate with the canonical TS validator
-# (per ADR 0019):
+# The fully bracketed default: use it when the customer's capability bindings
+# are not yet known and the assessment call fills them in. Copy this file to
+# operator/customers/{firm-slug}/customer.yaml (the shared files come from
+# operator/customers/_template/, see its README), then replace every bracketed
+# value. Validate with the canonical TS validator (per ADR 0019):
 #
 #   npx tsx scripts/validate-customer-yaml.ts \
 #     operator/customers/{firm-slug}/customer.yaml
@@ -21,6 +23,8 @@ customer_name: '[LEGAL NAME]'
 # probes of the running system and is deliberately absent here — a state field
 # is a claim an agent can write, and a claim an agent can write is one that rots.
 # Templates default to the MOST cautious kind: a seat nobody has relabelled is treated as if it holds a real client's data.
+# `product` names the offering whose commercial terms the seat is on; nothing on the
+# seat branches on it (ADR 0100).
 seat:
   kind: customer
   product: operator

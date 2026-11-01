@@ -71,11 +71,11 @@ fi
 # associative arrays, and tests/config-publish-guards.test.ts runs there too.
 changed=()
 while IFS= read -r _line; do
-  [[ -n "$_line" ]] && changed+=("$(basename "$(dirname "$_line")")")
+  _dir=$(seat_dir_of_path "$_line") && changed+=("$_dir")
 done < <(git diff --name-only "$BEFORE" "$AFTER" -- 'operator/customers/*/customer.yaml' || true)
 seats=()
 while IFS= read -r _line; do
-  case "$_line" in operator/customers/*/customer.yaml) seats+=("$(basename "$(dirname "$_line")")") ;; esac
+  case "$_line" in */customer.yaml) _dir=$(seat_dir_of_path "$_line") && seats+=("$_dir") ;; esac
 done < <(git ls-tree -r --name-only "$AFTER" -- operator/customers || true)
 
 if [[ ${#changed[@]} -eq 0 ]]; then

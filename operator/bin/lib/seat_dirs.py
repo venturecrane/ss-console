@@ -2,8 +2,8 @@
 
 A directory is a SEAT when all of these hold:
 
-* its name does not start with ``_`` (``_template``, ``_hosted-template``,
-  ``_couples-template`` are provisioning scaffolds, not seats);
+* its name does not start with ``_`` (``_template``, the one provisioning scaffold, whose presets live under
+  ``_template/presets/``, is not a seat);
 * its name does not start with ``.``;
 * its name does not contain ``.decommissioned.`` (a retired seat is kept as a
   ``<slug>.decommissioned.<date>`` tombstone by ``bin/lib/decommission.py``

@@ -369,7 +369,7 @@ skills:
       could not be read.
 
   # ---- couples role (ADR 0090), armed on every seat copied from
-  # operator/customers/_couples-template. Declared before the first seat
+  # the couples preset, operator/customers/_template/presets/couples. Declared before the first seat
   # exists: the provisioning gate (scripts/validate-customer-yaml.ts) refuses
   # a couples seat without these. ----
   dates-to-remember:

@@ -261,7 +261,7 @@ PINNED_CONNECTOR_SURFACES: dict[str, frozenset[str]] = {
     # backend: mcp:clio-oktopeak, enabled: true. NEITHER SEAT EXISTS ANY MORE
     # (pilot-law retired 2026-08-25; demo-law has no seat directory), and as of
     # that date no customer.yaml binds Clio — the only mention left is the option
-    # menu in operator/customers/_template/customer.yaml.
+    # menu in operator/customers/_template/presets/pi-law-firm/customer.yaml.
     #
     # The surface stays classified regardless, and this is deliberate. The entry
     # is NOT being converted to a dormancy carve-out: a carve-out is exactly what

@@ -18,7 +18,7 @@ import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate, type ValidationError } from '../src/lib/operator/customer-yaml'
 
-const TEMPLATE = 'operator/customers/_couples-template/customer.yaml'
+const TEMPLATE = 'operator/customers/_template/presets/couples/customer.yaml'
 
 /** Every bracketed placeholder in the template, and a valid value for it. */
 const FILL: Record<string, string> = {

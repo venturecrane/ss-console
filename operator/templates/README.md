@@ -126,10 +126,10 @@ Captain-initiated re-provision is the only path for structural changes; the OAut
 
 ## Customer.yaml starter templates
 
-| File                                                                           | When to use                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`../customers/_template/customer.yaml`](../customers/_template/customer.yaml) | The fully bracketed default. Use when the customer's capability bindings are not yet known — the assessment call fills them in.                                                                                              |
-| [`customer-no-pm-system.yaml`](customer-no-pm-system.yaml)                     | The customer has no working practice-management system (paper + Outlook + OneDrive + QuickBooks for billing). Ships with `no_pm` PracticeManagement + Microsoft Graph + DocuSign + QuickBooks + OneDrive bindings pre-wired. |
+| File                                                                  | When to use                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`../customers/_template/presets/`](../customers/_template/README.md) | The one Operator template and its presets (ADR 0100): `pi-law-firm` (the fully bracketed default, filled in by the assessment call), `self-serve`, `couples`.                                                                |
+| [`customer-no-pm-system.yaml`](customer-no-pm-system.yaml)            | The customer has no working practice-management system (paper + Outlook + OneDrive + QuickBooks for billing). Ships with `no_pm` PracticeManagement + Microsoft Graph + DocuSign + QuickBooks + OneDrive bindings pre-wired. |
 
 Both pass through the same validator (`src/lib/operator/customer-yaml/validator.ts`); the bracketed-field shape rejects an unedited template at validation time, forcing the operator to substitute real values before provisioning.
 

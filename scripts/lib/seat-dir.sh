@@ -38,3 +38,24 @@ seat_dir_skip_reason() {
   esac
   return 1
 }
+
+# seat_dir_of_path <path>: the directory name a repo path belongs to when the
+# path is exactly operator/customers/<name>/<file>. Prints <name> and returns 0;
+# prints nothing and returns 1 for any other path, deeper ones included. A git
+# pathspec or `case` glob `operator/customers/*/customer.yaml` also matches the
+# presets of the one template (operator/customers/_template/presets/<preset>/
+# customer.yaml, ADR 0100), and `basename "$(dirname ...)"` would read each as
+# a seat named after its preset. Callers still run seat_dir_skip_reason on the
+# name this prints.
+seat_dir_of_path() {
+  local rest="${1#operator/customers/}"
+  [[ "$rest" != "$1" ]] || return 1
+  case "$rest" in
+  */*/*) return 1 ;;
+  ?*/?*)
+    printf '%s\n' "${rest%%/*}"
+    return 0
+    ;;
+  esac
+  return 1
+}

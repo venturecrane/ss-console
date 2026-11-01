@@ -29,7 +29,9 @@ def _registry() -> dict:
 
 
 def _customer_files() -> list[Path]:
-    files = sorted(_CUSTOMERS.glob("*/customer.yaml"))
+    # Every seat, plus every preset of the one template (ADR 0100): a preset is
+    # what a new seat inherits before anyone thinks about it, so it is checked too.
+    files = sorted([*_CUSTOMERS.glob("*/customer.yaml"), *_CUSTOMERS.glob("_template/presets/*/customer.yaml")])
     assert files, "no customer.yaml files found to check"
     return files
 
