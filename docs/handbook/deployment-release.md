@@ -401,7 +401,8 @@ Two workflows run the release (ADR 0096).
   recorded image release under an image path (the
   `.github/operator-substrate-paths.txt` list without its `.github/` lines and
   without the artifact paths in `.github/operator-artifact-paths.txt`, today
-  `operator/skills/**`: `substrate-paths-changed.py --image`). It
+  `operator/skills/**` and the jobs bundle's runner and Smokeball connector:
+  `substrate-paths-changed.py --image`). It
   compares with the last BUILT commit, so a runtime merge followed quickly by a
   docs merge is still built. When main has already moved past the commit, the
   build-source guard refuses it and the job ends green: the newer merge's own
@@ -639,9 +640,15 @@ completed image built from main), at the same paths, with
 uploads `fleet/bundles/jobs/<version>.tar.zst`, reads it back, then the manifest
 `fleet/bundles/jobs/<version>.json` (name, version, sha256, size, source
 commit, base image, Python version), and records `fleet_releases` kind
-`bundle`, release id `bnd-<version>`. It writes no seat pointer. Until the cut
-those paths are image paths too, so the image keeps its own copy as the
-fallback.
+`bundle`, release id `bnd-<version>`. It writes no seat pointer. Since the cut
+(2026-10-31) the runner, the Smokeball connector and their two requirement pins
+are artifact paths: a change to them builds no image and restarts only the seats
+that author a job lane. The connector SDK, `jobs-runtime.sh` and the pricing
+table stay image paths as well, because the image builds its other connectors
+from them and the overlay prices from the table. The image keeps a seed copy of
+the runner and connector, frozen at its own build. A seat whose pointed-at
+bundle fails to verify or import runs the version it ran before (the installer
+keeps it, N-1), and only with none on disk the image's seed.
 
 The release controller steps bundle releases after skills, ring by ring with
 the same bake, holds, halt and lease, but only on the seats whose

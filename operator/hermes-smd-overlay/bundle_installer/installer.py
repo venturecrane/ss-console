@@ -22,8 +22,11 @@ WHAT GETS MOUNTED (:func:`decide`):
   is dropped so a later boot that cannot reach R2 does not resurrect a bundle
   the release controller withdrew;
 * R2 unreachable: the on-disk ``current``, with a warning;
-* anything that fails to verify: NOTHING, and the reasons are logged. A bad
-  publish costs the seat the update, never its job runner.
+* a pointed-at version that fails to verify: the on-disk ``current`` (the
+  version the seat ran before, N-1) when it still verifies, else NOTHING, and
+  the reasons are logged. A bad publish costs the seat the update, never its
+  job runner. The image's own copy is the last resort: since runner changes
+  stopped building images (the cut), it is a seed frozen at the image's build.
 
 THE TREE CHECK. ``.smd-root`` lives under ``/opt/data``, which the agent uid
 owns, so the agent can rename directories there. Root-owned content can only
@@ -370,7 +373,7 @@ def decide(
         _drop_current(store)
         return _image(f"no {spec.name} bundle pointer for {slug}")
     except ManifestError as exc:
-        return _image(*exc.reasons)
+        return _on_disk(store, spec, owner_uid, "; ".join(exc.reasons) or "bundle pointer refused")
     except SkillsApplyError as exc:
         return _on_disk(store, spec, owner_uid, f"R2 unreachable ({exc})")
     previous = _current_target(store)
@@ -392,7 +395,10 @@ def decide(
         commit(store, pointer.version)
     except (BundleError, ManifestError, SkillsApplyError, OSError) as exc:
         reasons = exc.reasons if isinstance(exc, ManifestError) else (str(exc),)
-        return _image(f"{spec.name} {pointer.version} refused", *reasons)
+        why = "; ".join((f"{spec.name} {pointer.version} refused", *reasons))
+        # The version that ran last boot, not the image: the image's copy is a
+        # seed frozen at its last build, and runner changes no longer build one.
+        return _on_disk(store, spec, owner_uid, why)
     keep = {pointer.version} | ({previous} if previous and valid_version(previous) else set())
     prune(store, keep)
     return Decision(source, pointer.version, final)

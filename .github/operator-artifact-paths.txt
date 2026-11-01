@@ -14,10 +14,23 @@
 # The suites still run on these paths: this file does not touch the test list.
 # The image still COPYs operator/skills/ as a seed for a seat with no pointer.
 #
-# The jobs bundle's paths (.github/operator-bundle-paths.txt) are NOT here yet:
-# they stay image paths, so the image keeps its own copy as the fallback, until
-# the cut.
+# The jobs bundle's paths (.github/operator-bundle-paths.txt) are here since the
+# cut (2026-10-31): a runner or Smokeball connector change publishes a bundle
+# that only the seats authoring a job lane take, and builds no image. The image
+# still COPYs them as a seed, exactly as with skills: a seat whose bundle cannot
+# be installed runs the version it ran before, and only with none on disk the
+# image's copy, frozen at that image's build.
 #
 # Glob shapes: as in operator-substrate-paths.txt.
 
 operator/skills/**
+
+# The jobs bundle's code: only what nothing else in the image builds from. The
+# rest of .github/operator-bundle-paths.txt stays an image path because the image
+# uses it too: the connector SDK and jobs-runtime.sh build the image's other
+# connectors, and the overlay prices from anthropic_pricing.json. A change there
+# builds an image AND a bundle.
+operator/runners/medchron/**
+operator/connectors/smokeball/**
+operator/requirements/medchron.txt
+operator/requirements/connector-smokeball.txt
