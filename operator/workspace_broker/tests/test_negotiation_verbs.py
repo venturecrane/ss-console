@@ -157,7 +157,9 @@ def test_a_spent_month_refuses(seat):
     job = submit(broker)["job_id"]
     call(broker, "negotiation_job_record", uid=0, job_id=job, state="running", fields={})
     call(broker, "negotiation_job_record", uid=0, job_id=job, state="delivered", fields={"cents": 2500, "notices": []})
-    broker.negotiation._now = lambda: datetime(2026, 10, 13, 15, 0, tzinfo=timezone.utc)
+    # The ledger stamps rows with the wall clock, so the month is read on it too:
+    # a clock pinned to October read a $0 month from November on.
+    broker.negotiation._now = lambda: datetime.now(timezone.utc)
     assert "budget is spent" in submit(broker)["reason"]
     assert call(broker, "negotiation_job_status", uid=0)["month_cents"] == 2500
 

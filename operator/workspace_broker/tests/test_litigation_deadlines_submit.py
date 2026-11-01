@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,9 @@ def test_a_deadlines_report_and_a_status_list_for_the_same_people_both_queue(sea
 
 def test_a_spent_month_does_not_refuse_the_deadlines_report(seat) -> None:
     broker, _db, yaml_path, _queue, firm = seat
+    # The ledger stamps rows with the wall clock, so the month is read on it too:
+    # a clock pinned to October read a $0 month from November on.
+    broker.litigation._now = lambda: datetime.now(timezone.utc)
     yaml_path.write_text(_deadlines_yaml())
     firm.write_text(firm.read_text().replace("monthly_budget_usd: 750", "monthly_budget_usd: 1"))
     job = submit(broker)["job_id"]

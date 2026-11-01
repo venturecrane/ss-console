@@ -345,6 +345,9 @@ def test_no_firm_budget_refuses(seat) -> None:
 
 def test_a_spent_month_refuses(seat) -> None:
     broker, _, _, _, firm = seat
+    # The ledger stamps rows with the wall clock, so the month is read on it too:
+    # a clock pinned to October read a $0 month from November on.
+    broker.litigation._now = lambda: datetime.now(timezone.utc)
     firm.write_text(FIRM.format(budget=1))
     job = submit(broker)["job_id"]
     call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
@@ -461,6 +464,9 @@ def test_only_root_authors_a_scheduled_runs_text(seat) -> None:
 
 def test_status_is_counts_only_and_root_sees_the_month(seat) -> None:
     broker, _, _, _, _ = seat
+    # The ledger stamps rows with the wall clock, so the month is read on it too:
+    # a clock pinned to October read a $0 month from November on.
+    broker.litigation._now = lambda: datetime.now(timezone.utc)
     job = submit(broker)["job_id"]
     root = {"pid": 1, "uid": 0}
     call(broker, "litigation_job_record", **root, job_id=job, state="running", fields={})
