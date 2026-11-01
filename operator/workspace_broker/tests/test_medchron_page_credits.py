@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -190,7 +191,9 @@ def test_the_hold_no_longer_fires_when_the_credit_brings_the_job_under(verbs):
 
 def test_the_credit_writes_its_audit_row_and_answers_with_the_new_figure(verbs):
     v, db = verbs
-    j = _job(v, db, pages=900, cents=10, created_at=NOW)
+    # The verb answers with the CURRENT month's figure (the wall clock), so the
+    # job is created now: a fixed date failed every run once October ended.
+    j = _job(v, db, pages=900, cents=10, created_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
     out = call(v, "medchron_allowance_credit", peer_uid=ROOT, pages=856, by="Scott", why="SMD's miss", job_id=j)
     assert out["credit"]["pages"] == 856 and out["allowance"]["used"] == 44
     with sqlite3.connect(db) as c:
