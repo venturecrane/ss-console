@@ -93,6 +93,7 @@ from shared import (
     inbound,
     matter_binding,
     matter_file_reply,
+    matter_file_review,
     matter_gate,
     msgraph_broker,
     output_checklist,
@@ -1057,6 +1058,119 @@ def _send_file_continuations(
         request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
 
 
+def _hold_for_review(
+    prepared: matter_file_reply.Prepared,
+    origin: inbound.InboundOrigin,
+    *,
+    session_id: str,
+    reply_key: str,
+    text: str,
+    html: str,
+    matter_ref: str | None,
+) -> None:
+    """Write a files reply for SMD's review, commit the email as answered (a
+    redraft must not slip past the review), and tell the turn it is waiting."""
+    staging = matter_file_reply.staged(session_id)
+    wire_text, wire_html = _transmitted_body(_ADAPTER_MSGRAPH, text, html)
+    row = matter_file_review.hold(
+        message_id=origin.message_id,
+        to=origin.sender_address,
+        text=wire_text,
+        html=wire_html,
+        batches=prepared.rows(),
+        matter_id=staging.matter_id if staging else "",
+        session_id=session_id,
+    )
+    _commit_reply(reply_key, origin)
+    matter_file_reply.discard(session_id)
+    every = tuple(f for batch in prepared.batches for f in batch)
+    _held(
+        matter_file_review.HOLD_REASON,
+        origin,
+        review_id=row["id"],
+        **matter_file_reply.audit_fields(every),
+        _matter_ref=matter_ref,
+    )
+
+
+def _review_once() -> None:
+    """Act on SMD's decisions about held files replies (shared.matter_file_review).
+
+    Runs on the held-reply sweeper thread. A row is marked ``sending`` before
+    anything is sent and is never sent from that state again, so a crash mid-send
+    can lose a release but never send one twice. Never raises."""
+    for row in matter_file_review.rows():
+        try:
+            _review_one(row)
+        except Exception as exc:  # noqa: BLE001 - one row's fault never stops the rest
+            logger.warning("hermes-smd-reply: review release failed (%s)", type(exc).__name__)
+
+
+def _review_one(row: dict[str, Any]) -> None:
+    if row.get("status") != matter_file_review.STATUS_REVIEW:
+        return
+    word = matter_file_review.decision(row)
+    origin = inbound.InboundOrigin(
+        sender_address=str(row.get("to") or ""),
+        message_id=str(row.get("message_id") or ""),
+        inbox_id="",
+    )
+    if word == "reject" or (matter_file_review.expired(row) and word != "reject"):
+        status = (
+            matter_file_review.STATUS_REJECTED
+            if word == "reject"
+            else matter_file_review.STATUS_EXPIRED
+        )
+        if word or matter_file_review.expired(row):
+            matter_file_review.finish(row, status)
+            _emit_reply_event(
+                action_type="REPLY_HELD",
+                metadata={"reason": f"matter_files_review_{status}", "review_id": row.get("id")},
+                session_id=str(row.get("session_id") or "") or None,
+            )
+        return
+    if word != "approve":
+        return
+    if matter_file_review.digest(row) != row.get("digest"):
+        matter_file_review.finish(
+            row, matter_file_review.STATUS_FAILED, note="the held reply changed after review"
+        )
+        return
+    matter_file_review.finish({**row, "text": row.get("text"), "html": row.get("html")}, "sending")
+    prepared = matter_file_reply.Prepared.from_rows(row.get("batches") or [])
+    session_id = str(row.get("session_id") or "")
+    text, html = str(row.get("text") or ""), str(row.get("html") or "")
+    try:
+        sent_id = _send_msgraph_reply(
+            origin.message_id,
+            text,
+            html,
+            session_id=session_id,
+            attachments=matter_file_reply.Prepared.descriptors(prepared.batches[0]),
+        )
+    except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
+        matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)
+        _send_failed(f"reviewed reply: {type(exc).__name__}", origin, adapter=_ADAPTER_MSGRAPH)
+        return
+    _emit_reply_event(
+        action_type="REPLY_SENT",
+        metadata={
+            "recipient": origin.sender_address,
+            "adapter": _ADAPTER_MSGRAPH,
+            "in_reply_to": origin.message_id,
+            "sent_message_id": sent_id,
+            "released_from_review": row.get("id"),
+            "file_reply_part": f"1/{len(prepared.batches)}",
+            **matter_file_reply.audit_fields(prepared.batches[0]),
+        },
+        session_id=session_id or None,
+    )
+    request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
+    if len(prepared.batches) > 1:
+        _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=None)
+    matter_file_review.finish(row, matter_file_review.STATUS_SENT)
+
+
 def _relay_draft(**kwargs: Any) -> None:
     """Relay the agent's governed draft back to a verified, rostered inbound sender.
 
@@ -1490,6 +1604,21 @@ def _relay_draft(**kwargs: Any) -> None:
                 _matter_ref=cited_matter_ref,
             )
             return
+        if prepared is not None and matter_file_reply.review_by_smd(
+            _seat_doc(), matter_file_review.held_count()
+        ):
+            # matter_file_delivery.review: smd. The reply and its files wait for
+            # SMD's approval (shared.matter_file_review) instead of sending.
+            _hold_for_review(
+                prepared,
+                origin,
+                session_id=session_id,
+                reply_key=reply_key,
+                text=send_text,
+                html=send_html,
+                matter_ref=cited_matter_ref,
+            )
+            return
 
         # (d) Rate-limit under the authored send policy (#2070). Resolved LIVE
         # per call (ADR 0044): authoring `send_policy` — e.g. exempting rostered
@@ -1847,6 +1976,7 @@ def _sender_is_internal(sender: str) -> bool:
 
 def _sweep_once() -> sweeper.SweepResult:
     """One release pass, with the policy resolved live."""
+    _review_once()  # SMD-reviewed files replies (ADR 0101); never raises
     if _HELD_STORE is None or _LIMITER is None:
         return sweeper.SweepResult()
     return sweeper.run_sweep_once(

@@ -45,7 +45,7 @@ MAX_CHUNK_BYTES = 4 * 1024 * 1024
 #: One file's bound: the per-message cap (25 MiB) is also the per-file cap.
 MAX_FILE_BYTES = 25 * 1024 * 1024
 #: Open and closed handles alike are gone after this.
-TTL_SECONDS = 2 * 60 * 60
+TTL_SECONDS = 24 * 60 * 60  # a reply held for SMD review (matter_file_review) sends these handles
 #: Handles open at once. A reply carries at most three files; a few requests
 #: in flight is generous, and a bound stops a caller filling the disk.
 MAX_HANDLES = 32
