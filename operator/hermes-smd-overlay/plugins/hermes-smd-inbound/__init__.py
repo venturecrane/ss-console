@@ -273,6 +273,11 @@ _FENCED_READ_TOOLS: frozenset[str] = frozenset(
         # reads return firm-side metadata and stay unfenced; this one returns
         # externally-authored body text and must taint like an inbound email.
         "mcp_smokeball_read_document",
+        # Smokeball page finder (find_pages_in_file, ADR 0102 amendment 2):
+        # what is printed on a matter document's pages (dates, providers,
+        # headings), read by the model from the page images. The same
+        # outside-authored surface as read_document, so it fences and taints.
+        "mcp_smokeball_find_pages_in_file",
         # Smokeball attachment text (read_attachment_text, vendor invoice
         # intake) — the same reason read_document is fenced: it returns
         # externally-authored body text, here a vendor's invoice PDF fetched

@@ -125,6 +125,7 @@ get_file = "read"
 # ActionClass.READ in the same change.
 find_files_on_matter = "read"
 stage_matter_files = "read"
+find_pages_in_file = "read"
 get_download_url = "read"
 read_document = "read"
 list_folders = "read"

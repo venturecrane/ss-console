@@ -629,6 +629,10 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # the external effect is the reply, fenced in hermes-smd-reply.
     "mcp_smokeball_find_files_on_matter": ActionClass.READ,
     "mcp_smokeball_stage_matter_files": ActionClass.READ,
+    # ADR 0102 amendment 2: which pages of a matter PDF hold a requested
+    # record. A read; it returns what page headers say (dates, providers,
+    # headings), so it is a FENCED content read in hermes-smd-inbound.
+    "mcp_smokeball_find_pages_in_file": ActionClass.READ,
     "mcp_smokeball_get_download_url": ActionClass.READ,
     # Server-side presigned fetch + text extraction (PDF/DOCX/text). The FIRST
     # content-bearing Smokeball read: it returns externally-authored document
