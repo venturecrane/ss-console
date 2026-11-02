@@ -197,8 +197,8 @@ def _cmd_locate(args: argparse.Namespace) -> int:
     checks = None if args.no_check else _import_send_checks(args.repo)
     if not args.index_dir and not os.environ.get("SMOKEBALL_PAGE_INDEX_DIR"):
         os.environ["SMOKEBALL_PAGE_INDEX_DIR"] = str(pdf.resolve().parent / ".page-index")
-    if args.full_pages:
-        os.environ["SMOKEBALL_PAGE_FINDER_VIEW"] = "full"
+    if args.strips:
+        os.environ["SMOKEBALL_PAGE_FINDER_VIEW"] = "bands"
     window = parse_window(args.pages)
     run_tokens = {"input_tokens": 0, "output_tokens": 0}
     # --all: read every page first (each call reads up to PAGES_PER_CALL new
@@ -251,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     loc.add_argument("--pages", help="limit the look to a range like 1-120")
     loc.add_argument("--all", action="store_true", help="keep reading until every page is indexed")
     loc.add_argument("--no-check", action="store_true", help="skip the send check of each range found")
-    loc.add_argument("--full-pages", action="store_true", help="show the model whole pages, not header/footer strips")
+    loc.add_argument("--strips", action="store_true", help="show only header/footer strips (default: whole pages)")
     loc.add_argument("--index-dir", help="where the page index is cached (default: .page-index beside the PDF)")
     loc.add_argument("--repo", type=Path, help="path to the repo's operator/ directory (default: this checkout)")
     loc.add_argument("--json", action="store_true")

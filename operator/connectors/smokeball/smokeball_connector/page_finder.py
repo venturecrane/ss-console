@@ -115,6 +115,8 @@ class _CallFailed(RuntimeError):
         #: The model's own stop_reason when it answered but did not finish
         #: (``refusal``, ``max_tokens``): the PAGE is the cause, not the wire.
         self.stop_reason = stop_reason
+        #: What the failed call still cost: a refusal bills its input tokens.
+        self.tokens: dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
 
 
 def model() -> str:
@@ -161,8 +163,14 @@ def load_index(sha: str, base: Path | None = None) -> dict[str, Any]:
 
 
 def view() -> str:
-    """``bands`` (the default: each page's top and bottom strips) or ``full``."""
-    return "full" if (os.environ.get(VIEW_ENV) or "").strip().lower() == "full" else "bands"
+    """``full`` (the default: whole pages) or ``bands`` (top and bottom strips).
+
+    Strips were the default for one acceptance run (2026-11-02) and lost: the
+    crop hid content but the page still shipped whole, so it saved ~9% of
+    tokens, and a heading in the middle of a page was invisible (a visit came
+    back 1-5 instead of 1-4, a discharge summary was not found). Kept behind
+    ``SMOKEBALL_PAGE_FINDER_VIEW=bands`` only."""
+    return "bands" if (os.environ.get(VIEW_ENV) or "").strip().lower() == "bands" else "full"
 
 
 def save_index(index: dict[str, Any], base: Path | None = None) -> None:
@@ -236,14 +244,18 @@ def _answer(message: Any) -> tuple[dict[str, Any], dict[str, int]]:
     usage = message.get("usage") or {}
     tokens = {k: int(usage.get(k) or 0) for k in ("input_tokens", "output_tokens")}
     if message.get("stop_reason") != "end_turn":
-        raise _CallFailed(f"stopped: {message.get('stop_reason')}", stop_reason=str(message.get("stop_reason")))
+        failed = _CallFailed(f"stopped: {message.get('stop_reason')}", stop_reason=str(message.get("stop_reason")))
+        failed.tokens = tokens
+        raise failed
     texts = [b.get("text") for b in message.get("content") or [] if isinstance(b, dict) and b.get("type") == "text"]
     try:
         data = json.loads("".join(t for t in texts if isinstance(t, str)))
-    except ValueError as exc:
-        raise _CallFailed("answer was not JSON") from exc
+    except ValueError:
+        data = None
     if not isinstance(data, dict):
-        raise _CallFailed("answer was not an object")
+        failed = _CallFailed("answer was not a JSON object")
+        failed.tokens = tokens
+        raise failed
     return data, tokens
 
 
@@ -279,13 +291,17 @@ def index_batch(pages: list[tuple[int, bytes]]) -> tuple[dict[str, dict[str, Any
     rows = data.get("pages")
     sent = {n for n, _ in pages}
     if not isinstance(rows, list):
-        raise _CallFailed("no pages in the answer")
+        failed = _CallFailed("no pages in the answer")
+        failed.tokens = tokens
+        raise failed
     got: dict[str, dict[str, Any]] = {}
     for row in rows:
         if isinstance(row, dict) and isinstance(row.get("page"), int) and row["page"] in sent:
             got[str(row["page"])] = _page_row(row)
     if set(got) != {str(n) for n in sent} or len(rows) != len(sent):
-        raise _CallFailed("the answer did not cover exactly the pages sent")
+        failed = _CallFailed("the answer did not cover exactly the pages sent")
+        failed.tokens = tokens
+        raise failed
     return got, tokens
 
 
@@ -420,6 +436,11 @@ class _BatchReader:
             for key, value in tokens.items():
                 self.facts["tokens"][key] += value
 
+    def _charge(self, exc: _CallFailed) -> None:
+        with self.lock:
+            for key, value in exc.tokens.items():
+                self.facts["tokens"][key] += value
+
     def _note(self, number: int, exc: _CallFailed | None) -> None:
         with self.lock:
             if exc is None:
@@ -434,6 +455,7 @@ class _BatchReader:
         try:
             self._record(*index_batch(batch))
         except _CallFailed as exc:
+            self._charge(exc)
             return exc
         return None
 
@@ -541,7 +563,7 @@ def locate(
     try:
         items, match_tokens = match(index["pages"], what, unreadable)
     except _CallFailed as exc:
-        items, match_tokens = [], {"input_tokens": 0, "output_tokens": 0}
+        items, match_tokens = [], dict(exc.tokens)
         built["match_error"] = str(exc)
     tokens = {k: built["tokens"][k] + match_tokens[k] for k in built["tokens"]}
     for key, value in match_tokens.items():
@@ -549,6 +571,7 @@ def locate(
     if any(match_tokens.values()):
         save_index(index, base)
     remaining = max(0, total - indexed - len(unreadable))
+    _qualify(items, unreadable, remaining)
     out: dict[str, Any] = {
         "pageCount": total,
         "indexedPages": indexed,
@@ -581,6 +604,37 @@ def locate(
             parts.append(f"{len(unreadable)} could not be read (see unreadablePages)")
         out["note"] = "; ".join(parts) + ". Do not say a record is absent from pages that were not read."
     return out
+
+
+def _qualify(items: list[dict[str, Any]], unreadable: dict[str, str], remaining: int) -> None:
+    """Say per item whether its answer is ESTABLISHED.
+
+    A "not found" read over pages that were never read (declined, too large,
+    or not reached yet) is not a finding: the record could be on those pages.
+    So it is ``established: false`` with the pages named, and the reason says
+    so first; it is never a flat "none". A found range that has unreadable
+    pages inside it is sent whole (they stay in their section) and is flagged."""
+    blind = ", ".join(sorted(unreadable, key=int))
+    for item in items:
+        inside = sorted(
+            {p for r in item["ranges"] for e in r["evidence"] for p in e.get("unreadablePages") or {}}, key=int
+        )
+        if item["found"]:
+            item["established"] = True
+            if inside:
+                item["unreadableInside"] = inside
+            continue
+        gaps = []
+        if unreadable:
+            gaps.append(f"pages {blind} could not be read")
+        if remaining:
+            gaps.append(f"{remaining} pages are not read yet")
+        item["established"] = not gaps
+        if gaps:
+            item["notEstablishedBecause"] = "; ".join(gaps)
+            item["reason"] = (
+                "NOT ESTABLISHED: not found on the pages read, but " + "; ".join(gaps) + ". " + item["reason"]
+            )[:600]
 
 
 def _compress(numbers: list[int]) -> str:

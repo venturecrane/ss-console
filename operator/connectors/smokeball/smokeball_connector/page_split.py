@@ -10,15 +10,15 @@ BANDS (2026-11-02, acceptance on the real sets). The index needs only what a
 page's header and footer carry: date, provider, type, heading, "(continued)",
 a page marker. Showing the whole page also showed the clinical images on it,
 and the model declined 84 of the first 100 pages of one set (stop_reason
-refusal). So by default each page goes as TWO strips cut from it: the top
+refusal). With ``bands`` each page goes as TWO strips cut from it: the top
 :data:`TOP_BAND` of the page and the bottom :data:`BOTTOM_BAND`, by setting the
 media and crop boxes of two copies of the page to those strips (the visual top,
 whatever the page's /Rotate). Nothing in the middle of the page is rendered.
-``full`` writes the whole page instead.
+``full``, the DEFAULT, writes the whole page: the acceptance run that followed found strips saved only ~9% of tokens (the page still ships whole) and hid mid-page headings, so they stay behind a flag.
 
 Usage (internal)::
 
-    python -I -m smokeball_connector.page_split <source> <first> <last> <outdir> [bands|full]
+    python -I -m smokeball_connector.page_split <source> <first> <last> <outdir> [full|bands]
 
 Writes ``p<N>.pdf`` for each page first..last that exists (``last`` past the
 end is clamped; ``last`` below ``first`` writes nothing) and prints one JSON
@@ -65,7 +65,7 @@ def _band(page: Any, top: bool, share: float) -> Any:
     return page
 
 
-def _child(source: str, first: int, last: int, outdir: str, view: str = "bands") -> int:
+def _child(source: str, first: int, last: int, outdir: str, view: str = "full") -> int:
     from pypdf import PdfReader, PdfWriter
 
     try:
@@ -78,7 +78,7 @@ def _child(source: str, first: int, last: int, outdir: str, view: str = "bands")
             written = []
             for number in range(first, min(last, total) + 1):
                 writer = PdfWriter()
-                if view == "full":
+                if view != "bands":
                     writer.add_page(reader.pages[number - 1])
                 else:
                     _band(writer.add_page(reader.pages[number - 1]), True, TOP_BAND)
@@ -96,7 +96,7 @@ def _child(source: str, first: int, last: int, outdir: str, view: str = "bands")
 
 
 def split(
-    source: Path, first: int, last: int, outdir: Path, *, limit: int | None = None, view: str = "bands"
+    source: Path, first: int, last: int, outdir: Path, *, limit: int | None = None, view: str = "full"
 ) -> tuple[int, list[int]]:
     """(the file's page count, the pages written as ``outdir/p<N>.pdf``), or :class:`CutRefused`."""
     cap = limit if limit is not None else memory_limit()
@@ -109,7 +109,7 @@ def split(
         str(first),
         str(last),
         str(outdir),
-        "full" if view == "full" else "bands",
+        "bands" if view == "bands" else "full",
     ]
     try:
         # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit - argv is this interpreter, this module, and paths the connector itself built; no shell
@@ -138,7 +138,7 @@ def split(
 def main(argv: list[str]) -> int:
     _limit_memory(int(os.environ.get("SMD_PAGE_CUT_MEMORY_LIMIT") or MEMORY_LIMIT_BYTES))
     source, first, last, outdir = argv[:4]
-    view = argv[4] if len(argv) > 4 else "bands"
+    view = argv[4] if len(argv) > 4 else "full"
     return _child(source, int(first), int(last), outdir, view)
 
 

@@ -411,7 +411,7 @@ def test_the_split_child_numbers_and_clamps_pages(tmp_path: Path) -> None:
     assert page_split.split(src, 1, 0, out) == (4, [])
     total, written = page_split.split(src, 2, 9, out)
     assert total == 4 and written == [2, 3, 4]
-    assert len(PdfReader(io.BytesIO((out / "p2.pdf").read_bytes())).pages) == 2  # top and bottom strips
+    assert len(PdfReader(io.BytesIO((out / "p2.pdf").read_bytes())).pages) == 1  # whole page, the default
 
 
 def test_the_split_child_refuses_a_non_pdf_plainly(tmp_path: Path) -> None:
@@ -553,7 +553,7 @@ def test_a_refused_page_is_cached_and_not_reread(monkeypatch: pytest.MonkeyPatch
     assert again["unreadablePages"][0]["page"] == 3
 
 
-def test_pages_go_as_top_and_bottom_strips_by_default(model: FakeModel, tmp_path: Path) -> None:
+def test_strips_are_cut_to_the_viewed_top_and_bottom(model: FakeModel, tmp_path: Path) -> None:
     from smokeball_connector import page_split
 
     src = tmp_path / "set.pdf"
@@ -565,7 +565,7 @@ def test_pages_go_as_top_and_bottom_strips_by_default(model: FakeModel, tmp_path
         w.write(fh)
     out = tmp_path / "pages"
     out.mkdir()
-    page_split.split(src, 1, 2, out)
+    page_split.split(src, 1, 2, out, view="bands")
     top, bottom = PdfReader(str(out / "p1.pdf")).pages
     assert [float(v) for v in top.mediabox] == [0, 780, 600, 1000]
     assert [float(v) for v in bottom.mediabox] == [0, 0, 600, 120]
@@ -578,16 +578,18 @@ def test_pages_go_as_top_and_bottom_strips_by_default(model: FakeModel, tmp_path
     page_split.split(src, 1, 1, full, view="full")
     assert len(PdfReader(str(full / "p1.pdf")).pages) == 1
     pf.locate(_set(tmp_path, 2), "x", _work(tmp_path))
-    assert "TWO strips" in model.bodies[0]["messages"][0]["content"][-1]["text"]
+    assert "TWO strips" not in model.bodies[0]["messages"][0]["content"][-1]["text"]  # full is the default
 
 
-def test_full_view_is_its_own_index(model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_pages_by_default_and_strips_only_behind_the_flag(
+    model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     src = _set(tmp_path, 2)
-    pf.locate(src, "x", _work(tmp_path))
-    monkeypatch.setenv(pf.VIEW_ENV, "full")
+    assert pf.locate(src, "x", _work(tmp_path))["view"] == "full"
+    monkeypatch.setenv(pf.VIEW_ENV, "bands")
     out = pf.locate(src, "x", _work(tmp_path))
-    assert out["readNow"] == 2 and out["view"] == "full"
-    assert "TWO strips" not in model.bodies[-2]["messages"][0]["content"][-1]["text"]
+    assert out["readNow"] == 2 and out["view"] == "bands"  # its own index
+    assert "TWO strips" in model.bodies[-2]["messages"][0]["content"][-1]["text"]
 
 
 def test_a_long_file_indexes_whole_across_calls(
@@ -639,3 +641,94 @@ def test_cli_all_stops_and_says_so_when_no_progress(
     captured = capsys.readouterr()
     assert "stopped: a call read no new page (3 failed)" in captured.err
     assert "failed: p1: HTTP 529" in captured.out
+
+
+# ---- the second acceptance run's defects ------------------------------------
+
+
+def _cont(header: str, *starts: tuple[str, str, str, str]) -> dict[str, Any]:
+    row = _page(*starts, cont=True)
+    row["running_header"] = header
+    return row
+
+
+def test_a_continued_note_keeps_running_through_an_embedded_report() -> None:
+    """The acceptance shape: a 35-page discharge summary (538-572) whose page 541
+    carries an embedded flowsheet the model indexes as its own section. The
+    running header still says the summary continues, so the summary runs on."""
+    summary = ("DISCHARGE SUMMARY", "discharge summary", "6/30/2024", "Hospital B")
+    flowsheet = ("VITALS FLOWSHEET", "flowsheet", "6/28/2024", "Hospital B")
+    pages = {"538": _page(summary), "539": _page(cont=True), "540": _page(cont=True)}
+    pages["541"] = _cont("DISCHARGE SUMMARY (continued)", flowsheet)
+    for n in range(542, 573):
+        pages[str(n)] = _cont("DISCHARGE SUMMARY (continued)")
+    pages["573"] = _page(("OFFICE VISIT", "office visit note", "8/1/2024", "Clinic A"))
+    secs = pf.sections(pages)
+    assert [(s["heading"], s["first"], s["last"]) for s in secs] == [
+        ("DISCHARGE SUMMARY", 538, 572),
+        ("VITALS FLOWSHEET", 541, 572),
+        ("OFFICE VISIT", 573, 573),
+    ]
+    assert secs[1]["insideOf"] == "S1"
+
+
+def test_continued_rows_run_to_their_last_continued_page() -> None:
+    """The 12/11 rows: 36-44 and 45-56, each with an embedded result mid-run."""
+    note = ("SPEECH THERAPY NOTE", "speech therapy note", "12/11/2024", "Clinic C")
+    second = ("SPEECH THERAPY NOTE", "speech therapy note", "12/11/2024", "Clinic C")
+    result = ("AUDIOGRAM", "test result", "12/11/2024", "Clinic C")
+    pages = {"36": _page(note)}
+    for n in range(37, 45):
+        pages[str(n)] = (
+            _cont("SPEECH THERAPY NOTE (cont'd)", result) if n == 41 else _cont("SPEECH THERAPY NOTE (cont'd)")
+        )
+    pages["45"] = _page(second)
+    for n in range(46, 57):
+        pages[str(n)] = _cont("SPEECH THERAPY NOTE cont.", result) if n == 52 else _cont("SPEECH THERAPY NOTE cont.")
+    spans = [(s["first"], s["last"]) for s in pf.sections(pages) if s["document_type"] == "speech therapy note"]
+    assert spans == [(36, 44), (45, 56)]
+
+
+def test_without_a_continued_header_a_start_still_ends_the_running_note() -> None:
+    pages = {
+        "1": _page(VISIT),
+        "2": _page(cont=True),
+        "3": _page(("LAB", "lab result", "", ""), cont=True),
+        "4": _page(cont=True),
+    }
+    assert _spans(pages) == [("OFFICE VISIT", 1, 3), ("LAB", 3, 4)]
+
+
+def test_refused_responses_are_in_the_cost(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A refusal bills its input tokens; the tally counts them (8-page batch
+    refused once, then 8 single pages of which 1 refused: 2 refusals x 900)."""
+    _refusing(monkeypatch, tmp_path, {3})
+    out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
+    read = 7 * 1600 + 1600  # seven single pages, plus the match call
+    assert out["tokens"]["input_tokens"] == read + 2 * 900
+    assert out["tokensForThisFile"]["input_tokens"] == out["tokens"]["input_tokens"]
+
+
+def test_a_negative_over_unread_pages_is_not_established(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    fake.items = [
+        {"asked": "the x-ray", "found": False, "sections": [], "reason": "none in the sections"},
+        {"asked": "the visit", "found": True, "sections": ["S1"], "reason": "S1"},
+    ]
+    out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
+    xray, visit = out["items"]
+    assert xray["established"] is False and xray["reason"].startswith("NOT ESTABLISHED")
+    assert "pages 3 could not be read" in xray["notEstablishedBecause"]
+    assert visit["established"] is True and visit["unreadableInside"] == ["3"]
+
+
+def test_a_negative_with_pages_left_is_not_established(
+    model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pf, "PAGES_PER_CALL", 16)
+    out = pf.locate(_set(tmp_path), "x", _work(tmp_path))
+    xray = out["items"][2]
+    assert xray["established"] is False and "24 pages are not read yet" in xray["notEstablishedBecause"]
+    done = _set(tmp_path, 8)
+    full = pf.locate(done, "x", _work(tmp_path))
+    assert full["items"][2]["established"] is True and "NOT ESTABLISHED" not in full["items"][2]["reason"]
