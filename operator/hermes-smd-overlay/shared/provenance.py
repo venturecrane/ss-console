@@ -217,6 +217,7 @@ TENANT_SOURCE_READ_TOOLS: frozenset[str] = frozenset(
         "mcp_smokeball_get_file",
         "mcp_smokeball_find_files_on_matter",
         "mcp_smokeball_stage_matter_files",
+        "mcp_smokeball_find_pages_in_file",
         "mcp_smokeball_get_download_url",
         "mcp_smokeball_read_document",
         "mcp_smokeball_get_memos_on_matter",

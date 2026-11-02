@@ -86,6 +86,7 @@ EXPECTED_TOOLS = {
     "get_post_list",
     "find_files_on_matter",
     "stage_matter_files",
+    "find_pages_in_file",
 }
 
 _SCRIPT = shutil.which("smokeball-mcp")

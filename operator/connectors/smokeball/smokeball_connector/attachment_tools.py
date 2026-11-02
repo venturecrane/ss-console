@@ -32,6 +32,7 @@ from .funding_case_eval import register as _register_funding_case_eval_tools
 from .layout_tools import register as _register_layout_tools
 from .post_journal import register as _register_post_journal_tools
 from .matter_files import register as _register_matter_file_tools
+from .page_finder_tools import register as _register_page_finder_tools
 
 
 def register(server: Any) -> None:
@@ -72,6 +73,9 @@ def register(server: Any) -> None:
     # Find a matter's files by name, and stage named files for a staff reply
     # (matter_files.py, ADR 0102), last.
     _register_matter_file_tools(server)
+    # Find which pages of a (scanned) matter PDF hold a requested record
+    # (page_finder.py, ADR 0102 amendment 2), after the matter-file tools.
+    _register_page_finder_tools(server)
 
 
 __all__ = ["register"]
