@@ -84,6 +84,21 @@ _ACTIVE_NAMES = (
     b"GoToE",
 )
 _ACTIVE_RE = re.compile(rb"/(?:" + b"|".join(_ACTIVE_NAMES) + rb")(?=[\s()<>\[\]{}/%]|$)")
+#: A stream's data, from the ``stream`` keyword's end-of-line to ``endstream``.
+_STREAM_RE = re.compile(rb"stream\r?\n.*?endstream", re.DOTALL)
+
+
+def active_outside_streams(raw: bytes) -> bool:
+    """Whether a PDF names an active key OUTSIDE its stream data.
+
+    Stream data is arbitrary bytes: ``/JS`` or ``/AA`` plus a delimiter turns up
+    by chance about once per 130 MB of random data, so scanning it would refuse
+    about one 25 MB set of scans in five, at random. Actions, scripts and embedded files are
+    dictionary keys, which live outside stream data (an object stream hides them
+    compressed, which is why this is the second wall and the overlay's full
+    parse the first). Shared by every broker file path.
+    """
+    return bool(_ACTIVE_RE.search(_STREAM_RE.sub(b"stream endstream", raw)))
 
 
 class AttachmentRefused(ValueError):
@@ -168,7 +183,7 @@ def _one(
             raise AttachmentRefused("attachment is not a PDF file")
         if b"/Encrypt" in raw:
             raise AttachmentRefused("the PDF is encrypted")
-        if _ACTIVE_RE.search(raw):
+        if active_outside_streams(raw):
             raise AttachmentRefused("the PDF names scripts, actions or embedded files")
     part = {
         "filename": name,

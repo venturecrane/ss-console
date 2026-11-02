@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from workspace_broker import msgraph_attachments, msgraph_upload
+from workspace_broker import agentmail_attachments, msgraph_attachments, msgraph_upload
 from workspace_broker.msgraph_attachments import (
     MAX_INLINE_TOTAL_BYTES,
     MAX_PDF_BYTES,
@@ -438,3 +438,50 @@ def test_a_malformed_handle_refuses(tmp_path: Path, monkeypatch) -> None:
     http = MailboxFake()
     with pytest.raises(MsGraphRefused, match="not a spool handle"):
         _send(tmp_path, http, [{**entry, "handle": "../../etc/passwd"}])
+
+
+# ---------------------------------------------------------------------------
+# The active-content byte scan reads outside stream data only
+# ---------------------------------------------------------------------------
+
+
+def _scan_pdf(stream_data: bytes, catalog_extra: bytes = b"") -> bytes:
+    return (
+        b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog " + catalog_extra + b">>\nendobj\n"
+        b"2 0 obj\n<< /Type /XObject /Subtype /Image /Length " + str(len(stream_data)).encode() + b" >>\n"
+        b"stream\n" + stream_data + b"\nendstream\nendobj\n%%EOF\n"
+    )
+
+
+def _entry(raw: bytes, name: str = "Scan.pdf") -> dict:
+    return {
+        "name": name,
+        "content_type": PDF_CONTENT_TYPE,
+        "content_b64": base64.b64encode(raw).decode("ascii"),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def test_a_stray_active_name_inside_image_stream_data_passes(tmp_path: Path) -> None:
+    """Multi-MB random image bytes with "/JS " and "/AA(" planted in them: a
+    scan, not a script. Refusing it would refuse real scans at random."""
+    import random
+
+    data = bytearray(random.Random(7).randbytes(4 * MiB))
+    data[1000:1004] = b"/JS "
+    data[2_000_000:2_000_004] = b"/AA("
+    raw = _scan_pdf(bytes(data))
+    assert agentmail_attachments.active_outside_streams(raw) is False
+    assert agentmail_attachments._ACTIVE_RE.search(raw), "falsifier: a whole-file scan would have refused it"
+    http = MailboxFake()
+    _send(tmp_path, http, [_entry(raw)])
+    assert http.sent[0]["files"][0]["data"] == raw
+
+
+@pytest.mark.parametrize("key", [b"/JS (app.alert(1))", b"/AA << /O 3 0 R >>", b"/OpenAction << /S /JavaScript >>"])
+def test_an_active_name_in_a_real_object_still_refuses(tmp_path: Path, key: bytes) -> None:
+    raw = _scan_pdf(b"\x00" * 64, catalog_extra=key + b" ")
+    http = MailboxFake()
+    with pytest.raises(MsGraphRefused, match="scripts, actions or embedded files"):
+        _send(tmp_path, http, [_entry(raw)])
+    assert http.drafts == {} and http.sent == []
