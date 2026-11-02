@@ -130,8 +130,16 @@ def _view(sec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _continues_running_note(row: dict[str, Any]) -> bool:
-    """The page's top continues an earlier note under a "(continued)" running header."""
-    return bool(row.get("continues_previous")) and bool(_CONTINUED_RE.search(str(row.get("running_header") or "")))
+    """The page continues an earlier note: its OWN label line says "(continued)".
+
+    The note's label (``note_label``), not the encounter banner above it: a
+    banner repeats on every page of a stay and never says which note runs on
+    (2026-11-02: a summary inside an encounter was cut at its first embedded
+    report). Only an index without the field falls back to the banner."""
+    if not row.get("continues_previous"):
+        return False
+    label = str(row.get("note_label") or "")
+    return bool(_CONTINUED_RE.search(label or str(row.get("running_header") or "")))
 
 
 def documents(
