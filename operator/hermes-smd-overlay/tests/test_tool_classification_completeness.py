@@ -249,6 +249,8 @@ PINNED_CONNECTOR_SURFACES: dict[str, frozenset[str]] = {
             "mcp_smokeball_prepare_records_order",
             "mcp_smokeball_place_records_order",
             "mcp_smokeball_records_orders_for_matter",
+            "mcp_smokeball_find_files_on_matter",
+            "mcp_smokeball_stage_matter_files",
             # trust-account writes (BANNED — never autonomous, never configurable)
             "mcp_smokeball_create_transaction",
             "mcp_smokeball_protect_funds",

@@ -84,6 +84,8 @@ EXPECTED_TOOLS = {
     "add_negotiation_rows",
     "record_post_batch",
     "get_post_list",
+    "find_files_on_matter",
+    "stage_matter_files",
 }
 
 _SCRIPT = shutil.which("smokeball-mcp")

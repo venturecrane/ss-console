@@ -48,7 +48,15 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import casefile_verbs, delivery_proof, help_signals, msgraph_drafts, note_verbs, records_order_acts
+from . import (
+    attachment_intake,
+    casefile_verbs,
+    delivery_proof,
+    help_signals,
+    msgraph_drafts,
+    note_verbs,
+    records_order_acts,
+)
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
 
@@ -240,6 +248,9 @@ VERBS: tuple[Verb, ...] = (
     Verb("agentmail_reply", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
+    # A file for a reply, in chunks, into the broker's own spool (ADR 0101,
+    # attachment_intake.py). Gateway-only like the reply that carries it.
+    Verb("attachment_put", _only(GATEWAY), attachment_intake.put_verb),
     # The verified reply binding (reply_binding.py): a turn no inbound opened
     # answers one earlier email, once, to its verified sender. Gateway-only like
     # the channel it transmits on; the check verb is gateway-only too, because

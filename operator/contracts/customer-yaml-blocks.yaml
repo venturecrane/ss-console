@@ -432,6 +432,24 @@ top_level:
       an approver's inbox holds the approve links (ADR 0089 amendment 5a), so
       the console validator refuses the overlap, the connector refuses the
       read, and boot smoke asks Microsoft about every approver.
+  matter_file_delivery:
+    status: implemented
+    owner: core # read by the core reply plugin (shared/matter_file_reply.py) and the broker (workspace_broker/msgraph_reply_files.py) as well as the Smokeball connector
+    materializer: >-
+      no translate step by design, the vendor_invoice_intake shape: the
+      Smokeball connector (smokeball_connector/matter_files.py
+      load_recipients), the reply plugin (hermes-smd-reply _stage_matter_files,
+      _prepare_matter_files) and the broker's reply verb
+      (msgraph_reply_files.staff_list) each read the block off the seat's own
+      customer.yaml at call time.
+    note: >-
+      ADR 0101. `recipients`, a list of addresses or `@domains`: the firm's own
+      staff who may receive the firm's matter files attached to the Operator's
+      reply to their own email. Each must ALSO be on scope.inbound_allow_from
+      and not typed as anything but firm_staff in scope.outbound_roster; the
+      connector, the reply plugin and the broker each check. Unauthored (or an
+      empty list), no file is staged and no reply carries one. Never an outside
+      party: the list is the whole of who can receive.
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

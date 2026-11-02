@@ -70,6 +70,7 @@ from typing import Any
 from .audit_ledger import new_row_token
 from .html_canon import html_body_sha256
 from . import msgraph_attachments as _files
+from . import msgraph_reply_files
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -783,10 +784,10 @@ class MsGraphOps:
         stored message's from/replyTo with its own Mail.ReadWrite — that is a
         pre-existing property of replying to mutable message objects.
         """
-        if _files.carries_attachments(payload):
-            # The reply wire carries a comment, not a message resource, so an
-            # attachment would be dropped silently. Refuse rather than do that.
-            raise MsGraphRefused("attachment refused: the reply verb does not carry attachments")
+        # A reply carries files only on the matter-file path (ADR 0101,
+        # msgraph_reply_files): authored staff, broker-spooled bytes, a draft
+        # read back before it is sent. Vetted BEFORE anything is fetched.
+        files = msgraph_reply_files.vetted(self._customer_path, payload, MsGraphRefused)
         message_id = str(payload.get("message_id") or "").strip()
         if not message_id:
             raise MsGraphRefused("reply requires the source message_id")
@@ -816,12 +817,18 @@ class MsGraphOps:
         sender, policy = self._vetted_sender(source, message_id)
         redirect = self._device_redirect(payload.get("to"), sender, policy)
         cc = [] if redirect else self._request_participants(source, sender, policy)
+        if files is not None:
+            cc = self._files_people(policy, sender, redirect, cc)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
         # Read BEFORE the POST: after it, a config read that raised would turn a
         # delivered reply into an error the caller may retry.
         mailbox = self.mailbox()
-        if redirect:
+        if files is not None:
+            stamped = msgraph_reply_files.send(
+                self, message_id, comment, html, audit_token, sender, cc, files, transport_error=MsGraphTransportError
+            )
+        elif redirect:
             stamped = send_redirected(
                 self,
                 message_id,
@@ -862,7 +869,22 @@ class MsGraphOps:
             # INBOUND_RECEIVED row is minted here, from the verified sender, and
             # hashed because the ledger must not hold an address.
             "sender_key": sender_key(sender),
+            **({"attachment_sha256": ",".join(sha for _, _, sha in files)} if files else {}),
         }
+
+    def _reply_files(self, payload: dict[str, Any]) -> list[tuple[str, bytes, str]]:
+        """The vetted files of a reply that carries them, or a refusal."""
+        try:
+            spool = attachment_intake.default_spool_dir()
+            return msgraph_reply_files.vet(self._customer_path, spool, payload)
+        except (msgraph_reply_files.FilesRefused, attachment_intake.IntakeRefused) as exc:
+            raise MsGraphRefused(f"attachment refused: {exc}") from exc
+
+    def _files_people(self, policy: RecipientPolicy, sender: str, redirect: str, cc: list[str]) -> list[str]:
+        try:
+            return msgraph_reply_files.people(self._customer_path, policy, sender, redirect, cc)
+        except msgraph_reply_files.FilesRefused as exc:
+            raise MsGraphRefused(f"attachment refused: {exc}") from exc
 
     @staticmethod
     def _device_redirect(requested: Any, sender: str, policy: RecipientPolicy) -> str:

@@ -1,0 +1,53 @@
+---
+title: Matter files on a staff reply
+date: 2026-11-02
+status: accepted
+captain: Scott Durgan
+related-adr: docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md, docs/adr/0056-persona-exposure-skill-initiation-entitlements.md, docs/adr/0086-matter-identity-send-binding.md, docs/adr/0100-one-operator-core-and-authored-capabilities.md
+enforced_by:
+  - operator/connectors/smokeball/tests/test_matter_files.py
+  - operator/hermes-smd-overlay/tests/test_matter_file_reply.py
+  - operator/workspace_broker/tests/test_msgraph_reply_files.py
+---
+
+# ADR 0101: Matter files on a staff reply
+
+- **Status:** Accepted (2026-11-02)
+- **Decider:** Captain (the ask: an attorney's request for named records must be answered with the records); mechanism by the agent
+- **Amends:** ADR 0086 (a new matter-identity seam: the files a reply carries), ADR 0053 (two connector tools), the outbound-attachment rule in `shared/outbound_attachment.py` (a firm's own record to its own staff is exempt from the text read only)
+
+## Context
+
+On 2026-11-01 an attorney at the first client emailed the Operator for five named records on one matter, attached to its reply. The Operator answered, truthfully, that it could not search the matter's documents by name (the file listing returns 500 rows a page with no filter, on a matter with thousands) and that its email could not carry a file. Until now an attachment was never a tool argument and the model never named a file; the only files a seat sent were a routine's workbook and SMD-staged PDFs, both chosen by code.
+
+Of the five records most were scans (image-only, or a garbled text layer), one was 6.67 MB, and two were a few pages inside very large sets: pages 1-4 of a 223-page 3.9 MB file and pages 3-11 of a 2,310-page 413 MB file. The seat has no OCR tool.
+
+## Decision
+
+1. **Find by name, server-side.** `find_files_on_matter(matter_id, name, folder, extension)` (Smokeball connector, READ) pages the matter's whole file listing and filters in the connector: every word of `name` in the file name, a folder name at any depth or a path suffix, an extension. It returns file id, name, extension, folder path, size and dates, and `searchComplete`. The vendor's `Search` parameter is answered from a separate document search index whose matching, lag and coverage we have not observed on a live tenant, so it is not used; the listing is the record. Past 30,000 files the result says the search was partial. A failed page is an error, never "none found".
+
+2. **The model names files; code moves bytes.** `stage_matter_files(matter_id, files)` (Smokeball connector, READ: it writes only the seat's own disk) takes up to nine `{file_id, pages?}`. The connector checks each file's own record names this matter, that it is a PDF, fetches it (streamed to disk, up to 600 MB for a page cut, 25 MB whole), cuts a page range itself when one is named (at most 200 pages), and writes each result to the seat's outbound file spool with its sha256. A file that cannot go is refused by name with its reason; the others still stage.
+
+3. **The reply plugin carries them, under fences the model cannot reach** (`shared/matter_file_reply.py`, `hermes-smd-reply`). From the connector's own tool result, in a hook: the stage is bound to the email that opened this turn, on a Graph seat, whose sender is firm staff. Each file is read back from the connector spool against its sha256, passes the gate's structural PDF check, and goes in 3 MiB chunks into the BROKER's own spool (`attachment_put`), which the agent cannot write and which hashes what it receives. At the reply, after every floor a reply already meets: the same email, firm staff, no device redirect, no bound reply, and one matter (the files' matter is the only matter whose content the session read, and the body cites no other). A refusal clears the staging and holds the reply with the reason, so the model redrafts without claiming a file. A reply carrying files is never queued behind the rate limit, because a queued reply is released without them.
+
+4. **Who is firm staff is authored per seat.** `matter_file_delivery.recipients` (addresses or `@domains`) in customer.yaml. A recipient must be on that list AND on `scope.inbound_allow_from` AND classify INTERNAL (never typed client, vendor or anything else in `scope.outbound_roster`). The connector, the reply plugin and the broker each check. Unauthored, nothing stages and no reply carries a file. This is the per-seat gate: a config block the capability reads, as `vendor_invoice_intake` is, rather than a new exposure class, because the act is a reply the seat already makes to its own staff and the entitlement question is only "to whom may the firm's files go", which is a list.
+
+5. **The broker's reply verb carries files only on this path** (`workspace_broker/msgraph_reply_files.py`). Descriptors are `{name, content_type, handle, sha256}`; the broker re-reads its own copy and refuses unless its hash matches, refuses non-PDFs, encrypted PDFs and PDFs naming active content outside stream data (a scanned page's image bytes are arbitrary and would match by chance), re-vets the fetched sender, drops copied participants who are not staff, and refuses a device redirect. It builds a `createReply` draft on the READ credential, attaches files (inline under 3 MB; above it through the shared upload-session helper `msgraph_upload.upload_large_attachment`), re-reads the draft (recipients exactly the sender plus the kept copies, no bcc, the body's words present, every attachment's name, type and sha256 exactly as vetted, the bytes fetched back and hashed), deletes it and refuses on any mismatch, and sends it on the SEND credential. The audit row's `attachment_sha256` is the broker's hash of each file.
+
+6. **Three files and 25 MiB per message; more go as further replies.** A request needing more than three files (or more than 25 MiB) is answered with the person's reply carrying the first batch and up to two further replies in the same thread, each with the code-fixed words "Part N of M of the files you asked for, attached: ...". Each is audited (`file_reply_part`).
+
+7. **Scanned PDFs: the text read does not apply to a firm's own record going back to its own staff.** The outbound gate refuses a PDF with no readable text, because what it cannot read it cannot check. That rule stays for every other send. Here the text gate has nothing to catch: it exists for words the Operator wrote or relayed (fabrication, another matter's identifiers, facts reaching an outsider), and a scan the firm filed, fetched by code and returned unaltered to a colleague who can already open it in Smokeball, carries none. What can still go wrong is structural (an active PDF) or a misdelivery (wrong matter, wrong person), and those checks run on every file, scanned or not. Outside the firm nothing changes: this path reaches the firm's own staff only.
+
+## Consequences
+
+- The attorney's request is answerable: find each record by name, stage the whole file or the named pages, and the reply carries them, split across replies when there are more than three.
+- A file over 3 MB depends on the shared upload-session helper. Until `workspace_broker/msgraph_upload.py` is on main, such a file refuses with a plain reason and the reply is held so the model says so; files under 3 MB go.
+- Every send here runs inside the reply hook's 25 s broker budget. A large reply that outlives it is reported as an unknown outcome (the broker finishes and writes its row); the agent is told not to resend.
+- The read credential builds the draft. Between the read-back and the send an agent holding that credential could in principle PATCH it; the window is one request long, the same stated property as the device-redirect path.
+
+## Rejected
+
+- **The vendor's `Search` index for finding files.** Unobserved matching and lag; a missed file reads as "not on the matter".
+- **Files as a model tool argument, or bytes through the model's context.** The model names Smokeball ids; nothing it writes reaches the wire as a file.
+- **Exempting scans by asking the model whether a file is a scan.** The exemption is keyed on who receives and where the bytes came from, both decided in code.
+- **A new exposure class.** It would touch every validator and the portal for a question a recipients list answers.

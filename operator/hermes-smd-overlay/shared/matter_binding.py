@@ -394,6 +394,9 @@ _CONTENT_READ_TOOLS: frozenset[str] = frozenset(
     {
         "mcp_smokeball_get_memos_on_matter",
         "mcp_smokeball_read_document",
+        # ADR 0101: staging fetches a matter's file bytes for a reply, so it is
+        # one matter's substance; the read fence keeps a second matter out.
+        "mcp_smokeball_stage_matter_files",
     }
 )
 
