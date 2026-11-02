@@ -9,6 +9,8 @@ heartbeat goes stale for the whole run.
 BUSY means any of:
   * a lane's job child pid is alive, or a lane heartbeat names a running job;
   * a lane has wakes pending (a finished job's notice not yet sent);
+  * a DELIVER turn started in the last TURN_BUSY_S and its reply is not yet
+    seen (the wake is consumed, so the lane reads idle while the turn sends);
   * a lane daemon is alive but its heartbeat is STALE: it cannot be shown idle,
     so it is treated as busy (a stale heartbeat never reads as idle), unless
     the live daemon started after that beat was written: then it is a lane the
@@ -48,6 +50,11 @@ STALE_AFTER_S = 300.0
 # 30 s poll lands in it.
 CRON_AHEAD_S = 360.0
 CRON_BEHIND_S = 120.0
+# A consumed wake is a gateway turn still sending (2026-11-02, A&P: a restart
+# 10 s after seven offer-email turns started lost four). Busy until its reply is
+# seen in Sent Items, at most this long: a reply that never shows is the reply
+# watch's page, not a reason to hold every release.
+TURN_BUSY_S = 600.0
 QUIESCE_TTL_S = 1800.0
 POLL_S = 30.0
 # A wait can run for an hour of ssh calls; one of them losing its connection to
@@ -110,6 +117,10 @@ def decide(
         reasons.extend(_lane_reasons(lane, stale_after))
     for cron in facts.get("crons") or []:
         reasons.extend(_cron_reasons(cron, ahead, behind))
+    for turn in facts.get("turns") or []:
+        ago = turn.get("sent_ago_s")
+        if turn.get("reply_open") and ago is not None and 0 <= float(ago) <= TURN_BUSY_S:
+            reasons.append(f"{turn.get('file')}: DELIVER turn started {float(ago):.0f}s ago, its reply not yet seen")
     for err in facts.get("errors") or []:
         reasons.append(f"cannot evaluate: {err}")
     return Verdict(bool(reasons), reasons, facts)
