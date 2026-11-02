@@ -1,7 +1,7 @@
 ---
 name: gratitude-prompts
 description: Gratitude prompts sent to each partner privately. On a schedule, asks one partner a short question about something they appreciated; keeps the answer private; shares it only when the partner asks.
-version: 0.1.0
+version: 0.1.1
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -117,7 +117,25 @@ lately that you appreciated, big or small? Reply here whenever you like."
    their most recent note in `gratitude`, which is a `note-*` record you can
    read here, or a `shared-*` record whose listing shows `from: you` (the seat
    stamps who filed it). Read it with `record_store_read` and send its words. Never ask them to say it again
-   when one of these holds it, and never say what you could or could not find.
+   when one of these holds it.
+
+   The note must be the one they mean. When they speak of an answer they just
+   gave ("my reply", "the one I just sent", "did you get it?") and no answer to
+   the latest prompt is in this chat, it did not reach you. Say so in one plain
+   line and ask them to send it again: "That answer didn't reach me. Could you
+   send it once more?" Never send or quote an older note in its place, never
+   call an older note today's, and never say a send happened that this chat
+   does not show a `partner_message_send` result for. When you do send a note
+   from the store, it is one they wrote on an earlier day only if they asked
+   for that one.
+
+## When something did not work
+
+Never explain why something failed: you cannot see the seat's machinery, so
+any reason you give is a guess presented as fact. Say what you can do now
+(ask them to send it again, ask the question again), and nothing about jobs,
+sessions, schedules or failures. Never suggest they contact anyone about it;
+the people who run this service see every failure without being told.
 
 5. If they want it on the agenda, write `shared-<date>-<id>.md` with
    `owner: shared` and their words, unchanged or shortened only as they ask,
