@@ -50,6 +50,7 @@ The lead's decision, 2026-11-02:
    on the draft. If anything differs, the broker refuses the send, deletes the
    draft and writes the refusal row. The draft id goes on the row and never back
    to the agent.
+
 4. **Large files travel by spool handle.** A file too large for the broker's
    request frame arrives as `{name, content_type, handle, sha256}`. The broker
    reads the bytes from its own spool (`attachment_intake.read_spooled`), which

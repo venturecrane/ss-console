@@ -176,6 +176,8 @@ def _http(
     request = urllib.request.Request(url, data=body, method=method, headers=all_headers)  # noqa: S310 - every url is the https graph base or an allow-listed https uploadUrl
     try:
         opener = ops._opener or urllib.request.urlopen
+        # The url is the https-checked graph base plus a segment-checked path, or an uploadUrl
+        # refused unless it is https on a Microsoft host (_checked_upload_url).
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with opener(request, timeout=TIMEOUT_S) as response:
             status = int(getattr(response, "status", 200) or 200)
