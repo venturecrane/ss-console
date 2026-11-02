@@ -29,10 +29,17 @@ describe('matter records procedure', () => {
   const body = section()
 
   it('finds the pages, with the page-finder when present, and says so when absent', () => {
-    expect(body).toMatch(/find_pages_in_file/)
+    expect(body).toMatch(/`find_pages_in_file\(matter_id, file_id, what=/)
     expect(body).toMatch(
-      /no such tool is available, say in the reply that you could not search inside/
+      /`find_pages_in_file` is not in your tool list, say in the reply that you could not search inside/
     )
+    // An incomplete index is never read as "not in the file".
+    expect(body).toMatch(
+      /When `complete` is false .*call it again .*before you say a record is not in that file/
+    )
+    // Stage with the returned ranges; cite their evidence to the requester.
+    expect(body).toMatch(/Stage with the returned ranges/)
+    expect(body).toMatch(/\*\*Attached:\*\*.*evidence `find_pages_in_file` gave/)
     expect(body).toMatch(/Never guess pages/)
   })
 
