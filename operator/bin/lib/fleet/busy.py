@@ -57,6 +57,13 @@ CRON_BEHIND_S = 120.0
 # seen in Sent Items, at most this long: a reply that never shows is the reply
 # watch's page, not a reason to hold every release.
 TURN_BUSY_S = 600.0
+# A gateway turn count is believed unless the gateway has written no
+# conversation message for this long. A live turn writes as it goes (its
+# prompt, each tool call, the reply); a count with half an hour of silence
+# behind it is one the gateway never released (captain-mark 2026-11-02: an
+# interrupted reply left 2 "turns" on an idle seat and the gate held a fix for
+# 30 minutes). Unknown silence (no reading) still counts as busy.
+GATEWAY_QUIET_S = 1800.0
 QUIESCE_TTL_S = 1800.0
 POLL_S = 30.0
 # A wait can run for an hour of ssh calls; one of them losing its connection to
@@ -124,7 +131,9 @@ def decide(
             active = int(gw.get("active_agents") or 0)
         except (TypeError, ValueError):
             active = 0
-        if gw.get("alive") and active > 0:
+        quiet = gw.get("quiet_s")
+        leaked = isinstance(quiet, (int, float)) and float(quiet) > GATEWAY_QUIET_S
+        if gw.get("alive") and active > 0 and not leaked:
             reasons.append(f"{gw.get('file')}: the gateway is running {active} turn(s)")
     for turn in facts.get("turns") or []:
         ago = turn.get("sent_ago_s")

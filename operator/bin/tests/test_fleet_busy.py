@@ -222,6 +222,44 @@ def test_a_gateway_with_turns_in_flight_is_busy() -> None:
     assert not busy.decide(_facts(gateways=[dict(gw, alive=False)])).busy  # a dead gateway's leftover file
 
 
+def test_a_turn_count_with_no_conversation_for_half_an_hour_is_not_busy() -> None:
+    # captain-mark 2026-11-02: an interrupted reply left active_agents=2 on an
+    # idle seat and the gate held a release for its whole 30-minute wait.
+    # FALSIFIER: drop the quiet rule and the first verdict is busy forever.
+    gw = {"file": "/opt/data/profiles/captain-mark/gateway_state.json", "alive": True, "active_agents": 2}
+    assert not busy.decide(_facts(gateways=[dict(gw, quiet_s=busy.GATEWAY_QUIET_S + 60)])).busy
+    # A turn that wrote recently is real work, and an unknown quiet time is never idle.
+    assert busy.decide(_facts(gateways=[dict(gw, quiet_s=30.0)])).busy
+    assert busy.decide(_facts(gateways=[dict(gw, quiet_s=None)])).busy
+
+
+def test_the_probe_reads_how_long_the_conversation_store_is_quiet(tmp_path: Path) -> None:
+    import sqlite3
+
+    _, data = _seat(tmp_path)
+    home = data / "profiles" / "operator"
+    state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": 2}
+    (home / "gateway_state.json").write_text(json.dumps(state))
+    db = home / "state.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, timestamp REAL)")
+    con.execute("INSERT INTO messages (timestamp) VALUES (?)", (time.time() - 7200,))
+    con.commit()
+    before = sorted(p.name for p in home.iterdir())
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    # The read leaves nothing behind (it runs as root on a seat).
+    assert sorted(p.name for p in home.iterdir()) == before
+    (gw,) = facts["gateways"]
+    assert gw["quiet_s"] is not None and gw["quiet_s"] > 7000
+    assert not busy.decide(facts).busy
+    con.execute("INSERT INTO messages (timestamp) VALUES (?)", (time.time(),))
+    con.commit()
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert facts["gateways"][0]["quiet_s"] < 60
+    assert busy.decide(facts).busy
+    con.close()
+
+
 def test_the_probe_reads_the_gateway_turn_count(tmp_path: Path) -> None:
     _, data = _seat(tmp_path)
     state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": 3}
