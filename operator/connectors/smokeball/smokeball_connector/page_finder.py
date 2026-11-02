@@ -223,9 +223,8 @@ def save_index(index: dict[str, Any], base: Path | None = None) -> None:
     base = base or index_dir()
     base.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(OSError):
-        os.chmod(
-            base, 0o700
-        )  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - owner-only on purpose; client content
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - owner-only on purpose; client content
+        os.chmod(base, 0o700)
     path = _index_path(base, index["sha256"])
     tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
