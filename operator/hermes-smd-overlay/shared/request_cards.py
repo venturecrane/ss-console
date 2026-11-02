@@ -5,8 +5,10 @@ When a firm person emails an Operator seat, SMD (team@smd.services) gets:
 * a ``replied`` card once the Operator has answered and gone quiet: who (and
   the firm's authored name for them), the subject, the request's own words,
   the first reply in full, the matter, the tools that ran with each one's
-  action class and call count, how many calls were refused or failed, and the
-  minutes to first reply;
+  action class and call count, how many calls were refused or failed, the
+  minutes to first reply, and ``could_not`` (a closed code, or None) when a
+  reply told the person the Operator could not do what they asked, which the
+  email reads as NOT FULFILLED (2026-11-01; ``shared.reply_could_not``);
 * a ``no_reply`` alarm when nothing has answered the request within
   :data:`NO_REPLY_AFTER` and nothing else is already handling it;
 * a ``job_done`` card when a demand, drafting, litigation status, case file or chronology job the request started
@@ -243,7 +245,8 @@ def _reply_rows(conn: sqlite3.Connection, horizon: str) -> list[dict]:
         " json_extract(metadata,'$.session_id') AS session_id,"
         " json_extract(metadata,'$.held_for_release') AS held_for_release,"
         " json_extract(metadata,'$.sent_message_id') AS sent_message_id,"
-        " json_extract(metadata,'$.recipient') AS recipient"
+        " json_extract(metadata,'$.recipient') AS recipient,"
+        " json_extract(metadata,'$.could_not') AS could_not"
         " FROM audit_log"
         " WHERE action_type IN ('REPLY_SENT', 'REPLY_HELD', 'REPLY_FAILED')"
         " AND substr(ts,1,19) >= ?"
@@ -260,8 +263,25 @@ def _reply_rows(conn: sqlite3.Connection, horizon: str) -> list[dict]:
         "hfr",
         "sent_message_id",
         "recipient",
+        "could_not",
     )
     return [dict(zip(keys, row, strict=True)) for row in rows]
+
+
+def _could_not(rows: list[dict]) -> str | None:
+    """The first decline code among these sent replies, from the closed
+    ``reply_could_not.CODES`` (an unknown one is ``other``), or None when every
+    reply gave the person an answer. What makes a card read NOT FULFILLED
+    (2026-11-01: "replied in 1m, refused 0 failed 0" read as a success for a
+    reply that told an attorney it could not find any of five records)."""
+    from shared import reply_could_not
+
+    for row in rows:
+        code = row.get("could_not")
+        if isinstance(code, str) and code.strip():
+            code = code.strip()
+            return code if code in reply_could_not.CODES else "other"
+    return None
 
 
 def _session_calls(conn: sqlite3.Connection, sessions: list[str], horizon: str) -> dict:
@@ -830,6 +850,7 @@ def _followup_cards(
                 "replies": 1,
                 "refused": 0,
                 "failed": 0,
+                "could_not": _could_not([row]),
                 "job": None,
             }
         )
@@ -959,6 +980,7 @@ def _replied_card(req, vid, base, sent, calls_by_session, now, heartbeat) -> dic
         "replies": len(sent),
         "refused": refused,
         "failed": failed,
+        "could_not": _could_not(sent),
         "job": None,
     }
 

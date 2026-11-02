@@ -96,6 +96,7 @@ from shared import (
     output_checklist,
     policy_profile,
     provenance,
+    reply_could_not,
     report_render,
     request_index,
     send_policy,
@@ -1477,6 +1478,11 @@ def _relay_draft(**kwargs: Any) -> None:
                 # the INBOUND_RECEIVED row that opened the turn, without a second
                 # address leaving the Machine in an export.
                 **sender_key_metadata,
+                # 2026-11-01: a reply that told the person the Operator could
+                # not do what they asked, as a closed code (never the words).
+                # The heartbeat pages it as a shortfall and the request card
+                # marks the request NOT FULFILLED (shared/reply_could_not.py).
+                **reply_could_not.metadata(wire_text),
             },
             session_id=session_id,
             matter_ref=cited_matter_ref,
@@ -1733,6 +1739,7 @@ def _deliver_owed_act(session_id: str, *, pending: Any = _UNSET, origin: Any = _
                 # Why this row exists: the model withheld nothing and sent
                 # nothing, so the seat delivered the act line itself.
                 "seat_delivered_act": proposal_id,
+                **reply_could_not.metadata(act_delivery.body_for(line)),
             },
             session_id=session_id,
         )

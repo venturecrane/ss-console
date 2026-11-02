@@ -17,6 +17,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import {
+  fulfilledLabel,
   parseArgs,
   queuedLabel,
   renderReport,
@@ -107,6 +108,20 @@ describe('the footer', () => {
     )
   })
 
+  it('a reply that declined reads NOT FULFILLED with its code; an answer reads as before (0146)', () => {
+    // 2026-11-01: "replied in 1m" for a reply that said it could not find any
+    // of five records. FALSIFIER: drop fulfilledLabel from outcome() and the
+    // report expectation fails.
+    expect(fulfilledLabel(row(A, 'replied', { could_not: 'cannot_find' }))).toBe(
+      ', NOT FULFILLED (cannot_find)'
+    )
+    expect(fulfilledLabel(row(A, 'replied', { could_not: null }))).toBe('')
+    expect(fulfilledLabel(row(A, 'replied'))).toBe('')
+    expect(
+      renderReport([row(A, 'replied', { could_not: 'cannot_find', minutes: 1 })], 'then')
+    ).toContain('replied in 1m, NOT FULFILLED (cannot_find)')
+  })
+
   it('a requester message on a held job is listed and counted (0136)', () => {
     const rows = [row(A, 'held_reply', { job_lane: 'medchron', job_state: 'held', minutes: 98 })]
     expect(summarize(rows).heldReply).toBe(1)
@@ -186,6 +201,7 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
       '0124_request_card_litigation_lane',
       '0125_request_card_lane_unproven',
       '0134_request_card_jobs_queued',
+      '0146_request_card_could_not',
     ]) {
       db.exec(readFileSync(resolve(`migrations/${m}.sql`), 'utf8'))
     }
@@ -203,6 +219,10 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
       'medchron',
       'pilot-smokeball'
     )
+    db.prepare('UPDATE operator_request_cards SET could_not = ? WHERE customer_slug = ?').run(
+      'cannot_attach',
+      'pilot-smokeball'
+    )
     db.close()
     const stub = join(dir, 'd1.cjs')
     writeFileSync(stub, SQLITE_STUB)
@@ -214,6 +234,7 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     expect(all.out).toContain('2 requests, 2 cards')
     expect(all.out).toContain('Still unanswered (an alarm with no later reply card): 1.')
     expect(all.out).toContain('QUEUED medchron')
+    expect(all.out).toContain('NOT FULFILLED (cannot_attach)')
 
     const ours = run(['--client', 'smd-services', '--json'], env)
     expect(ours.code).toBe(0)

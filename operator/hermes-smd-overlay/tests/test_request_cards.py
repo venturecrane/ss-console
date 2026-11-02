@@ -243,6 +243,28 @@ def test_replied_card_after_quiet_carries_tools_matter_and_minutes(ledger) -> No
     assert card["who"] == "paralegal@firm.example" and card["job"] is None
 
 
+def test_a_replied_card_whose_reply_declined_carries_its_could_not_code(ledger) -> None:
+    """2026-11-01: "replied in 1m, refused 0, failed 0" read as a success for a
+    reply that told an attorney it could not find any of five records. Every
+    call was ok; the reply's own decline code is what marks it."""
+    ledger.call(52, "mcp_smokeball_list_documents")
+    ledger.row("REPLY_SENT", 50, in_reply_to=VID, session_id="s1", could_not="cannot_find")
+    card = _decide(ledger, [_request(60)])[0]
+    assert card["kind"] == "replied"
+    assert (card["refused"], card["failed"]) == (0, 0)
+    assert card["could_not"] == "cannot_find"
+
+
+def test_an_ordinary_replied_card_has_no_could_not(ledger) -> None:
+    ledger.reply(50)
+    assert _decide(ledger, [_request(60)])[0]["could_not"] is None
+
+
+def test_an_unknown_could_not_code_never_rides_as_written(ledger) -> None:
+    ledger.row("REPLY_SENT", 50, in_reply_to=VID, session_id="s1", could_not="Testclient file")
+    assert _decide(ledger, [_request(60)])[0]["could_not"] == "other"
+
+
 def test_replied_card_waits_for_the_reply_to_go_quiet(ledger) -> None:
     ledger.reply(2)
     assert _decide(ledger, [_request(10)]) == []
@@ -1221,6 +1243,28 @@ def test_a_reply_sent_after_the_replied_card_landed_is_carded_with_its_own_words
     assert card["subject"] == "Pull the records"
     assert card["minutes"] == 51
     assert card["replies"] == 1 and card["job"] is None
+
+
+def test_a_later_reply_that_declined_carries_its_could_not_code(ledger) -> None:
+    _sent(ledger, 60, "sent-1")
+    ledger.row(
+        "REPLY_SENT",
+        10,
+        in_reply_to=VID,
+        session_id="s1",
+        sent_message_id="sent-2",
+        could_not="cannot_attach",
+    )
+    landed = {rc.card_key(VID, "replied"): _epoch(54)}
+    cards = _followups(
+        _decide_f(
+            ledger,
+            [_request(61)],
+            done_at=landed,
+            openings={"sent-1": "first", "sent-2": "I couldn't attach them."},
+        )
+    )
+    assert [c["could_not"] for c in cards] == ["cannot_attach"]
 
 
 def test_the_first_reply_is_the_replied_cards_never_a_follow_up(ledger) -> None:

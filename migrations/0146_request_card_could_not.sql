@@ -1,0 +1,26 @@
+-- 0146: a request card records whether its reply told the person the Operator
+-- could not do what they asked.
+--
+-- The gap (2026-11-01, ashton-price): an attorney asked for five records; the
+-- Operator answered in one minute that it could not find or attach any of
+-- them. Every tool call succeeded, so the card read "replied in 1m, refused 0
+-- failed 0", which looks like a clean answer, and no shortfall fired. The
+-- Captain learned of it a day later by asking.
+--
+-- The seat now stamps a closed code on the REPLY_SENT row when the reply
+-- declines (overlay shared/reply_could_not.py), pages it as a `failed`
+-- shortfall `reply_could_not:<code>`, and sends the code on the request card,
+-- whose email reads NOT FULFILLED. could_not holds that code:
+--
+--   NULL  the reply gave an answer, or the card was recorded before 0146
+--   'x'   one of cannot_find | cannot_attach | cannot_access |
+--         cannot_complete | not_permitted | none_available | other
+--
+-- A code-authored token, never client text; ADR 0052 s5 holds. The parse in
+-- src/lib/operator/request-card.ts refuses any other value before a row is
+-- written. A plain ADD COLUMN: every existing row stays valid (NULL).
+-- Ordering is safe: deploy.yml applies migrations before the worker deploys.
+--
+-- Manual-only rollback at migrations/rollbacks/0146_request_card_could_not_down.sql.
+
+ALTER TABLE operator_request_cards ADD COLUMN could_not TEXT;

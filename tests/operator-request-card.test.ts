@@ -17,6 +17,7 @@ import {
   installWorkerdPolyfills,
 } from '@venturecrane/crane-test-harness'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import { env as testEnv } from 'cloudflare:workers'
 import { seedMachineCredential } from './helpers/machine-credential'
 import { POST } from '../src/pages/api/internal/operator-request-card'
@@ -28,6 +29,7 @@ import {
 } from '../src/lib/operator/request-card-email'
 import {
   cleanText,
+  COULD_NOT_CODES,
   jobsQueued,
   parseRequestCard,
   type RequestCard,
@@ -98,6 +100,8 @@ describe('parseRequestCard: the wire contract', () => {
     ['refused', { refused: '0' }],
     ['job', { job: { lane: 'demand', state: 'delivered', reason: null } }], // job on a reply card
     ['request_opening', { request_opening: 42 }],
+    ['could_not', { could_not: 'the Testclient records' }], // never free text
+    ['could_not', { could_not: 7 }],
   ])('refuses a bad %s', (field, overrides) => {
     const r = parseRequestCard(body(overrides))
     expect(r.ok).toBe(false)
@@ -210,6 +214,60 @@ function laneBody(overrides: Record<string, unknown> = {}): Record<string, unkno
     ...overrides,
   })
 }
+
+describe('a reply that declined (0146, 2026-11-01)', () => {
+  // ashton-price: an attorney asked for five records, the Operator replied in a
+  // minute that it could not find or attach any, every tool call was ok, and
+  // the card read "replied in 1m, refused 0 failed 0".
+  it('reads NOT FULFILLED in the subject and leads the status with what the reply said', () => {
+    const card = parsed({ could_not: 'cannot_find', minutes: 1 })
+    expect(card.couldNot).toBe('cannot_find')
+    expect(cardSubject(SLUG, card)).toBe(
+      `[SMD Ops] ${SLUG} request: first reply in 1m, NOT FULFILLED: ${SUBJECT}`
+    )
+    const text = cardText(SLUG, card)
+    const status = text.slice(text.indexOf('STATUS'))
+    expect(status.split('\n')[1]).toMatch(
+      /^ {2}NOT FULFILLED: the reply told the requester it could not find what they asked for \(cannot_find\)\.$/
+    )
+    expect(text).toContain('SHORTFALL')
+    expect(text).not.toMatch(/—/)
+  })
+
+  it('an answer, or a card from an older seat, reads as before', () => {
+    for (const card of [parsed(), parsed({ could_not: null })]) {
+      expect(card.couldNot).toBeNull()
+      expect(cardSubject(SLUG, card)).not.toContain('NOT FULFILLED')
+      expect(cardText(SLUG, card)).not.toContain('NOT FULFILLED')
+    }
+  })
+
+  it('a later reply can decline too; no other kind may carry a code', () => {
+    const followup = parsed({
+      card_key: `${HASH}:followup-${'a'.repeat(16)}`,
+      kind: 'followup',
+      could_not: 'none_available',
+    })
+    expect(cardSubject(SLUG, followup)).toContain('later reply sent at +12m, NOT FULFILLED')
+    const r = parseRequestCard(
+      body({ card_key: `${HASH}:no_reply`, kind: 'no_reply', could_not: 'cannot_find' })
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.field).toBe('could_not')
+  })
+
+  it("the codes are the seat classifier's, plus other (pinned to the Python)", () => {
+    const py = readFileSync(
+      path.join(__dirname, '../operator/hermes-smd-overlay/shared/reply_could_not.py'),
+      'utf8'
+    )
+    const block = /^CODES = frozenset\(\s*\{([^}]*)\}/m.exec(py)
+    expect(block).not.toBeNull()
+    const seat = [...(block?.[1] ?? '').matchAll(/"([a-z_]+)"/g)].map((m) => m[1]).sort()
+    expect(seat.length).toBeGreaterThan(0)
+    expect([...COULD_NOT_CODES].sort()).toEqual([...seat, 'other'].sort())
+  })
+})
 
 describe('jobsQueued', () => {
   it('names each known lane a turn submitted, once, sorted; ignores the rest', () => {
@@ -556,6 +614,17 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(byKey[`${HASH}:replied`]).toBe('')
   })
 
+  it('a reply card records whether its reply declined; an answer is NULL (0146)', async () => {
+    // FALSIFIER: drop couldNot from recordCard's INSERT and the first row's
+    // could_not is NULL, so .claude/bin/requests reads the decline as a clean reply.
+    const declined = 'e'.repeat(64)
+    await post(body({ card_key: `${declined}:replied`, could_not: 'cannot_attach' }))
+    await post(body())
+    const byKey = Object.fromEntries((await rows()).map((r) => [r.card_key, r.could_not]))
+    expect(byKey[`${declined}:replied`]).toBe('cannot_attach')
+    expect(byKey[`${HASH}:replied`]).toBeNull()
+  })
+
   it('a refused send is 502, stays pending, and the retry sends', async () => {
     fetchMock.mockResolvedValueOnce(new Response('nope', { status: 500 }))
     const failed = await post(body())
@@ -794,6 +863,7 @@ describe('POST /api/internal/operator-request-card', () => {
       [
         'attempts',
         'card_key',
+        'could_not',
         'customer_slug',
         'event_at',
         'failed',

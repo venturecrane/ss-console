@@ -13,6 +13,10 @@
  * none`, or `queued ?` for a card recorded before migration 0134). Read that,
  * not job_lane: job_lane fills only when a job ENDS.
  *
+ * A reply line that says `NOT FULFILLED (<code>)` (migration 0146) is a
+ * reply that told the person the Operator could not do what they asked, with
+ * every tool call clean; the same reply raised a SHORTFALL.
+ *
  * A `REQUESTER WROTE on held <lane> job` line (migration 0136) is a message a
  * person sent in the thread of a request whose job is held: the firm's answer
  * to the one question a hold can ask it, or a chase. Either way it is SMD's to
@@ -59,6 +63,11 @@ export interface CardRow {
    * recorded before 0134 (unknown, never "none").
    */
   jobs_queued?: string | null
+  /**
+   * The reply told the person the Operator could not do what they asked
+   * (migration 0146): a closed code, NULL for an answer or a card before 0146.
+   */
+  could_not?: string | null
 }
 
 export interface RequestsArgs {
@@ -111,8 +120,15 @@ export function queuedLabel(row: CardRow): string {
   return row.jobs_queued === '' ? 'queued none' : `QUEUED ${row.jobs_queued}`
 }
 
+/** ", NOT FULFILLED (cannot_find)" for a reply that declined; '' otherwise. */
+export function fulfilledLabel(row: CardRow): string {
+  return row.could_not ? `, NOT FULFILLED (${row.could_not})` : ''
+}
+
 function outcome(row: CardRow): string {
-  if (row.kind === 'replied') return `replied in ${row.minutes}m, ${queuedLabel(row)}`
+  if (row.kind === 'replied') {
+    return `replied in ${row.minutes}m${fulfilledLabel(row)}, ${queuedLabel(row)}`
+  }
   if (row.kind === 'no_reply') return `NO REPLY after ${row.minutes}m`
   if (row.kind === 'lane_unproven') {
     return `NEW KIND ${row.lane_key ?? '?'} ${row.job_lane ? 'job waiting' : 'first use'}`
@@ -120,7 +136,7 @@ function outcome(row: CardRow): string {
   if (row.kind === 'held_reply') {
     return `REQUESTER WROTE on held ${row.job_lane ?? 'job'} job at +${row.minutes}m`
   }
-  if (row.kind === 'followup') return `later reply sent at +${row.minutes}m`
+  if (row.kind === 'followup') return `later reply sent at +${row.minutes}m${fulfilledLabel(row)}`
   return `${row.job_lane ?? 'job'} ${row.job_state ?? 'ended'} at +${row.minutes}m`
 }
 
@@ -202,7 +218,7 @@ export async function readCards(args: RequestsArgs, nowMs: number): Promise<Card
     .prepare(
       `SELECT customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
               replies, refused, failed, job_lane, job_state, status, attempts, lane_key,
-              jobs_queued
+              jobs_queued, could_not
          FROM operator_request_cards
         WHERE received_at >= ?${seatFilter}
         ORDER BY received_at DESC, customer_slug, kind

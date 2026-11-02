@@ -385,6 +385,11 @@ describe('shape', () => {
         /still waiting/,
       ],
       [
+        { class: 'failed', tool: 'reply_relay', code: 'reply_could_not:cannot_find' },
+        /told the person it could not do what they asked \(cannot_find\)/,
+        /been told no and is waiting/,
+      ],
+      [
         { class: 'failed', tool: 'casefile_job', code: 'proof:review_held' },
         /casefile job/,
         /finish the delivery/,

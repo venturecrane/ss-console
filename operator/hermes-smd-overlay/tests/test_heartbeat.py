@@ -2580,6 +2580,72 @@ def test_reply_failed_codes_are_closed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# A reply that declined is a shortfall (2026-11-01, ashton-price). An attorney
+# asked for five records; the Operator answered in a minute that it could not
+# find or attach any of them; every tool call was ok, so nothing paged. The
+# reply plugin now stamps a closed ``could_not`` code on the REPLY_SENT row.
+# ---------------------------------------------------------------------------
+
+
+def test_a_sent_reply_that_declined_is_a_failed_shortfall_linked_to_its_request(tmp_path):
+    """FALSIFIER: drop the REPLY_SENT branch in ``_reply_events`` and this is 0."""
+
+    def build(led):
+        _call(led, _ts(3), "mcp_smokeball_list_documents", "ok", session=_PERSON_SESSION)
+        _reply_row(
+            led,
+            _ts(2),
+            "REPLY_SENT",
+            in_reply_to=_INBOUND,
+            could_not="cannot_find",
+            body="I could not find the Testclient records",
+        )
+
+    facts = _shortfalls(tmp_path, build, [_REQ])
+    assert facts.count == 1 and facts.failed == 1
+    event = facts.events[0]
+    assert set(event) == SHORTFALL_LINKED_KEYS
+    assert event["class"] == "failed"
+    assert event["code"] == "reply_could_not:cannot_find"
+    assert event["tool"] == hb.REPLY_RELAY_TOOL
+    assert event["request_at"] == _RECEIVED_ISO
+    _never_names_the_request(event)
+    assert _SYNTH_ADDRESS not in json.dumps(event)
+
+
+def test_an_ordinary_sent_reply_is_not_a_shortfall(tmp_path):
+    facts = _shortfalls(
+        tmp_path, lambda led: _reply_row(led, _ts(2), "REPLY_SENT", in_reply_to=_INBOUND)
+    )
+    assert facts.count == 0
+
+
+def test_a_decline_to_smds_own_address_is_not_a_shortfall(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led,
+            _ts(2),
+            "REPLY_SENT",
+            in_reply_to=_INBOUND,
+            could_not="cannot_attach",
+            recipient="scott@smd.services",
+        ),
+    )
+    assert facts.count == 0
+
+
+def test_an_unknown_could_not_code_rides_as_other(tmp_path):
+    facts = _shortfalls(
+        tmp_path,
+        lambda led: _reply_row(
+            led, _ts(2), "REPLY_SENT", in_reply_to=_INBOUND, could_not="the records for Testclient"
+        ),
+    )
+    assert [e["code"] for e in facts.events] == ["reply_could_not:other"]
+
+
+# ---------------------------------------------------------------------------
 # A prose error_type gets an informative code (2026-10-05). A Smokeball token
 # mint rejected with HTTP 400 rode as code "error" eight times: the event said
 # something broke and nothing about what. The code is now derived from the
