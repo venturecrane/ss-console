@@ -69,7 +69,7 @@ from typing import Any
 
 from .audit_ledger import new_row_token
 from .html_canon import html_body_sha256
-from .msgraph_attachments import AttachmentRefused, carries_attachments, graph_attachments
+from . import msgraph_attachments as _files
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -268,6 +268,18 @@ def _html_stamp(message: dict[str, Any]) -> dict[str, str]:
         if isinstance(content, str) and content:
             return {"html_body_sha256": html_body_sha256(content)}
     return {}
+
+
+def _send_mail_body(message: dict[str, Any], save_to_sent_items: bool) -> dict[str, Any]:
+    """The ``sendMail`` request body, refused when its files would put it over
+    Graph's inline request bound (``msgraph_attachments.check_request_size``),
+    with the ``attachment refused:`` prefix the overlay keys on."""
+    body = {"message": message, "saveToSentItems": save_to_sent_items}
+    try:
+        _files.check_request_size(body)
+    except _files.AttachmentRefused as exc:
+        raise MsGraphRefused(f"attachment refused: {exc}") from exc
+    return body
 
 
 def _with_cc(body: dict[str, Any], cc: list[str]) -> dict[str, Any]:
@@ -504,8 +516,8 @@ class MsGraphOps:
         # (``msgraph_attachments``). A malformed one refuses the whole send: a
         # message must never leave with its attachment silently dropped.
         try:
-            attachments = graph_attachments(payload)
-        except AttachmentRefused as exc:
+            attachments = _files.graph_attachments(payload)
+        except _files.AttachmentRefused as exc:
             # The "attachment refused:" prefix is a contract: the overlay falls
             # back to the body-without-workbook rung only on a refusal whose
             # reason names the attachment.
@@ -536,7 +548,7 @@ class MsGraphOps:
         self._request(
             self._mail_path("sendMail"),
             "POST",
-            {"message": message, "saveToSentItems": save_to_sent_items},
+            _send_mail_body(message, save_to_sent_items),
         )
         return {
             # Graph still answers sendMail with 202 and no body, so this stays
@@ -550,6 +562,9 @@ class MsGraphOps:
             "mailbox": mailbox,
             "audit_row_token": audit_token,
             **_html_stamp(message),
+            # The broker's hash of each file it attached (msgraph_attachments),
+            # overriding any caller stamp of the same name on the row.
+            **_files.attachment_sha256(message),
             **(self._locate_sent(audit_token) if save_to_sent_items else {}),
         }
 
@@ -577,13 +592,14 @@ class MsGraphOps:
         audit_token = new_row_token()
         message = self._message(payload, audit_token)
         message["from"] = {"emailAddress": {"address": from_address}}
-        self._request(self._mail_path("sendMail"), "POST", {"message": message, "saveToSentItems": True})
+        self._request(self._mail_path("sendMail"), "POST", _send_mail_body(message, True))
         located = self._locate_sent(audit_token)
         return {
             "message_id": "",
             "recipients": recipients,
             "mailbox": mailbox,
             "audit_row_token": audit_token,
+            **_files.attachment_sha256(message),
             **located,
         }
 
@@ -767,7 +783,7 @@ class MsGraphOps:
         stored message's from/replyTo with its own Mail.ReadWrite — that is a
         pre-existing property of replying to mutable message objects.
         """
-        if carries_attachments(payload):
+        if _files.carries_attachments(payload):
             # The reply wire carries a comment, not a message resource, so an
             # attachment would be dropped silently. Refuse rather than do that.
             raise MsGraphRefused("attachment refused: the reply verb does not carry attachments")

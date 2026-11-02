@@ -10,13 +10,17 @@ The overlay's `shared/staged_send.py` writes the same consume-once envelope a
 routine's pre_run writes (`shared/prerendered_dispatch.py`). A one-off managed
 cron job wakes that routine's turn, and the trust plugin's `pre_llm_call` sends
 the envelope out of turn through the full gate. The broker re-validates the files
-(`operator/workspace_broker/agentmail_attachments.py`), fences the recipients,
-sends from the seat's pinned inbox and writes the `CONFIRM_SEND_DISPATCHED` row
-with every file's sha256.
+(`operator/workspace_broker/agentmail_attachments.py`, which the Graph verb's
+`msgraph_attachments.py` runs too), fences the recipients, sends from the seat's
+pinned mailbox and writes the `CONFIRM_SEND_DISPATCHED` row with every file's
+sha256.
 
 **What it carries.** One message, one to three files: PDFs (2 MiB each) and at
-most one `.xlsx` (512 KiB), 3 MiB together. AgentMail seats only; a Graph seat
-still carries exactly one workbook. A PDF is refused if it is encrypted, carries
+most one `.xlsx` (512 KiB), on either mail transport. Together they may be 3 MiB
+on an AgentMail seat and 2.5 MiB on a Microsoft 365 (Graph) seat, because Graph
+takes files inline only in a request of about 4 MB and the files ride it as
+base64, a third larger; the broker also refuses a Graph message whose whole
+request, body included, is over 4,000,000 bytes. A PDF is refused if it is encrypted, carries
 JavaScript, an automatic action, any action but an in-document jump or a web
 link, an embedded or referenced file, rich media or an XFA form, has more than 50
 pages, or has no readable text. The gate reads each file's text, as it reads the
@@ -85,7 +89,8 @@ resolved for that turn. The turn itself may send nothing but one fixed line.
    it. Still `.dispatch.json` after the job fired means it never bound (late,
    wrong name, wrong persona).
 2. The terminal seam: the sent message on the seat's inbox, read back through the
-   AgentMail API, shows every file; download each and compare its sha256 with the
+   AgentMail API (or, on a Graph seat, in the mailbox's Sent Items through the
+   read app), shows every file; download each and compare its sha256 with the
    pin. The `CONFIRM_SEND_DISPATCHED` row's `attachment_sha256` lists the same
    hashes, comma-joined in order. Record a `crane_verify` with both.
 3. Record the delivery in the obligation register and archive the sent message

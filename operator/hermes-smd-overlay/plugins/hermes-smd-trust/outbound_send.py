@@ -125,31 +125,32 @@ class MsGraphAttachmentError(MsGraphSendError, AttachmentSendError):
     """The broker refused the attachment on a Graph send."""
 
 
-#: What the broker's Graph verb carries: ONE workbook (ss-console
-#: ``msgraph_attachments``). Held here too, so a Graph seat refuses anything
-#: else before the broker is asked, exactly as it did before PDFs existed.
-_MSGRAPH_MAX_ATTACHMENTS = 1
-_MSGRAPH_CONTENT_TYPES = frozenset({outbound_attachment.XLSX_CONTENT_TYPE})
+#: The decoded bound on every attachment of one Graph send together: the
+#: broker's ``msgraph_attachments.MAX_TOTAL_BYTES`` (ss-console), held here too
+#: so a Graph seat refuses before the broker is asked. Smaller than
+#: ``outbound_attachment.MAX_TOTAL_ATTACHMENT_BYTES`` (3 MiB, AgentMail's)
+#: because Graph takes a file inline only "under 3 MB" and a whole sendMail
+#: request of about 4 MB (learn.microsoft.com, fetched 2026-11-02), and the
+#: files ride it as base64, a third larger: 3 MiB of files is 4 MiB on the
+#: wire before the body. 2.5 MiB is about 3.33 MiB of base64.
+_MSGRAPH_MAX_TOTAL_BYTES = 5 * 512 * 1024
 
 
 def _attachment_copies(attachments: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """Validated four-key copies of a Graph send's ``attachments``; raises on
-    any bad entry, so the transport never forwards a descriptor the shared
-    validator rejects or the Graph verb cannot carry."""
-    if len(attachments) > _MSGRAPH_MAX_ATTACHMENTS:
-        raise MsGraphAttachmentError("refusing to send: too many attachments")
-    copies: list[dict[str, str]] = []
-    for item in attachments:
-        try:
-            descriptor, _ = outbound_attachment.validate(item)
-        except outbound_attachment.AttachmentError as exc:
-            raise MsGraphAttachmentError(f"refusing to send: {exc}") from exc
-        if descriptor["content_type"] not in _MSGRAPH_CONTENT_TYPES:
-            raise MsGraphAttachmentError(
-                "refusing to send: this seat's mail transport carries only a workbook"
-            )
-        copies.append(descriptor)
-    return copies
+    """Validated four-key copies of a Graph send's ``attachments``: the whole
+    set the shared validator allows (``validate_all``: up to three, PDFs and at
+    most one workbook), under Graph's smaller total, or a raise. The broker
+    re-validates the same set against the same limits."""
+    try:
+        validated = outbound_attachment.validate_all(list(attachments))
+    except outbound_attachment.AttachmentError as exc:
+        raise MsGraphAttachmentError(f"refusing to send: {exc}") from exc
+    if sum(len(data) for _, data in validated) > _MSGRAPH_MAX_TOTAL_BYTES:
+        raise MsGraphAttachmentError(
+            "refusing to send: the attachments together are larger than this seat's "
+            f"mail transport carries ({_MSGRAPH_MAX_TOTAL_BYTES} bytes)"
+        )
+    return [d for d, _ in validated]
 
 
 def _agentmail_attachment_copies(attachments: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -355,10 +356,12 @@ def send_via_msgraph(
     ``attachments`` is a KEYWORD, never a payload field: ``attachments`` is not
     in :data:`_MSGRAPH_SEND_FIELDS`, so a model's tool-call args carrying one are
     not forwarded. Only the trust plugin's out-of-turn sender passes it, from a
-    pre_run envelope the model cannot write. Each entry is re-validated here and
-    forwarded as the pinned four-key descriptor; the broker maps it to a Graph
-    ``fileAttachment``. A broker refusal that names the attachment raises
-    :class:`MsGraphAttachmentError` so the caller can retry without it.
+    pre_run or SMD-staged envelope the model cannot write. The set is
+    re-validated here (``outbound_attachment.validate_all``, plus Graph's
+    smaller total) and forwarded as the pinned four-key descriptors; the broker
+    re-validates them and maps each to a Graph ``fileAttachment``. Any refusal
+    of the attachments, here or by the broker, raises
+    :class:`MsGraphAttachmentError` so the caller can retry without them.
     """
     if payload.get(CALENDAR_ARG) is not None:
         # The Graph verb carries no invitation (ss-console#3264): refused loudly,
