@@ -450,6 +450,9 @@ top_level:
       connector, the reply plugin and the broker each check. Unauthored (or an
       empty list), no file is staged and no reply carries one. Never an outside
       party: the list is the whole of who can receive.
+      `review: smd` holds every files reply for SMD's approval
+      (shared/matter_file_review.py); `review_first: N` holds only the first N
+      the seat composes, then sends normally (the seat counts its held rows).
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

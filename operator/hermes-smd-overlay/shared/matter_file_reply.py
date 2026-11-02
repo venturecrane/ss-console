@@ -100,6 +100,33 @@ class StagedFile:
     sha256: str
     size: int
     handle: str
+    #: The page range the request named ("3-11"), empty for the whole file.
+    pages: str = ""
+    page_count: int = 0
+
+    def as_row(self) -> dict[str, Any]:
+        """What an SMD review (``shared.matter_file_review``) shows and re-sends."""
+        return {
+            "file_id": self.file_id,
+            "name": self.name,
+            "sha256": self.sha256,
+            "size": self.size,
+            "handle": self.handle,
+            "pages": self.pages,
+            "page_count": self.page_count,
+        }
+
+    @classmethod
+    def from_row(cls, row: dict[str, Any]) -> StagedFile:
+        return cls(
+            str(row["file_id"]),
+            str(row["name"]),
+            str(row["sha256"]),
+            int(row["size"]),
+            str(row["handle"]),
+            str(row.get("pages") or ""),
+            int(row.get("page_count") or 0),
+        )
 
 
 @dataclass
@@ -117,6 +144,13 @@ class Prepared:
     """The files a reply carries, split into the replies that carry them."""
 
     batches: tuple[tuple[StagedFile, ...], ...]
+
+    def rows(self) -> list[list[dict[str, Any]]]:
+        return [[f.as_row() for f in batch] for batch in self.batches]
+
+    @classmethod
+    def from_rows(cls, rows: list[list[dict[str, Any]]]) -> Prepared:
+        return cls(tuple(tuple(StagedFile.from_row(f) for f in batch) for batch in rows))
 
     @staticmethod
     def descriptors(batch: tuple[StagedFile, ...]) -> list[dict[str, str]]:
@@ -182,6 +216,22 @@ def staff_list(doc: Any) -> tuple[frozenset[str], frozenset[str]]:
     return frozenset(exact), frozenset(domains)
 
 
+def review_by_smd(doc: Any, held_so_far: int = 0) -> bool:
+    """Does this files reply wait for SMD's approval (``shared.matter_file_review``)?
+
+    ``matter_file_delivery.review: smd`` holds every one. ``review_first: N``
+    holds only the first N this seat ever composes and then sends normally: the
+    countdown is the seat's own count of held rows (``held_so_far``), so it
+    expires by itself and nobody has to remember to flip it back."""
+    block = doc.get(CONFIG_BLOCK) if isinstance(doc, dict) else None
+    if not isinstance(block, dict):
+        return False
+    if str(block.get("review") or "").strip().lower() == "smd":
+        return True
+    first = block.get("review_first")
+    return isinstance(first, int) and not isinstance(first, bool) and held_so_far < first
+
+
 def authored(doc: Any) -> bool:
     exact, domains = staff_list(doc)
     return bool(exact or domains)
@@ -233,15 +283,18 @@ def read_connector_spool(token: str, sha256: str, *, directory: Path | None = No
     return data
 
 
-def check_record_pdf(data: bytes) -> None:
-    """The gate's structural PDF check, without the text read (the scanned-PDF rule)."""
+def check_record_pdf(data: bytes) -> int:
+    """The gate's structural PDF check, without the text read (the scanned-PDF
+    rule). Returns the page count."""
     if not data.startswith(b"%PDF-"):
         raise FileRefused("it is not a PDF file")
     try:
         reader = outbound_attachment._pdf_reader(data)
-        if not list(reader.pages):
+        count = len(list(reader.pages))
+        if not count:
             raise FileRefused("the PDF has no pages")
         outbound_attachment._pdf_refuse_active_content(reader)
+        return count
     except outbound_attachment.AttachmentError as exc:
         raise FileRefused(str(exc)) from exc
     except FileRefused:
@@ -325,7 +378,7 @@ def stage_from_result(
                 raise FileRefused("its attachment name is not a plain PDF name")
             sha = str(row.get("sha256") or "")
             data = read_connector_spool(str(row.get("spoolToken") or ""), sha, directory=spool)
-            check_record_pdf(data)
+            page_count = check_record_pdf(data)
             if any(f.name.lower() == name.lower() for f in staging.files):
                 raise FileRefused("a file of that name is already staged")
             handle = push_to_broker(data, sha, request)
@@ -337,7 +390,12 @@ def stage_from_result(
                 f"{name or row.get('fileId')} (it could not be handed to the mail service: {type(exc).__name__})"
             )
             continue
-        staging.files.append(StagedFile(str(row.get("fileId") or ""), name, sha, len(data), handle))
+        pages = str(row.get("pages") or "")
+        staging.files.append(
+            StagedFile(
+                str(row.get("fileId") or ""), name, sha, len(data), handle, pages, page_count
+            )
+        )
         kept.append(name)
     over = len(staging.files) > MAX_FILES_PER_REPLY * MAX_REPLIES
     if over:

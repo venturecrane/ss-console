@@ -110,6 +110,11 @@ _REASON_HINTS: dict[str, str] = {
         "file is attached: tell the person which records could not be sent and why, "
         "and where each one is on the matter."
     ),
+    "matter_files_review": (
+        "This seat has SMD review every reply that carries matter files. Your reply "
+        "and its files are waiting for that review and go exactly as written once "
+        "approved. Do not redraft, resend, or tell anyone the files were sent."
+    ),
     "matter_files_rate_limited": (
         "The reply carries matter files and the reply channel is at its rate limit, "
         "so it was not queued (a queued reply would lose its files). Nothing was sent. "
