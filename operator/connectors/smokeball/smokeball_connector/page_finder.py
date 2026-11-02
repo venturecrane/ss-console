@@ -400,62 +400,78 @@ def _build(
     return {"index": index, **facts}
 
 
-def _run_batches(
-    batches: list[list[tuple[int, bytes]]], index: dict[str, Any], facts: dict[str, Any], deadline: float
-) -> None:
-    """Read every batch; a batch that fails is split and its pages read ONE AT
-    A TIME, so one page the model declines never sinks the seven beside it.
-    A page that still fails is recorded with its reason: ``unreadable`` (the
-    model answered and declined or ran out: cached, not retried) or ``failed``
-    (the wire: retried on the next call). Nothing is dropped silently."""
-    lock = threading.Lock()
+class _BatchReader:
+    """Reads batches of pages into the index; one per build, shared by its workers.
 
-    def record(rows: dict[str, dict[str, Any]], tokens: dict[str, int]) -> None:
-        with lock:
-            index["pages"].update(rows)
-            facts["read_now"].extend(int(k) for k in rows)
+    A batch that fails is split and its pages read ONE AT A TIME, so one page
+    the model declines never sinks the seven beside it. A page that still fails
+    is recorded with its reason: ``unreadable`` (the model answered and declined
+    or ran out: cached, not retried) or ``failed`` (the wire, or out of time:
+    retried on the next call). Nothing is dropped silently."""
+
+    def __init__(self, index: dict[str, Any], facts: dict[str, Any], deadline: float) -> None:
+        self.index, self.facts, self.deadline = index, facts, deadline
+        self.lock = threading.Lock()
+
+    def _record(self, rows: dict[str, dict[str, Any]], tokens: dict[str, int]) -> None:
+        with self.lock:
+            self.index["pages"].update(rows)
+            self.facts["read_now"].extend(int(k) for k in rows)
             for key, value in tokens.items():
-                facts["tokens"][key] += value
+                self.facts["tokens"][key] += value
 
-    def note(number: int, exc: _CallFailed | None) -> None:
-        with lock:
+    def _note(self, number: int, exc: _CallFailed | None) -> None:
+        with self.lock:
             if exc is None:
-                facts["failed"][str(number)] = "out of time this call"
+                self.facts["failed"][str(number)] = "out of time this call"
             elif exc.stop_reason:
-                facts["unreadable_now"][str(number)] = f"the model declined to read it (stop_reason {exc.stop_reason})"
+                why = f"the model declined to read it (stop_reason {exc.stop_reason})"
+                self.facts["unreadable_now"][str(number)] = why
             else:
-                facts["failed"][str(number)] = str(exc)
+                self.facts["failed"][str(number)] = str(exc)
 
-    def attempt(batch: list[tuple[int, bytes]]) -> _CallFailed | None:
+    def _attempt(self, batch: list[tuple[int, bytes]]) -> _CallFailed | None:
         try:
-            record(*index_batch(batch))
+            self._record(*index_batch(batch))
         except _CallFailed as exc:
             return exc
         return None
 
-    def job(batch: list[tuple[int, bytes]]) -> None:
-        if time.monotonic() > deadline:
+    def _late(self) -> bool:
+        return time.monotonic() > self.deadline
+
+    def read(self, batch: list[tuple[int, bytes]]) -> None:
+        if self._late():
             for number, _ in batch:
-                note(number, None)
+                self._note(number, None)
             return
-        first = attempt(batch)
+        first = self._attempt(batch)
         if first is None:
             return
         if len(batch) == 1:
-            note(batch[0][0], first)
+            self._note(batch[0][0], first)
             return
         for page in batch:
-            if time.monotonic() > deadline:
-                note(page[0], None)
-                continue
-            failure = attempt([page])
-            if failure is not None:
-                note(page[0], failure)
+            self._single(page)
 
+    def _single(self, page: tuple[int, bytes]) -> None:
+        if self._late():
+            self._note(page[0], None)
+            return
+        failure = self._attempt([page])
+        if failure is not None:
+            self._note(page[0], failure)
+
+
+def _run_batches(
+    batches: list[list[tuple[int, bytes]]], index: dict[str, Any], facts: dict[str, Any], deadline: float
+) -> None:
+    """Every batch through a bounded pool (:class:`_BatchReader`)."""
     if not batches:
         return
+    reader = _BatchReader(index, facts, deadline)
     with ThreadPoolExecutor(max_workers=max(1, min(vision.workers(), len(batches)))) as pool:
-        list(pool.map(job, batches))
+        list(pool.map(reader.read, batches))
 
 
 # ---------------------------------------------------------------------------
