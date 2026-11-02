@@ -82,6 +82,7 @@ from .expense_ledger import contains_run_sequence, invoice_number_key
 from .library import _listing as listing
 from .library import _norm as norm
 from .layout_shape import layout_values
+from .printed_facts import case_number_key, printed_date_candidates
 from .resolution_token import mint
 
 VERDICT_UNIQUE = "unique"
@@ -178,6 +179,14 @@ def _iso_date(value: Any) -> str:
     return text if _ISO_DATE.match(text) else ""
 
 
+def _loss_dates(values: dict[str, str]) -> list[str]:
+    """The date-of-loss candidates the letter supplied. One ISO date, or, for a
+    date read from ``date_of_loss_as_printed``, up to ``MAX_DATE_CANDIDATES``
+    space-separated (an ISO date holds no space). A matter carries the fact when
+    it records any of them."""
+    return values[FACT_LOSS].split()
+
+
 def _get(client: Any, path: str, **params: Any) -> list[dict[str, Any]]:
     """One listing read, or SearchFailed. An exception here is never 'no rows'."""
     try:
@@ -236,7 +245,12 @@ def _layout_says(matter_id: str, fact: str, layouts: Layouts, values: dict[str, 
     if not recorded:
         return None
     if fact == FACT_LOSS:
-        return values[FACT_LOSS] in recorded
+        return any(day in recorded for day in _loss_dates(values))
+    if fact == FACT_CASE:
+        # The court's form and the firm's differ in their letter codes and
+        # leading zeros for one case; the year and sequence must agree.
+        want_case = case_number_key(values[FACT_CASE])
+        return any(case_number_key(value) == want_case for value in recorded)
     want = _number_key(values[fact])
     return any(invoice_number_key(value) == want for value in recorded)
 
@@ -481,7 +495,7 @@ def _text_carries(
     if fact == FACT_CLAIM:
         return contains_run_sequence(_matter_text(matter), invoice_number_key(values[FACT_CLAIM]))
     if fact == FACT_LOSS:
-        return _text_has_date(_matter_text(matter), values[FACT_LOSS])
+        return any(_text_has_date(_matter_text(matter), day) for day in _loss_dates(values))
     if fact == FACT_BIRTH:
         want = values[FACT_BIRTH]
         return any(_birth_date(contact) == want for contact in parties.get(matter_id, []))
@@ -646,26 +660,39 @@ def resolve_matter(
     date_of_loss: Any = None,
     date_of_birth: Any = None,
     case_number: Any = None,
+    date_of_loss_as_printed: Any = None,
 ) -> dict[str, Any]:
     """Resolve the matter one invoice belongs to. See the module docstring for
-    the four verdicts and the arithmetic; only ``unique`` mints a token."""
+    the four verdicts and the arithmetic; only ``unique`` mints a token.
+
+    ``date_of_loss_as_printed`` is the date of loss exactly as the page reads,
+    for a date the caller could not turn into ISO: a US month/day/year, or one
+    a transcription garbled. It is read into at most ``MAX_DATE_CANDIDATES``
+    real dates (``printed_facts.printed_date_candidates``) and used only when
+    ``date_of_loss`` was not given. The candidates are returned as
+    ``date_of_loss_read_as`` so a reply can say what was compared."""
+    loss = _iso_date(date_of_loss)
+    read_as: list[str] = []
+    if not loss and _clean(date_of_loss_as_printed):
+        read_as = printed_date_candidates(_clean(date_of_loss_as_printed))
+        loss = " ".join(read_as)
     values = {
         FACT_NUMBER: _clean(matter_number),
         FACT_NAME: _clean(client_name),
         FACT_CLAIM: _clean(claim_number) if _number_key(_clean(claim_number)) else "",
-        FACT_LOSS: _iso_date(date_of_loss),
+        FACT_LOSS: loss,
         FACT_BIRTH: _iso_date(date_of_birth),
         FACT_CASE: _clean(case_number) if _number_key(_clean(case_number)) else "",
     }
     # A fact that cannot be used is REPORTED, never silently dropped: a date that
-    # is not an ISO date, or a claim or case number too short or with no digit to
-    # corroborate anything. The sender should learn the fact went unused rather
-    # than read a "none" that implies the firm's record lacks it.
+    # does not read as one date, or a claim or case number too short or with no
+    # digit to corroborate anything. The sender should learn the fact went unused
+    # rather than read a "none" that implies the firm's record lacks it.
     ignored = [
         fact
         for fact, raw in (
             (FACT_CLAIM, claim_number),
-            (FACT_LOSS, date_of_loss),
+            (FACT_LOSS, _clean(date_of_loss) or _clean(date_of_loss_as_printed)),
             (FACT_BIRTH, date_of_birth),
             (FACT_CASE, case_number),
         )
@@ -673,6 +700,8 @@ def resolve_matter(
     ]
     supplied = [f for f in (FACT_NUMBER, FACT_NAME, FACT_CLAIM, FACT_LOSS, FACT_BIRTH, FACT_CASE) if values[f]]
     base: dict[str, Any] = {"searched": supplied, "ignored": ignored}
+    if read_as:
+        base["date_of_loss_read_as"] = read_as
     if not (values[FACT_NUMBER] or values[FACT_NAME]):
         return {
             **base,

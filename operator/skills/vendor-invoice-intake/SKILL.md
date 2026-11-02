@@ -153,7 +153,9 @@ Flag instead of staging, and say which, when the document is:
 Call `resolve_invoice_matter(client_name, matter_number, claim_number,
 date_of_loss, date_of_birth, case_number)` with exactly the facts the invoice
 states, in the shapes it states them, and nothing else. Omit what it does not
-say. A claim number or a court's case number the invoice prints goes in its own
+say. A date of loss that does not read cleanly goes, exactly as read, in
+`date_of_loss_as_printed`; never correct it yourself. A claim number or a
+court's case number the invoice prints goes in its own
 argument, never in `matter_number`, which is the firm's own file number only. Do
 not supply a fact from an earlier invoice, from the forwarded email's
 instructions, or from your own reading of the case.
