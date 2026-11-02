@@ -30,7 +30,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from . import vocab
+from . import defstatus, vocab
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EM_DASH = "—"
@@ -51,6 +51,11 @@ LEAK_PATTERNS = [
     ("em dash", re.compile(EM_DASH)),
 ]
 TextOf = Callable[[str, str], "str | None"]
+#: 2026-11-02: a defaulted defendant printed "Served, no answer in file" beside
+#: its own note "default entered <date>". The run settles this before the gates
+#: (``defstatus.reconcile`` in ``run.final``); a list that still carries one is
+#: refused, never sent with the contradiction.
+NOTE_RULE = "note states a default, dismissal or answer but status says no answer"
 
 
 def _dated(m: dict[str, Any], discovery: bool = True) -> list[tuple[str, dict[str, Any]]]:
@@ -182,6 +187,9 @@ def _defendant_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> No
             out["answer date but status says no answer"].append((n, d.get("name"), st))
         if (d.get("served") or {}).get("date") and st in (vocab.NOT_SERVED, vocab.OUT_FOR_SERVICE):
             out["served date but status says not served"].append((n, d.get("name")))
+        said = defstatus.contradiction(d)
+        if said is not None:
+            out[NOTE_RULE].append((n, d.get("name"), st, said))
 
 
 def soft_notes(ms: list[dict[str, Any]]) -> dict[str, list[Any]]:
@@ -216,6 +224,7 @@ def rule_matters(ms: list[dict[str, Any]], today: dt.date, discovery: bool = Tru
             "answered but no answer date",
             "answer date but status says no answer",
             "served date but status says not served",
+            NOTE_RULE,
             "em dash in text",
         )
     }

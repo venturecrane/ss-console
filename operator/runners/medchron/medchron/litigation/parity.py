@@ -32,7 +32,7 @@ import datetime as dt
 import re
 from typing import Any
 
-from . import identity, vocab
+from . import defstatus, identity, vocab
 
 
 def _src_id(v: Any) -> str | None:
@@ -115,6 +115,19 @@ def _contradicted_its_proof(old: Any, old_obj: Any, cur: Any, cur_obj: Any) -> b
     return bool(was and was == now and (old_obj or {}).get("date"))
 
 
+def _noted(prior: dict[str, Any]) -> dict[str, str]:
+    """``{status path: the status the defendant's note states}`` for each
+    prior defendant whose no-answer status its own note contradicted
+    (``defstatus``, 2026-11-02): the change to that status is the last
+    list's error, corrected from its own finding."""
+    out = {}
+    for d in prior.get("defendants") or []:
+        said = defstatus.contradiction(d)
+        if said is not None:
+            out[f"defendants[{party_key(str(d.get('name') or ''))}].status"] = defstatus.reconciled(d, said)
+    return out
+
+
 def _renamed(
     after: dict[str, tuple[Any, dict[str, Any] | None]], prior: dict[str, Any], new: dict[str, Any]
 ) -> dict[str, tuple[Any, dict[str, Any] | None]]:
@@ -159,6 +172,7 @@ def compare(
         return [{"path": "matter", "old": None, "new": "added to the list", "explained": True, "why": "new matter"}]
     before, after = points(prior), _renamed(points(new), prior, new)
     cited = {_keyed(str(o.get("path"))) for o in overturns if o.get("source")}
+    noted = _noted(prior)
     out = []
     for path in sorted(set(before) | set(after)):
         old, old_obj = before.get(path, (None, None))
@@ -184,6 +198,8 @@ def compare(
             why = "a status the last list did not carry that claims no service, so no paper exists to cite"
         elif _is_status(path) and _contradicted_its_proof(old, old_obj, cur, cur_obj):
             why = "the last list's status contradicted its own cited proof of service"
+        elif _is_status(path) and noted.get(path) == cur:
+            why = "the last list's status contradicted the defendant's own note, which states this one"
         out.append(
             {
                 "path": path,
