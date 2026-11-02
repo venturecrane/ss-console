@@ -1,6 +1,6 @@
 """A Graph reply that carries a firm's own matter files back to its own staff.
 
-WHY THIS EXISTS (ADR 0101, the 2026-11-01 ashton-price miss). An attorney
+WHY THIS EXISTS (ADR 0102, the 2026-11-01 ashton-price miss). An attorney
 asked the Operator for named records on a matter, attached to its reply. The
 reply verb (``msgraph_ops.reply``) carried no files at all. This module is the
 reply verb's file path, and it is narrower than a send on purpose:
@@ -159,10 +159,10 @@ def _attach(ops: Any, draft_id: str, name: str, raw: bytes) -> None:
         }
         ops._request(ops._mail_path("messages", draft_id, "attachments"), "POST", body, **_read(ops))
         return
-    try:
-        from .msgraph_upload import upload_large_attachment
-    except ImportError as exc:
-        raise FilesRefused(f"{name} is over 3 MB and this broker has no Graph upload session yet") from exc
+    # Imported here, not at the top: msgraph_upload imports msgraph_ops, which
+    # imports this module (ADR 0101's shared upload session).
+    from .msgraph_upload import upload_large_attachment
+
     upload_large_attachment(ops, draft_id, name, PDF_CONTENT_TYPE, raw)
 
 

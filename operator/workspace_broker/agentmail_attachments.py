@@ -46,6 +46,7 @@ import base64
 import binascii
 import hashlib
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -101,24 +102,61 @@ class Attachments:
         return ",".join(self.sha256s)
 
 
-def _one(entry: Any) -> tuple[dict[str, str], bytes]:
-    if not isinstance(entry, dict) or set(entry) != _ATTACHMENT_KEYS:
+#: A spooled file (``attachment_intake``): the bytes are read from the broker's
+#: own spool by handle, never carried in the request.
+_HANDLE_KEYS = frozenset({"name", "content_type", "handle", "sha256"})
+_HANDLE_RE = re.compile(r"^[0-9a-f]{32}$")
+
+#: Reads a spooled file's bytes by handle, raising on an unknown or expired one.
+SpoolReader = Callable[[str], bytes]
+
+
+def _inline_raw(content_b64: Any, bound: int) -> bytes:
+    if not isinstance(content_b64, str):
+        raise AttachmentRefused("attachment fields must be strings")
+    if len(content_b64) > 4 * ((bound + 2) // 3):
+        raise AttachmentRefused("attachment exceeds its size bound")
+    try:
+        return base64.b64decode(content_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise AttachmentRefused("attachment content_b64 is not valid standard base64") from exc
+
+
+def _spooled_raw(handle: Any, read_spooled: SpoolReader | None) -> bytes:
+    if read_spooled is None:
+        raise AttachmentRefused("this transport takes no spooled attachment")
+    if not isinstance(handle, str) or not _HANDLE_RE.fullmatch(handle):
+        raise AttachmentRefused("attachment handle is not a spool handle")
+    try:
+        raw = read_spooled(handle)
+    except Exception as exc:
+        raise AttachmentRefused(f"attachment handle could not be read from the spool ({type(exc).__name__})") from exc
+    if not isinstance(raw, bytes):
+        raise AttachmentRefused("attachment handle did not read back as bytes")
+    return raw
+
+
+def _one(
+    entry: Any, *, max_pdf: int = MAX_PDF_BYTES, read_spooled: SpoolReader | None = None
+) -> tuple[dict[str, str], bytes]:
+    keys = set(entry) if isinstance(entry, dict) else set()
+    if keys not in (_ATTACHMENT_KEYS, _HANDLE_KEYS) or not isinstance(entry, dict):
         raise AttachmentRefused("attachment must carry exactly name, content_type, content_b64, sha256")
-    name, content_type, content_b64, sha = (entry[k] for k in ("name", "content_type", "content_b64", "sha256"))
-    if not all(isinstance(v, str) for v in (name, content_type, content_b64, sha)):
+    name, content_type, sha = (entry[k] for k in ("name", "content_type", "sha256"))
+    if not all(isinstance(v, str) for v in (name, content_type, sha)):
         raise AttachmentRefused("attachment fields must be strings")
     kind = _KINDS.get(content_type)
     if kind is None:
         raise AttachmentRefused(f"attachment content_type not allowed: {content_type!r}")
     name_re, bound = kind
+    if content_type == PDF_CONTENT_TYPE:
+        bound = max_pdf
     if not name_re.fullmatch(name):
         raise AttachmentRefused(f"attachment name does not fit its type: {name!r}")
-    if len(content_b64) > 4 * ((bound + 2) // 3):
-        raise AttachmentRefused("attachment exceeds its size bound")
-    try:
-        raw = base64.b64decode(content_b64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise AttachmentRefused("attachment content_b64 is not valid standard base64") from exc
+    if keys == _HANDLE_KEYS:
+        raw = _spooled_raw(entry["handle"], read_spooled)
+    else:
+        raw = _inline_raw(entry["content_b64"], bound)
     if not raw:
         raise AttachmentRefused("attachment is empty")
     if len(raw) > bound:
@@ -144,7 +182,11 @@ def _one(entry: Any) -> tuple[dict[str, str], bytes]:
 
 
 def validated(
-    payload: dict[str, Any], *, max_total: int = MAX_TOTAL_BYTES
+    payload: dict[str, Any],
+    *,
+    max_total: int = MAX_TOTAL_BYTES,
+    max_pdf: int = MAX_PDF_BYTES,
+    read_spooled: SpoolReader | None = None,
 ) -> list[tuple[dict[str, str], bytes]] | None:
     """Every attachment of ``payload`` re-validated, as (AgentMail part, raw
     bytes) pairs in order, or ``None`` when it carries none.
@@ -152,9 +194,11 @@ def validated(
     THE ONE BROKER-SIDE VALIDATOR FOR OUTBOUND FILES. Both send verbs call it:
     :func:`build` here for AgentMail, and ``msgraph_attachments`` for Graph,
     which maps each pair to a ``fileAttachment``. So the two transports refuse
-    exactly the same files, and a check added here reaches both. ``max_total``
-    is the one per-transport knob: Graph passes a smaller total because its
-    inline request is smaller than AgentMail's (see ``msgraph_attachments``).
+    exactly the same files, and a check added here reaches both. The knobs are
+    per transport: ``max_total`` and ``max_pdf`` (Graph's draft path carries
+    larger files than AgentMail's one request can), and ``read_spooled``, which
+    admits a ``{name, content_type, handle, sha256}`` entry whose bytes the
+    broker reads from its own spool and re-hashes; without it a handle refuses.
 
     Absent and ``None`` mean no attachment. Anything else present must be a list
     of one to three valid entries; an empty list is refused too, because a caller
@@ -167,7 +211,7 @@ def validated(
         raise AttachmentRefused("attachments must be a non-empty list")
     if len(entries) > MAX_ATTACHMENTS:
         raise AttachmentRefused(f"at most {MAX_ATTACHMENTS} attachments per send")
-    built = [_one(entry) for entry in entries]
+    built = [_one(entry, max_pdf=max_pdf, read_spooled=read_spooled) for entry in entries]
     if sum(1 for part, _ in built if part["content_type"] == XLSX_CONTENT_TYPE) > MAX_XLSX_ATTACHMENTS:
         raise AttachmentRefused(f"at most {MAX_XLSX_ATTACHMENTS} workbook per send")
     if sum(len(raw) for _, raw in built) > max_total:

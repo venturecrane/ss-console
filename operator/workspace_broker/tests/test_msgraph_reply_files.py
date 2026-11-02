@@ -1,4 +1,4 @@
-"""A Graph reply carrying a firm's own matter files to its own staff (ADR 0101).
+"""A Graph reply carrying a firm's own matter files to its own staff (ADR 0102).
 
 Pins: the broker's own spool (chunked intake, hashed by the broker, owner-only,
 no traversal), the reply verb's file fences (authored, firm staff only, no
@@ -266,7 +266,7 @@ def _ops(tmp_path: Path, graph: DraftGraph, yaml_text: str = YAML) -> MsGraphOps
 def _files(spool: Path, *datas: bytes) -> list[dict]:
     out = []
     for i, data in enumerate(datas):
-        put = _put_whole(spool, data)
+        put = _put_whole(spool, data, chunk=7 if len(data) < 4096 else 1024 * 1024)
         out.append(
             {"name": f"R{i}.pdf", "content_type": "application/pdf", "handle": put["handle"], "sha256": put["sha256"]}
         )
@@ -384,26 +384,6 @@ def test_a_draft_that_reads_back_wrong_is_deleted_not_sent(
     assert graph.deleted and not graph.sent
 
 
-def test_a_large_file_without_the_upload_session_is_refused_and_the_draft_deleted(
-    tmp_path: Path, spool: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(mrf, "INLINE_MAX_BYTES", 10)
-    import builtins
-
-    real_import = builtins.__import__
-
-    def no_upload(name, *a, **k):
-        if name.endswith("msgraph_upload") or (a and a[2] and "msgraph_upload" in (a[2] or ())):
-            raise ImportError(name)
-        return real_import(name, *a, **k)
-
-    monkeypatch.setattr(builtins, "__import__", no_upload)
-    graph = DraftGraph()
-    with pytest.raises(mrf.FilesRefused, match="upload session"):
-        _reply(_ops(tmp_path, graph), _files(spool, PDF))
-    assert graph.deleted and not graph.sent
-
-
 def test_a_large_file_goes_through_the_shared_upload_helper(
     tmp_path: Path, spool: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -470,3 +450,59 @@ def test_the_attachment_put_verb_is_gateway_only_and_answers_ok(tmp_path: Path) 
     bad = {"payload": {"offset": 0, "chunk_b64": "", "final": False}}
     with pytest.raises(ValueError, match="attachment refused"):
         verb.handler(broker, "attachment_put", bad, 1, 0)
+
+
+class _Upload:
+    """A response with a status and headers, as Graph's upload PUT answers."""
+
+    def __init__(self, status: int, headers: dict[str, str], data: bytes = b"") -> None:
+        self.status, self.headers, self._d = status, headers, data
+
+    def read(self) -> bytes:
+        return self._d
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_a) -> bool:
+        return False
+
+
+def test_a_large_scan_goes_through_the_real_upload_session_and_is_verified(
+    tmp_path: Path, spool: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 6.67 MB-record case: over 3 MiB, so ADR 0101's upload session carries it."""
+    from workspace_broker import msgraph_upload
+
+    monkeypatch.setattr(msgraph_upload, "CHUNK_BYTES", 1024 * 1024)
+    big = (
+        b"%PDF-1.4\n1 0 obj << /Length 9 >>\nstream\n" + b"\x00\xff/JS " * (700 * 1024) + b"\nendstream\nendobj\n%%EOF"
+    )
+    assert len(big) > 3 * 1024 * 1024
+    graph = DraftGraph()
+    received = bytearray()
+    puts: list[str] = []
+    real = graph.__call__
+
+    def opener(request, timeout=None):
+        url = request.full_url
+        if url.endswith("/createUploadSession"):
+            graph.calls.append(("POST", url, None, request.get_header("Authorization") or ""))
+            return _Upload(201, {}, json.dumps({"uploadUrl": "https://outlook.office.com/up/1"}).encode())
+        if url.startswith("https://outlook.office.com/up/"):
+            assert request.get_header("Authorization") is None
+            puts.append(request.get_header("Content-range") or "")
+            received.extend(request.data)
+            if len(received) < len(big):
+                return _Upload(200, {})
+            graph.attachments.append(
+                {"id": "U1", "name": "R0.pdf", "contentType": "application/pdf", "raw": bytes(received)}
+            )
+            return _Upload(201, {"Location": "https://graph.microsoft.com/v1.0/x/Attachments('U1')"})
+        return real(request, timeout)
+
+    ops = _ops(tmp_path, graph)
+    ops._opener = opener
+    _reply(ops, _files(spool, big))
+    assert bytes(received) == big and len(puts) == -(-len(big) // (1024 * 1024)) > 1
+    assert graph.sent and not graph.deleted

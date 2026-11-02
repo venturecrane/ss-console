@@ -1,6 +1,6 @@
 """The broker's own spool for outbound files too large for one broker frame.
 
-WHY THIS EXISTS (ADR 0101). A broker request frame is bounded at 6 MiB
+WHY THIS EXISTS (ADR 0102). A broker request frame is bounded at 6 MiB
 (``server.MAX_REQUEST_BYTES``), and a firm's record asked for by its own staff
 can be 25 MiB. The bytes therefore cross into the broker in chunks, and land in
 a directory the BROKER owns (beside its audit ledger, root's, never the agent

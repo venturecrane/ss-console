@@ -164,7 +164,7 @@ def send_reply(
 ) -> str:
     """Reply in-thread to an inbound Graph message.
 
-    ``attachments`` (ADR 0101) is a KEYWORD set only by the reply plugin's
+    ``attachments`` (ADR 0102) is a KEYWORD set only by the reply plugin's
     matter-file path, never from a tool argument: descriptors ``{name,
     content_type, handle, sha256}`` naming files already in the BROKER's own
     spool (``attachment_put``). The broker re-vets the recipient as firm staff,
@@ -201,7 +201,7 @@ def send_reply(
         payload["attachments"] = [dict(a) for a in attachments]
     # ``anchor`` is the email this reply answers (participant fence); the
     # broker refuses a reply that names none.
-    # The row's ``attachment_sha256`` (ADR 0101): the hashes the broker refused
+    # The row's ``attachment_sha256`` (ADR 0102): the hashes the broker refused
     # to send without matching, so the row names exactly the bytes that went.
     extra = (
         {"attachment_sha256": ",".join(a["sha256"] for a in attachments)} if attachments else None

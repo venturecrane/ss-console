@@ -118,7 +118,7 @@ get_roles_on_matter = "read"
 get_relationships_on_matter = "read"
 get_files_on_matter = "read"
 get_file = "read"
-# ADR 0101 (2026-11-02): find a matter's files by name/folder/extension, paged
+# ADR 0102 (2026-11-02): find a matter's files by name/folder/extension, paged
 # server-side; and stage named files (whole, or a page range cut here) into the
 # seat's outbound spool for the reply to the colleague who asked. Staging writes
 # only the seat's own disk. COORDINATED CHANGE: the overlay carries both as

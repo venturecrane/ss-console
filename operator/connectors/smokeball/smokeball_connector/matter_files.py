@@ -20,7 +20,7 @@ connector half of both:
   and writes each result to the seat's outbound file spool. The model never
   handles a byte and never names a path. The reply plugin attaches the staged
   files to the reply to the colleague who asked, after its own fences
-  (overlay ``shared/matter_file_reply.py``, ADR 0101).
+  (overlay ``shared/matter_file_reply.py``, ADR 0102).
 
 Nothing here sends anything. Staging only writes this seat's own disk, which is
 why the tool is READ-class; the external effect is the reply, and the reply is

@@ -1,4 +1,4 @@
-"""SMD review of a reply carrying matter files (ADR 0101, ``review: smd``)."""
+"""SMD review of a reply carrying matter files (ADR 0102, ``review: smd``)."""
 
 from __future__ import annotations
 

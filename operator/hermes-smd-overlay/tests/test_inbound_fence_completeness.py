@@ -360,7 +360,7 @@ SMOKEBALL_FIRM_RECORD_READS: frozenset[str] = frozenset(
         "mcp_smokeball_get_files_on_matter",
         "mcp_smokeball_get_file",
         "mcp_smokeball_get_download_url",
-        # ADR 0101: file metadata found by name, and the staging receipt (names,
+        # ADR 0102: file metadata found by name, and the staging receipt (names,
         # sizes, hashes). The staged bytes never reach the model.
         "mcp_smokeball_find_files_on_matter",
         "mcp_smokeball_stage_matter_files",

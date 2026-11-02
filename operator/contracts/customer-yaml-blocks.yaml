@@ -443,7 +443,7 @@ top_level:
       (msgraph_reply_files.staff_list) each read the block off the seat's own
       customer.yaml at call time.
     note: >-
-      ADR 0101. `recipients`, a list of addresses or `@domains`: the firm's own
+      ADR 0102. `recipients`, a list of addresses or `@domains`: the firm's own
       staff who may receive the firm's matter files attached to the Operator's
       reply to their own email. Each must ALSO be on scope.inbound_allow_from
       and not typed as anything but firm_staff in scope.outbound_roster; the

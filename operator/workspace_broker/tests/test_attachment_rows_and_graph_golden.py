@@ -193,10 +193,8 @@ def test_the_graph_workbook_send_is_byte_identical_to_the_golden(tmp_path: Path)
 def test_falsifier_the_golden_sees_a_changed_attachment(tmp_path: Path, monkeypatch) -> None:
     """The comparison can fail: one extra key on the fileAttachment the broker
     builds and the bytes no longer match."""
-    from workspace_broker import msgraph_attachments
+    from workspace_broker import msgraph_upload
 
-    real = msgraph_attachments.graph_attachments
-    monkeypatch.setattr(
-        msgraph_attachments, "graph_attachments", lambda payload: [{**a, "isInline": False} for a in real(payload)]
-    )
+    real = msgraph_upload.inline_parts
+    monkeypatch.setattr(msgraph_upload, "inline_parts", lambda files: [{**a, "isInline": False} for a in real(files)])
     assert _graph_workbook_send(tmp_path) != GOLDEN.read_bytes().rstrip(b"\n")

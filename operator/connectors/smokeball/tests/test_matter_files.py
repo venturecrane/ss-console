@@ -1,4 +1,4 @@
-"""find_files_on_matter and stage_matter_files (ADR 0101): every refusal path."""
+"""find_files_on_matter and stage_matter_files (ADR 0102): every refusal path."""
 
 from __future__ import annotations
 

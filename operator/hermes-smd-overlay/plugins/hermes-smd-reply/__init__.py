@@ -276,7 +276,7 @@ def _send_msgraph_reply(
 ) -> str:
     """Reply in-thread via Microsoft Graph, keyed on the recorded message id.
 
-    ``attachments`` (ADR 0101) is set only by the matter-file path of the relay
+    ``attachments`` (ADR 0102) is set only by the matter-file path of the relay
     (``shared.matter_file_reply``): broker-spool descriptors, never anything a
     tool argument named.
 
@@ -930,7 +930,7 @@ def _files_recipient(cfg: CustomerConfig, sender: str) -> tuple[bool, bool, bool
 
 
 def _stage_matter_files(kwargs: dict[str, Any]) -> str:
-    """Carry a ``stage_matter_files`` result onto this turn's reply (ADR 0101).
+    """Carry a ``stage_matter_files`` result onto this turn's reply (ADR 0102).
 
     The fences that need the turn run here, where the session id is present:
     an email opened this turn, a Graph seat, its sender firm staff. The files
@@ -1017,7 +1017,7 @@ def _send_file_continuations(
     session_id: str,
     matter_ref: str | None,
 ) -> None:
-    """The rest of the files, as further replies in the same thread (ADR 0101).
+    """The rest of the files, as further replies in the same thread (ADR 0102).
 
     Code-fixed words; each audited. A failure is told and paged like any failed
     reply, and stops the rest."""
@@ -1581,7 +1581,7 @@ def _relay_draft(**kwargs: Any) -> None:
                 matter_ref=cited_matter_ref,
             )
 
-        # (c3) Matter files (ADR 0101). Staged files ride on this reply only
+        # (c3) Matter files (ADR 0102). Staged files ride on this reply only
         # after every floor above, and only when their own fences hold here:
         # the same email, firm staff, one matter. A refusal clears the staging
         # and holds the reply, so the model redrafts without claiming a file.
@@ -1813,7 +1813,7 @@ def _relay_draft(**kwargs: Any) -> None:
                 # The heartbeat pages it as a shortfall and the request card
                 # marks the request NOT FULFILLED (shared/reply_could_not.py).
                 **reply_could_not.metadata(wire_text),
-                # ADR 0101: the files this reply carried (ids and hashes only).
+                # ADR 0102: the files this reply carried (ids and hashes only).
                 **(
                     {
                         **matter_file_reply.audit_fields(prepared.batches[0]),
@@ -1976,7 +1976,7 @@ def _sender_is_internal(sender: str) -> bool:
 
 def _sweep_once() -> sweeper.SweepResult:
     """One release pass, with the policy resolved live."""
-    _review_once()  # SMD-reviewed files replies (ADR 0101); never raises
+    _review_once()  # SMD-reviewed files replies (ADR 0102); never raises
     if _HELD_STORE is None or _LIMITER is None:
         return sweeper.SweepResult()
     return sweeper.run_sweep_once(

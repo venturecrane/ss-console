@@ -1,4 +1,4 @@
-"""SMD review of a reply that carries matter files, before it is sent (ADR 0101).
+"""SMD review of a reply that carries matter files, before it is sent (ADR 0102).
 
 WHY. The Captain wants to see what the Operator will send, and to whom, before
 a client's files leave the seat. A seat authors that with

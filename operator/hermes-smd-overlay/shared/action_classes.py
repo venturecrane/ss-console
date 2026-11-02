@@ -624,7 +624,7 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "mcp_smokeball_get_relationships_on_matter": ActionClass.READ,
     "mcp_smokeball_get_files_on_matter": ActionClass.READ,
     "mcp_smokeball_get_file": ActionClass.READ,
-    # ADR 0101: find a matter's files by name/folder (metadata only), and stage
+    # ADR 0102: find a matter's files by name/folder (metadata only), and stage
     # named files for a staff reply. Staging writes only the seat's own spool;
     # the external effect is the reply, fenced in hermes-smd-reply.
     "mcp_smokeball_find_files_on_matter": ActionClass.READ,

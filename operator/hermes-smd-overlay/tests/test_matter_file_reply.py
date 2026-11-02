@@ -1,4 +1,4 @@
-"""Matter files on a staff reply (ADR 0101): the fences, and every refusal.
+"""Matter files on a staff reply (ADR 0102): the fences, and every refusal.
 
 The capability is the attorney's request on 2026-11-01: "send me records X, Y,
 Z on matter N", answered with the files attached. These tests pin that the

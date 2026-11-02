@@ -283,7 +283,7 @@ def test_poller_default_forward_contract_is_unchanged(monkeypatch):
     assert status == 200
 
 
-# ---- re-wake an existing inbound email (ADR 0101) ----------------------------
+# ---- re-wake an existing inbound email (ADR 0102) ----------------------------
 
 
 class _Graph:

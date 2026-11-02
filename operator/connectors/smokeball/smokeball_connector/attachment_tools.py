@@ -70,7 +70,7 @@ def register(server: Any) -> None:
     # The post journal and its daily list (post_journal.py).
     _register_post_journal_tools(server)
     # Find a matter's files by name, and stage named files for a staff reply
-    # (matter_files.py, ADR 0101), last.
+    # (matter_files.py, ADR 0102), last.
     _register_matter_file_tools(server)
 
 

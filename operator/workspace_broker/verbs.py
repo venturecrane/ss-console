@@ -248,7 +248,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("agentmail_reply", _only(GATEWAY), transmit_verbs.agentmail),
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
-    # A file for a reply, in chunks, into the broker's own spool (ADR 0101,
+    # A file for a reply, in chunks, into the broker's own spool (ADR 0102,
     # attachment_intake.py). Gateway-only like the reply that carries it.
     Verb("attachment_put", _only(GATEWAY), attachment_intake.put_verb),
     # The verified reply binding (reply_binding.py): a turn no inbound opened

@@ -75,10 +75,14 @@ _OPS_AUDIT_KEYS: tuple[str, ...] = (
     # hashes the bytes it sent, so on that send this OPS value overrides any
     # caller stamp of the same name (it is spread after ``audit_extra``).
     "attachment_sha256",
+    # ``graph_draft_id``: the draft a large-file Graph send was built in and
+    # sent from (msgraph_upload). Ledger only: the id is never handed to the
+    # agent, whose read credential could otherwise address the draft.
+    "graph_draft_id",
 )
 
 #: Of those, the ones that stay in the ledger and never travel back to the agent.
-_AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token", "html_body_sha256"})
+_AUDIT_ONLY_KEYS = frozenset({"sender_key", "audit_row_token", "html_body_sha256", "graph_draft_id"})
 
 #: What a CALLER may contribute to a transmit's audit row, by name (WS-RENDER).
 #: Same posture as ``session_id``/``matter_ref`` (ss#2497): attribution the

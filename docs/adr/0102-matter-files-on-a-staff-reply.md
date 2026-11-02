@@ -3,14 +3,14 @@ title: Matter files on a staff reply
 date: 2026-11-02
 status: accepted
 captain: Scott Durgan
-related-adr: docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md, docs/adr/0056-persona-exposure-skill-initiation-entitlements.md, docs/adr/0086-matter-identity-send-binding.md, docs/adr/0100-one-operator-core-and-authored-capabilities.md
+related-adr: docs/adr/0101-large-outbound-files-over-graph.md, docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md, docs/adr/0056-persona-exposure-skill-initiation-entitlements.md, docs/adr/0086-matter-identity-send-binding.md, docs/adr/0100-one-operator-core-and-authored-capabilities.md
 enforced_by:
   - operator/connectors/smokeball/tests/test_matter_files.py
   - operator/hermes-smd-overlay/tests/test_matter_file_reply.py
   - operator/workspace_broker/tests/test_msgraph_reply_files.py
 ---
 
-# ADR 0101: Matter files on a staff reply
+# ADR 0102: Matter files on a staff reply
 
 - **Status:** Accepted (2026-11-02)
 - **Decider:** Captain (the ask: an attorney's request for named records must be answered with the records); mechanism by the agent
@@ -32,7 +32,7 @@ Of the five records most were scans (image-only, or a garbled text layer), one w
 
 4. **Who is firm staff is authored per seat.** `matter_file_delivery.recipients` (addresses or `@domains`) in customer.yaml. A recipient must be on that list AND on `scope.inbound_allow_from` AND classify INTERNAL (never typed client, vendor or anything else in `scope.outbound_roster`). The connector, the reply plugin and the broker each check. Unauthored, nothing stages and no reply carries a file. This is the per-seat gate: a config block the capability reads, as `vendor_invoice_intake` is, rather than a new exposure class, because the act is a reply the seat already makes to its own staff and the entitlement question is only "to whom may the firm's files go", which is a list.
 
-5. **The broker's reply verb carries files only on this path** (`workspace_broker/msgraph_reply_files.py`). Descriptors are `{name, content_type, handle, sha256}`; the broker re-reads its own copy and refuses unless its hash matches, refuses non-PDFs, encrypted PDFs and PDFs naming active content outside stream data (a scanned page's image bytes are arbitrary and would match by chance), re-vets the fetched sender, drops copied participants who are not staff, and refuses a device redirect. It builds a `createReply` draft on the READ credential, attaches files (inline under 3 MB; above it through the shared upload-session helper `msgraph_upload.upload_large_attachment`), re-reads the draft (recipients exactly the sender plus the kept copies, no bcc, the body's words present, every attachment's name, type and sha256 exactly as vetted, the bytes fetched back and hashed), deletes it and refuses on any mismatch, and sends it on the SEND credential. The audit row's `attachment_sha256` is the broker's hash of each file.
+5. **The broker's reply verb carries files only on this path** (`workspace_broker/msgraph_reply_files.py`). Descriptors are `{name, content_type, handle, sha256}`; the broker re-reads its own copy and refuses unless its hash matches, refuses non-PDFs, encrypted PDFs and PDFs naming active content outside stream data (a scanned page's image bytes are arbitrary and would match by chance), re-vets the fetched sender, drops copied participants who are not staff, and refuses a device redirect. It builds a `createReply` draft on the READ credential, attaches files (inline under 3 MB; above it through the shared upload-session helper `msgraph_upload.upload_large_attachment`, ADR 0101), re-reads the draft (recipients exactly the sender plus the kept copies, no bcc, the body's words present, every attachment's name, type and sha256 exactly as vetted, the bytes fetched back and hashed), deletes it and refuses on any mismatch, and sends it on the SEND credential. The audit row's `attachment_sha256` is the broker's hash of each file.
 
 6. **Three files and 25 MiB per message; more go as further replies.** A request needing more than three files (or more than 25 MiB) is answered with the person's reply carrying the first batch and up to two further replies in the same thread, each with the code-fixed words "Part N of M of the files you asked for, attached: ...". Each is audited (`file_reply_part`).
 

@@ -6,7 +6,7 @@ The poller preserves a permanently-failing inbound message as
 documented recovery path the dead-letter log line points at:
 
     python3 -m shared.msgraph_replay /opt/data/msgraph/dead-letter/<file>.json
-    python3 -m shared.msgraph_replay --message-id <graph message id>   # re-wake (ADR 0101)
+    python3 -m shared.msgraph_replay --message-id <graph message id>   # re-wake (ADR 0102)
 
 It re-normalizes ``raw`` exactly as the poller would, rebuilds the byte-exact
 stamped envelope (compact separators — the HMAC is over these bytes), signs
@@ -100,7 +100,7 @@ def rewake(
     """Re-wake the Operator on an EXISTING inbound email, by its Graph id.
 
     For SMD to have the seat answer a request again once a capability it lacked
-    has shipped (ADR 0101: an attorney's request for records, answered "I cannot
+    has shipped (ADR 0102: an attorney's request for records, answered "I cannot
     attach files" the first time). The message is fetched from the seat's own
     mailbox on the agent's read credential, written as a dead-letter-shaped file
     under ``<state_dir>/rewake/``, and replayed through :func:`replay`, so it
@@ -234,7 +234,7 @@ def main(
     parser.add_argument(
         "--message-id",
         default=None,
-        help="re-wake the Operator on an existing inbound email by its Graph id (ADR 0101)",
+        help="re-wake the Operator on an existing inbound email by its Graph id (ADR 0102)",
     )
     parser.add_argument(
         "--mailbox",
