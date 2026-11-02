@@ -101,6 +101,19 @@ CASES = [
     ("answered but no answer date", ("defendants", 0, "answered"), {"date": None, "source": None}),
     ("answer date but status says no answer", ("defendants", 0, "status"), vocab.SERVED_NO_ANSWER),
     ("served date but status says not served", ("defendants", 0, "status"), vocab.NOT_SERVED),
+    # 2026-11-02: "Served, no answer in file" beside its own "default entered" note.
+    (
+        gates.NOTE_RULE,
+        ("defendants", 0),
+        {
+            "name": "Delta Example",
+            "status": vocab.SERVED_NO_ANSWER,
+            "served": {"date": "2026-04-10", "method": "personal", "source": src()},
+            "answered": {"date": None, "source": None},
+            "sent_for_service": {"date": "2026-03-20", "source": src("f6", "Service request.pdf")},
+            "flags": ["Default entered 2026-06-01."],
+        },
+    ),
     ("em dash in text", ("matter_flags",), ["served — no answer"]),
     ("source is not a file on the matter", ("complaint_filed", "source"), src("zz", "Elsewhere.pdf")),
     ("future date", ("discovery_propounded", 0, "date"), "2026-12-01"),

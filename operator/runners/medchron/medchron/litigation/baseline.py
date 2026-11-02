@@ -41,7 +41,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import finalload, vocab
+from . import defstatus, finalload, vocab
 from .finalload import load_final  # noqa: F401 - ``baseline.load_final``, the hand finish's last step
 from .manifest import _atomic
 
@@ -82,8 +82,22 @@ def first_date(text: Any) -> str | None:
     return None
 
 
+_EXACT = {v.lower(): v for v in vocab.DEFENDANT_STATUSES}
+
+
 def def_status(raw: Any) -> str:
+    """A hand run's status text in the vocabulary. A text that IS a status is
+    that status; otherwise a state that outranks service (dismissed, settled,
+    default entered, answered) wins wherever it appears (``defstatus``), and
+    only then does the text's first words decide. 2026-11-02: by prefix alone,
+    "served 3/1/2017; default entered 1/5/2018" became "Served, no answer in
+    file" and the default was lost."""
     s = str(raw or "").strip().lower()
+    if s in _EXACT:
+        return _EXACT[s]
+    said = defstatus.stated(s)
+    if said is not None:
+        return said
     return next((v for p, v in DEF_PREFIX if s.startswith(p)), vocab.D_UNCLEAR)
 
 
