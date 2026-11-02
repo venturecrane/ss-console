@@ -281,15 +281,23 @@ def test_stage_one_files_fault_never_stops_the_rest() -> None:
 # ---- stage: what goes -------------------------------------------------------
 
 
-def test_stage_whole_file_spools_exact_bytes_owner_only(_spool: Path) -> None:
+def test_stage_whole_file_spools_the_rewrite_owner_only(_spool: Path) -> None:
     c = FakeClient()
-    data = _pdf(2)
-    fid = c.add(1, "MRI: Report/2024", data)
+    w = PdfWriter()
+    for width in (101, 102):
+        w.add_blank_page(width=width, height=200)
+    buf = io.BytesIO()
+    w.write(buf)
+    fid = c.add(1, "MRI: Report/2024", buf.getvalue())
     out = mf.stage(c, MATTER, [{"file_id": fid}], recipients=STAFF)
     (row,) = out["staged"]
     assert row["attachmentName"] == "MRI Report 2024.pdf"
+    assert "embeddedItemsRemoved" not in row
     path = _spool / f"{row['spoolToken']}.bin"
-    assert path.read_bytes() == data and row["sha256"] == hashlib.sha256(data).hexdigest()
+    data = path.read_bytes()
+    # The staged bytes are the rewrite: the same pages, hashed as they go.
+    assert row["sha256"] == hashlib.sha256(data).hexdigest() and row["sizeBytes"] == len(data)
+    assert [int(p.mediabox.width) for p in PdfReader(io.BytesIO(data)).pages] == [101, 102]
     assert path.stat().st_mode & 0o077 == 0
     meta = json.loads((_spool / f"{row['spoolToken']}.json").read_text())
     assert meta["matter_id"] == MATTER and meta["file_id"] == fid
@@ -452,3 +460,223 @@ def test_a_cut_refusal_reaches_the_staging_result(tmp_path: Path) -> None:
     fid = c.add(1, "A", b"%PDF-1.4 not really a pdf")
     out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "1-2"}], recipients=STAFF)
     assert out["status"] == "refused" and "could not be read as a PDF" in out["refused"][0]["reason"]
+
+
+# ---- the restage strips embedded files and keeps every active-content refusal --
+
+_OPERATOR = Path(__file__).resolve().parents[3]
+
+
+def _load(rel: str, name: str) -> Any:
+    """The overlay's and broker's own checks, loaded from this tree in place
+    (both import only the stdlib and pypdf). Absent outside a repo checkout."""
+    import importlib.util
+
+    path = _OPERATOR / rel
+    if not path.is_file():
+        pytest.skip(f"{rel} is not in this checkout")
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    import sys
+
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod  # a dataclass resolves its module by name while it is built
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.fixture(scope="module")
+def gate() -> Any:
+    return _load("hermes-smd-overlay/shared/outbound_attachment.py", "_overlay_outbound_attachment")
+
+
+@pytest.fixture(scope="module")
+def broker() -> Any:
+    return _load("workspace_broker/agentmail_attachments.py", "_broker_agentmail_attachments")
+
+
+def _passes_the_reply_checks(gate: Any, broker: Any, data: bytes) -> None:
+    """What the reply plugin (check_record_pdf) and the broker's reply verb run."""
+    reader = gate._pdf_reader(data)
+    assert len(reader.pages)
+    gate._pdf_refuse_active_content(reader)
+    assert b"/Encrypt" not in data and not broker.active_outside_streams(data)
+
+
+def _credentialed_scan(pages: int = 3) -> bytes:
+    """A scan as A&P's scanner leaves it: a C2PA "Content Credentials" item in
+    the catalog's EmbeddedFiles and /AF, the same item on a page's /AF, and a
+    file-attachment annotation."""
+    from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject
+
+    w = PdfWriter()
+    for _ in range(pages):
+        w.add_blank_page(width=200, height=200)
+    w.add_attachment("Content Credentials", b"c2pa manifest bytes " * 1200)
+    names = w.root_object["/Names"]["/EmbeddedFiles"]["/Names"]
+    filespec = names[1]
+    w.root_object[NameObject("/AF")] = ArrayObject([filespec])
+    page = w.pages[0]
+    page[NameObject("/AF")] = ArrayObject([filespec])
+    annot = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Annot"),
+            NameObject("/Subtype"): NameObject("/FileAttachment"),
+            NameObject("/Rect"): ArrayObject([FloatObject(0), FloatObject(0), FloatObject(10), FloatObject(10)]),
+            NameObject("/FS"): filespec,
+        }
+    )
+    page[NameObject("/Annots")] = ArrayObject([w._add_object(annot)])
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def test_the_synthetic_scan_is_refused_as_it_comes(gate: Any) -> None:
+    """The falsifier: without the restage the reply check refuses this file."""
+    data = _credentialed_scan()
+    with pytest.raises(gate.AttachmentError):
+        gate._pdf_refuse_active_content(gate._pdf_reader(data))
+
+
+@pytest.mark.parametrize("pages", [None, "1-2"])
+def test_an_embedded_content_credential_is_stripped_and_the_file_passes(
+    _spool: Path, gate: Any, broker: Any, pages: str | None
+) -> None:
+    c = FakeClient()
+    fid = c.add(1, "UC Davis Discharge Summary", _credentialed_scan())
+    req = {"file_id": fid, **({"pages": pages} if pages else {})}
+    out = mf.stage(c, MATTER, [req], recipients=STAFF)
+    assert out["status"] == "staged", out
+    (row,) = out["staged"]
+    assert row["embeddedItemsRemoved"] >= 1
+    data = (_spool / f"{row['spoolToken']}.bin").read_bytes()
+    for marker in (b"/EmbeddedFile", b"/Filespec", b"/AF", b"/FileAttachment", b"c2pa manifest"):
+        assert marker not in data, marker
+    reader = PdfReader(io.BytesIO(data))
+    assert len(reader.pages) == (3 if pages is None else 2)
+    assert not reader.attachments
+    _passes_the_reply_checks(gate, broker, data)
+
+
+def _js_pdf(where: str) -> bytes:
+    from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+
+    w = PdfWriter()
+    for _ in range(2):
+        w.add_blank_page(width=200, height=200)
+    w.add_attachment("Content Credentials", b"c2pa")
+    action = w._add_object(
+        DictionaryObject(
+            {
+                NameObject("/S"): NameObject("/JavaScript"),
+                NameObject("/JS"): TextStringObject("app.alert('x');"),
+            }
+        )
+    )
+    if where == "catalog":
+        w.root_object[NameObject("/OpenAction")] = action
+    else:
+        w.pages[0][NameObject("/AA")] = DictionaryObject({NameObject("/O"): action})
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize(("where", "pages"), [("catalog", None), ("page", None), ("page", "1-1")])
+def test_a_pdf_with_javascript_still_refuses(
+    _spool: Path, gate: Any, broker: Any, where: str, pages: str | None
+) -> None:
+    """The strip removes embedded files only: the script survives the rewrite,
+    and the reply's check refuses it exactly as before."""
+    c = FakeClient()
+    fid = c.add(1, "Scripted", _js_pdf(where))
+    out = mf.stage(c, MATTER, [{"file_id": fid, **({"pages": pages} if pages else {})}], recipients=STAFF)
+    (row,) = out["staged"]
+    data = (_spool / f"{row['spoolToken']}.bin").read_bytes()
+    assert b"/EmbeddedFile" not in data
+    with pytest.raises(gate.AttachmentError, match="scripts, triggers|an action other than"):
+        gate._pdf_refuse_active_content(gate._pdf_reader(data))
+    assert broker.active_outside_streams(data)
+
+
+def test_an_encrypted_whole_file_refuses_at_stage() -> None:
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    w.encrypt("secret")
+    buf = io.BytesIO()
+    w.write(buf)
+    c = FakeClient()
+    fid = c.add(1, "Locked", buf.getvalue())
+    out = mf.stage(c, MATTER, [{"file_id": fid}], recipients=STAFF)
+    assert out["status"] == "refused" and "encrypted" in out["refused"][0]["reason"]
+
+
+def _object_heavy(pages: int = 4, heavy_page: int = 4) -> bytes:
+    """Light pages, and one page carrying more objects than the reply check allows."""
+    from pypdf.generic import ArrayObject, NameObject, NumberObject
+
+    from smokeball_connector import page_cut
+
+    w = PdfWriter()
+    for i in range(1, pages + 1):
+        page = w.add_blank_page(width=200, height=200)
+        if i == heavy_page:
+            page[NameObject("/SMDBulk")] = ArrayObject(NumberObject(n) for n in range(page_cut.MAX_PDF_OBJECTS + 10))
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def test_a_whole_file_over_the_object_bound_refuses_with_the_cut_hint(gate: Any) -> None:
+    data = _object_heavy()
+    with pytest.raises(gate.AttachmentError, match="more objects"):  # the reply would be held for it
+        gate._pdf_refuse_active_content(gate._pdf_reader(data))
+    c = FakeClient()
+    fid = c.add(1, "Shriners Records", data)
+    out = mf.stage(c, MATTER, [{"file_id": fid}], recipients=STAFF)
+    assert out["status"] == "refused" and not out["staged"]
+    reason = out["refused"][0]["reason"]
+    assert "50,000 PDF objects" in reason and "page range" in reason
+
+
+def test_a_cut_of_the_object_heavy_file_passes(_spool: Path, gate: Any, broker: Any) -> None:
+    c = FakeClient()
+    fid = c.add(1, "Shriners Records", _object_heavy())
+    out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "1-3"}], recipients=STAFF)
+    assert out["status"] == "staged", out
+    (row,) = out["staged"]
+    data = (_spool / f"{row['spoolToken']}.bin").read_bytes()
+    assert len(PdfReader(io.BytesIO(data)).pages) == 3
+    _passes_the_reply_checks(gate, broker, data)
+
+
+def test_a_cut_over_the_object_bound_asks_for_fewer_pages() -> None:
+    c = FakeClient()
+    fid = c.add(1, "Shriners Records", _object_heavy())
+    out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "3-4"}], recipients=STAFF)
+    assert out["status"] == "refused" and "fewer pages" in out["refused"][0]["reason"]
+
+
+def test_prepare_local_is_the_shared_hook(tmp_path: Path, gate: Any, broker: Any) -> None:
+    """The page finder's check calls this exact name and signature."""
+    import inspect
+
+    sig = inspect.signature(mf.prepare_local)
+    assert list(sig.parameters) == ["source", "pages"]
+    src = tmp_path / "s.pdf"
+    src.write_bytes(_credentialed_scan())
+    whole, removed = mf.prepare_local(src, None)
+    assert removed >= 1 and len(PdfReader(io.BytesIO(whole)).pages) == 3
+    _passes_the_reply_checks(gate, broker, whole)
+    cut, _ = mf.prepare_local(src, (2, 3))
+    assert len(PdfReader(io.BytesIO(cut)).pages) == 2
+    src.write_bytes(_object_heavy())
+    with pytest.raises(mf.StageRefused, match="page range"):
+        mf.prepare_local(src, None)
+
+
+def test_the_object_bound_mirrors_the_reply_check(gate: Any) -> None:
+    from smokeball_connector import page_cut
+
+    assert page_cut.MAX_PDF_OBJECTS == gate._MAX_PDF_OBJECTS
