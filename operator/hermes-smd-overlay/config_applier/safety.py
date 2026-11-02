@@ -298,6 +298,11 @@ _LIVE_WRITABLE_PREFIXES: tuple[str, ...] = (
     # change merged, and the seat kept filing to the old folders.
     "vendor_invoice_intake",
     "combined_post_intake",
+    # ADR 0102: who may receive matter files on a staff reply. Read per call by
+    # the Smokeball connector, the reply plugin and the broker off the live
+    # yaml, so a live write is complete on its own (2026-11-02: authoring it on
+    # A&P otherwise needed a machine restart to reach the seat).
+    "matter_file_delivery",
 )
 
 # Rebuild-class paths that must NEVER apply live, even if a future allow-list

@@ -199,18 +199,62 @@ def test_without_review_authored_the_reply_sends_at_once(lane) -> None:  # noqa:
     matter_binding._reset_for_tests()
 
 
-def test_lane_review_first_holds_one_then_sends_normally(lane) -> None:  # noqa: F811 - the lane fixture, imported
-    mod, _d1, sent, spool, _b = lane
+def _review_first_seat(mod, n: int = 1) -> None:
     mod._YAML_PATH.write_text(
         mod._YAML_PATH.read_text().replace(
-            "matter_file_delivery:\n", "matter_file_delivery:\n  review_first: 1\n"
+            "matter_file_delivery:\n", f"matter_file_delivery:\n  review_first: {n}\n"
         )
     )
-    _email(message_id="m1", session="s1")
-    _stage_call(mod, spool, [("R.pdf", _pdf(1))], session="s1")
-    _draft(mod, session="s1")
-    assert sent == [] and rev.held_count() == 1
-    _email(message_id="m2", session="s2")
-    _stage_call(mod, spool, [("S.pdf", _pdf(2))], session="s2", call="st2")
-    _draft(mod, session="s2", call="d2")
-    assert len(sent) == 1 and sent[0]["message_id"] == "m2" and rev.held_count() == 1
+
+
+def _files_reply(mod, spool, n: int) -> None:
+    _email(message_id=f"m{n}", session=f"s{n}")
+    _stage_call(mod, spool, [(f"R{n}.pdf", _pdf(n))], session=f"s{n}", call=f"st{n}")
+    _draft(mod, session=f"s{n}", call=f"d{n}")
+
+
+def _decide(monkeypatch, decisions: dict[str, str]) -> None:
+    monkeypatch.setattr(rev, "decision", lambda r, **k: decisions.get(r["message_id"], ""))
+
+
+def test_review_first_counts_only_released_replies() -> None:
+    """Only a reply SMD released spends review_first; rejected, expired, failed
+    and still-waiting rows never do."""
+    statuses = [rev.STATUS_REVIEW, rev.STATUS_REJECTED, rev.STATUS_EXPIRED, rev.STATUS_FAILED]
+    for status in statuses:
+        rev.finish(_row(), status)
+    assert rev.released_count() == 0
+    first = {"matter_file_delivery": {"review_first": 1}}
+    assert mfr.review_by_smd(first, rev.released_count())
+    rev.finish(_row(), rev.STATUS_SENT)
+    assert rev.released_count() == 1 and not mfr.review_by_smd(first, rev.released_count())
+
+
+def test_lane_review_first_a_rejected_reply_leaves_the_next_one_held(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    """2026-11-02: SMD rejected the first A&P files reply; the next one must
+    still wait for review, never send unreviewed."""
+    mod, _d1, sent, spool, _b = lane
+    _review_first_seat(mod)
+    _files_reply(mod, spool, 1)
+    assert sent == []
+    _decide(monkeypatch, {"m1": "reject"})
+    mod._review_once()
+    assert sent == [] and rev.rows()[0]["status"] == rev.STATUS_REJECTED
+    _files_reply(mod, spool, 2)
+    assert sent == [] and rev.released_count() == 0
+    assert sorted(r["status"] for r in rev.rows()) == [rev.STATUS_REJECTED, rev.STATUS_REVIEW]
+
+
+def test_lane_review_first_a_waiting_reply_spends_nothing(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    """review_first: 1 holds until one reply is released, then sends normally."""
+    mod, _d1, sent, spool, _b = lane
+    _review_first_seat(mod)
+    _files_reply(mod, spool, 1)
+    _files_reply(mod, spool, 2)  # m1 still waiting: m2 waits too
+    assert sent == [] and len(rev.rows()) == 2
+    _decide(monkeypatch, {"m1": "approve"})
+    mod._review_once()
+    assert [s["message_id"] for s in sent] == ["m1"] and rev.released_count() == 1
+    _files_reply(mod, spool, 3)
+    assert [s["message_id"] for s in sent] == ["m1", "m3"]
+    assert len(rev.rows()) == 2  # m3 was never held

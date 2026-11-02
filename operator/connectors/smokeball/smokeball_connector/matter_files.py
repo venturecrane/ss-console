@@ -26,6 +26,16 @@ Nothing here sends anything. Staging only writes this seat's own disk, which is
 why the tool is READ-class; the external effect is the reply, and the reply is
 fenced where it is sent.
 
+EVERY STAGED FILE IS A REWRITE (2026-11-02). Whole or cut, the file goes
+through ``page_cut.restage``: its embedded files (a scanner's C2PA "Content
+Credentials" item, file-attachment annotations, a portfolio) are STRIPPED, so
+an ordinary scan is not refused for an item no reader sees; a script, action,
+launch, XFA form or encryption is NOT stripped and refuses downstream exactly as
+before. A whole file over the reply check's object bound is refused here with
+the instruction to stage a page range, which carries only those pages' objects.
+This applies only on this path: the firm's own file, fetched by code, going to
+its own staff. Every other outbound file keeps the full refusal.
+
 FAIL CLOSED. Unauthored ``matter_file_delivery`` stages nothing. A file whose
 own record does not name this matter, that is not a PDF, that cannot be fetched,
 or that would take the reply past the size an email carries is refused BY NAME
@@ -333,20 +343,29 @@ def _download_to(client: Any, matter_id: str, file_id: str, dest: Path, cap: int
     return size
 
 
-def _cut_pages(source: Path, pages: tuple[int, int]) -> bytes:
-    """The named pages of the PDF at ``source``, as a new PDF.
+def prepare_local(source: Path, pages: tuple[int, int] | None) -> tuple[bytes, int]:
+    """(the PDF to attach, embedded items removed): ``source`` whole or the
+    named pages, rewritten with its embedded files stripped (page_cut.py).
 
-    Cut in a memory-capped child process from a file handle (page_cut.py): a
-    413 MB set must never be read whole into the connector, a child of the
-    gateway."""
-    from .page_cut import CutRefused, cut
+    Rewritten in a memory-capped child process from a file handle: a 413 MB set
+    must never be read whole into the connector, a child of the gateway. Whole
+    files go through the same rewrite, so a scanner's "Content Credentials"
+    item never reaches the reply's PDF check, while a script, action, launch or
+    XFA form still does, and still refuses there.
 
+    THE ONE PREPARATION PATH: ``stage_matter_files`` calls it, and so does the
+    workspace ``page_finder check``, so a check and a live stage cannot disagree.
+    Name and signature are that contract. Raises :class:`StageRefused` with the
+    plain reason (over the object bound, encrypted, unreadable, too large)."""
+    from .page_cut import CutRefused, restage
+
+    dest = source.with_suffix(".out.pdf")
     try:
-        return cut(source, pages[0], pages[1], source.with_suffix(".cut.pdf"))
+        return restage(source, pages, dest)
     except CutRefused as exc:
         raise StageRefused(str(exc)) from exc
     finally:
-        source.with_suffix(".cut.pdf").unlink(missing_ok=True)
+        dest.unlink(missing_ok=True)
 
 
 def spool_dir() -> Path:
@@ -380,8 +399,9 @@ def spool_write(blob: bytes, meta: dict[str, Any]) -> str:
     return token
 
 
-def _fetch_one(client: Any, matter_id: str, req: Request, workdir: Path) -> tuple[dict[str, Any], bytes]:
-    """(file metadata, the bytes to attach) for one request, or StageRefused."""
+def _fetch_one(client: Any, matter_id: str, req: Request, workdir: Path) -> tuple[dict[str, Any], bytes, int]:
+    """(file metadata, the bytes to attach, embedded items removed) for one
+    request, or StageRefused."""
     meta = client.get(f"/matters/{matter_id}/documents/files/{req.file_id}")
     if not _on_matter(meta, matter_id):
         raise StageRefused("the file's own record does not name this matter, so it is not sent")
@@ -393,7 +413,7 @@ def _fetch_one(client: Any, matter_id: str, req: Request, workdir: Path) -> tupl
         with open(source, "rb") as fh:
             if fh.read(5) != b"%PDF-":
                 raise StageRefused("the file is not a PDF")
-        blob = _cut_pages(source, req.pages) if req.pages else source.read_bytes()
+        blob, stripped = prepare_local(source, req.pages)
     finally:
         source.unlink(missing_ok=True)
     if len(blob) > MAX_FILE_BYTES:
@@ -401,7 +421,7 @@ def _fetch_one(client: Any, matter_id: str, req: Request, workdir: Path) -> tupl
             f"it is {len(blob) / 1048576:.1f} MB, over the {MAX_FILE_BYTES // 1048576} MB one email can carry; "
             "ask for a page range"
         )
-    return meta, blob
+    return meta, blob, stripped
 
 
 def stage(client: Any, matter_id: str, files: Any, *, recipients: tuple[str, ...] | None = None) -> dict[str, Any]:
@@ -431,7 +451,7 @@ def stage(client: Any, matter_id: str, files: Any, *, recipients: tuple[str, ...
         for req in requests:
             label = {"fileId": req.file_id, **({"pages": f"{req.pages[0]}-{req.pages[1]}"} if req.pages else {})}
             try:
-                meta, blob = _fetch_one(client, matter_id, req, Path(tmp))
+                meta, blob, stripped = _fetch_one(client, matter_id, req, Path(tmp))
                 if total + len(blob) > MAX_TOTAL_BYTES:
                     raise StageRefused(
                         f"adding it would take this request over the {MAX_TOTAL_BYTES // 1048576} MB three replies carry"
@@ -464,6 +484,7 @@ def stage(client: Any, matter_id: str, files: Any, *, recipients: tuple[str, ...
                     "sizeBytes": len(blob),
                     "sha256": sha,
                     "spoolToken": token,
+                    **({"embeddedItemsRemoved": stripped} if stripped else {}),
                 }
             )
     result: dict[str, Any] = {
@@ -544,6 +565,7 @@ __all__ = [
     "load_recipients",
     "parse_pages",
     "parse_requests",
+    "prepare_local",
     "register",
     "spool_write",
     "stage",

@@ -137,10 +137,15 @@ def rows(directory: Path | None = None) -> list[dict[str, Any]]:
     return out
 
 
-def held_count(directory: Path | None = None) -> int:
-    """Files replies this seat has ever held for review, in any status: the
-    countdown ``matter_file_delivery.review_first`` reads. Rows are never pruned."""
-    return len(rows(directory))
+def released_count(directory: Path | None = None) -> int:
+    """Held files replies SMD approved and the seat then SENT: the countdown
+    ``matter_file_delivery.review_first`` reads. Rows are never pruned.
+
+    Only a released reply counts. A rejected, expired, failed or still-waiting
+    row is a reply SMD has not let go, so it spends none of ``review_first``:
+    on 2026-11-02 the first A&P files reply was rejected, and counting every
+    held row would have sent the next one unreviewed."""
+    return sum(1 for row in rows(directory) if row.get("status") == STATUS_SENT)
 
 
 def finish(
@@ -247,7 +252,9 @@ def main(argv: list[str] | None = None) -> int:
                 describe(row) + ("\n(EXPIRED: approve is refused)" if expired(row) else "") + "\n"
             )
         print(f"{len(waiting)} repl{'y' if len(waiting) == 1 else 'ies'} waiting for review.")
-        print(f"{held_count()} held for review on this seat so far (review_first counts these).")
+        print(
+            f"{released_count()} released after review on this seat so far (review_first counts these)."
+        )
         return 0
     if os.geteuid() != 0:
         print(

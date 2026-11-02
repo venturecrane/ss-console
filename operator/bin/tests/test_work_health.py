@@ -828,6 +828,34 @@ def test_a_failed_delivery_proof_is_open_until_proven():
     assert src.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
 
 
+def test_a_reply_found_after_the_deadline_closes_reply_unproven():
+    """Triage 10-20 and 11-02: the reply went at minute 21 and the alarm stayed."""
+    fail = _row(
+        "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J9", lane="negotiation", code="reply_unproven"
+    )
+    assert _kinds(src.delivery_proof_items(SEAT, [fail], CFG, NOW)) == ["job_failed"]
+
+    def sent(at, job="J9", **md):
+        fields = {"outcome": "sent", "lookup": "ok", "reply_binding": f"negotiation_job:{job}:1:delivered", **md}
+        return _row("CONFIRM_SEND_DISPATCHED", at, **fields)
+
+    later = NOW - timedelta(minutes=58)
+    assert src.delivery_proof_items(SEAT, [fail, sent(later)], CFG, NOW) == []
+    # Each of these leaves the alarm open: the reply is not proven to have gone.
+    for row in (
+        sent(later, job="OTHER"),
+        sent(later, outcome="failed"),
+        sent(later, lookup="failed: not found"),
+        sent(NOW - timedelta(hours=2)),
+    ):
+        assert _kinds(src.delivery_proof_items(SEAT, [fail, row], CFG, NOW)) == ["job_failed"]
+    # A different proof failure is not answered by a reply.
+    other = _row(
+        "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J9", lane="negotiation", code="readback_mismatch"
+    )
+    assert _kinds(src.delivery_proof_items(SEAT, [other, sent(later)], CFG, NOW)) == ["job_failed"]
+
+
 def test_a_proof_failure_after_a_released_hold_is_reported():
     """DB1 (2026-10-17 review): any earlier HELD row dropped the job's proof
     failure, so held -> released -> delivered -> proof failed reached nobody

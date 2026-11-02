@@ -20,6 +20,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -47,11 +48,8 @@ afterEach(() => {
 })
 
 /** Run ops-triage once against a fake HOME. `agentOut`/`agentErr` are what the
- *  fake `claude` prints. Returns the subject and body handed to the sender. */
-function runTriage(
-  agentOut: string,
-  agentErr = ''
-): { subject: string; body: string; home: string } {
+ *  fake `claude` prints. Returns the fake HOME, whether or not anything was sent. */
+function runTriageSilently(agentOut: string, agentErr = ''): string {
   const home = mkdtempSync(join(tmpdir(), 'ops-triage-'))
   homes.push(home)
   for (const d of ['bin', 'fakebin', 'dev/ss-console/operator'])
@@ -83,7 +81,15 @@ echo "fake ss-env: unexpected $*" >&2; exit 99
   env.HOME = home
   env.PATH = `${join(home, 'fakebin')}:${process.env.PATH ?? '/usr/bin:/bin'}`
   execFileSync('bash', [SCRIPT], { env, stdio: 'pipe' })
+  return home
+}
 
+/** Run ops-triage and return the subject and body handed to the sender. */
+function runTriage(
+  agentOut: string,
+  agentErr = ''
+): { subject: string; body: string; home: string } {
+  const home = runTriageSilently(agentOut, agentErr)
   const subjectPath = join(home, 'sent-subject')
   if (!existsSync(subjectPath)) {
     throw new Error(
@@ -118,6 +124,45 @@ describe('ops-triage report subject', () => {
     expect(subject).toBe('[SMD Ops] Triage: 1 handled, 2 need you')
     expect(body).toContain('NEEDS YOU (2)')
     expect(body).not.toMatch(/^Subject:/m)
+  })
+
+  it('emails only NEEDS YOU and keeps FIXES for a session', () => {
+    const report = [
+      'Subject: [SMD Ops] Triage: 1 handled, 1 need you',
+      '',
+      'NEEDS YOU (1)',
+      '- a&p: should we tell the firm.',
+      '',
+      'HANDLED (1)',
+      '- a&p: nothing to do.',
+      '',
+      'FIXES (1)',
+      '- change a file.',
+      '  second line of it.',
+      '',
+    ].join('\n')
+    const { subject, body, home } = runTriage(report)
+    expect(subject).toBe('[SMD Ops] Triage: 1 handled, 1 need you')
+    expect(body).toContain('should we tell the firm')
+    expect(body).not.toContain('nothing to do')
+    expect(body).not.toContain('change a file')
+    const dir = join(home, 'state', 'fixes')
+    const saved = readdirSync(dir).filter((f) => f.endsWith('.txt'))
+    expect(saved).toHaveLength(1)
+    expect(readFileSync(join(dir, saved[0]), 'utf8')).toContain('second line of it')
+  })
+
+  it.each(['0 need you', '0 needs you'])('sends nothing when the subject says %s', (count) => {
+    const report = `Subject: [SMD Ops] Triage: 4 handled, ${count}\n\nHANDLED (4)\n- done.\n\nFIXES (1)\n- a fix.\n`
+    const home = runTriageSilently(report)
+    expect(existsSync(join(home, 'sent-subject'))).toBe(false)
+    expect(readdirSync(join(home, 'state', 'fixes'))).toHaveLength(1)
+    expect(readFileSync(join(home, 'state', 'triage-since'), 'utf8')).toMatch(/^20/)
+  })
+
+  it('does not read 10 need you as 0', () => {
+    const report = 'Subject: [SMD Ops] Triage: 0 handled, 10 need you\n\nNEEDS YOU (10)\n- x.\n'
+    expect(runTriage(report).subject).toContain('10 need you')
   })
 
   it('still flags a report with no Subject line, and keeps the whole text', () => {

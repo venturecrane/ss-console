@@ -557,6 +557,47 @@ describe('POST /api/internal/operator-request-card', () => {
     vi.unstubAllGlobals()
   })
 
+  describe('a card reporting success on a seat that is not a customer (0147)', () => {
+    async function setKind(kind: string | null): Promise<void> {
+      await db
+        .prepare('UPDATE customer_configs SET seat_json = ? WHERE customer_slug = ?')
+        .bind(kind === null ? null : JSON.stringify({ kind, product: 'operator' }), SLUG)
+        .run()
+    }
+
+    it('is ledgered and not emailed, and says so', async () => {
+      await setKind('proving')
+      const res = await post(body())
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ ok: true, quiet: true })
+      expect(fetchMock).not.toHaveBeenCalled()
+      const [row] = await rows()
+      expect(row.email_skipped).toBe(1)
+      expect(row.status).toBe('pending')
+    })
+
+    it.each(['customer', null])('still emails on a seat of kind %s', async (kind) => {
+      await setKind(kind)
+      expect(await (await post(body())).json()).toEqual({ ok: true })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect((await rows())[0].email_skipped).toBe(0)
+    })
+
+    it('still emails a reply that told the person it could not do it', async () => {
+      await setKind('proving')
+      expect(await (await post(body({ could_not: 'cannot_find' }))).json()).toEqual({ ok: true })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('still emails the NO REPLY alarm', async () => {
+      await setKind('proving')
+      await post(
+        body({ card_key: `${HASH}:no_reply`, kind: 'no_reply', minutes: 31, reply_opening: null })
+      )
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('a wrong key is 401 and nothing is recorded or sent', async () => {
     const res = await post(body(), 'wrong-key-wrong-key-wrong-key-xx')
     expect(res.status).toBe(401)
@@ -864,6 +905,7 @@ describe('POST /api/internal/operator-request-card', () => {
         'attempts',
         'card_key',
         'could_not',
+        'email_skipped',
         'customer_slug',
         'event_at',
         'failed',

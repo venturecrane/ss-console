@@ -57,6 +57,8 @@ export interface CardRow {
   job_lane: string | null
   job_state: string | null
   status: string
+  /** 1: deliberately not emailed, a success on a non-customer seat (0147). */
+  email_skipped?: number
   attempts: number
   /** The lane a lane_unproven card names (migration 0125); absent before it. */
   lane_key?: string | null
@@ -144,7 +146,11 @@ function outcome(row: CardRow): string {
 
 export function renderLine(row: CardRow): string {
   const when = row.received_at.slice(0, 16).replace('T', ' ')
-  const sent = row.status === 'sent' ? 'emailed' : `NOT EMAILED (${row.attempts} tries)`
+  const sent = row.email_skipped
+    ? 'not emailed (test seat)'
+    : row.status === 'sent'
+      ? 'emailed'
+      : `NOT EMAILED (${row.attempts} tries)`
   return [
     `${when}Z`,
     row.customer_slug.padEnd(16),
@@ -186,7 +192,7 @@ export function summarize(rows: readonly CardRow[]): Summary {
     laneUnproven: rows.filter((r) => r.kind === 'lane_unproven').length,
     heldReply: rows.filter((r) => r.kind === 'held_reply').length,
     laterReplies: rows.filter((r) => r.kind === 'followup').length,
-    notEmailed: rows.filter((r) => r.status !== 'sent').length,
+    notEmailed: rows.filter((r) => r.status !== 'sent' && !r.email_skipped).length,
     stillUnanswered: alarms.filter((r) => !answered.has(requestIdOf(r.card_key))).length,
   }
 }
@@ -232,7 +238,7 @@ export async function readCards(args: RequestsArgs, nowMs: number): Promise<Card
     .prepare(
       `SELECT customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
               replies, refused, failed, job_lane, job_state, status, attempts, lane_key,
-              jobs_queued, could_not
+              jobs_queued, could_not, email_skipped
          FROM operator_request_cards
         WHERE received_at >= ?${seatFilter}
         ORDER BY received_at DESC, customer_slug, kind
