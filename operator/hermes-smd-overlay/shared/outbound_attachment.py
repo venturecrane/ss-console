@@ -16,9 +16,10 @@ carrying a sha256 that matches its bytes, of two kinds:
   workbook rule, unchanged);
 * ``.pdf``: at most :data:`MAX_PDF_BYTES` decoded each.
 
-Which transport carries which is the transport's decision, not this module's:
-the Graph verb still carries exactly one workbook (``outbound_send``), the
-AgentMail verb carries the full set. The descriptor shape is pinned across
+Both transports carry the full set this module allows. The one difference is
+the transport's own, in ``outbound_send``: the Graph verb holds the files to a
+smaller total (2.5 MiB) because Graph takes them inline only in a request of
+about 4 MB. The descriptor shape is pinned across
 repos (ss-console's broker re-validates it and maps it to the vendor's)::
 
     {"name": str, "content_type": XLSX_CONTENT_TYPE | PDF_CONTENT_TYPE,

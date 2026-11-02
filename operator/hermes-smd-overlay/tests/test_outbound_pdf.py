@@ -314,7 +314,7 @@ def test_falsifier_the_same_pdf_passes_once_its_date_was_read(gate):  # noqa: F8
 
 
 # ---------------------------------------------------------------------------
-# The transport: AgentMail carries the set; Graph still carries one workbook
+# The transport: AgentMail and Graph both carry the set; Graph's total is smaller
 # ---------------------------------------------------------------------------
 
 
@@ -412,16 +412,82 @@ def test_a_broker_refusal_of_the_attachment_is_an_attachment_refusal():
         )
 
 
-def test_graph_refuses_a_pdf_before_the_broker_is_asked():
+def test_graph_forwards_every_validated_attachment_as_the_pinned_descriptor():
+    """The Graph verb carries the set ``validate_all`` allows: two PDFs and the
+    one workbook, each as the four-key descriptor, nothing the caller added."""
     mod = _outbound_send()
     captured: list = []
-    with pytest.raises(mod.MsGraphAttachmentError, match="only a workbook"):
+    attachments = [
+        pdf_descriptor(make_pdf(["A"]), "A.pdf"),
+        pdf_descriptor(make_pdf(["B"]), "B.pdf"),
+        xlsx_descriptor(),
+    ]
+    mod.send_via_msgraph(
+        {"to": "staff@firm.example", "subject": "Records", "text": "Attached."},
+        sender=_capture(captured),
+        attachments=[{**a, "extra": "dropped"} for a in attachments],
+    )
+    [call] = captured
+    assert call["body"]["attachments"] == attachments
+
+
+@pytest.mark.parametrize(
+    "attachments, match",
+    [
+        # Mutations of the allowed set: each one must still refuse on Graph.
+        pytest.param(_pdfs(4), "at most 3", id="a-fourth-file"),
+        pytest.param(
+            [xlsx_descriptor(), xlsx_descriptor(name="b.xlsx")], "workbooks", id="a-second-workbook"
+        ),
+        pytest.param(
+            [pdf_descriptor(), pdf_descriptor()], "share a name", id="a-second-pdf-same-name"
+        ),
+        pytest.param(
+            [{**pdf_descriptor(), "content_type": "application/msword", "name": "a.doc"}],
+            "not a workbook or a PDF",
+            id="a-non-pdf",
+        ),
+        pytest.param(
+            [pdf_descriptor(b"PK\x03\x04 not a pdf", "Fake.pdf")],
+            "not a PDF",
+            id="pdf-name-not-bytes",
+        ),
+        pytest.param([{**pdf_descriptor(), "sha256": "0" * 64}], "sha256", id="sha-mismatch"),
+        # Within AgentMail's 3 MiB but over Graph's 2.5 MiB: Graph-only refusal.
+        pytest.param(_pdfs(2, size=1_400_000), "transport carries", id="over-the-graph-total"),
+    ],
+)
+def test_graph_refuses_a_set_outside_its_limits_before_the_broker_is_asked(attachments, match):
+    mod = _outbound_send()
+    captured: list = []
+    with pytest.raises(mod.MsGraphAttachmentError, match=match):
         mod.send_via_msgraph(
             {"to": "a@b.com", "text": "attached"},
             sender=_capture(captured),
-            attachments=[pdf_descriptor()],
+            attachments=attachments,
         )
     assert captured == []
+    assert issubclass(mod.MsGraphAttachmentError, mod.AttachmentSendError)
+
+
+def test_the_graph_total_is_inclusive_and_smaller_than_agentmails():
+    """Falsifier for the Graph-only case above: exactly the Graph total sends on
+    Graph, and the set refused there is one AgentMail still carries."""
+    mod = _outbound_send()
+    assert mod._MSGRAPH_MAX_TOTAL_BYTES < outbound_attachment.MAX_TOTAL_ATTACHMENT_BYTES
+    half = mod._MSGRAPH_MAX_TOTAL_BYTES // 2
+    captured: list = []
+    mod.send_via_msgraph(
+        {"to": "a@b.com", "text": "attached"},
+        sender=_capture(captured),
+        attachments=_pdfs(2, size=half),
+    )
+    assert len(captured) == 1
+    over = _pdfs(2, size=1_400_000)
+    mod.send_message(
+        payload={"to": "a@b.com", "text": "x"}, sender=_capture(captured), attachments=over
+    )
+    assert len(captured) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -487,18 +553,68 @@ def test_one_refused_pdf_refuses_the_whole_send(monkeypatch):
     assert not result.sent and result.attachment_refused and am == []
 
 
-def test_a_pdf_on_a_graph_seat_is_an_attachment_refusal(monkeypatch):
+def test_two_pdfs_reach_the_graph_broker_scanned_and_stamped(monkeypatch):
+    """The A&P shape: a Graph seat sends matter PDFs through the same gate and
+    the same stamp as an AgentMail seat, and nothing reaches AgentMail."""
     trust = load_plugin("hermes-smd-trust")
     am, graph = _arm(monkeypatch, trust, "msgraph")
-    monkeypatch.setattr(trust.outbound, "check_outbound_attachment", lambda text, **k: None)
+    scanned: list[str] = []
+    monkeypatch.setattr(
+        trust.outbound, "check_outbound_attachment", lambda text, **k: scanned.append(text)
+    )
+    a = pdf_descriptor(make_pdf(["Records request, page one."]), "Records 1.pdf")
+    b = pdf_descriptor(make_pdf(["Billing ledger, page two."]), "Records 2.pdf")
+    result = trust._dispatch_internal_message(
+        to=["staff@firm.example"],
+        subject="Records",
+        text="Both attached.",
+        session_id="s1",
+        attachments=[a, b],
+    )
+    assert result.sent and not result.attachment_refused
+    [call] = graph
+    assert [x["sha256"] for x in call["body"]["attachments"]] == [a["sha256"], b["sha256"]]
+    assert call["audit_extra"]["attachment_sha256"] == f"{a['sha256']},{b['sha256']}"
+    assert any("page one" in t for t in scanned) and any("page two" in t for t in scanned)
+    assert am == []
+
+
+def test_one_refused_pdf_refuses_the_whole_graph_send(monkeypatch):
+    trust = load_plugin("hermes-smd-trust")
+    am, graph = _arm(monkeypatch, trust, "msgraph")
+    monkeypatch.setattr(
+        trust.outbound,
+        "check_outbound_attachment",
+        lambda text, **k: {"action": "block", "message": "no"} if "November" in text else None,
+    )
     result = trust._dispatch_internal_message(
         to=["staff@firm.example"],
         subject="s",
         text="b",
         session_id="s1",
-        attachments=[pdf_descriptor()],
+        attachments=[
+            pdf_descriptor(make_pdf(["October 26"]), "A.pdf"),
+            pdf_descriptor(make_pdf(["November 2"]), "B.pdf"),
+        ],
     )
     assert not result.sent and result.attachment_refused
+    assert am == [] and graph == []
+
+
+def test_a_set_over_the_graph_total_on_a_graph_seat_is_an_attachment_refusal(monkeypatch):
+    trust = load_plugin("hermes-smd-trust")
+    am, graph = _arm(monkeypatch, trust, "msgraph")
+    monkeypatch.setattr(trust.outbound, "check_outbound_attachment", lambda text, **k: None)
+    monkeypatch.setattr(trust.outbound_attachment, "extract_text", lambda d, data: "text")
+    result = trust._dispatch_internal_message(
+        to=["staff@firm.example"],
+        subject="s",
+        text="b",
+        session_id="s1",
+        attachments=_pdfs(2, size=1_400_000),
+    )
+    assert not result.sent and result.attachment_refused
+    assert "transport carries" in result.reason
     assert am == [] and graph == []
 
 

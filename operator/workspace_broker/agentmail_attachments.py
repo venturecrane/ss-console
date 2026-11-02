@@ -143,8 +143,18 @@ def _one(entry: Any) -> tuple[dict[str, str], bytes]:
     return part, raw
 
 
-def build(payload: dict[str, Any]) -> Attachments | None:
-    """The AgentMail parts for ``payload``, or ``None`` when it carries none.
+def validated(
+    payload: dict[str, Any], *, max_total: int = MAX_TOTAL_BYTES
+) -> list[tuple[dict[str, str], bytes]] | None:
+    """Every attachment of ``payload`` re-validated, as (AgentMail part, raw
+    bytes) pairs in order, or ``None`` when it carries none.
+
+    THE ONE BROKER-SIDE VALIDATOR FOR OUTBOUND FILES. Both send verbs call it:
+    :func:`build` here for AgentMail, and ``msgraph_attachments`` for Graph,
+    which maps each pair to a ``fileAttachment``. So the two transports refuse
+    exactly the same files, and a check added here reaches both. ``max_total``
+    is the one per-transport knob: Graph passes a smaller total because its
+    inline request is smaller than AgentMail's (see ``msgraph_attachments``).
 
     Absent and ``None`` mean no attachment. Anything else present must be a list
     of one to three valid entries; an empty list is refused too, because a caller
@@ -160,11 +170,20 @@ def build(payload: dict[str, Any]) -> Attachments | None:
     built = [_one(entry) for entry in entries]
     if sum(1 for part, _ in built if part["content_type"] == XLSX_CONTENT_TYPE) > MAX_XLSX_ATTACHMENTS:
         raise AttachmentRefused(f"at most {MAX_XLSX_ATTACHMENTS} workbook per send")
-    if sum(len(raw) for _, raw in built) > MAX_TOTAL_BYTES:
-        raise AttachmentRefused("the attachments together exceed the 3 MiB bound")
+    if sum(len(raw) for _, raw in built) > max_total:
+        raise AttachmentRefused(f"the attachments together exceed the {max_total}-byte bound")
     names = [part["filename"].lower() for part, _ in built]
     if len(set(names)) != len(names):
         raise AttachmentRefused("two attachments share a name")
+    return built
+
+
+def build(payload: dict[str, Any]) -> Attachments | None:
+    """The AgentMail parts for ``payload``, or ``None`` when it carries none.
+    The checks are :func:`validated`'s."""
+    built = validated(payload)
+    if built is None:
+        return None
     return Attachments(
         parts=tuple(part for part, _ in built),
         sha256s=tuple(hashlib.sha256(raw).hexdigest() for _, raw in built),
