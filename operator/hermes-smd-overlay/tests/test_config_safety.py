@@ -478,6 +478,8 @@ def test_firm_filing_rules_apply_live() -> None:
     assert live_writable("vendor_invoice_intake.folder_name")
     assert live_writable("vendor_invoice_intake.staff_id")
     assert live_writable("combined_post_intake.medical_folder")
+    assert live_writable("matter_file_delivery.recipients")
+    assert live_writable("matter_file_delivery.review_first")
     # The prefix is the block, not a substring: a sibling key is not admitted.
     assert not live_writable("vendor_invoice_intake_extra")
 

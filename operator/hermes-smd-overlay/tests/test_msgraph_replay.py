@@ -345,3 +345,26 @@ def test_rewake_reports_a_duplicate_drop_rather_than_claiming_delivery(tmp_path)
         state_dir=str(tmp_path),
     )
     assert code == 1
+
+
+def test_a_rewake_mints_a_fresh_request_id_and_a_replay_keeps_the_original(tmp_path):
+    """The gateway's admission ledger is durable and already holds the original
+    intake's id, so a re-wake under it is refused (admission_conflict) forever."""
+    raw = _raw("AAMk-orig", "attorney@client.example")
+    original = hashlib.sha256(b"AAMk-orig").hexdigest()
+    first, second = _Recorder(202), _Recorder(202)
+    for fwd in (first, second):
+        msgraph_replay.rewake(
+            "AAMk-orig",
+            mailbox=_MAILBOX,
+            signing_secret=_SECRET,
+            client=_Graph(raw),
+            forward_fn=fwd,
+            state_dir=str(tmp_path / fwd.__class__.__name__ / str(id(fwd))),
+        )
+    ids = {first.posts[0]["request_id"], second.posts[0]["request_id"]}
+    assert original not in ids and len(ids) == 2
+    letter = _letter(tmp_path, raw)
+    fwd = _Recorder(202)
+    msgraph_replay.replay(str(letter), mailbox=_MAILBOX, signing_secret=_SECRET, forward_fn=fwd)
+    assert fwd.posts[0]["request_id"] == original
