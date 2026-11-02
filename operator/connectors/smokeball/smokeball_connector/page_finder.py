@@ -83,7 +83,7 @@ INDEX_DIR_ENV = "SMOKEBALL_PAGE_INDEX_DIR"
 DEFAULT_INDEX_DIR = "/opt/data/smokeball-page-index"
 MODEL_ENV = "SMOKEBALL_PAGE_FINDER_MODEL"
 #: Bumped when the index prompt or schema changes; an index of another version is not reused.
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 PAGES_PER_CALL = 100
 #: A runaway guard, not a working limit: a 2,310-page set must index whole
 #: across calls (each call reads at most PAGES_PER_CALL new pages).
@@ -158,6 +158,7 @@ def load_index(sha: str, base: Path | None = None) -> dict[str, Any]:
     data.setdefault("pages", {})
     data.setdefault("matters", [])
     data.setdefault("unreadable", {})
+    data.setdefault("refusals", {})
     data.setdefault("spent", {"input_tokens": 0, "output_tokens": 0})
     return data
 
@@ -320,6 +321,7 @@ def _page_row(row: dict[str, Any]) -> dict[str, Any]:
         "sections": sections[:8],
         "dates": [_clip(d) for d in (row.get("dates") or []) if str(d or "").strip()][:8],
         "running_header": _clip(row.get("running_header")),
+        "note_label": _clip(row.get("note_label")),
         "page_of": _clip(row.get("page_of")),
         "legible": bool(row.get("legible")),
     }
@@ -348,9 +350,20 @@ def _batches(pages: list[tuple[int, bytes]]) -> list[list[tuple[int, bytes]]]:
     return out
 
 
+#: Times a page may be declined before it is treated as unreadable for good:
+#: once on the call that met it, once more on a later call.
+REFUSAL_TRIES = 2
+
+
+def _settled(index: dict[str, Any], key: str) -> bool:
+    """An unreadable page that is not retried: declined :data:`REFUSAL_TRIES`
+    times, or unreadable for a reason a retry cannot change (too large)."""
+    return int(index["refusals"].get(key, REFUSAL_TRIES)) >= REFUSAL_TRIES
+
+
 def _wanted(index: dict[str, Any], total: int, window: tuple[int, int] | None) -> list[int]:
     first, last = window or (1, total)
-    known = index["pages"].keys() | index["unreadable"].keys()
+    known = index["pages"].keys() | {k for k in index["unreadable"] if _settled(index, k)}
     todo = [n for n in range(first, min(last, total) + 1) if str(n) not in known]
     room = max(0, MAX_PAGES_PER_FILE - len(known))
     return todo[: min(PAGES_PER_CALL, room)]
@@ -397,6 +410,7 @@ def _build(
     facts: dict[str, Any] = {
         "read_now": [],
         "unreadable_now": {},
+        "refused_now": set(),
         "failed": {},
         "tokens": {"input_tokens": 0, "output_tokens": 0},
     }
@@ -409,7 +423,7 @@ def _build(
         else:
             pages.append((n, blob))
     _run_batches(_batches(pages), index, facts, time.monotonic() + CALL_DEADLINE_SECONDS)
-    index["unreadable"].update(facts["unreadable_now"])
+    _settle_unreadable(index, facts)
     for key, value in facts["tokens"].items():
         index["spent"][key] = int(index["spent"].get(key) or 0) + value
     save_index(index, base)
@@ -448,6 +462,7 @@ class _BatchReader:
             elif exc.stop_reason:
                 why = f"the model declined to read it (stop_reason {exc.stop_reason})"
                 self.facts["unreadable_now"][str(number)] = why
+                self.facts["refused_now"].add(str(number))
             else:
                 self.facts["failed"][str(number)] = str(exc)
 
@@ -483,6 +498,22 @@ class _BatchReader:
         failure = self._attempt([page])
         if failure is not None:
             self._note(page[0], failure)
+
+
+def _settle_unreadable(index: dict[str, Any], facts: dict[str, Any]) -> None:
+    """Record this call's unreadable pages; a page read on a retry stops being one."""
+    for key in map(str, facts["read_now"]):
+        index["unreadable"].pop(key, None)
+        index["refusals"].pop(key, None)
+    for key, why in facts["unreadable_now"].items():
+        if key in facts["refused_now"]:
+            tries = int(index["refusals"].get(key, 0)) + 1
+            index["refusals"][key] = tries
+            later = "; it is tried once more on the next call" if tries < REFUSAL_TRIES else f"; declined {tries} times"
+            index["unreadable"][key] = why + later
+        else:
+            index["refusals"][key] = REFUSAL_TRIES
+            index["unreadable"][key] = why
 
 
 def _run_batches(
@@ -631,10 +662,15 @@ def _qualify(items: list[dict[str, Any]], unreadable: dict[str, str], remaining:
             gaps.append(f"{remaining} pages are not read yet")
         item["established"] = not gaps
         if gaps:
+            # The model's own sentence is dropped, not prefixed: written from
+            # the pages it saw, it can read "there is no X" when the pages it
+            # did not see may hold X. The reason is composed here instead.
             item["notEstablishedBecause"] = "; ".join(gaps)
             item["reason"] = (
-                "NOT ESTABLISHED: not found on the pages read, but " + "; ".join(gaps) + ". " + item["reason"]
-            )[:600]
+                "NOT ESTABLISHED: not found on the pages read, but "
+                + "; ".join(gaps)
+                + ". It may be on those pages; this is not a finding that it is absent."
+            )
 
 
 def _compress(numbers: list[int]) -> str:

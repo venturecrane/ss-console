@@ -536,21 +536,43 @@ def test_a_refused_page_is_split_out_and_never_sinks_its_batch(monkeypatch: pyte
     _refusing(monkeypatch, tmp_path, {3})
     out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
     assert out["indexedPages"] == 7 and not out["complete"] and out["remainingPages"] == 0
-    assert out["unreadablePages"] == [{"page": 3, "reason": "the model declined to read it (stop_reason refusal)"}]
+    assert out["unreadablePages"] == [
+        {
+            "page": 3,
+            "reason": "the model declined to read it (stop_reason refusal); it is tried once more on the next call",
+        }
+    ]
     assert "could not be read" in out["note"] and "failedPages" not in out
     # The unreadable page stays INSIDE its section, named, never skipped.
     (sec,) = out["documents"][:1]
     assert sec["pages"] == "1-4" and sec["unreadablePages"] == {"3": out["unreadablePages"][0]["reason"]}
 
 
-def test_a_refused_page_is_cached_and_not_reread(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_a_refused_page_is_retried_once_on_a_later_call_then_settled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    src = _set(tmp_path, 8)
+    first = pf.locate(src, "x", _work(tmp_path))
+    assert "tried once more on the next call" in first["unreadablePages"][0]["reason"]
+    before = fake.index_calls()
+    second = pf.locate(src, "x", _work(tmp_path))
+    assert fake.index_calls() == before + 1  # page 3 alone, once more
+    assert "declined 2 times" in second["unreadablePages"][0]["reason"]
+    third = pf.locate(src, "x", _work(tmp_path))
+    assert fake.index_calls() == before + 1 and third["readNow"] == 0  # settled: not paid for again
+    assert third["unreadablePages"][0]["page"] == 3
+
+
+def test_a_refused_page_read_on_its_retry_stops_being_unreadable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     fake = _refusing(monkeypatch, tmp_path, {3})
     src = _set(tmp_path, 8)
     pf.locate(src, "x", _work(tmp_path))
-    before = fake.index_calls()
-    again = pf.locate(src, "x", _work(tmp_path))
-    assert fake.index_calls() == before and again["readNow"] == 0
-    assert again["unreadablePages"][0]["page"] == 3
+    fake.refuse = frozenset()
+    out = pf.locate(src, "x", _work(tmp_path))
+    assert out["complete"] and "unreadablePages" not in out and out["readNow"] == 1
 
 
 def test_strips_are_cut_to_the_viewed_top_and_bottom(model: FakeModel, tmp_path: Path) -> None:
@@ -732,3 +754,68 @@ def test_a_negative_with_pages_left_is_not_established(
     done = _set(tmp_path, 8)
     full = pf.locate(done, "x", _work(tmp_path))
     assert full["items"][2]["established"] is True and "NOT ESTABLISHED" not in full["items"][2]["reason"]
+
+
+# ---- follow-ups: the note's own label, standalone files, flat negatives -----
+
+
+def _labelled(banner: str, label: str, *starts: tuple[str, str, str, str]) -> dict[str, Any]:
+    row = _page(*starts, cont=True)
+    row["running_header"] = banner
+    row["note_label"] = label
+    return row
+
+
+def test_the_notes_own_label_keeps_it_running_under_an_encounter_banner() -> None:
+    """The banner names the encounter on every page and never says continued;
+    the note's own label line does. The summary must run 538-572."""
+    summary = ("DISCHARGE SUMMARY", "discharge summary", "6/30/2024", "Hospital B")
+    flowsheet = ("VITALS FLOWSHEET", "flowsheet", "6/28/2024", "Hospital B")
+    banner = "Hospital B | Encounter 6/27/2024"
+    pages = {"538": _page(summary)}
+    for n in range(539, 573):
+        starts = (flowsheet,) if n == 541 else ()
+        pages[str(n)] = _labelled(banner, "Discharge Summary (continued)", *starts)
+    pages["573"] = _page(("OFFICE VISIT", "office visit note", "8/1/2024", "Clinic A"))
+    spans = [(s["heading"], s["first"], s["last"]) for s in pf.sections(pages)]
+    assert spans[0] == ("DISCHARGE SUMMARY", 538, 572)
+
+
+def test_the_label_wins_over_a_banner_that_says_continued() -> None:
+    """A banner may carry "continued" (a multi-page encounter header); when the
+    page's own label is a different, non-continued note, what starts there
+    ends the running one."""
+    note = ("PROGRESS NOTE", "progress note", "1/1/2024", "Clinic A")
+    pages = {
+        "1": _page(note),
+        "2": _labelled("Encounter (continued)", "Operative Report", ("OPERATIVE REPORT", "operative report", "", "")),
+        "3": _labelled("Encounter (continued)", "Operative Report (continued)"),
+    }
+    assert [(s["heading"], s["first"], s["last"]) for s in pf.sections(pages)] == [
+        ("PROGRESS NOTE", 1, 2),
+        ("OPERATIVE REPORT", 2, 3),
+    ]
+
+
+def test_the_index_asks_for_the_note_label_separately(model: FakeModel, tmp_path: Path) -> None:
+    from smokeball_connector import page_finder_prompts as prompts
+
+    required = prompts.INDEX_SCHEMA["properties"]["pages"]["items"]["required"]
+    assert "note_label" in required and "running_header" in required
+    assert "not the encounter banner" in prompts.INDEX_INSTRUCTION
+    assert pf.PROMPT_VERSION >= 4
+
+
+def test_the_tool_prefers_a_records_own_file() -> None:
+    assert "OWN file" in pft.TOOL_NOTE and "rather than these pages" in pft.TOOL_NOTE
+
+
+def test_a_not_established_item_carries_no_flat_negative(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    fake.items = [
+        {"asked": "the x-ray", "found": False, "sections": [], "reason": "The x-ray does not exist in this file."}
+    ]
+    out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
+    (xray,) = out["items"]
+    assert "does not exist" not in xray["reason"] and xray["reason"].startswith("NOT ESTABLISHED")
+    assert "not a finding that it is absent" in xray["reason"]
