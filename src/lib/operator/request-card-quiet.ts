@@ -4,8 +4,13 @@
  * A card that says nothing went wrong, from a seat that is not a customer's:
  * our own rehearsals answering on time were half of the ops mail on 2026-11-02.
  * Everything else still emails on every seat, because a test seat that stops
- * answering is usually something every seat shares. A customer seat's cards
- * always email (the Captain asked for one per request, 2026-10-27, #3555).
+ * answering is usually something every seat shares. A customer seat's request
+ * cards always email (the Captain asked for one per request, 2026-10-27, #3555).
+ *
+ * A routine notice is quiet on every seat: a later reply with no request behind
+ * it is the Operator telling someone something on a schedule (21 negotiation
+ * notices in two weeks, subject "(no request on record)"). Nobody asked, nothing
+ * went wrong, and nothing is owed, so it is not a message about a request.
  *
  * The seat's kind is its authored `seat.kind`, read from the D1 projection. An
  * unknown kind is NOT a test seat, the same rule as operator/bin/work-health.py:
@@ -18,6 +23,14 @@ import type { RequestCard } from './request-card'
 export function cardReportsSuccess(card: RequestCard): boolean {
   if (card.kind === 'replied' || card.kind === 'followup') return !card.couldNot
   return card.kind === 'job_done' && card.job?.state === 'delivered'
+}
+
+/** The seat's own marker for a later reply with no request behind it. */
+export const NO_REQUEST_SUBJECT = '(no request on record)'
+
+/** A delivered notice nobody asked for. One that declined still emails. */
+export function cardIsRoutineNotice(card: RequestCard): boolean {
+  return card.kind === 'followup' && card.subject === NO_REQUEST_SUBJECT && !card.couldNot
 }
 
 /** `seat.kind` from a projected seat_json, or null when it cannot be read. */
@@ -39,6 +52,7 @@ export async function cardIsQuiet(
   slug: string,
   card: RequestCard
 ): Promise<boolean> {
+  if (cardIsRoutineNotice(card)) return true
   if (!cardReportsSuccess(card)) return false
   try {
     const row = await db

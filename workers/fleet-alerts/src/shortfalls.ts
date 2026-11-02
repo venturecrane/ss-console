@@ -35,6 +35,7 @@
  * been emailed yet (a Resend outage, the throttle) still go out.
  */
 
+import { seatIsQuiet } from './mail-policy'
 import { escapeHtml } from './html'
 import type { Env } from './index'
 import type { FleetStatusRow } from './fleet-status'
@@ -480,6 +481,16 @@ export async function notifyShortfalls(
       if (events.length > 0) await recordEvents(env.DB, row.customer_slug, events)
       const pending = await pendingRows(env.DB, row.customer_slug, IMMEDIATE_CLASSES)
       if (pending.length === 0) continue
+      // A test seat's shortfalls are recorded and left for the triage agent
+      // (./mail-policy). Marked notified so they do not pile up behind the throttle.
+      if (await seatIsQuiet(env.DB, row.customer_slug)) {
+        await markNotified(
+          env.DB,
+          row.customer_slug,
+          pending.map((r) => r.event_key)
+        )
+        continue
+      }
       if (await throttled(env.DB, row.customer_slug, nowMs)) continue
       const subject = `[SMD Ops] SHORTFALL ${row.customer_slug}: ${classSummary(pending)} (${toolSummary(pending)})`
       const sent = await sendEmail(env, subject, shortfallHtml(env, row, pending, nowMs))

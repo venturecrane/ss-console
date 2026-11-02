@@ -203,7 +203,7 @@ afterEach(() => {
 })
 
 describe('notifyRolloutFailures', () => {
-  it('pages once, moves the marker, and is silent on the next tick', async () => {
+  it('moves the marker once and emails nobody (./mail-policy)', async () => {
     const mock = stubResend()
     const state: FakeState = { rollouts: [rollout()], markers: new Map() }
     const first = await notifyRolloutFailures(makeEnv(state), NOW)
@@ -212,24 +212,13 @@ describe('notifyRolloutFailures', () => {
         customer_slug: 'captain-mark',
         marker: '2026-10-21T22:59:12Z',
         releases: ['img-202610202216-41f5627a-1aa0a762'],
-        emailed: true,
-        resendId: 'resend-rollout-1',
+        emailed: false,
+        resendId: undefined,
       },
     ])
     expect(state.markers.get('captain-mark:rollout_failed')).toBe('2026-10-21T22:59:12Z')
-    const body = JSON.parse(String((mock.mock.calls[0][1] as RequestInit).body))
-    expect(body.to).toBe('team@smd.services')
-    expect(body.html).toContain('--only captain-mark')
     expect(await notifyRolloutFailures(makeEnv(state), NOW + 120_000)).toEqual([])
-    expect(mock).toHaveBeenCalledTimes(1)
-  })
-
-  it('a Resend failure does not move the marker, so the next tick retries', async () => {
-    stubResend(false)
-    const state: FakeState = { rollouts: [rollout()], markers: new Map() }
-    const out = await notifyRolloutFailures(makeEnv(state), NOW)
-    expect(out[0].emailed).toBe(false)
-    expect(state.markers.size).toBe(0)
+    expect(mock).not.toHaveBeenCalled()
   })
 
   it('a read failure pages nothing and does not throw', async () => {

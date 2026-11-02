@@ -890,7 +890,7 @@ describe('connector conditions (ADR 0080)', () => {
 describe('alert-sink notification', () => {
   const healthy = (): FleetStatusRow[] => [row({ last_heartbeat_ts: new Date(NOW).toISOString() })]
 
-  it('emails an undelivered sentry row and marks it notified', async () => {
+  it('a sentry row is marked notified and left for the triage agent, not emailed', async () => {
     const fetchMock = stubResend()
     const state: FakeState = {
       fleet: healthy(),
@@ -901,17 +901,33 @@ describe('alert-sink notification', () => {
 
     const summary = await runOnce(makeEnv(state), NOW)
 
+    expect(summary.sink_notifications[0]).toMatchObject({ source: 'sentry', emailed: false })
+    expect(state.sink![0].notified_at).not.toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('emails an undelivered healthchecks row and marks it notified', async () => {
+    const fetchMock = stubResend()
+    const state: FakeState = {
+      fleet: healthy(),
+      alertState: new Map(),
+      writes: [],
+      sink: [sinkRow({ source: 'healthchecks' })],
+    }
+
+    const summary = await runOnce(makeEnv(state), NOW)
+
     expect(summary.sink_notifications).toHaveLength(1)
     expect(summary.sink_notifications[0]).toMatchObject({
       customer_slug: 'pilot-smokeball',
-      source: 'sentry',
+      source: 'healthchecks',
       emailed: true,
     })
     expect(state.sink![0].notified_at).not.toBeNull()
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
     expect(body.to).toBe('team@smd.services')
     expect(body.subject).toContain('pilot-smokeball')
-    expect(body.subject).toContain('Sentry issue alert')
+    expect(body.subject).toContain('healthchecks.io grace expired')
   })
 
   it('delivers each row exactly once across runs', async () => {
@@ -939,7 +955,7 @@ describe('alert-sink notification', () => {
       fleet: healthy(),
       alertState: new Map(),
       writes: [],
-      sink: [sinkRow()],
+      sink: [sinkRow({ source: 'healthchecks' })],
     }
 
     const summary = await runOnce(makeEnv(state), NOW)
@@ -996,7 +1012,7 @@ describe('alert-sink notification', () => {
       fleet: healthy(),
       alertState: new Map(),
       writes: [],
-      sink: [sinkRow({ summary: '<img src=x onerror="alert(1)">' })],
+      sink: [sinkRow({ source: 'healthchecks', summary: '<img src=x onerror="alert(1)">' })],
     }
 
     await runOnce(makeEnv(state), NOW)
@@ -1278,7 +1294,8 @@ describe('spec_control (ss#2234)', () => {
 
     await runOnce(env, NOW)
     const bodies = () => fetchMock.mock.calls.map((c) => String((c[1] as { body: string }).body))
-    expect(bodies().some((b) => b.includes('ALERT') && b.includes('staff.voice'))).toBe(true)
+    // Recorded for the triage agent, never emailed (./mail-policy).
+    expect(bodies()).toHaveLength(0)
     expect(state.writes).toContain('open:pilot-smokeball:spec_control_broken:staff.voice')
 
     // Still broken on the next tick: no second email.
@@ -1296,9 +1313,8 @@ describe('spec_control (ss#2234)', () => {
       }),
     ]
     await runOnce(env, NOW)
-    const recovered = bodies().filter((b) => b.includes('RECOVERED') && b.includes('staff.voice'))
-    expect(recovered).toHaveLength(1)
-    expect(recovered[0]).toContain('spec installed')
+    expect(bodies()).toHaveLength(0)
+    expect(state.writes).toContain('resolve:pilot-smokeball:spec_control_broken:staff.voice')
   })
 })
 
@@ -1459,9 +1475,8 @@ describe('webhook_surface (ss#2287 — the ss#2222 warn tier)', () => {
 
     await runOnce(env, NOW)
     const bodies = () => fetchMock.mock.calls.map((c) => String((c[1] as { body: string }).body))
-    expect(bodies().some((b) => b.includes('ALERT') && b.includes('operator_seat_facts'))).toBe(
-      true
-    )
+    // Recorded for the triage agent, never emailed (./mail-policy).
+    expect(bodies()).toHaveLength(0)
     expect(state.writes).toContain(
       'open:pilot-smokeball:webhook_surface_missing:operator_seat_facts'
     )
@@ -1483,11 +1498,10 @@ describe('webhook_surface (ss#2287 — the ss#2222 warn tier)', () => {
       }),
     ]
     await runOnce(env, NOW)
-    const recovered = bodies().filter(
-      (b) => b.includes('RECOVERED') && b.includes('operator_seat_facts')
+    expect(bodies()).toHaveLength(0)
+    expect(state.writes).toContain(
+      'resolve:pilot-smokeball:webhook_surface_missing:operator_seat_facts'
     )
-    expect(recovered).toHaveLength(1)
-    expect(recovered[0]).toContain('offered on the webhook surface')
   })
 
   it('an open alert whose seat stops reporting the map surfaces as a stale hold', async () => {
@@ -1824,7 +1838,7 @@ describe('runOnce drift alarm', () => {
     },
   ]
 
-  it('pages image_drift once, stays silent while drifted, recovers once', async () => {
+  it('records image_drift once, emails nobody, recovers once', async () => {
     const fetchMock = stubResend()
     const state: FakeState = {
       fleet: [row({ image_ref: `${REPO}:rel-old` })],
@@ -1835,16 +1849,12 @@ describe('runOnce drift alarm', () => {
     }
     const first = await runOnce(makeEnv(state), NOW)
     expect(first.transitions).toEqual([
-      expect.objectContaining({ condition: 'image_drift', kind: 'opened', emailed: true }),
+      expect.objectContaining({ condition: 'image_drift', kind: 'opened', emailed: false }),
     ])
-    const alert = JSON.parse(String(fetchMock.mock.calls[0][1].body))
-    expect(alert.subject).toBe(
-      '[SMD Ops] ALERT smd: Seat went back to an older image after its release landed'
-    )
 
     const second = await runOnce(makeEnv(state), NOW + 120_000)
     expect(second.transitions).toEqual([])
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
 
     state.fleet = [row({ image_ref: `${REPO}:rel-blessed` })]
     const third = await runOnce(makeEnv(state), NOW + 240_000)
