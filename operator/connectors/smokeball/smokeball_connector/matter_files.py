@@ -36,7 +36,6 @@ so the person gets what can go and is told what cannot.
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import re
@@ -335,26 +334,19 @@ def _download_to(client: Any, matter_id: str, file_id: str, dest: Path, cap: int
 
 
 def _cut_pages(source: Path, pages: tuple[int, int]) -> bytes:
-    """The named pages of the PDF at ``source``, as a new PDF."""
-    from pypdf import PdfReader, PdfWriter
+    """The named pages of the PDF at ``source``, as a new PDF.
+
+    Cut in a memory-capped child process from a file handle (page_cut.py): a
+    413 MB set must never be read whole into the connector, a child of the
+    gateway."""
+    from .page_cut import CutRefused, cut
 
     try:
-        reader = PdfReader(str(source), strict=False)
-        if reader.is_encrypted:
-            raise StageRefused("the file is encrypted, so its pages cannot be cut out")
-        total = len(reader.pages)
-    except StageRefused:
-        raise
-    except Exception as exc:
-        raise StageRefused(f"the file could not be read as a PDF ({exc.__class__.__name__})") from exc
-    if pages[1] > total:
-        raise StageRefused(f"the file has {total} pages, so pages {pages[0]}-{pages[1]} do not exist")
-    writer = PdfWriter()
-    for index in range(pages[0] - 1, pages[1]):
-        writer.add_page(reader.pages[index])
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
+        return cut(source, pages[0], pages[1], source.with_suffix(".cut.pdf"))
+    except CutRefused as exc:
+        raise StageRefused(str(exc)) from exc
+    finally:
+        source.with_suffix(".cut.pdf").unlink(missing_ok=True)
 
 
 def spool_dir() -> Path:
@@ -431,7 +423,11 @@ def stage(client: Any, matter_id: str, files: Any, *, recipients: tuple[str, ...
     refused: list[dict[str, Any]] = []
     taken: set[str] = set()
     total = 0
-    with tempfile.TemporaryDirectory(prefix="smd-matter-files-") as tmp:
+    # On the seat volume beside the spool, not /tmp: a source for a page cut can
+    # be hundreds of MB, and the root filesystem is the image's.
+    work = spool_dir()
+    work.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="smd-matter-files-", dir=work) as tmp:
         for req in requests:
             label = {"fileId": req.file_id, **({"pages": f"{req.pages[0]}-{req.pages[1]}"} if req.pages else {})}
             try:

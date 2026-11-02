@@ -316,3 +316,80 @@ def test_attachment_names_are_plain_and_unique() -> None:
     assert mf.attachment_name("A", None, taken) == "A (2).pdf"
     assert mf.attachment_name("", (4, 4), taken) == "document pp. 4.pdf"
     assert len(mf.attachment_name("x" * 400, None, set())) <= 120
+
+
+# ---- the page cut never reads a large source whole ------------------------
+
+
+def _big_pdf(path: Path, pages: int, stream_bytes: int) -> None:
+    """A PDF whose pages each carry an uncompressed content stream of ``stream_bytes``."""
+    from pypdf.generic import DecodedStreamObject, NameObject
+
+    w = PdfWriter()
+    filler = b"% " + b"x" * (stream_bytes - 3) + b"\n"
+    for _ in range(pages):
+        page = w.add_blank_page(width=200, height=200)
+        stream = DecodedStreamObject()
+        stream.set_data(filler)
+        page[NameObject("/Contents")] = w._add_object(stream)
+    with open(path, "wb") as fh:
+        w.write(fh)
+
+
+def test_the_reader_is_given_a_file_handle_never_a_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from smokeball_connector import page_cut
+
+    src = tmp_path / "s.pdf"
+    src.write_bytes(_pdf(4))
+    seen: list[object] = []
+    import pypdf
+
+    real = pypdf.PdfReader
+
+    def spy(stream, *a, **k):
+        seen.append(stream)
+        return real(stream, *a, **k)
+
+    monkeypatch.setattr(pypdf, "PdfReader", spy)
+    assert page_cut._child(str(src), 2, 3, str(tmp_path / "out.pdf")) == 0
+    assert seen and hasattr(seen[0], "read") and not isinstance(seen[0], (str, Path))
+    assert len(PdfReader(str(tmp_path / "out.pdf")).pages) == 2
+
+
+def test_a_large_source_is_cut_without_loading_it_whole(tmp_path: Path) -> None:
+    """80 MB source, 3 pages cut: the child's peak memory stays far below the file."""
+    import resource
+    import sys
+
+    from smokeball_connector import page_cut
+
+    src = tmp_path / "big.pdf"
+    _big_pdf(src, pages=160, stream_bytes=512 * 1024)
+    size = src.stat().st_size
+    assert size > 80 * 1024 * 1024
+    before = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    out = page_cut.cut(src, 3, 5, tmp_path / "cut.pdf")
+    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    peak_bytes = peak if sys.platform == "darwin" else peak * 1024
+    assert len(PdfReader(io.BytesIO(out)).pages) == 3
+    assert max(peak, before) and peak_bytes < size * 0.75, (peak_bytes, size)
+
+
+def test_a_cut_that_needs_more_memory_than_the_cap_is_a_plain_refusal(tmp_path: Path) -> None:
+    import sys
+
+    from smokeball_connector import page_cut
+
+    if sys.platform != "linux":
+        pytest.skip("RLIMIT_AS is enforced on Linux (the seat), not on macOS")
+    src = tmp_path / "s.pdf"
+    src.write_bytes(_pdf(3))
+    with pytest.raises(page_cut.CutRefused, match="too large to cut pages"):
+        page_cut.cut(src, 1, 2, tmp_path / "o.pdf", memory_limit=16 * 1024 * 1024)
+
+
+def test_a_cut_refusal_reaches_the_staging_result(tmp_path: Path) -> None:
+    c = FakeClient()
+    fid = c.add(1, "A", b"%PDF-1.4 not really a pdf")
+    out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "1-2"}], recipients=STAFF)
+    assert out["status"] == "refused" and "could not be read as a PDF" in out["refused"][0]["reason"]
