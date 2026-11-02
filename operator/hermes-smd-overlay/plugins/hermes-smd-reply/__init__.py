@@ -1605,7 +1605,7 @@ def _relay_draft(**kwargs: Any) -> None:
             )
             return
         if prepared is not None and matter_file_reply.review_by_smd(
-            _seat_doc(), matter_file_review.held_count()
+            _seat_doc(), matter_file_review.released_count()
         ):
             # matter_file_delivery.review: smd. The reply and its files wait for
             # SMD's approval (shared.matter_file_review) instead of sending.
