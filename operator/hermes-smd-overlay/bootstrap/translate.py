@@ -1242,7 +1242,21 @@ def _materialize_telegram_platform(
     # _notify_active_sessions_of_shutdown; config.py calls it "noise on end-user
     # platforms"). Every merge rolls every seat, so a client saw a dozen a day
     # (captain-mark, 2026-10-28/29). Not authorable: restarts are ours to absorb.
-    block: dict[str, Any] = {"allow_from": allow_from, "gateway_restart_notification": False}
+    #
+    # The same restarts must not LOSE what people send. The pinned Telegram
+    # adapter discards every update queued while the gateway was down unless
+    # ``drop_pending_on_cold_boot`` is false (adapter.py _cold_boot_drop_pending,
+    # default true). A fleet release replaces the Machine and the bot is offline
+    # for about 75 s, so a message sent in that window vanished with no trace:
+    # the Captain's answer to a gratitude prompt at 12:18 MST on 2026-11-02 landed
+    # in the 12:18:12 release and never reached the seat. Telegram keeps an
+    # undelivered update for 24 h, so preserving the queue answers it late
+    # instead of never. Not authorable, same reason.
+    block: dict[str, Any] = {
+        "allow_from": allow_from,
+        "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
+    }
     if "require_mention" in tg:
         block["require_mention"] = bool(tg["require_mention"])
     if "reactions" in tg:

@@ -67,6 +67,7 @@ def test_space_mode_block_uses_the_pinned_hermes_keys():
     assert block == {
         "allow_from": [P1, P2],
         "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
         "group_allow_from": [P1, P2],
         "allowed_chats": [GROUP],
         "group_sessions_per_user": False,
@@ -154,6 +155,7 @@ def test_non_space_seat_passes_group_keys_through():
     assert _wh._materialize_telegram_platform(cust) == {
         "allow_from": [P1],
         "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
         "group_allow_from": [P1],
         "allowed_chats": [GROUP],
         "group_sessions_per_user": True,
@@ -166,7 +168,7 @@ def test_non_space_seat_passes_group_keys_through():
         # scott-shaped (after the phase-2 migration)
         (
             {"enabled": True, "allow_from": ["7367659986"]},
-            {"allow_from": ["7367659986"], "gateway_restart_notification": False},
+            {"allow_from": ["7367659986"], "gateway_restart_notification": False, "drop_pending_on_cold_boot": False},
         ),
         # Brokery-shaped
         (
@@ -174,6 +176,7 @@ def test_non_space_seat_passes_group_keys_through():
             {
                 "allow_from": ["7367659986", "5550001111"],
                 "gateway_restart_notification": False,
+                "drop_pending_on_cold_boot": False,
                 "require_mention": False,
             },
         ),

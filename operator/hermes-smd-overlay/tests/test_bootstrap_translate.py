@@ -1814,6 +1814,19 @@ def test_telegram_restart_notices_are_always_off():
         assert block["gateway_restart_notification"] is False
 
 
+def test_telegram_keeps_messages_sent_while_the_seat_restarts():
+    # FALSIFIER: fails if the block stops carrying the switch. Without it the
+    # pinned adapter drops every Telegram message queued during a restart, so a
+    # person who writes during a fleet release is silently never heard
+    # (captain-mark, 2026-11-02 12:18 MST). An authored value cannot turn it on.
+    for tg in (
+        {"enabled": True, "allow_from": ["1"]},
+        {"enabled": True, "allow_from": ["1"], "drop_pending_on_cold_boot": True},
+    ):
+        block = _wh._materialize_telegram_platform({"telegram": tg})
+        assert block["drop_pending_on_cold_boot"] is False
+
+
 def test_telegram_platform_fail_closed_on_empty_allowlist():
     # enabled + empty allow_from must raise — pinned ref fails OPEN on empty allowlist
     for bad in ([], ["", "  "], None):
@@ -1854,7 +1867,7 @@ _SCOTT_TELEGRAM = {"telegram": {"allowed_users": ["7367659986"]}}
 def test_telegram_alias_materializes_when_token_present():
     # FALSIFIER: fails if allowed_users is ignored again (returns {}).
     block = _wh._materialize_telegram_platform(_SCOTT_TELEGRAM, token_present=True)
-    assert block == {"allow_from": ["7367659986"], "gateway_restart_notification": False}
+    assert block == {"allow_from": ["7367659986"], "gateway_restart_notification": False, "drop_pending_on_cold_boot": False}
 
 
 def test_telegram_alias_inert_without_token():
@@ -1871,6 +1884,7 @@ def test_telegram_alias_reads_token_presence_from_env(monkeypatch):
     assert _wh._materialize_telegram_platform(_SCOTT_TELEGRAM) == {
         "allow_from": ["7367659986"],
         "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
     }
 
 
@@ -1885,7 +1899,7 @@ def test_telegram_alias_unions_with_allow_from_dedup_in_order():
     # Explicit enabled: token presence is irrelevant (unchanged behavior).
     for token in (True, False):
         block = _wh._materialize_telegram_platform(cust, token_present=token)
-        assert block == {"allow_from": ["1", "2", "3"], "gateway_restart_notification": False}
+        assert block == {"allow_from": ["1", "2", "3"], "gateway_restart_notification": False, "drop_pending_on_cold_boot": False}
 
 
 def test_telegram_alias_satisfies_explicit_enabled():
@@ -1894,6 +1908,7 @@ def test_telegram_alias_satisfies_explicit_enabled():
     assert _wh._materialize_telegram_platform(cust, token_present=False) == {
         "allow_from": ["7367659986"],
         "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
     }
 
 
@@ -1924,6 +1939,7 @@ def test_telegram_alias_lands_in_persona_config(monkeypatch):
     assert _wh._persona_config(persona, cust, {})["telegram"] == {
         "allow_from": ["7367659986"],
         "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
     }
 
 
