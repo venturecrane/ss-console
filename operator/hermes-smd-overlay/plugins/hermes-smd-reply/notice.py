@@ -104,6 +104,22 @@ _REASON_HINTS: dict[str, str] = {
         "would reach the person twice. Escalate so a person confirms whether it "
         "arrived and reaches them if it did not."
     ),
+    "matter_files_refused": (
+        "The matter files staged for this reply cannot go on it, so nothing was "
+        "sent and the staging is cleared. Draft the reply again WITHOUT saying any "
+        "file is attached: tell the person which records could not be sent and why, "
+        "and where each one is on the matter."
+    ),
+    "matter_files_review": (
+        "This seat has SMD review every reply that carries matter files. Your reply "
+        "and its files are waiting for that review and go exactly as written once "
+        "approved. Do not redraft, resend, or tell anyone the files were sent."
+    ),
+    "matter_files_rate_limited": (
+        "The reply carries matter files and the reply channel is at its rate limit, "
+        "so it was not queued (a queued reply would lose its files). Nothing was sent. "
+        "Escalate so a person sends the files."
+    ),
     "no_inbox_id": "No inbox was recorded for the original message, so there is nothing to thread into.",
     "held_wording": (
         "This job is held, and a held job's reply is its fixed wording and nothing "

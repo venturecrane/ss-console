@@ -6,6 +6,7 @@ The poller preserves a permanently-failing inbound message as
 documented recovery path the dead-letter log line points at:
 
     python3 -m shared.msgraph_replay /opt/data/msgraph/dead-letter/<file>.json
+    python3 -m shared.msgraph_replay --message-id <graph message id>   # re-wake (ADR 0102)
 
 It re-normalizes ``raw`` exactly as the poller would, rebuilds the byte-exact
 stamped envelope (compact separators — the HMAC is over these bytes), signs
@@ -85,6 +86,55 @@ def build_envelope(raw: dict, *, mailbox: str) -> tuple[bytes, str] | None:
         separators=(",", ":"),
     ).encode("utf-8")
     return body, message_id
+
+
+def rewake(
+    message_id: str,
+    *,
+    mailbox: str,
+    signing_secret: str,
+    client: object | None = None,
+    forward_fn: Callable[..., tuple[int, bytes]] | None = None,
+    state_dir: str | None = None,
+) -> int:
+    """Re-wake the Operator on an EXISTING inbound email, by its Graph id.
+
+    For SMD to have the seat answer a request again once a capability it lacked
+    has shipped (ADR 0102: an attorney's request for records, answered "I cannot
+    attach files" the first time). The message is fetched from the seat's own
+    mailbox on the agent's read credential, written as a dead-letter-shaped file
+    under ``<state_dir>/rewake/``, and replayed through :func:`replay`, so it
+    enters the model ONLY through the same fenced webhook door as live mail:
+    the sender is re-verified, the roster and every floor apply, and the reply
+    is the model's own in its own turn. Nothing here composes or sends anything.
+
+    Run on the seat, as the hermes user. A reply already committed for this
+    email in the RUNNING gateway is held as a duplicate; the adapter drops a
+    repeat within its 1 h idempotency window. Both are reported, never forced.
+    """
+    if not message_id or "/" in message_id or len(message_id) > 512:
+        logger.error("rewake: %r is not a Graph message id", message_id)
+        return 2
+    graph = client if client is not None else msgraph_client.build_client_from_env()
+    if graph is None:
+        logger.error("rewake: no Graph client on this seat (MSGRAPH_* unset)")
+        return 2
+    try:
+        raw = graph.get_message(message_id)  # type: ignore[attr-defined]
+    except Exception as exc:  # noqa: BLE001 - report, don't traceback, on a seat console
+        logger.error("rewake: cannot read message %s (%s)", message_id, exc)
+        return 1
+    if not isinstance(raw, dict) or not raw.get("id"):
+        logger.error("rewake: message %s did not read back as a message", message_id)
+        return 1
+    root = state_dir or os.path.join(os.environ.get("HERMES_HOME") or "/opt/data", "msgraph")
+    base = os.path.join(root, "rewake")
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    name = hashlib.sha256(message_id.encode("utf-8")).hexdigest()[:16] + ".json"
+    path = os.path.join(base, name)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"reason": "smd_rewake", "message_id": message_id, "raw": raw}, fh)
+    return replay(path, mailbox=mailbox, signing_secret=signing_secret, forward_fn=forward_fn)
 
 
 def replay(
@@ -180,7 +230,12 @@ def main(
         prog="python3 -m shared.msgraph_replay",
         description="Replay a dead-lettered msgraph item through the fenced webhook door.",
     )
-    parser.add_argument("path", help="dead-letter JSON file to replay")
+    parser.add_argument("path", nargs="?", help="dead-letter JSON file to replay")
+    parser.add_argument(
+        "--message-id",
+        default=None,
+        help="re-wake the Operator on an existing inbound email by its Graph id (ADR 0102)",
+    )
     parser.add_argument(
         "--mailbox",
         default=None,
@@ -198,6 +253,13 @@ def main(
     signing_secret = os.environ.get(_SIGNING_SECRET_ENV)
     if not signing_secret:
         logger.error("replay: %s unset — cannot sign the envelope", _SIGNING_SECRET_ENV)
+        return 2
+    if args.message_id:
+        return rewake(
+            args.message_id, mailbox=mailbox, signing_secret=signing_secret, forward_fn=forward_fn
+        )
+    if not args.path:
+        logger.error("replay: give a dead-letter file or --message-id")
         return 2
     return replay(args.path, mailbox=mailbox, signing_secret=signing_secret, forward_fn=forward_fn)
 

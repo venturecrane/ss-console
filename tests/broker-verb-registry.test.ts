@@ -74,6 +74,8 @@ const EXPECTED_VERBS = [
   'act_propose',
   'agentmail_reply',
   'agentmail_send',
+  // A reply's file, in chunks, into the broker's own spool (attachment_intake.py, ADR 0102).
+  'attachment_put',
   'audit_append',
   'authorize',
   // The case file job's request edge (casefile_verbs.py): submit, status and

@@ -69,7 +69,7 @@ from typing import Any
 
 from .audit_ledger import new_row_token
 from .html_canon import html_body_sha256
-from .msgraph_attachments import carries_attachments
+from . import msgraph_reply_files
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -766,10 +766,10 @@ class MsGraphOps:
         stored message's from/replyTo with its own Mail.ReadWrite — that is a
         pre-existing property of replying to mutable message objects.
         """
-        if carries_attachments(payload):
-            # The reply wire carries a comment, not a message resource, so an
-            # attachment would be dropped silently. Refuse rather than do that.
-            raise MsGraphRefused("attachment refused: the reply verb does not carry attachments")
+        # A reply carries files only on the matter-file path (ADR 0102,
+        # msgraph_reply_files): authored staff, broker-spooled bytes, a draft
+        # read back before it is sent. Vetted BEFORE anything is fetched.
+        files = msgraph_reply_files.vetted(self._customer_path, payload, MsGraphRefused)
         message_id = str(payload.get("message_id") or "").strip()
         if not message_id:
             raise MsGraphRefused("reply requires the source message_id")
@@ -804,7 +804,9 @@ class MsGraphOps:
         # Read BEFORE the POST: after it, a config read that raised would turn a
         # delivered reply into an error the caller may retry.
         mailbox = self.mailbox()
-        if redirect:
+        if files is not None:
+            stamped, cc = msgraph_reply_files.transmit(self, payload, files, policy, sender, redirect, cc, audit_token)
+        elif redirect:
             stamped = send_redirected(
                 self,
                 message_id,

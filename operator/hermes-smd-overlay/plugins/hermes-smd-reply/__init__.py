@@ -91,6 +91,9 @@ from shared import (
     answered_messages,
     hook_worker,
     inbound,
+    matter_binding,
+    matter_file_reply,
+    matter_file_review,
     matter_gate,
     msgraph_broker,
     output_checklist,
@@ -114,6 +117,7 @@ from shared.pending_acts import PENDING_ACTS
 from shared.recipient_classifier import RecipientClass, classify_recipients_typed
 from shared.secrets import get_secret
 from shared.tool_registration import register_wrapped_tool
+from shared.workspace_broker import request as _broker_request
 
 from . import (
     act_delivery,
@@ -268,8 +272,13 @@ def _send_msgraph_reply(
     session_id: str = "",
     matter_ref: str | None = None,
     to: str | None = None,
+    attachments: list[dict[str, str]] | None = None,
 ) -> str:
     """Reply in-thread via Microsoft Graph, keyed on the recorded message id.
+
+    ``attachments`` (ADR 0102) is set only by the matter-file path of the relay
+    (``shared.matter_file_reply``): broker-spool descriptors, never anything a
+    tool argument named.
 
     ``to`` is set only for a DEVICE redirect (``scope.device_senders``): the
     source message came from a scanner nobody reads, and the reply goes to the
@@ -333,6 +342,7 @@ def _send_msgraph_reply(
             # Passed only when set, so a reply that is not a redirect makes
             # exactly the call it made before device senders existed.
             **({"to": to} if to else {}),
+            **({"attachments": attachments} if attachments else {}),
             # The participant fence: a reply's anchor is the email it answers,
             # which every caller took from a verified origin (never a guess).
             anchor={"kind": "graph_message", "graph_message_id": graph_message_id},
@@ -822,6 +832,10 @@ def on_post_tool_call(**kwargs: Any) -> None:
     if (kwargs.get("tool_name") or "") == binding.TOOL_NAME:
         _record_binding(kwargs)
         return
+    if (kwargs.get("tool_name") or "") == matter_file_reply.STAGE_TOOL:
+        if _DECIDED.claim(kwargs.get("tool_call_id")) is not False:
+            _stage_matter_files(kwargs)
+        return
     if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
         return
     if _DECIDED.claim(kwargs.get("tool_call_id")) is False:
@@ -891,6 +905,270 @@ def _record_binding(kwargs: dict[str, Any]) -> str | None:
             "hermes-smd-reply: recording a reply binding failed (%s); nothing bound", exc
         )
         return None
+
+
+def _seat_doc() -> dict[str, Any]:
+    """The seat's customer.yaml as a mapping, read live; empty when unreadable."""
+    try:
+        import yaml
+
+        doc = yaml.safe_load(_YAML_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - unreadable authors nothing
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def _files_recipient(cfg: CustomerConfig, sender: str) -> tuple[bool, bool, bool]:
+    """(internal, on_roster, device) for a matter-file recipient. Faults fail closed."""
+    try:
+        cls = classify_recipients_typed([sender], cfg.inbound_roster, cfg.outbound_roster)
+    except Exception:  # noqa: BLE001 - an unclassifiable recipient is not staff
+        cls = None
+    target = cfg.device_reply_target(sender)
+    device = bool(target) and target != sender.strip().lower()
+    return cls is RecipientClass.INTERNAL, bool(cfg.sender_on_roster(sender)), device
+
+
+def _stage_matter_files(kwargs: dict[str, Any]) -> str:
+    """Carry a ``stage_matter_files`` result onto this turn's reply (ADR 0102).
+
+    The fences that need the turn run here, where the session id is present:
+    an email opened this turn, a Graph seat, its sender firm staff. The files
+    then go from the connector's spool into the broker's. Returns the line the
+    model reads after the connector's result. Never raises."""
+    try:
+        session_id = str(kwargs.get("session_id") or "") or provenance.resolve_session("")
+        if not session_id:
+            return "[matter files] NOT staged: this call could not be tied to a turn."
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+        refusal: str | None = None
+        message_id = origin.message_id if origin is not None else ""
+        cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        doc = _seat_doc()
+        if origin is None or not origin.sender_address:
+            refusal = "no email opened this turn, so there is no reply for the files to go on"
+        elif _email_adapter(cfg) != _ADAPTER_MSGRAPH:
+            refusal = "this seat's mail transport cannot carry files on a reply"
+        else:
+            internal, on_roster, device = _files_recipient(cfg, origin.sender_address)
+            refusal = matter_file_reply.recipient_refusal(
+                doc, origin.sender_address, internal=internal, on_roster=on_roster, device=device
+            )
+        return matter_file_reply.stage_from_result(
+            session_id,
+            kwargs.get("args"),
+            kwargs.get("result"),
+            origin_message_id=message_id,
+            refusal=refusal,
+            request=_broker_request,
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.warning("hermes-smd-reply: staging matter files failed (%s)", type(exc).__name__)
+        return (
+            "[matter files] NOT staged: the seat could not take the files. "
+            "Do not say any file is attached."
+        )
+
+
+def _prepare_matter_files(
+    cfg: CustomerConfig,
+    session_id: str,
+    origin: inbound.InboundOrigin,
+    *,
+    reply_to: str,
+    redirected: bool,
+    bound: bool,
+    scan_text: str,
+) -> matter_file_reply.Prepared | None:
+    """The staged files for this reply, ``None`` when none were staged, or
+    :class:`matter_file_reply.FileRefused`."""
+    staging = matter_file_reply.staged(session_id)
+    if staging is None:
+        return None
+    try:
+        membership = matter_binding.membership_for(provenance.resolve_session(session_id))
+        read = set(membership.content_read_matters())
+        cited = matter_gate.cited_matters(scan_text, membership.known_numbers())
+        cited_ids = {membership.resolve(t) or t for t in cited}
+    except Exception as exc:  # noqa: BLE001 - could not check the matter: no file goes
+        raise matter_file_reply.FileRefused(
+            "the seat could not confirm which matter this reply is about"
+        ) from exc
+    internal, on_roster, _device = _files_recipient(cfg, reply_to)
+    return matter_file_reply.prepare(
+        staging,
+        doc=_seat_doc(),
+        message_id=origin.message_id,
+        recipient=reply_to,
+        internal=internal,
+        on_roster=on_roster,
+        redirected=redirected,
+        bound=bound,
+        msgraph=_email_adapter(cfg) == _ADAPTER_MSGRAPH,
+        read_matters=read,
+        cited_matters=cited_ids,
+    )
+
+
+def _send_file_continuations(
+    prepared: matter_file_reply.Prepared,
+    origin: inbound.InboundOrigin,
+    *,
+    session_id: str,
+    matter_ref: str | None,
+) -> None:
+    """The rest of the files, as further replies in the same thread (ADR 0102).
+
+    Code-fixed words; each audited. A failure is told and paged like any failed
+    reply, and stops the rest."""
+    total = len(prepared.batches)
+    for index, batch in enumerate(prepared.batches[1:], start=2):
+        text = matter_file_reply.continuation_text(index, total, batch)
+        try:
+            sent_id = _send_msgraph_reply(
+                origin.message_id,
+                text,
+                session_id=session_id,
+                matter_ref=matter_ref,
+                attachments=matter_file_reply.Prepared.descriptors(batch),
+            )
+        except Exception as exc:  # noqa: BLE001 - told and paged, never raised
+            why = str(exc) if isinstance(exc, relay.RelaySendError) else type(exc).__name__
+            _send_failed(
+                f"file part {index} of {total}: {why}",
+                origin,
+                adapter=_ADAPTER_MSGRAPH,
+                matter_ref=matter_ref,
+            )
+            return
+        _emit_reply_event(
+            action_type="REPLY_SENT",
+            metadata={
+                "recipient": origin.sender_address,
+                "adapter": _ADAPTER_MSGRAPH,
+                "in_reply_to": origin.message_id,
+                "sent_message_id": sent_id,
+                "body_digest": inbound.content_digest(text),
+                "file_reply_part": f"{index}/{total}",
+                **matter_file_reply.audit_fields(batch),
+            },
+            session_id=session_id,
+            matter_ref=matter_ref,
+        )
+        request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
+
+
+def _hold_for_review(
+    prepared: matter_file_reply.Prepared,
+    origin: inbound.InboundOrigin,
+    *,
+    session_id: str,
+    reply_key: str,
+    text: str,
+    html: str,
+    matter_ref: str | None,
+) -> None:
+    """Write a files reply for SMD's review, commit the email as answered (a
+    redraft must not slip past the review), and tell the turn it is waiting."""
+    staging = matter_file_reply.staged(session_id)
+    wire_text, wire_html = _transmitted_body(_ADAPTER_MSGRAPH, text, html)
+    row = matter_file_review.hold(
+        message_id=origin.message_id,
+        to=origin.sender_address,
+        text=wire_text,
+        html=wire_html,
+        batches=prepared.rows(),
+        matter_id=staging.matter_id if staging else "",
+        session_id=session_id,
+    )
+    _commit_reply(reply_key, origin)
+    matter_file_reply.discard(session_id)
+    every = tuple(f for batch in prepared.batches for f in batch)
+    _held(
+        matter_file_review.HOLD_REASON,
+        origin,
+        review_id=row["id"],
+        **matter_file_reply.audit_fields(every),
+        _matter_ref=matter_ref,
+    )
+
+
+def _review_once() -> None:
+    """Act on SMD's decisions about held files replies (shared.matter_file_review).
+
+    Runs on the held-reply sweeper thread. A row is marked ``sending`` before
+    anything is sent and is never sent from that state again, so a crash mid-send
+    can lose a release but never send one twice. Never raises."""
+    for row in matter_file_review.rows():
+        try:
+            _review_one(row)
+        except Exception as exc:  # noqa: BLE001 - one row's fault never stops the rest
+            logger.warning("hermes-smd-reply: review release failed (%s)", type(exc).__name__)
+
+
+def _review_one(row: dict[str, Any]) -> None:
+    if row.get("status") != matter_file_review.STATUS_REVIEW:
+        return
+    word = matter_file_review.decision(row)
+    origin = inbound.InboundOrigin(
+        sender_address=str(row.get("to") or ""),
+        message_id=str(row.get("message_id") or ""),
+        inbox_id="",
+    )
+    if word == "reject" or (matter_file_review.expired(row) and word != "reject"):
+        status = (
+            matter_file_review.STATUS_REJECTED
+            if word == "reject"
+            else matter_file_review.STATUS_EXPIRED
+        )
+        if word or matter_file_review.expired(row):
+            matter_file_review.finish(row, status)
+            _emit_reply_event(
+                action_type="REPLY_HELD",
+                metadata={"reason": f"matter_files_review_{status}", "review_id": row.get("id")},
+                session_id=str(row.get("session_id") or "") or None,
+            )
+        return
+    if word != "approve":
+        return
+    if matter_file_review.digest(row) != row.get("digest"):
+        matter_file_review.finish(
+            row, matter_file_review.STATUS_FAILED, note="the held reply changed after review"
+        )
+        return
+    matter_file_review.finish({**row, "text": row.get("text"), "html": row.get("html")}, "sending")
+    prepared = matter_file_reply.Prepared.from_rows(row.get("batches") or [])
+    session_id = str(row.get("session_id") or "")
+    text, html = str(row.get("text") or ""), str(row.get("html") or "")
+    try:
+        sent_id = _send_msgraph_reply(
+            origin.message_id,
+            text,
+            html,
+            session_id=session_id,
+            attachments=matter_file_reply.Prepared.descriptors(prepared.batches[0]),
+        )
+    except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
+        matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)
+        _send_failed(f"reviewed reply: {type(exc).__name__}", origin, adapter=_ADAPTER_MSGRAPH)
+        return
+    _emit_reply_event(
+        action_type="REPLY_SENT",
+        metadata={
+            "recipient": origin.sender_address,
+            "adapter": _ADAPTER_MSGRAPH,
+            "in_reply_to": origin.message_id,
+            "sent_message_id": sent_id,
+            "released_from_review": row.get("id"),
+            "file_reply_part": f"1/{len(prepared.batches)}",
+            **matter_file_reply.audit_fields(prepared.batches[0]),
+        },
+        session_id=session_id or None,
+    )
+    request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
+    if len(prepared.batches) > 1:
+        _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=None)
+    matter_file_review.finish(row, matter_file_review.STATUS_SENT)
 
 
 def _relay_draft(**kwargs: Any) -> None:
@@ -1303,6 +1581,45 @@ def _relay_draft(**kwargs: Any) -> None:
                 matter_ref=cited_matter_ref,
             )
 
+        # (c3) Matter files (ADR 0102). Staged files ride on this reply only
+        # after every floor above, and only when their own fences hold here:
+        # the same email, firm staff, one matter. A refusal clears the staging
+        # and holds the reply, so the model redrafts without claiming a file.
+        try:
+            prepared = _prepare_matter_files(
+                cfg,
+                session_id,
+                origin,
+                reply_to=reply_to,
+                redirected=redirected,
+                bound=bound is not None,
+                scan_text=scan_text,
+            )
+        except matter_file_reply.FileRefused as exc:
+            matter_file_reply.discard(session_id)
+            _held(
+                matter_file_reply.REFUSAL_REASON,
+                origin,
+                _detail=str(exc),
+                _matter_ref=cited_matter_ref,
+            )
+            return
+        if prepared is not None and matter_file_reply.review_by_smd(
+            _seat_doc(), matter_file_review.held_count()
+        ):
+            # matter_file_delivery.review: smd. The reply and its files wait for
+            # SMD's approval (shared.matter_file_review) instead of sending.
+            _hold_for_review(
+                prepared,
+                origin,
+                session_id=session_id,
+                reply_key=reply_key,
+                text=send_text,
+                html=send_html,
+                matter_ref=cited_matter_ref,
+            )
+            return
+
         # (d) Rate-limit under the authored send policy (#2070). Resolved LIVE
         # per call (ADR 0044): authoring `send_policy` — e.g. exempting rostered
         # INTERNAL senders so a sustained dialogue never rate-holds — applies on
@@ -1329,6 +1646,11 @@ def _relay_draft(**kwargs: Any) -> None:
             decision = relay.RateDecision(False, "queued_behind_held")
         else:
             decision = _LIMITER.check(reply_to, internal=internal, policy=policy)
+        if not decision.allowed and prepared is not None:
+            # A queued reply is released later without its files, so a reply
+            # carrying files is held, never queued.
+            _held("matter_files_rate_limited", origin)
+            return
         if not decision.allowed and shared_people:
             # The held-reply queue releases to the source's sender alone, so a
             # shared reply is never queued: it is held, and the agent is told.
@@ -1400,6 +1722,11 @@ def _relay_draft(**kwargs: Any) -> None:
                     session_id=session_id,
                     matter_ref=cited_matter_ref,
                     to=reply_to if redirected else None,
+                    attachments=(
+                        matter_file_reply.Prepared.descriptors(prepared.batches[0])
+                        if prepared
+                        else None
+                    ),
                 )
             else:
                 sent_id = relay.send_reply(
@@ -1439,6 +1766,9 @@ def _relay_draft(**kwargs: Any) -> None:
             )
             return
         _CURRENT_CALL.transmitted = True
+        if prepared is not None:
+            # The files are on their way: the staging is spent either way.
+            matter_file_reply.discard(session_id)
 
         # (f) The reply for this inbound is now committed — record it before the
         # audit emission so a retry cannot race between the send and the mark.
@@ -1483,10 +1813,23 @@ def _relay_draft(**kwargs: Any) -> None:
                 # The heartbeat pages it as a shortfall and the request card
                 # marks the request NOT FULFILLED (shared/reply_could_not.py).
                 **reply_could_not.metadata(wire_text),
+                # ADR 0102: the files this reply carried (ids and hashes only).
+                **(
+                    {
+                        **matter_file_reply.audit_fields(prepared.batches[0]),
+                        "file_reply_part": f"1/{len(prepared.batches)}",
+                    }
+                    if prepared is not None
+                    else {}
+                ),
             },
             session_id=session_id,
             matter_ref=cited_matter_ref,
         )
+        if prepared is not None and len(prepared.batches) > 1:
+            _send_file_continuations(
+                prepared, origin, session_id=session_id, matter_ref=cited_matter_ref
+            )
         # Request cards: the opening of the first reply, seat-local only (the
         # audit row above carries digests, never words). Never raises.
         request_index.record_reply_opening(origin.message_id, wire_text, sent_message_id=sent_id)
@@ -1538,6 +1881,14 @@ def on_transform_tool_result(**kwargs: Any) -> str | None:
     try:
         if (kwargs.get("tool_name") or "") == binding.TOOL_NAME:
             return _record_binding(kwargs)
+        if (kwargs.get("tool_name") or "") == matter_file_reply.STAGE_TOOL:
+            if _DECIDED.claim(kwargs.get("tool_call_id")) is False:
+                return None
+            told = _stage_matter_files(kwargs)
+            result = kwargs.get("result")
+            if not told:
+                return None
+            return f"{result}\n\n{told}" if isinstance(result, str) and result else told
         if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
             return None
         tool_call_id = kwargs.get("tool_call_id")
@@ -1625,6 +1976,7 @@ def _sender_is_internal(sender: str) -> bool:
 
 def _sweep_once() -> sweeper.SweepResult:
     """One release pass, with the policy resolved live."""
+    _review_once()  # SMD-reviewed files replies (ADR 0102); never raises
     if _HELD_STORE is None or _LIMITER is None:
         return sweeper.SweepResult()
     return sweeper.run_sweep_once(

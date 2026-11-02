@@ -160,8 +160,16 @@ def send_reply(
     matter_ref: str | None = None,
     to: str | None = None,
     anchor: dict[str, str] | None,
+    attachments: list[dict[str, str]] | None = None,
 ) -> str:
     """Reply in-thread to an inbound Graph message.
+
+    ``attachments`` (ADR 0102) is a KEYWORD set only by the reply plugin's
+    matter-file path, never from a tool argument: descriptors ``{name,
+    content_type, handle, sha256}`` naming files already in the BROKER's own
+    spool (``attachment_put``). The broker re-vets the recipient as firm staff,
+    re-hashes its copy, builds the reply as a draft, reads it back, and only then
+    sends. Absent, the wire payload is exactly what it was before.
 
     ``to`` redirects the reply when the source message came from an authored
     DEVICE (``scope.device_senders``: an office scanner nobody reads). It is a
@@ -189,10 +197,24 @@ def send_reply(
         payload["html"] = html
     if to and to.strip():
         payload["to"] = to.strip()
+    if attachments:
+        payload["attachments"] = [dict(a) for a in attachments]
     # ``anchor`` is the email this reply answers (participant fence); the
     # broker refuses a reply that names none.
+    # The row's ``attachment_sha256`` (ADR 0102): the hashes the broker refused
+    # to send without matching, so the row names exactly the bytes that went.
+    extra = (
+        {"attachment_sha256": ",".join(a["sha256"] for a in attachments)} if attachments else None
+    )
     return _vendor_id(
-        _call("msgraph_reply", payload, session_id=session_id, matter_ref=matter_ref, anchor=anchor)
+        _call(
+            "msgraph_reply",
+            payload,
+            session_id=session_id,
+            matter_ref=matter_ref,
+            anchor=anchor,
+            audit_extra=extra,
+        )
     )
 
 
