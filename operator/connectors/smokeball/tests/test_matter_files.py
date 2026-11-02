@@ -357,9 +357,12 @@ def test_the_reader_is_given_a_file_handle_never_a_path(tmp_path: Path, monkeypa
 
 
 def test_a_large_source_is_cut_without_loading_it_whole(tmp_path: Path) -> None:
-    """80 MB source, 3 pages cut: the cutting process's OWN peak memory stays far
-    below the file size. Measured inside that one process (RUSAGE_SELF), because
-    RUSAGE_CHILDREN is the max over every child the test runner ever waited on."""
+    """80 MB source, 3 pages cut: the cutting process never holds the file whole.
+
+    Measured as the peak of Python allocations inside that one process
+    (tracemalloc), which is exactly what reading the source whole would show
+    (pypdf's ``BytesIO(fh.read())`` is one 80 MB allocation). Resident-set size
+    is printed for the record but not asserted: it varies by platform allocator."""
     import subprocess
     import sys
 
@@ -368,11 +371,12 @@ def test_a_large_source_is_cut_without_loading_it_whole(tmp_path: Path) -> None:
     size = src.stat().st_size
     assert size > 80 * 1024 * 1024
     probe = (
-        "import resource, sys\n"
+        "import resource, sys, tracemalloc\n"
         "from smokeball_connector import page_cut\n"
-        "code = page_cut.main(sys.argv[1:])\n"
-        "peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n"
-        "print(peak if sys.platform == 'darwin' else peak * 1024)\n"
+        "tracemalloc.start()\n"
+        "code = page_cut._child(*sys.argv[1:2], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4])\n"
+        "rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n"
+        "print(tracemalloc.get_traced_memory()[1], rss)\n"
         "sys.exit(code)\n"
     )
     done = subprocess.run(  # noqa: S603 - this interpreter and a constant probe script; paths built by the test
@@ -382,9 +386,9 @@ def test_a_large_source_is_cut_without_loading_it_whole(tmp_path: Path) -> None:
         check=False,
     )
     assert done.returncode == 0, done.stderr
-    peak_bytes = int(done.stdout.strip().splitlines()[-1])
+    peak_bytes, rss = (int(v) for v in done.stdout.strip().splitlines()[-1].split())
     assert len(PdfReader(str(tmp_path / "cut.pdf")).pages) == 3
-    assert peak_bytes < size * 0.75, (peak_bytes, size)
+    assert peak_bytes < size * 0.25, (peak_bytes, rss, size)
 
 
 def test_a_cut_that_needs_more_memory_than_the_cap_is_a_plain_refusal(tmp_path: Path) -> None:
