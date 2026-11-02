@@ -357,22 +357,34 @@ def test_the_reader_is_given_a_file_handle_never_a_path(tmp_path: Path, monkeypa
 
 
 def test_a_large_source_is_cut_without_loading_it_whole(tmp_path: Path) -> None:
-    """80 MB source, 3 pages cut: the child's peak memory stays far below the file."""
-    import resource
+    """80 MB source, 3 pages cut: the cutting process's OWN peak memory stays far
+    below the file size. Measured inside that one process (RUSAGE_SELF), because
+    RUSAGE_CHILDREN is the max over every child the test runner ever waited on."""
+    import subprocess
     import sys
-
-    from smokeball_connector import page_cut
 
     src = tmp_path / "big.pdf"
     _big_pdf(src, pages=160, stream_bytes=512 * 1024)
     size = src.stat().st_size
     assert size > 80 * 1024 * 1024
-    before = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    out = page_cut.cut(src, 3, 5, tmp_path / "cut.pdf")
-    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    peak_bytes = peak if sys.platform == "darwin" else peak * 1024
-    assert len(PdfReader(io.BytesIO(out)).pages) == 3
-    assert max(peak, before) and peak_bytes < size * 0.75, (peak_bytes, size)
+    probe = (
+        "import resource, sys\n"
+        "from smokeball_connector import page_cut\n"
+        "code = page_cut.main(sys.argv[1:])\n"
+        "peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n"
+        "print(peak if sys.platform == 'darwin' else peak * 1024)\n"
+        "sys.exit(code)\n"
+    )
+    done = subprocess.run(  # noqa: S603 - this interpreter and a constant probe script; paths built by the test
+        [sys.executable, "-I", "-c", probe, str(src), "3", "5", str(tmp_path / "cut.pdf")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    peak_bytes = int(done.stdout.strip().splitlines()[-1])
+    assert len(PdfReader(str(tmp_path / "cut.pdf")).pages) == 3
+    assert peak_bytes < size * 0.75, (peak_bytes, size)
 
 
 def test_a_cut_that_needs_more_memory_than_the_cap_is_a_plain_refusal(tmp_path: Path) -> None:
