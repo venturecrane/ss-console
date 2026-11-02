@@ -308,6 +308,56 @@ def test_a_case_whose_layout_cycles_is_laid_out_again_in_a_shorter_frame(tmp_pat
     assert printout.check(out, shown) == [] and printout.scan(out) == []
 
 
+def _bands_over_text(pdf: Path) -> list[str]:
+    """Every filled shape thicker than a border rule (over 1 point both ways)
+    that crosses a line of text, as 'page N at y=...'."""
+    import pymupdf
+
+    out = []
+    with pymupdf.open(pdf) as doc:
+        for i, page in enumerate(doc, 1):
+            lines = [pymupdf.Rect(ln["bbox"]) for b in page.get_text("dict")["blocks"] for ln in b.get("lines", [])]
+            for d in page.get_drawings():
+                r = d["rect"]
+                if d.get("fill") is not None and min(r.width, r.height) > 1 and any(r.intersects(ln) for ln in lines):
+                    out.append(f"page {i} at y={r.y0:.0f}")
+    return out
+
+
+def test_no_grey_band_crosses_a_row_on_any_page_of_a_long_case(tmp_path: Path):
+    """2026-11-02, the delivered discovery book: MuPDF repainted each table
+    header's grey on every later page the table ran onto, a 4-point band across
+    a row on 974 of 1,274 pages. A case whose tables run over many pages must
+    print with nothing filled across its text."""
+    from medchron.litigation.discovery12 import sections as d12
+
+    defs = [{"name": f"Defendant {i} {_words(3)}", "status": "Served"} for i in range(40)]
+    shown = cd.shown([_matter("m1", "1001", "A v. B", "Lee", defendants=defs)], {"m1": CAL}, TODAY)
+    shown[0]["discovery12"] = {
+        "read": True,
+        "sections": {k: [_d12_entry(j) for j in range(10)] for k, _l in d12.SECTIONS},
+    }
+    out = tmp_path / "x.pdf"
+    stats = printout.build(shown, out, TODAY)
+    assert stats["pages"] >= 8
+    assert _bands_over_text(out) == []
+    assert printout.check(out, shown) == [] and printout.scan(out) == []
+
+
+def test_the_band_check_can_fail(tmp_path: Path):
+    """The instrument sees a shaded strip across text and ignores a border rule."""
+    import pymupdf
+
+    out = tmp_path / "x.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.insert_text((50, 100), "Row text")
+        page.draw_rect(pymupdf.Rect(40, 92, 300, 96), color=None, fill=(0.87, 0.87, 0.87))
+        page.draw_rect(pymupdf.Rect(40, 98, 300, 98.5), color=None, fill=(0.6, 0.6, 0.6))
+        doc.save(out)
+    assert _bands_over_text(out) == ["page 1 at y=92"]
+
+
 # ---- the run: the calendar reaches the files, never the stored state ---------------------------
 def test_a_run_shows_the_calendar_date_in_every_file_and_stores_only_the_papers(tmp_path: Path, pricing_path: Path):
     from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs

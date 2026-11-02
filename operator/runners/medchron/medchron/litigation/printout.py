@@ -28,6 +28,13 @@ SUFFIX = " court dates"
 PAGE_W, PAGE_H = 612.0, 792.0  # portrait Letter, points (Chris prints portrait, 2026-10-30)
 MARGIN = 36.0
 FOOT = 20.0
+#: No background colour anywhere, header cells included. MuPDF's Story
+#: (pymupdf 1.28.2) paints a table header cell's background again on every
+#: later page the table runs onto, at the y the header held on the first page
+#: and 4 points tall (its padding, no text), so a grey band crossed a row on
+#: 974 of the 1,274 pages of the 2026-11-02 discovery book. Headers are told
+#: apart by bold alone; a background only paints, so the layout and the page
+#: count are the same without it.
 CSS = """
 * { font-family: sans-serif; }
 body { font-size: 8.5pt; }
@@ -36,7 +43,7 @@ h2 { font-size: 10pt; margin: 8pt 0 3pt 0; }
 h3 { font-size: 9pt; margin: 5pt 0 2pt 0; }
 p { margin: 0 0 3pt 0; }
 table { border-collapse: collapse; width: 100%; }
-th { background-color: #dddddd; text-align: left; font-weight: bold; }
+th { text-align: left; font-weight: bold; }
 th, td { border: 0.5pt solid #999999; padding: 2pt 3pt; vertical-align: top; }
 .flag { font-weight: bold; }
 """
