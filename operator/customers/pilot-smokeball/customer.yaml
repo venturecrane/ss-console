@@ -1484,3 +1484,10 @@ form_letters:
       paragraph_fields: [employer_address]
       signer_name_from: preparer
       facts_kind: wage
+
+# ADR 0102: who may receive matter files on a reply (the rostered SMD test
+# senders). The AgentMail reply path for files is a follow-up; until it ships
+# the reply plugin refuses files on this seat with a plain reason.
+matter_file_delivery:
+  recipients:
+    - '@smd.services'
