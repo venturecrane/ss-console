@@ -1907,3 +1907,14 @@ vendor_invoice_intake:
   is_billable: true
   folder_name: INVOICES
   staff_id: '210332d8-5cc4-41a0-9228-900ce4f00b28'
+
+# ADR 0102: the firm's own staff who may receive matter files attached to the
+# Operator's reply to their own email ("send me records X, Y, Z on matter N").
+# Each must also be on scope.inbound_allow_from and classify INTERNAL; the
+# connector, the reply plugin and the broker each check. Never an outside party.
+matter_file_delivery:
+  recipients:
+    - '@ashtonandprice.com'
+  # The first files reply waits for SMD's review (python -m shared.matter_file_review
+  # list / approve / reject, as root), then every later one sends normally.
+  review_first: 1
