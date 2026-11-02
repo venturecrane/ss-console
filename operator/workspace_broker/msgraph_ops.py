@@ -69,13 +69,7 @@ from typing import Any
 
 from .audit_ledger import new_row_token
 from .html_canon import html_body_sha256
-from .msgraph_attachments import (
-    AttachmentRefused,
-    attachment_sha256,
-    carries_attachments,
-    check_request_size,
-    graph_attachments,
-)
+from . import msgraph_attachments as _files
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -282,8 +276,8 @@ def _send_mail_body(message: dict[str, Any], save_to_sent_items: bool) -> dict[s
     with the ``attachment refused:`` prefix the overlay keys on."""
     body = {"message": message, "saveToSentItems": save_to_sent_items}
     try:
-        check_request_size(body)
-    except AttachmentRefused as exc:
+        _files.check_request_size(body)
+    except _files.AttachmentRefused as exc:
         raise MsGraphRefused(f"attachment refused: {exc}") from exc
     return body
 
@@ -522,8 +516,8 @@ class MsGraphOps:
         # (``msgraph_attachments``). A malformed one refuses the whole send: a
         # message must never leave with its attachment silently dropped.
         try:
-            attachments = graph_attachments(payload)
-        except AttachmentRefused as exc:
+            attachments = _files.graph_attachments(payload)
+        except _files.AttachmentRefused as exc:
             # The "attachment refused:" prefix is a contract: the overlay falls
             # back to the body-without-workbook rung only on a refusal whose
             # reason names the attachment.
@@ -570,7 +564,7 @@ class MsGraphOps:
             **_html_stamp(message),
             # The broker's hash of each file it attached (msgraph_attachments),
             # overriding any caller stamp of the same name on the row.
-            **attachment_sha256(message),
+            **_files.attachment_sha256(message),
             **(self._locate_sent(audit_token) if save_to_sent_items else {}),
         }
 
@@ -605,7 +599,7 @@ class MsGraphOps:
             "recipients": recipients,
             "mailbox": mailbox,
             "audit_row_token": audit_token,
-            **attachment_sha256(message),
+            **_files.attachment_sha256(message),
             **located,
         }
 
@@ -789,7 +783,7 @@ class MsGraphOps:
         stored message's from/replyTo with its own Mail.ReadWrite — that is a
         pre-existing property of replying to mutable message objects.
         """
-        if carries_attachments(payload):
+        if _files.carries_attachments(payload):
             # The reply wire carries a comment, not a message resource, so an
             # attachment would be dropped silently. Refuse rather than do that.
             raise MsGraphRefused("attachment refused: the reply verb does not carry attachments")
