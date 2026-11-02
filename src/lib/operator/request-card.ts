@@ -22,6 +22,11 @@
  * by the seat side (hermes-smd-overlay `shared/request_cards.py`); change it
  * in both repos or neither.
  *
+ * A `replied` or `followup` card may carry `could_not` (migration 0146,
+ * 2026-11-01): a closed code saying the reply told the person the Operator
+ * could not do what they asked. The email reads NOT FULFILLED; the ledger
+ * keeps the code, which is a code-authored token, never client text.
+ *
  * ADR 0052 s5: the card's text fields (who, who_name, subject, request_text,
  * reply_opening, reply_text, matter) reach the email and nothing else. `recordCard` takes the parsed card and
  * writes only its numbers, kinds and keys, and
@@ -52,6 +57,24 @@ export type CardKind = (typeof CARD_KINDS)[number]
 // table entry, not a table rebuild.
 export const JOB_LANES = Object.keys(CAPABILITY_JOB_LANES) as readonly JobLane[]
 export const JOB_STATES = ['delivered', 'failed', 'held'] as const
+
+/**
+ * Why a reply did not give the person what they asked for (migration 0146,
+ * 2026-11-01): the closed codes the seat's decline classifier returns
+ * (overlay `shared/reply_could_not.py` CODES, pinned by
+ * tests/operator-request-card.test.ts), plus `other` for a code the seat did
+ * not recognise. A card carrying one reads NOT FULFILLED.
+ */
+export const COULD_NOT_CODES = [
+  'cannot_find',
+  'cannot_attach',
+  'cannot_access',
+  'cannot_complete',
+  'not_permitted',
+  'none_available',
+  'other',
+] as const
+export type CouldNotCode = (typeof COULD_NOT_CODES)[number]
 
 // `<sha256 of the request>:<kind>`. A job_done key may carry its job ENDING
 // (`:<state>-<attempt>`): a resumed job ends again, and that ending is its own
@@ -153,6 +176,11 @@ export interface RequestCard {
   replies: number
   refused: number
   failed: number
+  /**
+   * Set when a reply told the person the Operator could not do what they
+   * asked; null for an answer, and on every card a seat posted before 0146.
+   */
+  couldNot: CouldNotCode | null
   job: CardJob | null
   lane: CardLane | null
 }
@@ -259,6 +287,12 @@ function parseJob(v: unknown): CardJob | null | undefined {
   return { lane, state, reason, id }
 }
 
+/** null for none (or absent: an older seat), the code for a known one, undefined otherwise. */
+function parseCouldNot(v: unknown): CouldNotCode | null | undefined {
+  if (v === null || v === undefined) return null
+  return COULD_NOT_CODES.find((c) => c === v)
+}
+
 /** null for none, the lane for a known one, undefined for anything else. */
 function parseJobLane(v: unknown): CardLane['jobLane'] | undefined {
   return v === null || v === undefined ? null : JOB_LANES.find((l) => l === v)
@@ -354,6 +388,39 @@ function parseContent(body: Record<string, unknown>): Content | { field: string 
   }
 }
 
+/** The kinds whose card quotes a reply the Operator sent. */
+const REPLY_KINDS: ReadonlySet<CardKind> = new Set<CardKind>(['replied', 'followup'])
+
+interface KindFields {
+  couldNot: CouldNotCode | null
+  job: CardJob | null
+  lane: CardLane | null
+}
+
+/** The fields only some kinds carry, each checked against the card's kind. */
+function parseKindFields(
+  body: Record<string, unknown>,
+  id: Identity
+): KindFields | { field: string } {
+  const couldNot = parseCouldNot(body.could_not)
+  // Only a reply can decline: a card with no reply in it carries no code.
+  if (couldNot === undefined || (couldNot !== null && !REPLY_KINDS.has(id.kind))) {
+    return { field: 'could_not' }
+  }
+  const job = parseJob(body.job)
+  // A job card carries its job, and so does a held_reply (the job the
+  // requester wrote about, which must be held); a reply or alarm card carries none.
+  const wantsJob = id.kind === 'job_done' || id.kind === 'held_reply'
+  if (job === undefined || wantsJob !== (job !== null)) return { field: 'job' }
+  if (id.kind === 'held_reply' && job?.state !== 'held') return { field: 'job' }
+  // A lane card carries its lane, the same lane its key names; no other does.
+  const lane = parseLane(body.lane, id.laneKey)
+  if (lane === undefined || (id.kind === 'lane_unproven') !== (lane !== null)) {
+    return { field: 'lane' }
+  }
+  return { couldNot, job, lane }
+}
+
 /** Parse a card body against the wire contract. Any deviation names its field. */
 export function parseRequestCard(body: Record<string, unknown>): ParseResult {
   const id = parseIdentity(body)
@@ -367,19 +434,9 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
   for (const f of ['replies', 'refused', 'failed'] as const) {
     if (!isCount(body[f], MAX_COUNT)) return { ok: false, field: f }
   }
-  const job = parseJob(body.job)
-  // A job card carries its job, and so does a held_reply (the job the
-  // requester wrote about, which must be held); a reply or alarm card carries none.
-  const wantsJob = id.kind === 'job_done' || id.kind === 'held_reply'
-  if (job === undefined || wantsJob !== (job !== null)) {
-    return { ok: false, field: 'job' }
-  }
-  if (id.kind === 'held_reply' && job?.state !== 'held') return { ok: false, field: 'job' }
-  // A lane card carries its lane, the same lane its key names; no other does.
-  const lane = parseLane(body.lane, id.laneKey)
-  if (lane === undefined || (id.kind === 'lane_unproven') !== (lane !== null)) {
-    return { ok: false, field: 'lane' }
-  }
+  const kindFields = parseKindFields(body, id)
+  if ('field' in kindFields) return { ok: false, field: kindFields.field }
+  const { couldNot, job, lane } = kindFields
   const { laneKey: _laneKey, ...identity } = id
   return {
     ok: true,
@@ -391,6 +448,7 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
       replies: body.replies as number,
       refused: body.refused as number,
       failed: body.failed as number,
+      couldNot,
       job,
       lane,
     },
@@ -431,8 +489,8 @@ export async function recordCard(
     .prepare(
       `INSERT INTO operator_request_cards
          (customer_slug, card_key, kind, received_at, event_at, minutes, tools_count,
-          replies, refused, failed, job_lane, job_state, lane_key, jobs_queued)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          replies, refused, failed, job_lane, job_state, lane_key, jobs_queued, could_not)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (customer_slug, card_key) DO NOTHING`
     )
     .bind(
@@ -449,7 +507,8 @@ export async function recordCard(
       card.job?.lane ?? card.lane?.jobLane ?? null,
       card.job?.state ?? null,
       card.lane?.key ?? null,
-      jobsQueued(card.tools)
+      jobsQueued(card.tools),
+      card.couldNot
     )
     .run()
   const row = await db

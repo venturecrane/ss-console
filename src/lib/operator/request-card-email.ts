@@ -12,7 +12,13 @@
  * this module writes D1.
  */
 
-import { jobsQueued, LANE_WHY, type ActionClassName, type RequestCard } from './request-card'
+import {
+  jobsQueued,
+  LANE_WHY,
+  type ActionClassName,
+  type CouldNotCode,
+  type RequestCard,
+} from './request-card'
 
 const SUBJECT_EXCERPT = 70
 
@@ -21,12 +27,42 @@ function subjectExcerpt(subject: string): string {
   return subject.length > SUBJECT_EXCERPT ? `${subject.slice(0, SUBJECT_EXCERPT - 3)}...` : subject
 }
 
+/**
+ * A reply that declined, appended to the headline so the inbox shows it
+ * without opening the card (2026-11-01: "first reply in 1m" read as a success
+ * for a reply that said it could not find any of five records). The subject
+ * still starts the same way, so mail filters keep matching.
+ */
+function notFulfilled(card: RequestCard): string {
+  return card.couldNot ? ', NOT FULFILLED' : ''
+}
+
+/** What a decline code says the reply told the requester, as a clause. */
+const COULD_NOT_TEXT: Record<CouldNotCode, string> = {
+  cannot_find: 'it could not find what they asked for',
+  cannot_attach: 'it could not send or attach what they asked for',
+  cannot_access: 'it could not open or reach what they asked about',
+  cannot_complete: 'it could not do what they asked',
+  not_permitted: 'it is not permitted to do what they asked',
+  none_available: 'none of what they asked for was available',
+  other: 'it could not do what they asked',
+}
+
+function couldNotLines(card: RequestCard): string[] {
+  if (!card.couldNot) return []
+  return [
+    `NOT FULFILLED: the reply told the requester ${COULD_NOT_TEXT[card.couldNot]} (${card.couldNot}).`,
+    'The tool counts below can all be clean; the reply is what says it. This also raised a',
+    'SHORTFALL. Read the reply, then answer them or hand this card to an agent to finish it.',
+  ]
+}
+
 /** The subject's middle: what happened, without the seat or the request's subject. */
 function cardHeadline(card: RequestCard): string {
   const lane = card.job?.lane ?? 'job'
   switch (card.kind) {
     case 'replied':
-      return `request: first reply in ${card.minutes}m`
+      return `request: first reply in ${card.minutes}m${notFulfilled(card)}`
     case 'no_reply':
       return `NO REPLY after ${card.minutes}m`
     case 'job_done':
@@ -38,7 +74,7 @@ function cardHeadline(card: RequestCard): string {
     case 'held_reply':
       return `REQUESTER WROTE on held ${lane} job`
     case 'followup':
-      return `later reply sent at +${card.minutes}m`
+      return `later reply sent at +${card.minutes}m${notFulfilled(card)}`
   }
 }
 
@@ -237,7 +273,8 @@ export function cardText(slug: string, card: RequestCard): string {
   if (asked) lines.push('', ...indented(asked))
   else if (card.kind === 'held_reply') lines.push('  (no words in the message)')
   else lines.push('  (the seat did not record the words of this message)')
-  lines.push('', 'STATUS', ...outcomeLines(card).map((l) => `  ${l}`))
+  lines.push('', 'STATUS', ...couldNotLines(card).map((l) => `  ${l}`))
+  lines.push(...outcomeLines(card).map((l) => `  ${l}`))
   lines.push(...laneLines(slug, card).map((l) => `  ${l}`))
   // Only when the seat named one. "Matter: none named" is law-firm vocabulary
   // and read as noise on every non-legal seat (Brokery, 2026-10-16).

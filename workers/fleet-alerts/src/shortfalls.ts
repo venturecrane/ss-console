@@ -8,7 +8,10 @@
  * alike. Four classes:
  *
  *   limit       a size, page or allowance cap stopped the work
- *   failed      a call failed and nothing in the session recovered it
+ *   failed      a call failed and nothing in the session recovered it, a reply
+ *               was held or failed, a delivery was unproven, or a reply went
+ *               out saying the Operator could not do what was asked
+ *               (`reply_could_not:<code>`, 2026-11-01)
  *   partial     the mail routine filed fewer pages than it was handed
  *   not_allowed the request was outside what the seat is entitled to do
  *
@@ -41,6 +44,13 @@ export type ShortfallClass = (typeof SHORTFALL_CLASSES)[number]
 
 /** Classes that page within the tick. */
 export const IMMEDIATE_CLASSES: readonly ShortfallClass[] = ['limit', 'failed', 'partial']
+
+/**
+ * The code prefix of a reply that went out and told the person the Operator
+ * could not do what they asked (overlay shared/reply_could_not.py, 2026-11-01).
+ * Class `failed`: the person did not get what they asked for, and it pages.
+ */
+export const REPLY_COULD_NOT = 'reply_could_not:'
 
 /** At most one shortfall email per seat in this many minutes. */
 export const THROTTLE_MINUTES = 30
@@ -255,6 +265,12 @@ export function whatHappened(r: Pick<LedgerRow, 'class' | 'tool' | 'code'>): str
   if (code.startsWith('reply_failed:')) {
     return `The Operator's reply did not go out (${code.slice(13)}).`
   }
+  if (code.startsWith(REPLY_COULD_NOT)) {
+    return (
+      `The Operator's reply went out and told the person it could not do what they asked ` +
+      `(${code.slice(REPLY_COULD_NOT.length)}). Every tool call may have succeeded; the reply is what said it.`
+    )
+  }
   if (code.startsWith('proof:')) {
     return `A ${r.tool.replace(/_job$/, '')} job finished, but its delivery to the firm could not be proven (${code.slice(6)}).`
   }
@@ -296,6 +312,13 @@ export function nextStep(
     return (
       `Check ${card} for a later reply. If none went out, the person is still waiting: ` +
       `hand this alert to an agent to redraft and send it, or answer them yourself.`
+    )
+  }
+  if (r.code.startsWith(REPLY_COULD_NOT)) {
+    return (
+      `Read the reply on ${card}: the person has been told no and is waiting. ` +
+      `If what they asked for exists, hand this alert to an agent to find it and send it; ` +
+      `if the Operator was right that it does not, nothing more is owed.`
     )
   }
   if (r.code.startsWith('proof:')) {

@@ -189,6 +189,36 @@ def test_happy_path_sends_to_recorded_inbox_and_message(relay_mod) -> None:
     assert "Thanks for reaching out" not in json.dumps(meta)
 
 
+def test_a_sent_reply_that_declines_carries_its_code_never_its_words(relay_mod) -> None:
+    """2026-11-01, ashton-price: the reply told an attorney it could not find or
+    attach any of five records, every tool call was ok, and nothing paged. The
+    REPLY_SENT row now carries the closed decline code the heartbeat pages on."""
+    mod, d1, sent = relay_mod
+    _record_origin(sender="greg@whitfield.example", message_id="msg_in", inbox_id="inbox_x")
+    words = "I wasn't able to find or attach any of the Whitfield records you listed."
+    mod.on_post_tool_call(
+        tool_name="agentmail:create_draft",
+        args=_draft(["greg@whitfield.example"], text=words),
+        session_id="s1",
+    )
+    assert len(sent) == 1
+    _, meta = next((a, m) for a, m in d1.events() if a == "REPLY_SENT")
+    assert meta["could_not"] == "cannot_find"
+    assert "Whitfield records" not in json.dumps(meta)
+
+
+def test_an_ordinary_sent_reply_carries_no_decline_code(relay_mod) -> None:
+    mod, d1, _sent = relay_mod
+    _record_origin(sender="greg@whitfield.example", message_id="msg_in", inbox_id="inbox_x")
+    mod.on_post_tool_call(
+        tool_name="agentmail:create_draft",
+        args=_draft(["greg@whitfield.example"]),
+        session_id="s1",
+    )
+    _, meta = next((a, m) for a, m in d1.events() if a == "REPLY_SENT")
+    assert "could_not" not in meta
+
+
 def test_runtime_mcp_tool_name_fires_relay(relay_mod) -> None:
     """Regression for the 2026-06-12 inbound live test: the relay hooked the
     colon spelling ``agentmail:create_draft``, but Hermes emits the MCP runtime

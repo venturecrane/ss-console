@@ -41,7 +41,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from shared import request_index
+from shared import reply_could_not, request_index
 from shared import send_policy as send_policy_mod
 
 from . import held_store as held_store_mod
@@ -186,6 +186,8 @@ def run_sweep_once(
                 **(authored_digest_fn(row) if authored_digest_fn is not None else {}),
                 "released_from_hold": True,
                 "held_reason": row.hold_reason,
+                # A released reply that declines is a decline like any other.
+                **reply_could_not.metadata(row.send_text),
             },
         )
         # Request cards: a released reply is a first reply like any other.
