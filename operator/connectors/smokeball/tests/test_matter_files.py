@@ -544,7 +544,7 @@ def test_an_embedded_content_credential_is_stripped_and_the_file_passes(
     _spool: Path, gate: Any, broker: Any, pages: str | None
 ) -> None:
     c = FakeClient()
-    fid = c.add(1, "UC Davis Discharge Summary", _credentialed_scan())
+    fid = c.add(1, "Discharge Summary", _credentialed_scan())
     req = {"file_id": fid, **({"pages": pages} if pages else {})}
     out = mf.stage(c, MATTER, [req], recipients=STAFF)
     assert out["status"] == "staged", out
@@ -633,7 +633,7 @@ def test_a_whole_file_over_the_object_bound_refuses_with_the_cut_hint(gate: Any)
     with pytest.raises(gate.AttachmentError, match="more objects"):  # the reply would be held for it
         gate._pdf_refuse_active_content(gate._pdf_reader(data))
     c = FakeClient()
-    fid = c.add(1, "Shriners Records", data)
+    fid = c.add(1, "Hospital Records", data)
     out = mf.stage(c, MATTER, [{"file_id": fid}], recipients=STAFF)
     assert out["status"] == "refused" and not out["staged"]
     reason = out["refused"][0]["reason"]
@@ -642,7 +642,7 @@ def test_a_whole_file_over_the_object_bound_refuses_with_the_cut_hint(gate: Any)
 
 def test_a_cut_of_the_object_heavy_file_passes(_spool: Path, gate: Any, broker: Any) -> None:
     c = FakeClient()
-    fid = c.add(1, "Shriners Records", _object_heavy())
+    fid = c.add(1, "Hospital Records", _object_heavy())
     out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "1-3"}], recipients=STAFF)
     assert out["status"] == "staged", out
     (row,) = out["staged"]
@@ -653,7 +653,7 @@ def test_a_cut_of_the_object_heavy_file_passes(_spool: Path, gate: Any, broker: 
 
 def test_a_cut_over_the_object_bound_asks_for_fewer_pages() -> None:
     c = FakeClient()
-    fid = c.add(1, "Shriners Records", _object_heavy())
+    fid = c.add(1, "Hospital Records", _object_heavy())
     out = mf.stage(c, MATTER, [{"file_id": fid, "pages": "3-4"}], recipients=STAFF)
     assert out["status"] == "refused" and "fewer pages" in out["refused"][0]["reason"]
 

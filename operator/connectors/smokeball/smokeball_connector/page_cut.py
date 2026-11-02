@@ -19,8 +19,8 @@ So the cut runs here, in its own interpreter:
 * a wall-clock bound (:data:`TIMEOUT_SECONDS`) does the same for a slow file;
 * the cut is written straight to a file, never returned through a pipe.
 
-EVERY STAGED FILE IS REWRITTEN HERE, whole files too (2026-11-02, the UC Davis
-and Shriners refusals). Two ordinary firm records were refused by the outbound
+EVERY STAGED FILE IS REWRITTEN HERE, whole files too (2026-11-02, two refusals
+on the first live run). Two ordinary firm records were refused by the outbound
 PDF check on A&P: a 35-page discharge summary for one embedded file named
 "Content Credentials" (a 24 KB C2PA provenance item a scanner adds), and a
 223-page set for its 97,058 objects. So the child, after copying the pages:
