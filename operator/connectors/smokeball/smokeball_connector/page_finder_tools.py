@@ -167,9 +167,15 @@ def _print_locate(out: dict[str, Any]) -> None:
         for r in item["ranges"]:
             print(f"  pages {r['pages']}")
             for ev in r["evidence"]:
-                print(
-                    f"    p{ev['page']}: {ev['date'] or '-'} | {ev['provider'] or '-'} | {ev['document_type'] or '-'} | {ev['title'] or '-'}"
-                )
+                cells = [ev.get(k) or "-" for k in ("date", "provider", "document_type", "heading")]
+                print(f"    {ev['section']} pp. {ev['pages']}: " + " | ".join(cells))
+                if ev.get("dates"):
+                    print(f"      dates printed: {'; '.join(ev['dates'])}")
+    if out.get("documents"):
+        print("\nSECTIONS OF THE FILE (PDF positions):")
+        for sec in out["documents"]:
+            cells = [sec.get(k) or "-" for k in ("date", "provider", "document_type", "heading")]
+            print(f"  {sec['section']} pp. {sec['pages']}: " + " | ".join(cells))
     tokens = out["tokens"]
     cost = tokens["input_tokens"] * 4 / 1e6 + tokens["output_tokens"] * 20 / 1e6
     print(f"\ntokens: {tokens} (about ${cost:.2f} at Opus 5.5 list price)")

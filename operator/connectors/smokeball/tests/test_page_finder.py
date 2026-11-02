@@ -59,14 +59,14 @@ class FakeModel:
             rows = []
             for n in labels:
                 date, provider, kind, starts = TRUTH.get(n, ("", "", "", False))
+                section = {"heading": kind.upper(), "document_type": kind, "date": date, "provider": provider}
                 rows.append(
                     {
                         "page": n + self.shift,
-                        "date": date,
-                        "provider": provider,
-                        "document_type": kind,
-                        "title": kind.upper(),
-                        "starts_document": starts,
+                        "continues_previous": not starts,
+                        "sections": [section] if starts else [],
+                        "dates": [f"DOS {date}"] if date else [],
+                        "running_header": "",
                         "page_of": "",
                         "legible": True,
                     }
@@ -99,16 +99,16 @@ def model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeModel:
             {
                 "asked": "the 3/3/2021 clinic visit",
                 "found": True,
-                "ranges": [{"first": 1, "last": 4}],
-                "reason": "p1-4 dated 3/3/2021",
+                "sections": ["S1"],
+                "reason": "S1 dated 3/3/2021",
             },
             {
                 "asked": "the inpatient discharge",
                 "found": True,
-                "ranges": [{"first": 29, "last": 38}, {"first": 39, "last": 400}],
-                "reason": "p29",
+                "sections": ["S3", "S99"],
+                "reason": "S3",
             },
-            {"asked": "the 3/14/2024 x-ray", "found": False, "ranges": [], "reason": "no page dated 3/14/2024"},
+            {"asked": "the 3/14/2024 x-ray", "found": False, "sections": [], "reason": "no page dated 3/14/2024"},
         ]
     )
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -139,14 +139,16 @@ def test_locates_each_record_with_code_composed_evidence(model: FakeModel, tmp_p
     visit, discharge, xray = out["items"]
     assert [r["pages"] for r in visit["ranges"]] == ["1-4"]
     assert visit["ranges"][0]["evidence"][0] == {
-        "page": 1,
+        "section": "S1",
+        "pages": "1-4",
+        "heading": "PROGRESS NOTE",
+        "document_type": "progress note",
         "date": "3/3/2021",
         "provider": "Northside Clinic",
-        "document_type": "progress note",
-        "title": "PROGRESS NOTE",
+        "dates": ["DOS 3/3/2021"],
     }
-    # A range the index does not support is dropped by code, and counted.
-    assert [r["pages"] for r in discharge["ranges"]] == ["29-38"] and discharge["droppedRanges"] == 1
+    # A section id the index does not hold is dropped by code, and counted.
+    assert [r["pages"] for r in discharge["ranges"]] == ["29-38"] and discharge["droppedSections"] == 1
     assert xray["found"] is False and xray["ranges"] == [] and "3/14/2024" in xray["reason"]
     assert [d["pages"] for d in out["documents"]] == ["1-4", "5-28", "29-38", "39-40"]
 
@@ -373,7 +375,7 @@ def test_cli_check_and_locate(model: FakeModel, tmp_path: Path, capsys: pytest.C
     big = _set(tmp_path)
     assert pft.main(["locate", "--pdf", str(big), "--what", "the visit", "--all"]) == 0
     out = capsys.readouterr().out
-    assert "pages 1-4" in out and "p1: 3/3/2021 | Northside Clinic | progress note" in out
+    assert "pages 1-4" in out and "S1 pp. 1-4: 3/3/2021 | Northside Clinic | progress note | PROGRESS NOTE" in out
     assert '"range": "pp. 1-4", "passes": true' in out and '"range": "pp. 29-38", "passes": true' in out
     assert (tmp_path / ".page-index").is_dir() or Path(pf.index_dir()).is_dir()
 
@@ -398,3 +400,99 @@ def test_the_split_child_refuses_a_non_pdf_plainly(tmp_path: Path) -> None:
     src.write_bytes(b"not a pdf")
     with pytest.raises(page_cut.CutRefused, match="could not be read"):
         page_split.split(src, 1, 2, tmp_path)
+
+
+# ---- the section boundaries (the workspace's answer-key traps) --------------
+
+
+def _page(*starts: tuple[str, str, str, str], cont: bool = False, dates: tuple[str, ...] = ()) -> dict[str, Any]:
+    return {
+        "continues_previous": cont,
+        "sections": [dict(zip(("heading", "document_type", "date", "provider"), st)) for st in starts],
+        "dates": list(dates),
+        "running_header": "",
+        "page_of": "",
+        "legible": True,
+    }
+
+
+def _spans(pages: dict[str, dict[str, Any]]) -> list[tuple[str, int, int]]:
+    return [(s["heading"], s["first"], s["last"]) for s in pf.sections(pages)]
+
+
+VISIT = ("OFFICE VISIT", "office visit note", "3/3/2021", "Clinic A")
+
+
+def test_a_section_starting_mid_page_shares_that_page() -> None:
+    pages = {
+        "1": _page(VISIT),
+        "2": _page(cont=True),
+        "3": _page(("SPEECH NOTE", "speech therapy note", "4/4/2021", "Clinic A"), cont=True),
+        "4": _page(cont=True),
+    }
+    assert _spans(pages) == [("OFFICE VISIT", 1, 3), ("SPEECH NOTE", 3, 4)]
+
+
+def test_a_section_without_a_continued_top_ends_the_page_before() -> None:
+    pages = {"1": _page(VISIT), "2": _page(cont=True), "3": _page(("NEXT", "letter", "", ""))}
+    assert _spans(pages) == [("OFFICE VISIT", 1, 2), ("NEXT", 3, 3)]
+
+
+def test_continued_pages_and_embedded_imaging_stay_in_their_note() -> None:
+    """A long note with a "(continued)" running header through imaging pages:
+    the model reports no new section on them, so the note runs on."""
+    pages = {
+        "1": _page(VISIT),
+        **{str(n): _page(cont=True) for n in range(2, 9)},
+        "9": _page(("LAB", "lab result", "", "")),
+    }
+    assert _spans(pages) == [("OFFICE VISIT", 1, 8), ("LAB", 9, 9)]
+
+
+def test_a_canceled_appointment_and_the_visit_on_one_date_are_two_sections() -> None:
+    canceled = ("APPOINTMENT CANCELED", "canceled appointment", "3/3/2021", "Clinic A")
+    pages = {"1": _page(canceled, VISIT), "2": _page(cont=True), "3": _page(cont=True)}
+    secs = pf.sections(pages)
+    assert [(s["document_type"], s["first"], s["last"]) for s in secs] == [
+        ("canceled appointment", 1, 1),
+        ("office visit note", 1, 3),
+    ]
+
+
+def test_a_date_printed_only_on_a_late_page_belongs_to_the_section() -> None:
+    report = ("EXPERT REPORT", "expert report", "", "Dr. Example")
+    pages = {"1": _page(report), **{str(n): _page(cont=True) for n in range(2, 32)}}
+    pages["32"] = _page(cont=True, dates=("Signed 04/01/2023",))
+    (sec,) = pf.sections(pages)
+    assert (sec["first"], sec["last"]) == (1, 32) and sec["dates"] == ["Signed 04/01/2023"]
+
+
+def test_a_continuation_after_an_unindexed_gap_is_never_attached_to_an_earlier_section() -> None:
+    pages = {"1": _page(VISIT), "5": _page(cont=True)}
+    assert _spans(pages) == [("OFFICE VISIT", 1, 1), ("(untitled: starts before the indexed pages)", 5, 5)]
+
+
+def test_the_match_gets_pdf_positions_and_the_trap_rules(model: FakeModel, tmp_path: Path) -> None:
+    pf.locate(_set(tmp_path, 8), "the visit", _work(tmp_path))
+    text = " ".join(b["text"] for b in model.bodies[-1]["messages"][0]["content"])
+    assert "S1 | pp. 1-4 |" in text
+    for rule in (
+        "never substitute another",
+        "never a canceled appointment",
+        "printed only on a later page",
+        "Page numbers printed on the paper are not PDF positions",
+    ):
+        assert rule in text
+    index_text = model.bodies[0]["messages"][0]["content"][-1]["text"]
+    assert "never a page number printed on the page" in index_text and 'is NOT a "' not in index_text
+    assert "continued" in index_text and "canceled appointment" in index_text
+
+
+def test_found_false_or_unknown_sections_give_no_pages(model: FakeModel, tmp_path: Path) -> None:
+    model.items = [
+        {"asked": "Clinic B discharge", "found": False, "sections": ["S3"], "reason": "Clinic B has none"},
+        {"asked": "x", "found": True, "sections": ["S77"], "reason": "?"},
+    ]
+    out = pf.locate(_set(tmp_path), "Clinic B discharge", _work(tmp_path))
+    assert [i["ranges"] for i in out["items"]] == [[], []]
+    assert [i["found"] for i in out["items"]] == [False, False]
