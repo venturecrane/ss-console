@@ -134,7 +134,21 @@ def rewake(
     path = os.path.join(base, name)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump({"reason": "smd_rewake", "message_id": message_id, "raw": raw}, fh)
-    return replay(path, mailbox=mailbox, signing_secret=signing_secret, forward_fn=forward_fn)
+    # A FRESH request id, never the one the original intake used. The gateway's
+    # admission ledger is durable: it already holds sha256(message_id) from the
+    # day the email first arrived, so a re-wake under that id is answered 503
+    # admission_conflict on every attempt, restart or not (found live on A&P,
+    # 2026-11-02). A dead-letter replay keeps the original id on purpose: that
+    # email never got through, and a second copy of it must still collapse.
+    nonce = os.urandom(8).hex()
+    request_id = hashlib.sha256(f"{message_id}:rewake:{nonce}".encode()).hexdigest()
+    return replay(
+        path,
+        mailbox=mailbox,
+        signing_secret=signing_secret,
+        forward_fn=forward_fn,
+        request_id=request_id,
+    )
 
 
 def replay(
@@ -143,6 +157,7 @@ def replay(
     mailbox: str,
     signing_secret: str,
     forward_fn: Callable[..., tuple[int, bytes]] | None = None,
+    request_id: str | None = None,
 ) -> int:
     """Replay one dead-letter file. Returns the process exit code.
 
@@ -169,7 +184,7 @@ def replay(
         return 2
     body, message_id = built
     timestamp, signature = forward_signature.sign_forward(body, signing_secret)
-    request_id = hashlib.sha256(message_id.encode("utf-8")).hexdigest()
+    request_id = request_id or hashlib.sha256(message_id.encode("utf-8")).hexdigest()
     forward = forward_fn or _post_forward
     try:
         status, payload = forward(
