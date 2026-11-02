@@ -8,6 +8,7 @@ it reads has existed on every seat since the runner lanes shipped:
 
   /run/smd-medchron/*heartbeat.json   each lane daemon's liveness + counts
   /run/smd-medchron/*child.pid        a lane's running job child
+  /run/smd-medchron/*jobs/*/daemon.json  a finished job's DELIVER wake + reply watch
   /opt/data/profiles/*/cron/jobs.json Hermes' per-profile cron store
   /opt/data/cron/jobs.json            the root cron store
   /run/smd-medchron/quiesce           the fleet's no-new-work marker
@@ -26,6 +27,7 @@ from datetime import datetime, timezone
 RUN = "/run/smd-medchron"
 CRON_STORES = ("/opt/data/profiles/*/cron/jobs.json", "/opt/data/cron/jobs.json")
 MANAGED_PREFIX = "op-managed:"
+TURN_SCAN_S = 1800
 
 
 def pid_alive(pid):
@@ -144,6 +146,42 @@ def crons(now, errors):
     return out
 
 
+def turns(now, errors):
+    """DELIVER turns the daemons started recently whose reply is not yet seen.
+
+    A consumed wake is a gateway turn, not a lane job: the child is gone and
+    the heartbeat says idle while the turn is still sending (2026-11-02 A&P:
+    seven offer emails dispatched at 09:48:38, the release restarted the
+    Machine at 09:48:48, and four never went). Only job dirs touched in the
+    last TURN_SCAN_S are read, so the scan stays small on a seat holding
+    72 h of finished jobs."""
+    out = []
+    for path in sorted(glob.glob(RUN + "/*jobs/*/daemon.json")):
+        try:
+            if now - os.path.getmtime(path) > TURN_SCAN_S:
+                continue
+            with open(path) as fh:
+                st = json.load(fh)
+        except (OSError, ValueError) as exc:
+            errors.append("%s unreadable: %s" % (path, exc))
+            continue
+        wake = st.get("wake") if isinstance(st, dict) else None
+        if not isinstance(wake, dict) or wake.get("pending"):
+            continue  # a pending wake is already counted by its lane's heartbeat
+        sent = epoch(wake.get("sent_at"))
+        if sent is None:
+            continue
+        watch = st.get("reply_watch") if isinstance(st.get("reply_watch"), dict) else {}
+        out.append(
+            {
+                "file": "/".join(path.split("/")[-3:-1]),
+                "sent_ago_s": round(now - sent, 1),
+                "reply_open": bool(watch) and not watch.get("done") and not watch.get("proven_at"),
+            }
+        )
+    return out
+
+
 def quiesce():
     try:
         with open(RUN + "/quiesce") as fh:
@@ -161,6 +199,7 @@ def main():
         "lanes": lanes(now, errors),
         "children": children(errors),
         "crons": crons(now, errors),
+        "turns": turns(now, errors),
         "quiesce": quiesce(),
         "errors": errors,
     }

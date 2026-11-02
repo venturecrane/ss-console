@@ -180,6 +180,38 @@ def test_remote_probe_reads_a_seat_shaped_tree(tmp_path: Path) -> None:
     assert "negotiation-heartbeat.json" not in reasons
 
 
+def test_a_deliver_turn_in_flight_is_busy() -> None:
+    # 2026-11-02, A&P: seven offer-email turns started at 09:48:38, the lane
+    # read idle (wakes consumed, child gone), the release restarted the Machine
+    # at 09:48:48 and four emails never went.
+    # FALSIFIER: drop the turn rule and this verdict is idle.
+    turn = {"file": "negotiation-jobs/n1", "sent_ago_s": 10, "reply_open": True}
+    verdict = busy.decide(_facts(turns=[turn]))
+    assert verdict.busy and "DELIVER turn" in verdict.reasons[0]
+    assert not busy.decide(_facts(turns=[dict(turn, reply_open=False)])).busy  # reply seen
+    assert not busy.decide(_facts(turns=[dict(turn, sent_ago_s=busy.TURN_BUSY_S + 1)])).busy  # the watch's page now
+
+
+def test_the_probe_reads_a_consumed_wake_and_its_reply_watch(tmp_path: Path) -> None:
+    run, _ = _seat(tmp_path)
+    now = time.time()
+    jobs = run / "negotiation-jobs"
+    for name, wake, watch in (
+        ("open", {"pending": False, "sent_at": now - 10}, {"due": now + 1190}),
+        ("proven", {"pending": False, "sent_at": now - 10}, {"due": now + 1190, "proven_at": now - 2}),
+        ("pending", {"pending": True}, {}),
+    ):
+        (jobs / name).mkdir(parents=True)
+        (jobs / name / "daemon.json").write_text(json.dumps({"wake": wake, "reply_watch": watch}))
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    by = {t["file"]: t for t in facts["turns"]}
+    assert set(by) == {"negotiation-jobs/open", "negotiation-jobs/proven"}
+    assert by["negotiation-jobs/open"]["reply_open"] is True
+    assert by["negotiation-jobs/proven"]["reply_open"] is False
+    verdict = busy.decide(facts)
+    assert verdict.busy and "negotiation-jobs/open" in " ".join(verdict.reasons)
+
+
 def test_remote_probe_on_a_seat_without_runners_is_idle(tmp_path: Path) -> None:
     out = _run_remote("remote_busy_probe.py", tmp_path)
     facts = busy.parse_probe(out)
