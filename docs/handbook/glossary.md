@@ -87,7 +87,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **NO REPLY.** The alarm kind of **request card** (defined below): a person at the client asked the Operator something and had no answer after 30 minutes.
 
-**SHORTFALL.** The team@ email `[SMD Ops] SHORTFALL <seat>`, sent when the Operator could not give someone what they asked; see **shortfall** below.
+**SHORTFALL.** The older name of the team@ email about a **shortfall** (below). Since 2026-11-02 it reads `[SMD Ops] <seat>: a reply did not go out` or `a limit stopped the work`, and other shortfalls go to the triage agent without an email.
 
 **lane.** A kind of job a seat runs in the background, such as a medical chronology, a demand letter, or drafting one class of document (`docs/runbooks/operator/lane-proof.md`).
 
