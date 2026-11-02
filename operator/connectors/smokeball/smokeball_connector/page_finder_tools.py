@@ -124,16 +124,10 @@ def _import_send_checks(repo_operator: Path | None) -> tuple[Any, Any]:
 def _as_staged(source: Path, pages: tuple[int, int] | None) -> tuple[bytes, int]:
     """The bytes ``stage_matter_files`` would attach, and embedded files removed.
 
-    Uses the connector's own staging step: ``matter_files.prepare_local`` when
-    the restage (embedded files stripped) is on this checkout, else the page
-    cut / whole-file read staging does today. Never a copy of either."""
-    prepare = getattr(mf, "prepare_local", None)
-    if callable(prepare):
-        blob, removed = prepare(source, pages)
-        return blob, int(removed)
-    if pages:
-        return mf._cut_pages(source, pages), 0
-    return source.read_bytes(), 0
+    The connector's own staging step (``matter_files.prepare_local``: the page
+    cut, or the whole file restaged with embedded files stripped), never a copy."""
+    blob, removed = mf.prepare_local(source, pages)
+    return blob, int(removed)
 
 
 def check_cut(pdf: Path, pages: tuple[int, int] | None, checks: tuple[Any, Any]) -> dict[str, Any]:

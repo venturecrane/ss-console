@@ -343,8 +343,8 @@ def test_overlay_refuses_the_raw_file_with_embedded_files(tmp_path: Path, checks
 def test_the_check_uses_the_connectors_own_staging_step(
     tmp_path: Path, checks: tuple[Any, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When the restage (``matter_files.prepare_local``) is on the checkout the
-    check runs IT; until then, the cut / whole read staging does today."""
+    """The check runs the connector's own staging step (``prepare_local``),
+    then the real one: a cut, a whole file, and a record with embedded files."""
     src = tmp_path / "clean.pdf"
     src.write_bytes(_pdf(5))
     calls: list[Any] = []
@@ -353,14 +353,19 @@ def test_the_check_uses_the_connectors_own_staging_step(
         calls.append(pages)
         return _pdf(2), 1
 
-    monkeypatch.setattr(mf, "prepare_local", prepare, raising=False)
+    original = mf.prepare_local
+    monkeypatch.setattr(mf, "prepare_local", prepare)
     result = pft.check_cut(src, (1, 2), checks)
     assert calls == [(1, 2)] and result["passes"] and result["embeddedFilesRemoved"] == 1
-    monkeypatch.delattr(mf, "prepare_local")
+    monkeypatch.setattr(mf, "prepare_local", original)
     cut = pft.check_cut(src, (2, 4), checks)
     assert cut["passes"] and cut["pages"] == 3 and cut["embeddedFilesRemoved"] == 0
     whole = pft.check_cut(src, None, checks)
     assert whole["passes"] and whole["pages"] == 5
+    stamped = tmp_path / "stamped.pdf"
+    _with_attachments(stamped)
+    restaged = pft.check_cut(stamped, None, checks)
+    assert restaged["passes"] and restaged["embeddedFilesRemoved"] >= 1, restaged
 
 
 def test_a_cut_past_the_last_page_fails_the_check(tmp_path: Path, checks: tuple[Any, Any]) -> None:
