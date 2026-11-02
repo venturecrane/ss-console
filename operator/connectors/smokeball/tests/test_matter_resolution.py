@@ -644,6 +644,11 @@ def _item(item_id: str, **values: Any) -> dict[str, Any]:
     return {"id": item_id, "values": values}
 
 
+def _case_item(case_number: str) -> dict[str, Any]:
+    """A layout item recording only the court's case number, as the firm writes it."""
+    return {"id": "c1", "values": {CASE_KEY: case_number}}
+
+
 def _laid(layouts: dict[str, list[dict[str, Any]]], **kw: Any) -> Tenant:
     return Tenant(matters=BARE, layouts=layouts, **kw)
 
@@ -804,3 +809,106 @@ def test_the_tool_takes_the_case_number() -> None:
     from smokeball_connector import vendor_invoice_tools
 
     assert "case_number" in inspect.signature(vendor_invoice_tools.resolve_invoice_matter).parameters
+
+
+# ---- A garbled date and a court's form of the case number (2026-11-02) --------
+#
+# The same post: a date of loss the transcription read with letters where digits
+# were printed (left out, so two matters stayed ambiguous), and a court notice
+# whose caption writes the case number in the court's form while the firm
+# records the firm's form of the same case. Shapes from that post, digits made
+# up.
+
+
+def test_a_garbled_printed_date_still_separates_one_clients_two_matters() -> None:
+    """The paper prints 03/14/2026; the transcription read 03/l4/202C."""
+    tenant = _laid(
+        {
+            M101: [_item("c1", **{LOSS_KEY: "2026-03-14T00:00:00"})],
+            M107: [_item("c1", **{LOSS_KEY: "2025-07-01T00:00:00"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_loss_as_printed="03/l4/202C")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_LOSS]
+    assert out["date_of_loss_read_as"] == ["2020-03-14", "2026-03-14"]
+
+
+def test_a_garbled_date_that_fits_both_matters_stays_ambiguous() -> None:
+    """C may be 0 or 6: when one matter is 2020 and the other 2026, the page
+    cannot say which, and neither is filed."""
+    tenant = _laid(
+        {
+            M101: [_item("c1", **{LOSS_KEY: "2026-03-14"})],
+            M107: [_item("c1", **{LOSS_KEY: "2020-03-14"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_loss_as_printed="03/14/202C")
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS and _minted() == 0
+
+
+def test_a_clean_printed_us_date_is_read_too() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("c1", **{LOSS_KEY: "2026-03-14"})],
+            M107: [_item("c1", **{LOSS_KEY: "2025-07-01"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_loss_as_printed="3/14/2026")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["date_of_loss_read_as"] == ["2026-03-14"]
+
+
+@pytest.mark.parametrize("unreadable", ["0?/14/2026", "XX/14/2026", "ll/ll/2026", "March 14", "14/2026"])
+def test_a_date_too_garbled_to_read_is_reported_and_not_used(unreadable: str) -> None:
+    tenant = _laid({M101: [_item("c1", **{LOSS_KEY: "2026-03-14"})]})
+    out = _resolve(tenant, client_name=NAME, date_of_loss_as_printed=unreadable)
+    assert out["ignored"] == [mr.FACT_LOSS]
+    assert "date_of_loss_read_as" not in out
+    assert out["verdict"] == mr.VERDICT_AMBIGUOUS and _minted() == 0
+
+
+def test_an_iso_date_of_loss_wins_over_the_printed_text() -> None:
+    tenant = _laid(
+        {
+            M101: [_item("c1", **{LOSS_KEY: "2026-03-14"})],
+            M107: [_item("c1", **{LOSS_KEY: "2025-07-01"})],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, date_of_loss="2025-07-01", date_of_loss_as_printed="03/14/2026")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M107
+    assert "date_of_loss_read_as" not in out
+
+
+def test_the_courts_form_of_a_case_number_matches_the_firms_form() -> None:
+    """Caption CV-2025-0001234; the firm records ABC-CV-XYZ-2025-01234."""
+    tenant = _laid({M101: [_case_item("ABC-CV-XYZ-2025-01234")]}, contact_matters={CONTACT: [M101]})
+    out = _resolve(tenant, client_name=NAME, case_number="CV-2025-0001234")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M101
+    assert out["matched_on"] == [mr.FACT_NAME, mr.FACT_CASE]
+
+
+def test_a_case_number_with_another_sequence_is_still_a_different_case() -> None:
+    tenant = _laid(
+        {
+            M101: [_case_item("ABC-CV-XYZ-2025-01234")],
+            M107: [_case_item("ABC-CV-XYZ-2025-01235")],
+        }
+    )
+    out = _resolve(tenant, client_name=NAME, case_number="CV-2025-0001235")
+    assert out["verdict"] == mr.VERDICT_UNIQUE and out["matter_id"] == M107
+    rt._reset_for_tests()
+    other_year = _resolve(
+        _laid({M101: [_case_item("ABC-CV-XYZ-2024-01234")]}, contact_matters={CONTACT: [M101]}),
+        client_name=NAME,
+        case_number="CV-2025-0001234",
+    )
+    assert other_year["verdict"] == mr.VERDICT_NONE and other_year["matched_on"] == [mr.FACT_NAME]
+
+
+def test_the_tool_takes_the_printed_date() -> None:
+    import inspect
+
+    from smokeball_connector import vendor_invoice_tools
+
+    assert "date_of_loss_as_printed" in inspect.signature(vendor_invoice_tools.resolve_invoice_matter).parameters

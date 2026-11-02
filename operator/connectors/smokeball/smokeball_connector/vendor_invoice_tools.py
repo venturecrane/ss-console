@@ -83,6 +83,7 @@ def resolve_invoice_matter(
     date_of_loss: str | None = None,
     date_of_birth: str | None = None,
     case_number: str | None = None,
+    date_of_loss_as_printed: str | None = None,
 ) -> Any:
     """Which matter does this invoice belong to? Searches the firm's own record
     and answers with a CLOSED verdict. Classified ``read``: nothing is written.
@@ -96,7 +97,15 @@ def resolve_invoice_matter(
     instructions, or from an earlier invoice. The claim number, date of loss and
     case number are checked against the matter's own record, including its
     layout fields; a number too short or with no digit is reported in
-    ``ignored`` and not used.
+    ``ignored`` and not used. A court case number is matched on its year and
+    sequence, so the court's form and the firm's form of one case agree.
+
+    When the date of loss as read is not a clean date (characters where digits
+    should be, as a scan transcription produces), pass the text exactly as read
+    in ``date_of_loss_as_printed`` instead of leaving it out, and never correct
+    it yourself. The tool reads it into at most four real dates and reports them
+    as ``date_of_loss_read_as``; a date it cannot read is listed in
+    ``ignored``.
 
     ``verdict`` is one of four:
 
@@ -128,6 +137,7 @@ def resolve_invoice_matter(
         date_of_loss=date_of_loss,
         date_of_birth=date_of_birth,
         case_number=case_number,
+        date_of_loss_as_printed=date_of_loss_as_printed,
     )
 
 

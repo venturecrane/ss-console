@@ -252,8 +252,8 @@ client's file, and nobody will find it.
 
 For each letter, read ONLY that letter's own pages and call
 `resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss,
-date_of_birth, case_number)` with exactly the facts **that letter** prints, and
-nothing else.
+date_of_birth, case_number, date_of_loss_as_printed)` with exactly the facts
+**that letter** prints, and nothing else.
 
 The tool is named for the first thing that used it; its arithmetic is not
 specific to invoices, and it is the same resolver here.
@@ -271,6 +271,15 @@ specific to invoices, and it is the same resolver here.
   including the fields where the firm keeps them, so a printed claim or case
   number is often the second fact that files a letter instead of asking. Leaving
   one out turns a letter that would have filed into a question.
+- A date of loss that does not read cleanly as a date on the page (a letter where
+  a digit should be, as a scan produces) is NOT left out and NOT corrected by
+  you: pass the text exactly as read in `date_of_loss_as_printed`. The tool
+  reads it into the few real dates it can be and compares those; a date it
+  cannot read comes back in `ignored`. Use `date_of_loss` only for a date you
+  read cleanly.
+- A court's case number goes in `case_number` exactly as the caption prints it.
+  The tool matches it to the firm's form of the same case, so do not rewrite it
+  into the firm's form.
 - Nothing from another letter, from the covering email, from an earlier message,
   or from memory.
 
