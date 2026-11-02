@@ -116,6 +116,40 @@ def test_reminders_about_other_events_are_still_excluded():
     assert cd.kind(ev("MOTION/DISCOVERY CUT-OFF", all_day=True, ltb=True)) == "discovery_cutoff"
 
 
+TENTATIVE = (
+    "Tentative CMC ruling",
+    "Tentative ruling - CMC",
+    "Tentative CMP ruling",
+    "TENTATIVE RULING: CMC",
+    "CMC tentative ruling",
+    "Tentative ruling on Motion to Compel",
+    "Tentative Rulings - Hearing on MSJ",
+)
+
+
+@pytest.mark.parametrize("ltb", [False, True], ids=["staff", "lawtoolbox"])
+@pytest.mark.parametrize("all_day", [False, True], ids=["timed", "all-day"])
+@pytest.mark.parametrize("subject", TENTATIVE)
+def test_a_tentative_ruling_entry_is_never_the_hearing_it_precedes(subject: str, all_day: bool, ltb: bool):
+    assert cd.kind(ev(subject, all_day=all_day, ltb=ltb)) is None
+
+
+def test_the_cmc_after_its_tentative_ruling_is_the_next_court_date():
+    """2026-11-02: a LawToolBox tentative-ruling entry the day before a CMC
+    printed as the CMC, a day early."""
+    cal = [
+        {"startTime": "2026-11-16T00:00:00", "allDay": True, "subject": "Tentative CMC ruling",
+         "isDeleted": False, "ltb": True},
+        {"startTime": "2026-11-16T14:00:00", "allDay": False, "subject": "Tentative ruling - CMC",
+         "isDeleted": False, "ltb": True},
+        {"startTime": "2026-11-17T08:30:00", "allDay": False, "subject": "CMC dept 47",
+         "isDeleted": False, "ltb": True},
+    ]  # fmt: skip
+    got = cd.merge({}, cal, TODAY)
+    assert (got["next"]["date"], got["calendar"]["time"]) == ("2026-11-17", "8:30 AM")
+    assert cd.upcoming(cal, TODAY)["cmc"]["date"] == "2026-11-17"
+
+
 def test_a_motion_hearing_on_the_calendar_is_the_next_court_date_and_agrees_with_the_papers():
     """The 2026-11-02 shape: a timed motion hearing next week, a trial two
     years out, and the papers giving the hearing's date."""

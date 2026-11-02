@@ -75,7 +75,11 @@ _SKIP = re.compile(
     # "L/D to Req Remote Appearance at MSC", "Check Tentative CMC Ruling".
     # ("N days before" and "prior to" are ``_BEFORE``: after a hearing word
     # they are its note, not a reminder.)
-    r"|\bcheck\s+tentative\b|^\W*(\d+/\d+\W*)?L/D\b",
+    # A tentative ruling posts the day before the hearing it precedes, and is
+    # never that hearing (2026-11-02: "Tentative CMC ruling" printed the CMC a
+    # day early): "Tentative ruling - CMC", "CMC tentative ruling".
+    r"|\bcheck\s+tentative\b|\btentatives?\b.{0,40}\brulings?\b|\brulings?\b.{0,40}\btentative"
+    r"|^\W*(\d+/\d+\W*)?L/D\b",
     re.I,
 )
 _CUTOFF = re.compile(r"discovery\s+cut-?\s?off", re.I)
