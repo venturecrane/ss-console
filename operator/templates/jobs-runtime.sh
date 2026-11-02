@@ -11,9 +11,10 @@
 # The seat's bundle installer calls `import-check` too, so the import list a
 # bundle must pass on a seat is the one it passed at build.
 #
-#   jobs-runtime.sh connectors           every connector under $SRC/connectors (the image)
+#   jobs-runtime.sh connectors           every connector under $SRC/connectors
+#   jobs-runtime.sh image-connectors     every connector the bundle does not carry (the image)
 #   jobs-runtime.sh connector <name>     one connector venv (the bundle: smokeball)
-#   jobs-runtime.sh medchron             the chronology runner venv
+#   jobs-runtime.sh medchron             the chronology runner venv (the bundle only, since W5)
 #   jobs-runtime.sh import-check <py>    the import list + antiword, against <py>
 #
 # SRC (default /app) is where connectors/, runners/ and requirements/ are read
@@ -48,10 +49,17 @@ install_connector() {
   ls "$venv"/bin/*-mcp >/dev/null 2>&1 || { echo "FATAL: connector ${name} produced no *-mcp console-script"; exit 1; }
 }
 
+# The connectors the `jobs` bundle carries. The image no longer builds them
+# (ADR 0100 W5): a seat that authors a job lane runs the bundle's copy, mounted
+# over the empty /opt/connectors/<name> the image leaves as its mount target.
+BUNDLED_CONNECTORS="smokeball"
+
 connectors() {
+  skip="${1:-}"
   for cdir in "${SRC}"/connectors/*/; do
     name=$(basename "$cdir")
     [ "$name" = "_sdk" ] && continue
+    case " ${skip} " in *" ${name} "*) continue ;; esac
     [ -f "${cdir}pyproject.toml" ] || continue
     install_connector "$cdir"
   done
@@ -94,8 +102,9 @@ medchron() {
 
 case "${1:-}" in
   connectors) connectors ;;
+  image-connectors) connectors "${BUNDLED_CONNECTORS}" ;;
   connector) [ $# -eq 2 ] || { echo "usage: jobs-runtime.sh connector <name>" >&2; exit 2; }; connector "$2" ;;
   medchron) medchron ;;
   import-check) [ $# -eq 2 ] || { echo "usage: jobs-runtime.sh import-check <python>" >&2; exit 2; }; import_check "$2" ;;
-  *) echo "usage: jobs-runtime.sh connectors | connector <name> | medchron | import-check <python>" >&2; exit 2 ;;
+  *) echo "usage: jobs-runtime.sh connectors | image-connectors | connector <name> | medchron | import-check <python>" >&2; exit 2 ;;
 esac

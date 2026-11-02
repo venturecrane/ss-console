@@ -57,6 +57,9 @@ def directories(paths: set[str]) -> set[str]:
 def unmet_needs(manifest: dict[str, Any], caps: dict[str, Any]) -> list[str]:
     """Every need of every skill the image does not provide, as 'skill: kind name'."""
     provided = {k: set(caps.get(k) or []) for k in NEED_KINDS}
+    # ADR 0100 W5: the runner and the Smokeball connector ship in the jobs
+    # bundle, not the image; the image records the bundle's guaranteed paths.
+    provided["paths"] |= set(caps.get("bundle_paths") or [])
     dirs = directories(provided["paths"])
     missing: list[str] = []
     for skill, needs in sorted((manifest.get("needs") or {}).items()):

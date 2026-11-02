@@ -663,7 +663,7 @@ COPY operator/connectors/ /app/connectors/
 # job runtime and the bundle a seat mounts over it are built by one script.
 # operator/bin/tests/test_jobs_runtime.py pins it to the steps it replaced here.
 COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh
-RUN sh /app/jobs-runtime.sh connectors
+RUN sh /app/jobs-runtime.sh image-connectors
 
 # ---------- The chronology runner (routine 11, ss#2614) ----------
 # operator/runners/medchron is installed into its OWN root-owned venv from the
@@ -687,12 +687,19 @@ RUN sh /app/jobs-runtime.sh connectors
 # The case file manager (medchron/casefile/) ships in the same venv: it reads
 # with the litigation job's extractors and text cache, and its inputs come from
 # vaults/<slug>/casefile/ (casefile-firm.yaml and prompts/).
+#
+# THE IMAGE NO LONGER BUILDS THE RUNNER OR THE SMOKEBALL CONNECTOR (ADR 0100
+# W5, 2026-11-02). Both ship only in the `jobs` bundle (scripts/
+# ci-publish-bundle.sh runs jobs-runtime.sh INSIDE this image, so the bundle's
+# venvs match its python and glibc), and entrypoint-bundles.sh bind-mounts them
+# over the two empty, root-owned directories below. The cut waited for proof: a
+# real A&P job ran on the mounted bundle and delivered (vfy_01M6EKXDF2P39A3E56D2FKQN67).
+# A seat that authors a job lane and cannot mount a bundle has NO runner: it
+# says so in its boot log and its self-test lane checks fail, which pages. A
+# seat that authors none carries 0 bytes of it. /app/runners/ stays: the
+# supervisor and the root ledger run from it.
 COPY operator/runners/ /app/runners/
-# The pricing table the runner's cents cap and ledger price from, beside the
-# venv (NOT under /opt/smd, which is the establishment compilers' contract
-# tree and is pinned file-by-file by tests/shipped-runtime-paths.test.ts).
-COPY operator/adapter/cost_telemetry/anthropic_pricing.json /opt/medchron/anthropic_pricing.json
-RUN sh /app/jobs-runtime.sh medchron
+RUN install -d -o root -g root -m 0755 /opt/medchron /opt/connectors/smokeball
 
 # Safety-substrate tests — bootstrap.sh runs these on container start
 COPY operator/safety_substrate/ /app/safety_substrate/
@@ -825,6 +832,8 @@ COPY operator/templates/seat-spec.pub /app/seat-spec.pub
 # and the action classes. Generated LAST, after every COPY into /app and /opt,
 # so the path list is the image's real tree. A failure here fails the build.
 COPY operator/templates/gen-image-capabilities.py /app/gen-image-capabilities.py
+# The jobs bundle's guaranteed paths (ADR 0100 W5), recorded as bundle_paths.
+COPY operator/templates/jobs-bundle-paths.txt /app/jobs-bundle-paths.txt
 RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-capabilities.py /app/image-capabilities.json
 
 # NOTE: customer.yaml is NOT copied into the image. It lives on the Fly

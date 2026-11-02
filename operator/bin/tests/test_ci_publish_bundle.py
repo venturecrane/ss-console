@@ -28,6 +28,10 @@ def test_no_tar_listing_is_piped_into_an_early_exit_grep() -> None:
 def test_the_check_still_requires_both_entry_points() -> None:
     code = _code()
     assert 'tar -tf "${work}/out/bundle.tar" > "${work}/listing.txt"' in code
+    # The guaranteed set is one file the image also records (ADR 0100 W5).
+    assert "operator/templates/jobs-bundle-paths.txt" in code
+    listed = (SCRIPT.parents[1] / "operator" / "templates" / "jobs-bundle-paths.txt").read_text(encoding="utf-8")
     for entry in ("medchron/.venv/bin/medchron", "connectors/smokeball/.venv/bin/smokeball-mcp"):
-        assert entry in code
+        assert entry in listed.splitlines()
+    assert 'for entry in "${guaranteed[@]}"; do' in code
     assert 'grep -qxF "${entry}" "${work}/listing.txt"' in code

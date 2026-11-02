@@ -860,8 +860,9 @@ def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> No
         "the tarball goes up before the manifest that names it, and the record comes last"
     )
     dockerfile = (OPERATOR_DIR / "templates" / "Dockerfile").read_text(encoding="utf-8")
-    assert "RUN sh /app/jobs-runtime.sh connectors" in dockerfile
-    assert "RUN sh /app/jobs-runtime.sh medchron" in dockerfile
+    # ADR 0100 W5: the image builds only the connectors the bundle does not carry.
+    assert "RUN sh /app/jobs-runtime.sh image-connectors" in dockerfile
+    assert "RUN sh /app/jobs-runtime.sh medchron" not in dockerfile
 
 
 def test_the_tick_rolls_bundles_only_behind_the_switch_and_the_urgent_path_can_send_one() -> None:
