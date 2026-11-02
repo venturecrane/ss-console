@@ -10,6 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Prepended when pages are shown as strips (page_split ``bands``, the default).
+BANDS_NOTE = (
+    "Each page is shown as TWO strips of the same page, its TOP and its BOTTOM; "
+    "the middle of the page is not shown. Headers, letterheads, running headers, "
+    "footers and page markers are in those strips. Report only what the strips show; "
+    "a section whose heading is in the middle of a page is not visible and is not "
+    "reported.\n"
+)
+
 INDEX_INSTRUCTION = (
     "Each document block above is ONE page of a scanned record from a legal matter "
     'file. The text "Page N:" before a block is that page\'s position in the PDF; '

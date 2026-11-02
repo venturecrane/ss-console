@@ -39,7 +39,10 @@ class FakeModel:
     """The Messages API: index requests answered from the labels, match
     requests answered with a scripted list of items."""
 
-    def __init__(self, items: list[dict[str, Any]] | None = None, *, shift: int = 0) -> None:
+    def __init__(
+        self, items: list[dict[str, Any]] | None = None, *, shift: int = 0, refuse: frozenset[int] = frozenset()
+    ) -> None:
+        self.refuse = refuse
         self.items = items or []
         self.shift = shift
         self.bodies: list[dict[str, Any]] = []
@@ -72,6 +75,11 @@ class FakeModel:
                     }
                 )
             answer = {"pages": rows}
+            if self.refuse & set(labels):
+                return httpx.Response(
+                    200,
+                    json={"content": [], "stop_reason": "refusal", "usage": {"input_tokens": 900, "output_tokens": 0}},
+                )
         else:
             answer = {"items": self.items}
         return httpx.Response(
@@ -183,8 +191,12 @@ def test_an_answer_that_moves_evidence_between_pages_is_refused(
     monkeypatch.setenv(pf.INDEX_DIR_ENV, str(tmp_path / "index"))
     monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(shifted)))
     out = pf.locate(_set(tmp_path, 8), "the visit", _work(tmp_path))
-    assert out["indexedPages"] == 0 and out["failedPages"] == "1-8" and not out["complete"]
-    assert "before saying a record is not in this file" in out["note"]
+    assert (
+        out["indexedPages"] == 0
+        and [r["page"] for r in out["failedPages"]] == list(range(1, 9))
+        and not out["complete"]
+    )
+    assert "Do not say a record is absent" in out["note"]
     assert pf.load_index(out["sha256"])["pages"] == {}
 
 
@@ -196,7 +208,8 @@ def test_a_failed_call_is_failed_pages_never_an_empty_answer(monkeypatch: pytest
         vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(529)))
     )
     out = pf.locate(_set(tmp_path, 3), "the visit", _work(tmp_path))
-    assert out["failedPages"] == "1-3" and out["items"] == [] and not out["complete"]
+    assert [r["page"] for r in out["failedPages"]] == [1, 2, 3] and "529" in out["failedPages"][0]["reason"]
+    assert out["items"] == [] and not out["complete"]
 
 
 def test_no_credential_reads_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -390,7 +403,7 @@ def test_the_split_child_numbers_and_clamps_pages(tmp_path: Path) -> None:
     assert page_split.split(src, 1, 0, out) == (4, [])
     total, written = page_split.split(src, 2, 9, out)
     assert total == 4 and written == [2, 3, 4]
-    assert len(PdfReader(io.BytesIO((out / "p2.pdf").read_bytes())).pages) == 1
+    assert len(PdfReader(io.BytesIO((out / "p2.pdf").read_bytes())).pages) == 2  # top and bottom strips
 
 
 def test_the_split_child_refuses_a_non_pdf_plainly(tmp_path: Path) -> None:
@@ -496,3 +509,125 @@ def test_found_false_or_unknown_sections_give_no_pages(model: FakeModel, tmp_pat
     out = pf.locate(_set(tmp_path), "Clinic B discharge", _work(tmp_path))
     assert [i["ranges"] for i in out["items"]] == [[], []]
     assert [i["found"] for i in out["items"]] == [False, False]
+
+
+# ---- refusals, strips, the whole file, the spend tally ---------------------
+
+
+def _refusing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, refuse: set[int]) -> FakeModel:
+    fake = FakeModel([{"asked": "x", "found": True, "sections": ["S1"], "reason": "S1"}], refuse=frozenset(refuse))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv(pf.INDEX_DIR_ENV, str(tmp_path / "index"))
+    monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(fake)))
+    return fake
+
+
+def test_a_refused_page_is_split_out_and_never_sinks_its_batch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """One page the model declines: the batch of 8 is retried page by page, the
+    other 7 index, and the declined page is listed with its stop_reason."""
+    _refusing(monkeypatch, tmp_path, {3})
+    out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
+    assert out["indexedPages"] == 7 and not out["complete"] and out["remainingPages"] == 0
+    assert out["unreadablePages"] == [{"page": 3, "reason": "the model declined to read it (stop_reason refusal)"}]
+    assert "could not be read" in out["note"] and "failedPages" not in out
+    # The unreadable page stays INSIDE its section, named, never skipped.
+    (sec,) = out["documents"][:1]
+    assert sec["pages"] == "1-4" and sec["unreadablePages"] == {"3": out["unreadablePages"][0]["reason"]}
+
+
+def test_a_refused_page_is_cached_and_not_reread(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    src = _set(tmp_path, 8)
+    pf.locate(src, "x", _work(tmp_path))
+    before = fake.index_calls()
+    again = pf.locate(src, "x", _work(tmp_path))
+    assert fake.index_calls() == before and again["readNow"] == 0
+    assert again["unreadablePages"][0]["page"] == 3
+
+
+def test_pages_go_as_top_and_bottom_strips_by_default(model: FakeModel, tmp_path: Path) -> None:
+    from smokeball_connector import page_split
+
+    src = tmp_path / "set.pdf"
+    w = PdfWriter()
+    w.add_blank_page(width=600, height=1000)
+    rotated = w.add_blank_page(width=600, height=1000)
+    rotated.rotate(90)
+    with open(src, "wb") as fh:
+        w.write(fh)
+    out = tmp_path / "pages"
+    out.mkdir()
+    page_split.split(src, 1, 2, out)
+    top, bottom = PdfReader(str(out / "p1.pdf")).pages
+    assert [float(v) for v in top.mediabox] == [0, 780, 600, 1000]
+    assert [float(v) for v in bottom.mediabox] == [0, 0, 600, 120]
+    assert [float(v) for v in top.cropbox] == [0, 780, 600, 1000]
+    # Rotated 90: the visual top is the page's left edge.
+    rtop, _ = PdfReader(str(out / "p2.pdf")).pages
+    assert [float(v) for v in rtop.mediabox] == [0, 0, 132, 1000]
+    full = tmp_path / "full"
+    full.mkdir()
+    page_split.split(src, 1, 1, full, view="full")
+    assert len(PdfReader(str(full / "p1.pdf")).pages) == 1
+    pf.locate(_set(tmp_path, 2), "x", _work(tmp_path))
+    assert "TWO strips" in model.bodies[0]["messages"][0]["content"][-1]["text"]
+
+
+def test_full_view_is_its_own_index(model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    src = _set(tmp_path, 2)
+    pf.locate(src, "x", _work(tmp_path))
+    monkeypatch.setenv(pf.VIEW_ENV, "full")
+    out = pf.locate(src, "x", _work(tmp_path))
+    assert out["readNow"] == 2 and out["view"] == "full"
+    assert "TWO strips" not in model.bodies[-2]["messages"][0]["content"][-1]["text"]
+
+
+def test_a_long_file_indexes_whole_across_calls(
+    model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pf, "PAGES_PER_CALL", 16)
+    src = _set(tmp_path)
+    reads = []
+    for _ in range(4):
+        reads.append(pf.locate(src, "x", _work(tmp_path))["readNow"])
+    assert reads == [16, 16, 8, 0]
+    assert pf.MAX_PAGES_PER_FILE >= 10_000
+
+
+def test_the_spend_is_tallied_for_the_file_across_calls(
+    model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pf, "PAGES_PER_CALL", 16)
+    src = _set(tmp_path)
+    first = pf.locate(src, "x", _work(tmp_path))
+    second = pf.locate(src, "x", _work(tmp_path))
+    total = second["tokensForThisFile"]["input_tokens"]
+    assert total == first["tokens"]["input_tokens"] + second["tokens"]["input_tokens"]
+
+
+def test_cli_all_reads_everything_then_matches_once(
+    model: FakeModel, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(pf, "PAGES_PER_CALL", 16)
+    big = _set(tmp_path)
+    assert pft.main(["locate", "--pdf", str(big), "--what", "the visit", "--all", "--no-check", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["complete"] and out["indexedPages"] == 40
+    matches = [b for b in model.bodies if "items" in b["output_config"]["format"]["schema"]["properties"]]
+    assert len(matches) == 1
+    assert out["tokensThisRun"]["input_tokens"] == out["tokensForThisFile"]["input_tokens"]
+
+
+def test_cli_all_stops_and_says_so_when_no_progress(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(pf.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(
+        vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(529)))
+    )
+    big = _set(tmp_path, 3)
+    assert pft.main(["locate", "--pdf", str(big), "--what", "x", "--all", "--no-check"]) == 0
+    captured = capsys.readouterr()
+    assert "stopped: a call read no new page (3 failed)" in captured.err
+    assert "failed: p1: HTTP 529" in captured.out

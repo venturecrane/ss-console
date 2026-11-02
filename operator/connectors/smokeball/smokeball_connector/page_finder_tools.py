@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from . import matter_files as mf
-from .page_finder import FinderRefused, locate, parse_window, purge
+from .page_finder import FinderRefused, build_index, locate, parse_window, purge
 
 TOOL_NOTE = (
     "To send what was found, call stage_matter_files with these page ranges. A record this "
@@ -155,13 +155,22 @@ def check_cut(pdf: Path, pages: tuple[int, int] | None, checks: tuple[Any, Any])
     return {"range": label, "passes": True, "pages": page_count, "bytes": len(blob), "embeddedFilesRemoved": removed}
 
 
-def _print_locate(out: dict[str, Any]) -> None:
+def _cost(tokens: dict[str, int]) -> str:
+    dollars = tokens.get("input_tokens", 0) * 4 / 1e6 + tokens.get("output_tokens", 0) * 20 / 1e6
+    return f"{tokens} (about ${dollars:.2f} at Opus 5.5 list price)"
+
+
+def _print_locate(out: dict[str, Any], run_tokens: dict[str, int]) -> None:
     print(
-        f"{out['indexedPages']} of {out['pageCount']} pages indexed ({out['readNow']} read now, {out['fromCache']} cached)"
+        f"{out['indexedPages']} of {out['pageCount']} pages indexed, {out['remainingPages']} not read yet "
+        f"(view: {out.get('view')})"
     )
-    for key in ("failedPages", "unreadablePages", "matchError", "note"):
+    for key in ("matchError", "note"):
         if out.get(key):
             print(f"{key}: {out[key]}")
+    for key in ("unreadablePages", "failedPages"):
+        for row in out.get(key) or []:
+            print(f"{key[:-5]}: p{row['page']}: {row['reason']}")
     for item in out["items"]:
         print(f"\nASKED: {item['asked']}\n  found: {item['found']}  reason: {item['reason']}")
         for r in item["ranges"]:
@@ -171,14 +180,22 @@ def _print_locate(out: dict[str, Any]) -> None:
                 print(f"    {ev['section']} pp. {ev['pages']}: " + " | ".join(cells))
                 if ev.get("dates"):
                     print(f"      dates printed: {'; '.join(ev['dates'])}")
+                if ev.get("unreadablePages"):
+                    print(f"      unreadable pages inside it: {', '.join(ev['unreadablePages'])}")
     if out.get("documents"):
         print("\nSECTIONS OF THE FILE (PDF positions):")
         for sec in out["documents"]:
             cells = [sec.get(k) or "-" for k in ("date", "provider", "document_type", "heading")]
             print(f"  {sec['section']} pp. {sec['pages']}: " + " | ".join(cells))
-    tokens = out["tokens"]
-    cost = tokens["input_tokens"] * 4 / 1e6 + tokens["output_tokens"] * 20 / 1e6
-    print(f"\ntokens: {tokens} (about ${cost:.2f} at Opus 5.5 list price)")
+    print(f"\ntokens this run: {_cost(run_tokens)}")
+    print(f"tokens for this file so far: {_cost(out.get('tokensForThisFile') or {})}")
+
+
+def _staged_copy(pdf: Path, tmp: str) -> Path:
+    source = Path(tmp) / "source.pdf"
+    os.symlink(pdf.resolve(), source)
+    (Path(tmp) / "pages").mkdir()
+    return source
 
 
 def _cmd_locate(args: argparse.Namespace) -> int:
@@ -186,19 +203,42 @@ def _cmd_locate(args: argparse.Namespace) -> int:
     checks = None if args.no_check else _import_send_checks(args.repo)
     if not args.index_dir and not os.environ.get("SMOKEBALL_PAGE_INDEX_DIR"):
         os.environ["SMOKEBALL_PAGE_INDEX_DIR"] = str(pdf.resolve().parent / ".page-index")
+    if args.full_pages:
+        os.environ["SMOKEBALL_PAGE_FINDER_VIEW"] = "full"
     window = parse_window(args.pages)
-    while True:
+    run_tokens = {"input_tokens": 0, "output_tokens": 0}
+    # --all: read every page first (each call reads up to PAGES_PER_CALL new
+    # ones), then match ONCE. Stops when nothing is left or a call made no
+    # progress, and says which.
+    while args.all:
         with tempfile.TemporaryDirectory(prefix="smd-page-finder-") as tmp:
-            source = Path(tmp) / "source.pdf"
-            os.symlink(pdf.resolve(), source)
-            (Path(tmp) / "pages").mkdir()
-            out = locate(source, args.what, Path(tmp) / "pages", window=window)
-        if out["complete"] or not args.all or not out["readNow"]:
+            built = build_index(_staged_copy(pdf, tmp), Path(tmp) / "pages", window=window)
+        for key, value in built["tokens"].items():
+            run_tokens[key] += value
+        index = built["index"]
+        left = int(index.get("page_count") or 0) - len(index["pages"]) - len(index["unreadable"])
+        progress = len(built["read_now"]) + len(built["unreadable_now"])
+        print(
+            f"read {len(built['read_now'])} pages, {len(built['unreadable_now'])} unreadable, {left} left",
+            file=sys.stderr,
+        )
+        if left <= 0 or window:
             break
+        if not progress:
+            print(
+                f"stopped: a call read no new page ({len(built['failed'])} failed); re-run to retry them",
+                file=sys.stderr,
+            )
+            break
+    with tempfile.TemporaryDirectory(prefix="smd-page-finder-") as tmp:
+        out = locate(_staged_copy(pdf, tmp), args.what, Path(tmp) / "pages", window=window)
+    for key, value in out["tokens"].items():
+        run_tokens[key] += value
+    out["tokensThisRun"] = run_tokens
     if args.json:
         print(json.dumps(out, indent=2))
     else:
-        _print_locate(out)
+        _print_locate(out, run_tokens)
     if checks:
         print("\nSEND CHECK (what stage_matter_files would do):")
         for item in out["items"]:
@@ -217,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     loc.add_argument("--pages", help="limit the look to a range like 1-120")
     loc.add_argument("--all", action="store_true", help="keep reading until every page is indexed")
     loc.add_argument("--no-check", action="store_true", help="skip the send check of each range found")
+    loc.add_argument("--full-pages", action="store_true", help="show the model whole pages, not header/footer strips")
     loc.add_argument("--index-dir", help="where the page index is cached (default: .page-index beside the PDF)")
     loc.add_argument("--repo", type=Path, help="path to the repo's operator/ directory (default: this checkout)")
     loc.add_argument("--json", action="store_true")

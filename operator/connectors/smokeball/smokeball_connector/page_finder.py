@@ -46,8 +46,8 @@ scanned page is roughly 1,600 input tokens and its index row roughly 80 output
 tokens, so about $0.90 per 100 pages to index, plus a few cents for the match
 step (an estimate from the token counts above, not a measured bill; the result
 reports the actual tokens). Bounds: :data:`PAGES_PER_CALL` pages per call
-inside :data:`CALL_DEADLINE_SECONDS`, :data:`MAX_PAGES_PER_FILE` indexed per
-file, :data:`BATCH_PAGES` pages per request.
+inside :data:`CALL_DEADLINE_SECONDS` (the rest on the next call), a runaway guard of :data:`MAX_PAGES_PER_FILE` per
+file, :data:`BATCH_PAGES` pages per request. Pages go as header and footer strips (page_split.py), which cost less than whole pages; the full-page figure above is the ceiling.
 
 RUNTIME LAYER. The index holds what page headers say (dates, providers,
 headings) for a firm's files: client content on the seat volume at
@@ -69,8 +69,10 @@ from pathlib import Path
 from typing import Any
 
 from . import vision
+from .page_finder_sections import _ranges, _view, documents, section_lines, sections
 from .page_finder_prompts import (
     _SECTION_FIELDS,
+    BANDS_NOTE,
     INDEX_INSTRUCTION,
     INDEX_SCHEMA,
     MATCH_INSTRUCTION,
@@ -81,9 +83,12 @@ INDEX_DIR_ENV = "SMOKEBALL_PAGE_INDEX_DIR"
 DEFAULT_INDEX_DIR = "/opt/data/smokeball-page-index"
 MODEL_ENV = "SMOKEBALL_PAGE_FINDER_MODEL"
 #: Bumped when the index prompt or schema changes; an index of another version is not reused.
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 PAGES_PER_CALL = 100
-MAX_PAGES_PER_FILE = 1000
+#: A runaway guard, not a working limit: a 2,310-page set must index whole
+#: across calls (each call reads at most PAGES_PER_CALL new pages).
+MAX_PAGES_PER_FILE = 10_000
+VIEW_ENV = "SMOKEBALL_PAGE_FINDER_VIEW"
 BATCH_PAGES = 8
 BATCH_BYTES = 12 * 1024 * 1024
 PAGE_MAX_BYTES = 8 * 1024 * 1024
@@ -104,9 +109,12 @@ class FinderRefused(ValueError):
 
 
 class _CallFailed(RuntimeError):
-    def __init__(self, detail: str, *, retryable: bool = False) -> None:
+    def __init__(self, detail: str, *, retryable: bool = False, stop_reason: str | None = None) -> None:
         super().__init__(detail)
         self.retryable = retryable
+        #: The model's own stop_reason when it answered but did not finish
+        #: (``refusal``, ``max_tokens``): the PAGE is the cause, not the wire.
+        self.stop_reason = stop_reason
 
 
 def model() -> str:
@@ -142,11 +150,19 @@ def load_index(sha: str, base: Path | None = None) -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
-    if not isinstance(data, dict) or data.get("version") != PROMPT_VERSION or data.get("model") != model():
-        return {"version": PROMPT_VERSION, "model": model(), "sha256": sha, "pages": {}, "matters": []}
+    fresh = {"version": PROMPT_VERSION, "model": model(), "view": view(), "sha256": sha, "pages": {}}
+    if not isinstance(data, dict) or any(data.get(k) != fresh[k] for k in ("version", "model", "view")):
+        data = fresh
     data.setdefault("pages", {})
     data.setdefault("matters", [])
+    data.setdefault("unreadable", {})
+    data.setdefault("spent", {"input_tokens": 0, "output_tokens": 0})
     return data
+
+
+def view() -> str:
+    """``bands`` (the default: each page's top and bottom strips) or ``full``."""
+    return "full" if (os.environ.get(VIEW_ENV) or "").strip().lower() == "full" else "bands"
 
 
 def save_index(index: dict[str, Any], base: Path | None = None) -> None:
@@ -220,7 +236,7 @@ def _answer(message: Any) -> tuple[dict[str, Any], dict[str, int]]:
     usage = message.get("usage") or {}
     tokens = {k: int(usage.get(k) or 0) for k in ("input_tokens", "output_tokens")}
     if message.get("stop_reason") != "end_turn":
-        raise _CallFailed(f"stopped: {message.get('stop_reason')}")
+        raise _CallFailed(f"stopped: {message.get('stop_reason')}", stop_reason=str(message.get("stop_reason")))
     texts = [b.get("text") for b in message.get("content") or [] if isinstance(b, dict) and b.get("type") == "text"]
     try:
         data = json.loads("".join(t for t in texts if isinstance(t, str)))
@@ -256,7 +272,9 @@ def index_batch(pages: list[tuple[int, bytes]]) -> tuple[dict[str, dict[str, Any
                 "source": {"type": "base64", "media_type": "application/pdf", "data": base64.b64encode(blob).decode()},
             }
         )
-    content.append({"type": "text", "text": INDEX_INSTRUCTION})
+    content.append(
+        {"type": "text", "text": (BANDS_NOTE + INDEX_INSTRUCTION) if view() == "bands" else INDEX_INSTRUCTION}
+    )
     data, tokens = _post(_body(content, INDEX_SCHEMA, INDEX_MAX_TOKENS))
     rows = data.get("pages")
     sent = {n for n, _ in pages}
@@ -316,8 +334,9 @@ def _batches(pages: list[tuple[int, bytes]]) -> list[list[tuple[int, bytes]]]:
 
 def _wanted(index: dict[str, Any], total: int, window: tuple[int, int] | None) -> list[int]:
     first, last = window or (1, total)
-    todo = [n for n in range(first, min(last, total) + 1) if str(n) not in index["pages"]]
-    room = max(0, MAX_PAGES_PER_FILE - len(index["pages"]))
+    known = index["pages"].keys() | index["unreadable"].keys()
+    todo = [n for n in range(first, min(last, total) + 1) if str(n) not in known]
+    room = max(0, MAX_PAGES_PER_FILE - len(known))
     return todo[: min(PAGES_PER_CALL, room)]
 
 
@@ -353,7 +372,7 @@ def _build(
     try:
         total, _ = split(source, 1, 0, workdir)  # counts pages, writes none
         todo = _wanted(index, total, window)
-        written = split(source, todo[0], todo[-1], workdir)[1] if todo else []
+        written = split(source, todo[0], todo[-1], workdir, view=view())[1] if todo else []
     except CutRefused as exc:
         raise FinderRefused(str(exc)) from exc
     index["page_count"] = total
@@ -361,8 +380,8 @@ def _build(
         index["matters"].append(matter_id)
     facts: dict[str, Any] = {
         "read_now": [],
-        "unreadable": [],
-        "failed": [],
+        "unreadable_now": {},
+        "failed": {},
         "tokens": {"input_tokens": 0, "output_tokens": 0},
     }
     pages: list[tuple[int, bytes]] = []
@@ -370,10 +389,13 @@ def _build(
         blob = (workdir / f"p{n}.pdf").read_bytes()
         (workdir / f"p{n}.pdf").unlink(missing_ok=True)
         if len(blob) > PAGE_MAX_BYTES:
-            facts["unreadable"].append(n)
+            facts["unreadable_now"][str(n)] = "the page is too large to show the model"
         else:
             pages.append((n, blob))
     _run_batches(_batches(pages), index, facts, time.monotonic() + CALL_DEADLINE_SECONDS)
+    index["unreadable"].update(facts["unreadable_now"])
+    for key, value in facts["tokens"].items():
+        index["spent"][key] = int(index["spent"].get(key) or 0) + value
     save_index(index, base)
     return {"index": index, **facts}
 
@@ -381,22 +403,54 @@ def _build(
 def _run_batches(
     batches: list[list[tuple[int, bytes]]], index: dict[str, Any], facts: dict[str, Any], deadline: float
 ) -> None:
+    """Read every batch; a batch that fails is split and its pages read ONE AT
+    A TIME, so one page the model declines never sinks the seven beside it.
+    A page that still fails is recorded with its reason: ``unreadable`` (the
+    model answered and declined or ran out: cached, not retried) or ``failed``
+    (the wire: retried on the next call). Nothing is dropped silently."""
     lock = threading.Lock()
 
-    def job(batch: list[tuple[int, bytes]]) -> None:
-        if time.monotonic() > deadline:
-            return
-        try:
-            rows, tokens = index_batch(batch)
-        except _CallFailed:
-            with lock:
-                facts["failed"].extend(n for n, _ in batch)
-            return
+    def record(rows: dict[str, dict[str, Any]], tokens: dict[str, int]) -> None:
         with lock:
             index["pages"].update(rows)
             facts["read_now"].extend(int(k) for k in rows)
             for key, value in tokens.items():
                 facts["tokens"][key] += value
+
+    def note(number: int, exc: _CallFailed | None) -> None:
+        with lock:
+            if exc is None:
+                facts["failed"][str(number)] = "out of time this call"
+            elif exc.stop_reason:
+                facts["unreadable_now"][str(number)] = f"the model declined to read it (stop_reason {exc.stop_reason})"
+            else:
+                facts["failed"][str(number)] = str(exc)
+
+    def attempt(batch: list[tuple[int, bytes]]) -> _CallFailed | None:
+        try:
+            record(*index_batch(batch))
+        except _CallFailed as exc:
+            return exc
+        return None
+
+    def job(batch: list[tuple[int, bytes]]) -> None:
+        if time.monotonic() > deadline:
+            for number, _ in batch:
+                note(number, None)
+            return
+        first = attempt(batch)
+        if first is None:
+            return
+        if len(batch) == 1:
+            note(batch[0][0], first)
+            return
+        for page in batch:
+            if time.monotonic() > deadline:
+                note(page[0], None)
+                continue
+            failure = attempt([page])
+            if failure is not None:
+                note(page[0], failure)
 
     if not batches:
         return
@@ -409,94 +463,13 @@ def _run_batches(
 # ---------------------------------------------------------------------------
 
 
-def sections(pages: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """The file's sections and the PDF pages each spans, decided by CODE from the index.
-
-    A section runs from the page it starts on through every following page until
-    the next section starts. The page where the next one starts still belongs to
-    the earlier section when its top continues it (``continues_previous``): a new
-    visit beginning mid-page shares that page with the note it follows. Several
-    sections starting on one page all include it. A continuation page with no
-    known start (an unindexed gap before it) opens an untitled section, so no
-    page is ever silently attached to a section it may not belong to."""
-    out: list[dict[str, Any]] = []
-    last_page = 0
-    for key in sorted(pages, key=int):
-        n, row = int(key), pages[key]
-        starts = row.get("sections") or []
-        adjacent = bool(out) and last_page == n - 1
-        if adjacent and (not starts or row.get("continues_previous")):
-            for sec in out:
-                if sec["last"] == n - 1 and not sec.get("closed"):
-                    sec["last"] = n
-        elif not starts:
-            out.append(
-                {
-                    "first": n,
-                    "last": n,
-                    "heading": "(untitled: starts before the indexed pages)",
-                    "document_type": "",
-                    "date": "",
-                    "provider": "",
-                }
-            )
-        for start in starts:
-            # A section that started earlier on this same page ends here.
-            out.append({"first": n, "last": n, **{k: start.get(k, "") for k in _SECTION_FIELDS}})
-        if starts:
-            # Only the LAST section starting on a page can run on past it: an
-            # earlier one that started or continued onto this page ends here.
-            for sec in out[:-1]:
-                sec["closed"] = True
-        last_page = n
-    for index, sec in enumerate(out, start=1):
-        sec["id"] = f"S{index}"
-        seen: list[str] = []
-        for page in range(sec["first"], sec["last"] + 1):
-            for d in pages.get(str(page), {}).get("dates") or []:
-                if d not in seen:
-                    seen.append(d)
-        sec["dates"] = seen[:8]
-        sec.pop("closed", None)
-    return out
-
-
-def section_lines(secs: list[dict[str, Any]]) -> str:
-    out = []
-    for sec in secs:
-        cells = [sec.get(k) or "-" for k in _SECTION_FIELDS]
-        pages_txt = f"pp. {sec['first']}-{sec['last']}"
-        dates = "; ".join(sec.get("dates") or []) or "-"
-        out.append(" | ".join([sec["id"], pages_txt, *cells, f"dates printed: {dates}"]))
-    return "\n".join(out)
-
-
-def _ranges(chosen: list[dict[str, Any]]) -> list[tuple[int, int]]:
-    """The pages of the chosen sections, merged into contiguous PDF ranges."""
-    pages = sorted({n for sec in chosen for n in range(sec["first"], sec["last"] + 1)})
-    spans: list[list[int]] = []
-    for n in pages:
-        if spans and spans[-1][1] >= n - 1:
-            spans[-1][1] = n
-        else:
-            spans.append([n, n])
-    return [(a, b) for a, b in spans]
-
-
-def _view(sec: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "section": sec["id"],
-        "pages": f"{sec['first']}-{sec['last']}",
-        **{k: sec.get(k, "") for k in _SECTION_FIELDS},
-        "dates": sec.get("dates") or [],
-    }
-
-
-def match(pages: dict[str, dict[str, Any]], what: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
+def match(
+    pages: dict[str, dict[str, Any]], what: str, unreadable: dict[str, str] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Per record asked for: found, PDF page ranges, reason, and the sections
     (code-composed) the ranges rest on. The model names section ids only; the
     page boundaries are code's, from the index."""
-    secs = sections(pages)
+    secs = sections(pages, unreadable)
     if not secs:
         return [], {"input_tokens": 0, "output_tokens": 0}
     by_id = {sec["id"]: sec for sec in secs}
@@ -532,11 +505,6 @@ def match(pages: dict[str, dict[str, Any]], what: str) -> tuple[list[dict[str, A
     return items, tokens
 
 
-def documents(pages: dict[str, dict[str, Any]], limit: int = 120) -> list[dict[str, Any]]:
-    """The file's sections, as the outline a reply can cite."""
-    return [_view(sec) for sec in sections(pages)[:limit]]
-
-
 def locate(
     source: Path,
     what: str,
@@ -553,33 +521,49 @@ def locate(
     index = built["index"]
     total = int(index.get("page_count") or 0)
     indexed = len(index["pages"])
+    unreadable = index["unreadable"]
     try:
-        items, match_tokens = match(index["pages"], what)
+        items, match_tokens = match(index["pages"], what, unreadable)
     except _CallFailed as exc:
         items, match_tokens = [], {"input_tokens": 0, "output_tokens": 0}
         built["match_error"] = str(exc)
     tokens = {k: built["tokens"][k] + match_tokens[k] for k in built["tokens"]}
+    for key, value in match_tokens.items():
+        index["spent"][key] = int(index["spent"].get(key) or 0) + value
+    if any(match_tokens.values()):
+        save_index(index, base)
+    remaining = max(0, total - indexed - len(unreadable))
     out: dict[str, Any] = {
         "pageCount": total,
         "indexedPages": indexed,
+        "remainingPages": remaining,
         "complete": indexed >= total,
         "readNow": len(built["read_now"]),
         "fromCache": indexed - len(built["read_now"]),
         "items": items,
-        "documents": documents(index["pages"]),
+        "documents": documents(index["pages"], unreadable),
         "tokens": tokens,
+        "tokensForThisFile": dict(index["spent"]),
+        "view": index.get("view"),
         "sha256": index["sha256"],
     }
-    for key, label in (("failed", "failedPages"), ("unreadable", "unreadablePages")):
-        if built[key]:
-            out[label] = _compress(built[key])
+    if unreadable:
+        out["unreadablePages"] = [
+            {"page": int(k), "reason": v} for k, v in sorted(unreadable.items(), key=lambda kv: int(kv[0]))
+        ]
+    if built["failed"]:
+        out["failedPages"] = [
+            {"page": int(k), "reason": v} for k, v in sorted(built["failed"].items(), key=lambda kv: int(kv[0]))
+        ]
     if built.get("match_error"):
         out["matchError"] = built["match_error"]
     if not out["complete"]:
-        out["note"] = (
-            f"Only {indexed} of {total} pages are indexed so far. Call again (cached pages are free) "
-            "before saying a record is not in this file."
-        )
+        parts = [f"{indexed} of {total} pages are indexed"]
+        if remaining:
+            parts.append(f"{remaining} not read yet: call again (cached pages are free)")
+        if unreadable:
+            parts.append(f"{len(unreadable)} could not be read (see unreadablePages)")
+        out["note"] = "; ".join(parts) + ". Do not say a record is absent from pages that were not read."
     return out
 
 
@@ -602,6 +586,7 @@ __all__ = [
     "index_batch",
     "section_lines",
     "sections",
+    "view",
     "load_index",
     "locate",
     "match",
