@@ -6,8 +6,9 @@
 #
 # One line per card a seat reported (a first reply, a NO REPLY alarm, a queued
 # job ending), newest first, with a footer that counts requests still
-# unanswered. Who asked and what they asked are in the matching email in
-# team@smd.services; the table holds numbers and keys only (ADR 0052 s5).
+# unanswered. The table holds numbers and keys only (ADR 0052 s5). Who asked,
+# what they asked and the reply live on the seat in /opt/data/requests.db, read
+# from the client's ops workspace (ops-handoff <client>), never Gmail.
 #
 # Runs scripts/request-cards.ts under the repo's pinned tsx, resolved from the
 # checkout this script lives in, never an `npx` download.
