@@ -35,10 +35,10 @@ Two separate runs share one evaluation (`operator/bin/work-health.py`):
 
 | Run | Where | What it sends |
 |---|---|---|
-| **The triage agent** | `smd-ops`, hourly at :47 Phoenix time (`operator/ops-machine/crontab`) | Only when the evaluation has something NEW: the agent investigates each new item with read-only tools and emails team@ one report, `[SMD Ops] Triage: <H> handled, <N> need you`, in three parts: NEEDS YOU, HANDLED, FIXES TO APPROVE (`operator/ops-machine/TRIAGE.md`). A quiet hour sends nothing. |
+| **The triage agent** | `smd-ops`, hourly at :47 Phoenix time (`operator/ops-machine/crontab`) | Only when the evaluation has something NEW: the agent investigates each new item with read-only tools and writes a report in three parts: NEEDS YOU, HANDLED, FIXES (`operator/ops-machine/TRIAGE.md`). Only NEEDS YOU is emailed to team@, as `[SMD Ops] Triage: <H> handled, <N> need you`, and only when N is above zero. An hour with nothing that is yours to decide sends nothing. |
 | **The page backstop** | GitHub Actions, hourly at :23 (`.github/workflows/work-health.yml`) | Since 2026-10-16 (Captain) it runs with `--pages-only`: it sends only the ACTION pages below, never the list, so a dead sign-in still emails you even if the ops machine is down. |
 
-The triage agent may not change code, deploy, rebuild or restart a seat, or message a client: every fix it proposes waits under FIXES TO APPROVE ([Who Does What](/admin/playbook/who-does-what)). If it stops running, the healthchecks.io check `smd-ops-triage` (hourly, 30 minutes grace, `operator/ops-machine/bin/ops-triage`) emails a failure notice; until that is fixed, an empty inbox means nothing.
+The triage agent may not change code, deploy, rebuild or restart a seat, or message a client: every fix it proposes is saved on `smd-ops` for the next agent session, which sees it in `/sos` and reads it with `.claude/bin/ops-fixes list` ([Who Does What](/admin/playbook/who-does-what)). If it stops running, the healthchecks.io check `smd-ops-triage` (hourly, 30 minutes grace, `operator/ops-machine/bin/ops-triage`) emails a failure notice; until that is fixed, an empty inbox means nothing.
 
 What you do with the report is in [The Administrator's Week](/admin/playbook/administrators-week): decide the NEEDS YOU items that are yours, and bring the Captain the rest and the fixes to approve.
 

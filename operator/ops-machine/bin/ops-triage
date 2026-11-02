@@ -4,8 +4,10 @@
 # WHY (Captain, 2026-10-16): the work-health email told him what was wrong and
 # the only thing he could do with a line was hand it to an agent. This is that
 # agent, on a schedule: it reads the same evaluation, investigates every NEW
-# listed item, does what is safe and reversible, and emails him only a report of
-# what it found and the decisions that are his. Quiet hours send nothing.
+# listed item and emails him only the decisions that are his. Quiet hours send
+# nothing, and neither does an hour with no decision for him (Captain, 2026-11-02:
+# "mostly noise"): HANDLED stays in the report on this Machine, and FIXES go to
+# $STATE/fixes/, where the next session's /sos picks them up.
 #
 # Runs as ops under the Captain's Claude login, capped per run. The email body
 # never leaves SMD (Resend to team@), the same path work-health uses.
@@ -59,9 +61,15 @@ commit_window() {
 new=$(grep -o -E 'need attention \(([0-9]+) new\)' "$body" | grep -o -E '[0-9]+' | tail -1)
 if [ "${new:-0}" = "0" ]; then echo "nothing new; no agent run"; commit_window; exit 0; fi
 
+# Fixes already waiting are shown so the same defect is not proposed twice.
+FIXES="$STATE/fixes"; mkdir -p "$FIXES"
+open_fixes=$(cat "$FIXES"/*.txt 2>/dev/null || true)
 prompt="You are SMD's ops triage agent on the smd-ops machine (read docs/handbook/work-health.md and operator/ops-machine/TRIAGE.md first; follow TRIAGE.md exactly). The work-health evaluation just reported the items below. Investigate each NEW item to ground, take only the actions TRIAGE.md allows, and end with the report in the exact format TRIAGE.md gives.
 
-$(sed -n '/^Subject:/,$p' "$body")"
+$(sed -n '/^Subject:/,$p' "$body")
+
+Fixes already waiting for a session (do not propose these again):
+${open_fixes:-none}"
 
 report="$STATE/triage-report-$now.txt"
 report_err="$STATE/triage-report-$now.err"
@@ -84,10 +92,21 @@ echo "agent exit=$?"
 subject_line=$(grep -m1 '^Subject: ' "$report" | tr -d '\r' || true)
 subject=$(printf '%s' "${subject_line#Subject: }" | cut -c1-150)
 case "$subject" in "[SMD Ops] Triage"*) ;; *) subject="[SMD Ops] Triage: report (format not followed)";; esac
+# The FIXES section (to the next heading or a "--- " fold) is for a session.
+awk '/^FIXES( |$)/{on=1; print; next} /^(NEEDS YOU|HANDLED)( |$)/ || /^--- /{on=0} on' "$report" > "$FIXES/.$now"
+if grep -q '^- ' "$FIXES/.$now"; then mv -f "$FIXES/.$now" "$FIXES/$now.txt"; else rm -f "$FIXES/.$now"; fi
+
+# No decision for the Captain, no email. A report with no readable count (the
+# format-not-followed subject above) still emails: that is itself worth seeing.
+needs=$(printf '%s' "$subject" | sed -n -E 's/.*[^0-9]([0-9]+) needs? you.*/\1/p')
+if [ "$needs" = "0" ]; then echo "nothing for the Captain; report kept at $report"; commit_window; exit 0; fi
+
 email="$STATE/triage-email-$now.txt"
 {
   if [ -n "$subject_line" ]; then
-    awk '!done && /^Subject: /{done=1; skip=1; next} skip && /^[[:space:]]*$/{skip=0; next} {skip=0; print}' "$report"
+    # Subject line dropped; HANDLED and FIXES stay on this Machine.
+    awk '!done && /^Subject: /{done=1; skip=1; next} skip && /^[[:space:]]*$/{skip=0; next} {skip=0; print}' "$report" |
+      awk '/^(HANDLED|FIXES)( |$)/{off=1; next} /^NEEDS YOU( |$)/ || /^--- /{off=0} !off'
   else
     cat "$report"
   fi

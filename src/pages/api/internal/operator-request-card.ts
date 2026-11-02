@@ -19,6 +19,9 @@
  * Responses (the seat treats any 200 as done and retries anything else):
  *   200 {ok:true}                  emailed now
  *   200 {ok:true, duplicate:true}  this card was already emailed
+ *   200 {ok:true, quiet:true}      ledgered, deliberately not emailed: a card
+ *                                  reporting success from a non-customer seat
+ *                                  (request-card-quiet.ts, migration 0147)
  *   400 invalid_json | invalid_body (with `field`)
  *   401 unauthorized
  *   502 upstream_failed            Resend refused or was unreachable; retry
@@ -34,6 +37,7 @@ import { failedResponse } from '../../../lib/api/failures'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 import { markCardAttempt, parseRequestCard, recordCard } from '../../../lib/operator/request-card'
 import { sendCardEmail } from '../../../lib/operator/request-card-email'
+import { cardIsQuiet, markCardQuiet } from '../../../lib/operator/request-card-quiet'
 
 export const POST: APIRoute = async ({ request }) => {
   const auth = await verifyMachineRequest(request, env.DB)
@@ -55,6 +59,11 @@ export const POST: APIRoute = async ({ request }) => {
 
   const { alreadySent } = await recordCard(env.DB, auth.slug, card)
   if (alreadySent) return jsonResponse(200, { ok: true, duplicate: true })
+
+  if (await cardIsQuiet(env.DB, auth.slug, card)) {
+    await markCardQuiet(env.DB, auth.slug, card.cardKey)
+    return jsonResponse(200, { ok: true, quiet: true })
+  }
 
   const sent = await sendCardEmail(env, auth.slug, card)
   await markCardAttempt(env.DB, auth.slug, card.cardKey, sent.ok)

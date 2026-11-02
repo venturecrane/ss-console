@@ -548,14 +548,34 @@ _PROOF_WORDS = {
 }
 
 
+def _found_reply_job(row: dict) -> str:
+    """The job a sent reply answered, when the mailbox found it in Sent Items:
+    a CONFIRM_SEND_DISPATCHED row with outcome sent, a lookup that succeeded,
+    and a binding key shaped ``<kind>:<job id>:<attempt>:<state>``. "" otherwise."""
+    if row.get("action_type") != "CONFIRM_SEND_DISPATCHED":
+        return ""
+    md = meta(row)
+    if md.get("outcome") != "sent" or not str(md.get("lookup") or "").startswith("ok"):
+        return ""
+    parts = str(md.get("reply_binding") or "").split(":")
+    return parts[1] if len(parts) == 4 else ""
+
+
 def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
     """A DELIVERY_PROOF_FAILED row (the seat refused to call a job delivered,
     or its requester reply never reached Sent Items) is open work until a
-    DELIVERY_PROVEN row for the same job lands after it."""
+    DELIVERY_PROVEN row for the same job lands after it. A ``reply_unproven``
+    also closes when the reply went after all: the seat's watch stops looking at
+    its 20 minute deadline, so a reply at minute 21 reached the requester and the
+    alarm stayed listed for 72 hours (triage reported it 10-20 and again 11-02)."""
     proven: dict[str, datetime] = {}
+    replied: dict[str, datetime] = {}
     failures: dict[str, tuple[datetime, dict]] = {}
     ended_bad: dict[str, datetime] = {}
     for ts, row in stamped(rows):
+        answered = _found_reply_job(row)
+        if answered:
+            replied[answered] = ts
         md = meta(row)
         job_id = str(md.get("job_id") or "")
         if not job_id:
@@ -569,6 +589,8 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
     out: list[Item] = []
     for job_id, (ts, md) in failures.items():
         if (job_id in proven and proven[job_id] >= ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
+            continue
+        if md.get("code") == "reply_unproven" and job_id in replied and replied[job_id] >= ts:
             continue
         if job_id in ended_bad and ended_bad[job_id] >= ts:
             # The job's own FAILED/HELD line, landing AFTER the proof failure,
