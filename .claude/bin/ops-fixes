@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# ops-fixes -- the fixes the ops triage agent found, waiting for a session.
+#
+#   .claude/bin/ops-fixes count         "<N> <oldest age in days>"
+#   .claude/bin/ops-fixes list          every waiting report, with its name
+#   .claude/bin/ops-fixes done <name>   clear one once it is fixed or ruled out
+#
+# WHY. Triage cannot act, and emailing the Captain its proposals asked him to
+# approve agent work (2026-11-02). One defect sat in that mail for 13 days, so
+# the proposals now wait on smd-ops (operator/ops-machine/bin/ops-triage) and
+# /sos raises them. They carry job refs and matter numbers, never document
+# contents (operator/ops-machine/TRIAGE.md), so they stay off this public repo.
+#
+# Exit codes: 0 read, 1 bad arguments or smd-ops could not be read. A failed read
+# says so and never prints as zero.
+set -uo pipefail
+
+APP=smd-ops
+DIR=/home/ops/state/fixes
+
+remote() { fly ssh console -q -a "$APP" -C "$1" 2>/dev/null; }
+
+names() {
+  local out
+  out=$(remote "sh -c 'echo reachable; ls $DIR 2>/dev/null; true'") || return 1
+  printf '%s\n' "$out" | tr -d '\r' | grep -q '^reachable$' || return 1
+  printf '%s\n' "$out" | tr -d '\r' | grep -E '^[0-9]{8}T[0-9]{4}\.txt$' | sort
+  return 0
+}
+
+fail() { echo "ops-fixes: could not read $APP" >&2; exit 1; }
+
+case "${1:-}" in
+  count)
+    all=$(names) || fail
+    [ -n "$all" ] || { echo "0 0"; exit 0; }
+    oldest=$(printf '%s\n' "$all" | head -1)
+    day="${oldest:0:4}-${oldest:4:2}-${oldest:6:2}"
+    then_s=$(date -j -u -f '%Y-%m-%d' "$day" +%s 2>/dev/null || date -u -d "$day" +%s)
+    echo "$(printf '%s\n' "$all" | wc -l | tr -d ' ') $(( ($(date -u +%s) - then_s) / 86400 ))"
+    ;;
+  list)
+    all=$(names) || fail
+    [ -n "$all" ] || { echo "No fixes waiting."; exit 0; }
+    for n in $all; do
+      echo "=== $n"
+      remote "cat $DIR/$n" | tr -d '\r' || fail
+    done
+    ;;
+  done)
+    [[ "${2:-}" =~ ^[0-9]{8}T[0-9]{4}\.txt$ ]] || { echo "usage: ops-fixes done <name from list>" >&2; exit 1; }
+    remote "rm -f $DIR/$2" >/dev/null || fail
+    all=$(names) || fail
+    if printf '%s\n' "$all" | grep -qx "$2"; then echo "ops-fixes: $2 is still there" >&2; exit 1; fi
+    echo "cleared $2"
+    ;;
+  *)
+    echo "usage: ops-fixes count | list | done <name>" >&2
+    exit 1
+    ;;
+esac

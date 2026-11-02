@@ -20,6 +20,7 @@ import {
   fulfilledLabel,
   parseArgs,
   queuedLabel,
+  renderLine,
   renderReport,
   summarize,
   type CardRow,
@@ -106,6 +107,27 @@ describe('the footer', () => {
     expect(renderReport([row(A, 'replied', { jobs_queued: 'medchron' })], 'then')).toContain(
       'replied in 30m, QUEUED medchron'
     )
+  })
+
+  it('a card deliberately not emailed never reads NOT EMAILED or counts as one (0147)', () => {
+    const row = {
+      customer_slug: 'pilot',
+      card_key: 'k:replied',
+      kind: 'replied',
+      received_at: '2026-11-02T00:00:00Z',
+      event_at: '2026-11-02T00:00:00Z',
+      minutes: 1,
+      tools_count: 0,
+      replies: 1,
+      refused: 0,
+      failed: 0,
+      job_lane: null,
+      job_state: null,
+      status: 'pending',
+      attempts: 0,
+    }
+    expect(renderLine({ ...row, email_skipped: 1 })).toContain('not emailed (test seat)')
+    expect(renderLine({ ...row, email_skipped: 0 })).toContain('NOT EMAILED (0 tries)')
   })
 
   it('a reply that declined reads NOT FULFILLED with its code; an answer reads as before (0146)', () => {
@@ -202,6 +224,7 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
       '0125_request_card_lane_unproven',
       '0134_request_card_jobs_queued',
       '0146_request_card_could_not',
+      '0147_request_card_email_skipped',
     ]) {
       db.exec(readFileSync(resolve(`migrations/${m}.sql`), 'utf8'))
     }
