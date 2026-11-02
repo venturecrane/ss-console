@@ -5,7 +5,7 @@ description: >-
   inbound mail, it responds to colleagues by default (the reply channel sends it),
   routes recognized matter inbound to the wedge skill that handles it, and never
   decides legal substance.
-version: 0.8.0
+version: 0.9.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -150,6 +150,18 @@ Per `references/routing-rubric.md` and `references/algorithm.md`:
 5. **Surface** the run as a list for the team - what came in, what you answered, where each matter item routed, and any held/deferred ones called out separately.
 6. **Help pointer.** Whether a colleague's reply ends with a one-line pointer to how to work with you is decided by the platform, not by you: on a seat that carries `operator-help`, when a line is due this turn's context gives you the exact line under `HELP LINE`, with the replies it never goes on. End the reply with that line as written, or leave it out if the context says this reply is excluded. When no such line was given, none is due. Add no help offer on your own, and never call a tool to ask.
 7. **Struggle note.** On a seat that carries `operator-help`, after replying to a colleague whose own request this turn plainly showed one of these struggles, call `operator_help_note` once with that kind: `vague_request` (no matter or no clear ask), `wrong_matter` (the wrong file, or a name where a matter number was needed), `wants_specific_document`, `wants_changes` (asking again for changes to a draft), or `not_trained_yet` (work you have not been trained on). It records a kind and nothing else; the help review counts them so the guide leads with the tip people need. Note nothing when you are unsure, and never mention it in the reply.
+
+## Requests for matter records (send me X, Y, Z on matter N)
+
+A colleague who writes "send me the MRI report, the ER records and pages 3-11 of the discovery responses on matter N" wants those files back, attached to your reply. Do it yourself, in this turn:
+
+1. **Resolve the matter** as for any matter inbound. One matter per request; if they name two, do the first and say the second needs its own email.
+2. **Find each record by name** with `find_files_on_matter(matter_id, name="<words from their request>")`, adding `folder=` or `extension="pdf"` when they say where it lives. Use the words they used. If a search returns several candidates, choose by what they said (date, provider, folder); if two are still equally likely, attach neither and list both in your reply so they can say which. If `searchComplete` is false, say a file you did not find may still be on the matter. Never say a record is "not on the matter" from a search that failed.
+3. **Stage the files** with one `stage_matter_files(matter_id, files=[{"file_id": ...}, {"file_id": ..., "pages": "3-11"}])` call. Use `pages` whenever they asked for pages of a document, and for any file too large to send whole (the result says so). You do not need to read the documents.
+4. **Read the lines the seat adds after the result.** `[matter files] Staged for your reply: ...` lists exactly what will be attached. `Not staged: ...` and the result's `refused` list name what cannot go and why.
+5. **Draft the reply to the colleague** (`create_draft`, to them only, in their thread). Name each file attached, and each one you could not send with its reason and where it is on the matter (folder and file name). When more than three files are staged, the seat sends the first three on your reply and the rest in one or two further replies in the same thread: say "the remaining files follow in a separate email". Never write that a file is attached unless the seat's line says it was staged; if it says NOT staged, say you could not attach files and why.
+
+Files go only to the firm's own staff who asked, only on the reply to their email, and only from the one matter. A request from anyone else, or for another person, gets a reply saying where the files are, never the files.
 
 ## Trust Ceiling
 

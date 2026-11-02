@@ -206,7 +206,7 @@ def find_files(
         }
     try:
         folders = _folder_paths(client, matter_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - unreadable folders: a folder filter cannot run, so it says so
         if folder:
             return {"error": f"the matter's folders could not be read ({exc.__class__.__name__}); nothing was searched"}
         folders = {}

@@ -818,7 +818,7 @@ class MsGraphOps:
         redirect = self._device_redirect(payload.get("to"), sender, policy)
         cc = [] if redirect else self._request_participants(source, sender, policy)
         if files is not None:
-            cc = self._files_people(policy, sender, redirect, cc)
+            cc = msgraph_reply_files.kept_people(self._customer_path, policy, sender, redirect, cc, MsGraphRefused)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
         # Read BEFORE the POST: after it, a config read that raised would turn a
@@ -871,20 +871,6 @@ class MsGraphOps:
             "sender_key": sender_key(sender),
             **({"attachment_sha256": ",".join(sha for _, _, sha in files)} if files else {}),
         }
-
-    def _reply_files(self, payload: dict[str, Any]) -> list[tuple[str, bytes, str]]:
-        """The vetted files of a reply that carries them, or a refusal."""
-        try:
-            spool = attachment_intake.default_spool_dir()
-            return msgraph_reply_files.vet(self._customer_path, spool, payload)
-        except (msgraph_reply_files.FilesRefused, attachment_intake.IntakeRefused) as exc:
-            raise MsGraphRefused(f"attachment refused: {exc}") from exc
-
-    def _files_people(self, policy: RecipientPolicy, sender: str, redirect: str, cc: list[str]) -> list[str]:
-        try:
-            return msgraph_reply_files.people(self._customer_path, policy, sender, redirect, cc)
-        except msgraph_reply_files.FilesRefused as exc:
-            raise MsGraphRefused(f"attachment refused: {exc}") from exc
 
     @staticmethod
     def _device_redirect(requested: Any, sender: str, policy: RecipientPolicy) -> str:

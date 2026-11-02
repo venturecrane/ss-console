@@ -49,8 +49,8 @@ CONFIG_BLOCK = "matter_file_delivery"
 PDF_CONTENT_TYPE = "application/pdf"
 MAX_FILES = 3
 MAX_TOTAL_BYTES = 25 * 1024 * 1024
-#: Graph's single-request attachment bound ("under 3 MB"); above it, an upload session.
-INLINE_MAX_BYTES = 3 * 1000 * 1000
+#: Inline below 3 MiB; at and above it the shared upload session (msgraph_upload takes 3 MiB and up).
+INLINE_MAX_BYTES = 3 * 1024 * 1024
 _KEYS = frozenset({"name", "content_type", "handle", "sha256"})
 _NAME_RE = re.compile(r"^[\w .()-]{1,120}\.pdf$")
 _STREAM_RE = re.compile(rb"stream\r?\n.*?endstream", re.DOTALL)
@@ -173,7 +173,7 @@ def _raw_get(ops: Any, path: str) -> bytes:
         headers={"Authorization": f"Bearer {ops._bearer(ops._read_credential_path, role='read')}"},
     )
     opener = ops._opener or urllib.request.urlopen
-    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected - graph_base is https-checked by MsGraphOps and the path is built in this module
     with opener(request, timeout=60) as response:
         return response.read()
 
@@ -246,6 +246,30 @@ def send(
     return stamped
 
 
+def vetted(
+    customer_path: Path, payload: dict[str, Any], refused: type[Exception]
+) -> list[tuple[str, bytes, str]] | None:
+    """:func:`vet` against the broker's own spool, or ``None`` for a reply that
+    names no files; a refusal raised as ``refused`` with the ``attachment
+    refused:`` prefix the overlay keys on."""
+    if payload.get("attachments") is None:
+        return None
+    try:
+        return vet(customer_path, attachment_intake.default_spool_dir(), payload)
+    except (FilesRefused, attachment_intake.IntakeRefused) as exc:
+        raise refused(f"attachment refused: {exc}") from exc
+
+
+def kept_people(
+    customer_path: Path, policy: RecipientPolicy, sender: str, redirect: str, cc: list[str], refused: type[Exception]
+) -> list[str]:
+    """:func:`people`, a refusal raised as ``refused``."""
+    try:
+        return people(customer_path, policy, sender, redirect, cc)
+    except FilesRefused as exc:
+        raise refused(f"attachment refused: {exc}") from exc
+
+
 def discard_spooled(spool: Path, payload: dict[str, Any]) -> None:
     """The reply is decided: drop its handles from the broker's spool."""
     for entry in payload.get("attachments") or []:
@@ -253,4 +277,15 @@ def discard_spooled(spool: Path, payload: dict[str, Any]) -> None:
             attachment_intake.discard(spool, entry.get("handle"))
 
 
-__all__ = ["CONFIG_BLOCK", "FilesRefused", "MAX_FILES", "may_receive", "people", "send", "staff_list", "vet"]
+__all__ = [
+    "CONFIG_BLOCK",
+    "FilesRefused",
+    "MAX_FILES",
+    "kept_people",
+    "may_receive",
+    "people",
+    "send",
+    "staff_list",
+    "vet",
+    "vetted",
+]

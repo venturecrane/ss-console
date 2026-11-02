@@ -447,3 +447,24 @@ def test_a_reply_without_files_is_unchanged(tmp_path: Path) -> None:
     graph = Plain()
     out = _ops(tmp_path, graph).reply({"message_id": "SRC1", "comment": "Hello."})
     assert "attachment_sha256" not in out and any(c[1].endswith("/reply") for c in graph.calls)
+
+
+def test_the_attachment_put_verb_is_gateway_only_and_answers_ok(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from workspace_broker import verbs
+
+    verb = verbs.TABLE["attachment_put"]
+    assert verb.auth == frozenset({verbs.GATEWAY})
+    broker = SimpleNamespace(audit_db_path=str(tmp_path / "audit.db"))
+    data = b"%PDF-1.4 x"
+    request = {
+        "action": "attachment_put",
+        "payload": {"offset": 0, "chunk_b64": _b64(data), "final": True, "sha256": hashlib.sha256(data).hexdigest()},
+    }
+    out = verb.handler(broker, "attachment_put", request, 1, 0)
+    assert out["ok"] is True and ai.HANDLE_RE.fullmatch(out["handle"])
+    assert (tmp_path / "attachment-spool" / f"{out['handle']}.bin").read_bytes() == data
+    bad = {"payload": {"offset": 0, "chunk_b64": "", "final": False}}
+    with pytest.raises(ValueError, match="attachment refused"):
+        verb.handler(broker, "attachment_put", bad, 1, 0)

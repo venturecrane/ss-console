@@ -281,3 +281,67 @@ def test_poller_default_forward_contract_is_unchanged(monkeypatch):
     finally:
         srv.server_close()
     assert status == 200
+
+
+# ---- re-wake an existing inbound email (ADR 0101) ----------------------------
+
+
+class _Graph:
+    def __init__(self, raw: dict | None = None, fail: bool = False) -> None:
+        self.raw = raw
+        self.fail = fail
+        self.asked: list[str] = []
+
+    def get_message(self, message_id: str):
+        self.asked.append(message_id)
+        if self.fail:
+            raise RuntimeError("403")
+        return self.raw
+
+
+def test_rewake_fetches_the_email_and_enters_through_the_same_door(tmp_path):
+    raw = _raw("AAMk-original", "attorney@client.example")
+    fwd = _Recorder(202)
+    graph = _Graph(raw)
+    code = msgraph_replay.rewake(
+        "AAMk-original",
+        mailbox=_MAILBOX,
+        signing_secret=_SECRET,
+        client=graph,
+        forward_fn=fwd,
+        state_dir=str(tmp_path),
+    )
+    assert code == 0 and graph.asked == ["AAMk-original"]
+    (post,) = fwd.posts
+    # Byte-identical to what the poller would forward for the same item.
+    assert (post["body"], msgraph_replay.build_envelope(raw, mailbox=_MAILBOX)[1]) == (
+        msgraph_replay.build_envelope(raw, mailbox=_MAILBOX)[0],
+        "AAMk-original",
+    )
+    assert list((tmp_path / "rewake").glob("*.replayed"))
+
+
+def test_rewake_refuses_bad_ids_and_unreadable_mail(tmp_path):
+    for bad in ("", "a/b", "x" * 600):
+        assert (
+            msgraph_replay.rewake(bad, mailbox=_MAILBOX, signing_secret=_SECRET, client=_Graph())
+            == 2
+        )
+    for graph in (_Graph(fail=True), _Graph({})):
+        code = msgraph_replay.rewake(
+            "m", mailbox=_MAILBOX, signing_secret=_SECRET, client=graph, state_dir=str(tmp_path)
+        )
+        assert code == 1
+
+
+def test_rewake_reports_a_duplicate_drop_rather_than_claiming_delivery(tmp_path):
+    fwd = _Recorder(200, json.dumps({"status": "duplicate"}).encode())
+    code = msgraph_replay.rewake(
+        "m1",
+        mailbox=_MAILBOX,
+        signing_secret=_SECRET,
+        client=_Graph(_raw("m1", "a@client.example")),
+        forward_fn=fwd,
+        state_dir=str(tmp_path),
+    )
+    assert code == 1
