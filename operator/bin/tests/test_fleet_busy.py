@@ -212,6 +212,25 @@ def test_the_probe_reads_a_consumed_wake_and_its_reply_watch(tmp_path: Path) -> 
     assert verdict.busy and "negotiation-jobs/open" in " ".join(verdict.reasons)
 
 
+def test_a_gateway_with_turns_in_flight_is_busy() -> None:
+    # 2026-11-02, A&P: "Gateway drain timed out after 0.0s with 7 active agent(s)".
+    # FALSIFIER: drop the gateway rule and this verdict is idle.
+    gw = {"file": "/opt/data/profiles/operator/gateway_state.json", "alive": True, "active_agents": 2}
+    verdict = busy.decide(_facts(gateways=[gw]))
+    assert verdict.busy and "2 turn(s)" in verdict.reasons[0]
+    assert not busy.decide(_facts(gateways=[dict(gw, active_agents=0)])).busy
+    assert not busy.decide(_facts(gateways=[dict(gw, alive=False)])).busy  # a dead gateway's leftover file
+
+
+def test_the_probe_reads_the_gateway_turn_count(tmp_path: Path) -> None:
+    _, data = _seat(tmp_path)
+    state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": 3}
+    (data / "profiles" / "operator" / "gateway_state.json").write_text(json.dumps(state))
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert [(g["active_agents"], g["alive"]) for g in facts["gateways"]] == [(3, True)]
+    assert busy.decide(facts).busy
+
+
 def test_remote_probe_on_a_seat_without_runners_is_idle(tmp_path: Path) -> None:
     out = _run_remote("remote_busy_probe.py", tmp_path)
     facts = busy.parse_probe(out)
