@@ -33,6 +33,9 @@ TRUTH: dict[int, tuple[str, str, str, bool]] = {
     **{n: ("7/1/2024", "Northside Clinic", "billing statement", n == 39) for n in range(39, 41)},
 }
 LABEL = re.compile(r"^Page (\d+):$")
+#: The checkout's operator/ directory: CI installs the connector as a wheel, so
+#: the CLI cannot find the overlay and broker checks from its own path there.
+REPO_OPERATOR = Path(__file__).resolve().parents[3]
 
 
 class FakeModel:
@@ -326,7 +329,7 @@ def _with_attachments(path: Path, pages: int = 3) -> None:
 
 @pytest.fixture
 def checks() -> tuple[Any, Any]:
-    return pft._import_send_checks(None)
+    return pft._import_send_checks(REPO_OPERATOR)
 
 
 def test_overlay_refuses_the_raw_file_with_embedded_files(tmp_path: Path, checks: tuple[Any, Any]) -> None:
@@ -383,10 +386,10 @@ def test_scripts_are_still_refused_after_a_cut(tmp_path: Path, checks: tuple[Any
 def test_cli_check_and_locate(model: FakeModel, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     src = tmp_path / "clean.pdf"
     src.write_bytes(_pdf(2))
-    assert pft.main(["check", "--pdf", str(src)]) == 0
+    assert pft.main(["check", "--pdf", str(src), "--repo", str(REPO_OPERATOR)]) == 0
     assert json.loads(capsys.readouterr().out)["passes"] is True
     big = _set(tmp_path)
-    assert pft.main(["locate", "--pdf", str(big), "--what", "the visit", "--all"]) == 0
+    assert pft.main(["locate", "--pdf", str(big), "--what", "the visit", "--all", "--repo", str(REPO_OPERATOR)]) == 0
     out = capsys.readouterr().out
     assert "pages 1-4" in out and "S1 pp. 1-4: 3/3/2021 | Northside Clinic | progress note | PROGRESS NOTE" in out
     assert '"range": "pp. 1-4", "passes": true' in out and '"range": "pp. 29-38", "passes": true' in out
