@@ -208,9 +208,41 @@ def gateways(errors):
                     "alive": pid_alive(st.get("pid")),
                     "state": st.get("gateway_state"),
                     "active_agents": st.get("active_agents"),
+                    "quiet_s": conversation_quiet_s(os.path.dirname(path), time.time()),
                 }
             )
     return out
+
+
+def conversation_quiet_s(home, now):
+    """Seconds since this gateway last wrote a conversation message; None if unknown.
+
+    A turn writes its user message when it starts and every tool call and reply
+    as it goes, so a turn count with no message written in a long time is a
+    count the gateway failed to release, not work (captain-mark 2026-11-02: an
+    interrupted reply left ``active_agents`` at 2 with the seat idle, and the
+    gate held every release). This runs as root, so the database is opened
+    read-only (``mode=ro``): SQLite then creates no journal or WAL file, and no
+    root-owned file is left for the hermes user to trip on (the 2026-07-16 cron
+    lesson). A database it cannot open that way reads as unknown.
+    """
+    db = os.path.join(home, "state.db")
+    if not os.path.exists(db):
+        return None
+    try:
+        import sqlite3
+
+        con = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=2)
+        try:
+            row = con.execute("SELECT MAX(timestamp) FROM messages").fetchone()
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001 - unknown is reported as None, which the gate reads as busy
+        return None
+    last = row[0] if row else None
+    if not isinstance(last, (int, float)):
+        return None
+    return round(now - float(last), 1)
 
 
 def quiesce():
