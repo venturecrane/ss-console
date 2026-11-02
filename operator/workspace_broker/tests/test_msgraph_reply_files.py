@@ -284,7 +284,9 @@ def test_staff_get_their_files_through_a_verified_draft(tmp_path: Path, spool: P
     assert [a["raw"] for a in graph.attachments] == [PDF, PDF + b"2"]
     # Only firm staff are copied: the typed client and the outsider are left off.
     assert [c["emailAddress"]["address"] for c in graph.draft["ccRecipients"]] == ["paralegal@firm.example"]
-    assert out["attachment_sha256"] == ",".join(hashlib.sha256(d).hexdigest() for d in (PDF, PDF + b"2"))
+    # The row's hashes ride the caller's audit_extra, which the broker accepts
+    # only because it refused to send unless its own copy hashed to them.
+    assert out["recipients"] == [STAFF, "paralegal@firm.example"]
     # The draft is built and read on the READ app; only the send uses the SEND app.
     send_calls = [c for c in graph.calls if c[3] == "Bearer tok-send"]
     assert [c[1].rsplit("/", 1)[-1] for c in send_calls] == ["send"]

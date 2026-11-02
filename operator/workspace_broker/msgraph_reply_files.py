@@ -270,6 +270,31 @@ def kept_people(
         raise refused(f"attachment refused: {exc}") from exc
 
 
+def transmit(
+    ops: Any,
+    payload: dict[str, Any],
+    files: list[tuple[str, bytes, str]],
+    policy: RecipientPolicy,
+    sender: str,
+    redirect: str,
+    cc: list[str],
+    audit_token: str,
+) -> tuple[bool, list[str]]:
+    """The reply verb's file branch: keep only staff copies, then :func:`send`
+    with the reply's own words (read as ``msgraph_ops.reply`` reads them). ``(stamped, the copies kept)``; refusals and
+    transport faults are raised as the ops' own types."""
+    from .msgraph_ops import MsGraphRefused, MsGraphTransportError
+
+    kept = kept_people(ops._customer_path, policy, sender, redirect, cc, MsGraphRefused)
+    message_id = str(payload.get("message_id") or "").strip()
+    comment = str(payload.get("comment") or "").strip()
+    html = str(payload.get("html") or "").strip()
+    stamped = send(
+        ops, message_id, comment, html, audit_token, sender, kept, files, transport_error=MsGraphTransportError
+    )
+    return stamped, kept
+
+
 def discard_spooled(spool: Path, payload: dict[str, Any]) -> None:
     """The reply is decided: drop its handles from the broker's spool."""
     for entry in payload.get("attachments") or []:

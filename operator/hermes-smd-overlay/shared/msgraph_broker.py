@@ -201,8 +201,20 @@ def send_reply(
         payload["attachments"] = [dict(a) for a in attachments]
     # ``anchor`` is the email this reply answers (participant fence); the
     # broker refuses a reply that names none.
+    # The row's ``attachment_sha256`` (ADR 0101): the hashes the broker refused
+    # to send without matching, so the row names exactly the bytes that went.
+    extra = (
+        {"attachment_sha256": ",".join(a["sha256"] for a in attachments)} if attachments else None
+    )
     return _vendor_id(
-        _call("msgraph_reply", payload, session_id=session_id, matter_ref=matter_ref, anchor=anchor)
+        _call(
+            "msgraph_reply",
+            payload,
+            session_id=session_id,
+            matter_ref=matter_ref,
+            anchor=anchor,
+            audit_extra=extra,
+        )
     )
 
 

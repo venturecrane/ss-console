@@ -560,3 +560,23 @@ def test_lane_a_tool_argument_can_never_carry_a_file(lane) -> None:
         tool_call_id="d9",
     )
     assert sent and "attachments" not in sent[0]
+
+
+def test_send_reply_carries_the_files_and_their_hashes_for_the_row(monkeypatch) -> None:
+    from shared import msgraph_broker
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        msgraph_broker,
+        "_call",
+        lambda action, payload, **kw: calls.append((action, payload, kw)) or {},
+    )
+    files = [
+        {"name": "A.pdf", "content_type": "application/pdf", "handle": "a" * 32, "sha256": "b" * 64}
+    ]
+    msgraph_broker.send_reply("m1", "Here.", anchor={"kind": "graph_message"}, attachments=files)
+    msgraph_broker.send_reply("m2", "Plain.", anchor={"kind": "graph_message"})
+    (action, payload, kw), (_a, plain, plain_kw) = calls
+    assert action == "msgraph_reply" and payload["attachments"] == files
+    assert kw["audit_extra"] == {"attachment_sha256": "b" * 64}
+    assert "attachments" not in plain and plain_kw["audit_extra"] is None

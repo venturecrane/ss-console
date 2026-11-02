@@ -69,8 +69,7 @@ from typing import Any
 
 from .audit_ledger import new_row_token
 from .html_canon import html_body_sha256
-from . import msgraph_attachments as _files
-from . import msgraph_reply_files
+from . import msgraph_attachments as _files, msgraph_reply_files
 from .msgraph_auth import load_credential, seat_mailbox
 from .msgraph_redirect import send_redirected
 from .recipient_policy import RecipientPolicy, authored_policy, normalize_address, sender_key
@@ -817,17 +816,13 @@ class MsGraphOps:
         sender, policy = self._vetted_sender(source, message_id)
         redirect = self._device_redirect(payload.get("to"), sender, policy)
         cc = [] if redirect else self._request_participants(source, sender, policy)
-        if files is not None:
-            cc = msgraph_reply_files.kept_people(self._customer_path, policy, sender, redirect, cc, MsGraphRefused)
         conversation_id = str(source.get("conversationId") or "")
         audit_token = new_row_token()
         # Read BEFORE the POST: after it, a config read that raised would turn a
         # delivered reply into an error the caller may retry.
         mailbox = self.mailbox()
         if files is not None:
-            stamped = msgraph_reply_files.send(
-                self, message_id, comment, html, audit_token, sender, cc, files, transport_error=MsGraphTransportError
-            )
+            stamped, cc = msgraph_reply_files.transmit(self, payload, files, policy, sender, redirect, cc, audit_token)
         elif redirect:
             stamped = send_redirected(
                 self,
@@ -869,7 +864,6 @@ class MsGraphOps:
             # INBOUND_RECEIVED row is minted here, from the verified sender, and
             # hashed because the ledger must not hold an address.
             "sender_key": sender_key(sender),
-            **({"attachment_sha256": ",".join(sha for _, _, sha in files)} if files else {}),
         }
 
     @staticmethod
