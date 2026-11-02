@@ -11,6 +11,8 @@ BUSY means any of:
   * a lane has wakes pending (a finished job's notice not yet sent);
   * a DELIVER turn started in the last TURN_BUSY_S and its reply is not yet
     seen (the wake is consumed, so the lane reads idle while the turn sends);
+  * a live gateway reports turns in flight (``active_agents`` in its
+    gateway_state.json): an answer to an inbound email is no lane and no cron;
   * a lane daemon is alive but its heartbeat is STALE: it cannot be shown idle,
     so it is treated as busy (a stale heartbeat never reads as idle), unless
     the live daemon started after that beat was written: then it is a lane the
@@ -117,6 +119,13 @@ def decide(
         reasons.extend(_lane_reasons(lane, stale_after))
     for cron in facts.get("crons") or []:
         reasons.extend(_cron_reasons(cron, ahead, behind))
+    for gw in facts.get("gateways") or []:
+        try:
+            active = int(gw.get("active_agents") or 0)
+        except (TypeError, ValueError):
+            active = 0
+        if gw.get("alive") and active > 0:
+            reasons.append(f"{gw.get('file')}: the gateway is running {active} turn(s)")
     for turn in facts.get("turns") or []:
         ago = turn.get("sent_ago_s")
         if turn.get("reply_open") and ago is not None and 0 <= float(ago) <= TURN_BUSY_S:

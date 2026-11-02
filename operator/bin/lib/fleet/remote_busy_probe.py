@@ -9,6 +9,7 @@ it reads has existed on every seat since the runner lanes shipped:
   /run/smd-medchron/*heartbeat.json   each lane daemon's liveness + counts
   /run/smd-medchron/*child.pid        a lane's running job child
   /run/smd-medchron/*jobs/*/daemon.json  a finished job's DELIVER wake + reply watch
+  /opt/data/profiles/*/gateway_state.json  the gateway's own in-flight turn count
   /opt/data/profiles/*/cron/jobs.json Hermes' per-profile cron store
   /opt/data/cron/jobs.json            the root cron store
   /run/smd-medchron/quiesce           the fleet's no-new-work marker
@@ -28,6 +29,7 @@ RUN = "/run/smd-medchron"
 CRON_STORES = ("/opt/data/profiles/*/cron/jobs.json", "/opt/data/cron/jobs.json")
 MANAGED_PREFIX = "op-managed:"
 TURN_SCAN_S = 1800
+GATEWAY_STATES = ("/opt/data/gateway_state.json", "/opt/data/profiles/*/gateway_state.json")
 
 
 def pid_alive(pid):
@@ -182,6 +184,35 @@ def turns(now, errors):
     return out
 
 
+def gateways(errors):
+    """Each gateway's in-flight turn count, as the gateway itself publishes it.
+
+    Hermes rewrites ``active_agents`` in its launch home's gateway_state.json at
+    every turn boundary. A turn answering an inbound email is no lane job and no
+    cron: before this read, a restart killed it with "drain timed out after 0.0s
+    with N active agent(s)" and nothing in the gate could have seen it."""
+    out = []
+    for pattern in GATEWAY_STATES:
+        for path in sorted(glob.glob(pattern)):
+            try:
+                with open(path) as fh:
+                    st = json.load(fh)
+            except (OSError, ValueError) as exc:
+                errors.append("%s unreadable: %s" % (path, exc))
+                continue
+            if not isinstance(st, dict):
+                continue
+            out.append(
+                {
+                    "file": path,
+                    "alive": pid_alive(st.get("pid")),
+                    "state": st.get("gateway_state"),
+                    "active_agents": st.get("active_agents"),
+                }
+            )
+    return out
+
+
 def quiesce():
     try:
         with open(RUN + "/quiesce") as fh:
@@ -200,6 +231,7 @@ def main():
         "children": children(errors),
         "crons": crons(now, errors),
         "turns": turns(now, errors),
+        "gateways": gateways(errors),
         "quiesce": quiesce(),
         "errors": errors,
     }
