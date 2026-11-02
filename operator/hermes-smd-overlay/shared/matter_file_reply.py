@@ -216,20 +216,22 @@ def staff_list(doc: Any) -> tuple[frozenset[str], frozenset[str]]:
     return frozenset(exact), frozenset(domains)
 
 
-def review_by_smd(doc: Any, held_so_far: int = 0) -> bool:
+def review_by_smd(doc: Any, released_so_far: int = 0) -> bool:
     """Does this files reply wait for SMD's approval (``shared.matter_file_review``)?
 
     ``matter_file_delivery.review: smd`` holds every one. ``review_first: N``
-    holds only the first N this seat ever composes and then sends normally: the
-    countdown is the seat's own count of held rows (``held_so_far``), so it
-    expires by itself and nobody has to remember to flip it back."""
+    holds every files reply until SMD has released N of them, then sends
+    normally: the countdown is the seat's own count of reviewed rows that were
+    approved AND sent (``released_so_far``, ``matter_file_review.released_count``),
+    so it expires by itself and nobody has to remember to flip it back. A
+    rejected, expired or still-waiting reply spends nothing."""
     block = doc.get(CONFIG_BLOCK) if isinstance(doc, dict) else None
     if not isinstance(block, dict):
         return False
     if str(block.get("review") or "").strip().lower() == "smd":
         return True
     first = block.get("review_first")
-    return isinstance(first, int) and not isinstance(first, bool) and held_so_far < first
+    return isinstance(first, int) and not isinstance(first, bool) and released_so_far < first
 
 
 def authored(doc: Any) -> bool:
