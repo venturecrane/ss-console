@@ -19,9 +19,11 @@
  * act on; the Operator cannot record a decision on a held job. The words are
  * in the email.
  *
- * The table holds numbers and keys only (ADR 0052 s5): who asked and what
- * they asked live in the email in team@smd.services, found by the short
- * request id this prints (the email's "Card:" line carries the full key).
+ * The table holds numbers and keys only (ADR 0052 s5). Who asked, what they
+ * asked and what the Operator replied live on the seat, in its request index
+ * (/opt/data/requests.db), read from the client's ops workspace; the card
+ * email in team@smd.services is a transient copy that inbox cleanup trashes.
+ * Every report ends with SOURCE_NOTE saying so.
  *
  * Exit codes: 0 read (including "no cards"), 1 bad arguments or the read
  * failed. A failed read says why and never prints as an empty list.
@@ -173,8 +175,19 @@ export function summarize(rows: readonly CardRow[]): Summary {
   }
 }
 
+/**
+ * Printed under every report, empty or not. Two sessions asked to "monitor the
+ * A&P Operator" read this ledger and then searched Gmail for the card emails
+ * (2026-10-19, 2026-11-02). This is SMD's ledger of cards, not the Operator:
+ * what a client asked and was told lives on the seat, in its request index.
+ */
+export const SOURCE_NOTE =
+  "This is SMD's card ledger (numbers only), not the Operator. To see what a client asked and " +
+  "what the Operator replied, read the seat's request index (/opt/data/requests.db) from that " +
+  "client's ops workspace: ops-handoff <client> '<task>'. Never Gmail or team@ for this."
+
 export function renderReport(rows: readonly CardRow[], sinceLabel: string): string {
-  if (rows.length === 0) return `requests: no request cards since ${sinceLabel}.`
+  if (rows.length === 0) return `requests: no request cards since ${sinceLabel}.\n${SOURCE_NOTE}`
   const s = summarize(rows)
   return [
     ...rows.map(renderLine),
@@ -185,6 +198,7 @@ export function renderReport(rows: readonly CardRow[], sinceLabel: string): stri
       `${s.laterReplies} later replies sent.`,
     `Still unanswered (an alarm with no later reply card): ${s.stillUnanswered}.`,
     `Not emailed yet: ${s.notEmailed}.`,
+    SOURCE_NOTE,
   ].join('\n')
 }
 

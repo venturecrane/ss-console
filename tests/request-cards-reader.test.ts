@@ -222,3 +222,16 @@ process.stdout.write(JSON.stringify([{ results, success: true }]))
     expect(parsed.rows[0].jobs_queued).toBe('medchron')
   })
 })
+
+describe('the report names where a request actually lives', () => {
+  // Two sessions asked to monitor the A&P Operator read this ledger and then
+  // searched Gmail (2026-10-19, 2026-11-02). Every report, empty or not, must
+  // point at the seat's request index instead.
+  it('ends every report, including an empty one, with the seat source', () => {
+    for (const text of [renderReport([], 'then'), renderReport([row(A, 'replied')], 'then')]) {
+      expect(text).toContain('/opt/data/requests.db')
+      expect(text).toContain('ops-handoff')
+      expect(text).toMatch(/Never Gmail/)
+    }
+  })
+})
