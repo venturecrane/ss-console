@@ -2,11 +2,12 @@
  * The request-card email: what SMD ops reads for every request a person sends
  * an Operator seat (the card is parsed and ledgered in `request-card.ts`).
  *
- * Four questions, each under its own heading (Captain, 2026-10-27): who asked
- * (the firm's authored name and the address), what they asked (the subject and
- * their own words), what the Operator replied, and what it did (each tool
- * grouped by what it can do, and any job it started). Times are Arizona time.
- * The subject lines are unchanged so mail filters keep matching.
+ * Readable first (Captain, 2026-11-02: "when I get a message about a request,
+ * it's something that I can actually consume"). The top of the email answers
+ * three questions in plain words: who asked, what happened, what you need to do.
+ * Then their words and the Operator's words (2026-10-27). Everything an agent
+ * needs (tool names, job ids, card keys) sits under DETAILS at the bottom. Times
+ * are Arizona time.
  *
  * ADR 0052 s5: the text here exists in the email and nowhere else; nothing in
  * this module writes D1.
@@ -25,16 +26,6 @@ const SUBJECT_EXCERPT = 70
 function subjectExcerpt(subject: string): string {
   if (subject.length === 0) return '(no subject)'
   return subject.length > SUBJECT_EXCERPT ? `${subject.slice(0, SUBJECT_EXCERPT - 3)}...` : subject
-}
-
-/**
- * A reply that declined, appended to the headline so the inbox shows it
- * without opening the card (2026-11-01: "first reply in 1m" read as a success
- * for a reply that said it could not find any of five records). The subject
- * still starts the same way, so mail filters keep matching.
- */
-function notFulfilled(card: RequestCard): string {
-  return card.couldNot ? ', NOT FULFILLED' : ''
 }
 
 /** What a decline code says the reply told the requester, as a clause. */
@@ -57,29 +48,101 @@ function couldNotLines(card: RequestCard): string[] {
   ]
 }
 
-/** The subject's middle: what happened, without the seat or the request's subject. */
+/** What a person calls a lane's work. An unknown lane reads as its own name. */
+const LANE_WORDS: Record<string, string> = {
+  medchron: 'chronology',
+  demand: 'demand',
+  drafting: 'drafting',
+  litigation: 'litigation list',
+  negotiation: 'negotiation',
+  casefile: 'case file',
+}
+
+function laneWords(card: RequestCard): string {
+  const lane = card.job?.lane
+  return lane ? (LANE_WORDS[lane] ?? lane) : 'job'
+}
+
+/** The subject's first words: the outcome, so a cut-off subject still says it. */
 function cardHeadline(card: RequestCard): string {
-  const lane = card.job?.lane ?? 'job'
+  const declined = card.couldNot ? ', NOT FULFILLED' : ''
   switch (card.kind) {
     case 'replied':
-      return `request: first reply in ${card.minutes}m${notFulfilled(card)}`
+      return `answered in ${card.minutes}m${declined}`
     case 'no_reply':
       return `NO REPLY after ${card.minutes}m`
     case 'job_done':
-      return `${lane} job ${card.job?.state ?? 'ended'}`
+      return `${laneWords(card)} ${card.job?.state ?? 'ended'}`
     case 'lane_unproven':
       return card.lane?.heldJob
         ? `NEW KIND OF ASK, job waiting: ${card.lane.key}`
         : `NEW KIND OF ASK, first use: ${card.lane?.key ?? 'unknown'}`
     case 'held_reply':
-      return `REQUESTER WROTE on held ${lane} job`
+      return `REQUESTER WROTE on held ${laneWords(card)}`
     case 'followup':
-      return `later reply sent at +${card.minutes}m${notFulfilled(card)}`
+      return `later reply${declined}`
   }
 }
 
+/** "Chris Price" when the firm authored a name, else the address. */
+function askedBy(card: RequestCard): string {
+  return card.whoName ?? card.who
+}
+
 export function cardSubject(slug: string, card: RequestCard): string {
-  return `[SMD Ops] ${slug} ${cardHeadline(card)}: ${subjectExcerpt(card.subject)}`
+  return `[SMD Ops] ${slug}: ${cardHeadline(card)}: ${askedBy(card)}: ${subjectExcerpt(card.subject)}`
+}
+
+function minutes(n: number): string {
+  return n === 1 ? '1 minute' : `${n} minutes`
+}
+
+/** One plain sentence: what happened. */
+function whatHappened(card: RequestCard): string {
+  const told = card.couldNot ? ` and told them ${COULD_NOT_TEXT[card.couldNot]}` : ''
+  switch (card.kind) {
+    case 'replied':
+      return `The Operator answered in ${minutes(card.minutes)}${told}.`
+    case 'no_reply':
+      return `Nothing has answered them after ${minutes(card.minutes)}.`
+    case 'job_done': {
+      const state = card.job?.state
+      if (state === 'delivered') return `The ${laneWords(card)} was delivered.`
+      if (state === 'held') return `The ${laneWords(card)} is held and has not been delivered.`
+      return `The ${laneWords(card)} failed and has not been delivered.`
+    }
+    case 'lane_unproven':
+      return card.lane?.heldJob
+        ? 'They asked for a kind of job this seat has never done. The job is waiting.'
+        : 'They asked for something this seat has never done. The Operator answered it directly.'
+    case 'held_reply':
+      return `They wrote again about a ${laneWords(card)} that is held.`
+    case 'followup':
+      return `The Operator sent another reply, ${minutes(card.minutes)} after the request${told}.`
+  }
+}
+
+/** One plain sentence: what the reader does. "Nothing." is a real answer. */
+function whatToDo(card: RequestCard): string {
+  const handOff =
+    'Read the reply below, then answer them or give this email to an agent to finish it.'
+  switch (card.kind) {
+    case 'replied':
+    case 'followup':
+      return card.couldNot ? handOff : 'Nothing.'
+    case 'no_reply':
+      return 'Someone needs to answer them. Give this email to an agent now.'
+    case 'job_done':
+      return card.job?.state === 'delivered'
+        ? 'Nothing.'
+        : 'Give this email to an agent to find out why, and decide what they are told.'
+    case 'lane_unproven':
+      return card.lane?.heldJob
+        ? 'Nothing yet. An agent tests this kind of job, then you accept or decline it.'
+        : "Nothing yet. An agent checks the Operator's answer."
+    case 'held_reply':
+      return 'Read what they wrote. If it answers the hold, give this email to an agent to resume the job.'
+  }
 }
 
 /**
@@ -250,64 +313,60 @@ function actionLines(card: RequestCard): string[] {
   return lines
 }
 
-/**
- * The plain-text body. SMD ops only; this text never reaches a client or D1.
- *
- * Four questions, in this order, each under its own heading (Captain,
- * 2026-10-27): who asked, what they asked, what the Operator answered, and
- * what it did. A card from a seat that predates the full texts falls back to
- * the openings it carried.
- */
-export function cardText(slug: string, card: RequestCard): string {
-  const asked = card.requestText ?? card.requestOpening
-  const answer = card.replyText ?? card.replyOpening
+/** The agent's half of the email, below the fold. */
+function detailLines(slug: string, card: RequestCard): string[] {
   const lines = [
-    'WHO ASKED',
-    `  ${requester(card)}`,
-    `  Received ${phoenixTime(card.receivedAt)} on the ${slug} seat`,
-    '',
-    // A held_reply card is about a LATER message on a held job, not the ask.
-    card.kind === 'held_reply' ? 'WHAT THEY WROTE (on the held job)' : 'WHAT THEY ASKED',
-    `  Subject: ${card.subject.length > 0 ? card.subject : '(no subject)'}`,
+    `Seat: ${slug}. From: ${requester(card)}. Received ${phoenixTime(card.receivedAt)}.`,
+    ...couldNotLines(card),
+    ...outcomeLines(card),
+    ...laneLines(slug, card),
   ]
-  if (asked) lines.push('', ...indented(asked))
-  else if (card.kind === 'held_reply') lines.push('  (no words in the message)')
-  else lines.push('  (the seat did not record the words of this message)')
-  lines.push('', 'STATUS', ...couldNotLines(card).map((l) => `  ${l}`))
-  lines.push(...outcomeLines(card).map((l) => `  ${l}`))
-  lines.push(...laneLines(slug, card).map((l) => `  ${l}`))
   // Only when the seat named one. "Matter: none named" is law-firm vocabulary
   // and read as noise on every non-legal seat (Brokery, 2026-10-16).
-  if (card.matter) lines.push(`  Matter: ${card.matter}`)
-  if (answer) {
-    const label =
-      card.kind === 'followup' ? 'THE OPERATOR WROTE (a later reply)' : "THE OPERATOR'S REPLY"
-    lines.push('', label, ...indented(answer))
-  } else if (card.kind === 'replied' || card.kind === 'followup') {
-    lines.push('', "THE OPERATOR'S REPLY", '  (the seat did not record the words of this reply)')
-  }
-  lines.push('', 'WHAT THE OPERATOR DID')
+  if (card.matter) lines.push(`Matter: ${card.matter}`)
   if (card.kind === 'lane_unproven') {
     // The seat builds this card with no tools and zero counts by construction
     // (overlay shared/request_cards.py _lane_card), so tallies here would read
     // as "did nothing". On 2026-10-30 a first-use card said "No tools ran" and
     // "Replies sent: 0" for a mail bundle the Operator had filed 8 letters from.
     lines.push(
-      "  Not counted on this card. The request's first-reply card carries the Operator's reply",
-      '  and every tool it ran.'
+      "Not counted on this card. The request's first-reply card carries the Operator's reply",
+      'and every tool it ran.'
     )
   } else {
     const did = actionLines(card)
-    if (did.length > 0) lines.push(...did.map((l) => `  ${l}`))
-    else lines.push('  No tools ran for this card.')
-    lines.push(`  Replies sent: ${card.replies}. Refused: ${card.refused}. Failed: ${card.failed}.`)
+    lines.push(...(did.length > 0 ? did : ['No tools ran for this card.']))
+    lines.push(`Replies sent: ${card.replies}. Refused: ${card.refused}. Failed: ${card.failed}.`)
   }
-  lines.push(
+  lines.push(`Card: ${card.cardKey}`, 'List recent requests from a terminal: .claude/bin/requests')
+  return lines
+}
+
+/**
+ * The plain-text body. SMD ops only; this text never reaches a client or D1.
+ * A card from a seat that predates the full texts falls back to the openings.
+ */
+export function cardText(slug: string, card: RequestCard): string {
+  const asked = card.requestText ?? card.requestOpening
+  const answer = card.replyText ?? card.replyOpening
+  const lines = [
+    `WHO: ${askedBy(card)}, ${phoenixTime(card.receivedAt)}`,
+    `WHAT HAPPENED: ${whatHappened(card)}`,
+    `WHAT YOU NEED TO DO: ${whatToDo(card)}`,
     '',
-    `Card: ${card.cardKey}`,
-    'List recent requests from a terminal: .claude/bin/requests',
-    ''
-  )
+    // A held_reply card is about a LATER message on a held job, not the ask.
+    card.kind === 'held_reply' ? 'WHAT THEY WROTE' : 'WHAT THEY ASKED',
+    `  Subject: ${card.subject.length > 0 ? card.subject : '(no subject)'}`,
+  ]
+  if (asked) lines.push('', ...indented(asked))
+  else if (card.kind === 'held_reply') lines.push('  (no words in the message)')
+  else lines.push('  (the seat did not record the words of this message)')
+  if (answer) {
+    lines.push('', 'WHAT THE OPERATOR SAID', ...indented(answer))
+  } else if (card.kind === 'replied' || card.kind === 'followup') {
+    lines.push('', 'WHAT THE OPERATOR SAID', '  (the seat did not record the words of this reply)')
+  }
+  lines.push('', '---', 'DETAILS, for the agent who picks this up', ...detailLines(slug, card), '')
   return lines.join('\n')
 }
 

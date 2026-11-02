@@ -223,13 +223,14 @@ describe('a reply that declined (0146, 2026-11-01)', () => {
     const card = parsed({ could_not: 'cannot_find', minutes: 1 })
     expect(card.couldNot).toBe('cannot_find')
     expect(cardSubject(SLUG, card)).toBe(
-      `[SMD Ops] ${SLUG} request: first reply in 1m, NOT FULFILLED: ${SUBJECT}`
+      `[SMD Ops] ${SLUG}: answered in 1m, NOT FULFILLED: ${WHO}: ${SUBJECT}`
     )
     const text = cardText(SLUG, card)
-    const status = text.slice(text.indexOf('STATUS'))
-    expect(status.split('\n')[1]).toMatch(
-      /^ {2}NOT FULFILLED: the reply told the requester it could not find what they asked for \(cannot_find\)\.$/
+    expect(text).toContain(
+      'WHAT HAPPENED: The Operator answered in 1 minute and told them it could not find what they asked for.'
     )
+    expect(text).toContain('WHAT YOU NEED TO DO: Read the reply below')
+    expect(text).toContain('NOT FULFILLED: the reply told the requester')
     expect(text).toContain('SHORTFALL')
     expect(text).not.toMatch(/—/)
   })
@@ -248,7 +249,7 @@ describe('a reply that declined (0146, 2026-11-01)', () => {
       kind: 'followup',
       could_not: 'none_available',
     })
-    expect(cardSubject(SLUG, followup)).toContain('later reply sent at +12m, NOT FULFILLED')
+    expect(cardSubject(SLUG, followup)).toContain(': later reply, NOT FULFILLED: ')
     const r = parseRequestCard(
       body({ card_key: `${HASH}:no_reply`, kind: 'no_reply', could_not: 'cannot_find' })
     )
@@ -352,7 +353,7 @@ describe('parseRequestCard: the lane_unproven card (0125)', () => {
 describe('the email', () => {
   it('subject lines per kind, with the subject cut to 70', () => {
     expect(cardSubject(SLUG, parsed())).toBe(
-      `[SMD Ops] ${SLUG} request: first reply in 12m: ${SUBJECT}`
+      `[SMD Ops] ${SLUG}: answered in 12m: ${WHO}: ${SUBJECT}`
     )
     const alarm = parsed({
       card_key: `${HASH}:no_reply`,
@@ -360,7 +361,7 @@ describe('the email', () => {
       minutes: 31,
       reply_opening: null,
     })
-    expect(cardSubject(SLUG, alarm)).toMatch(/^\[SMD Ops\] card-co NO REPLY after 31m: /)
+    expect(cardSubject(SLUG, alarm)).toMatch(/^\[SMD Ops\] card-co: NO REPLY after 31m: /)
     const job = parsed({
       card_key: `${HASH}:job_done`,
       kind: 'job_done',
@@ -368,8 +369,9 @@ describe('the email', () => {
       subject: 'z'.repeat(150),
     })
     const s = cardSubject(SLUG, job)
-    expect(s.startsWith('[SMD Ops] card-co demand job delivered: ')).toBe(true)
-    expect(s.length).toBe('[SMD Ops] card-co demand job delivered: '.length + 70)
+    const head = `[SMD Ops] card-co: demand delivered: ${WHO}: `
+    expect(s.startsWith(head)).toBe(true)
+    expect(s.length).toBe(head.length + 70)
   })
 
   it('the body carries the card and no em dash', () => {
@@ -383,12 +385,12 @@ describe('the email', () => {
   it('a held_reply email leads with the requester words and tells SMD to record the decision', () => {
     const card = parsed(heldReplyBody())
     expect(cardSubject(SLUG, card)).toBe(
-      `[SMD Ops] ${SLUG} REQUESTER WROTE on held medchron job: ${SUBJECT}`
+      `[SMD Ops] ${SLUG}: REQUESTER WROTE on held chronology: ${WHO}: ${SUBJECT}`
     )
     const text = cardText(SLUG, card)
     for (const s of [
       `Job: medchron ${HELD} is HELD (identity).`,
-      'WHAT THEY WROTE (on the held job)',
+      'WHAT THEY WROTE',
       WROTE,
       'record the',
       'decision on the seat',
@@ -426,12 +428,15 @@ describe('the email', () => {
     })
     const text = cardText(SLUG, card)
     const at = (s: string) => text.indexOf(s)
-    // The four questions, each under its heading, in reading order.
-    expect(at('WHO ASKED')).toBe(0)
-    expect(at('WHAT THEY ASKED')).toBeGreaterThan(at('WHO ASKED'))
-    expect(at("THE OPERATOR'S REPLY")).toBeGreaterThan(at('WHAT THEY ASKED'))
-    expect(at('WHAT THE OPERATOR DID')).toBeGreaterThan(at("THE OPERATOR'S REPLY"))
-    expect(text).toContain('  Chris Price <chris@firm.example>')
+    // What a person needs first, then the words, then the agent's half.
+    expect(at('WHO: Chris Price,')).toBe(0)
+    expect(at('WHAT HAPPENED: ')).toBeGreaterThan(0)
+    expect(at('WHAT YOU NEED TO DO: Nothing.')).toBeGreaterThan(at('WHAT HAPPENED: '))
+    expect(at('WHAT THEY ASKED')).toBeGreaterThan(at('WHAT YOU NEED TO DO: '))
+    expect(at('WHAT THE OPERATOR SAID')).toBeGreaterThan(at('WHAT THEY ASKED'))
+    expect(at('DETAILS, for the agent')).toBeGreaterThan(at('WHAT THE OPERATOR SAID'))
+    expect(at('Sent:')).toBeGreaterThan(at('DETAILS, for the agent'))
+    expect(text).toContain('From: Chris Price <chris@firm.example>')
     // The whole messages, paragraphs kept, never the 300-character opening.
     expect(text).toContain('  Can you redo the litigation list?\n\n  One sheet per case, please.')
     expect(text).toContain(
@@ -455,7 +460,7 @@ describe('the email', () => {
 
   it('a card from an older seat still reads: openings and the raw tool list', () => {
     const text = cardText(SLUG, parsed())
-    expect(text).toContain(`  ${WHO}`)
+    expect(text).toContain(`WHO: ${WHO},`)
     expect(text).toContain(`  ${OPENING}`)
     expect(text).toContain('Tools run (2): smokeball_get_matter, smokeball_list_documents')
     expect(text).toContain('(the seat did not record the words of this message)')
@@ -589,6 +594,29 @@ describe('POST /api/internal/operator-request-card', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
+    it('a notice nobody asked for is not emailed, even on a customer seat', async () => {
+      await setKind('customer')
+      const notice = body({
+        card_key: `${HASH}:followup-${'b'.repeat(16)}`,
+        kind: 'followup',
+        subject: '(no request on record)',
+      })
+      expect(await (await post(notice)).json()).toEqual({ ok: true, quiet: true })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('a notice that declined still emails', async () => {
+      await setKind('customer')
+      const notice = body({
+        card_key: `${HASH}:followup-${'c'.repeat(16)}`,
+        kind: 'followup',
+        subject: '(no request on record)',
+        could_not: 'cannot_find',
+      })
+      expect(await (await post(notice)).json()).toEqual({ ok: true })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
     it('still emails the NO REPLY alarm', async () => {
       await setKind('proving')
       await post(
@@ -625,7 +653,7 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(headers['Idempotency-Key']).toBe(`${SLUG}:${HASH}:replied`)
     const sent = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(sent.to).toEqual(['team@smd.services'])
-    expect(String(sent.subject)).toContain('first reply in 12m')
+    expect(String(sent.subject)).toContain('answered in 12m')
     expect(String(sent.text)).toContain(OPENING)
 
     const again = await post(body())
@@ -809,7 +837,7 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(row).toMatchObject({ kind: 'held_reply', job_lane: 'medchron', job_state: 'held' })
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
-    expect(sent.subject).toContain('REQUESTER WROTE on held medchron job')
+    expect(sent.subject).toContain('REQUESTER WROTE on held chronology')
     expect(sent.text).toContain(WROTE)
     expect(sent.text).toContain(HELD)
     // ADR 0052 s5: the words reach the email, never D1.
@@ -833,7 +861,7 @@ describe('POST /api/internal/operator-request-card', () => {
     expect(row).toMatchObject({ kind: 'followup', minutes: 50, job_lane: null })
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     const sent = JSON.parse(String(init.body)) as { subject: string; text: string }
-    expect(sent.subject).toBe(`[SMD Ops] ${SLUG} later reply sent at +50m: ${SUBJECT}`)
+    expect(sent.subject).toBe(`[SMD Ops] ${SLUG}: later reply: ${WHO}: ${SUBJECT}`)
     expect(sent.text).toContain('UNIQUELATERMARK')
     expect(sent.text).toContain('It is what the requester was told')
     expect(sent.text).not.toMatch(/—/)

@@ -126,7 +126,7 @@ describe('the footer', () => {
       status: 'pending',
       attempts: 0,
     }
-    expect(renderLine({ ...row, email_skipped: 1 })).toContain('not emailed (test seat)')
+    expect(renderLine({ ...row, email_skipped: 1 })).toContain('not emailed (nothing to act on)')
     expect(renderLine({ ...row, email_skipped: 0 })).toContain('NOT EMAILED (0 tries)')
   })
 

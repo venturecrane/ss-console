@@ -22,6 +22,7 @@
  * and can never stop the seat pagers that ran before it.
  */
 
+import { conditionIsQuiet } from './mail-policy'
 import { escapeHtml } from './html'
 import type { Env } from './index'
 
@@ -244,13 +245,18 @@ export async function notifyRolloutFailures(
     try {
       const page = decideRolloutFailedPage(slug, rows, await readMarker(env.DB, slug), nowMs)
       if (page === null) continue
-      const sent = await sendEmail(env, page)
+      // Recorded for agents, not emailed (./mail-policy). A rollout that did not
+      // land is the release controller's and an agent's, never a person's inbox.
+      const quiet = conditionIsQuiet(ROLLOUT_FAILED_CONDITION)
+      const sent: { ok: boolean; resendId?: string } = quiet
+        ? { ok: true }
+        : await sendEmail(env, page)
       if (sent.ok) await writeMarker(env.DB, slug, page.marker, sent.resendId ?? null)
       out.push({
         customer_slug: slug,
         marker: page.marker,
         releases: [...new Set(page.rows.map((r) => r.release_id))],
-        emailed: sent.ok,
+        emailed: sent.ok && !quiet,
         resendId: sent.resendId,
       })
     } catch (err) {

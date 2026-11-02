@@ -82,7 +82,7 @@ export async function processTransition(
       condition: s.condition,
       kind: 'opened',
       detail: s.detail,
-      emailed: true,
+      emailed: !sent.quiet,
       resendId: sent.resendId,
     }
   }
@@ -95,7 +95,7 @@ export async function processTransition(
       condition: s.condition,
       kind: 'resolved',
       detail: s.detail,
-      emailed: true,
+      emailed: !sent.quiet,
       resendId: sent.resendId,
     }
   }
@@ -108,7 +108,7 @@ export async function processTransition(
       condition: s.condition,
       kind: 'reminder',
       detail: s.detail,
-      emailed: true,
+      emailed: !sent.quiet,
       resendId: sent.resendId,
     }
   }

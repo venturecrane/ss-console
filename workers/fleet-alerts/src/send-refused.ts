@@ -25,6 +25,7 @@
  * refused, so neither pages and neither moves the marker.
  */
 
+import { seatIsQuiet } from './mail-policy'
 import { escapeHtml } from './html'
 import type { Env, FleetStatusRow } from './index'
 
@@ -265,7 +266,11 @@ export async function notifySendRefusals(
     try {
       const page = decideSendRefusedPage(row, await readMarker(env.DB, row.customer_slug))
       if (page === null) continue
-      const sent = await sendRefusedEmail(env, page)
+      // A test seat's refusals are recorded for agents, not emailed (./mail-policy).
+      const quiet = await seatIsQuiet(env.DB, row.customer_slug)
+      const sent: { ok: boolean; resendId?: string } = quiet
+        ? { ok: true }
+        : await sendRefusedEmail(env, page)
       if (sent.ok) {
         await writeMarker(env.DB, row.customer_slug, page.marker, sent.resendId ?? null)
       }
@@ -273,7 +278,7 @@ export async function notifySendRefusals(
         customer_slug: page.customer_slug,
         marker: page.marker,
         kind: page.kind,
-        emailed: sent.ok,
+        emailed: sent.ok && !quiet,
         resendId: sent.resendId,
       })
     } catch (err) {

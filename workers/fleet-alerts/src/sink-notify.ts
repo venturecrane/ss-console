@@ -11,6 +11,7 @@
  * via `notified_at` rather than tracked in `fleet_alert_state`.
  */
 
+import { seatIsQuiet, sinkSourceIsQuiet } from './mail-policy'
 import { escapeHtml } from './html'
 import type { Env } from './index'
 
@@ -69,7 +70,11 @@ export async function notifySinkAlerts(env: Env): Promise<SinkNotification[]> {
   for (const row of rows) {
     try {
       const summary = row.summary ?? `${row.source} alert`
-      const sent = await sendSinkEmail(env, row.customer_slug, row.source, summary)
+      // Recorded and left for the triage agent, not emailed (./mail-policy).
+      const quiet = sinkSourceIsQuiet(row.source) || (await seatIsQuiet(env.DB, row.customer_slug))
+      const sent = quiet
+        ? { ok: true, resendId: undefined }
+        : await sendSinkEmail(env, row.customer_slug, row.source, summary)
       if (sent.ok) {
         await env.DB.prepare(
           `UPDATE cost_anomaly_alerts SET notified_at = datetime('now') WHERE rowid = ?`
@@ -81,7 +86,7 @@ export async function notifySinkAlerts(env: Env): Promise<SinkNotification[]> {
         customer_slug: row.customer_slug,
         source: row.source,
         summary,
-        emailed: sent.ok,
+        emailed: sent.ok && !quiet,
         resendId: sent.resendId,
       })
     } catch (err) {

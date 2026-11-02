@@ -57,7 +57,7 @@ export interface CardRow {
   job_lane: string | null
   job_state: string | null
   status: string
-  /** 1: deliberately not emailed, a success on a non-customer seat (0147). */
+  /** 1: deliberately not emailed (0147, src/lib/operator/request-card-quiet.ts). */
   email_skipped?: number
   attempts: number
   /** The lane a lane_unproven card names (migration 0125); absent before it. */
@@ -147,7 +147,7 @@ function outcome(row: CardRow): string {
 export function renderLine(row: CardRow): string {
   const when = row.received_at.slice(0, 16).replace('T', ' ')
   const sent = row.email_skipped
-    ? 'not emailed (test seat)'
+    ? 'not emailed (nothing to act on)'
     : row.status === 'sent'
       ? 'emailed'
       : `NOT EMAILED (${row.attempts} tries)`

@@ -42,6 +42,10 @@ The triage agent may not change code, deploy, rebuild or restart a seat, or mess
 
 What you do with the report is in [The Administrator's Week](/admin/playbook/administrators-week): decide the NEEDS YOU items that are yours, and bring the Captain the rest and the fixes to approve.
 
+## What no longer emails
+
+Since 2026-11-02 (Captain: "mostly noise") a machine reporting on itself is recorded for the triage agent and not emailed: rollouts that did not land, drift, self-test results, gateway restarts, Sentry errors, and anything at all from a seat that is not a client's unless a person is left unanswered. The list is `workers/fleet-alerts/src/mail-policy.ts`. A client seat that is down, a failing connection or sign-in, scheduled work not firing and a refused send still email.
+
 ## How the list is built
 
 The list below is what the evaluation produces and what the triage agent reads. You see it only through the agent's report, or if you ask an agent to run the evaluation for you.

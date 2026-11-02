@@ -8,6 +8,7 @@
 import { threadHeaders } from './alert-thread'
 import { conditionLabel, EDGE_DOWN_CONDITION } from './conditions'
 import { escapeHtml } from './html'
+import { transitionIsQuiet } from './mail-policy'
 import type { ConditionState, Env } from './index'
 
 export async function sendTransitionEmail(
@@ -15,7 +16,10 @@ export async function sendTransitionEmail(
   s: ConditionState,
   kind: 'opened' | 'resolved' | 'reminder',
   messageId: string | null
-): Promise<{ ok: boolean; resendId?: string }> {
+): Promise<{ ok: boolean; resendId?: string; quiet?: boolean }> {
+  // Recorded and left for the triage agent, not emailed (./mail-policy).
+  if (await transitionIsQuiet(env.DB, s.customer_slug, s.condition))
+    return { ok: true, quiet: true }
   if (!env.RESEND_API_KEY) {
     console.log(`[fleet-alerts] DEV: would email ${kind} ${s.condition} for ${s.customer_slug}`)
     return { ok: false }
