@@ -385,7 +385,50 @@ def test_a_cut_that_needs_more_memory_than_the_cap_is_a_plain_refusal(tmp_path: 
     src = tmp_path / "s.pdf"
     src.write_bytes(_pdf(3))
     with pytest.raises(page_cut.CutRefused, match="too large to cut pages"):
-        page_cut.cut(src, 1, 2, tmp_path / "o.pdf", memory_limit=16 * 1024 * 1024)
+        page_cut.cut(src, 1, 2, tmp_path / "o.pdf", limit=16 * 1024 * 1024)
+
+
+@pytest.mark.parametrize(
+    ("mem_total_kb", "expected"),
+    [
+        (1024 * 1024, int(1024 * 1024 * 1024 * 0.40)),  # a 1 GB seat: 40%, just above the floor
+        (512 * 1024, 384 * 1024 * 1024),  # 512 MB: the floor
+        (8 * 1024 * 1024, 3 * 1024 * 1024 * 1024),  # A&P (8 GB): the ceiling
+        (2 * 1024 * 1024, int(2 * 1024 * 1024 * 1024 * 0.40)),  # 2 GB: 40%
+    ],
+)
+def test_the_memory_cap_is_derived_from_the_seat(tmp_path: Path, mem_total_kb: int, expected: int) -> None:
+    from smokeball_connector import page_cut
+
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemTotal:       {mem_total_kb} kB\nMemFree:        1 kB\n")
+    got = page_cut.memory_limit(str(meminfo))
+    assert got == expected
+    assert page_cut.MEMORY_FLOOR_BYTES <= got <= page_cut.MEMORY_CEILING_BYTES
+
+
+def test_an_unreadable_meminfo_falls_back_to_the_floor(tmp_path: Path) -> None:
+    from smokeball_connector import page_cut
+
+    assert page_cut.memory_limit(str(tmp_path / "missing")) == page_cut.MEMORY_FLOOR_BYTES
+    (tmp_path / "junk").write_text("MemTotal: lots\n")
+    assert page_cut.memory_limit(str(tmp_path / "junk")) == page_cut.MEMORY_FLOOR_BYTES
+
+
+def test_the_derived_cap_is_what_the_child_is_given(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from smokeball_connector import page_cut
+
+    seen: dict[str, str] = {}
+
+    def fake_run(argv, **kw):
+        seen.update(kw["env"])
+        raise page_cut.subprocess.TimeoutExpired(argv, 1)
+
+    monkeypatch.setattr(page_cut, "memory_limit", lambda: 123 * 1024 * 1024)
+    monkeypatch.setattr(page_cut.subprocess, "run", fake_run)
+    with pytest.raises(page_cut.CutRefused, match="longer than"):
+        page_cut.cut(tmp_path / "s.pdf", 1, 2, tmp_path / "o.pdf")
+    assert seen["SMD_PAGE_CUT_MEMORY_LIMIT"] == str(123 * 1024 * 1024)
 
 
 def test_a_cut_refusal_reaches_the_staging_result(tmp_path: Path) -> None:

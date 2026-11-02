@@ -33,14 +33,34 @@ import subprocess
 import sys
 from pathlib import Path
 
-#: The child's address-space cap. Interpreter + pypdf import is ~60 MB resident
-#: and well under 200 MB of address space; a lazily read cut of a few pages adds
-#: the objects those pages reference. 384 MiB leaves a 1 GB seat its gateway.
-MEMORY_LIMIT_BYTES = 384 * 1024 * 1024
+#: The child's address-space cap is derived from the seat (:func:`memory_limit`):
+#: 40% of the machine's memory, never below the floor (interpreter + pypdf + a
+#: lazily read cut of a few pages fits well inside it, and a 1 GB seat keeps its
+#: gateway) and never above the ceiling. An 8 GB seat gets the ceiling, enough
+#: for pypdf to rebuild a damaged cross-reference table of a 413 MB set.
+MEMORY_FLOOR_BYTES = 384 * 1024 * 1024
+MEMORY_CEILING_BYTES = 3 * 1024 * 1024 * 1024
+MEMORY_FRACTION = 0.40
+#: Kept for callers that name the old constant: the floor.
+MEMORY_LIMIT_BYTES = MEMORY_FLOOR_BYTES
 TIMEOUT_SECONDS = 120
 
 _EXIT_REFUSED = 3
 _EXIT_MEMORY = 4
+
+
+def memory_limit(meminfo: str = "/proc/meminfo") -> int:
+    """40% of ``MemTotal``, clamped to [floor, ceiling]; the floor when unreadable."""
+    try:
+        with open(meminfo, encoding="ascii") as fh:
+            for line in fh:
+                if line.startswith("MemTotal:"):
+                    total = int(line.split()[1]) * 1024  # the kernel reports kB
+                    wanted = int(total * MEMORY_FRACTION)
+                    return max(MEMORY_FLOOR_BYTES, min(MEMORY_CEILING_BYTES, wanted))
+    except (OSError, ValueError, IndexError):
+        pass
+    return MEMORY_FLOOR_BYTES
 
 
 class CutRefused(ValueError):
@@ -82,8 +102,10 @@ def _child(source: str, first: int, last: int, dest: str) -> int:
     return 0
 
 
-def cut(source: Path, first: int, last: int, dest: Path, *, memory_limit: int = MEMORY_LIMIT_BYTES) -> bytes:
-    """Pages ``first``..``last`` (1-based, inclusive) of ``source``, or :class:`CutRefused`."""
+def cut(source: Path, first: int, last: int, dest: Path, *, limit: int | None = None) -> bytes:
+    """Pages ``first``..``last`` (1-based, inclusive) of ``source``, or :class:`CutRefused`.
+    ``limit`` overrides the seat-derived memory cap (tests)."""
+    cap = limit if limit is not None else memory_limit()
     argv = [sys.executable, "-I", "-m", "smokeball_connector.page_cut", str(source), str(first), str(last), str(dest)]
     try:
         # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit - argv is this interpreter, this module, and paths the connector itself built; no shell
@@ -92,7 +114,7 @@ def cut(source: Path, first: int, last: int, dest: Path, *, memory_limit: int = 
             capture_output=True,
             text=True,
             timeout=TIMEOUT_SECONDS,
-            env={"SMD_PAGE_CUT_MEMORY_LIMIT": str(memory_limit), "PATH": "/usr/bin:/bin"},
+            env={"SMD_PAGE_CUT_MEMORY_LIMIT": str(cap), "PATH": "/usr/bin:/bin"},
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
