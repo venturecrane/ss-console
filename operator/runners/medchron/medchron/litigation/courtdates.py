@@ -22,8 +22,15 @@ The rules, each from what the calendar actually holds:
   itself, except the two rule dates that ARE the event (the discovery cutoff
   and the expert exchange) and an entry headed by the event's kind ("TRIAL-
   Trial date"). Otherwise the set event is the timed entry.
-* A staff entry worded as a deadline ("LD to submit trial dates") is not the
-  event either.
+* A staff entry worded as a deadline ("LD to submit trial dates", "MSJ
+  opposition due") is not the event either, unless a hearing word comes
+  first: "Hearing on Motion to Compel (file reply 5 court days before)" is the
+  hearing with its note, and words in a motion's own name ("Motion for Leave
+  to File") are never an instruction.
+* A hearing is named by the word "hearing" (hrg, OSC, ex parte) or by what is
+  heard: a motion, a demurrer, an MSJ, a petition, a status conference
+  (2026-11-02: a timed motion hearing on the calendar read as no court date,
+  and the list flagged the papers' date as missing from it).
 
 The merge never touches the stored values: ``shown`` returns copies whose
 "Next court date" is the earliest upcoming court date from either source, and
@@ -66,7 +73,13 @@ _SKIP = re.compile(
     # Staff reminders about an event, never the event (2026-10-30, the calendar
     # read on 230 cases): "TWO MONTHS BEFORE TRIAL", "M&C ... Prior to MSC",
     # "L/D to Req Remote Appearance at MSC", "Check Tentative CMC Ruling".
-    r"|\b(months?|weeks?|days?)\s+before\b|\bprior\s+to\b|\bcheck\s+tentative\b|^\W*(\d+/\d+\W*)?L/D\b",
+    # ("N days before" and "prior to" are ``_BEFORE``: after a hearing word
+    # they are its note, not a reminder.)
+    # A tentative ruling posts the day before the hearing it precedes, and is
+    # never that hearing (2026-11-02: "Tentative CMC ruling" printed the CMC a
+    # day early): "Tentative ruling - CMC", "CMC tentative ruling".
+    r"|\bcheck\s+tentative\b|\btentatives?\b.{0,40}\brulings?\b|\brulings?\b.{0,40}\btentative"
+    r"|^\W*(\d+/\d+\W*)?L/D\b",
     re.I,
 )
 _CUTOFF = re.compile(r"discovery\s+cut-?\s?off", re.I)
@@ -76,19 +89,40 @@ _EXPERT = re.compile(r"exchange\s+(of\s+)?expert|expert\s+(witness\s+)?(exchange
 _EXPERT_NOT = re.compile(r"^\W*demand\b|\b(supplement\w*|rebut\w*)\b", re.I)
 _DEADLINE = re.compile(
     r"\bdeadline\b|\b(LD|DL)\b|\b(file|serve|submit|request|object|deposit|pay|prepare|make|give|"
-    r"stipulat\w*|statement|brief|notice)\b",
+    r"stipulat\w*|statement|brief|notice)\b"
+    # The papers due around a motion, never its hearing (2026-11-02): "MSJ
+    # Opposition due", "Reply to MTC due", "Last day to hear MSJ", "Motion cut-off".
+    r"|\b(due|opp(osition|o)?|reply|last\s+day)\b|\bcut-?\s?off\b",
     re.I,
 )
+#: A staff reminder about an event (2026-10-30): "TWO MONTHS BEFORE TRIAL",
+#: "L/D M&C w/Def Counsel Prior to MSC".
+_BEFORE = re.compile(r"\b(months?|weeks?|days?)\s+before\b|\bprior\s+to\b", re.I)
+#: A motion's own name carries deadline words that are not an instruction:
+#: "Motion for Leave to File", "Notice of Motion", "OSC re Failure to File
+#: Proof of Service", "Motion to Compel Responses to Requests for Production".
+#: Masked before the deadline test.
+_TITLE = re.compile(
+    r"\b(leave|failure)\s+to\s+(file|serve)\b|\bnotice\s+of\s+(motion|hearing)\b|\brequests?\s+for\s+\w+",
+    re.I,
+)
+#: The words that name a hearing itself. An entry that names one BEFORE any
+#: deadline word is that hearing; the deadline words after it are its note
+#: ("Hearing on Motion to Compel (file reply 5 court days before)").
+_HEARING_WORD = re.compile(r"\bhearing\b|\bhrg\b|\bOSC\b|order\s+to\s+show\s+cause|\bex[\s-]+parte\b", re.I)
+#: A court-set hearing named by what is heard, with no "hearing" word: a timed
+#: "11/10 - Example. Motion to Compel dept 47", "MSJ", "Demurrer". The deadline
+#: and reminder rules run first, so "File motion to compel" never reaches it.
+_HEARD = r"|\b(motions?|mtn|mot)\b|\bdemurrers?\b|\b(MSJ|MSA|MTC|MJOP)\b|\bpetition\b|status\s+conf"
 _RULES = (
     ("hearing", re.compile(r"trial\s+setting|\bTSC\b|issue\s+conf", re.I)),
     ("msc", re.compile(r"\bMSC\b|mandatory\s+settlement|settlement\s+conf", re.I)),
-    ("trial", re.compile(r"\btrial\b", re.I)),
     ("cmc", re.compile(r"\bCMC\b|case\s+management", re.I)),
+    # Before trial and mediation (2026-11-02): "Hearing re Motion to Continue
+    # Trial" is a hearing, and "Post-Mediation Status Conference" a court date.
+    ("hearing", re.compile(_HEARING_WORD.pattern + _HEARD + r"|arbitration", re.I)),
+    ("trial", re.compile(r"\btrial\b", re.I)),
     ("mediation", re.compile(r"mediat", re.I)),
-    (
-        "hearing",
-        re.compile(r"\bhearing\b|\bhrg\b|\bOSC\b|order\s+to\s+show\s+cause|\bex\s+parte\b|arbitration", re.I),
-    ),
 )
 #: LawToolBox writes some SET events as all-day entries headed by the event's
 #: kind: "TRIAL- Trial date", "**MSC- Mandatory Settlement Conference (MSC)",
@@ -105,13 +139,13 @@ def _ltb(e: dict[str, Any]) -> bool:
 def kind(e: dict[str, Any]) -> str | None:
     """The date kind one calendar entry is, or None when it is not one."""
     subj = str(e.get("subject") or "").strip()
-    if e.get("isDeleted") or not subj or _SKIP.search(subj):
+    if e.get("isDeleted") or not subj or _SKIP.search(subj) or _instruction(subj, _BEFORE):
         return None
     if _CUTOFF.search(subj):
         return "discovery_cutoff"
     if _EXPERT.search(subj) and not _EXPERT_NOT.search(subj):
         return "expert_exchange"
-    if _DEADLINE.search(subj):
+    if _instruction(subj):
         return None
     if e.get("allDay") and _ltb(e) and not _LTB_EVENT.search(subj):
         return None
@@ -119,6 +153,17 @@ def kind(e: dict[str, Any]) -> str | None:
         if rx.search(subj):
             return k
     return None
+
+
+def _instruction(subj: str, words: re.Pattern[str] = _DEADLINE) -> bool:
+    """The entry is a deadline, task or reminder: one of ``words``, outside a
+    motion's own name, that no hearing word comes before."""
+    text = _TITLE.sub(" ", subj)
+    d = words.search(text)
+    if d is None:
+        return False
+    h = _HEARING_WORD.search(text)
+    return h is None or h.start() > d.start()
 
 
 def _day(e: dict[str, Any]) -> dt.date | None:
