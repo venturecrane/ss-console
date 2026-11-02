@@ -1867,7 +1867,11 @@ _SCOTT_TELEGRAM = {"telegram": {"allowed_users": ["7367659986"]}}
 def test_telegram_alias_materializes_when_token_present():
     # FALSIFIER: fails if allowed_users is ignored again (returns {}).
     block = _wh._materialize_telegram_platform(_SCOTT_TELEGRAM, token_present=True)
-    assert block == {"allow_from": ["7367659986"], "gateway_restart_notification": False, "drop_pending_on_cold_boot": False}
+    assert block == {
+        "allow_from": ["7367659986"],
+        "gateway_restart_notification": False,
+        "drop_pending_on_cold_boot": False,
+    }
 
 
 def test_telegram_alias_inert_without_token():
@@ -1899,7 +1903,11 @@ def test_telegram_alias_unions_with_allow_from_dedup_in_order():
     # Explicit enabled: token presence is irrelevant (unchanged behavior).
     for token in (True, False):
         block = _wh._materialize_telegram_platform(cust, token_present=token)
-        assert block == {"allow_from": ["1", "2", "3"], "gateway_restart_notification": False, "drop_pending_on_cold_boot": False}
+        assert block == {
+            "allow_from": ["1", "2", "3"],
+            "gateway_restart_notification": False,
+            "drop_pending_on_cold_boot": False,
+        }
 
 
 def test_telegram_alias_satisfies_explicit_enabled():
