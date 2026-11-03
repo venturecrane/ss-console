@@ -16,6 +16,7 @@ exactly what a live job would send.
 from __future__ import annotations
 
 import html as html_lib
+import re
 from typing import Any
 
 from records_contract import facts as facts_mod
@@ -84,11 +85,15 @@ def outcomes(
     owners: dict[tuple[str, int], int],
     unresolved: set[int],
     files_by_n: dict[int, int],
+    *,
+    held: set[int] | None = None,
 ) -> list[dict[str, Any]]:
-    """One ``{n, outcome, files}`` per record asked for. ``attached`` when any
-    of its items is on the reply; else ``unplaced`` (found, not attached: our
-    defect), ``not_established``, ``not_found``; ``unresolved`` when no file on
-    the matter could be tied to it."""
+    """One ``{n, outcome, files}`` per record asked for. ``held`` when the
+    record waits for SMD (``search.py``: a file it needs would pass the cap);
+    else ``attached`` when any of its items is on the reply; else ``unplaced``
+    (found, not attached: our defect), ``not_established``, ``not_found``;
+    ``unresolved`` when no file on the matter could be tied to it."""
+    held = held or set()
     heads: dict[int, set[str]] = {}
     for it in rendered_items:
         n = owners.get((str(it.get("file_id")), int(it.get("index") or 0)))
@@ -98,9 +103,38 @@ def outcomes(
     for rec in records:
         n = int(rec["n"])
         got = set() if n in unresolved else heads.get(n, set())
-        outcome = next((h for h in _ORDER if h in got), "unresolved")
+        outcome = "held" if n in held else next((h for h in _ORDER if h in got), "unresolved")
         out.append({"n": n, "outcome": outcome, "files": int(files_by_n.get(n, 0))})
     return out
+
+
+#: The pages a cap hold names (``per_job_cap_usd: <id prefix> <unread> pages``).
+_HELD_PAGES = re.compile(r"\b(\d{1,7}) pages\b")
+
+
+def held_line(asked: str, reason: str) -> str:
+    """One held record, in the reply's words: its own words and why it is not
+    established yet, never a dollar figure, a setting name or a file id."""
+    m = _HELD_PAGES.search(reason or "")
+    why = (
+        f"{int(m.group(1)):,} pages of the file it is in are not read yet, and SMD is finishing it"
+        if m
+        else "SMD is finishing it"
+    )
+    return f"- {facts_mod._tame(asked) or 'the record asked for'}: not established yet; {why}"
+
+
+def with_held(
+    block_text: str, block_html: str, records: list[dict[str, Any]], holds: dict[int, str]
+) -> tuple[str, str]:
+    """The facts block with every held record under "Not established", so no
+    record the sender asked for is ever left out of the reply."""
+    if not holds:
+        return block_text, block_html
+    lines = [held_line(str(r.get("asked") or ""), holds[int(r["n"])]) for r in records if int(r["n"]) in holds]
+    head = "Not established, still to be read:"
+    text = "\n\n".join(p for p in (block_text, head + "\n" + "\n".join(lines)) if p)
+    return text, block_html + facts_mod.html_blocks([(head, lines)])
 
 
 def compose(block_text: str, block_html: str, *, held: bool) -> tuple[str, str]:

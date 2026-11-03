@@ -30,6 +30,9 @@ assert job["per_job_cap_usd"] == 5.0 and job["monthly_budget_usd"] == 100.0, job
 env = {k: os.environ.get(k, "") for k in ("MEDCHRON_RECORDS_INPUTS_DIR", "MEDCHRON_RECORDS_STATE_DIR", "SMOKEBALL_PAGE_INDEX_DIR")}
 (jd / "env.json").write_text(json.dumps(env))
 verdict = os.environ.get("FAKE_VERDICT", "delivered")
+# held_some: one record held at the cap, the found one cut (records/search.py).
+held_some = verdict == "held_some"
+verdict = "held" if held_some else verdict
 data = jd / "data"
 (data / "cuts").mkdir(parents=True, exist_ok=True)
 blob = b"%PDF-1.4 fake cut " + b"x" * 5000
@@ -45,7 +48,9 @@ held = verdict == "held"
     "reply_html": "<p>x</p>"}))
 v = {"verdict": verdict, "stage": "verdict", "cents": 42, "items": [{"n": 1, "outcome": "attached", "files": 1}],
      "cuts": [{k: cuts[0][k] for k in ("n", "k", "file_id", "pages", "page_count", "sha256", "size")}]}
-if held:
+if held_some:
+    v.update(reason="per_job_cap_usd: 00000002 2000 pages", items=[*v["items"], {"n": 2, "outcome": "held", "files": 0}])
+elif held:
     v.update(reason="per_job_cap_usd: the run's spend reached the job's cost cap during locate; the run stopped", cuts=[])
 elif verdict == "delivered":
     v["proof"] = {"readback": "confirmed", "files": [{"name": "1-1.pdf", "file_id": cuts[0]["file_id"], "size": len(blob), "sha256": sha}],
@@ -228,6 +233,21 @@ def test_a_held_job_writes_a_words_only_row_and_pages(
     assert row["text"].endswith("SMD is finishing this request.")
     assert client.spool == {} and not seat["decisions"].exists()
     assert client.records[-1]["reason"].startswith("per_job_cap_usd:") and client.alerts == ["limit_held"]
+
+
+def test_a_job_with_one_record_held_carries_the_found_records_files_and_is_never_approved(
+    tmp_path: Path, seat: dict[str, Path]
+) -> None:
+    lane, client, _ = _lane(tmp_path, seat)
+    lane.child_env = {"FAKE_VERDICT": "held_some"}
+    _submit(lane, client)
+    assert lane.tick() == "review"
+    (row,) = _rows(seat)
+    assert row["reason"].startswith("per_job_cap_usd:") and len(row["batches"]) == 1
+    assert row["batches"][0][0]["handle"] in client.spool
+    # review_first is spent on this seat, yet a held row waits for SMD: no decision.
+    assert not seat["decisions"].exists() or not list(seat["decisions"].iterdir())
+    assert "decision" not in client.records[-1]["delivery"] and client.alerts == ["limit_held"]
 
 
 def test_a_crash_after_the_spool_and_before_the_row_writes_exactly_one_row(

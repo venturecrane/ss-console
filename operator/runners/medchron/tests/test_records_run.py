@@ -132,7 +132,10 @@ def test_preflight_holds_before_any_page_is_bought(
         "per_job_cap_usd: 0.05\nmonthly_budget_usd: 100.0\nusd_per_page: 1.0\n", encoding="utf-8"
     )
     _r, v = _run(tmp_path, env, sb, per_job_cap_usd=None)
-    assert v["verdict"] == "held" and v["reason"].startswith("per_job_cap_usd:") and v["stage"] == "preflight"
+    # Priced per file, just before its first read (records/search.py): each
+    # record whose file would pass the cap holds, and no page is bought.
+    assert v["verdict"] == "held" and v["reason"].startswith("per_job_cap_usd:")
+    assert [i["outcome"] for i in v["items"]] == ["held", "held"]
     assert model.bodies == []
 
 

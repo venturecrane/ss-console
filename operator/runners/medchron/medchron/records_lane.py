@@ -377,7 +377,9 @@ class RecordsLane(DraftingLane):
             )
         jd = self.job_dir(job_id)
         facts = json.loads((jd / "data" / "facts.json").read_text(encoding="utf-8"))
-        cuts = self._cuts(jd) if verdict in ("delivered", "dry_run") else []
+        # A held job whose verdict carries cuts held only some records (records/
+        # search.py): the found ones ride its row, which SMD reviews either way.
+        cuts = self._cuts(jd) if verdict in ("delivered", "dry_run") or v.get("cuts") else []
         try:
             files = [self._spooled(job_id, jd, c, proof) for c in cuts]
         except (BrokerError, OSError) as exc:
@@ -467,7 +469,7 @@ class RecordsLane(DraftingLane):
                 to=str(env.get("requester") or ""),
                 text=str(facts.get("reply_text") or ""),
                 html=str(facts.get("reply_html") or ""),
-                batches=batches_mod.batches(files) if delivered else [],
+                batches=batches_mod.batches(files) if delivered or files else [],
                 matter_id=self._resolved_matter(job_id) or str(env.get("matter_id") or ""),
                 session_id=f"records:{job_id}",
                 reason="" if delivered else str(v.get("reason") or "")[: rr.REASON_CHARS],
