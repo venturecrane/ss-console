@@ -34,6 +34,39 @@ import { homedir } from 'node:os'
 const EVIDENCE_RE = /(`[^`]+`|vfy_[0-9A-Z]+|[\w./-]+\.(ts|mjs|sh|py|md|json|yaml|yml):\d+|https?:\/\/|probe|docs fetch|live |read )/i
 const HOLLOW_RE = /\b(TODO|TBD|\?\?\?|fill in)\b/i
 
+/**
+ * Law 16 corollary (2026-11-03, the A&P matter-records lane): a plan for
+ * client work must carry at least one premise MEASURED on the real request
+ * and the real inputs. That plan had eleven mechanical premises (permissions,
+ * spool, lanes, caps) and none about the client's request or file set; it was
+ * built, reviewed, released, and failed its first dry-run two ways a $0
+ * measurement on the seat would have shown (five records parsed as seven; a
+ * cost pre-flight of 4,775 pages against a $5 cap).
+ *
+ * CLIENT_RE is a heuristic for "this plan is client work". "Operator" is
+ * case-sensitive (the product, not the word); "matter" skips "no matter" /
+ * "doesn't matter"; "client" skips "client-side". A row is MEASURED when it
+ * carries both a number with a unit (MEASURE_RE) and a probe reference
+ * (PROBE_REF_RE) in the same row.
+ */
+const CLIENT_RE =
+  /(\bseats?\b|\bclients?\b(?![- ]side)|(?<!\bno |n't |\bnot )\bmatters?\b|customer\.yaml|ashton-price|\blanes?\b)/i
+const OPERATOR_RE = /\bOperators?\b/
+const MEASURE_RE =
+  /(\d[\d,.]*\s*(pages?|files?|rows?|bytes?|[KMG]B|seconds?|requests?|records?|matters?)\b|\$\s?\d|\bcount\b[:=]?\s*\d|\d[\d,.]*\s*count\b)/i
+const PROBE_REF_RE = /(`[^`]+`|seat-probe|ops-handoff|fleet status|vfy_[0-9A-Z]+|\bmeasured\b)/i
+
+export function isClientPlan(planText) {
+  return CLIENT_RE.test(planText) || OPERATOR_RE.test(planText)
+}
+
+export function isMeasuredRow(row) {
+  return MEASURE_RE.test(row) && PROBE_REF_RE.test(row)
+}
+
+const MEASURE_TEACH =
+  'Law 16 corollary (docs/doctrine/agent-operating-doctrine.md): a client-work plan needs at least one Premises row MEASURED read-only on the real request and real inputs, with the number and its probe in the row (e.g. "| request names 5 records | measured via `seat-probe ...`: 5 records, 9 files, 4,775 pages unindexed |"); a plan whose premises are all mechanics is not approvable.'
+
 function log(entry) {
   try {
     const dir = process.env.SS_BOARD_DIR || join(homedir(), '.claude', 'ss-board')
@@ -84,6 +117,13 @@ export function premisesOk(planText) {
   if (hollow.length > 0) return { ok: false, why: `${hollow.length} premise row(s) with hollow or missing evidence` }
   const evidenced = rows.filter((r) => EVIDENCE_RE.test(r))
   if (evidenced.length === 0) return { ok: false, why: 'no premise row carries recognizable evidence (a command, file:line, vfy_ id, doc fetch, or probe note)' }
+  if (isClientPlan(planText)) {
+    const measured = rows.filter(isMeasuredRow).length
+    if (measured === 0) {
+      return { ok: false, mode: 'client', why: 'client-work premises that are all mechanics: no row carries a number measured on the real request or inputs', teach: MEASURE_TEACH }
+    }
+    return { ok: true, mode: 'table', client: true, measured, rows: rows.length }
+  }
   return { ok: true, mode: 'table', rows: rows.length }
 }
 
@@ -115,35 +155,34 @@ function main() {
     has_plan_field: typeof payload.tool_input?.plan === 'string',
   })
 
-  let planText = null
-  let source = null
-  if (typeof payload.tool_input?.plan === 'string' && payload.tool_input.plan.trim() !== '') {
-    planText = payload.tool_input.plan
-    source = 'tool_input'
-  } else if (typeof payload.transcript_path === 'string') {
-    try {
-      const transcript = readFileSync(payload.transcript_path, 'utf8')
-      const path = planPathFromTranscript(transcript)
-      if (path) {
-        planText = readFileSync(path, 'utf8')
-        source = 'transcript-derived:' + path
-      }
-    } catch {
-      /* fall through to warn-only */
-    }
-  }
-
+  const { planText, source } = loadPlanText(payload)
   if (planText === null) {
     // A guessing gate must not claim to enforce.
     log({ event: 'warn-only', why: 'plan text unavailable from tool_input and transcript' })
     return
   }
 
-  const check = premisesOk(planText)
+  const { teach, ...check } = premisesOk(planText)
   log({ event: 'evaluated', source, ...check })
   if (!check.ok) {
-    deny(`[premise-gate] This plan has ${check.why}. ${TEACH}`)
+    deny(`[premise-gate] This plan has ${check.why}. ${teach ?? TEACH}`)
   }
+}
+
+/** Plan text from tool_input, else from the session's own plan file named in
+ *  its transcript; { planText: null } when neither is available. */
+function loadPlanText(payload) {
+  if (typeof payload.tool_input?.plan === 'string' && payload.tool_input.plan.trim() !== '') {
+    return { planText: payload.tool_input.plan, source: 'tool_input' }
+  }
+  if (typeof payload.transcript_path !== 'string') return { planText: null, source: null }
+  try {
+    const path = planPathFromTranscript(readFileSync(payload.transcript_path, 'utf8'))
+    if (path) return { planText: readFileSync(path, 'utf8'), source: 'transcript-derived:' + path }
+  } catch {
+    /* fall through to warn-only */
+  }
+  return { planText: null, source: null }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -108,6 +108,74 @@ describe('premise-gate: via tool_input.plan', () => {
   })
 })
 
+// Law 16 corollary (2026-11-03, the A&P matter-records lane): a client-work
+// plan whose premises are all mechanics is bounced until one row carries a
+// number measured on the real request or the real inputs.
+const MECHANICS_CLIENT_PLAN = [
+  '# Matter records lane for the ashton-price seat',
+  '## Premises',
+  '| Premise | Evidence |',
+  '|---|---|',
+  '| the lane spool dir is writable | read `operator/runners/medchron/medchron/records_lane.py:40` |',
+  '| the seat grants Smokeball file reads | read `operator/customers/ashton-price/customer.yaml:120` |',
+  '## Workstreams',
+  'Build the lane.',
+].join('\n')
+
+const MEASURED_ROW =
+  '| the real request names 5 records across 9 candidate files | measured via `seat-probe ashton-price`: 5 records, 9 files, 4,775 pages unindexed |'
+
+const MEASURED_CLIENT_PLAN = MECHANICS_CLIENT_PLAN.replace(
+  '## Workstreams',
+  `${MEASURED_ROW}\n## Workstreams`
+)
+
+const NUMBER_WITHOUT_PROBE_PLAN = MECHANICS_CLIENT_PLAN.replace(
+  '## Workstreams',
+  '| the matter is about 4,775 pages | read the dossier |\n## Workstreams'
+)
+
+const CLIENT_OPTOUT_PLAN = [
+  '# Rename a variable in the seat helper',
+  'Premises: none (no external premises)',
+].join('\n')
+
+describe('premise-gate: Law 16 corollary, client plans need a measured premise', () => {
+  it('DENIES a client plan whose premises are all mechanics (control)', () => {
+    const r = runHook(payload({ tool_input: { plan: MECHANICS_CLIENT_PLAN } }))
+    expect(r.status).toBe(0)
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/Law 16 corollary/)
+  })
+
+  it('passes the same plan once one row is measured', () => {
+    expect(permission(runHook(payload({ tool_input: { plan: MEASURED_CLIENT_PLAN } })))).toBeNull()
+  })
+
+  it('a number with no probe reference does not count as measured', () => {
+    expect(permission(runHook(payload({ tool_input: { plan: NUMBER_WITHOUT_PROBE_PLAN } })))).toBe(
+      'deny'
+    )
+  })
+
+  it('a non-client plan with mechanics-only premises is unaffected', () => {
+    expect(GOOD_PLAN).not.toMatch(/\d+\s*(pages|files|records)/)
+    expect(permission(runHook(payload({ tool_input: { plan: GOOD_PLAN } })))).toBeNull()
+  })
+
+  it('"no matter" and "client-side" do not make a plan client work', () => {
+    const plan = GOOD_PLAN.replace(
+      'Build the thing.',
+      'No matter the order, render it client-side.'
+    )
+    expect(permission(runHook(payload({ tool_input: { plan } })))).toBeNull()
+  })
+
+  it('"Premises: none" still passes on a client plan', () => {
+    expect(permission(runHook(payload({ tool_input: { plan: CLIENT_OPTOUT_PLAN } })))).toBeNull()
+  })
+})
+
 describe('premise-gate: via transcript-derived plan file', () => {
   it('finds the session plan file named in the transcript and gates on it', () => {
     const plansDir = join(dir, '.claude', 'plans')

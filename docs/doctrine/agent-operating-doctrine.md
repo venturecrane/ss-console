@@ -409,14 +409,19 @@ It is `primer` rather than `gate` on purpose. The hook is a habit-breaker, not a
 
 ```yaml
 id: prove-the-path-before-running
-primer_line: 'Prove the path before you run it: before a paid run, restart, release or handoff on a client deliverable or long-running Operator job, write the whole path to delivery with every step proven by a probe (what runs, what it costs, what can stop it, what the client sees). An unproven step is a question, never a try; a defect found mid-run means re-prove the rest, not fix, redeploy and retry.'
+primer_line: "Prove the path before you run it: before a paid run, restart, release or handoff on a client deliverable or long-running Operator job, write the whole path to delivery with every step proven by a probe (what runs, what it costs, what can stop it, what the client sees). An unproven step is a question, never a try; a defect found mid-run means re-prove the rest, not fix, redeploy and retry. Before a client-job plan is approved, at least one premise is a number measured read-only on the real request and the real inputs (the client's own words, file counts, pages, what a search returns, a cost projection); a plan whose premises are all mechanics is not approvable, and builders' risk lists go to the critique and the Captain."
 cost: medium
 tier: primer
 enforcement:
   - .claude/hooks/reflex-primer.sh
   - .claude/hooks/plan-premise-gate.mjs
+  - tests/plan-premise-gate.test.ts
   - tests/doctrine-integrity.test.ts
 incidents:
+  - date: 2026-11-03
+    ref: 'A&P matter-records lane: a plan with eleven mechanical premises (permissions, spool, lanes, caps) and none about the real request or the real file set was approved, built by four agents, reviewed by four reviewers, released, and failed its first dry-run on the client''s real request two ways a $0 measurement on the seat would have shown: the request parse turned five records into seven (a parenthetical with two visit dates was split; the fixtures were neat synthetic lists), and the cost pre-flight summed 9 candidate files and 4,775 unread pages (about $43 against a $5 cap) because a name search fans each record out to several files. A builder had listed the fan-out as a risk; the critique never saw it. Captain: "those sound like the same misses we''ve had before."'
+  - date: 2026-11-02
+    ref: 'A&P records for Chris: two failed runs before a working one, because "we tested against the records we imagined instead of the real ones" (memory feedback_dry_run_on_the_real_inputs_before_release)'
   - date: 2026-10-23
     ref: 'A&P chronology 3CH59XBY (22h29m, $211.59, eight stops, seven of them cleared by code merged mid-job, #3402 to #3421; the client heard nothing for 21 hours)'
   - date: 2026-10-23
@@ -433,6 +438,12 @@ So the rule: before a paid run, a restart, a release, or a handoff on a client d
 This is SMD's rule for building and running its products. It describes how we work, so it never encodes one client's or one client staff member's preferences; what a particular request asked for is checked against the deliverable (memory `feedback_check_deliverable_against_the_request_line_by_line`), not written into law.
 
 It is `primer` rather than `gate` because no hook can see that a path was proven rather than assumed; the plan-premise gate enforces the same discipline wherever plan mode runs, and this line carries it outside plan mode. The cost is `medium`: minutes of probing before every long job, against hours of cycling during it.
+
+**Corollary: measure the real request and the real inputs before anything is built (2026-11-03).** A path can be proven step by step and still be the path for a request nobody made. The matter-records lane plan proved every mechanism it named, and none of its eleven premises looked at the client's own words or the client's own files. Fixtures stood in for both. The fixtures were neat, the client's request was not, and the matter held thousands of scanned pages the fixtures did not. Both failures were sitting on the seat, readable for nothing, before a line was written. This is the same miss as 2026-11-02, and the Captain said so.
+
+So, before a plan for a client-facing job is approved, at least one premise is a measurement taken on the real request and the real inputs: the client's own words parsed the way the build will parse them, and the real file set counted (files, sizes, pages already indexed, what a search returns, a cost projection against the authored cap). It runs read-only, on the seat or in the client's ops workspace (Law 15), and the number goes in the evidence cell. A plan whose premises are all mechanics is not approvable, however many there are. And a builder's list of risks is evidence about the premises: it goes to the critique and to the Captain, never held by the orchestrator, because a risk one agent saw and the reviewers did not is exactly how this one shipped.
+
+The plan-premise gate carries the mechanical half: when a plan reads as client work (it names a seat, a client, a matter, a lane, the Operator, `customer.yaml`, or a client slug), it bounces unless a Premises row holds both a number with a unit (pages, files, records, bytes, seconds, dollars, a count) and the probe that produced it (a command, `seat-probe`, `ops-handoff`, `fleet status`, a `vfy_` id, or the word "measured"). The gate checks the shape; whether the number came from the real inputs is still the agent's honesty, which is why this stays a primer law.
 
 ---
 
@@ -485,6 +496,12 @@ mechanisms:
     review: 2026-11-24
     on_failure: 'Demote to warn-only. A premise table filled with ceremonial evidence is Law 12 failing at the row level and means the check needs redesign, not more force.'
     last_review: '2026-10-24, MET FOR PLAN MODE. premise-gate.log: 145 evaluations, 128 passed with an evidenced table, 17 blocked, 0 on the warn-only path. Saved unprobed-premise corrections by month: 19/4/6. The October six are client-deliverable premises (register row, coverage diff, rehearsal recipient, a pipeline debugged one deploy at a time) that arose outside plan mode, which this gate cannot see; Law 16 (2026-10-23) now carries that half. Keep.'
+  - id: plan-premise-gate-measured-row
+    file: .claude/hooks/plan-premise-gate.mjs
+    hypothesis: 'Requiring a client-work plan to carry at least one premise row with a number measured on the real request or real inputs (Law 16 corollary, 2026-11-03) moves the "tested against imagined inputs" failure from the first dry-run to plan time.'
+    success_criterion: 'Zero client-job dry-runs between 2026-11-04 and 2026-12-03 that fail on a property of the real request or the real file set (request parse, file count, page volume, cost against the cap) that a read-only probe could have measured before the build. Second half, from ~/.claude/ss-board/premise-gate.log: entries with mode "client" are counted, and a sample of the passing measured rows is read; if the measured numbers are mostly not from the real inputs (fixtures, guesses, the cap itself), the rule is being satisfied by ceremony.'
+    review: 2026-12-03
+    on_failure: 'If dry-runs still fail on unmeasured inputs, the shape check is not reaching the behavior: move the measurement into the job runner as a $0 pre-flight on the real request that must run before release. If the bounce fires mostly on plans that are not client work, narrow CLIENT_RE rather than teach agents to type a ceremonial number.'
   - id: session-board
     file: .claude/hooks/lib/board.mjs
     hypothesis: 'Per-turn injection of every live peer mission line ends mutually-blind concurrent sessions (Law 10 extended to peers) without a brittle collision matcher.'
