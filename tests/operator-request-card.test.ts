@@ -24,6 +24,7 @@ import { POST } from '../src/pages/api/internal/operator-request-card'
 import {
   cardSubject,
   cardText,
+  minutes,
   phoenixTime,
   toolLabel,
 } from '../src/lib/operator/request-card-email'
@@ -350,6 +351,14 @@ describe('parseRequestCard: the lane_unproven card (0125)', () => {
 })
 
 describe('the email', () => {
+  it('says a wait the way a person would', () => {
+    expect(minutes(1)).toBe('1 minute')
+    expect(minutes(89)).toBe('89 minutes')
+    expect(minutes(90)).toBe('2 hours')
+    expect(minutes(1910)).toBe('32 hours')
+    expect(minutes(2880)).toBe('2 days')
+  })
+
   it('subject lines per kind, with the subject cut to 70', () => {
     expect(cardSubject(SLUG, parsed())).toBe(
       `[SMD Ops] ${SLUG}: answered in 12m: ${WHO}: ${SUBJECT}`
