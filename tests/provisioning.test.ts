@@ -46,7 +46,7 @@ function validInput(): ProvisioningInput {
     fly_region: 'lax',
     model: 'claude-opus-4-7',
     machine_size: 'shared-cpu-1x',
-    machine_memory_mb: 1024,
+    machine_memory_mb: 2048,
     user_email: 'partner@firm.com',
     user_role: 'principal',
     user_full_name: 'Jane Smith',
@@ -190,7 +190,7 @@ describe('serializeCustomerYaml', () => {
     // empty list renders inline
     expect(yaml).toContain('addons: []')
     // nested map
-    expect(yaml).toMatch(/machine:\n {2}size: 'shared-cpu-1x'\n {2}memory_mb: 1024/)
+    expect(yaml).toMatch(/machine:\n {2}size: 'shared-cpu-1x'\n {2}memory_mb: 2048/)
   })
 
   it('single-quotes strings and doubles internal quotes', () => {

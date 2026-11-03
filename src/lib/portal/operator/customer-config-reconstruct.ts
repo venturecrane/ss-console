@@ -47,6 +47,7 @@
 import type { CustomerConfigRow, PersonaConfig } from '../customer-config'
 import type { DeviceSenderEntry } from '../../operator/customer-yaml/types'
 import { parseDeviceSenders } from './configure'
+import { MIN_SEAT_MEMORY_MB } from '../../operator/customer-yaml/sections-identity'
 
 /**
  * `users` is required and must be non-empty, and the projection carries no
@@ -119,7 +120,7 @@ export function reconstructFromProjection(row: CustomerConfigRow): unknown {
     vertical: UNPROJECTED_VERTICAL,
     fly_region: 'unprojected',
     model: 'unprojected',
-    machine: { size: 'unprojected', memory_mb: 256 },
+    machine: { size: 'unprojected', memory_mb: MIN_SEAT_MEMORY_MB },
     users: [{ ...UNPROJECTED_USER }],
     personas: row.personas.map(withoutCron),
     connectors: row.connectors ?? {},
