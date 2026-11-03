@@ -246,6 +246,21 @@ def test_a_seat_runs_the_runtime_checks_of_exactly_the_lanes_it_authors(seat: di
     assert ran == {"medchron-daemon-ticking", "demand-lane-ticking", "note-lane-ticking"}
 
 
+# ADR 0100 W5 (2026-11-03): the image carries no runner, so a seat with no lane has
+# no medchron python. The memory-cap sum ran with it on every seat and failed the
+# scott seat's boot smoke on rel-ab97b966; with no lane there is no cap to sum.
+def test_a_seat_with_no_lane_and_no_runner_passes_the_memory_cap_check_with_a_note(seat: dict[str, Path]) -> None:
+    assert not (seat["root"] / "opt/medchron").exists()
+    found = _check(_once(seat, "hourly"), "lane-memory-caps-leave-gateway-reserve")
+    assert found["ok"] is True, found
+
+
+def test_a_seat_with_a_lane_and_no_runner_fails_the_memory_cap_check(seat: dict[str, Path]) -> None:
+    _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    found = _check(_once(seat, "hourly"), "lane-memory-caps-leave-gateway-reserve")
+    assert found["ok"] is False, found
+
+
 def test_an_unreadable_config_runs_every_lane_runtime_check(seat: dict[str, Path]) -> None:
     """Cannot evaluate must never pass-skip a client's lane: every check runs and says why."""
     (seat["root"] / "var/lib/smd-config/customer.yaml").write_text(": not yaml : [")
