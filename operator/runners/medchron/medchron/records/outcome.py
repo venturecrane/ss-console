@@ -39,7 +39,7 @@ REASON_CODES = HOLD_CODES + FAIL_CODES
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r")(: |$)")
 EXIT = {"delivered": 0, "held": 1, "dry_run": 0, "failed": 2}
 #: Each record's outcome token (the broker's ``records_lines.outcome``).
-OUTCOMES = ("attached", "not_found", "not_established", "unplaced", "unresolved")
+OUTCOMES = ("attached", "not_found", "not_established", "unplaced", "unresolved", "held")
 
 
 class RecordsHold(RuntimeError):

@@ -49,7 +49,7 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, parse as parse_mod
+from . import assemble, firm as firm_mod, job as job_mod, parse as parse_mod, search
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -320,22 +320,8 @@ class RecordsRun(RunBase):
         dump(self.data / "candidates.json", candidates)
 
     # ---- preflight --------------------------------------------------------------------
-    def _unread(self, file_id: str, meta: dict[str, Any]) -> int:
-        from smokeball_connector import page_finder as pf
-
-        index = pf.load_index(meta["sha256"])
-        settled = sum(1 for k in index["unreadable"] if pf._settled(index, k))
-        return max(0, int(meta["page_count"]) - len(index["pages"]) - settled)
-
     def _preflight(self) -> None:
-        files = self._json("files.json")
-        cand = self._json("candidates.json")
-        wanted = {fid for ids in cand.values() for fid in ids}
-        pages = sum(self._unread(fid, files[fid]) for fid in sorted(wanted))
-        self.log(f"[preflight] {len(wanted)} files, {pages} unread pages")
-        self.limits.check_before_paid(
-            projected_usd=pages * self.firm.usd_per_page, spent_usd=self.budget.refresh(), stage="preflight"
-        )
+        search.preflight(self)
 
     # ---- locate --------------------------------------------------------------------
     def _read_all(self, source: Path, mid: str, hook: CapHook) -> None:
@@ -383,7 +369,10 @@ class RecordsRun(RunBase):
     def located(self) -> list[tuple[int, str, dict[str, Any]]]:
         """Every saved (record, file, result), in record then candidate order."""
         out = []
-        cand = self._json("candidates.json") if (self.data / "candidates.json").is_file() else {}
+        if (self.data / search.ORDER).is_file():
+            cand = self._json(search.ORDER)
+        else:
+            cand = self._json("candidates.json") if (self.data / "candidates.json").is_file() else {}
         for rec in self._records():
             for fid in cand.get(str(rec["n"])) or []:
                 p = self.locate_path(int(rec["n"]), fid)
@@ -392,20 +381,7 @@ class RecordsRun(RunBase):
         return out
 
     def _locate(self) -> None:
-        mid, files, cand = self._matter(), self._json("files.json"), self._json("candidates.json")
-        hook = CapHook(self)
-        for rec in self._records():
-            n = int(rec["n"])
-            for fid in cand.get(str(n)) or []:
-                stop_request.check("records")
-                out = self._locate_one(n, fid, rec["asked"], mid, files[fid], hook)
-                if out.get("matchError"):
-                    raise RecordsHold("finder_failed: the match step did not answer")
-                if assemble.found(out):
-                    break
-        for n, _fid, out in self.located():
-            if int(out.get("remainingPages") or 0) > 0:
-                raise RecordsHold(f"match_unsettled: record {n}'s file still has pages not read")
+        search.locate(self, CapHook(self), CapStop)
 
     # ---- cut ------------------------------------------------------------------------
     def _cut(self) -> None:
@@ -458,6 +434,11 @@ class RecordsRun(RunBase):
         mid = self._matter() if (self.data / "matter.json").is_file() else (self.job.matter_id or "")
         located = self.located() if records else []
         results, owners = assemble.merge(located)
+        held_items = search.item_holds(self.data)
+        if held_items and hold is None:
+            # Some records wait for SMD (a file that would pass the cap); the
+            # others are attached as they were found, and the reply says which.
+            return self.compose_items_held(records, results, owners, mid, held_items)
         cuts = self._json("cuts.json") if (hold is None and (self.data / "cuts.json").is_file()) else []
         files = [{k: c[k] for k in ("file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
         rendered = assemble.render(results, files, mid) if results or files else None
@@ -504,9 +485,11 @@ class RecordsRun(RunBase):
         rendered = assemble.render(results, [], mid) if results else None
         ok = rendered is not None and not rendered.hold_reason
         block_t, block_h = (rendered.text, rendered.html) if ok and rendered is not None else ("", "")
+        held_items = search.item_holds(self.data)
         outcomes = assemble.outcomes(
-            records, rendered.items if ok and rendered is not None else [], owners, unresolved, {}
+            records, rendered.items if ok and rendered is not None else [], owners, unresolved, {}, held=set(held_items)
         )
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,
@@ -518,6 +501,46 @@ class RecordsRun(RunBase):
         }
         dump(self.data / "facts.json", doc)
         return {**doc, "cuts": []}
+
+    def compose_items_held(
+        self,
+        records: list[dict[str, Any]],
+        results: dict[str, Any],
+        owners: Any,
+        mid: str,
+        held_items: dict[int, str],
+    ) -> dict[str, Any]:
+        """Some records held (``search.py``): the found ones attached, every
+        held one under "Not established" with its reason, and the reply waits
+        for SMD. The job's reason is the first held record's."""
+        hold = held_items[min(held_items)]
+        cuts = self._json("cuts.json") if (self.data / "cuts.json").is_file() else []
+        files = [{k: c[k] for k in ("file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
+        rendered = assemble.render(results, files, mid) if results or files else None
+        if rendered is not None and rendered.hold_reason:
+            return self.compose_held(f"finder_failed: {rendered.hold_reason}", results, mid, records, owners, set())
+        cand = self._json(search.ORDER) if (self.data / search.ORDER).is_file() else {}
+        unresolved = {int(r["n"]) for r in records if not cand.get(str(r["n"])) and int(r["n"]) not in held_items}
+        per_n: dict[int, int] = {}
+        for c in cuts:
+            per_n[int(c["n"])] = per_n.get(int(c["n"]), 0) + 1
+        items = rendered.items if rendered is not None else []
+        outcomes = assemble.outcomes(records, items, owners, unresolved, per_n, held=set(held_items))
+        if any(o["outcome"] in ("unplaced", "unresolved") for o in outcomes):
+            return self.compose_held(hold, results, mid, records, owners, unresolved)
+        block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
+        text, html = assemble.compose(block_t, block_h, held=True)
+        doc = {
+            "text": block_t,
+            "html": block_h,
+            "items": outcomes,
+            "hold_reason": hold,
+            "reply_text": text,
+            "reply_html": html,
+        }
+        dump(self.data / "facts.json", doc)
+        return {**doc, "cuts": cuts}
 
     # ---- the walk ----------------------------------------------------------------------
     def _walk(self) -> None:
@@ -571,7 +594,9 @@ class RecordsRun(RunBase):
             return Verdict("failed", stage=stage, reason=failed or "unexpected: no reply was composed")
         items, cuts = doc["items"], doc["cuts"]
         if hold is not None:
-            return Verdict("held", stage=stage, reason=hold, items=items)
+            # A record-level hold still carries the cuts of the records found:
+            # SMD's review sends them with the rest once it is finished.
+            return Verdict("held", stage=stage, reason=hold, items=items, cuts=cuts)
         if proof_mode.active():
             self._proof_out(doc)
             return Verdict(proof_mode.OUTCOME, stage="verdict", items=items, cuts=cuts)
