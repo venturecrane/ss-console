@@ -100,7 +100,7 @@ The inputs are staged to a seat by the casefile staging step of provisioning (`o
 
 ## What pages SMD
 
-Each of these reaches team@ as a `SHORTFALL` once, not every day; while it lasts, the hourly work digest repeats one line a day ([Work Health](/admin/playbook/work-health)):
+Each of these is recorded once for the triage agent, not every day; while it lasts, the hourly work digest repeats one line a day ([Work Health](/admin/playbook/work-health)):
 
 | What happened | What it means | Who acts |
 |---|---|---|

@@ -43,8 +43,7 @@ function couldNotLines(card: RequestCard): string[] {
   if (!card.couldNot) return []
   return [
     `NOT FULFILLED: the reply told the requester ${COULD_NOT_TEXT[card.couldNot]} (${card.couldNot}).`,
-    'The tool counts below can all be clean; the reply is what says it. This also raised a',
-    'SHORTFALL. Read the reply, then answer them or hand this card to an agent to finish it.',
+    'The tool counts below can all be clean; the reply is what says it.',
   ]
 }
 

@@ -11,8 +11,8 @@
  * via `notified_at` rather than tracked in `fleet_alert_state`.
  */
 
+import { alertHtml, sourceWords } from './alert-words'
 import { seatIsQuiet, sinkSourceIsQuiet } from './mail-policy'
-import { escapeHtml } from './html'
 import type { Env } from './index'
 
 /**
@@ -106,12 +106,6 @@ interface SinkAlertRow {
   entity_id: string
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  sentry: 'Sentry issue alert',
-  healthchecks: 'healthchecks.io grace expired',
-  audit_integrity: 'Audit-log integrity violation',
-}
-
 async function sendSinkEmail(
   env: Env,
   slug: string,
@@ -122,13 +116,12 @@ async function sendSinkEmail(
     console.log(`[fleet-alerts] DEV: would email ${source} alert for ${slug}: ${summary}`)
     return { ok: false }
   }
-  const label = SOURCE_LABEL[source] ?? `${source} alert`
-  const dashboard = `${env.ADMIN_BASE_URL ?? 'https://admin.smd.services'}/operator`
-  const html =
-    `<p><strong>ALERT</strong>: ${escapeHtml(label)}</p>` +
-    `<ul><li>Seat: ${escapeHtml(slug)}</li>` +
-    `<li>Detail: ${escapeHtml(summary)}</li></ul>` +
-    `<p><a href="${dashboard}">Fleet dashboard</a>. No automatic action was taken (ADR 0064/0065).</p>`
+  const words = sourceWords(source)
+  const html = alertHtml(words.happened, words.todo, [
+    `Seat: ${slug}`,
+    `Source: ${source}`,
+    `Detail: ${summary}`,
+  ])
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -139,7 +132,7 @@ async function sendSinkEmail(
       body: JSON.stringify({
         from: env.ALERT_FROM_EMAIL ?? 'SMD Services Ops <team@smd.services>',
         to: env.ALERT_TO_EMAIL ?? 'team@smd.services',
-        subject: `[SMD Ops] ALERT ${slug}: ${label}`,
+        subject: `[SMD Ops] ${slug}: ${words.subject}`,
         html,
       }),
     })

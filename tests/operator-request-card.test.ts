@@ -231,7 +231,6 @@ describe('a reply that declined (0146, 2026-11-01)', () => {
     )
     expect(text).toContain('WHAT YOU NEED TO DO: Read the reply below')
     expect(text).toContain('NOT FULFILLED: the reply told the requester')
-    expect(text).toContain('SHORTFALL')
     expect(text).not.toMatch(/—/)
   })
 
