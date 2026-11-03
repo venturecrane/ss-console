@@ -92,6 +92,7 @@ from shared import (
     hook_worker,
     inbound,
     matter_binding,
+    matter_file_facts,
     matter_file_reply,
     matter_file_review,
     matter_gate,
@@ -836,6 +837,9 @@ def on_post_tool_call(**kwargs: Any) -> None:
         if _DECIDED.claim(kwargs.get("tool_call_id")) is not False:
             _stage_matter_files(kwargs)
         return
+    if (kwargs.get("tool_name") or "") == matter_file_facts.FIND_TOOL:
+        _record_finder(kwargs)
+        return
     if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
         return
     if _DECIDED.claim(kwargs.get("tool_call_id")) is False:
@@ -905,6 +909,37 @@ def _record_binding(kwargs: dict[str, Any]) -> str | None:
             "hermes-smd-reply: recording a reply binding failed (%s); nothing bound", exc
         )
         return None
+
+
+def _record_finder(kwargs: dict[str, Any]) -> None:
+    """Keep this turn's ``find_pages_in_file`` result for the reply's facts
+    (``shared.matter_file_facts``). Never raises."""
+    try:
+        session_id = str(kwargs.get("session_id") or "") or provenance.resolve_session("")
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+        matter_file_facts.record_from_result(
+            session_id,
+            kwargs.get("args"),
+            kwargs.get("result"),
+            message_id=origin.message_id if origin is not None else "",
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise out of a hook
+        logger.warning("hermes-smd-reply: recording a page-finder result failed (%s)", exc)
+
+
+def _file_facts(session_id: str, origin: inbound.InboundOrigin) -> matter_file_facts.Facts | None:
+    """The records reply's facts block (``shared.matter_file_facts``), or
+    ``None`` when this turn neither searched a file nor staged one. A fault
+    renders no block and holds the reply for SMD."""
+    try:
+        return matter_file_facts.build(
+            session_id, origin.message_id, matter_file_reply.staged(session_id)
+        )
+    except Exception as exc:  # noqa: BLE001 - could not write the facts: SMD reads it
+        logger.warning("hermes-smd-reply: facts block failed (%s)", type(exc).__name__)
+        return matter_file_facts.Facts(
+            "", "", "the seat could not write the facts block", frozenset()
+        )
 
 
 def _seat_doc() -> dict[str, Any]:
@@ -1059,7 +1094,7 @@ def _send_file_continuations(
 
 
 def _hold_for_review(
-    prepared: matter_file_reply.Prepared,
+    prepared: matter_file_reply.Prepared | None,
     origin: inbound.InboundOrigin,
     *,
     session_id: str,
@@ -1067,27 +1102,35 @@ def _hold_for_review(
     text: str,
     html: str,
     matter_ref: str | None,
+    because: str = "",
 ) -> None:
-    """Write a files reply for SMD's review, commit the email as answered (a
-    redraft must not slip past the review), and tell the turn it is waiting."""
+    """Write a records reply (with its files, or none) for SMD's review, commit
+    the email as answered (a redraft must not slip past the review), and tell
+    the turn it is waiting. ``because`` says why when it is not the seat's
+    review setting (a facts check that failed)."""
     staging = matter_file_reply.staged(session_id)
     wire_text, wire_html = _transmitted_body(_ADAPTER_MSGRAPH, text, html)
+    matter_id = (staging.matter_id if staging else "") or matter_file_facts.finder_matter(
+        session_id, origin.message_id
+    )
     row = matter_file_review.hold(
         message_id=origin.message_id,
         to=origin.sender_address,
         text=wire_text,
         html=wire_html,
-        batches=prepared.rows(),
-        matter_id=staging.matter_id if staging else "",
+        batches=prepared.rows() if prepared is not None else [],
+        matter_id=matter_id,
         session_id=session_id,
+        reason=because,
     )
     _commit_reply(reply_key, origin)
     matter_file_reply.discard(session_id)
-    every = tuple(f for batch in prepared.batches for f in batch)
+    every = tuple(f for batch in prepared.batches for f in batch) if prepared else ()
     _held(
         matter_file_review.HOLD_REASON,
         origin,
         review_id=row["id"],
+        **({"held_because": because} if because else {}),
         **matter_file_reply.audit_fields(every),
         _matter_ref=matter_ref,
     )
@@ -1138,6 +1181,9 @@ def _review_one(row: dict[str, Any]) -> None:
         return
     matter_file_review.finish({**row, "text": row.get("text"), "html": row.get("html")}, "sending")
     prepared = matter_file_reply.Prepared.from_rows(row.get("batches") or [])
+    # A records reply held with no files (a turn that searched a file's pages
+    # and attached nothing) is released as words alone.
+    first = prepared.batches[0] if prepared.batches else ()
     session_id = str(row.get("session_id") or "")
     text, html = str(row.get("text") or ""), str(row.get("html") or "")
     try:
@@ -1146,7 +1192,7 @@ def _review_one(row: dict[str, Any]) -> None:
             text,
             html,
             session_id=session_id,
-            attachments=matter_file_reply.Prepared.descriptors(prepared.batches[0]),
+            attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)
@@ -1160,8 +1206,8 @@ def _review_one(row: dict[str, Any]) -> None:
             "in_reply_to": origin.message_id,
             "sent_message_id": sent_id,
             "released_from_review": row.get("id"),
-            "file_reply_part": f"1/{len(prepared.batches)}",
-            **matter_file_reply.audit_fields(prepared.batches[0]),
+            **({"file_reply_part": f"1/{len(prepared.batches)}"} if first else {}),
+            **matter_file_reply.audit_fields(first),
         },
         session_id=session_id or None,
     )
@@ -1366,6 +1412,23 @@ def _relay_draft(**kwargs: Any) -> None:
             _held("device_redirect_unsupported", origin)
             return
 
+        # (b1) The facts of a records reply (ADR 0102, shared.matter_file_facts):
+        # what was attached, found and not found, written by code from the page
+        # finder and the staged files, put into the body BEFORE the scan text and
+        # html are built, so every gate below and the review digest cover it.
+        facts = _file_facts(session_id, origin)
+        facts_hold = ""
+        model_words = matter_file_facts.model_words(args)
+        if facts is not None:
+            facts_hold = facts.hold
+            if not facts_hold:
+                args = matter_file_facts.insert(args, facts)
+                extra = matter_file_facts.unstated(facts, model_words)
+                if extra:
+                    facts_hold = (
+                        f"the reply's own words state pages or counts the facts do not: {extra}"
+                    )
+
         scan_text, send_text, send_html = relay.draft_body(args)
 
         # (c) Re-apply the outbound floors to the draft body. ADR 0072 carve-out
@@ -1456,6 +1519,24 @@ def _relay_draft(**kwargs: Any) -> None:
             tool_name=str(kwargs.get("tool_name") or ""),
             session_id=session_id,
         )
+        if (
+            checklist_hold is not None
+            and facts is not None
+            and facts.text
+            and _checklist_violations(
+                model_words,
+                internal=internal,
+                tool_name=str(kwargs.get("tool_name") or ""),
+                session_id=session_id,
+            )
+            is None
+        ):
+            # The facts block is code's: when only it trips the checklist, a
+            # redraft cannot fix it, so the reply waits for SMD instead.
+            facts_hold = (
+                facts_hold or f"the facts block tripped the checklist ({checklist_hold[0]})"
+            )
+            checklist_hold = None
         if checklist_hold is not None:
             _held(
                 spec_gate.REASON_OUTPUT_CHECKLIST,
@@ -1604,11 +1685,18 @@ def _relay_draft(**kwargs: Any) -> None:
                 _matter_ref=cited_matter_ref,
             )
             return
-        if prepared is not None and matter_file_reply.review_by_smd(
-            _seat_doc(), matter_file_review.released_count()
+        # matter_file_delivery.review: smd (or review_first). A reply carrying
+        # files waits for SMD's approval (shared.matter_file_review) instead of
+        # sending; so does EVERY reply of a turn that searched a file's pages,
+        # files or not (2026-11-02: a records reply with nothing attached went
+        # past the review), and every reply whose facts did not check out.
+        files_turn = prepared is not None or matter_file_facts.searched(
+            session_id, origin.message_id
+        )
+        if facts_hold or (
+            files_turn
+            and matter_file_reply.review_by_smd(_seat_doc(), matter_file_review.released_count())
         ):
-            # matter_file_delivery.review: smd. The reply and its files wait for
-            # SMD's approval (shared.matter_file_review) instead of sending.
             _hold_for_review(
                 prepared,
                 origin,
@@ -1617,6 +1705,7 @@ def _relay_draft(**kwargs: Any) -> None:
                 text=send_text,
                 html=send_html,
                 matter_ref=cited_matter_ref,
+                because=facts_hold,
             )
             return
 
@@ -1889,6 +1978,11 @@ def on_transform_tool_result(**kwargs: Any) -> str | None:
             if not told:
                 return None
             return f"{result}\n\n{told}" if isinstance(result, str) and result else told
+        if (kwargs.get("tool_name") or "") == matter_file_facts.FIND_TOOL:
+            # Recorded from both hooks (whichever fires first; the record is
+            # the same each time), and the result is never altered.
+            _record_finder(kwargs)
+            return None
         if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
             return None
         tool_call_id = kwargs.get("tool_call_id")

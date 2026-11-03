@@ -32,7 +32,11 @@ HOW. Three steps; the model reads, code decides the boundaries:
    for, the section ids that hold it, or says it is not there and what the
    sections show instead. Only the named provider's sections answer a provider.
    Code turns the ids into page ranges and composes the evidence; an id it does
-   not hold is dropped and counted.
+   not hold is dropped and counted. It also names, by id, the sections closest
+   to a record it did not find and other sections the colleague may want; code
+   turns those into pages, heading and date (``page_finder_match.py``). Every
+   fact a reply prints (pages, counts) is a field code computed, versioned by
+   ``schemaVersion``, and a match is cached once the index is whole.
 
 WHAT IT NEVER DOES. It sends nothing and files nothing. Page images go only to
 the Messages API the seat already uses (``vision.py``: the seat's own
@@ -69,7 +73,17 @@ from pathlib import Path
 from typing import Any
 
 from . import vision
-from .page_finder_sections import _ranges, _view, documents, section_lines, sections
+from .page_finder_match import (
+    SCHEMA_VERSION,
+    cached_match,
+    compose,
+    counts,
+    match_key,
+    qualify,
+    remember_match,
+    zero_tokens,
+)
+from .page_finder_sections import documents, section_lines, sections
 from .page_finder_prompts import (
     _SECTION_FIELDS,
     BANDS_NOTE,
@@ -82,7 +96,11 @@ from .page_finder_prompts import (
 INDEX_DIR_ENV = "SMOKEBALL_PAGE_INDEX_DIR"
 DEFAULT_INDEX_DIR = "/opt/data/smokeball-page-index"
 MODEL_ENV = "SMOKEBALL_PAGE_FINDER_MODEL"
-#: Bumped when the index prompt or schema changes; an index of another version is not reused.
+#: Bumped when the index prompt or schema changes; an index of another version is
+#: not reused, and every page is paid for again. It is the on-disk key ``version``
+#: and stays 4 while the page-reading prompt is unchanged (2026-11-02: a bump for
+#: a change that did not touch the read cost $14 of re-reads). A change to the
+#: match step bumps ``page_finder_prompts.MATCH_VERSION`` instead.
 PROMPT_VERSION = 4
 PAGES_PER_CALL = 100
 #: A runaway guard, not a working limit: a 2,310-page set must index whole
@@ -160,6 +178,8 @@ def load_index(sha: str, base: Path | None = None) -> dict[str, Any]:
     data.setdefault("unreadable", {})
     data.setdefault("refusals", {})
     data.setdefault("spent", {"input_tokens": 0, "output_tokens": 0})
+    if not isinstance(data.get("matches"), dict):
+        data["matches"] = {}
     return data
 
 
@@ -537,41 +557,45 @@ def match(
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Per record asked for: found, PDF page ranges, reason, and the sections
     (code-composed) the ranges rest on. The model names section ids only; the
-    page boundaries are code's, from the index."""
+    page boundaries are code's, from the index. Never cached (see :func:`locate`)."""
     secs = sections(pages, unreadable)
     if not secs:
-        return [], {"input_tokens": 0, "output_tokens": 0}
-    by_id = {sec["id"]: sec for sec in secs}
+        return [], zero_tokens()
+    raw, tokens = _ask_match(secs, what)
+    return compose(raw, secs), tokens
+
+
+def _ask_match(secs: list[dict[str, Any]], what: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
     content = [
         {"type": "text", "text": "SECTIONS:\n" + section_lines(secs)},
         {"type": "text", "text": "THE COLLEAGUE'S REQUEST:\n" + what.strip()[:4000]},
         {"type": "text", "text": MATCH_INSTRUCTION},
     ]
     data, tokens = _post(_body(content, MATCH_SCHEMA, MATCH_MAX_TOKENS))
-    items = []
-    for item in data.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        ids = [str(i).strip() for i in item.get("sections") or []]
-        chosen = [by_id[i] for i in dict.fromkeys(ids) if i in by_id]
-        dropped = len([i for i in ids if i not in by_id])
-        found = bool(chosen) and bool(item.get("found"))
-        items.append(
-            {
-                "asked": str(item.get("asked") or "")[:300],
-                "found": found,
-                "ranges": [
-                    {
-                        "pages": f"{a}-{b}",
-                        "evidence": [_view(s) for s in chosen if s["first"] <= b and s["last"] >= a],
-                    }
-                    for a, b in (_ranges(chosen) if found else [])
-                ],
-                "reason": str(item.get("reason") or "")[:500],
-                **({"droppedSections": dropped} if dropped else {}),
-            }
-        )
-    return items, tokens
+    return [i for i in data.get("items") or [] if isinstance(i, dict)], tokens
+
+
+def _match_index(
+    index: dict[str, Any], what: str, *, complete: bool
+) -> tuple[list[dict[str, Any]], dict[str, int], bool]:
+    """(items, tokens, from_cache) for ``what`` against the file's sections.
+
+    A match is reused only under the same model, sections, unreadable pages,
+    request and match version (page_finder_match.match_key), and stored only
+    when every page is indexed: a match made over a partial index answers a
+    question about pages the next call may change."""
+    unreadable = index["unreadable"]
+    secs = sections(index["pages"], unreadable)
+    if not secs:
+        return [], zero_tokens(), False
+    key = match_key(model(), secs, unreadable, what)
+    raw = cached_match(index, key)
+    if raw is not None:
+        return compose(raw, secs), zero_tokens(), True
+    raw, tokens = _ask_match(secs, what)
+    if complete:
+        remember_match(index, key, raw)
+    return compose(raw, secs), tokens, False
 
 
 def locate(
@@ -591,8 +615,10 @@ def locate(
     total = int(index.get("page_count") or 0)
     indexed = len(index["pages"])
     unreadable = index["unreadable"]
+    complete = indexed >= total
+    from_cache = False
     try:
-        items, match_tokens = match(index["pages"], what, unreadable)
+        items, match_tokens, from_cache = _match_index(index, what, complete=complete)
     except _CallFailed as exc:
         items, match_tokens = [], dict(exc.tokens)
         built["match_error"] = str(exc)
@@ -602,14 +628,17 @@ def locate(
     if any(match_tokens.values()):
         save_index(index, base)
     remaining = max(0, total - indexed - len(unreadable))
-    _qualify(items, unreadable, remaining)
+    qualify(items, unreadable, remaining)
     out: dict[str, Any] = {
+        "schemaVersion": SCHEMA_VERSION,
         "pageCount": total,
         "indexedPages": indexed,
         "remainingPages": remaining,
-        "complete": indexed >= total,
+        "counts": counts(total, indexed, len(unreadable)),
+        "complete": complete,
         "readNow": len(built["read_now"]),
         "fromCache": indexed - len(built["read_now"]),
+        "matchFromCache": from_cache,
         "items": items,
         "documents": documents(index["pages"], unreadable),
         "tokens": tokens,
@@ -635,42 +664,6 @@ def locate(
             parts.append(f"{len(unreadable)} could not be read (see unreadablePages)")
         out["note"] = "; ".join(parts) + ". Do not say a record is absent from pages that were not read."
     return out
-
-
-def _qualify(items: list[dict[str, Any]], unreadable: dict[str, str], remaining: int) -> None:
-    """Say per item whether its answer is ESTABLISHED.
-
-    A "not found" read over pages that were never read (declined, too large,
-    or not reached yet) is not a finding: the record could be on those pages.
-    So it is ``established: false`` with the pages named, and the reason says
-    so first; it is never a flat "none". A found range that has unreadable
-    pages inside it is sent whole (they stay in their section) and is flagged."""
-    blind = ", ".join(sorted(unreadable, key=int))
-    for item in items:
-        inside = sorted(
-            {p for r in item["ranges"] for e in r["evidence"] for p in e.get("unreadablePages") or {}}, key=int
-        )
-        if item["found"]:
-            item["established"] = True
-            if inside:
-                item["unreadableInside"] = inside
-            continue
-        gaps = []
-        if unreadable:
-            gaps.append(f"pages {blind} could not be read")
-        if remaining:
-            gaps.append(f"{remaining} pages are not read yet")
-        item["established"] = not gaps
-        if gaps:
-            # The model's own sentence is dropped, not prefixed: written from
-            # the pages it saw, it can read "there is no X" when the pages it
-            # did not see may hold X. The reason is composed here instead.
-            item["notEstablishedBecause"] = "; ".join(gaps)
-            item["reason"] = (
-                "NOT ESTABLISHED: not found on the pages read, but "
-                + "; ".join(gaps)
-                + ". It may be on those pages; this is not a finding that it is absent."
-            )
 
 
 def _compress(numbers: list[int]) -> str:

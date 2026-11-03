@@ -14,8 +14,6 @@ from .page_finder_prompts import _SECTION_FIELDS
 
 #: A running header that says the page continues the note it names.
 _CONTINUED_RE = re.compile(r"\bcont(?:inued|inuation|'?d|\.)?(?:\b|$)", re.IGNORECASE)
-#: A page the model could not read: kept in the section around it, never a start.
-_UNREAD: dict[str, Any] = {"continues_previous": True, "sections": [], "dates": [], "legible": False}
 
 
 def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -29,16 +27,30 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
     known start (an unindexed gap before it) opens an untitled section, so no
     page is ever silently attached to a section it may not belong to.
 
-    A page the model could not read (``unreadable``: declined, too large) is
-    kept INSIDE the section it falls in, so a range never silently skips it,
-    and is listed on that section as ``unreadablePages`` with its reason."""
+    A page the model could not read (``unreadable``: declined, too large) never
+    extends a section by itself: nothing is known about it. When the next READ
+    page continues the section (its top says so), the section bridges back over
+    the unread pages, and they are listed on it as ``unreadablePages`` with
+    their reason, so a range never silently skips them. When the next read page
+    does not continue it (a new start), the section closes before the unread
+    pages, which then belong to no section (2026-11-02: a visit whose third page
+    was unread came back 1-4 on one call and 1-5 on the next)."""
     unreadable = unreadable or {}
-    merged = {**{k: _UNREAD for k in unreadable}, **pages}
     out: list[dict[str, Any]] = []
-    last_page = 0
-    for key in sorted(merged, key=int):
-        _step(out, int(key), merged[key], adjacent=bool(out) and last_page == int(key) - 1)
-        last_page = int(key)
+    last_read = 0
+    for key in sorted(pages, key=int):
+        n = int(key)
+        row = pages[key]
+        gap = range(last_read + 1, n)
+        bridged = (
+            bool(out)
+            and len(gap) > 0
+            and all(str(p) in unreadable for p in gap)
+            and bool(row.get("continues_previous"))
+        )
+        adjacent = bool(out) and (last_read == n - 1 or bridged)
+        _step(out, n, row, adjacent=adjacent, prev=last_read)
+        last_read = n
     for index, sec in enumerate(out, start=1):
         _finish(sec, index, out, pages, unreadable)
     return out
@@ -47,12 +59,14 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
 _UNTITLED = {"heading": "(untitled: starts before the indexed pages)", "document_type": "", "date": "", "provider": ""}
 
 
-def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: bool) -> None:
-    """Apply one page of the index to the sections built so far."""
+def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: bool, prev: int) -> None:
+    """Apply one page of the index to the sections built so far. ``prev`` is the
+    last READ page before ``n``: ``n - 1``, or the page before an unread run
+    that ``n`` bridges."""
     starts = row.get("sections") or []
     if adjacent and (not starts or row.get("continues_previous")):
         for sec in out:
-            if sec["last"] == n - 1 and not sec.get("closed"):
+            if sec["last"] == prev and not sec.get("closed"):
                 sec["last"] = n
     elif not starts:
         out.append({"first": n, "last": n, **_UNTITLED})

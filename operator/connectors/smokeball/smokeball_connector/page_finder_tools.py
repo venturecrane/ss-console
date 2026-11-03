@@ -42,8 +42,16 @@ TOOL_NOTE = (
     "Otherwise, to send what was found, call stage_matter_files with these page ranges. A record this "
     "file does not hold is reported found=false with what the index shows instead; say that, "
     "never guess. complete=false means pages remain unread: call again before saying a record "
-    "is not here."
+    "is not here. The seat writes the attached files, their pages and the page counts into your "
+    "reply from this result: do not retype pages or counts yourself."
 )
+
+
+def _for_the_model(out: dict[str, Any]) -> dict[str, Any]:
+    """The result without its internal keys (``_modelReason``: the match model's
+    own sentence for an item that is not established, which is never shown)."""
+    out["items"] = [{k: v for k, v in item.items() if not k.startswith("_")} for item in out.get("items") or []]
+    return out
 
 
 def find_pages(client: Any, matter_id: str, file_id: str, what: str, pages: str | None = None) -> dict[str, Any]:
@@ -68,7 +76,7 @@ def find_pages(client: Any, matter_id: str, file_id: str, what: str, pages: str 
             mf._download_to(client, matter_id, file_id, source, mf.MAX_SOURCE_BYTES)
             pages_dir = Path(tmp) / "pages"
             pages_dir.mkdir()
-            out = locate(source, what, pages_dir, window=window, matter_id=matter_id)
+            out = _for_the_model(locate(source, what, pages_dir, window=window, matter_id=matter_id))
     except (FinderRefused, mf.StageRefused) as exc:
         return {"error": str(exc), "matterId": matter_id, "fileId": file_id}
     except Exception as exc:  # noqa: BLE001 - could not look is never "not there"
@@ -160,8 +168,9 @@ def _cost(tokens: dict[str, int]) -> str:
 def _print_locate(out: dict[str, Any], run_tokens: dict[str, int]) -> None:
     print(
         f"{out['indexedPages']} of {out['pageCount']} pages indexed, {out['remainingPages']} not read yet "
-        f"(view: {out.get('view')})"
+        f"(view: {out.get('view')}; match from cache: {out.get('matchFromCache')})"
     )
+    print(f"counts: {out.get('counts')}")
     for key in ("matchError", "note"):
         if out.get(key):
             print(f"{key}: {out[key]}")
@@ -170,6 +179,10 @@ def _print_locate(out: dict[str, Any], run_tokens: dict[str, int]) -> None:
             print(f"{key[:-5]}: p{row['page']}: {row['reason']}")
     for item in out["items"]:
         print(f"\nASKED: {item['asked']}\n  found: {item['found']}  reason: {item['reason']}")
+        for key in ("closest", "relatedCandidates"):
+            for ptr in item.get(key) or []:
+                cells = f"{ptr.get('date') or '-'} | {ptr.get('heading') or '-'}"
+                print(f"  {key}: {ptr['section']} pp. {ptr['pages']}: {cells}")
         for r in item["ranges"]:
             print(f"  pages {r['pages']}")
             for ev in r["evidence"]:

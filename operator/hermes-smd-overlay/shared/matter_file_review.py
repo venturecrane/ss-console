@@ -93,10 +93,16 @@ def hold(
     batches: list[list[dict[str, Any]]],
     matter_id: str,
     session_id: str,
+    reason: str = "",
     now: float | None = None,
     directory: Path | None = None,
 ) -> dict[str, Any]:
-    """Write one held reply for review; return the row (with ``id`` and ``digest``)."""
+    """Write one held reply for review; return the row (with ``id`` and ``digest``).
+
+    ``batches`` may be empty: a records reply from a turn that searched a file's
+    pages is held whether or not it attached anything. ``reason`` is why the
+    reply is here when it is not the seat's review setting (its facts did not
+    check out, ``shared.matter_file_facts``); it is shown, not digested."""
     base = directory or review_dir()
     base.mkdir(mode=0o700, parents=True, exist_ok=True)
     row: dict[str, Any] = {
@@ -110,6 +116,7 @@ def hold(
         "batches": batches,
         "matter_id": matter_id,
         "session_id": session_id,
+        "reason": str(reason or "")[:500],
     }
     row["digest"] = digest(row)
     _write(base / f"{row['id']}.json", row)
@@ -192,12 +199,15 @@ def describe(row: dict[str, Any]) -> str:
         f"to:       {row.get('to')} (the reply is in-thread; the broker copies only the request's own firm staff)",
         f"answers:  graph message {row.get('message_id')}",
         f"matter:   {row.get('matter_id')}",
+        *([f"held because: {row.get('reason')}"] if row.get("reason") else []),
         "words (sent exactly as below):",
         "-" * 60,
         str(row.get("text") or "").rstrip("\n"),
         "-" * 60,
     ]
     batches = row.get("batches") or []
+    if not batches:
+        lines.append("files:    none (the reply goes as words alone)")
     for n, batch in enumerate(batches, start=1):
         lines.append(f"reply {n} of {len(batches)}:")
         for f in batch:
