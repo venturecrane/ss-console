@@ -368,15 +368,30 @@ SPEECH = ("SPEECH THERAPY NOTE", "speech therapy note", "12/11/2024", "Clinic C"
 GROWTH = ("GROWTH CHART", "growth chart", "", "Clinic C")
 
 
-@pytest.mark.parametrize("blank", ["illegible", "empty"])
-def test_a_blank_page_never_extends_a_note(blank: str) -> None:
+@pytest.mark.parametrize("legible", [True, False])
+def test_a_blank_page_never_extends_a_note(legible: bool) -> None:
     """The replay's 48-51: a speech note ran through a blank p50 and onto the
-    growth chart that starts on p51. The key is 48-49."""
+    growth chart that starts on p51. The key is 48-49. A truly empty page
+    (nothing printed, continuing nothing) breaks the note however it is marked."""
     empty = _page()
-    if blank == "illegible":
-        empty.update(legible=False, continues_previous=True)
+    empty["legible"] = legible
     pages = {"48": _page(SPEECH), "49": _page(cont=True), "50": empty, "51": _page(GROWTH, cont=True)}
     assert _heads(pages) == [("SPEECH THERAPY NOTE", "12/11/2024", 48, 49), ("GROWTH CHART", "", 51, 51)]
+
+
+def test_a_handwritten_page_mid_note_stays_inside_and_is_flagged() -> None:
+    """An illegible page that continues the note never ends it: ending there
+    would send a short record. It stays inside, listed as unreadable."""
+    hand = _page(cont=True)
+    hand["legible"] = False
+    pages = {"1": _page(NOTE), "2": _page(cont=True), "3": hand, "4": _page(cont=True), "5": _page(ENTRY)}
+    note, entry = pf.sections(pages)
+    assert (note["first"], note["last"], entry["first"]) == (1, 4, 5)
+    assert list(note["unreadablePages"]) == ["3"]
+    raw = [{"asked": "the 5/15 note", "found": True, "sections": ["S1"], "reason": ""}]
+    (item,) = pm.compose(raw, pf.sections(pages))
+    pm.qualify([item], {}, 0)
+    assert [r["pages"] for r in item["ranges"]] == ["1-4"] and item["unreadableInside"] == ["3"]
 
 
 def test_a_new_start_after_unread_pages_never_bridges() -> None:

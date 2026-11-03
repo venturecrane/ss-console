@@ -64,6 +64,9 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
     return out
 
 
+#: Why an indexed page whose words the model could not read is listed inside its section.
+ILLEGIBLE = "the page was read but nothing on it could be made out"
+
 _UNTITLED = {"heading": "(untitled: starts before the indexed pages)", "document_type": "", "date": "", "provider": ""}
 
 
@@ -117,9 +120,16 @@ def _finish(
                 seen.append(d)
     sec["dates"] = seen[:8]
     sec.pop("closed", None)
-    blind = [p for p in range(sec["first"], sec["last"] + 1) if str(p) in unreadable and str(p) not in pages]
+    blind: dict[str, str] = {}
+    for p in range(sec["first"], sec["last"] + 1):
+        if str(p) in unreadable and str(p) not in pages:
+            blind[str(p)] = unreadable[str(p)]
+        elif pages.get(str(p), {}).get("legible") is False:
+            # Indexed, but the model could read nothing on it (handwriting, a
+            # faint scan): inside the section, and said so.
+            blind[str(p)] = ILLEGIBLE
     if blind:
-        sec["unreadablePages"] = {str(p): unreadable[str(p)] for p in blind}
+        sec["unreadablePages"] = blind
     if sec.pop("embedded", False):
         outer = [o["id"] for o in out[: index - 1] if o["first"] < sec["first"] and o["last"] >= sec["last"]]
         if outer:
@@ -162,17 +172,15 @@ def _view(sec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _blank(row: dict[str, Any]) -> bool:
-    """Nothing is on the page: no section starts and no date is printed, and
-    either the model says nothing on it can be read, or it shows no banner,
-    label or page marker and does not continue anything. A continuation page
-    with no header line is not blank."""
-    if row.get("sections") or row.get("dates"):
+    """Nothing is on the page: no section starts, no date, no banner, label or
+    page marker, and it does not continue anything. Only such a page breaks a
+    section. A page the model could not read (``legible: false``) that
+    continues the note is NOT blank: it stays inside the note and is listed as
+    unreadable there, because ending a note at a handwritten page would send a
+    short record (Captain's call via the coordinator, 2026-11-02)."""
+    if row.get("sections") or row.get("dates") or row.get("continues_previous"):
         return False
-    if row.get("legible") is False:
-        return True
-    return not row.get("continues_previous") and not any(
-        str(row.get(k) or "").strip() for k in ("running_header", "note_label", "page_of")
-    )
+    return not any(str(row.get(k) or "").strip() for k in ("running_header", "note_label", "page_of"))
 
 
 def _words(text: str) -> str:
