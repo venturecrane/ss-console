@@ -37,7 +37,9 @@ from . import matter_files as mf
 from .page_finder import FinderRefused, build_index, locate, parse_window, purge
 
 TOOL_NOTE = (
-    "To send what was found, call stage_matter_files with these page ranges. A record this "
+    "If a record found here also exists on the matter as its OWN file (find_files_on_matter by "
+    "its name, provider or date), send that file rather than these pages cut from a larger set. "
+    "Otherwise, to send what was found, call stage_matter_files with these page ranges. A record this "
     "file does not hold is reported found=false with what the index shows instead; say that, "
     "never guess. complete=false means pages remain unread: call again before saying a record "
     "is not here."
@@ -90,7 +92,8 @@ def register(server: Any) -> None:
         evidence printed on those pages (date, provider, document type,
         heading), and a ``documents`` outline of the file. Up to 100 new pages
         are read per call; pages already read are free. Use it when a file is
-        too large or refused whole, then stage just those pages."""
+        too large or refused whole, then stage just those pages. Prefer a
+        record's own standalone file on the matter when one exists."""
         from . import server as _server
 
         resp = find_pages(_client(), matter_id, file_id, what, pages)

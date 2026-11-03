@@ -41,7 +41,12 @@ INDEX_INSTRUCTION = (
     "canceled appointment or no-show, never office visit.\n"
     "- dates: every date printed anywhere on the page with the word that labels it, "
     'verbatim (e.g. "Signed 04/01/2023", "DOS 3/3/2021"), at most 8.\n'
-    "- running_header: a header repeated at the top of the page, verbatim, or empty.\n"
+    "- running_header: the bar repeated at the top of every page (a patient or encounter "
+    "banner, a letterhead), verbatim, or empty.\n"
+    "- note_label: the label line of the note, report or form THIS page belongs to, as printed "
+    'on this page below any banner (e.g. "Discharge Summary (continued)", "Progress Notes '
+    "(continued)\"), verbatim, or empty when the page shows none. It is the note's own "
+    "sub-section label, not the encounter banner.\n"
     '- page_of: a printed "Page X of Y" marker, verbatim, or empty.\n'
     "- legible: false when nothing on the page can be read.\n"
     "Use only what is printed on that page. Never carry a date or provider over from "
@@ -91,6 +96,7 @@ INDEX_SCHEMA: dict[str, Any] = {
                     },
                     "dates": {"type": "array", "items": _STR},
                     "running_header": _STR,
+                    "note_label": _STR,
                     "page_of": _STR,
                     "legible": {"type": "boolean"},
                 },
@@ -100,6 +106,7 @@ INDEX_SCHEMA: dict[str, Any] = {
                     "sections",
                     "dates",
                     "running_header",
+                    "note_label",
                     "page_of",
                     "legible",
                 ],
