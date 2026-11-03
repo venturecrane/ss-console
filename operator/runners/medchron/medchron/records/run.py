@@ -301,7 +301,7 @@ class RecordsRun(RunBase):
         # then the best-scored priced ones, at most MAX_CANDIDATES of those.
         free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
         priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
-        priced.sort(key=lambda fs: (-fs[1], int(files[fs[0]]["page_count"]), fs[0]))
+        priced.sort(key=lambda fs: (-fs[1], search.read_none(files[fs[0]]), int(files[fs[0]]["page_count"]), fs[0]))
         return free + priced[:MAX_CANDIDATES]
 
     def _resolve(self) -> None:

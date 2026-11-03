@@ -17,9 +17,13 @@
                                                                   The SHARED index is never told they are
                                                                   unreadable: a page this job did not reach is
                                                                   this job's state, not the file's
- F    the file's first read would pass what is left of the cap    nothing is read; the next file is tried, and
-                                                                  ``per_job_cap_usd: <file> N pages`` holds the
-                                                                  record only if no file answers it
+ F    the file's first read would pass what is left of the cap    nothing is read. If its index already holds
+                                                                  read pages, the match is asked once on them:
+                                                                  found there, it is an E found (cut, "N pages
+                                                                  ... were not read"). Otherwise the next file
+                                                                  is tried, and ``per_job_cap_usd: <file> N
+                                                                  pages`` holds the record only if no file
+                                                                  answers it
  G    the cap trips mid-file, or on a whole file's match          pages already read stay in the index; as F
                                                                   (the match case says "the match was not asked")
  H    the match call itself fails (``matchError``)                the next candidate; with none left, the record
@@ -88,15 +92,28 @@ def unread(meta: dict[str, Any]) -> int:
     return max(0, int(meta["page_count"]) - len(index["pages"]) - gone)
 
 
+def read_none(meta: dict[str, Any]) -> bool:
+    """No page of the file is in its index yet."""
+    return not pf.load_index(meta["sha256"])["pages"]
+
+
 def order(ids: list[str], files: dict[str, Any], scores: dict[str, int] | None = None) -> list[str]:
     """FREE files first (every page already in the index: a match is all they
     cost), best score first among them; then the priced ones, best score first,
-    then fewer pages; the id breaks a tie. On the real A&P request a record's
+    a partly indexed file before an unindexed one of the same score (its read
+    pages may answer for a match alone), then fewer pages; the id breaks a tie. On the real A&P request a record's
     top-scored file was a 2,313-page set while a 35-page file with a complete
     index, scoring one less, was never tried (2026-11-03)."""
     sc = scores or {}
     return sorted(
-        ids, key=lambda fid: (unread(files[fid]) > 0, -int(sc.get(fid, 0)), int(files[fid]["page_count"]), fid)
+        ids,
+        key=lambda fid: (
+            unread(files[fid]) > 0,
+            -int(sc.get(fid, 0)),
+            read_none(files[fid]),
+            int(files[fid]["page_count"]),
+            fid,
+        ),
     )
 
 
@@ -178,14 +195,39 @@ def locate_one(run: Any, n: int, fid: str, what: str, mid: str, meta: dict[str, 
         out = pf.locate_index(meta["sha256"], what, hook=hook)
     except pf.FinderRefused as exc:
         raise RecordsHold(f"finder_failed: {exc}") from exc
+    return _keep(run, n, fid, mid, meta, out, save=True)
+
+
+def _keep(
+    run: Any, n: int, fid: str, mid: str, meta: dict[str, Any], out: dict[str, Any], *, save: bool
+) -> dict[str, Any]:
+    """The finder result in the shape the cut and the facts read, saved (never
+    overwritten) when ``save`` and the match answered."""
     out["items"] = [{k: v for k, v in item.items() if not k.startswith("_")} for item in out.get("items") or []]
     out.update(matterId=mid, fileId=fid, name=meta.get("name") or "")
-    if not out.get("matchError"):
+    if save and not out.get("matchError"):
+        path = locate_path(run, n, fid)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never overwritten
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(out, fh, sort_keys=True)
     return out
+
+
+def _read_part(run: Any, n: int, fid: str, rec: dict[str, Any], meta: dict[str, Any], hook: Any) -> bool:
+    """A file too dear to read on (F) whose index already holds read pages:
+    the match is asked ONCE on those pages (cents, no page read). Found: that
+    result is kept (an E-found: cut, "N pages ... were not read") and True.
+    Not found, or no read page: False, and the F hold stands (2026-11-03: the
+    answer to a record sat on pages 6-14 of a 2,313-page set whose first 300
+    pages were already indexed, while the pre-flight held it unasked)."""
+    if not pf.load_index(meta["sha256"])["pages"]:
+        return False
+    out = pf.locate_index(meta["sha256"], rec["asked"], hook=hook)
+    if out.get("matchError") or not assemble.found(out):
+        return False
+    _keep(run, n, fid, run._matter(), meta, out, save=True)
+    return True
 
 
 def _priced(run: Any, fid: str, meta: dict[str, Any]) -> str | None:
@@ -212,11 +254,11 @@ def _try(
     (A, C, E found); ``next`` tries the next file (B, D); ``unsettled`` tries
     the next file and, with none left, holds the record (E not found, H);
     ``held`` holds it now (F, G)."""
-    if not locate_path(run, n, fid).is_file():
-        why = _priced(run, fid, meta)
-        if why:
-            return "held", why
     try:
+        if not locate_path(run, n, fid).is_file():
+            why = _priced(run, fid, meta)
+            if why:
+                return ("found", "") if _read_part(run, n, fid, rec, meta, hook) else ("held", why)
         out = locate_one(run, n, fid, rec["asked"], run._matter(), meta, hook)
     except stop_cls as stop:
         reason = str(getattr(stop, "hold").reason)

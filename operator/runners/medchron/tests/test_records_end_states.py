@@ -348,6 +348,77 @@ def test_a_free_file_is_tried_before_a_better_scored_priced_one(
     assert model.index_calls() == 0 and not search.item_holds(r.data)
 
 
+def _partly_indexed_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: FakeFinderModel) -> tuple[bytes, dict]:
+    """A 2,313-page set whose first 300 pages are already in the index (the
+    seat's 688cfc53 shape), the discharge summary on pages 5-14."""
+    import records_testkit
+
+    from smokeball_connector import page_finder as pf
+
+    monkeypatch.setitem(records_testkit.TRUTH, 15, ("1/1/2022", "Eastgate Lab", "lab result", True))
+    env = setup_env(tmp_path, monkeypatch, model)
+    big = pdf(2313)
+    pre = tmp_path / "pre.pdf"
+    pre.write_bytes(big)
+    work = tmp_path / "pre-work"
+    work.mkdir()
+    for _ in range(3):
+        pf.build_index(pre, work, window=(1, 300))
+    assert len(pf.load_index(pf.file_sha256(pre))["pages"]) == 300
+    model.bodies.clear()
+    return big, env
+
+
+@pytest.mark.parametrize("found", [True, False], ids=["found-on-read-pages", "absent-from-read-pages"])
+def test_F_an_over_cap_file_is_matched_on_its_read_pages_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, found: bool
+) -> None:
+    model = FakeFinderModel(match_fn=by_sections)
+    big, env = _partly_indexed_set(tmp_path, monkeypatch, model)
+    sb = FakeSmokeball()
+    f = sb.add(1, "Northside Clinic set.pdf", big)
+    what = DISCHARGE if found else XRAY
+    r = RecordsRun(
+        job_dir(tmp_path, request_text=f"Please send {what}."),
+        inputs_dir=str(env["inputs"]),
+        pricing=str(env["pricing"]),
+        state_dir=env["state"],
+        client=sb,
+        model_client=FakeParseClient({"items": [_rec(what)]}),
+        log=lambda _m: None,
+    )
+    v = json.loads(r.run().to_json())
+    # 2,013 unread pages x 0.02 is far over the $5 cap: no page is read either way.
+    assert model.index_calls() == 0 and model.match_calls() == 1
+    if found:
+        assert v["verdict"] == "delivered" and [c["pages"] for c in v["cuts"]] == ["5-14"]
+        assert "- 2013 pages of Northside Clinic set.pdf were not read" in _facts(r)
+    else:
+        assert v["verdict"] == "held" and v["reason"] == f"per_job_cap_usd: {f[:8]} 2013 pages"
+
+
+def test_a_partly_indexed_file_comes_after_free_ones_and_before_an_unindexed_one(tmp_path: Path) -> None:
+    files = {
+        "free": {"sha256": "1", "page_count": 900},
+        "part": {"sha256": "2", "page_count": 2313},
+        "none": {"sha256": "3", "page_count": 40},
+    }
+    read = {"1": 900, "2": 300, "3": 0}
+
+    def unread(meta: dict[str, Any]) -> int:
+        return int(meta["page_count"]) - read[meta["sha256"]]
+
+    import medchron.records.search as s
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(s, "unread", unread)
+    mp.setattr(s, "read_none", lambda meta: read[meta["sha256"]] == 0)
+    try:
+        assert s.order(["none", "part", "free"], files, {"free": 1, "part": 4, "none": 4}) == ["free", "part", "none"]
+    finally:
+        mp.undo()
+
+
 def test_H_a_match_that_fails_tries_the_next_file_and_holds_only_that_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
