@@ -92,8 +92,12 @@ export function cardSubject(slug: string, card: RequestCard): string {
   return `[SMD Ops] ${slug}: ${cardHeadline(card)}: ${askedBy(card)}: ${subjectExcerpt(card.subject)}`
 }
 
-function minutes(n: number): string {
-  return n === 1 ? '1 minute' : `${n} minutes`
+/** A wait as a person says it. "1910 minutes" was the first live email, 2026-11-02. */
+export function minutes(n: number): string {
+  const unit = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+  if (n < 90) return unit(n, 'minute')
+  if (n < 48 * 60) return unit(Math.round(n / 60), 'hour')
+  return unit(Math.round(n / (24 * 60)), 'day')
 }
 
 /** One plain sentence: what happened. */
