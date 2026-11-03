@@ -37,10 +37,27 @@ describe('matter records procedure', () => {
     expect(body).toMatch(
       /When `complete` is false .*call it again .*before you say a record is not in that file/
     )
-    // Stage with the returned ranges; cite their evidence to the requester.
+    // Stage with the returned ranges.
     expect(body).toMatch(/Stage with the returned ranges/)
-    expect(body).toMatch(/\*\*Attached:\*\*.*evidence `find_pages_in_file` gave/)
     expect(body).toMatch(/Never guess pages/)
+    // The request goes to the finder in the colleague's own words.
+    expect(body).toMatch(/copied word for word from their email/)
+  })
+
+  it('leaves the facts to the seat: the model never types pages or counts (2026-11-02)', () => {
+    // On an A&P records request (2026-11-02) the Operator retyped the finder's ranges and counts and
+    // got them wrong (pp 48-49 dropped, 59 for 57). The seat now writes them.
+    expect(body).toMatch(/The seat writes the facts of the reply itself/)
+    expect(body).toMatch(/\*\*Attached:\*\* \(each file, its pages, its page count/)
+    expect(body).toMatch(/\*\*Never type a page number, a page range or a count yourself\*\*/)
+    expect(body).toMatch(/You write only:/)
+    // The marker the skill names is the one the overlay replaces.
+    const facts = readFileSync('operator/hermes-smd-overlay/shared/matter_file_facts.py', 'utf8')
+    const marker = facts.match(/^MARKER = "([^"]+)"$/m)?.[1]
+    expect(marker).toBeDefined()
+    expect(body).toContain(`Put the line \`${marker}\` on its own`)
+    // No counted ceiling in the words the model may copy into a reply.
+    expect(body).not.toMatch(/more than 200 pages wanted/)
   })
 
   it('never reports a file unsendable before a page cut was tried', () => {

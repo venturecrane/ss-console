@@ -14,8 +14,6 @@ from .page_finder_prompts import _SECTION_FIELDS
 
 #: A running header that says the page continues the note it names.
 _CONTINUED_RE = re.compile(r"\bcont(?:inued|inuation|'?d|\.)?(?:\b|$)", re.IGNORECASE)
-#: A page the model could not read: kept in the section around it, never a start.
-_UNREAD: dict[str, Any] = {"continues_previous": True, "sections": [], "dates": [], "legible": False}
 
 
 def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -29,34 +27,73 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
     known start (an unindexed gap before it) opens an untitled section, so no
     page is ever silently attached to a section it may not belong to.
 
-    A page the model could not read (``unreadable``: declined, too large) is
-    kept INSIDE the section it falls in, so a range never silently skips it,
-    and is listed on that section as ``unreadablePages`` with its reason."""
+    A page the model could not read (``unreadable``: declined, too large) never
+    extends a section by itself: nothing is known about it. When the next READ
+    page continues the section (its top says so), the section bridges back over
+    the unread pages, and they are listed on it as ``unreadablePages`` with
+    their reason, so a range never silently skips them. When the next read page
+    does not continue it (a new start), the section closes before the unread
+    pages, which then belong to no section (2026-11-02: a visit whose third page
+    was unread came back 1-4 on one call and 1-5 on the next). A page that
+    continues the note bridges the unread run before it even when it also
+    starts a section mid-page, and then shares that page with the new section
+    (the seat replay: refusing the bridge there sent a visit as 1-2 with its
+    unread third page left out, unflagged). A page that only starts, and does
+    not continue, never bridges.
+
+    A BLANK page (:func:`_blank`) belongs to no section and never extends one,
+    and nothing bridges over it (2026-11-02 replay: a speech note ran 48-51
+    through a blank page 50 and onto a growth chart; the key is 48-49)."""
     unreadable = unreadable or {}
-    merged = {**{k: _UNREAD for k in unreadable}, **pages}
     out: list[dict[str, Any]] = []
-    last_page = 0
-    for key in sorted(merged, key=int):
-        _step(out, int(key), merged[key], adjacent=bool(out) and last_page == int(key) - 1)
-        last_page = int(key)
+    last_read = 0
+    for key in sorted(pages, key=int):
+        n = int(key)
+        row = pages[key]
+        if _blank(row):
+            continue
+        gap = range(last_read + 1, n)
+        bridged = (
+            bool(out)
+            and len(gap) > 0
+            and all(str(p) in unreadable for p in gap)
+            and bool(row.get("continues_previous"))
+        )
+        adjacent = bool(out) and (last_read == n - 1 or bridged)
+        _step(out, n, row, adjacent=adjacent, prev=last_read)
+        last_read = n
     for index, sec in enumerate(out, start=1):
         _finish(sec, index, out, pages, unreadable)
     return out
 
 
+#: Why an indexed page whose words the model could not read is listed inside its section.
+ILLEGIBLE = "the page was read but nothing on it could be made out"
+
 _UNTITLED = {"heading": "(untitled: starts before the indexed pages)", "document_type": "", "date": "", "provider": ""}
 
 
-def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: bool) -> None:
-    """Apply one page of the index to the sections built so far."""
+def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: bool, prev: int) -> None:
+    """Apply one page of the index to the sections built so far. ``prev`` is the
+    last READ page before ``n``: ``n - 1``, or the page before an unread run
+    that ``n`` bridges."""
     starts = row.get("sections") or []
     if adjacent and (not starts or row.get("continues_previous")):
         for sec in out:
-            if sec["last"] == n - 1 and not sec.get("closed"):
+            if sec["last"] == prev and not sec.get("closed"):
                 sec["last"] = n
     elif not starts:
         out.append({"first": n, "last": n, **_UNTITLED})
-    nested = adjacent and _continues_running_note(row)
+    # The open notes this page's own "(continued)" label NAMES: only those stay
+    # open past what starts here. A record-level label ("<record> Clinical Notes
+    # (continued)") names no note, so a new start there closes the note before it
+    # (2026-11-02 replay: a 5/15 note ran 2-5 over a 3/20 entry starting on p4).
+    named = (
+        [sec for sec in out if sec["last"] == n and not sec.get("closed") and _label_names(row, sec)]
+        if adjacent and starts and _continues_running_note(row)
+        else []
+    )
+    nested = bool(named)
     for start in starts:
         # A section that started earlier on this same page ends here.
         out.append({"first": n, "last": n, "embedded": nested, **{k: start.get(k, "") for k in _SECTION_FIELDS}})
@@ -68,8 +105,9 @@ def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: b
     # there (a flowsheet, an embedded report) sits INSIDE that note, so the note
     # stays open and runs on (2026-11-02: a 35-page discharge summary came back
     # as its first 4 pages).
+    keep = {id(sec) for sec in named if not sec.get("embedded")}
     for sec in out[:-1]:
-        if not (nested and not sec.get("embedded") and sec["last"] == n):
+        if id(sec) not in keep:
             sec["closed"] = True
 
 
@@ -85,9 +123,16 @@ def _finish(
                 seen.append(d)
     sec["dates"] = seen[:8]
     sec.pop("closed", None)
-    blind = [p for p in range(sec["first"], sec["last"] + 1) if str(p) in unreadable and str(p) not in pages]
+    blind: dict[str, str] = {}
+    for p in range(sec["first"], sec["last"] + 1):
+        if str(p) in unreadable and str(p) not in pages:
+            blind[str(p)] = unreadable[str(p)]
+        elif pages.get(str(p), {}).get("legible") is False:
+            # Indexed, but the model could read nothing on it (handwriting, a
+            # faint scan): inside the section, and said so.
+            blind[str(p)] = ILLEGIBLE
     if blind:
-        sec["unreadablePages"] = {str(p): unreadable[str(p)] for p in blind}
+        sec["unreadablePages"] = blind
     if sec.pop("embedded", False):
         outer = [o["id"] for o in out[: index - 1] if o["first"] < sec["first"] and o["last"] >= sec["last"]]
         if outer:
@@ -127,6 +172,35 @@ def _view(sec: dict[str, Any]) -> dict[str, Any]:
         **({"unreadablePages": sec["unreadablePages"]} if sec.get("unreadablePages") else {}),
         **({"insideOf": sec["insideOf"]} if sec.get("insideOf") else {}),
     }
+
+
+def _blank(row: dict[str, Any]) -> bool:
+    """Nothing is on the page: no section starts, no date, no banner, label or
+    page marker, and it does not continue anything. Only such a page breaks a
+    section. A page the model could not read (``legible: false``) that
+    continues the note is NOT blank: it stays inside the note and is listed as
+    unreadable there, because ending a note at a handwritten page would send a
+    short record (Captain's call via the coordinator, 2026-11-02)."""
+    if row.get("sections") or row.get("dates") or row.get("continues_previous"):
+        return False
+    return not any(str(row.get(k) or "").strip() for k in ("running_header", "note_label", "page_of"))
+
+
+def _words(text: str) -> str:
+    """Lowercase words only, the continuation marker taken out."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", _CONTINUED_RE.sub(" ", str(text or "")).lower()).split())
+
+
+def _label_names(row: dict[str, Any], sec: dict[str, Any]) -> bool:
+    """Does the page's continuation label name THIS note (its heading or type)?"""
+    core = _words(str(row.get("note_label") or "") or str(row.get("running_header") or ""))
+    if not core:
+        return False
+    for field in ("heading", "document_type"):
+        name = _words(sec.get(field) or "")
+        if name and (name in core or core in name):
+            return True
+    return False
 
 
 def _continues_running_note(row: dict[str, Any]) -> bool:

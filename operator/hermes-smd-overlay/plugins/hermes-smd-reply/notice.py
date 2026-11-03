@@ -115,6 +115,11 @@ _REASON_HINTS: dict[str, str] = {
         "and its files are waiting for that review and go exactly as written once "
         "approved. Do not redraft, resend, or tell anyone the files were sent."
     ),
+    "matter_files_review_unsupported": (
+        "This reply must wait for SMD's review, and on this seat a reply like it "
+        "cannot be released from that review, so nothing was sent and the email is "
+        "closed. Do not redraft or resend. Escalate so a person answers it."
+    ),
     "matter_files_rate_limited": (
         "The reply carries matter files and the reply channel is at its rate limit, "
         "so it was not queued (a queued reply would lose its files). Nothing was sent. "

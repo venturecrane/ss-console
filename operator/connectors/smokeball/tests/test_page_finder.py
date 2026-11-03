@@ -739,7 +739,7 @@ def test_a_negative_over_unread_pages_is_not_established(monkeypatch: pytest.Mon
     ]
     out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
     xray, visit = out["items"]
-    assert xray["established"] is False and xray["reason"].startswith("NOT ESTABLISHED")
+    assert xray["established"] is False and xray["reason"].startswith("not established:")
     assert "pages 3 could not be read" in xray["notEstablishedBecause"]
     assert visit["established"] is True and visit["unreadableInside"] == ["3"]
 
@@ -753,7 +753,7 @@ def test_a_negative_with_pages_left_is_not_established(
     assert xray["established"] is False and "24 pages are not read yet" in xray["notEstablishedBecause"]
     done = _set(tmp_path, 8)
     full = pf.locate(done, "x", _work(tmp_path))
-    assert full["items"][2]["established"] is True and "NOT ESTABLISHED" not in full["items"][2]["reason"]
+    assert full["items"][2]["established"] is True and "not established" not in full["items"][2]["reason"]
 
 
 # ---- follow-ups: the note's own label, standalone files, flat negatives -----
@@ -817,5 +817,5 @@ def test_a_not_established_item_carries_no_flat_negative(monkeypatch: pytest.Mon
     ]
     out = pf.locate(_set(tmp_path, 8), "x", _work(tmp_path))
     (xray,) = out["items"]
-    assert "does not exist" not in xray["reason"] and xray["reason"].startswith("NOT ESTABLISHED")
+    assert "does not exist" not in xray["reason"] and xray["reason"].startswith("not established:")
     assert "not a finding that it is absent" in xray["reason"]
