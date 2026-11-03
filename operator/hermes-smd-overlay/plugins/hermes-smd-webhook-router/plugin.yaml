@@ -13,5 +13,8 @@ requires_env:
   - SMD_WEBHOOK_SIGNING_SECRET
 provides_hooks:
   - pre_gateway_dispatch
+  # Claims an SMD re-wake for the webhook turn it started (shared.rewake_outcome).
+  - pre_llm_call
 hooks:
   - pre_gateway_dispatch
+  - pre_llm_call

@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from shared import msgraph_poller, msgraph_replay
+from shared import msgraph_poller, msgraph_replay, rewake_outcome
 from shared.msgraph_poller import MsGraphPoller
 
 _SECRET = "whook-secret"
@@ -21,9 +21,24 @@ _MAILBOX = "op@client.example"
 
 
 @pytest.fixture(autouse=True)
-def _baseline_before_fixture_mail(monkeypatch):
+def _baseline_before_fixture_mail(monkeypatch, tmp_path):
     # A cursorless poller state starts from "now"; the fixture mail is 2026-07.
     monkeypatch.setattr(msgraph_poller, "_baseline_now", lambda: "2026-01-01T00:00:00Z")
+    # A re-wake waits on the router's outcome journal; keep it per-test.
+    monkeypatch.setenv("SMD_REWAKE_OUTCOME_DIR", str(tmp_path / "rewake-outcomes"))
+
+
+class _TurnStarts:
+    """A forward double standing in for adapter + router + the turn's first
+    LLM call: it answers 202 and journals the re-wake's turn as started."""
+
+    def __init__(self) -> None:
+        self.posts: list[dict] = []
+
+    def __call__(self, *, body: bytes, signature: str, timestamp: str, request_id: str):
+        self.posts.append({"body": body, "request_id": request_id})
+        rewake_outcome.record(request_id, rewake_outcome.STATE_TURN_STARTED, session_id="s1")
+        return 202, b'{"status":"accepted"}'
 
 
 def _raw(mid: str, frm: str) -> dict:
@@ -301,7 +316,7 @@ class _Graph:
 
 def test_rewake_fetches_the_email_and_enters_through_the_same_door(tmp_path):
     raw = _raw("AAMk-original", "attorney@client.example")
-    fwd = _Recorder(202)
+    fwd = _TurnStarts()
     graph = _Graph(raw)
     code = msgraph_replay.rewake(
         "AAMk-original",
@@ -313,11 +328,12 @@ def test_rewake_fetches_the_email_and_enters_through_the_same_door(tmp_path):
     )
     assert code == 0 and graph.asked == ["AAMk-original"]
     (post,) = fwd.posts
-    # Byte-identical to what the poller would forward for the same item.
-    assert (post["body"], msgraph_replay.build_envelope(raw, mailbox=_MAILBOX)[1]) == (
-        msgraph_replay.build_envelope(raw, mailbox=_MAILBOX)[0],
-        "AAMk-original",
-    )
+    # The poller's envelope for the same item plus ONE signed field: the
+    # re-wake id, which is the request id the adapter sees.
+    poller_body = json.loads(msgraph_replay.build_envelope(raw, mailbox=_MAILBOX)[0])
+    sent = json.loads(post["body"])
+    assert sent.pop(rewake_outcome.MARKER_KEY) == post["request_id"]
+    assert sent == poller_body
     assert list((tmp_path / "rewake").glob("*.replayed"))
 
 
@@ -361,6 +377,7 @@ def test_a_rewake_mints_a_fresh_request_id_and_a_replay_keeps_the_original(tmp_p
             client=_Graph(raw),
             forward_fn=fwd,
             state_dir=str(tmp_path / fwd.__class__.__name__ / str(id(fwd))),
+            wait_s=0.0,
         )
     ids = {first.posts[0]["request_id"], second.posts[0]["request_id"]}
     assert original not in ids and len(ids) == 2

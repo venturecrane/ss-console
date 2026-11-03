@@ -20,6 +20,15 @@ Both dropped the item, so both exit 1 with the file left in place. A replay ente
 model ONLY through the same fenced webhook door as live mail — this tool grants
 nothing that the poller does not.
 
+A re-wake is not done at the adapter's 2xx either. The adapter queues the POST
+and the gateway's hooks run after it answers, so the webhook router could still
+drop the delivery (its replay guard dropped a re-wake 39 minutes after the
+previous one on A&P, 2026-11-03, and nothing said so). A re-wake therefore signs
+its own id into the body (``shared.rewake_outcome.MARKER_KEY``), which gives it
+its own replay key, and then waits for the router's outcome journal to say a
+turn started. It exits 0 only on ``turn_started``; a refusal exits 1 with the
+router's reason, and so does no turn inside the bounded wait.
+
 Exit codes follow bootstrap/cli.py: 0 accepted, 1 rejected/transport failure,
 2 bad input (missing file, id-less item, missing secret/mailbox).
 """
@@ -32,9 +41,10 @@ import json
 import logging
 import os
 import sys
+import time
 from collections.abc import Callable
 
-from shared import forward_signature, msgraph_client
+from shared import forward_signature, msgraph_client, rewake_outcome
 from shared.msgraph_poller import (
     EVENT_TYPE,
     SOURCE,
@@ -55,6 +65,12 @@ _ADAPTER_IDEMPOTENCY_TTL_S = 3600
 #: drop (HTTP 200). Neither is a delivery.
 _DROPPED_STATUSES = frozenset({"duplicate", "ignored"})
 
+#: How long a re-wake waits for its turn to start. The adapter answers before
+#: the gateway runs the dispatch hooks; a webhook turn's first LLM call follows
+#: within seconds unless the gateway is busy with another turn.
+_TURN_WAIT_S = 180.0
+_TURN_POLL_S = 2.0
+
 
 def _adapter_status(payload: bytes) -> str:
     """The adapter's ``{"status": ...}`` field, or "" when absent/unparseable."""
@@ -67,25 +83,83 @@ def _adapter_status(payload: bytes) -> str:
     return ""
 
 
-def build_envelope(raw: dict, *, mailbox: str) -> tuple[bytes, str] | None:
+def build_envelope(
+    raw: dict, *, mailbox: str, rewake_id: str | None = None
+) -> tuple[bytes, str] | None:
     """The poller's exact forward body + message id, or None for an id-less item.
 
     Byte-parity with ``MsGraphPoller._forward`` is load-bearing: same key order,
-    same compact separators, because the signature is over these exact bytes."""
+    same compact separators, because the signature is over these exact bytes.
+    A re-wake appends ONE signed field, the re-wake id; ``event_id`` and the DTO
+    keep the original Graph message id, so the request index, reply threading
+    and every other consumer see the client's own email."""
     dto = msgraph_client.normalize_message(raw, mailbox=mailbox)
     message_id = dto.get("message_id") or ""
     if not message_id:
         return None
-    body = json.dumps(
-        {
-            "source": SOURCE,
-            "event_type": EVENT_TYPE,
-            "inbound_message": dto,
-            "event_id": message_id,
-        },
-        separators=(",", ":"),
-    ).encode("utf-8")
+    envelope: dict = {
+        "source": SOURCE,
+        "event_type": EVENT_TYPE,
+        "inbound_message": dto,
+        "event_id": message_id,
+    }
+    if rewake_id is not None:
+        envelope[rewake_outcome.MARKER_KEY] = rewake_id
+    body = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
     return body, message_id
+
+
+def await_turn(
+    rewake_id: str,
+    *,
+    wait_s: float = _TURN_WAIT_S,
+    poll_s: float = _TURN_POLL_S,
+    outcome_dir: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> int:
+    """Wait for the router's outcome for one re-wake. 0 only on a started turn."""
+    deadline = clock() + wait_s
+    last: dict | None = None
+    while True:
+        last = rewake_outcome.read(rewake_id, directory=outcome_dir)
+        state = (last or {}).get("state")
+        if state == rewake_outcome.STATE_TURN_STARTED:
+            logger.info(
+                "rewake: DELIVERED. The router dispatched re-wake %s and a webhook turn "
+                "started (session %r).",
+                rewake_id[:12],
+                (last or {}).get("session_id") or "unknown",
+            )
+            return 0
+        if state == rewake_outcome.STATE_REFUSED:
+            logger.error(
+                "rewake: NOT delivered. The adapter accepted it, then the webhook router "
+                "refused it: %s. No turn ran.",
+                (last or {}).get("reason") or "no reason recorded",
+            )
+            return 1
+        if clock() >= deadline:
+            break
+        sleep(poll_s)
+    if state == rewake_outcome.STATE_DISPATCHED:
+        logger.error(
+            "rewake: NOT confirmed. The router dispatched re-wake %s to the gateway, but no "
+            "webhook turn started within %ds. Check the seat's newest webhook:msgraph "
+            "session before re-waking again.",
+            rewake_id[:12],
+            int(wait_s),
+        )
+    else:
+        logger.error(
+            "rewake: NOT confirmed. The adapter accepted re-wake %s, but the router recorded "
+            "no outcome within %ds (journal %s). The gateway did not run the dispatch, or "
+            "this seat's image predates the re-wake journal.",
+            rewake_id[:12],
+            int(wait_s),
+            outcome_dir or rewake_outcome.outcome_dir(),
+        )
+    return 1
 
 
 def rewake(
@@ -96,6 +170,10 @@ def rewake(
     client: object | None = None,
     forward_fn: Callable[..., tuple[int, bytes]] | None = None,
     state_dir: str | None = None,
+    wait_s: float = _TURN_WAIT_S,
+    poll_s: float = _TURN_POLL_S,
+    outcome_dir: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     """Re-wake the Operator on an EXISTING inbound email, by its Graph id.
 
@@ -111,6 +189,10 @@ def rewake(
     Run on the seat, as the hermes user. A reply already committed for this
     email in the RUNNING gateway is held as a duplicate; the adapter drops a
     repeat within its 1 h idempotency window. Both are reported, never forced.
+
+    Success is a started turn, not an accepted POST: after the adapter's 2xx
+    this waits (up to ``wait_s``) for the router's outcome journal and exits 1
+    with the router's reason when it refused the delivery or no turn began.
     """
     if not message_id or "/" in message_id or len(message_id) > 512:
         logger.error("rewake: %r is not a Graph message id", message_id)
@@ -142,12 +224,21 @@ def rewake(
     # email never got through, and a second copy of it must still collapse.
     nonce = os.urandom(8).hex()
     request_id = hashlib.sha256(f"{message_id}:rewake:{nonce}".encode()).hexdigest()
-    return replay(
+    # The same id is signed into the body as the re-wake marker: the router's
+    # replay guard keys this delivery on it (the message id alone is already in
+    # its cache from the first intake), and journals its outcome under it.
+    code = replay(
         path,
         mailbox=mailbox,
         signing_secret=signing_secret,
         forward_fn=forward_fn,
         request_id=request_id,
+        rewake_id=request_id,
+    )
+    if code != 0:
+        return code
+    return await_turn(
+        request_id, wait_s=wait_s, poll_s=poll_s, outcome_dir=outcome_dir, sleep=sleep
     )
 
 
@@ -158,6 +249,7 @@ def replay(
     signing_secret: str,
     forward_fn: Callable[..., tuple[int, bytes]] | None = None,
     request_id: str | None = None,
+    rewake_id: str | None = None,
 ) -> int:
     """Replay one dead-letter file. Returns the process exit code.
 
@@ -174,7 +266,7 @@ def replay(
     if not isinstance(raw, dict):
         logger.error("replay: %s carries no raw item", path)
         return 2
-    built = build_envelope(raw, mailbox=mailbox)
+    built = build_envelope(raw, mailbox=mailbox, rewake_id=rewake_id)
     if built is None:
         logger.error(
             "replay: item in %s has no message id; it cannot be replayed through the "

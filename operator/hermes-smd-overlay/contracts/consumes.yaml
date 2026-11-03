@@ -464,6 +464,12 @@ vars:
     requirement: optional
     consumed_by: [reply]
     note: held-reply queue db (#2070); defaults to /opt/data/held_replies.db
+  SMD_REWAKE_OUTCOME_DIR:
+    discovery: static
+    stage: agent
+    requirement: optional
+    consumed_by: [webhook-router]
+    note: "test/dev override for the seat-local re-wake outcome journal; defaults to /opt/data/smd/rewake-outcomes (shared/rewake_outcome.py). The router writes one small JSON per SMD re-wake (refused with its reason, dispatched, or turn_started with the session id); shared.msgraph_replay --message-id reads it to exit 0 only when the re-wake started a turn. Holds states, reasons and session ids; no mail content."
   SMD_REQUEST_INDEX_DB_PATH:
     discovery: static
     stage: agent

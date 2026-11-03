@@ -48,6 +48,7 @@ from shared import (
     msgraph_broker,
     read_volume,
     request_index,
+    rewake_outcome,
     sender_auth,
 )
 from shared.audit_client import audit_client_from_env
@@ -517,6 +518,20 @@ def _verification_failure(kwargs: dict[str, Any], payload: Any) -> str | None:
     event_id = _header(headers, _EVENT_ID_HEADER) or _event_id_from_payload(payload)
     if not event_id:
         return "missing event id required for replay protection"
+    # An SMD re-wake (ADR 0102, shared.rewake_outcome) answers an email the seat
+    # already received, so its message id is in this cache from the first
+    # delivery and a re-wake within the TTL was dropped as a replay, silently
+    # (A&P, 2026-11-03). The re-wake id is signed into the body, so it keys the
+    # guard on its own: each re-wake is a new event, the same re-wake twice is
+    # still a replay, and a true duplicate of the email (no marker) still is.
+    # A malformed marker, or one on any source but msgraph, is refused.
+    present, rewake_id = rewake_outcome.marker(payload)
+    if present:
+        if rewake_id is None:
+            return "malformed re-wake marker"
+        if _webhook_source(payload) != inbound_message.PROVIDER_MSGRAPH:
+            return "re-wake marker on a non-msgraph delivery"
+        event_id = rewake_outcome.replay_key(event_id, rewake_id)
     if not _REPLAY.check_and_record(event_id):
         return f"replayed event id {event_id!r}"
     return None
@@ -638,6 +653,43 @@ def _consumed_by_calendar(payload: Any) -> bool:
 
 
 def on_pre_gateway_dispatch(**kwargs: Any) -> dict | None:
+    """The hook: :func:`_dispatch`, plus the outcome of an SMD re-wake.
+
+    A re-wake's caller (``shared.msgraph_replay``) cannot read the gateway's
+    log, so what the router did with it is written to the seat's outcome
+    journal: ``refused`` with the reason (written where the refusal is
+    decided), else ``dispatched``. Only a well-formed marker is journaled, and
+    journaling never changes the dispatch."""
+    result = _dispatch(**kwargs)
+    try:
+        present, rewake_id = rewake_outcome.marker(_webhook_payload(kwargs))
+        if present and rewake_id is not None:
+            if isinstance(result, dict) and result.get("action") == "skip":
+                recorded = rewake_outcome.read(rewake_id) or {}
+                if recorded.get("state") != rewake_outcome.STATE_REFUSED:
+                    rewake_outcome.record(
+                        rewake_id, rewake_outcome.STATE_REFUSED, reason="dispatch skipped"
+                    )
+            else:
+                rewake_outcome.dispatched(rewake_id)
+    except Exception:  # noqa: BLE001 - hook callbacks are exception-safe
+        logger.debug("hermes-smd-webhook-router: re-wake outcome not recorded", exc_info=True)
+    return result
+
+
+def on_pre_llm_call(**kwargs: Any) -> None:
+    """Claim a dispatched re-wake for the webhook turn it started. Injects
+    nothing and never raises."""
+    session_id = kwargs.get("session_id")
+    rewake_outcome.claim_turn(
+        session_id if isinstance(session_id, str) else "",
+        platform=kwargs.get("platform"),
+        is_first_turn=kwargs.get("is_first_turn", True),
+    )
+    return None
+
+
+def _dispatch(**kwargs: Any) -> dict | None:
     """Inspect each inbound dispatch for webhook markers and rewrite if matched.
 
     Hermes invokes this hook with ``event`` (a ``MessageEvent``), ``gateway``,
@@ -759,6 +811,9 @@ def on_pre_gateway_dispatch(**kwargs: Any) -> dict | None:
             matched_key or source,
             failure,
         )
+        _rewake_id = rewake_outcome.marker(payload)[1]
+        if _rewake_id is not None:
+            rewake_outcome.record(_rewake_id, rewake_outcome.STATE_REFUSED, reason=failure)
         return {"action": "skip"}
 
     # ADR 0027 — attach an inbound provenance envelope to the dispatched
@@ -1047,7 +1102,8 @@ def on_pre_gateway_dispatch(**kwargs: Any) -> dict | None:
 
 
 def register(ctx) -> None:
-    """Plugin entry point. Wires pre_gateway_dispatch.
+    """Plugin entry point. Wires pre_gateway_dispatch, and pre_llm_call for
+    the re-wake outcome journal (``shared.rewake_outcome``).
 
     Binds the env secrets (customer slug, audit binding, signing secret) and
     records the authored-config path. The routing table itself is NOT built
@@ -1146,3 +1202,4 @@ def register(ctx) -> None:
     )
 
     ctx.register_hook("pre_gateway_dispatch", on_pre_gateway_dispatch)
+    ctx.register_hook("pre_llm_call", on_pre_llm_call)

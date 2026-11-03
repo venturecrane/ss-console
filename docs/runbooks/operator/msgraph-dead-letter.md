@@ -54,6 +54,30 @@ store for a new session with chat id `webhook:msgraph:<request id>` started
 at the replay time. No new row means the message has still not reached the
 agent: leave the incident open.
 
+## Re-waking the Operator on an email it already answered
+
+```bash
+python3 -m shared.msgraph_replay --message-id <graph message id>
+```
+
+ADR 0102: once a capability the seat lacked has shipped, this has the Operator
+answer the original request again, through the same fenced door. A re-wake
+signs a fresh re-wake id into the envelope (`smd_rewake`); `event_id` and the
+message itself keep the original Graph id, so the reply threads to the
+client's own email. The webhook router keys its replay guard on
+`<message id>:rewake:<re-wake id>`, so a re-wake inside the hour is a new
+event while a second copy of the same email is still dropped. (Before this,
+the router dropped every re-wake inside the hour as `replayed event id`,
+after the adapter had already answered 202; A&P, 2026-11-03.)
+
+**Exit 0 means a turn started.** After the adapter's 2xx the tool waits up to
+three minutes for the router's outcome journal
+(`/opt/data/smd/rewake-outcomes/<re-wake id>.json`): `turn_started` exits 0
+and names the session; `refused` exits 1 with the router's reason; a delivery
+the router dispatched but no turn picked up, or no journal entry at all,
+exits 1 and says which. On a seat image older than the journal, every re-wake
+exits 1 with "recorded no outcome"; check the session store by hand there.
+
 ## After every incident
 
 1. **Resolve the Sentry issue** for the constant message you were paged on.
@@ -70,6 +94,10 @@ agent: leave the incident open.
 - `hermes-smd-overlay:shared/msgraph_poller.py` (hold/poison/dead-letter) and
   `shared/msgraph_replay.py` (the replay tool), tests
   `tests/test_msgraph_poller.py`, `tests/test_msgraph_replay.py`
+- `hermes-smd-overlay:shared/rewake_outcome.py` (the re-wake marker and
+  outcome journal), `plugins/hermes-smd-webhook-router/__init__.py`
+  (`_verification_failure`, `on_pre_llm_call`), test
+  `tests/test_rewake_replay_guard.py`
 - Hermes `gateway/platforms/webhook.py` at the pinned `HERMES_REF`
   (`operator/templates/Dockerfile`): `_record_delivery_id` (1h TTL) and the
   `{"status":"duplicate"}` 200 answer
