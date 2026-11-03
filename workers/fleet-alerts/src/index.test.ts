@@ -455,7 +455,9 @@ describe('runOnce edge triggering', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.to).toBe('team@smd.services')
-    expect(body.subject).toContain('ALERT smd')
+    expect(body.subject).toBe('[SMD Ops] smd: the Operator may be down')
+    expect(body.html).toContain('WHAT YOU NEED TO DO')
+    expect(body.html).not.toContain('SEV1')
   })
 
   it('red seat its release is restarting: held, no page (2026-10-31 captain-mark)', async () => {
@@ -511,7 +513,8 @@ describe('runOnce edge triggering', () => {
     expect(summary.transitions).toHaveLength(1)
     expect(summary.transitions[0].kind).toBe('resolved')
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
-    expect(body.subject).toContain('RECOVERED smd')
+    expect(body.subject).toContain('smd: cleared: the Operator may be down')
+    expect(body.html).toContain('<strong>WHAT YOU NEED TO DO:</strong> Nothing.')
     expect(state.alertState.get('smd:heartbeat_red')).toBe('resolved')
   })
 
@@ -542,7 +545,7 @@ describe('runOnce edge triggering', () => {
     }
     await runOnce(makeEnv(state), NOW)
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
-    expect(body.subject).toContain('[SMD Ops] RECOVERED smd')
+    expect(body.subject).toContain('[SMD Ops] smd: cleared: ')
     expect(body.headers).toBeUndefined()
   })
 
@@ -572,7 +575,7 @@ describe('runOnce scheduler conditions', () => {
       expect.objectContaining({ condition: 'scheduler_error', kind: 'opened', emailed: true }),
     ])
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
-    expect(body.subject).toContain('ALERT smd: Cron scheduler broken/unreadable')
+    expect(body.subject).toBe('[SMD Ops] smd: scheduled work is not running')
     expect(state.alertState.get('smd:scheduler_error')).toBe('open')
   })
 
@@ -588,7 +591,7 @@ describe('runOnce scheduler conditions', () => {
       expect.objectContaining({ condition: 'scheduler_error', kind: 'resolved' }),
     ])
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
-    expect(body.subject).toContain('RECOVERED smd: Cron scheduler broken/unreadable')
+    expect(body.subject).toContain('smd: cleared: scheduled work is not running')
     expect(state.alertState.get('smd:scheduler_error')).toBe('resolved')
   })
 
@@ -927,7 +930,7 @@ describe('alert-sink notification', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
     expect(body.to).toBe('team@smd.services')
     expect(body.subject).toContain('pilot-smokeball')
-    expect(body.subject).toContain('healthchecks.io grace expired')
+    expect(body.subject).toContain('a monitor stopped reporting')
   })
 
   it('delivers each row exactly once across runs', async () => {
@@ -1731,10 +1734,8 @@ describe('edge poll through runOnce (wave 8.2)', () => {
     )
     expect(resendCalls).toHaveLength(2)
     const opened = JSON.parse(String(resendCalls[0]?.[1]?.body))
-    expect(opened.subject).toBe(
-      '[SMD Ops] ALERT smd.services: Web edge not answering /api/health from outside'
-    )
-    expect(opened.html).toContain('<li>Host: smd.services</li>')
+    expect(opened.subject).toBe('[SMD Ops] smd.services: the website is down')
+    expect(opened.html).toContain('Host: smd.services<br>')
     expect(opened.html).toContain('3 consecutive failed probes of https://smd.services/api/health')
     expect(state.alertState.get('smd.services:edge_down')).toBe('resolved')
   })
@@ -1798,7 +1799,8 @@ describe('edge poll through runOnce (wave 8.2)', () => {
     )
     expect(resendCalls).toHaveLength(1)
     const recovered = JSON.parse(String(resendCalls[0]?.[1]?.body))
-    expect(recovered.subject).toContain('RECOVERED probe')
+    expect(recovered.subject).toContain('probe')
+    expect(recovered.html).toContain('This has cleared.')
     expect(recovered.html).toContain('removed from EDGE_POLL_TARGETS')
     // A second tick is silent: nothing left to retire, nothing open.
     const again = await runOnce(edgeEnv(state), NOW + 120_000)

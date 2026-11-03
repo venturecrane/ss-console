@@ -130,10 +130,9 @@ export function decideSendRefusedPage(
   }
 }
 
-/** Subject line: the seat, the kind, and the head of the reason verbatim. */
+/** Subject line: the seat and what happened. The reason is in the details. */
 export function sendRefusedSubject(page: SendRefusedPage): string {
-  const reason = page.reason.slice(0, SUBJECT_REASON_CHARS)
-  return `[${page.customer_slug}] send refused: ${page.kind}${reason ? `/${reason}` : ''}`
+  return `${page.customer_slug}: a scheduled message did not go out`
 }
 
 function eventLine(event: SendRefusalEvent): string {
@@ -151,21 +150,23 @@ function eventLine(event: SendRefusalEvent): string {
   return `<li>${parts.join(' &middot; ')}${needsYou}</li>`
 }
 
-function sendRefusedHtml(env: Env, page: SendRefusedPage): string {
-  const dashboard = `${env.ADMIN_BASE_URL ?? 'https://admin.smd.services'}/operator`
+function sendRefusedHtml(page: SendRefusedPage): string {
   // Escaped throughout: every field below is text a customer Machine wrote.
-  const body =
+  const events =
     page.events.length > 0
       ? `<ul>${page.events.map(eventLine).join('')}</ul>`
       : '<p>No per-event detail was reported on this beat.</p>'
   return (
-    `<p><strong>ALERT</strong>: a routine could not reach a human.</p>` +
-    `<ul><li>Seat: ${escapeHtml(page.customer_slug)}</li>` +
-    `<li>Newest event: ${escapeHtml(page.marker)}</li></ul>` +
-    body +
-    `<p>A refusal is the gate working. The escalation not arriving is the harm. ` +
-    `Read the routine and the reason above before touching the gate.</p>` +
-    `<p><a href="${dashboard}">Fleet dashboard</a>. No automatic action was taken (ADR 0064/0065).</p>`
+    `<p><strong>WHAT HAPPENED:</strong> A scheduled routine had something to tell someone and it did not go out. ` +
+    `A safety check refused it, or the routine sent nothing. The person it was for has not heard.</p>` +
+    `<p><strong>WHAT YOU NEED TO DO:</strong> Give this email to an agent to find out what it was saying, ` +
+    `then decide how that person is told.</p>` +
+    `<hr><p><strong>DETAILS, for the agent who picks this up</strong><br>` +
+    `Seat: ${escapeHtml(page.customer_slug)}. Kind: ${escapeHtml(page.kind)}. ` +
+    `Reason: ${escapeHtml(page.reason.slice(0, SUBJECT_REASON_CHARS) || 'not recorded')}. ` +
+    `Newest event: ${escapeHtml(page.marker)}.</p>` +
+    events +
+    `<p>A refusal is the check working. Read the routine and the reason before touching the check.</p>`
   )
 }
 
@@ -188,7 +189,7 @@ async function sendRefusedEmail(
         from: env.ALERT_FROM_EMAIL ?? 'SMD Services Ops <team@smd.services>',
         to: env.ALERT_TO_EMAIL ?? 'team@smd.services',
         subject: `[SMD Ops] ${sendRefusedSubject(page)}`,
-        html: sendRefusedHtml(env, page),
+        html: sendRefusedHtml(page),
       }),
     })
     if (!resp.ok) {

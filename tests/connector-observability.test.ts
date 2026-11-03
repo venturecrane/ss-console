@@ -832,10 +832,10 @@ describe('worker runOnce — connector_token_expiring reminds daily while open',
     await tick(OPEN_AT)
     await tick(OPEN_AT + 24 * HOUR)
     const [alert, reminder] = resendBodies()
-    expect(alert?.subject).toMatch(/^\[SMD Ops\] ALERT seat: /)
+    expect(alert?.subject).toMatch(/^\[SMD Ops\] seat: /)
     expect(reminder?.subject).toBe(`Re: ${alert?.subject}`)
     expect(reminder?.headers?.['In-Reply-To']).toBe(alert?.headers?.['Message-ID'])
-    expect(reminder?.html).toContain('STILL OPEN')
+    expect(reminder?.html).toContain('Still not fixed.')
   })
 
   it('a failed reminder send is retried on the next tick, not skipped for a day', async () => {

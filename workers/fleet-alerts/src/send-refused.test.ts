@@ -187,9 +187,7 @@ describe('sendRefusedSubject', () => {
       row({ send_refusals_last_ts: '2026-08-19T14:01:20.000Z', send_refusals_json: REFUSED_JSON }),
       null
     )
-    expect(sendRefusedSubject(page!)).toBe(
-      '[pilot-smokeball] send refused: refused/IDENTIFIER_UNVERIFIED'
-    )
+    expect(sendRefusedSubject(page!)).toBe('pilot-smokeball: a scheduled message did not go out')
   })
 
   it('caps the reason at 60 characters so the subject stays readable', () => {
@@ -203,9 +201,7 @@ describe('sendRefusedSubject', () => {
       }),
       null
     )
-    expect(sendRefusedSubject(page!)).toBe(
-      `[pilot-smokeball] send refused: refused/${'x'.repeat(60)}`
-    )
+    expect(sendRefusedSubject(page!)).toBe('pilot-smokeball: a scheduled message did not go out')
   })
 })
 
@@ -345,7 +341,7 @@ describe('runOnce send-refusal paging', () => {
     const second = await runOnce(env, NOW)
     expect(second.send_refusals).toEqual([])
     expect(sentSubjects(mock)).toEqual([
-      '[SMD Ops] [pilot-smokeball] send refused: refused/IDENTIFIER_UNVERIFIED',
+      '[SMD Ops] pilot-smokeball: a scheduled message did not go out',
     ])
   })
 
@@ -363,7 +359,10 @@ describe('runOnce send-refusal paging', () => {
     const second = await runOnce(env, NOW)
     expect(second.send_refusals[0]?.kind).toBe('unsent')
     expect(sentSubjects(mock)).toHaveLength(2)
-    expect(sentSubjects(mock)[1]).toContain('unsent/no_send_attempted')
+    const bodies = mock.mock.calls
+      .filter((call) => String(call[0]).includes('api.resend.com'))
+      .map((call) => String((call[1] as RequestInit).body))
+    expect(bodies[1]).toContain('Kind: unsent. Reason: no_send_attempted.')
   })
 
   it('never emits a RECOVERED notice for send_refused', async () => {
