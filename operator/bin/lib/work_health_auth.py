@@ -31,7 +31,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional
 
-from bin.lib.work_health import _JOB_TYPE, Config, Item, hhmm, item, meta, stamped
+from bin.lib.work_health import _JOB_TYPE, Config, Item, Page, hhmm, item, meta, stamped
 
 AUTH_PROBE_SKILL = "connector-auth-check"
 OK, REFUSED, UNSAVED, UNCHECKED, SECONDHAND = "ok", "refused", "unsaved", "unchecked", "secondhand"
@@ -89,7 +89,12 @@ def _trail_item(seat: str, trail: list[tuple[datetime, str, str]]) -> Optional[I
             f"Smokeball REFUSED this seat's sign-in at {hhmm(refused[-1][0])} ({refused[-1][2]}), first at "
             f"{hhmm(since)}; every Smokeball read and write fails until it is re-consented.",
             "Re-consent the Smokeball connection for this seat (memory: smokeball token program).",
-            page=f"ACTION: {seat} Smokeball sign-in is dead",
+            page=Page(
+                f"[SMD Ops] {seat}: the Smokeball sign-in is dead",
+                "Smokeball is refusing this seat's sign-in, so everything the Operator does in Smokeball has stopped.",
+                "Email the client and ask them to sign in to Smokeball again. If you need the steps, give this "
+                "email to an agent.",
+            ),
         )
     if unsaved:
         since = unsaved[0][0]
@@ -103,7 +108,13 @@ def _trail_item(seat: str, trail: list[tuple[datetime, str, str]]) -> Optional[I
             "seat's next restart.",
             "Fix it before the seat restarts: check the durable token file is writable, then re-consent the "
             "Smokeball connection for this seat (memory: smokeball token program).",
-            page=f"ACTION: {seat} Smokeball sign-in dies at the next restart",
+            page=Page(
+                f"[SMD Ops] {seat}: the Smokeball sign-in will die at the next restart",
+                "Smokeball still works, but its renewed sign-in was not saved. When this seat restarts, everything "
+                "the Operator does in Smokeball stops.",
+                "Give this email to an agent today, before the seat restarts. If the client has to sign in again, "
+                "the agent will say so and that email is yours to send.",
+            ),
         )
     if trail and trail[-1][1] == UNCHECKED:
         ts, _o, detail = trail[-1]

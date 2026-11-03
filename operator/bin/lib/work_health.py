@@ -96,6 +96,17 @@ def load_config(path: Path = CONTRACT_PATH) -> Config:
 
 
 @dataclass
+class Page:
+    """The email an urgent item sends (Captain, 2026-11-02: an ops email must be
+    something he can consume): same shape as a request email. The item's ``what``
+    and ``todo`` stay as the agent's half, below the fold."""
+
+    subject: str
+    happened: str
+    todo: str
+
+
+@dataclass
 class Item:
     """One piece of work someone must look at. ``key`` is stable across runs
     (it is how "new" and "still open" are told apart); ``onset`` is when the
@@ -108,9 +119,9 @@ class Item:
     what: str
     todo: str
     rank: int = 50
-    #: Set on an item that must PAGE (its own ACTION email every run while it
-    #: stands), not only sit in the digest: a dead sign-in stops all work.
-    page: Optional[str] = None
+    #: Set on an item that must PAGE (its own email every run while it stands),
+    #: not only sit in the digest: a dead sign-in stops all work.
+    page: Optional[Page] = None
 
     def age_text(self, now: datetime) -> str:
         return span(now - self.onset)
@@ -138,7 +149,7 @@ RANK = {
 }
 
 
-def item(seat: str, kind: str, key: str, onset: datetime, what: str, todo: str, page: Optional[str] = None) -> Item:
+def item(seat: str, kind: str, key: str, onset: datetime, what: str, todo: str, page: Optional[Page] = None) -> Item:
     return Item(seat, kind, f"{seat}|{kind}|{key}", onset, what, todo, RANK.get(kind, 50), page)
 
 

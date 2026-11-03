@@ -35,9 +35,10 @@ bucket_name = "smd-customer-config"
 
 [triggers]
 # The 2-minute pager, and the Monday 08:11 Phoenix (15:11 UTC) digest of what
-# the Operator declined as not entitled. The digest string must equal
-# DIGEST_CRON in src/shortfalls.ts: scheduled() routes on event.cron.
-crons = ["*/2 * * * *", "11 15 * * 1"]
+# a check stopped the Operator from doing. Cloudflare counts Sunday as 1, so
+# Monday is 2. The digest string must equal DIGEST_CRON in src/shortfalls.ts:
+# scheduled() routes on event.cron.
+crons = ["*/2 * * * *", "11 15 * * 2"]
 
 [vars]
 ALERT_FROM_EMAIL = "SMD Services Ops <team@smd.services>"

@@ -13,11 +13,11 @@
  *               out saying the Operator could not do what was asked
  *               (`reply_could_not:<code>`, 2026-11-01)
  *   partial     the mail routine filed fewer pages than it was handed
- *   not_allowed the request was outside what the seat is entitled to do
+ *   not_allowed a check stopped the call: the trust gate, a plugin, or a banned
+ *               tool. The ledger keeps which, never why.
  *
- * not_allowed is working as designed, so it waits for the Monday digest, where a
- * person reads it as either a scope conversation or a misconfigured entitlement
- * (Captain, 2026-10-05).
+ * not_allowed is the checks working, so it waits for the Monday digest
+ * (./shortfall-digest; Captain, 2026-10-05).
  *
  * WHO IS EMAILED (Captain, 2026-11-02: "mostly noise"). Every event is still
  * recorded, and operator/bin/work-health.py lists them for the triage agent. Only
@@ -59,10 +59,14 @@ export const IMMEDIATE_CLASSES: readonly ShortfallClass[] = ['limit', 'failed', 
 export const THROTTLE_MINUTES = 30
 
 /** Rows listed in one email; the rest are counted, never dropped. */
-const MAX_LISTED = 25
+export const MAX_LISTED = 25
 
-/** The Monday digest cron, Phoenix 08:11. Must match wrangler.toml `crons`. */
-export const DIGEST_CRON = '11 15 * * 1'
+/**
+ * The Monday digest cron, Phoenix 08:11. Must match wrangler.toml `crons`.
+ * Cloudflare counts Sunday as 1, so Monday is 2: this read `* * 1` until
+ * 2026-11-03 and the "Monday" summary went out on Sunday Oct 25 and Sunday Nov 1.
+ */
+export const DIGEST_CRON = '11 15 * * 2'
 
 export interface ShortfallEvent {
   ts: string
@@ -148,7 +152,7 @@ async function recordEvents(db: D1Database, slug: string, events: ShortfallEvent
   }
 }
 
-interface LedgerRow {
+export interface LedgerRow {
   event_key: string
   ts: string
   class: ShortfallClass
@@ -158,7 +162,7 @@ interface LedgerRow {
   request_at: string | null
 }
 
-const LEDGER_COLUMNS = 'event_key, ts, class, tool, routine, code, request_at'
+export const LEDGER_COLUMNS = 'event_key, ts, class, tool, routine, code, request_at'
 
 function classPlaceholders(classes: readonly string[]): string {
   return classes.map(() => '?').join(', ')
@@ -203,7 +207,7 @@ async function throttled(db: D1Database, slug: string, nowMs: number): Promise<b
   return Number.isFinite(lastMs) && nowMs - lastMs < THROTTLE_MINUTES * 60_000
 }
 
-async function markNotified(db: D1Database, slug: string, keys: string[]): Promise<void> {
+export async function markNotified(db: D1Database, slug: string, keys: string[]): Promise<void> {
   for (const key of keys) {
     await db
       .prepare(
@@ -312,29 +316,7 @@ export function shortfallSubject(slug: string, rows: LedgerRow[]): string {
   return `[SMD Ops] ${slug}: ${parts.join(', ')}`
 }
 
-function rowsTable(rows: LedgerRow[], withSeat?: string): string {
-  const listed = rows.slice(0, MAX_LISTED)
-  const body = listed
-    .map(
-      (r) =>
-        `<tr>${withSeat !== undefined ? `<td>${escapeHtml(withSeat)}</td>` : ''}` +
-        `<td>${escapeHtml(phoenixTime(r.ts))}</td><td>${escapeHtml(r.tool)}</td>` +
-        `<td>${escapeHtml(r.routine || 'not recorded')}</td>` +
-        `<td>${escapeHtml(r.request_at ? phoenixTime(r.request_at) : 'none linked')}</td>` +
-        `<td>${escapeHtml(r.code)}</td></tr>`
-    )
-    .join('')
-  const more =
-    rows.length > listed.length ? `<p>${rows.length - listed.length} more not listed.</p>` : ''
-  const seatHead = withSeat !== undefined ? '<th>Seat</th>' : ''
-  return (
-    `<table border="1" cellpadding="4" cellspacing="0">` +
-    `<tr>${seatHead}<th>When (MST)</th><th>Tool</th><th>Routine</th><th>Request received</th><th>Code</th></tr>` +
-    `${body}</table>${more}`
-  )
-}
-
-async function sendEmail(
+export async function sendEmail(
   env: Env,
   subject: string,
   html: string
@@ -450,50 +432,4 @@ export async function notifyShortfalls(
     }
   }
   return out
-}
-
-/**
- * The Monday digest: every not-yet-reported not_allowed refusal, grouped by
- * seat. An empty week sends nothing.
- */
-export async function sendShortfallDigest(env: Env): Promise<ShortfallNotification | null> {
-  const res = await env.DB.prepare(
-    `SELECT customer_slug, ${LEDGER_COLUMNS} FROM operator_shortfalls
-      WHERE class = 'not_allowed' AND notified_at IS NULL
-      ORDER BY customer_slug, ts ASC`
-  ).all<LedgerRow & { customer_slug: string }>()
-  const rows = res.results ?? []
-  if (rows.length === 0) return null
-  const bySeat = new Map<string, LedgerRow[]>()
-  for (const r of rows) {
-    const arr = bySeat.get(r.customer_slug)
-    if (arr) arr.push(r)
-    else bySeat.set(r.customer_slug, [r])
-  }
-  const sections = [...bySeat.entries()]
-    .map(([slug, seatRows]) => {
-      const byTool = new Map<string, number>()
-      for (const r of seatRows) byTool.set(r.tool, (byTool.get(r.tool) ?? 0) + 1)
-      const tools = [...byTool.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([tool, n]) => `${escapeHtml(tool)} (${n})`)
-        .join(', ')
-      return `<h3>${escapeHtml(slug)}: ${seatRows.length}</h3><p>By tool: ${tools}</p>${rowsTable(seatRows)}`
-    })
-    .join('')
-  const html =
-    `<p>What the Operator declined because it was outside what the seat is entitled to do. ` +
-    `Each one is either a scope conversation with the client or an entitlement set wrong.</p>${sections}`
-  const subject = `[SMD Ops] Weekly: what the Operator refused (${rows.length})`
-  const sent = await sendEmail(env, subject, html)
-  if (sent.ok) {
-    for (const [slug, seatRows] of bySeat) {
-      await markNotified(
-        env.DB,
-        slug,
-        seatRows.map((r) => r.event_key)
-      )
-    }
-  }
-  return { customer_slug: '*', events: rows.length, emailed: sent.ok, resendId: sent.resendId }
 }

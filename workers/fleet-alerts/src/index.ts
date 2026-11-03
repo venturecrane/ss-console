@@ -73,12 +73,8 @@ import { runEdgePolls, type EdgePollResult } from './edge-poll'
 import { notifySinkAlerts, type SinkNotification } from './sink-notify'
 import { notifySendRefusals, type SendRefusedNotification } from './send-refused'
 import { notifyRolloutFailures, type RolloutFailedNotification } from './rollout-failed'
-import {
-  DIGEST_CRON,
-  notifyShortfalls,
-  sendShortfallDigest,
-  type ShortfallNotification,
-} from './shortfalls'
+import { DIGEST_CRON, notifyShortfalls, type ShortfallNotification } from './shortfalls'
+import { sendShortfallDigest } from './shortfall-digest'
 import { processTransition } from './transition'
 import { driftConditions, driftGraceSeconds } from './drift'
 import { specConditions } from './spec'

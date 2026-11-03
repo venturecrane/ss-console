@@ -255,7 +255,7 @@ def test_only_an_explicit_refusal_pages_dead():
     rows = [_probe(NOW - timedelta(minutes=70), "ok"), _probe(NOW - timedelta(minutes=10), "refused")]
     items = _auth(rows)
     assert _kinds(items) == ["auth_failed"]
-    assert items[0].page == f"ACTION: {SEAT} Smokeball sign-in is dead"
+    assert items[0].page.subject == f"[SMD Ops] {SEAT}: the Smokeball sign-in is dead"
 
 
 def test_a_check_that_could_not_run_is_never_called_dead():
@@ -643,8 +643,8 @@ def test_pre_run_never_wakes_and_records_the_basis(tmp_path, monkeypatch, capsys
         "skill_name": "connector-auth-check",
         "metadata": seen[0]["row"]["metadata"],
     }
-    assert [i.page for i in auth.smokeball_auth_items(SEAT, [row], CFG, NOW, probe_scheduled=True)] == [
-        f"ACTION: {SEAT} Smokeball sign-in is dead"
+    assert [i.page.subject for i in auth.smokeball_auth_items(SEAT, [row], CFG, NOW, probe_scheduled=True)] == [
+        f"[SMD Ops] {SEAT}: the Smokeball sign-in is dead"
     ]
 
 
@@ -671,7 +671,7 @@ def test_an_unsaved_refresh_token_pages_the_same_day(tmp_path, monkeypatch, caps
     }
     items = auth.smokeball_auth_items(SEAT, [row], CFG, NOW, probe_scheduled=True)
     assert _kinds(items) == ["auth_failed"]
-    assert items[0].page == f"ACTION: {SEAT} Smokeball sign-in dies at the next restart"
+    assert items[0].page.subject == f"[SMD Ops] {SEAT}: the Smokeball sign-in will die at the next restart"
     assert "next restart" in items[0].what and "could not run" not in items[0].what
     # A later ok clears it, like a refusal.
     ok = _probe(NOW + timedelta(minutes=5), "ok")
@@ -733,16 +733,33 @@ def test_the_run_log_carries_counts_never_the_email_text(tmp_path, capsys, monke
 
 
 def test_a_dead_sign_in_pages_every_run_on_its_own(monkeypatch, tmp_path):
-    """A refused check produces its own ACTION email (not only a digest line),
-    on this run and the next."""
+    """A refused check produces its own email (not only a digest line), on this
+    run and the next, and it reads like the other ops mail."""
     rows = _offline(monkeypatch, tmp_path, [_probe(NOW - timedelta(minutes=10), "refused")])
     sent = []
-    monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append((subject, key)) or None)
+    monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append((subject, key, text)) or None)
     for now in (NOW, NOW + timedelta(minutes=40)):
         assert cli.main(["--rows", f"{SEAT}={rows}", "--now", now.isoformat()]) == 0
-    pages = [s for s in sent if s[0].startswith("ACTION:")]
-    assert [p[0] for p in pages] == [f"ACTION: {SEAT} Smokeball sign-in is dead"] * 2
+    pages = [s for s in sent if "sign-in is dead" in s[0]]
+    assert [p[0] for p in pages] == [f"[SMD Ops] {SEAT}: the Smokeball sign-in is dead"] * 2
     assert pages[0][1] != pages[1][1]  # a fresh idempotency key each hour, so the repeat is not deduped away
+    body = pages[0][2]
+    above, below = body.split("---", 1)
+    assert "WHAT HAPPENED: Smokeball is refusing" in above
+    assert "WHAT YOU NEED TO DO: Email the client" in above
+    assert "every hour" in above
+    assert "re-consent" not in above and "token" not in above  # the machine's words stay below the fold
+    assert "re-consent" in below
+    assert "\u2014" not in body
+
+
+def test_a_test_seats_dead_sign_in_is_listed_but_not_emailed(monkeypatch, tmp_path):
+    rows = _offline(monkeypatch, tmp_path, [_probe(NOW - timedelta(minutes=10), "refused")])
+    monkeypatch.setattr(cli, "footnoted_seats", lambda seats: frozenset(seats))
+    sent = []
+    monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append(subject) or None)
+    assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat()]) == 0
+    assert not [s for s in sent if "sign-in" in s]
 
 
 def test_a_check_that_could_not_run_never_pages(monkeypatch, tmp_path):
@@ -750,12 +767,12 @@ def test_a_check_that_could_not_run_never_pages(monkeypatch, tmp_path):
     sent = []
     monkeypatch.setattr(cli, "send", lambda subject, text, key: sent.append(subject) or None)
     assert cli.main(["--rows", f"{SEAT}={rows}", "--now", NOW.isoformat()]) == 0
-    assert not [s for s in sent if s.startswith("ACTION:")]
+    assert not [s for s in sent if "sign-in" in s]
 
 
 def test_a_mailbox_sign_in_failure_pages():
     items = src.graph_probe_item(SEAT, "ops@example.test", "msgraph token mint rejected with HTTP 401", NOW)
-    assert items[0].page == f"ACTION: {SEAT} mailbox sign-in is dead"
+    assert items[0].page.subject == f"[SMD Ops] {SEAT}: the mailbox sign-in check is failing"
 
 
 def test_a_self_serve_seat_gets_the_same_checks_as_any_seat():

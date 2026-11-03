@@ -15,10 +15,10 @@ import {
   parseShortfallEvents,
   phoenixTime,
   emailsAPerson,
-  sendShortfallDigest,
   THROTTLE_MINUTES,
   whatHappened,
 } from './shortfalls'
+import { sendShortfallDigest, toolWords } from './shortfall-digest'
 import type { Env } from './index'
 import type { FleetStatusRow } from './fleet-status'
 
@@ -369,10 +369,45 @@ describe('sendShortfallDigest', () => {
     const digest = await sendShortfallDigest(env)
     expect(digest).toMatchObject({ events: 2, emailed: true })
     const [mail] = sent(mock)
-    expect(mail.subject).toBe('[SMD Ops] Weekly: what the Operator refused (2)')
+    expect(mail.subject).toBe('[SMD Ops] Weekly: what a check stopped the Operator from doing (2)')
+    expect(mail.html).toContain('WHAT HAPPENED')
+    expect(mail.html).toContain('WHAT YOU NEED TO DO')
     expect(mail.html).toContain('ashton-price: 1')
     expect(mail.html).toContain('scott: 1')
+    const above = String(mail.html).split('<hr>')[0]
+    expect(above).toContain('Create a task in Smokeball')
+    expect(above).not.toContain('mcp_')
+    expect(above).not.toContain('\u2014')
     expect(await sendShortfallDigest(env)).toBeNull()
+  })
+
+  it('leaves a test seat out of the summary and closes its rows', async () => {
+    const { db, env } = setup()
+    const mock = stubResend()
+    db.exec('CREATE TABLE customer_configs (customer_slug TEXT PRIMARY KEY, seat_json TEXT)')
+    db.prepare(
+      `INSERT INTO customer_configs (customer_slug, seat_json) VALUES ('pilot-smokeball', ?)`
+    ).run(JSON.stringify({ kind: 'proving' }))
+    await notifyShortfalls(
+      env,
+      [
+        {
+          ...row([ev({ class: 'not_allowed', code: 'plugin_block', key: 'not_allowed:9' })]),
+          customer_slug: 'pilot-smokeball',
+        },
+      ],
+      NOW
+    )
+    expect(await sendShortfallDigest(env)).toBeNull()
+    expect(sent(mock)).toHaveLength(0)
+    expect(db.prepare('SELECT notified_at FROM operator_shortfalls').all()).not.toEqual([
+      { notified_at: null },
+    ])
+  })
+
+  it('says a tool in words, and still reads for a tool with no entry', () => {
+    expect(toolWords('mcp_msgraph_mail_create_draft')).toBe('Draft an email')
+    expect(toolWords('mcp_newvendor_do_thing')).toBe('Newvendor do thing')
   })
 })
 
