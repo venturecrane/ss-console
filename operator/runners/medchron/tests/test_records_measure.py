@@ -51,9 +51,10 @@ def test_the_price_is_the_higher_of_the_firm_and_the_measured_figure(tmp_path: P
     state.mkdir()
     (state / measure.NAME).write_text(json.dumps({"dollars": 5.09, "attempts": 100, "pages": 46, "refused": 23}))
     p = measure.price(state, 0.009)
-    assert p.per_attempt == pytest.approx(0.0509) and p.attempts_per_page == pytest.approx(1.5)
+    # 100 attempts over 46 distinct pages: 2.17 attempts a page, as measured.
+    assert p.per_attempt == pytest.approx(0.0509) and p.attempts_per_page == pytest.approx(100 / 46)
     assert "measured" in p.source
-    assert measure.price(state, 0.10).per_page == pytest.approx(0.15)  # the firm's, with the declined share
+    assert measure.price(state, 0.10).per_page == pytest.approx(0.10 * 100 / 46)  # the firm's rate, measured attempts
 
 
 def test_a_finished_job_adds_its_measurement_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,3 +71,16 @@ def test_the_preflight_logs_the_price_it_used(tmp_path: Path, monkeypatch: pytes
         m.startswith("[preflight] priced at $0.0200 a page (the firm's usd_per_page, not yet measured; 2.00 attempts")
         for m in log
     )
+
+
+def test_after_the_worst_shape_the_next_projection_still_covers_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One declined page in every batch of 47: 94 attempts. The measurement
+    that job leaves must price the same shape at no less than it cost."""
+    r, env, _v = _run(tmp_path, monkeypatch, FakeFinderModel(refuse=frozenset({1, 9, 17, 25, 33, 41})), 47, [])
+    dollars, attempts = measure.job_spend(r.ledger.path, r.pricing)
+    assert attempts == 94
+    p = measure.price(env["state"], float(r.firm.usd_per_page))
+    assert "measured" in p.source and p.attempts_per_page == pytest.approx(2.0)
+    assert 47 * p.per_page >= dollars

@@ -16,8 +16,12 @@ job when it ends:
 * ``pages`` and ``refused``: the distinct pages the job finished (read, or
   recorded unreadable) and how many of them the model declined.
 
-``per_attempt = dollars / attempts`` and ``refused_share = refused / pages``.
-A page not yet read is projected at ``(1 + refused_share)`` attempts once
+``per_attempt = dollars / attempts`` and ``attempts_per_page = attempts /
+pages`` (at least 1.0): a declined page re-sends its whole batch a page at a
+time, so the attempts a page really costs is the measured ratio, never
+``1 + refused / pages`` (the worst shape, one declined page in each batch of
+eight, measures 94 attempts over 47 pages, 2.0, where that formula said 1.13).
+A page not yet read is projected at ``attempts_per_page`` attempts once
 measured. With fewer than :data:`MIN_ATTEMPTS` measured attempts the firm's
 figure stands, at :data:`WORST_ATTEMPTS` attempts a page: one declined page
 re-sends its whole batch of eight a page at a time, so the worst case bills
@@ -66,16 +70,16 @@ def _read(path: Path) -> dict[str, Any]:
 
 def price(state: Path, firm_per_page: float) -> Price:
     """The pre-flight's price of one unread page: the higher of the firm's
-    figure and the measured one, with the measured share of declined pages."""
+    figure and the measured one, times the measured attempts a page costs."""
     m = _read(state / NAME)
     attempts, pages = int(m.get("attempts") or 0), int(m.get("pages") or 0)
-    share = (int(m.get("refused") or 0) / pages) if pages else 0.0
-    if attempts < MIN_ATTEMPTS:
+    if attempts < MIN_ATTEMPTS or not pages:
         return Price(firm_per_page, WORST_ATTEMPTS, "the firm's usd_per_page, not yet measured")
     measured = float(m.get("dollars") or 0.0) / attempts
+    per_page = max(attempts / pages, 1.0)
     if measured > firm_per_page:
-        return Price(measured, 1.0 + share, f"measured over {attempts} page attempts")
-    return Price(firm_per_page, 1.0 + share, f"the firm's usd_per_page, measured over {attempts} page attempts")
+        return Price(measured, per_page, f"measured over {attempts} page attempts")
+    return Price(firm_per_page, per_page, f"the firm's usd_per_page, measured over {attempts} page attempts")
 
 
 def note_pages(data: Path, read: int, refused: int) -> None:
