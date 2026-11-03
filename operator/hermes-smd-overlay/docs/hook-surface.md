@@ -93,7 +93,7 @@ hooks:
 
 ### 3. `pre_llm_call`
 
-**Purpose (overlay):** voice-sample injection (`hermes-smd-voice` — adds per-customer voice samples to the user message before the model sees it) AND untrusted-inbound quarantine (`hermes-smd-inbound`, ADR 0027 — drains the per-session pending inbound register and injects each item wrapped in a nonce-fenced quarantine block). Both are observers that contribute injected context; returns are merged (no "first wins"), so the two plugins coexist on this hook. This is the SINGLE chokepoint for inbound quarantine — it also fires for skill-triggered LLM calls, so no per-skill duplication is needed.
+**Purpose (overlay):** voice-sample injection (`hermes-smd-voice` — adds per-customer voice samples to the user message before the model sees it) AND untrusted-inbound quarantine (`hermes-smd-inbound`, ADR 0027 — drains the per-session pending inbound register and injects each item wrapped in a nonce-fenced quarantine block). Both are observers that contribute injected context; returns are merged (no "first wins"), so the two plugins coexist on this hook. `hermes-smd-webhook-router` also observes it, injecting nothing: a webhook turn's first call claims a dispatched SMD re-wake so `shared.msgraph_replay` can report that the turn started (`shared/rewake_outcome.py`). This is the SINGLE chokepoint for inbound quarantine — it also fires for skill-triggered LLM calls, so no per-skill duplication is needed.
 
 **Firing site:** `agent/turn_context.py:799-852` (`_collect_pre_llm_call_context`; `run_agent.py:12447-12457` at v2026.5.16).
 
