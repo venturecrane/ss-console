@@ -34,19 +34,27 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
     their reason, so a range never silently skips them. When the next read page
     does not continue it (a new start), the section closes before the unread
     pages, which then belong to no section (2026-11-02: a visit whose third page
-    was unread came back 1-4 on one call and 1-5 on the next)."""
+    was unread came back 1-4 on one call and 1-5 on the next). A page that
+    STARTS something after unread pages never bridges: a new start closes.
+
+    A BLANK page (:func:`_blank`) belongs to no section and never extends one,
+    and nothing bridges over it (2026-11-02 replay: a speech note ran 48-51
+    through a blank page 50 and onto a growth chart; the key is 48-49)."""
     unreadable = unreadable or {}
     out: list[dict[str, Any]] = []
     last_read = 0
     for key in sorted(pages, key=int):
         n = int(key)
         row = pages[key]
+        if _blank(row):
+            continue
         gap = range(last_read + 1, n)
         bridged = (
             bool(out)
             and len(gap) > 0
             and all(str(p) in unreadable for p in gap)
             and bool(row.get("continues_previous"))
+            and not row.get("sections")
         )
         adjacent = bool(out) and (last_read == n - 1 or bridged)
         _step(out, n, row, adjacent=adjacent, prev=last_read)
@@ -70,7 +78,16 @@ def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: b
                 sec["last"] = n
     elif not starts:
         out.append({"first": n, "last": n, **_UNTITLED})
-    nested = adjacent and _continues_running_note(row)
+    # The open notes this page's own "(continued)" label NAMES: only those stay
+    # open past what starts here. A record-level label ("<record> Clinical Notes
+    # (continued)") names no note, so a new start there closes the note before it
+    # (2026-11-02 replay: a 5/15 note ran 2-5 over a 3/20 entry starting on p4).
+    named = (
+        [sec for sec in out if sec["last"] == n and not sec.get("closed") and _label_names(row, sec)]
+        if adjacent and starts and _continues_running_note(row)
+        else []
+    )
+    nested = bool(named)
     for start in starts:
         # A section that started earlier on this same page ends here.
         out.append({"first": n, "last": n, "embedded": nested, **{k: start.get(k, "") for k in _SECTION_FIELDS}})
@@ -82,8 +99,9 @@ def _step(out: list[dict[str, Any]], n: int, row: dict[str, Any], *, adjacent: b
     # there (a flowsheet, an embedded report) sits INSIDE that note, so the note
     # stays open and runs on (2026-11-02: a 35-page discharge summary came back
     # as its first 4 pages).
+    keep = {id(sec) for sec in named if not sec.get("embedded")}
     for sec in out[:-1]:
-        if not (nested and not sec.get("embedded") and sec["last"] == n):
+        if id(sec) not in keep:
             sec["closed"] = True
 
 
@@ -141,6 +159,37 @@ def _view(sec: dict[str, Any]) -> dict[str, Any]:
         **({"unreadablePages": sec["unreadablePages"]} if sec.get("unreadablePages") else {}),
         **({"insideOf": sec["insideOf"]} if sec.get("insideOf") else {}),
     }
+
+
+def _blank(row: dict[str, Any]) -> bool:
+    """Nothing is on the page: no section starts and no date is printed, and
+    either the model says nothing on it can be read, or it shows no banner,
+    label or page marker and does not continue anything. A continuation page
+    with no header line is not blank."""
+    if row.get("sections") or row.get("dates"):
+        return False
+    if row.get("legible") is False:
+        return True
+    return not row.get("continues_previous") and not any(
+        str(row.get(k) or "").strip() for k in ("running_header", "note_label", "page_of")
+    )
+
+
+def _words(text: str) -> str:
+    """Lowercase words only, the continuation marker taken out."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", _CONTINUED_RE.sub(" ", str(text or "")).lower()).split())
+
+
+def _label_names(row: dict[str, Any], sec: dict[str, Any]) -> bool:
+    """Does the page's continuation label name THIS note (its heading or type)?"""
+    core = _words(str(row.get("note_label") or "") or str(row.get("running_header") or ""))
+    if not core:
+        return False
+    for field in ("heading", "document_type"):
+        name = _words(sec.get(field) or "")
+        if name and (name in core or core in name):
+            return True
+    return False
 
 
 def _continues_running_note(row: dict[str, Any]) -> bool:

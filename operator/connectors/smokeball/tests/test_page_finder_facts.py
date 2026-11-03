@@ -305,3 +305,84 @@ def test_a_file_with_pages_not_reached_never_caches_its_match(monkeypatch: pytes
     src = _set(tmp_path, 8)
     pf.locate(src, "the visit", _work(tmp_path))
     assert pf.load_index(pf.file_sha256(src))["matches"] == {} and _matches(fake) == 1
+
+
+# ---- the $0 replay on the seat's indexes (2026-11-02): section rows only ----
+
+NOTE = ("PROGRESS NOTE", "progress note", "5/15/2024", "Clinic A")
+ENTRY = ("PROGRESS NOTE", "progress note", "3/20/2024", "Clinic A")
+SUMMARY = ("DISCHARGE SUMMARY", "discharge summary", "6/30/2024", "Hospital B")
+RECORD_LABEL = "Clinic A Clinical Notes (continued)"
+
+
+def _labelled_row(label: str, *starts: tuple[str, str, str, str]) -> dict[str, Any]:
+    row = _page(*starts, cont=True)
+    row["note_label"] = label
+    return row
+
+
+def _heads(pages: dict[str, dict[str, Any]]) -> list[tuple[str, str, int, int]]:
+    return [(s["heading"], s["date"], s["first"], s["last"]) for s in pf.sections(pages)]
+
+
+def test_a_record_level_continued_label_never_keeps_a_note_open_over_a_new_start() -> None:
+    """8-B shape: the label on p4 is the RECORD's ("... Clinical Notes
+    (continued)"), not the 5/15 note's. The 3/20 entry starting on p4 closes the
+    5/15 note there: 2-4, never 2-5."""
+    pages = {
+        "1": _page(("CLINIC A RECORDS", "records certification", "", "Clinic A")),
+        "2": _page(NOTE),
+        "3": _labelled_row(RECORD_LABEL),
+        "4": _labelled_row(RECORD_LABEL, ENTRY),
+        "5": _labelled_row(RECORD_LABEL),
+    }
+    spans = _heads(pages)
+    assert ("PROGRESS NOTE", "5/15/2024", 2, 4) in spans and ("PROGRESS NOTE", "3/20/2024", 4, 5) in spans
+
+
+def test_a_discharge_note_stops_where_a_record_label_page_starts_something() -> None:
+    """The twin files' shape (closest discharge note 33-100 on one, 33-149 on
+    the other): the summary's own label runs 34-37; from 38 the label is the
+    record's, and the note starting on 38 ends the summary there."""
+    pages = {"33": _page(SUMMARY)}
+    for n in range(34, 38):
+        pages[str(n)] = _labelled_row("Discharge Summary (continued)")
+    pages["38"] = _labelled_row(RECORD_LABEL, NOTE)
+    for n in range(39, 150):
+        pages[str(n)] = _labelled_row(RECORD_LABEL, ENTRY) if n % 10 == 0 else _labelled_row(RECORD_LABEL)
+    assert _heads(pages)[0] == ("DISCHARGE SUMMARY", "6/30/2024", 33, 38)
+
+
+def test_a_note_whose_own_label_says_continued_still_runs_whole() -> None:
+    """8-E shape: a 35-page discharge summary whose labels name the summary
+    itself keeps running through what is embedded in it: 1-35."""
+    flow = ("VITALS FLOWSHEET", "flowsheet", "6/28/2024", "Hospital B")
+    pages = {"1": _page(SUMMARY)}
+    for n in range(2, 36):
+        pages[str(n)] = _labelled_row("Discharge Summary (continued)", *((flow,) if n in (4, 20) else ()))
+    pages["36"] = _page(("OFFICE VISIT", "office visit note", "8/1/2024", "Clinic A"))
+    assert _heads(pages)[0] == ("DISCHARGE SUMMARY", "6/30/2024", 1, 35)
+
+
+SPEECH = ("SPEECH THERAPY NOTE", "speech therapy note", "12/11/2024", "Clinic C")
+GROWTH = ("GROWTH CHART", "growth chart", "", "Clinic C")
+
+
+@pytest.mark.parametrize("blank", ["illegible", "empty"])
+def test_a_blank_page_never_extends_a_note(blank: str) -> None:
+    """The replay's 48-51: a speech note ran through a blank p50 and onto the
+    growth chart that starts on p51. The key is 48-49."""
+    empty = _page()
+    if blank == "illegible":
+        empty.update(legible=False, continues_previous=True)
+    pages = {"48": _page(SPEECH), "49": _page(cont=True), "50": empty, "51": _page(GROWTH, cont=True)}
+    assert _heads(pages) == [("SPEECH THERAPY NOTE", "12/11/2024", 48, 49), ("GROWTH CHART", "", 51, 51)]
+
+
+def test_a_new_start_after_unread_pages_never_bridges() -> None:
+    pages = {"48": _page(SPEECH), "49": _page(cont=True), "51": _page(GROWTH, cont=True)}
+    secs = pf.sections(pages, {"50": "declined"})
+    assert [(s["heading"], s["first"], s["last"]) for s in secs] == [
+        ("SPEECH THERAPY NOTE", 48, 49),
+        ("GROWTH CHART", 51, 51),
+    ]

@@ -55,14 +55,25 @@ MARKER = "[[FILE FACTS]]"
 _MAX_SESSIONS = 128
 _TEXT_CHARS = 120
 
+#: A number as a person writes it: "2,313" is one number, never "313".
+_NUM = r"\d{1,3}(?:,\d{3})+(?!\d)|\d{1,6}"
 _PAGE_TOKEN = re.compile(
-    r"\b(?:pp\.?|p\.|pages?)\s*(\d{1,5})(?:\s*(?:-|\u2013|to|through)\s*(\d{1,5}))?",
+    rf"\b(?:pp\.?|p\.|pages?)\s*({_NUM})(?:\s*(?:-|\u2013|to|through)\s*({_NUM}))?",
     re.IGNORECASE,
 )
 _COUNT_TOKEN = re.compile(
-    r"\b(\d{1,5})\s+(pages?|files?|records?|documents?|sections?|attachments?)\b",
+    rf"(?<![\d,.])({_NUM})\s+(pages?|files?|records?|documents?|sections?|attachments?)\b",
     re.IGNORECASE,
 )
+#: Before a number that is part of a document's name ("Exhibit 4 file", "Tab 3
+#: records", "#2 file"): that number is a label, never a quantity.
+_NAME_BEFORE = re.compile(
+    r"(?:\b(?:exhibit|ex|tab|part|vol|volume|no|number|item|appendix|attachment|schedule|"
+    r"chapter|set|bates|doc|document)\.?|#)\s*$",
+    re.IGNORECASE,
+)
+#: A capitalised word just before the number, not at a sentence start: a name.
+_PROPER_BEFORE = re.compile(r"[^.!?\s]\s+[A-Z][\w-]*\s+$")
 _CAPS = re.compile(r"\b[A-Z]{4,}\b")
 
 
@@ -150,6 +161,9 @@ class Facts:
     stated: frozenset[str]
     #: The match model's words the block prints (``asked``), guarded like the reply's.
     echoed: tuple[str, ...] = ()
+    #: The file names the block prints, exactly as on the matter. The reply
+    #: checklist does not judge them (they are authored data, not our words).
+    names: tuple[str, ...] = ()
 
 
 def _tame(value: Any) -> str:
@@ -164,6 +178,23 @@ def _tame(value: Any) -> str:
         # A heading printed all in capitals: every word in title case.
         return " ".join(w if w in known else w.title() for w in text.split(" "))
     return _CAPS.sub(lambda m: m.group(0) if m.group(0) in known else m.group(0).title(), text)
+
+
+def _name(value: Any) -> str:
+    """A file's name exactly as the matter holds it (authored data, never
+    normalised: an underscore, a credential in capitals, a space before the
+    extension are all the name). Only a line break is made a space, so it
+    stays on its line."""
+    return str(value or "").replace("\r", " ").replace("\n", " ")
+
+
+def without_names(facts: Facts | None, text: str) -> str:
+    """``text`` with each file name the facts print replaced by a neutral
+    word, for the reply checklist: it judges our prose, not a file's name."""
+    for name in sorted(facts.names if facts else (), key=len, reverse=True):
+        if name:
+            text = text.replace(name, "the file")
+    return text
 
 
 def _plural(n: int, noun: str) -> str:
@@ -235,7 +266,7 @@ def _attached(files: list[Any], results: dict[str, dict[str, Any]]) -> list[str]
         count = _plural(int(f.page_count or 0), "page")
         where = f"pages {f.pages} ({count})" if f.pages else f"the whole file ({count})"
         found = _evidence(results.get(f.file_id), f.pages) if f.pages else ""
-        lines.append(f"- {_tame(f.name)}, {where}" + (f": {found}" if found else ""))
+        lines.append(f"- {_name(f.name)}, {where}" + (f": {found}" if found else ""))
     return lines
 
 
@@ -248,7 +279,7 @@ def _sections(
     groups: list[tuple[str, list[str]]] = []
     asked_texts: list[str] = []
     for file_id, result in results.items():
-        name = _tame(result.get("name") or "the file")
+        name = _name(result.get("name") or "the file")
         counts = result.get("counts") or {}
         pending: list[str] = []
         for item in result.get("items") or []:
@@ -354,7 +385,12 @@ def build(
     facts_only = text
     for words in asked:
         facts_only = facts_only.replace(words, " ")
-    return Facts(text, _html(blocks), "", tokens(facts_only), tuple(asked))
+    names = tuple(
+        dict.fromkeys(
+            [_name(f.name) for f in files] + [_name(r.get("name")) for r in results.values()]
+        )
+    )
+    return Facts(text, _html(blocks), "", tokens(facts_only), tuple(asked), names)
 
 
 def _html(blocks: list[tuple[str, list[str]]]) -> str:
@@ -372,12 +408,21 @@ def _html(blocks: list[tuple[str, list[str]]]) -> str:
 
 def tokens(text: str) -> frozenset[str]:
     """Every page reference and page or file count in ``text``, normalised."""
+    text = text or ""
     found = set()
-    for m in _PAGE_TOKEN.finditer(text or ""):
-        found.add(f"p{m.group(1)}" + (f"-{m.group(2)}" if m.group(2) else ""))
-    for m in _COUNT_TOKEN.finditer(text or ""):
-        found.add(f"{m.group(1)} {m.group(2).lower().rstrip('s')}")
+    for m in _PAGE_TOKEN.finditer(text):
+        first, last = _n(m.group(1)), _n(m.group(2)) if m.group(2) else ""
+        found.add(f"p{first}" + (f"-{last}" if last else ""))
+    for m in _COUNT_TOKEN.finditer(text):
+        before = text[max(0, m.start() - 40) : m.start()]
+        if _NAME_BEFORE.search(before) or _PROPER_BEFORE.search(before):
+            continue
+        found.add(f"{_n(m.group(1))} {m.group(2).lower().rstrip('s')}")
     return frozenset(found)
+
+
+def _n(number: str) -> str:
+    return number.replace(",", "")
 
 
 def unstated(facts: Facts, model_text: str) -> str:
@@ -459,4 +504,5 @@ __all__ = [
     "searched",
     "tokens",
     "unstated",
+    "without_names",
 ]

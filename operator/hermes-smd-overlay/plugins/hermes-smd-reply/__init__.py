@@ -1546,7 +1546,11 @@ def _relay_draft(**kwargs: Any) -> None:
         # not refused: the draft stands, and the notice tells the model exactly
         # what to correct.
         checklist_hold = _checklist_violations(
-            send_text or report_render.html_text_content(send_html),
+            # A file name the facts print is the matter's own, not our prose: the
+            # checklist never judges it (2026-11-02 replay: credentials in names).
+            matter_file_facts.without_names(
+                facts, send_text or report_render.html_text_content(send_html)
+            ),
             internal=internal,
             tool_name=str(kwargs.get("tool_name") or ""),
             session_id=session_id,
@@ -1559,7 +1563,7 @@ def _relay_draft(**kwargs: Any) -> None:
                 or (
                     facts.text
                     and _checklist_violations(
-                        model_words,
+                        matter_file_facts.without_names(facts, model_words),
                         internal=internal,
                         tool_name=str(kwargs.get("tool_name") or ""),
                         session_id=session_id,

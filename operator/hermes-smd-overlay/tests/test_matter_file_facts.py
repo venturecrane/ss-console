@@ -557,3 +557,86 @@ def test_the_invariant_names_a_body_missing_its_facts() -> None:
     )
     assert "missing from the reply's text" in facts.missing(block, "Hi.", "")
     assert facts.missing(block, "Hi.\n\nAttached:\n- A.pdf", "") == ""
+
+
+# ---- the $0 replay on the seat's indexes (2026-11-02) --------------------------
+
+
+@pytest.mark.parametrize(
+    ("words", "found"),
+    [
+        ("The set has 2,313 pages.", {"2313 page"}),
+        ("See pages 1,200-1,204.", {"p1200-1204"}),
+        ("It is the Exhibit 4 file.", set()),
+        ("Tab 3 records are attached.", set()),
+        ("We sent 3 files.", {"3 file"}),
+        ("See 12 pages.", {"12 page"}),
+    ],
+)
+def test_a_number_is_a_count_only_when_it_counts(words, found) -> None:
+    """Item 3: "2,313 pages" was read as 313, and the 4 in "Exhibit 4 file" as a count."""
+    assert set(facts.tokens(words)) == found
+
+
+def test_a_count_written_with_a_thousands_separator_matches_the_facts() -> None:
+    result = _finding()
+    result.update(
+        pageCount=2313, counts={"pages": 2313, "read": 2313, "unreadable": 0, "notReached": 0}
+    )
+    _searched(result)
+    block = facts.build("s1", "m1", None)
+    assert "(all 2313 pages were read)" in block.text
+    assert facts.unstated(block, "We read all 2,313 pages of it, and the Exhibit 4 file.") == ""
+
+
+NAMES = ("8E_Records_Smith_MD .pdf", "8A Records Dr ANNE SMITH MD.pdf")
+
+
+def test_file_names_are_printed_exactly_as_on_the_matter() -> None:
+    """Item 4: underscores, capitals and the space before the extension are the name."""
+    result = _finding()
+    result["name"] = "Hospital Records_SET 2"
+    _searched(result)
+    staging = mfr.Staging(
+        "m1",
+        MATTER,
+        [
+            mfr.StagedFile("f0", NAMES[0], "a" * 64, 10, "b" * 32, "1-4", 4),
+            mfr.StagedFile("f9", NAMES[1], "a" * 64, 10, "b" * 32, "", 2),
+        ],
+    )
+    block = facts.build("s1", "m1", staging)
+    assert f"- {NAMES[0]}, pages 1-4 (4 pages)" in block.text
+    assert f"- {NAMES[1]}, the whole file (2 pages)" in block.text
+    assert "Hospital Records_SET 2" in block.text and set(NAMES) <= set(block.names)
+    # The checklist judges our words, not the names.
+    masked = facts.without_names(block, block.text)
+    assert NAMES[1] not in masked
+    assert (
+        output_checklist.refusing(output_checklist.check(masked, output_checklist.STAFF_SEND)) == []
+    )
+
+
+def test_lane_a_file_name_in_capitals_never_holds_the_reply(lane) -> None:
+    mod, _d1, sent, spool, _b = lane
+    _email()
+    _find_call(mod, _finding())
+    from shared import matter_binding
+
+    row = {
+        "fileId": "f0",
+        "attachmentName": "SMITH RECORDS MD.pdf",
+        "pages": "1-4",
+        **_spooled(spool, _pdf(4)),
+    }
+    matter_binding.membership_for("s1").note_content_read(MATTER)
+    mod.on_transform_tool_result(
+        tool_name=mfr.STAGE_TOOL,
+        args={"matter_id": MATTER, "files": []},
+        result=_result([row]),
+        session_id="s1",
+        tool_call_id="st1",
+    )
+    assert _reply(mod, "Here are the records.") is None
+    (out,) = sent
+    assert "- SMITH RECORDS MD.pdf, pages 1-4 (4 pages)" in out["comment"]
