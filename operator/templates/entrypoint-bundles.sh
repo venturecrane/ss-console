@@ -77,7 +77,9 @@ else
     fi
   fi
   if [ "${_smd_bundle_jobs}" = "image" ]; then
-    log "JOBS BUNDLE NOT MOUNTED: the image's job runner and Smokeball connector run (reasons above); heartbeat bundles.jobs=image"
+    # Since ADR 0100 W5 the image carries no runner and no Smokeball connector:
+    # an unmounted bundle on a seat that authors a lane means its lanes cannot run.
+    log "JOBS BUNDLE NOT MOUNTED: this seat authors job lanes (${SMD_AUTHORED_LANES}) and has NO job runner or Smokeball connector (reasons above); its lane self-test checks fail; heartbeat bundles.jobs=image"
   fi
   printf '%s\n' "${_smd_bundle_jobs}" > "${SMD_BUNDLE_STATE_DIR}/jobs"
   chmod 0644 "${SMD_BUNDLE_STATE_DIR}/jobs"

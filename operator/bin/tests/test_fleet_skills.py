@@ -101,6 +101,17 @@ def test_unmet_needs_names_each_gap() -> None:
     assert unmet_needs(MANIFEST, CAPS) == []
 
 
+def test_a_bundle_path_is_provided_by_bundle_paths() -> None:
+    # ADR 0100 W5: 16 tracker skills run /opt/connectors/smokeball/.venv/bin/python,
+    # which only the jobs bundle carries. FALSIFIER: without bundle_paths the
+    # need is unmet and every seat refuses the skills release.
+    need = "/opt/connectors/smokeball/.venv/bin/python"
+    manifest = {"needs": {"task-list-keeper": {"paths": [need]}}}
+    caps = dict(CAPS, paths=["/app/a"])
+    assert unmet_needs(manifest, caps) == [f"task-list-keeper: path {need}"]
+    assert unmet_needs(manifest, dict(caps, bundle_paths=[need])) == []
+
+
 def test_capable_seats_get_the_pointer_and_confirm() -> None:
     store, r2, roll, raw = world()
     result = run(store, roll, [Ring(0, ["smd-staging"]), Ring(1, ["pilot-smokeball"], 1)])

@@ -684,7 +684,7 @@ elif [ -x /opt/medchron/.venv/bin/python ] \
   SMD_MEDCHRON_LOOP_PID=$!
   log "Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from ${MEDCHRON_RUN_DIR}/queue)"
 else
-  log "Root medchron daemon NOT launched (the runner venv is not in this image)"
+  log "ERROR: Root medchron daemon NOT launched: this seat authors job lanes (${SMD_AUTHORED_LANES}) but no jobs bundle is mounted at /opt/medchron (the image carries no runner since ADR 0100 W5)"
 fi
 
 # Root-side authored-spec applier (ss ADR 0083 #2084). Same shape, same

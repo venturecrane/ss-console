@@ -109,10 +109,34 @@ def tools_and_classes() -> tuple[list[str], list[str]]:
     return tools, classes
 
 
-def build(paths: list[str], tools: list[str], verbs: list[str], action_classes: list[str]) -> dict:
+DEFAULT_BUNDLE_PATHS = "/app/jobs-bundle-paths.txt"
+
+
+def bundle_paths(listing: Path, root: str = "/opt") -> list[str]:
+    """The jobs bundle's guaranteed paths (ADR 0100 W5), each under a mount root
+    this image actually leaves for it. The bundle, not the image, carries the
+    file; scripts/ci-publish-bundle.sh refuses a bundle missing any of them."""
+    if not listing.is_file():
+        return []
+    out = []
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        rel = line.strip()
+        if not rel or rel.startswith("#"):
+            continue
+        parts = rel.split("/")
+        mount = "/".join(parts[:2]) if parts[0] == "connectors" else parts[0]
+        if os.path.isdir(f"{root}/{mount}"):
+            out.append(f"/opt/{rel}")
+    return sorted(out)
+
+
+def build(
+    paths: list[str], tools: list[str], verbs: list[str], action_classes: list[str], bundled: list[str] | None = None
+) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "paths": paths,
+        "bundle_paths": bundled or [],
         "tools": tools,
         "verbs": verbs,
         "action_classes": action_classes,
@@ -129,11 +153,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("out")
     ap.add_argument("--verbs-file", default=DEFAULT_VERBS_FILE)
     ap.add_argument("--root", action="append", dest="roots")
+    ap.add_argument("--bundle-paths", default=DEFAULT_BUNDLE_PATHS)
     args = ap.parse_args(argv)
     tools, classes = tools_and_classes()
     verbs = verbs_from_table(Path(args.verbs_file).read_text(encoding="utf-8"))
     paths = walk_paths(args.roots or DEFAULT_ROOTS)
-    doc = build(paths, tools, verbs, classes)
+    doc = build(paths, tools, verbs, classes, bundle_paths(Path(args.bundle_paths)))
     Path(args.out).write_text(json.dumps(doc, indent=0, sort_keys=True) + "\n", encoding="utf-8")
     print(
         f"image capabilities: {len(paths)} path(s), {len(tools)} tool(s), {len(verbs)} verb(s), {len(classes)} class(es)"

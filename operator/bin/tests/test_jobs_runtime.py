@@ -178,18 +178,28 @@ def test_a_failing_import_fails_the_check(box: dict[str, Path]) -> None:
     assert _run(box, "import-check", str(good)).returncode == 0
 
 
+def test_image_connectors_skips_what_the_bundle_carries(box: dict[str, Path]) -> None:
+    # ADR 0100 W5: the image builds every connector but the bundle's.
+    # FALSIFIER: drop the skip and smokeball's venv is built here again.
+    res = _run(box, "image-connectors")
+    assert res.returncode == 0, res.stderr + res.stdout
+    assert _log(box) == ["chmod -R a+rX /opt/connectors"]
+
+
 def test_the_dockerfile_runs_the_script_where_the_replaced_lines_ran() -> None:
-    """The image runs the script after its inputs are COPYed, and builds no job venv of its own."""
+    """The image builds the connectors the bundle does not carry, and no job venv at all (ADR 0100 W5)."""
     lines = [ln for ln in DOCKERFILE.read_text().splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
     at = {ln: i for i, ln in enumerate(lines)}
     copy_script = at["COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh"]
-    run_conn = at["RUN sh /app/jobs-runtime.sh connectors"]
-    run_med = at["RUN sh /app/jobs-runtime.sh medchron"]
+    run_conn = at["RUN sh /app/jobs-runtime.sh image-connectors"]
+    mounts = at["RUN install -d -o root -g root -m 0755 /opt/medchron /opt/connectors/smokeball"]
     assert at["COPY operator/requirements/ /app/requirements/"] < run_conn
-    assert at["COPY operator/connectors/ /app/connectors/"] < copy_script < run_conn < run_med
-    assert at["COPY operator/runners/ /app/runners/"] < run_med
-    assert (
-        at["COPY operator/adapter/cost_telemetry/anthropic_pricing.json /opt/medchron/anthropic_pricing.json"] < run_med
+    assert at["COPY operator/connectors/ /app/connectors/"] < copy_script < run_conn < mounts
+    assert at["COPY operator/runners/ /app/runners/"] < mounts
+    assert "RUN sh /app/jobs-runtime.sh medchron" not in at
+    assert "RUN sh /app/jobs-runtime.sh connectors" not in at
+    assert at["COPY operator/templates/jobs-bundle-paths.txt /app/jobs-bundle-paths.txt"] < max(
+        i for ln, i in at.items() if "gen-image-capabilities.py /app/image-capabilities.json" in ln
     )
     code = "\n".join(lines)
     for gone in ("uv venv /opt/medchron", "/opt/connectors/${name}", "medchron.casefile.firm", "command -v antiword"):

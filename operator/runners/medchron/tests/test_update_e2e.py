@@ -55,8 +55,11 @@ class _U:
     input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens = 10, 5, 0, 0
 
 
-#: The records review an update files beside the chronology (the driver stamps today).
-REVIEW = review_list.name("Alpha Example", time.strftime("%m-%d-%y"))
+def _review() -> str:
+    """The records review an update files beside the chronology. The driver stamps
+    the day it runs, so the name is read at the assertion: a constant computed when
+    the module loads fails any suite that crosses midnight between load and run."""
+    return review_list.name("Alpha Example", time.strftime("%m-%d-%y"))
 
 
 def _msg(content: list, stop: str):
@@ -203,7 +206,7 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
     sent = [s["name"] for s in seat.sent]
     final_ex = "Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf"
     # The records review (one row per named file) is filed beside them (2026-10-25).
-    assert sent[1:] == [final_ex, REVIEW] and sent[0].startswith("Alpha Example - Medical Chronology ")
+    assert sent[1:] == [final_ex, _review()] and sent[0].startswith("Alpha Example - Medical Chronology ")
     assert all(s["folderId"] == CHRON_FOLDER for s in seat.sent)
     # The delivered document retired BY ID after the new one was proven; the
     # delivered exhibit (still cited) and the firm's own file left alone.
@@ -212,7 +215,7 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
     assert o.proof["readback"] == "confirmed" and len(o.proof["files"]) == 3  # chronology, exhibit, records review
     from medchron.stages.review import docx_text
 
-    review_text = docx_text(sd / "out" / "alpha" / REVIEW)
+    review_text = docx_text(sd / "out" / "alpha" / _review())
     assert f"added to the chronology as {final_ex[:-4]}" in review_text and "Finding" in review_text
     # The photo was named and never pulled; the re-filed copy of a delivered
     # exhibit was pulled and skipped by its bytes.
@@ -325,7 +328,7 @@ def test_a_named_record_of_another_person_is_left_out_before_any_paid_read(
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "delivered" and o.stage == "update_select" and o.current is not None, o
     assert o.current["by_reason"]["left_out_by_rule"]["files"] == 1
-    assert model.calls == [] and [s["name"] for s in seat.sent] == [REVIEW] and seat.deleted == []
+    assert model.calls == [] and [s["name"] for s in seat.sent] == [_review()] and seat.deleted == []
 
 
 def _job(tmp_path: Path, data_root: Path, ids: list[str]) -> Path:
@@ -416,7 +419,7 @@ def test_a_firm_numbered_exhibit_in_the_folder_takes_its_number_and_the_list_has
     o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
     assert o.outcome == "delivered" and o.stage is None, o
     sent = [s["name"] for s in seat.sent]
-    assert sent[1:] == ["Exhibit 3 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf", REVIEW]
+    assert sent[1:] == ["Exhibit 3 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf", _review()]
     upd = (data_root / "example-matter" / "runs" / "alpha" / "update" / "updated-chronology.md").read_text()
     listed = B.table_rows(upd.split("## Exhibit List", 1)[1].split("## Records Reviewed", 1)[0])
     assert listed[1:] == [
@@ -441,7 +444,7 @@ def test_a_new_record_identical_to_a_firm_numbered_file_reuses_its_number_and_is
     seat.docs.append(doc_row("f2", "Exhibit 2- Example Radiology.pdf", CHRON_FOLDER, len(seat.blobs["n1"])))
     o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
     assert o.outcome == "delivered" and o.stage is None, o
-    assert [s["name"] for s in seat.sent] == [seat.sent[0]["name"], REVIEW]  # the chronology and its review
+    assert [s["name"] for s in seat.sent] == [seat.sent[0]["name"], _review()]  # the chronology and its review
     assert seat.sent[0]["name"].startswith("Alpha Example - Medical Chronology ")
     upd = (data_root / "example-matter" / "runs" / "alpha" / "update" / "updated-chronology.md").read_text()
     listed = B.table_rows(upd.split("## Exhibit List", 1)[1].split("## Records Reviewed", 1)[0])

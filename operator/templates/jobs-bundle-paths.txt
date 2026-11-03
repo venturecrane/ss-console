@@ -1,0 +1,13 @@
+# Paths the `jobs` bundle guarantees on a seat that mounts it (ADR 0100 W5),
+# relative to /opt. One list, two readers:
+#   * scripts/ci-publish-bundle.sh refuses to publish a tarball missing any of them;
+#   * gen-image-capabilities.py records them as `bundle_paths`, so a skill that
+#     cites one (16 tracker skills run /opt/connectors/smokeball/.venv/bin/python)
+#     is not refused by `fleet release --skills` on an image that no longer
+#     carries the runner itself.
+# Add a path here before a skill cites a new one under /opt/medchron or
+# /opt/connectors/smokeball; tests/fleet-skill-needs.test.ts fails otherwise.
+medchron/.venv/bin/medchron
+medchron/.venv/bin/python
+connectors/smokeball/.venv/bin/smokeball-mcp
+connectors/smokeball/.venv/bin/python

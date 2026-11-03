@@ -86,7 +86,11 @@ PYTHON_VERSION="$(tr -d '[:space:]' < "${work}/out/python")"
 # fails on a FOUND entry, because grep exits at the first match and tar dies
 # writing to the closed pipe (the first real publish, 2026-10-31, run 41238271283).
 tar -tf "${work}/out/bundle.tar" > "${work}/listing.txt"
-for entry in medchron/.venv/bin/medchron connectors/smokeball/.venv/bin/smokeball-mcp; do
+# The guaranteed set is one file (ADR 0100 W5): the image records the same list
+# as bundle_paths, and skills that cite one pass the skills release on it.
+mapfile -t guaranteed < <(grep -vE '^[[:space:]]*(#|$)' "${REPO_ROOT}/operator/templates/jobs-bundle-paths.txt")
+[ "${#guaranteed[@]}" -gt 0 ] || { echo "::error::operator/templates/jobs-bundle-paths.txt lists no path"; exit 1; }
+for entry in "${guaranteed[@]}"; do
   grep -qxF "${entry}" "${work}/listing.txt" \
     || { echo "::error::the tarball holds no ${entry} ($(wc -l < "${work}/listing.txt") entries; nearest below)"
          grep -F "$(basename "${entry}")" "${work}/listing.txt" | head -5 || true

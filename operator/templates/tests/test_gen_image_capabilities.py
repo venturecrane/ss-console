@@ -89,11 +89,49 @@ def test_document_shape(tmp_path: Path) -> None:
     assert json.loads(json.dumps(doc)) == {
         "schema_version": 1,
         "paths": ["/app/a"],
+        "bundle_paths": [],
         "tools": ["t"],
         "verbs": ["v"],
         "action_classes": ["read"],
         "selftest": False,
     }
+
+
+def test_bundle_paths_are_recorded_only_under_a_mount_root_the_image_leaves(tmp_path: Path) -> None:
+    # ADR 0100 W5: the image carries no runner; a skill citing the bundle's
+    # python must still pass the skills release. FALSIFIER: an image with no
+    # mount root (a pre-W3 tree, or a mistyped list line) claims nothing.
+    listing = OPERATOR / "templates" / "jobs-bundle-paths.txt"
+    mod = _module()
+    assert mod.bundle_paths(listing, str(tmp_path)) == []
+    (tmp_path / "medchron").mkdir()
+    (tmp_path / "connectors" / "smokeball").mkdir(parents=True)
+    got = mod.bundle_paths(listing, str(tmp_path))
+    assert "/opt/connectors/smokeball/.venv/bin/python" in got
+    assert "/opt/medchron/.venv/bin/medchron" in got
+    assert mod.bundle_paths(tmp_path / "absent.txt", str(tmp_path)) == []
+
+
+def test_every_bundle_path_a_skill_cites_is_guaranteed() -> None:
+    # A skill citing a new /opt/medchron or /opt/connectors/smokeball path the
+    # bundle does not guarantee would be refused on every seat at its release.
+    sys.path.insert(0, str(OPERATOR / "bin" / "lib"))
+    import skill_needs
+
+    listed = {
+        "/opt/" + ln.strip()
+        for ln in (OPERATOR / "templates" / "jobs-bundle-paths.txt").read_text().splitlines()
+        if ln.strip() and not ln.startswith("#")
+    }
+    cited = {
+        p
+        for d in sorted((OPERATOR / "skills").iterdir())
+        if d.is_dir()
+        for p in skill_needs.paths_needed(d)
+        if p.startswith(("/opt/medchron", "/opt/connectors/smokeball"))
+    }
+    assert cited, "no skill cites a bundle path any more; this test's premise changed"
+    assert cited <= listed, f"cited but not guaranteed by the bundle: {sorted(cited - listed)}"
 
 
 def test_selftest_capability_is_read_from_the_tree() -> None:
