@@ -79,7 +79,7 @@ The schedule is the firm's yes in writing, then a reviewed change to the seat's 
 - `initiation.scheduled: true`;
 - `settings.scheduled_caseloads`: the people whose caseloads are reviewed, as Smokeball shows their names, separated by `;`;
 - `settings.scheduled_recipients`: the Named Administrator who receives each list;
-- the cron row, which is the switch itself: `{ skill: case-file-manager, schedule: '17 6-14 * * 1-5', pre_run: pre_run.py, wake_policy: pre_run_decides }`.
+- the cron row, which is the switch itself: `{ skill: case-file-manager, schedule: '19 6-13 * * 1-5', pre_run: pre_run.py, wake_policy: pre_run_decides }`.
 
 The cron fires hourly on weekday mornings and wakes no model; the broker decides everything in the firm's time zone. Each business day (a weekday not on the firm's `holidays` list) queues one **re-check** per caseload; the first business day of the month queues a **full read** of every file instead. A caseload whose last job is still running waits for the next hourly fire. Each list arrives as a new email to the recipient, so each list is its own thread and approval numbers bind to that list. Re-check jobs are held until the seat's `case-file-manager.recheck` proof is accepted.
 
