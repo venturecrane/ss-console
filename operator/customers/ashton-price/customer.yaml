@@ -1915,6 +1915,8 @@ vendor_invoice_intake:
 matter_file_delivery:
   recipients:
     - '@ashtonandprice.com'
-  # The first files reply waits for SMD's review (python -m shared.matter_file_review
-  # list / approve / reject, as root), then every later one sends normally.
-  review_first: 1
+  # The first ten files replies wait for SMD's review (python -m shared.matter_file_review
+  # list / approve / reject, as root), then later ones send normally. Raised from 1 on
+  # 2026-11-02: the Operator's files-reply wording was not yet reliable (two held
+  # replies rejected for false or missing statements).
+  review_first: 10
