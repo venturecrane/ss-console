@@ -17,10 +17,11 @@
                                                                   The SHARED index is never told they are
                                                                   unreadable: a page this job did not reach is
                                                                   this job's state, not the file's
- F    the file's first read would pass what is left of the cap    the record holds ``per_job_cap_usd: <file> N
-                                                                  pages`` before any read; others go on
- G    the cap trips mid-file                                      pages already read stay in the index; the
-                                                                  record holds as F; others go on
+ F    the file's first read would pass what is left of the cap    nothing is read; the next file is tried, and
+                                                                  ``per_job_cap_usd: <file> N pages`` holds the
+                                                                  record only if no file answers it
+ G    the cap trips mid-file, or on a whole file's match          pages already read stay in the index; as F
+                                                                  (the match case says "the match was not asked")
  H    the match call itself fails (``matchError``)                the next candidate; with none left, the record
                                                                   holds ``match_unsettled: <file> the match did
                                                                   not answer``. Never the whole job
@@ -42,8 +43,10 @@ declined, or when a pass reads nothing new, and never past ``ceil(pages / 100)
 
 THE PRICE (``measure.py``). A file's first read is projected at its unread
 pages times the higher of the firm's ``usd_per_page`` and this lane's own
-measured cost per page attempt, times ``1 +`` the measured share of declined
-pages (a declined page is billed twice: its batch, then alone). The pre-flight
+measured cost per page attempt, times the attempts a page costs: ``1 +`` the
+measured share of declined pages once measured, and 2.0 until then. 2.0 is
+the worst case under ``retry_refused=False``: one declined page re-sends its
+whole batch a page at a time, so every page of that batch is billed twice. The pre-flight
 logs the figure it used, and each candidate's unread pages by file id prefix,
 never a name.
 
@@ -86,10 +89,14 @@ def unread(meta: dict[str, Any]) -> int:
 
 
 def order(ids: list[str], files: dict[str, Any], scores: dict[str, int] | None = None) -> list[str]:
-    """Best score first; then a complete index, then fewer pages; the id breaks a tie."""
+    """FREE files first (every page already in the index: a match is all they
+    cost), best score first among them; then the priced ones, best score first,
+    then fewer pages; the id breaks a tie. On the real A&P request a record's
+    top-scored file was a 2,313-page set while a 35-page file with a complete
+    index, scoring one less, was never tried (2026-11-03)."""
     sc = scores or {}
     return sorted(
-        ids, key=lambda fid: (-int(sc.get(fid, 0)), unread(files[fid]) > 0, int(files[fid]["page_count"]), fid)
+        ids, key=lambda fid: (unread(files[fid]) > 0, -int(sc.get(fid, 0)), int(files[fid]["page_count"]), fid)
     )
 
 
@@ -215,7 +222,11 @@ def _try(
         reason = str(getattr(stop, "hold").reason)
         if not reason.startswith(limits_mod.CAP_SETTING):
             raise
-        return "held", f"{limits_mod.CAP_SETTING}: {fid[:ID_PREFIX]} {unread(meta)} pages"
+        left = unread(meta)
+        # The cap can trip on the MATCH of a file whose pages are all read: then
+        # there is no page count to give, only that the match was not asked.
+        what = f"{left} pages" if left else "the match was not asked"
+        return "held", f"{limits_mod.CAP_SETTING}: {fid[:ID_PREFIX]} {what}"
     if out.get("matchError"):
         return "unsettled", f"match_unsettled: {fid[:ID_PREFIX]} the match did not answer"
     if assemble.found(out):
@@ -238,9 +249,12 @@ def locate(run: Any, hook: Any, stop_cls: type[BaseException]) -> None:
         for fid in orders(run).get(str(n)) or []:
             stop_request.check("records")
             state, reason = _try(run, n, fid, rec, files[fid], hook, stop_cls)
-            if state in ("found", "held"):
-                pending = reason
+            if state == "found":
+                pending = ""
                 break
+            # A hold on one file (its first read would pass the cap) never ends
+            # the search: a later file may answer the record. Its reason stands
+            # only if none does.
             pending = reason or pending
         if pending:
             holds[n] = pending

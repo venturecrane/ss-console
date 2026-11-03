@@ -17,8 +17,12 @@ job when it ends:
   recorded unreadable) and how many of them the model declined.
 
 ``per_attempt = dollars / attempts`` and ``refused_share = refused / pages``.
-A page not yet read is projected at ``(1 + refused_share)`` attempts. Fewer
-than :data:`MIN_ATTEMPTS` measured attempts and the firm's figure stands alone.
+A page not yet read is projected at ``(1 + refused_share)`` attempts once
+measured. With fewer than :data:`MIN_ATTEMPTS` measured attempts the firm's
+figure stands, at :data:`WORST_ATTEMPTS` attempts a page: one declined page
+re-sends its whole batch of eight a page at a time, so the worst case bills
+every page twice (the suite's 47-page file with pages 15-37 declined costs 79
+attempts, 1.68x; one declined page in every batch costs 2.0x).
 """
 
 from __future__ import annotations
@@ -34,6 +38,8 @@ from ..ledger import read_rows
 NAME = "price.json"
 JOB_NAME = "measure.json"
 MIN_ATTEMPTS = 50
+#: Attempts a page is projected at before the lane has measured its own.
+WORST_ATTEMPTS = 2.0
 
 
 @dataclass(frozen=True)
@@ -64,10 +70,12 @@ def price(state: Path, firm_per_page: float) -> Price:
     m = _read(state / NAME)
     attempts, pages = int(m.get("attempts") or 0), int(m.get("pages") or 0)
     share = (int(m.get("refused") or 0) / pages) if pages else 0.0
-    measured = float(m.get("dollars") or 0.0) / attempts if attempts >= MIN_ATTEMPTS else 0.0
+    if attempts < MIN_ATTEMPTS:
+        return Price(firm_per_page, WORST_ATTEMPTS, "the firm's usd_per_page, not yet measured")
+    measured = float(m.get("dollars") or 0.0) / attempts
     if measured > firm_per_page:
         return Price(measured, 1.0 + share, f"measured over {attempts} page attempts")
-    return Price(firm_per_page, 1.0 + share, "the firm's usd_per_page")
+    return Price(firm_per_page, 1.0 + share, f"the firm's usd_per_page, measured over {attempts} page attempts")
 
 
 def note_pages(data: Path, read: int, refused: int) -> None:
@@ -113,4 +121,4 @@ def record_job(state: Path, data: Path, ledger: Path, pricing: Any) -> bool:
     return True
 
 
-__all__ = ["MIN_ATTEMPTS", "NAME", "Price", "job_spend", "note_pages", "price", "record_job"]
+__all__ = ["MIN_ATTEMPTS", "WORST_ATTEMPTS", "NAME", "Price", "job_spend", "note_pages", "price", "record_job"]

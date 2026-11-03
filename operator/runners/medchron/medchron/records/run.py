@@ -297,8 +297,12 @@ class RecordsRun(RunBase):
         except Exception as exc:  # could not look is never "no file is named for it"
             raise RecordsHold("finder_failed: the matter's files could not be listed") from exc
         got = [(fid, sc) for fid, sc in rank.rank(rows, rec) if self._fetch(mid, fid, files)]
-        got.sort(key=lambda fs: (-fs[1], search.unread(files[fs[0]]) > 0, int(files[fs[0]]["page_count"]), fs[0]))
-        return got[:MAX_CANDIDATES]
+        # Every free file (a complete index: only its match costs anything),
+        # then the best-scored priced ones, at most MAX_CANDIDATES of those.
+        free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
+        priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
+        priced.sort(key=lambda fs: (-fs[1], int(files[fs[0]]["page_count"]), fs[0]))
+        return free + priced[:MAX_CANDIDATES]
 
     def _resolve(self) -> None:
         mid = self._matter_id()

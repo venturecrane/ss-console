@@ -14,7 +14,7 @@ import pytest
 
 from medchron import proof_mode
 from medchron.ledger import read_rows
-from medchron.records import assemble, search
+from medchron.records import assemble, measure, search
 from medchron.records.run import RecordsRun
 from records_testkit import FakeFinderModel, FakeParseClient, FakeSmokeball, job_dir, pdf, setup_env
 
@@ -271,6 +271,83 @@ def test_G_the_cap_tripping_mid_file_keeps_its_pages_and_the_other_record_goes_o
     assert len(pf.load_index(_sha(r, big))["pages"]) == 8  # the batch read before the cap stays
 
 
+def test_G_the_cap_tripping_on_a_whole_files_match_names_no_page_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cap trips on the MATCH of a file whose pages are all read (no
+    match cached): there are 0 unread pages, so the hold names no page count
+    and the reply says only that SMD is finishing it."""
+    from smokeball_connector import page_finder as pf
+
+    model = FakeFinderModel(match_fn=by_sections)
+    env = setup_env(tmp_path, monkeypatch, model)
+    (env["inputs"] / "records-firm.yaml").write_text(
+        "per_job_cap_usd: 5.0\nmonthly_budget_usd: 100.0\nusd_per_page: 0.0001\n", encoding="utf-8"
+    )
+    small = pdf(10)
+    pre = tmp_path / "pre.pdf"
+    pre.write_bytes(small)
+    work = tmp_path / "pre-work"
+    work.mkdir()
+    pf.build_index(pre, work, window=None)  # every page read; NO match cached
+    sb = FakeSmokeball()
+    sb.add(1, "Eastgate Imaging set.pdf", pdf(40))
+    free = sb.add(2, "Northside Clinic discharge records.pdf", small)
+    recs = [_rec("the Eastgate Imaging MRI", provider="Eastgate Imaging"), _rec(DISCHARGE)]
+    r = RecordsRun(
+        job_dir(tmp_path, request_text=f"Please send the Eastgate Imaging MRI and {DISCHARGE}.", per_job_cap_usd=0.015),
+        inputs_dir=str(env["inputs"]),
+        pricing=str(env["pricing"]),
+        state_dir=env["state"],
+        client=sb,
+        model_client=FakeParseClient({"items": recs}),
+        log=lambda _m: None,
+    )
+    v = json.loads(r.run().to_json())
+    holds = search.item_holds(r.data)
+    assert holds[2] == f"per_job_cap_usd: {free[:8]} the match was not asked"
+    text = _facts(r)
+    assert "- the discharge summary: not established yet; SMD is finishing it" in text
+    assert "0 pages" not in text and v["verdict"] == "held"
+
+
+def test_a_free_file_is_tried_before_a_better_scored_priced_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The A&P shape of records 4 and 5: the top-scored candidate a 2,313-page
+    set with no index (its first read over the cap), a 10-page file with a
+    complete index scoring one less. The record is found in the free file at
+    $0 of page reads, and nothing holds."""
+    from smokeball_connector import page_finder as pf
+
+    model = FakeFinderModel(match_fn=by_sections)
+    env = setup_env(tmp_path, monkeypatch, model)
+    small = pdf(10)
+    pre = tmp_path / "pre.pdf"
+    pre.write_bytes(small)
+    work = tmp_path / "pre-work"
+    work.mkdir()
+    pf.build_index(pre, work, window=None)
+    sb = FakeSmokeball()
+    big = sb.add(1, "Northside Clinic records 2021.pdf", pdf(2313))
+    sb.add(2, "Northside Clinic records.pdf", small)
+    model.bodies.clear()
+    r = RecordsRun(
+        job_dir(tmp_path, request_text=f"Please send {VISIT}."),
+        inputs_dir=str(env["inputs"]),
+        pricing=str(env["pricing"]),
+        state_dir=env["state"],
+        client=sb,
+        model_client=FakeParseClient({"items": [_rec(VISIT, dates=["3/3/2021"])]}),
+        log=lambda _m: None,
+    )
+    v = json.loads(r.run().to_json())
+    scores = json.loads((r.data / search.SCORES).read_text())["1"]
+    assert scores[big] == 5 and list(scores.values()).count(4) == 1  # the big set scores higher
+    assert v["verdict"] == "delivered" and v["items"] == [{"n": 1, "outcome": "attached", "files": 1}]
+    assert model.index_calls() == 0 and not search.item_holds(r.data)
+
+
 def test_H_a_match_that_fails_tries_the_next_file_and_holds_only_that_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -314,8 +391,22 @@ def test_calls_and_spend_are_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyP
     r, _v = _job(tmp_path, monkeypatch, model, sb, [_rec(DISCHARGE)], f"Please send {DISCHARGE}.")
     sha = _sha(r, f)
     assert calls.builds[sha] + calls.matches[sha] <= -(-10 // 100) + 2
+    # Actual page spend never passes what the pre-flight projected for the
+    # file's first read (10 unread pages x the price of a page).
+    dollars, _attempts = _page_spend(r)
+    assert dollars <= 10 * r.firm.usd_per_page * measure.WORST_ATTEMPTS
+
+
+def test_the_projection_covers_the_worst_decline_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """One declined page in every batch: the whole batch is re-sent a page at
+    a time, so every page is billed twice. The projection (2.0x) covers it."""
+    model = FakeFinderModel(match_fn=by_sections, refuse=frozenset({1, 9, 17, 25, 33, 41}))
+    sb = FakeSmokeball()
+    sb.add(1, "Northside Clinic records.pdf", pdf(47))
+    r, _v = _job(tmp_path, monkeypatch, model, sb, [_rec(VISIT)], f"Please send {VISIT}.")
     dollars, attempts = _page_spend(r)
-    assert dollars <= attempts * r.firm.usd_per_page * 1.5
+    assert attempts == 2 * 47  # every page in its batch, then every page alone
+    assert dollars <= 47 * r.firm.usd_per_page * measure.WORST_ATTEMPTS
 
 
 def test_the_bound_holds_even_if_declined_pages_were_retried(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

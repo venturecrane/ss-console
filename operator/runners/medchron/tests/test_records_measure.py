@@ -46,7 +46,8 @@ def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: FakeFinderModel
 def test_the_price_is_the_higher_of_the_firm_and_the_measured_figure(tmp_path: Path) -> None:
     state = tmp_path / "state"
     p = measure.price(state, 0.009)
-    assert p.per_page == pytest.approx(0.009) and "firm" in p.source
+    # Not yet measured: the firm's figure, at the worst case of 2 attempts a page.
+    assert p.per_page == pytest.approx(0.018) and "not yet measured" in p.source
     state.mkdir()
     (state / measure.NAME).write_text(json.dumps({"dollars": 5.09, "attempts": 100, "pages": 46, "refused": 23}))
     p = measure.price(state, 0.009)
@@ -65,4 +66,7 @@ def test_a_finished_job_adds_its_measurement_once(tmp_path: Path, monkeypatch: p
 def test_the_preflight_logs_the_price_it_used(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     log: list[str] = []
     _run(tmp_path, monkeypatch, FakeFinderModel(), 10, log)
-    assert any(m.startswith("[preflight] priced at $0.0100 a page (the firm's usd_per_page") for m in log)
+    assert any(
+        m.startswith("[preflight] priced at $0.0200 a page (the firm's usd_per_page, not yet measured; 2.00 attempts")
+        for m in log
+    )
