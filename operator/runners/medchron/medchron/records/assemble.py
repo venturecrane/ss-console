@@ -124,6 +124,29 @@ def held_line(asked: str, reason: str) -> str:
     return f"- {facts_mod._tame(asked) or 'the record asked for'}: not established yet; {why}"
 
 
+def with_gaps(
+    block_text: str, block_html: str, results: dict[str, dict[str, Any]], files: list[dict[str, Any]]
+) -> tuple[str, str]:
+    """The facts block, plus each ATTACHED file with pages the model could not
+    read: a record found on the readable pages goes out (2026-11-03: 47 pages,
+    23 unreadable, the visit found on 1-2 and 6-39), and the reply says, in the
+    contract's gap words, how many pages of that file were not read. A file the
+    renderer already named in a "Not established" heading is not named twice."""
+    lines = []
+    for fid in dict.fromkeys(str(f.get("file_id")) for f in files):
+        result = results.get(fid) or {}
+        gone = int((result.get("counts") or {}).get("unreadable") or 0)
+        name = facts_mod._name(result.get("name") or "the file")
+        line = f"- {facts_mod._plural(gone, 'page')} of {name} could not be read"
+        if gone and f"{facts_mod._plural(gone, 'page')} of {name} could not be read" not in block_text:
+            lines.append(line)
+    if not lines:
+        return block_text, block_html
+    head = "Could not be read:"
+    text = "\n\n".join(p for p in (block_text, head + "\n" + "\n".join(lines)) if p)
+    return text, block_html + facts_mod.html_blocks([(head, lines)])
+
+
 def with_held(
     block_text: str, block_html: str, records: list[dict[str, Any]], holds: dict[int, str]
 ) -> tuple[str, str]:

@@ -146,4 +146,38 @@ def test_before_is_given_the_requests_model_and_an_estimate(model: FakeModel, tm
     (index_model, index_est), (match_model, _) = hook.before_calls
     assert index_model == match_model == pf.model()
     assert index_est >= 8 * 1600
-    assert hook.after_calls[0][1] == {"input_tokens": 1600, "output_tokens": 80}
+    # The page images the request carried ride beside its tokens; the match carries none.
+    assert hook.after_calls[0][1] == {"input_tokens": 1600, "output_tokens": 80, "pages": 8}
+    assert hook.after_calls[1][1]["pages"] == 0
+
+
+def test_without_retries_a_declined_page_is_never_asked_for_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+
+    from smokeball_connector import vision
+
+    fake = FakeModel(refuse=frozenset({3}))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("SMOKEBALL_VISION_DISABLED", raising=False)
+    monkeypatch.setenv(pf.INDEX_DIR_ENV, str(tmp_path / "index"))
+    monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(fake)))
+    src = _set(tmp_path, 8)
+    pf.build_index(src, _work(tmp_path), window=None, retry_refused=False)
+    first = fake.index_calls()
+    again = pf.build_index(src, _work(tmp_path), window=None, retry_refused=False)
+    assert fake.index_calls() == first and again["read_now"] == []
+    # The default still owes the page its one retry.
+    pf.build_index(src, _work(tmp_path), window=None)
+    assert fake.index_calls() == first + 1
+
+
+def test_settle_unreached_records_the_missing_pages_for_good(model: FakeModel, tmp_path: Path) -> None:
+    src = _set(tmp_path, 10)
+    pf.build_index(src, _work(tmp_path), window=(1, 8))
+    sha = pf.file_sha256(src)
+    assert pf.settle_unreached(sha) == 2
+    index = pf.load_index(sha)
+    assert index["unreadable"] == {"9": "not reached", "10": "not reached"}
+    assert pf._covered(index) and pf.settle_unreached(sha) == 0

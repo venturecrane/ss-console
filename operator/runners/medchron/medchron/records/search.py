@@ -28,6 +28,7 @@ files in the same order and pays for nothing twice.
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,7 @@ from smokeball_connector import page_finder as pf
 
 from .. import limits as limits_mod, stop_request
 from ..litigation.tools import dump
-from . import assemble
+from . import assemble, measure
 from .outcome import RecordsHold
 
 ORDER = "order.json"
@@ -45,10 +46,12 @@ ID_PREFIX = 8
 
 
 def unread(meta: dict[str, Any]) -> int:
-    """Pages of the file not in its index (a page declined for good counts as read)."""
+    """Pages of the file in neither the index's pages nor its unreadable ones.
+    The lane never asks for a declined page again (``retry_refused=False``),
+    so a declined page costs nothing more and is not priced."""
     index = pf.load_index(meta["sha256"])
-    settled = sum(1 for k in index["unreadable"] if pf._settled(index, k) and k not in index["pages"])
-    return max(0, int(meta["page_count"]) - len(index["pages"]) - settled)
+    gone = sum(1 for k in index["unreadable"] if k not in index["pages"])
+    return max(0, int(meta["page_count"]) - len(index["pages"]) - gone)
 
 
 def order(ids: list[str], files: dict[str, Any]) -> list[str]:
@@ -85,7 +88,36 @@ def preflight(run: Any) -> None:
     per = {fid: unread(files[fid]) for fid in wanted}
     detail = ", ".join(f"{fid[:ID_PREFIX]} {n}" for fid, n in sorted(per.items(), key=lambda kv: (kv[1], kv[0])))
     run.log(f"[preflight] {len(wanted)} files, {sum(per.values())} unread pages ({detail or 'none'})")
+    run.log(f"[preflight] priced at {measure.price(run.state, run.firm.usd_per_page).describe()}")
     run.limits.check_before_paid(projected_usd=0.0, spent_usd=run.budget.refresh(), stage="preflight")
+
+
+def read_all(run: Any, source: Path, mid: str, hook: Any) -> int:
+    """Read the file until it is SETTLED (every page read or recorded
+    unreadable), and return the build calls made.
+
+    A page the model declined is never asked for again (``retry_refused``
+    False: the second dry run of 2026-11-03 bought 23 refusals again and again).
+    A pass that reads nothing new ends the loop, and the pages it could not
+    reach are recorded unreadable ("not reached"), so one page the wire keeps
+    failing can never keep the file open. At most ``ceil(pages / 100) + 1``
+    build calls, so with the match, ``ceil(pages / 100) + 2`` calls a file."""
+    calls = 0
+    while True:
+        with tempfile.TemporaryDirectory(dir=run.data) as tmp:
+            built = pf.build_index(source, Path(tmp), window=None, matter_id=mid, hook=hook, retry_refused=False)
+        calls += 1
+        index = built["index"]
+        total = int(index.get("page_count") or 0)
+        measure.note_pages(run.data, len(built["read_now"]), len(built["unreadable_now"]))
+        left = total - len(index["pages"]) - len(index["unreadable"])
+        if left <= 0:
+            return calls
+        progress = len(built["read_now"]) + len(built["unreadable_now"])
+        if not progress or calls >= -(-total // pf.PAGES_PER_CALL) + 1:
+            run.log(f"[locate] {left} pages not reached after {calls} calls; recorded unreadable")
+            measure.note_pages(run.data, 0, pf.settle_unreached(index["sha256"]))
+            return calls
 
 
 def _priced(run: Any, fid: str, meta: dict[str, Any]) -> str | None:
@@ -94,9 +126,11 @@ def _priced(run: Any, fid: str, meta: dict[str, Any]) -> str | None:
     pages = unread(meta)
     if not pages:
         return None
+    price = measure.price(run.state, run.firm.usd_per_page)
+    run.log(f"[locate] {fid[:ID_PREFIX]}: {pages} unread pages at {price.describe()}")
     try:
         run.limits.check_before_paid(
-            projected_usd=pages * run.firm.usd_per_page, spent_usd=run.budget.refresh(), stage="locate"
+            projected_usd=pages * price.per_page, spent_usd=run.budget.refresh(), stage="locate"
         )
     except limits_mod.LimitHold as hold:
         if hold.setting != limits_mod.CAP_SETTING:
@@ -131,6 +165,9 @@ def locate(run: Any, hook: Any, stop_cls: type[BaseException]) -> None:
                 break
             if out.get("matchError"):
                 raise RecordsHold("finder_failed: the match step did not answer")
+            if not out.get("items") and not int(out.get("indexedPages") or 0):
+                # No page of the file could be read, so the match had nothing to run on.
+                raise RecordsHold(f"match_unsettled: record {n}'s file has no readable page")
             if assemble.found(out):
                 break
         dump(run.data / HOLDS, {str(k): v for k, v in holds.items()})

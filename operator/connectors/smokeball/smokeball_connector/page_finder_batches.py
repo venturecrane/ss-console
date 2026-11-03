@@ -16,6 +16,7 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from . import vision
@@ -162,3 +163,37 @@ def _run_batches(
         list(pool.map(reader.read, batches))
     if reader.stopped is not None:
         raise reader.stopped
+
+
+def _covered(index: dict[str, Any], retry_refused: bool = True) -> bool:
+    """Every page of the file is in the index: read, or unreadable for good
+    (:func:`_settled`). A page declined only once is still owed its one retry,
+    so it keeps the build going exactly as :func:`_wanted` would, unless
+    ``retry_refused`` is False (any unreadable page then counts as settled)."""
+    total = index.get("page_count")
+    if not isinstance(total, int) or isinstance(total, bool) or total < 1:
+        return False
+    settled = sum(
+        1 for k in index["unreadable"] if (not retry_refused or _settled(index, k)) and k not in index["pages"]
+    )
+    return len(index["pages"]) + settled >= total
+
+
+def settle_unreached(sha: str, base: Path | None = None, reason: str = "not reached") -> int:
+    """Record every page of a file that is neither read nor unreadable as
+    unreadable (``reason``), for good: no call retries it. The records lane
+    calls it when a pass made no progress, so one page the wire kept failing
+    can never keep a file unsettled, or a loop running. Returns how many."""
+    index = _pf().load_index(sha, base)
+    total = index.get("page_count")
+    if not isinstance(total, int) or total < 1:
+        return 0
+    missing = [
+        str(n) for n in range(1, total + 1) if str(n) not in index["pages"] and str(n) not in index["unreadable"]
+    ]
+    for key in missing:
+        index["unreadable"][key] = reason
+        index["refusals"][key] = REFUSAL_TRIES
+    if missing:
+        _pf().save_index(index, base)
+    return len(missing)

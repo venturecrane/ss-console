@@ -118,15 +118,39 @@ class FakeFinderModel:
     """The Messages API at ``vision._http_client``: index requests answered from
     the code-written labels, match requests from :data:`MATCH` by the request words."""
 
-    def __init__(self, match: dict[str, list[dict[str, Any]]] | None = None) -> None:
+    def __init__(
+        self,
+        match: dict[str, list[dict[str, Any]]] | None = None,
+        *,
+        refuse: frozenset[int] = frozenset(),
+        fail: frozenset[int] = frozenset(),
+    ) -> None:
         self.match = {k: list(v) for k, v in (MATCH if match is None else match).items()}
         self.bodies: list[dict[str, Any]] = []
+        #: Pages the model declines on every request that carries them (billed input, as a refusal is).
+        self.refuse = refuse
+        #: Pages whose request fails on the wire every time (no usage).
+        self.fail = fail
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.bodies.append(body)
         content = body["messages"][0]["content"]
         if "pages" in body["output_config"]["format"]["schema"]["properties"]:
+            labels = {
+                int(m.group(1)) for b in content if b["type"] == "text" for m in [LABEL.match(b.get("text", ""))] if m
+            }
+            if labels & self.fail:
+                return httpx.Response(400, json={"error": {"type": "invalid_request_error"}})
+            if labels & self.refuse:
+                return httpx.Response(
+                    200,
+                    json={
+                        "content": [],
+                        "stop_reason": "refusal",
+                        "usage": {"input_tokens": 1600 * len(labels), "output_tokens": 0},
+                    },
+                )
             rows = []
             for b in content:
                 m = LABEL.match(b.get("text", "")) if b["type"] == "text" else None

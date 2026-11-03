@@ -49,7 +49,7 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, parse as parse_mod, search
+from . import assemble, firm as firm_mod, job as job_mod, measure, parse as parse_mod, search
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -95,10 +95,18 @@ class CapHook:
             raise CapStop(hold) from hold
 
     def after(self, model: str, usage: dict[str, int]) -> None:
+        """One ledger row per request, in the ledger's own shape (``in``/``out``,
+        ``ledger.usage_dict``, read from the page finder's ``input_tokens`` /
+        ``output_tokens``), with the page images it carried in ``pages``."""
         tokens = SimpleNamespace(
-            input_tokens=int(usage.get("input_tokens") or 0), output_tokens=int(usage.get("output_tokens") or 0)
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            cache_read_input_tokens=int(usage.get("cache_read_input_tokens") or 0),
+            cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens") or 0),
         )
-        self.run.ledger.record(self.stage, model, tokens, effort="low", cache=False, batch=False)
+        self.run.ledger.record(
+            self.stage, model, tokens, effort="low", cache=False, batch=False, pages=int(usage.get("pages") or 0)
+        )
 
 
 def _query(text: str) -> str:
@@ -324,22 +332,6 @@ class RecordsRun(RunBase):
         search.preflight(self)
 
     # ---- locate --------------------------------------------------------------------
-    def _read_all(self, source: Path, mid: str, hook: CapHook) -> None:
-        """Read the file's every page, a pass at a time, while pages remain and
-        a pass made progress (bounded by the page count)."""
-        from smokeball_connector import page_finder as pf
-
-        passes = 0
-        while True:
-            with tempfile.TemporaryDirectory(dir=self.data) as tmp:
-                built = pf.build_index(source, Path(tmp), window=None, matter_id=mid, hook=hook)
-            index = built["index"]
-            left = int(index.get("page_count") or 0) - len(index["pages"]) - len(index["unreadable"])
-            passes += 1
-            progress = len(built["read_now"]) + len(built["unreadable_now"])
-            if left <= 0 or not progress or passes > int(index.get("page_count") or 0) // pf.PAGES_PER_CALL + 2:
-                return
-
     def locate_path(self, n: int, file_id: str) -> Path:
         return self.data / "locate" / str(n) / f"{file_id}.json"
 
@@ -353,9 +345,9 @@ class RecordsRun(RunBase):
             return json.loads(path.read_text(encoding="utf-8"))
         source = self.data / "files" / f"{file_id}.pdf"
         try:
-            self._read_all(source, mid, hook)
+            search.read_all(self, source, mid, hook)
             with tempfile.TemporaryDirectory(dir=self.data) as tmp:
-                out = pf.locate(source, what, Path(tmp), matter_id=mid, hook=hook)
+                out = pf.locate(source, what, Path(tmp), matter_id=mid, hook=hook, retry_refused=False)
         except pf.FinderRefused as exc:
             raise RecordsHold(f"finder_failed: {exc}") from exc
         out["items"] = [{k: v for k, v in item.items() if not k.startswith("_")} for item in out.get("items") or []]
@@ -461,6 +453,7 @@ class RecordsRun(RunBase):
             hold = "cut_refused: a record was found and no cut carries it"
         if hold is not None:
             return self.compose_held(hold, results, mid, records, owners, unresolved)
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
         text, html = assemble.compose(block_t, block_h, held=False)
         doc = {
             "text": block_t,
@@ -529,6 +522,7 @@ class RecordsRun(RunBase):
         if any(o["outcome"] in ("unplaced", "unresolved") for o in outcomes):
             return self.compose_held(hold, results, mid, records, owners, unresolved)
         block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
         block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
@@ -586,7 +580,13 @@ class RecordsRun(RunBase):
         v = self._verdict(stage, hold, failed, doc)
         if v.reason and not REASON.match(v.reason):
             v.reason = f"unexpected: {v.reason}"
+        # The one spend figure: the usage ledger, priced (budget.Budget), the
+        # same rows the cap reads before every request.
         v.cents = int(round(self.budget.refresh() * 100))
+        try:
+            measure.record_job(self.state, self.data, self.ledger.path, self.pricing)
+        except OSError as exc:  # a lost measurement must never change a verdict
+            self.log(f"[measure] not recorded: {type(exc).__name__}")
         return v
 
     def _verdict(self, stage: str, hold: str | None, failed: str | None, doc: dict[str, Any] | None) -> Verdict:
