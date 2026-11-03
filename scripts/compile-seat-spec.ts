@@ -15,6 +15,7 @@
  *       [--config <customer.yaml>] [--compiled-from <sha>]
  *       [--image-manifest <f>] [--image-capabilities <f>] [--image-lane-inputs <f>]
  *       [--skills-pointer <f>] [--skills-manifest <f>] [--published <f>]
+ *       [--jobs-bundle-pointer <f>]
  *       [--lane-pin <lane>=<f> ...] [--current-spec <f>] [--sign] [--provisioning]
  *       writes <dir>/spec.json (the canonical bytes) and, with --sign and
  *       SEAT_SPEC_SIGNING_KEY set, <dir>/pointer.json. A missing input file is
@@ -39,7 +40,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
-import { LANE_INPUTS, readLaneSchemaDigests, sha256Hex } from './lib/seat-spec'
+import { LANE_INPUTS, readJobsBundlePaths, readLaneSchemaDigests, sha256Hex } from './lib/seat-spec'
 import {
   compileSpec,
   pointerProblem,
@@ -118,6 +119,8 @@ function inputsFrom(v: Record<string, string | string[] | boolean | undefined>):
     imageLaneInputs: readJson(str('image-lane-inputs')),
     skillsPointer: readJson(str('skills-pointer')),
     skillsManifest: readJson(str('skills-manifest')),
+    jobsBundlePointer: readJson(str('jobs-bundle-pointer')),
+    jobsBundlePaths: readJobsBundlePaths(repo),
     published: readOptional(str('published')),
   }
 }
@@ -138,6 +141,7 @@ const COMPILE_OPTIONS = {
   'image-lane-inputs': str,
   'skills-pointer': str,
   'skills-manifest': str,
+  'jobs-bundle-pointer': str,
   published: str,
   'current-spec': str,
   'lane-pin': { type: 'string', multiple: true },

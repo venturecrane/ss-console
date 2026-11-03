@@ -12,7 +12,13 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { LANE_INPUTS, canonicalJson, imagePathOf, sha256Hex } from '../scripts/lib/seat-spec'
+import {
+  LANE_INPUTS,
+  canonicalJson,
+  imagePathOf,
+  readJobsBundlePaths,
+  sha256Hex,
+} from '../scripts/lib/seat-spec'
 import {
   compileSpec,
   keyIdOf,
@@ -128,6 +134,87 @@ describe('compileSpec: golden cases', () => {
       inputs({ imageCapabilities: undefined, published: Buffer.from('personas: []\n') })
     )
     expect(none.imageRefusals.join('\n')).toContain('cannot determine')
+  })
+
+  describe('the jobs bundle provides its guaranteed paths (ADR 0100 W5, Deploy run 41704284912)', () => {
+    // A&P-shaped: a tracker skill runs the Smokeball connector's python, which
+    // since #3694 only the jobs bundle carries; the image's capabilities list
+    // everything else. Before this, every config publish on a lane seat was
+    // refused with "the enabled skills need what the seat's image does not
+    // provide: path:/opt/connectors/smokeball/.venv/bin/python".
+    const SB = '/opt/connectors/smokeball/.venv/bin/python'
+    const sbManifest = {
+      ...SKILLS_MANIFEST,
+      needs: {
+        'matter-reader': {
+          ...SKILLS_MANIFEST.needs['matter-reader'],
+          paths: ['/app/bin/reader', SB],
+        },
+      },
+    }
+    const pointer = {
+      version: '202611030000-0123abcd',
+      manifest_key: 'fleet/bundles/jobs/202611030000-0123abcd.json',
+      manifest_sha256: 'f'.repeat(64),
+    }
+    const apInputs = (over: Partial<CompileInputs> = {}): CompileInputs =>
+      inputs({
+        skillsManifest: sbManifest,
+        jobsBundlePaths: readJobsBundlePaths(REPO_ROOT),
+        ...over,
+      })
+
+    it('reproduces the refusal: no bundle pointer, the image alone must provide the path', () => {
+      const r = compileSpec(apInputs())
+      expect(r.imageRefusals.join('\n')).toContain(
+        "the enabled skills need what the seat's image does not provide"
+      )
+      expect(r.imageRefusals.join('\n')).toContain(`path:${SB}`)
+      expect(r.spec.bundles).toBeUndefined()
+    })
+
+    it('with a bundle pointer the path counts as provided and the spec records it came from the bundle', () => {
+      const r = compileSpec(apInputs({ jobsBundlePointer: pointer }))
+      expect(r.imageRefusals).toEqual([])
+      expect(r.spec.bundles).toEqual({
+        jobs: { pointer_key: 'vaults/seat-alpha/bundles/jobs-pointer.json', provides: [SB] },
+      })
+      // The requirement itself is unchanged: the seat still needs the path.
+      const req = r.spec.requires as { capabilities: { paths: string[] } }
+      expect(req.capabilities.paths).toContain(SB)
+    })
+
+    it('a malformed or foreign pointer is no bundle: refused as before', () => {
+      for (const bad of [
+        new Error('unreadable'),
+        { ...pointer, manifest_key: 'fleet/skills/202611030000-0123abcd.json' },
+        { ...pointer, manifest_sha256: 'nope' },
+        'not an object',
+      ]) {
+        const r = compileSpec(apInputs({ jobsBundlePointer: bad }))
+        expect(r.imageRefusals.join('\n')).toContain(`path:${SB}`)
+      }
+    })
+
+    it('the bundle answers only its own paths: any other unmet need is still refused', () => {
+      const r = compileSpec(
+        apInputs({
+          jobsBundlePointer: pointer,
+          imageCapabilities: { ...CAPS_ALL, paths: [], verbs: [] },
+        })
+      )
+      const text = r.imageRefusals.join('\n')
+      expect(text).toContain('path:/app/bin/reader')
+      expect(text).toContain('verb:matter_read')
+      expect(text).not.toContain(SB)
+    })
+
+    it("the checkout's list is the bundle's /opt paths, including the one 16 A&P skills cite", () => {
+      const paths = readJobsBundlePaths(REPO_ROOT)
+      expect(paths).toContain(SB)
+      expect(paths.every((p) => p.startsWith('/opt/'))).toBe(true)
+      expect(paths).toContain('/opt/medchron/.venv/bin/medchron')
+    })
   })
 
   it('refuses the SPEC, not the config, when a lane schema digest differs from the image', () => {

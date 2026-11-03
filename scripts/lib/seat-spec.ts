@@ -18,7 +18,11 @@
  *                 seat's skills release (the 2026-10-13 outage guard);
  *   capabilities  the paths, tools, broker verbs and action classes the
  *                 enabled skills need (the skills manifest's `needs`),
- *                 checked against the image's image-capabilities.json;
+ *                 checked against the image's image-capabilities.json, except
+ *                 that on a seat with a jobs bundle pointer the paths the
+ *                 bundle guarantees (operator/templates/jobs-bundle-paths.txt,
+ *                 ADR 0100 W5) count as provided, and the spec records them
+ *                 under `bundles.jobs.provides`;
  *   lanes         for each lane whose firm inputs are staged, the digest of
  *                 the schema module those inputs are validated against,
  *                 checked against the image's lane-inputs.json.
@@ -233,4 +237,66 @@ export function readLaneSchemaDigests(repo: string): Record<string, string> {
 /** The image path a lane's schema module is installed at (operator/ -> /app/). */
 export function imagePathOf(module: string): string {
   return `/app/${module.replace(/^operator\//, '')}`
+}
+
+// ---------------------------------------------------------------- jobs bundle
+
+/**
+ * The paths the `jobs` bundle guarantees on a seat that mounts it (ADR 0100
+ * W5), relative to /opt. The one list scripts/ci-publish-bundle.sh refuses a
+ * tarball against and gen-image-capabilities.py records as `bundle_paths`.
+ */
+export const JOBS_BUNDLE_PATHS_FILE = 'operator/templates/jobs-bundle-paths.txt'
+
+/** The jobs bundle's guaranteed absolute paths in a checkout, or [] when it has no list. */
+export function readJobsBundlePaths(repo: string): string[] {
+  const path = join(repo, JOBS_BUNDLE_PATHS_FILE)
+  if (!existsSync(path)) return []
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+    .map((l) => `/opt/${l}`)
+    .sort()
+}
+
+const BUNDLE_VERSION_RE = /^[0-9]{12}-[0-9a-f]{8}$/
+
+/**
+ * True when `pointer` is a well-formed vaults/<slug>/bundles/jobs-pointer.json
+ * (operator/bin/lib/fleet/bundles.py writes it): the seat mounts that release
+ * at its next boot. Anything else (absent, unreadable, a key outside
+ * fleet/bundles/jobs/) is "no bundle", so the image alone must provide.
+ */
+export function isJobsBundlePointer(pointer: unknown): boolean {
+  const p = obj(pointer)
+  if (!p) return false
+  const { version, manifest_key: key, manifest_sha256: sha } = p
+  return (
+    typeof version === 'string' &&
+    BUNDLE_VERSION_RE.test(version) &&
+    key === `fleet/bundles/jobs/${version}.json` &&
+    typeof sha === 'string' &&
+    /^[0-9a-f]{64}$/.test(sha)
+  )
+}
+
+/**
+ * Split `needs` into what the image must provide and the paths the jobs bundle
+ * provides instead. A path need is the bundle's when it is one of the bundle's
+ * guaranteed paths or a directory above one (the rule unmetCapabilities applies
+ * to the image's paths). Only paths move; tools, verbs and action classes are
+ * always the image's.
+ */
+export function splitBundleNeeds(
+  needs: Capabilities,
+  bundlePaths: string[]
+): { image: Capabilities; fromBundle: string[] } {
+  const have = new Set(bundlePaths)
+  const dirs = directories(have)
+  const fromBundle = needs.paths.filter((p) => have.has(p) || dirs.has(p.replace(/\/+$/, '')))
+  return {
+    image: { ...needs, paths: needs.paths.filter((p) => !fromBundle.includes(p)) },
+    fromBundle,
+  }
 }
