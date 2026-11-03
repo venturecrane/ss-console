@@ -9,15 +9,14 @@ import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  classSummary,
   DIGEST_CRON,
   nextStep,
   notifyShortfalls,
   parseShortfallEvents,
   phoenixTime,
+  emailsAPerson,
   sendShortfallDigest,
   THROTTLE_MINUTES,
-  toolSummary,
   whatHappened,
 } from './shortfalls'
 import type { Env } from './index'
@@ -112,75 +111,52 @@ function row(events: unknown[] | null, extra: Partial<FleetStatusRow> = {}): Fle
 
 const NOW = Date.parse('2026-10-05T20:00:00Z')
 
+const HELD = ev({
+  class: 'failed',
+  tool: 'reply_relay',
+  routine: null,
+  code: 'reply_held:output_checklist',
+  key: 'failed:held',
+})
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 describe('notifyShortfalls', () => {
-  it('pages the 2026-10-01 shape: a mail bundle filed short', async () => {
+  it('emails a reply that did not go out, in words, and marks it notified', async () => {
     const { db, env } = setup()
     const mock = stubResend()
-    const out = await notifyShortfalls(env, [row([ev()])], NOW)
+    const out = await notifyShortfalls(env, [row([HELD])], NOW)
     expect(out).toEqual([
       expect.objectContaining({ customer_slug: 'ashton-price', events: 1, emailed: true }),
     ])
     const [mail] = sent(mock)
-    expect(mail.subject).toBe(
-      '[SMD Ops] SHORTFALL ashton-price: 1 partial (mcp_smokeball_file_attachment_pages_to_matter)'
-    )
-    expect(mail.html).toContain('filed 0 of 52')
+    expect(mail.subject).toBe('[SMD Ops] ashton-price: a reply did not go out')
+    expect(mail.html).toContain('<strong>WHAT HAPPENED:</strong> The Operator wrote a reply')
+    expect(mail.html).toContain('<strong>WHAT YOU NEED TO DO:</strong> Someone may be waiting.')
+    expect(mail.html).toContain('reply_held:output_checklist')
+    expect(mail.html).not.toContain('SHORTFALL')
     const stored = db.prepare('SELECT notified_at FROM operator_shortfalls').all() as Array<{
       notified_at: string | null
     }>
-    expect(stored).toHaveLength(1)
     expect(stored[0].notified_at).not.toBeNull()
   })
 
-  // 2026-10-24: a missing routine says only that the seat named none. Job-lane
-  // delivery failures carry no routine whether a person or a schedule started
-  // them, so the cell must not claim a person asked.
-  it('says no request is linked when the seat named none, never "person request"', async () => {
-    const { env } = setup()
-    const mock = stubResend()
-    await notifyShortfalls(
-      env,
-      [
-        row([
-          ev({ routine: null, class: 'failed', code: 'proof:review_held', key: 'failed:1' }),
-          ev({ routine: '', class: 'failed', code: 'proof:gate_held', key: 'failed:2' }),
-        ]),
-      ],
-      NOW
-    )
-    const [mail] = sent(mock)
-    expect(mail.html.match(/No request is linked to this event/g)).toHaveLength(2)
-    expect(mail.html).not.toContain('person request')
-  })
-
-  // 2026-10-27, the Captain on an A&P page that read only "job_status failed
-  // error": "I cannot tell what happened or what the next steps should be."
-  it('says when, which request, what happened and what to do, in Phoenix time', async () => {
+  it('names the request in Phoenix time, never UTC', async () => {
     const { db, env } = setup()
     const mock = stubResend()
-    const explained = ev({
+    const explained = {
+      ...HELD,
       ts: '2026-10-28T01:03:34.941Z',
-      class: 'failed',
-      tool: 'mcp_smokeball_get_matter',
-      routine: null,
-      code: 'http_500',
-      key: 'failed:explained',
       request_at: '2026-10-28T00:54:43.000Z',
-    })
+    }
     await notifyShortfalls(env, [row([explained])], NOW)
     const [mail] = sent(mock)
-    expect(mail.subject).toBe(
-      '[SMD Ops] SHORTFALL ashton-price: 1 failed (mcp_smokeball_get_matter)'
-    )
     expect(mail.html).toContain('Oct 27, 6:03 PM MST')
-    expect(mail.html).toContain('Serving the request received Oct 27, 5:54 PM MST')
-    expect(mail.html).toContain('the other system answered HTTP 500')
+    expect(mail.html).toContain('The request received Oct 27, 5:54 PM MST')
     expect(mail.html).toContain(
-      '<strong>What to do:</strong> Check the request card for the ashton-price request received Oct 27, 5:54 PM MST'
+      'the email for the ashton-price request received Oct 27, 5:54 PM MST'
     )
     expect(mail.html).not.toContain('UTC')
     const stored = db.prepare('SELECT request_at FROM operator_shortfalls').get() as {
@@ -189,18 +165,56 @@ describe('notifyShortfalls', () => {
     expect(stored.request_at).toBe('2026-10-28T00:54:43.000Z')
   })
 
+  it('says one thing once: the four identical paragraphs of 2026-11-02', async () => {
+    const { env } = setup()
+    const mock = stubResend()
+    const same = [1, 2, 3, 4].map((n) => ({ ...HELD, key: `failed:${n}` }))
+    await notifyShortfalls(env, [row(same)], NOW)
+    const [mail] = sent(mock)
+    expect(mail.html.match(/WHAT HAPPENED/g)).toHaveLength(1)
+    expect(mail.html).toContain('This happened 4 times.')
+    expect(mail.subject).toBe('[SMD Ops] ashton-price: a reply did not go out (4)')
+  })
+
+  it.each([
+    ['a late delivery proof', 'failed', 'negotiation_job', 'proof:reply_unproven'],
+    ['a held job, which has its own request email', 'failed', 'medchron_job', 'proof:review_held'],
+    ['a reply that said no, ditto', 'failed', 'reply_relay', 'reply_could_not:cannot_find'],
+    ['a failed call', 'failed', 'mcp_smokeball_get_matter', 'http_404'],
+    ['a bundle filed short', 'partial', 'file_pages', 'filed 0 of 52'],
+  ])('records %s for the triage agent, without an email', async (_n, cls, tool, code) => {
+    const { db, env } = setup()
+    const mock = stubResend()
+    const out = await notifyShortfalls(
+      env,
+      [row([ev({ class: cls, tool, code, key: 'q:1' })])],
+      NOW
+    )
+    expect(out).toEqual([])
+    expect(sent(mock)).toHaveLength(0)
+    expect(db.prepare('SELECT code FROM operator_shortfalls').all()).toEqual([{ code }])
+  })
+
+  it('a quiet row does not start the throttle and delay a real one', async () => {
+    const { env } = setup()
+    const mock = stubResend()
+    await notifyShortfalls(env, [row([ev()])], NOW)
+    await notifyShortfalls(env, [row([ev(), HELD])], NOW + 60_000)
+    expect(sent(mock)).toHaveLength(1)
+  })
+
   it('fills request_at on a row an older beat stored without it, never overwrites', async () => {
     const { db, env } = setup()
     stubResend()
-    await notifyShortfalls(env, [row([ev({ key: 'k1' })])], NOW)
+    await notifyShortfalls(env, [row([{ ...HELD, key: 'k1' }])], NOW)
     await notifyShortfalls(
       env,
-      [row([ev({ key: 'k1', request_at: '2026-10-01T15:00:00.000Z' })])],
+      [row([{ ...HELD, key: 'k1', request_at: '2026-10-01T15:00:00.000Z' }])],
       NOW
     )
     await notifyShortfalls(
       env,
-      [row([ev({ key: 'k1', request_at: '2026-10-01T16:00:00.000Z' })])],
+      [row([{ ...HELD, key: 'k1', request_at: '2026-10-01T16:00:00.000Z' }])],
       NOW
     )
     const stored = db.prepare('SELECT request_at FROM operator_shortfalls').get() as {
@@ -212,9 +226,9 @@ describe('notifyShortfalls', () => {
   it('pages an event once though it rides every heartbeat for a day', async () => {
     const { env } = setup()
     const mock = stubResend()
-    await notifyShortfalls(env, [row([ev()])], NOW)
-    await notifyShortfalls(env, [row([ev()])], NOW + 2 * 60_000)
-    await notifyShortfalls(env, [row([ev()])], NOW + (THROTTLE_MINUTES + 5) * 60_000)
+    await notifyShortfalls(env, [row([HELD])], NOW)
+    await notifyShortfalls(env, [row([HELD])], NOW + 2 * 60_000)
+    await notifyShortfalls(env, [row([HELD])], NOW + (THROTTLE_MINUTES + 5) * 60_000)
     expect(sent(mock)).toHaveLength(1)
   })
 
@@ -235,11 +249,11 @@ describe('notifyShortfalls', () => {
   it('holds new events inside the throttle window, then sends them together', async () => {
     const { env } = setup()
     const mock = stubResend()
-    await notifyShortfalls(env, [row([ev()])], NOW)
+    await notifyShortfalls(env, [row([HELD])], NOW)
     const later = [
-      ev(),
+      HELD,
       ev({ class: 'limit', code: 'over_page_cap', key: 'limit:2' }),
-      ev({ class: 'failed', code: 'api_error', key: 'failed:3' }),
+      { ...HELD, code: 'reply_failed:send_error', key: 'failed:3' },
     ]
     await notifyShortfalls(env, [row(later)], NOW + 60_000)
     expect(sent(mock)).toHaveLength(1)
@@ -259,14 +273,14 @@ describe('notifyShortfalls', () => {
     const mails = sent(mock)
     expect(mails).toHaveLength(2)
     expect(mails[1].subject).toBe(
-      '[SMD Ops] SHORTFALL ashton-price: 1 limit, 1 failed (mcp_smokeball_file_attachment_pages_to_matter)'
+      '[SMD Ops] ashton-price: a reply did not go out, a limit stopped the work'
     )
   })
 
   it('keeps the rows un-notified when Resend fails, so the next tick retries', async () => {
     const { db, env } = setup()
     stubResend(false)
-    const out = await notifyShortfalls(env, [row([ev()])], NOW)
+    const out = await notifyShortfalls(env, [row([HELD])], NOW)
     expect(out[0].emailed).toBe(false)
     expect(db.prepare('SELECT notified_at FROM operator_shortfalls').all()).toEqual([
       { notified_at: null },
@@ -284,7 +298,7 @@ describe('notifyShortfalls', () => {
   it('names audit writes lost inside the window so an undercount is visible', async () => {
     const { env } = setup()
     const mock = stubResend()
-    const r = row([ev()], {
+    const r = row([HELD], {
       audit_write_failures: 90,
       audit_write_failures_rose_at: '2026-10-05 14:00:00',
     })
@@ -301,7 +315,7 @@ describe('notifyShortfalls', () => {
       const mock = stubResend()
       await notifyShortfalls(
         env,
-        [row([ev()], { audit_write_failures: 22, audit_write_failures_rose_at: rose })],
+        [row([HELD], { audit_write_failures: 22, audit_write_failures_rose_at: rose })],
         NOW
       )
       expect(sent(mock)[0].html).not.toContain('lost audit write')
@@ -311,7 +325,7 @@ describe('notifyShortfalls', () => {
   it('escapes seat-supplied text', async () => {
     const { env } = setup()
     const mock = stubResend()
-    await notifyShortfalls(env, [row([ev({ code: 'a<b' })])], NOW)
+    await notifyShortfalls(env, [row([{ ...HELD, code: 'reply_held:a<b' }])], NOW)
     expect(sent(mock)[0].html).toContain('a&lt;b')
   })
 })
@@ -367,72 +381,25 @@ describe('shape', () => {
     expect(parseShortfallEvents('not json')).toEqual([])
     expect(parseShortfallEvents(JSON.stringify([{ class: 'bogus' }, ev()]))).toHaveLength(1)
   })
-  it('summarizes classes in a fixed order', () => {
-    expect(classSummary([{ class: 'partial' }, { class: 'limit' }, { class: 'limit' }])).toBe(
-      '2 limit, 1 partial'
-    )
-  })
-  it('gives every kind of event a sentence and a step', () => {
+  it('gives every emailed kind a sentence and a step, with no em dash', () => {
     const cases: Array<[Record<string, string>, RegExp, RegExp]> = [
-      [
-        { class: 'failed', tool: 'reply_relay', code: 'reply_held:output_checklist' },
-        /held it/,
-        /still waiting/,
-      ],
-      [
-        { class: 'failed', tool: 'reply_relay', code: 'reply_failed:send_error' },
-        /did not go out/,
-        /still waiting/,
-      ],
-      [
-        { class: 'failed', tool: 'reply_relay', code: 'reply_could_not:cannot_find' },
-        /told the person it could not do what they asked \(cannot_find\)/,
-        /been told no and is waiting/,
-      ],
-      [
-        { class: 'failed', tool: 'casefile_job', code: 'proof:review_held' },
-        /casefile job/,
-        /finish the delivery/,
-      ],
-      [
-        { class: 'limit', tool: 'read_pages', code: 'over_page_cap' },
-        /limit stopped/,
-        /past the limit/,
-      ],
-      [
-        { class: 'partial', tool: 'file_pages', code: 'filed 3 of 9' },
-        /filed 3 of 9 pages/,
-        /file the pages/,
-      ],
-      [
-        { class: 'failed', tool: 'job_status', code: 'no_such_job' },
-        /called job_status and it looked up a job that this tool does not know/,
-        /got their answer/,
-      ],
-      [
-        { class: 'failed', tool: 'some_tool', code: 'ValueError' },
-        /the code was ValueError/,
-        /got their answer/,
-      ],
+      [{ class: 'failed', code: 'reply_held:output_checklist' }, /held it/, /may be waiting/],
+      [{ class: 'failed', code: 'reply_failed:send_error' }, /did not go out/, /may be waiting/],
+      [{ class: 'limit', code: 'over_page_cap' }, /limit stopped/, /past the limit/],
     ]
     for (const [r, happened, step] of cases) {
       const row = { ...r, request_at: null } as never
+      expect(emailsAPerson(row)).toBe(true)
       expect(whatHappened(row)).toMatch(happened)
       expect(nextStep('ashton-price', row)).toMatch(step)
-      if (r.class !== 'partial')
-        expect(nextStep('ashton-price', row)).toContain('ashton-price request cards in team@')
-      expect(`${whatHappened(row)} ${nextStep('ashton-price', row)}`).not.toMatch(/—/)
+      expect(nextStep('ashton-price', row)).toContain('ashton-price request emails')
+      expect(`${whatHappened(row)} ${nextStep('ashton-price', row)}`).not.toMatch(/\u2014/)
     }
   })
   it('reads times as Phoenix time, and leaves an unparseable one alone', () => {
     expect(phoenixTime('2026-10-28T01:03:34.941Z')).toBe('Oct 27, 6:03 PM MST')
     expect(phoenixTime('2026-10-28 01:03:34')).toBe('Oct 27, 6:03 PM MST')
     expect(phoenixTime('garbage')).toBe('garbage')
-  })
-  it('names at most two tools in the subject', () => {
-    expect(toolSummary([{ tool: 'a' }, { tool: 'b' }, { tool: 'a' }, { tool: 'c' }])).toBe(
-      'a, b +1'
-    )
   })
   it('names the digest cron the wrangler config schedules', () => {
     const toml = readFileSync(new URL('../wrangler.toml', import.meta.url).pathname, 'utf8')
