@@ -35,7 +35,11 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
     does not continue it (a new start), the section closes before the unread
     pages, which then belong to no section (2026-11-02: a visit whose third page
     was unread came back 1-4 on one call and 1-5 on the next). A page that
-    STARTS something after unread pages never bridges: a new start closes.
+    continues the note bridges the unread run before it even when it also
+    starts a section mid-page, and then shares that page with the new section
+    (the seat replay: refusing the bridge there sent a visit as 1-2 with its
+    unread third page left out, unflagged). A page that only starts, and does
+    not continue, never bridges.
 
     A BLANK page (:func:`_blank`) belongs to no section and never extends one,
     and nothing bridges over it (2026-11-02 replay: a speech note ran 48-51
@@ -54,7 +58,6 @@ def sections(pages: dict[str, dict[str, Any]], unreadable: dict[str, str] | None
             and len(gap) > 0
             and all(str(p) in unreadable for p in gap)
             and bool(row.get("continues_previous"))
-            and not row.get("sections")
         )
         adjacent = bool(out) and (last_read == n - 1 or bridged)
         _step(out, n, row, adjacent=adjacent, prev=last_read)

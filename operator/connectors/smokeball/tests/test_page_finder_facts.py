@@ -394,10 +394,20 @@ def test_a_handwritten_page_mid_note_stays_inside_and_is_flagged() -> None:
     assert [r["pages"] for r in item["ranges"]] == ["1-4"] and item["unreadableInside"] == ["3"]
 
 
-def test_a_new_start_after_unread_pages_never_bridges() -> None:
-    pages = {"48": _page(SPEECH), "49": _page(cont=True), "51": _page(GROWTH, cont=True)}
-    secs = pf.sections(pages, {"50": "declined"})
-    assert [(s["heading"], s["first"], s["last"]) for s in secs] == [
-        ("SPEECH THERAPY NOTE", 48, 49),
-        ("GROWTH CHART", 51, 51),
-    ]
+def test_a_page_that_continues_and_starts_bridges_the_unread_run_before_it() -> None:
+    """The seat replay's common shape (8-C, and the closest note 33-38): a
+    refused page, then a page that continues the note AND starts a new section
+    mid-page. The note bridges over the refused page and shares the page with
+    the new section; the refused page is inside, flagged. Never 1-2 with p3
+    left out."""
+    pages = {"1": _page(NOTE), "2": _page(cont=True), "4": _page(ENTRY, cont=True), "5": _page(cont=True)}
+    note, entry = pf.sections(pages, {"3": "declined"})
+    assert (note["first"], note["last"], list(note["unreadablePages"])) == (1, 4, ["3"])
+    assert (entry["first"], entry["last"]) == (4, 5)
+
+
+def test_a_page_that_only_starts_never_bridges_the_unread_run_before_it() -> None:
+    pages = {"1": _page(NOTE), "2": _page(cont=True), "4": _page(ENTRY), "5": _page(cont=True)}
+    note, entry = pf.sections(pages, {"3": "declined"})
+    assert (note["first"], note["last"], "unreadablePages" in note) == (1, 2, False)
+    assert (entry["first"], entry["last"]) == (4, 5)
