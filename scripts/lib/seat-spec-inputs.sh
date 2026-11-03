@@ -25,6 +25,12 @@
 #       seat's heartbeat image_ref through D1 (wrangler); the manifest falls back
 #       to vaults/<slug>/image-manifest.json, which the entrypoint uploads at boot.
 #   skills-pointer.json and the skills release it names (fleet/skills/ only).
+#   jobs-bundle-pointer.json   vaults/<slug>/bundles/jobs-pointer.json, present
+#                       only on a seat that mounts a jobs bundle at boot; the
+#                       compiler then counts the bundle's guaranteed paths
+#                       (operator/templates/jobs-bundle-paths.txt) as provided.
+#                       Absent or unreadable means "no bundle": the image alone
+#                       must provide, so a failed read can only refuse.
 #   published.yaml      the customer.yaml the seat boots from now.
 #   spec-pointer.json and the spec it names (fleet/specs/<slug>/ only).
 #   <lane>.firm         each lane's firm-input manifest, HASHED by the compiler
@@ -131,6 +137,7 @@ seat_spec_inputs() {
   mkdir -p "$dir"
   _fetch_image_inputs "$slug" "$dir"
   _fetch_skills_inputs "$slug" "$dir"
+  _fetch_soft "vaults/${slug}/bundles/jobs-pointer.json" "${dir}/jobs-bundle-pointer.json"
   _fetch_soft "vaults/${slug}/customer.yaml" "${dir}/published.yaml"
   _fetch_spec_inputs "$slug" "$dir" || return 2
   while read -r lane key; do
@@ -149,7 +156,7 @@ seat_spec_compile() {
   local slug="$1" cfg="$2" dir="$3" out="$4" lane f
   shift 4
   local args=(compile --slug "$slug" --repo "$(pwd)" --config "$cfg" --out "$out")
-  for f in image-manifest image-capabilities skills-pointer skills-manifest current-spec; do
+  for f in image-manifest image-capabilities skills-pointer skills-manifest jobs-bundle-pointer current-spec; do
     [[ -f "${dir}/${f}.json" ]] && args+=("--${f}" "${dir}/${f}.json")
   done
   [[ -f "${dir}/lane-inputs.json" ]] && args+=(--image-lane-inputs "${dir}/lane-inputs.json")

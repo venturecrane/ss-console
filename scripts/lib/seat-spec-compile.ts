@@ -25,10 +25,12 @@ import {
   enabledSkills,
   imagePathOf,
   imageRequirements,
+  isJobsBundlePointer,
   providedByImage,
   providedBySkills,
   scalar,
   sha256Hex,
+  splitBundleNeeds,
   unmetCapabilities,
   type Capabilities,
 } from './seat-spec'
@@ -50,6 +52,13 @@ export interface CompileInputs {
   imageLaneInputs?: MaybeJson
   skillsPointer?: MaybeJson
   skillsManifest?: MaybeJson
+  /**
+   * vaults/<slug>/bundles/jobs-pointer.json: present and well formed only when
+   * the seat mounts a jobs bundle at boot (ADR 0100 W5).
+   */
+  jobsBundlePointer?: MaybeJson
+  /** The jobs bundle's guaranteed absolute paths, from the compiling checkout. */
+  jobsBundlePaths?: string[]
   /** The customer.yaml the seat boots from now, for the cannot-determine fallback. */
   published?: Buffer
   /**
@@ -215,6 +224,31 @@ function skillsRef(pointer: unknown): Record<string, string> | null {
   return { version, manifest_key: key, manifest_sha256: sha }
 }
 
+/**
+ * ADR 0100 W5: the Smokeball connector venv and the job runner ship in the jobs
+ * bundle, not the image. On a seat whose pointer names a bundle, the bundle's
+ * guaranteed paths are provided and recorded in the spec; on any other seat the
+ * image alone must provide every need, exactly as before. The record names the
+ * pointer's key, not its version, so a bundle release does not make every
+ * published spec stale; `provides` is which needs the bundle answers.
+ */
+function bundleSplit(
+  needs: Capabilities,
+  inputs: CompileInputs,
+  notes: string[]
+): { bundles: Record<string, unknown> | undefined; imageNeeds: Capabilities } {
+  if (!isJobsBundlePointer(inputs.jobsBundlePointer))
+    return { bundles: undefined, imageNeeds: needs }
+  const { image, fromBundle } = splitBundleNeeds(needs, inputs.jobsBundlePaths ?? [])
+  if (fromBundle.length > 0) {
+    notes.push(
+      `the seat's jobs bundle provides ${fromBundle.length} path need(s) the image is not asked for`
+    )
+  }
+  const pointerKey = `vaults/${inputs.slug}/bundles/jobs-pointer.json`
+  return { bundles: { jobs: { pointer_key: pointerKey, provides: fromBundle } }, imageNeeds: image }
+}
+
 /** Compile a spec. Never throws on a refusal; the caller reads the refusal lists. */
 export function compileSpec(inputs: CompileInputs): CompileResult {
   const notes: string[] = []
@@ -235,12 +269,16 @@ export function compileSpec(inputs: CompileInputs): CompileResult {
     skills,
     inputs.skillsManifest instanceof Error ? undefined : inputs.skillsManifest
   )
+  const { bundles, imageNeeds } = bundleSplit(needs, inputs, notes)
   const lanes = Object.keys(inputs.lanePins)
     .filter((l) => l in LANE_INPUTS)
     .sort()
   const imageRefusals = inputs.unchecked
     ? []
-    : [...checkImage(config, inputs, notes), ...checkCapabilities(needs, config, inputs, notes)]
+    : [
+        ...checkImage(config, inputs, notes),
+        ...checkCapabilities(imageNeeds, config, inputs, notes),
+      ]
   const laneRefusals = inputs.unchecked ? [] : checkLanes(inputs, lanes)
   if (inputs.unchecked) {
     notes.push('provisioning: requirements recorded, not checked (the image ships in this run)')
@@ -260,6 +298,7 @@ export function compileSpec(inputs: CompileInputs): CompileResult {
       ])
     ),
     skills: skillsRef(inputs.skillsPointer),
+    bundles,
     requires: {
       skills,
       image: [...imageRequirements(config)].sort(),

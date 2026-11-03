@@ -811,6 +811,82 @@ describe('ci-publish-customer-configs: the signed seat spec (Wave 2 W4)', () => 
     expect(res.stdout + res.stderr).toContain('verb:matter_read')
   })
 
+  describe('a seat with a jobs bundle (ADR 0100 W5; Deploy run 41704284912)', () => {
+    // The A&P shape: an enabled tracker skill cites the Smokeball connector's
+    // python, which the jobs bundle carries and the image no longer does.
+    const SB = '/opt/connectors/smokeball/.venv/bin/python'
+    function apFixture(): Fixture {
+      const fx = makeFixture(['seat-alpha'])
+      mkdirSync(join(fx.root, 'operator', 'templates'), { recursive: true })
+      writeFileSync(
+        join(fx.root, 'operator', 'templates', 'jobs-bundle-paths.txt'),
+        readFileSync(join(REPO_ROOT, 'operator', 'templates', 'jobs-bundle-paths.txt'))
+      )
+      writeFileSync(
+        join(fx.root, 'operator', 'customers', 'seat-alpha', 'customer.yaml'),
+        'personas:\n  - slug: operator\n    skills:\n      - name: task-list-keeper\n        enabled: true\n'
+      )
+      git(fx.root, ['add', '-A'])
+      git(fx.root, ['commit', '-qm', 'enable the tracker'])
+      fx.after = git(fx.root, ['rev-parse', 'HEAD']).trim()
+      seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'personas: []\n')
+      const version = '202610230000-abcdef12'
+      seedObject(
+        fx,
+        `fleet/skills/${version}.json`,
+        JSON.stringify({
+          version,
+          files: { 'task-list-keeper/SKILL.md': { sha256: 'd'.repeat(64), size: 1 } },
+          needs: { 'task-list-keeper': { paths: [SB], tools: [], verbs: [], action_classes: [] } },
+        })
+      )
+      seedObject(
+        fx,
+        'vaults/seat-alpha/skills-pointer.json',
+        JSON.stringify({
+          version,
+          manifest_key: `fleet/skills/${version}.json`,
+          manifest_sha256: '0'.repeat(64),
+        })
+      )
+      return fx
+    }
+
+    it('without a bundle pointer the path is refused, as today', () => {
+      const fx = apFixture()
+      const res = runPublisher(fx, { SEAT_SPEC_ENABLED: '', SEAT_SPEC_SIGNING_KEY: '' })
+      expect(res.code).not.toBe(0)
+      expect(uploads(res.awsCalls)).toHaveLength(0)
+      expect(res.stdout + res.stderr).toContain(`path:${SB}`)
+      expect(objectAt(fx, 'vaults/seat-alpha/customer.yaml')).toBe('personas: []\n')
+    })
+
+    it('with the seat bundle pointer the path counts as provided and the config publishes', () => {
+      const fx = apFixture()
+      seedObject(
+        fx,
+        'vaults/seat-alpha/bundles/jobs-pointer.json',
+        JSON.stringify({
+          version: '202611030000-0123abcd',
+          manifest_key: 'fleet/bundles/jobs/202611030000-0123abcd.json',
+          manifest_sha256: 'f'.repeat(64),
+        })
+      )
+      const res = runPublisher(fx, testSigningEnv(fx.root))
+      expect(res.stdout + res.stderr).not.toContain(`path:${SB}`)
+      expect(res.code).toBe(0)
+      expect(objectAt(fx, 'vaults/seat-alpha/customer.yaml')).toContain('task-list-keeper')
+      const pointer = JSON.parse(objectAt(fx, 'vaults/seat-alpha/spec-pointer.json')) as Record<
+        string,
+        string
+      >
+      const spec = JSON.parse(objectAt(fx, pointer.spec_key)) as Record<string, unknown>
+      expect(spec.bundles).toEqual({
+        jobs: { pointer_key: 'vaults/seat-alpha/bundles/jobs-pointer.json', provides: [SB] },
+      })
+    })
+  })
+
   it('re-signs a published spec whose pointer no longer verifies', () => {
     const fx = makeFixture(['seat-alpha'])
     seedObject(fx, 'vaults/seat-alpha/customer.yaml', 'stale: true\n')
