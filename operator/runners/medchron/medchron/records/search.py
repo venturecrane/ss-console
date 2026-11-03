@@ -40,10 +40,12 @@ declined, or when a pass reads nothing new, and never past ``ceil(pages / 100)
 (``page_finder.locate_index``), so a (record, file) pair costs at most
 ``ceil(pages / 100) + 2`` calls.
 
-THE PRICE. A file's first read is projected at its unread pages times
-``usd_per_page`` times :data:`ATTEMPTS_PER_PAGE`: a declined page is billed
-twice (its batch, then alone), so 1.5 allows for half a file declined. The
-pre-flight logs each candidate's unread pages by file id prefix, never a name.
+THE PRICE (``measure.py``). A file's first read is projected at its unread
+pages times the higher of the firm's ``usd_per_page`` and this lane's own
+measured cost per page attempt, times ``1 +`` the measured share of declined
+pages (a declined page is billed twice: its batch, then alone). The pre-flight
+logs the figure it used, and each candidate's unread pages by file id prefix,
+never a name.
 
 Item holds live in ``data/item_holds.json`` ``{n: reason}``; the order each
 record tries its files in ``data/order.json``; their scores in
@@ -63,7 +65,7 @@ from smokeball_connector import page_finder as pf
 
 from .. import limits as limits_mod, stop_request
 from ..litigation.tools import dump
-from . import assemble
+from . import assemble, measure
 from .outcome import RecordsHold
 
 ORDER = "order.json"
@@ -71,8 +73,6 @@ HOLDS = "item_holds.json"
 SCORES = "scores.json"
 #: Characters of a file id a hold or log line names it by.
 ID_PREFIX = 8
-#: Paid attempts a page is projected at: a declined page is billed twice.
-ATTEMPTS_PER_PAGE = 1.5
 NO_FILE = "scope_unresolved: no file on the matter is named for this record"
 
 
@@ -116,8 +116,12 @@ def orders(run: Any) -> dict[str, list[str]]:
     return out
 
 
+def price(run: Any) -> measure.Price:
+    return measure.price(run.state, float(run.firm.usd_per_page))
+
+
 def price_per_page(run: Any) -> float:
-    return float(run.firm.usd_per_page) * ATTEMPTS_PER_PAGE
+    return price(run).per_page
 
 
 def preflight(run: Any) -> None:
@@ -127,10 +131,7 @@ def preflight(run: Any) -> None:
     per = {fid: unread(files[fid]) for fid in wanted}
     detail = ", ".join(f"{fid[:ID_PREFIX]} {n}" for fid, n in sorted(per.items(), key=lambda kv: (kv[1], kv[0])))
     run.log(f"[preflight] {len(wanted)} files, {sum(per.values())} unread pages ({detail or 'none'})")
-    run.log(
-        f"[preflight] a first read is priced at {price_per_page(run):.4f} USD a page "
-        f"(usd_per_page x {ATTEMPTS_PER_PAGE} attempts)"
-    )
+    run.log(f"[preflight] priced at {price(run).describe()}")
     run.limits.check_before_paid(projected_usd=0.0, spent_usd=run.budget.refresh(), stage="preflight")
 
 
@@ -145,6 +146,7 @@ def read_all(run: Any, source: Path, mid: str, hook: Any) -> int:
         calls += 1
         index = built["index"]
         total = int(index.get("page_count") or 0)
+        measure.note_pages(run.data, len(built["read_now"]), len(built["unreadable_now"]))
         left = total - len(index["pages"]) - len(index["unreadable"])
         if left <= 0:
             return calls
@@ -220,7 +222,7 @@ def _try(
         return "found", ""
     left = int(out.get("remainingPages") or 0)
     if left:
-        return "unsettled", f"match_unsettled: {fid[:ID_PREFIX]} {left} pages not read"
+        return "unsettled", f"match_unsettled: {fid[:ID_PREFIX]} {left} pages not reached"
     return "next", ""
 
 
@@ -246,7 +248,6 @@ def locate(run: Any, hook: Any, stop_cls: type[BaseException]) -> None:
 
 
 __all__ = [
-    "ATTEMPTS_PER_PAGE",
     "HOLDS",
     "ID_PREFIX",
     "NO_FILE",
@@ -259,6 +260,7 @@ __all__ = [
     "order",
     "orders",
     "preflight",
+    "price",
     "price_per_page",
     "read_all",
     "unread",

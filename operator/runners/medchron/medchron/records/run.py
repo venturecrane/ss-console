@@ -49,7 +49,7 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, parse as parse_mod, rank, search
+from . import assemble, firm as firm_mod, job as job_mod, measure, parse as parse_mod, rank, search
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -587,6 +587,10 @@ class RecordsRun(RunBase):
         # The one spend figure: the usage ledger, priced (budget.Budget), the
         # same rows the cap reads before every request.
         v.cents = int(round(self.budget.refresh() * 100))
+        try:
+            measure.record_job(self.state, self.data, self.ledger.path, self.pricing)
+        except OSError as exc:  # a lost measurement must never change a verdict
+            self.log(f"[measure] not recorded: {type(exc).__name__}")
         return v
 
     def _verdict(self, stage: str, hold: str | None, failed: str | None, doc: dict[str, Any] | None) -> Verdict:

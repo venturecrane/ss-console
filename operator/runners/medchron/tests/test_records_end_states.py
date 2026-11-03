@@ -182,11 +182,31 @@ def test_E_a_page_never_reached_stays_unread_found_records_go_out(
     model = FakeFinderModel(match_fn=by_sections, fail=frozenset({10}))
     sb = FakeSmokeball()
     f = sb.add(1, "Northside Clinic records.pdf", pdf(10))
+    calls = Calls(monkeypatch)
     r, v = _job(tmp_path, monkeypatch, model, sb, [_rec(VISIT)], f"Please send {VISIT}.")
     assert v["verdict"] == "delivered", v
     assert "- 1 page of Northside Clinic records.pdf was not read" in _facts(r)
-    index = pf.load_index(_sha(r, f))
+    sha = _sha(r, f)
+    # Pass 1 reads 1-9 (page 10 fails on the wire), pass 2 asks page 10 alone
+    # and makes no progress: the loop stops; one match on the index as it stands.
+    assert calls.builds[sha] == 2 and calls.matches[sha] == 1
+    saved = json.loads(search.locate_path(r, 1, f).read_text())
+    assert saved["complete"] is False and saved["counts"]["notReached"] == 1
+    index = pf.load_index(sha)
     assert "10" not in index["unreadable"] and "10" not in index["pages"]  # the shared index is not told
+    # The same job again: its own saved result says this file is done for this
+    # job, so no call is made.
+    model.bodies.clear()
+    r.reopen(["locate"])
+    assert json.loads(r.run().to_json())["verdict"] == "delivered" and model.bodies == []
+    # A NEW job on the same file: page 10 is still unread in the index, so it
+    # is asked once more (1 build, no progress) and the match runs once.
+    (tmp_path / "next").mkdir()
+    import shutil
+
+    shutil.copytree(tmp_path / "index", tmp_path / "next" / "index")
+    r2, v2 = _job(tmp_path / "next", monkeypatch, model, sb, [_rec(VISIT)], f"Please send {VISIT}.")
+    assert v2["verdict"] == "delivered" and model.index_calls() == 1 and model.match_calls() == 1
 
 
 def test_E_not_found_with_pages_never_reached_holds_that_record(
@@ -196,7 +216,7 @@ def test_E_not_found_with_pages_never_reached_holds_that_record(
     sb = FakeSmokeball()
     f = sb.add(1, "Northside Clinic records.pdf", pdf(10))
     r, v = _job(tmp_path, monkeypatch, model, sb, [_rec(XRAY)], f"Please send {XRAY}.")
-    assert v["verdict"] == "held" and v["reason"] == f"match_unsettled: {f[:8]} 1 pages not read", v
+    assert v["verdict"] == "held" and v["reason"] == f"match_unsettled: {f[:8]} 1 pages not reached", v
     assert "not established yet; 1 page of the file it is in is not read yet" in _facts(r)
 
 
