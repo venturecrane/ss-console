@@ -895,6 +895,24 @@ personas:
           # The Operator Library matter's id, the same matter the litigation
           # lane files to; the broker pairs it with the library number.
           file_to_matter_id: '1dad2f6b-7c5b-4cee-a06d-aab9e1e91a23'
+      # ---- matter records by email: QUEUED LANE 2026-11-03 (matter-records) ----
+      # ADR 0102 amendment 4 (ss-console#3717). A staff member's email asking
+      # for named records on a matter queues a job; the turn only submits it
+      # and relays the acknowledgement. The job finds the pages in the
+      # matter's files, cuts them, and the reply with its attachments waits
+      # for SMD review (matter_file_delivery.review_first below) before it is
+      # sent in the requester's own thread. Who may ask: anyone on
+      # matter_file_delivery.recipients, not admin-reserved. The per-job and
+      # monthly dollar caps live in the firm's records-firm.yaml (engagements,
+      # vaults/ashton-price/records/). The lane holds its first job until its
+      # lane proof (matter-records) is accepted by SMD.
+      - name: matter-records # a staff ask for named records, queued as a job; never searched or attached in a turn
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
       # ---- the negotiation watch: ENABLED 2026-10-09 (negotiation-watch) ----
       # LANE ACTIVATION RECORD. On 2026-10-09 the Operator filled the
       # Negotiation Details tab on the firm's open matters from every offer

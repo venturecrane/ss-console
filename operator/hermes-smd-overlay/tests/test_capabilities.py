@@ -121,16 +121,15 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     def seat(slug: str) -> dict:
         return cap.read(OPERATOR / "customers" / slug / "customer.yaml") or {}
 
-    # The records lane (ADR 0102 amendment 4) is built but switched on nowhere yet:
-    # enabling matter-records on ashton-price and smd-staging is its own PR, after
-    # the release that carries the lane. That PR deletes this exclusion.
-    not_yet = [lane for lane in cap.JOB_LANES if lane != "records"]
-    assert cap.authored_lanes(seat("ashton-price")) == not_yet
+    # Every job lane, the records lane included (ADR 0102 amendment 4, switched
+    # on 2026-11-03 after the release that carried it).
+    every_lane = list(cap.JOB_LANES)
+    assert cap.authored_lanes(seat("ashton-price")) == every_lane
     assert cap.authors_connector(seat("ashton-price"), "smokeball")
     assert cap.authors_connector(seat("pilot-smokeball"), "smokeball")
     # smd-staging is ring 0: it authors every lane A&P runs (manual only, no firm
     # inputs, so each lane's self-test notes "absent" by the boot fetch verdict).
-    assert cap.authored_lanes(seat("smd-staging")) == not_yet
+    assert cap.authored_lanes(seat("smd-staging")) == every_lane
     assert not cap.authors_connector(seat("smd-staging"), "smokeball")
     for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug
