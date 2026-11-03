@@ -479,7 +479,10 @@ jobs:
             "${HERMES_AGENT_SRC}/uv.lock" > /tmp/hermes-lock-overrides.txt
           uv pip install --python /tmp/e2ev/bin/python --overrides /tmp/hermes-lock-overrides.txt \
             -e "${HERMES_AGENT_SRC}[mcp,anthropic]"
-          uv pip install --python /tmp/e2ev/bin/python -e "./operator/hermes-smd-overlay[e2e]"
+          # The overlay imports records_contract (ADR 0102 amendment 4); the image
+          # installs it beside the overlay, so the harness venv does too.
+          uv pip install --python /tmp/e2ev/bin/python -e "./operator/hermes-smd-overlay[e2e]" \
+            ./operator/connectors/_contract
 
       - name: Real-dispatch harness (pytest tests_e2e)
         if: steps.changes.outputs.relevant == 'true'
