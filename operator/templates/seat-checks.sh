@@ -688,7 +688,15 @@ fi
 # FALSIFIER: raise a lane default (or an authored lane_memory_mb value) or
 # shrink machine.memory_mb on a seat with that lane's inputs staged and this
 # fails.
+# A seat that runs no lane has no runner (since ADR 0100 W5 the runner arrives
+# only in the jobs bundle, so the probe's python is absent) and makes no lane
+# cgroup, so there is no cap to sum (ring 2's scott seat failed this on
+# rel-ab97b966, 2026-11-03).
+if any_lane_runs; then
 check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/medchron/.venv/bin/python" "lane-memory-caps-probe.py"
+else
+check_note "lane-memory-caps-leave-gateway-reserve" "this seat runs no job lane, so no lane cgroup takes memory from the gateway"
+fi
 # The negotiation watch (2026-10-09): its own daemon thread, the same checks,
 # and its state dir (file cursors: the child's alone, 0700).
 if lane_runs negotiation; then
