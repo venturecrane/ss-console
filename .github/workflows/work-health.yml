@@ -117,7 +117,7 @@ jobs:
           # (operator/ops-machine/TRIAGE.md); its silence is caught by the
           # healthchecks.io check smd-ops-triage. This run stays as the
           # independent backstop for the urgent pages: a dead Smokeball or
-          # mailbox sign-in still emails ACTION from here even if smd-ops is down.
+          # mailbox sign-in still emails from here even if smd-ops is down.
           ARGS+=(--pages-only)
           # `|| STATUS=$?` keeps the report printed before a non-zero exit (ss#2309).
           STATUS=0

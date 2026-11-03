@@ -41,7 +41,7 @@ Each schedule is a cron expression read in the time zone shown: GitHub and Cloud
 | Cloudflare Worker | `workers/cost-anomaly` | `0 3 * * *` | UTC |
 | Cloudflare Worker | `workers/cost-telemetry` | `0 2 * * *` | UTC |
 | Cloudflare Worker | `workers/fleet-alerts` | `*/2 * * * *` | UTC |
-| Cloudflare Worker | `workers/fleet-alerts` | `11 15 * * 1` | UTC |
+| Cloudflare Worker | `workers/fleet-alerts` | `11 15 * * 2` | UTC |
 | Ops machine (smd-ops) | `/home/ops/bin/ops-triage` | `47 * * * *` | America/Phoenix |
 | Ops machine (smd-ops) | `find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/trans...` | `23 3 * * *` | America/Phoenix |
 

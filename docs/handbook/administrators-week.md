@@ -9,7 +9,7 @@ summary: Everything that arrives in the team inbox or the GitHub issue list, wha
 sources:
   - label: Fleet alerts worker (2-minute and Monday crons)
     href: workers/fleet-alerts/wrangler.toml
-  - label: Work-health workflow (hourly ACTION pages)
+  - label: Work-health workflow (hourly urgent sign-in emails)
     href: .github/workflows/work-health.yml
   - label: Ops triage agent orders
     href: operator/ops-machine/TRIAGE.md
@@ -38,7 +38,7 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 
 ## Weekly
 
-- **Monday morning:** "Weekly: what the Operator refused". Each refusal is either a scope conversation to have with the client or a setting SMD got wrong. An empty week sends nothing.
+- **Monday morning:** "Weekly: what a check stopped the Operator from doing", client seats only. Nothing to do unless something on it is work the client should be getting; then an agent finds out why it was stopped, and whether to change what the client gets is your decision. An empty week sends nothing.
 - **Monday:** a "Hermes upstream ... available" issue when the Operator's runtime has a new release. Upgrading is a deliberate, staged release with its own plan (the Hermes upgrade plans in [Disaster Recovery](/admin/playbook/disaster-recovery)); ask an agent whether this one matters and what it would take.
 - **Monday:** the "Handbook: pages due for review" issue, when it is open. It lists pages whose sources changed after they were last checked, and pages past their review window; ask an agent to re-check each against its sources.
 - **Once a week, ask an agent to read you the obligation register** ([Clients & Commitments](/admin/playbook/clients-and-commitments)), so nothing we owe goes stale without you noticing.
@@ -58,7 +58,7 @@ There is **no daily "all clear" email**. On a quiet day the team inbox is simply
 |---|---|---|---|
 | `[SMD Ops] <seat>: <what happened>`, then `Re: ...` when it clears | Checked every 2 minutes; one email when a problem starts, one when it clears | A seat stopped heartbeating, stopped itself, stopped running scheduled work, a connector is failing, a seat is running something other than what was published for it, or the website is down from outside | You: ask an agent to investigate and fix; see [When Something Goes Wrong](/admin/playbook/when-something-goes-wrong) |
 | `<seat>: the <name> sign-in is about to expire`, then a daily reminder | Before a client sign-in expires | The client must sign in again or that work stops | You: email the client to re-consent |
-| `ACTION: <seat> ... sign-in is dead` | Hourly, repeating until fixed | A sign-in already failed; that seat's work in that system has stopped | You: get the client to sign in again; an agent fixes anything on our side |
+| `<seat>: the ... sign-in is dead` | Hourly, repeating until fixed | A sign-in already failed; that seat's work in that system has stopped | You: get the client to sign in again; an agent fixes anything on our side |
 | `[SMD Ops] Triage: N handled, M need you` | Hourly, only when something new needs a person's decision | The triage agent already investigated each item. It cannot change anything itself, and work for an agent never comes here: it waits for the next agent session | You: decide the "NEEDS YOU" items that are yours |
 | `[SMD Ops] <seat>: a reply did not go out`, `... a limit stopped the work` | At most every 30 minutes per seat | The Operator could not give a client what they asked for | You: learn of it before the client complains; an agent finds out why |
 | `[SMD Ops] <seat> NO REPLY after N m: ...` | 30 minutes after an unanswered client request | A client is waiting | You: make sure it is answered |

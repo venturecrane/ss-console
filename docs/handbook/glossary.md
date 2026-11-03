@@ -75,7 +75,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **work health.** The hourly check of the work on every live seat: unanswered requests, stuck or held jobs, missed scheduled runs, dead sign-ins ([Work Health](/admin/playbook/work-health)).
 
-**ACTION page.** An email whose subject starts `ACTION:`, sent every hour while a client sign-in is dead or a connection keeps failing, because that seat's work in that system has stopped until it is fixed ([Work Health](/admin/playbook/work-health)).
+**Urgent sign-in email.** An email sent every hour while a client sign-in is dead or a connection keeps failing, because that seat's work in that system has stopped until it is fixed ([Work Health](/admin/playbook/work-health)).
 
 **ops workspace.** A client's own locked-down machine in the cloud (`ops-<slug>`), the only place that client's documents are opened and worked on; never a laptop ([Client Ops Workspaces](/admin/playbook/ops-machine)).
 

@@ -372,17 +372,33 @@ def send(subject: str, text: str, run_key: str) -> Optional[str]:
     return None
 
 
+def page_text(it: wh.Item, page: wh.Page, now: datetime) -> str:
+    """What happened and what to do, then the agent's half below a fold."""
+    return (
+        f"WHAT HAPPENED: {page.happened}\n\n"
+        f"WHAT YOU NEED TO DO: {page.todo}\n\n"
+        "You will get this email every hour until it is fixed.\n\n"
+        "---\n"
+        "DETAILS, for the agent who picks this up\n"
+        f"Seat: {it.seat}. Checked {wh.hhmm(now)}.\n"
+        f"{it.what}\n"
+        f"To do: {it.todo}\n"
+    )
+
+
 def send_pages(pages: list[wh.Item], now: datetime) -> Optional[str]:
-    """One ACTION email per paging item, EVERY run while it stands: a dead
-    sign-in stops all of a seat's work, so it is not left to the digest's
-    one-line "still open" repeat. Returns the first send error, if any."""
+    """One email per paging item, EVERY run while it stands: a dead sign-in
+    stops all of a seat's work, so it is not left to the digest's one-line "still
+    open" repeat. Returns the first send error, if any."""
     first_error = None
     for it in pages:
-        text = (
-            f"Seat: {it.seat}\n\n{it.what}\n\nTo do: {it.todo}\n\n"
-            f"This repeats every hour until the sign-in works again (work-health, {now.strftime('%Y-%m-%d %H:%MZ')}).\n"
+        if it.page is None:
+            continue
+        error = send(
+            it.page.subject,
+            page_text(it, it.page, now),
+            f"work-health-page:{mail.state_key(it.key)}:{now.strftime('%Y%m%dT%H')}",
         )
-        error = send(it.page or "", text, f"work-health-page:{mail.state_key(it.key)}:{now.strftime('%Y%m%dT%H')}")
         if error:
             print(f"PAGE SEND FAILED: {error}", file=sys.stderr)
             first_error = first_error or error
@@ -408,7 +424,7 @@ def _parser() -> argparse.ArgumentParser:
         help="print the email text (LOCAL ONLY: the CI log of this public repo must never carry it)",
     )
     ap.add_argument(
-        "--pages-only", action="store_true", help="send ACTION pages but not the digest (deliberate proofs)"
+        "--pages-only", action="store_true", help="send the urgent pages but not the digest (deliberate proofs)"
     )
     return ap
 
@@ -468,10 +484,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     for it in items:
         kinds[it.kind] = kinds.get(it.kind, 0) + 1
     print(f"evaluated {len(seats)} seat(s): {len(items)} item(s), {len(plan.new)} new; send={plan.send}; {kinds}")
-    pages = [it for it in items if it.page]
+    # A test seat's problems stay on the triage agent's list and are not emailed
+    # (workers/fleet-alerts/src/mail-policy.ts is the same rule for alerts).
+    test_seats = footnoted_seats(seats)
+    pages = [it for it in items if it.page and it.seat not in test_seats]
     page_error = None if args.dry_run else send_pages(pages, now)
     if pages:
-        print(f"pages: {len(pages)} ACTION email(s){' (dry run)' if args.dry_run else ''}")
+        print(f"pages: {len(pages)} email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send or args.pages_only:
         return EXIT_SEND_FAILED if page_error else EXIT_OK
     if args.print_body:

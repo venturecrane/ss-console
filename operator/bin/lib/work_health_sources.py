@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from bin.lib import cron_slots
-from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, reason_token, span, stamped
+from bin.lib.work_health import Config, Item, Page, hhmm, item, meta, parse_ts, reason_token, span, stamped
 
 _BIN = Path(__file__).resolve().parents[1]
 
@@ -62,6 +62,13 @@ def load_module(name: str, filename: str):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+#: What a page says when an agent looks first and the client may be next.
+SIGN_IN_FOR_AGENT = (
+    "Give this email to an agent to check it. If the client has to sign in again, the agent will say so "
+    "and that email is yours to send."
+)
 
 
 def _words(tool: str) -> str:
@@ -392,7 +399,11 @@ def connector_items(seat: str, status: Optional[dict], now: datetime) -> list[It
                 onset,
                 what,
                 "Check the connection's credentials and the vendor's status; requests through it are failing.",
-                page=f"ACTION: {seat} {_words(server)} connection is failing",
+                page=Page(
+                    f"[SMD Ops] {seat}: the {_words(server)} connection is failing",
+                    f"The connection to {_words(server)} is failing, so work that needs it may have stopped.",
+                    SIGN_IN_FOR_AGENT,
+                ),
             )
         )
     return out
@@ -520,7 +531,12 @@ def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetim
             now - timedelta(minutes=1),
             f"SMD's hourly sign-in check of the {mailbox} mailbox failed ({error}).",
             "Check the mailbox's app credentials; if the seat's own connection is healthy, SMD's copy of the secret is stale.",
-            page=f"ACTION: {seat} mailbox sign-in is dead",
+            page=Page(
+                f"[SMD Ops] {seat}: the mailbox sign-in check is failing",
+                "SMD's hourly sign-in check of this seat's mailbox failed. Either the mailbox connection is broken "
+                "or SMD's own copy of its credentials is out of date.",
+                SIGN_IN_FOR_AGENT,
+            ),
         )
     ]
 

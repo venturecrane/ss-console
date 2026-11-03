@@ -5,7 +5,7 @@ order: 21
 owner: captain
 review_every: 30
 last_reviewed: "2026-10-21"
-summary: The hourly check of the WORK on every live seat (requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors), how it reaches you as the triage report and ACTION pages, and what each line means.
+summary: The hourly check of the WORK on every live seat (requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors), how it reaches you as the triage report and urgent sign-in emails, and what each line means.
 sources:
   - label: operator/bin/work-health.py - the evaluation
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/work-health.py
@@ -36,7 +36,7 @@ Two separate runs share one evaluation (`operator/bin/work-health.py`):
 | Run | Where | What it sends |
 |---|---|---|
 | **The triage agent** | `smd-ops`, hourly at :47 Phoenix time (`operator/ops-machine/crontab`) | Only when the evaluation has something NEW: the agent investigates each new item with read-only tools and writes a report in three parts: NEEDS YOU, HANDLED, FIXES (`operator/ops-machine/TRIAGE.md`). Only NEEDS YOU is emailed to team@, as `[SMD Ops] Triage: <H> handled, <N> need you`, and only when N is above zero. An hour with nothing that is yours to decide sends nothing. |
-| **The page backstop** | GitHub Actions, hourly at :23 (`.github/workflows/work-health.yml`) | Since 2026-10-16 (Captain) it runs with `--pages-only`: it sends only the ACTION pages below, never the list, so a dead sign-in still emails you even if the ops machine is down. |
+| **The page backstop** | GitHub Actions, hourly at :23 (`.github/workflows/work-health.yml`) | Since 2026-10-16 (Captain) it runs with `--pages-only`: it sends only the urgent sign-in emails below, never the list, so a dead sign-in still emails you even if the ops machine is down. |
 
 The triage agent may not change code, deploy, rebuild or restart a seat, or message a client: every fix it proposes is saved on `smd-ops` for the next agent session, which sees it in `/sos` and reads it with `.claude/bin/ops-fixes list` ([Who Does What](/admin/playbook/who-does-what)). If it stops running, the healthchecks.io check `smd-ops-triage` (hourly, 30 minutes grace, `operator/ops-machine/bin/ops-triage`) emails a failure notice; until that is fixed, an empty inbox means nothing.
 
@@ -59,16 +59,16 @@ The list below is what the evaluation produces and what the triage agent reads. 
 - **Not checked** names what the run could not vouch for: a seat that has never reported a heartbeat (being built, not broken). Every other seat gets the same checks, the self-serve offering included (ADR 0100 W6, 2026-10-31); each check grades only what the seat authors, so a seat with no Smokeball connector, no Graph mailbox or no schedule is never graded on one.
 - **The daily all-clear** (`[SMD Ops] Work health: all clear` at 08:00 Phoenix) still exists in the evaluation but has not been emailed since 2026-10-16: neither run sends the list or the all-clear. A silent triage agent is caught by its healthchecks.io check instead.
 
-## ACTION pages
+## Urgent sign-in emails
 
-A dead sign-in gets its own email on every hourly run while it stays dead, from the page backstop:
+A dead sign-in gets its own email on every hourly run while it stays dead, from the page backstop. Each opens with WHAT HAPPENED and WHAT YOU NEED TO DO, with the machine's detail below a fold. A test seat's are on the triage list and not emailed:
 
 | Subject | What it means | Who acts |
 |---|---|---|
-| `ACTION: <seat> Smokeball sign-in is dead` | Smokeball refused the seat's token; that seat's Smokeball work has stopped | You: get the client to sign in again; an agent fixes anything on SMD's side |
-| `ACTION: <seat> Smokeball sign-in dies at the next restart` | A renewed token was not saved on the seat: it works until the seat restarts, then every Smokeball call fails | An agent fixes the saving before the seat restarts; the fix may still need the client to sign in again, which is yours to arrange |
-| `ACTION: <seat> mailbox sign-in is dead` | SMD's hourly sign-in check of the seat's mailbox failed; if the seat's own connection is healthy, SMD's copy of the secret is stale | An agent checks the mailbox's app credentials |
-| `ACTION: <seat> <connection> connection is failing` | A connection failed twice in a row, or the mail reader has not succeeded for 15 minutes | An agent checks the credentials and the vendor |
+| `[SMD Ops] <seat>: the Smokeball sign-in is dead` | Smokeball refused the seat's token; that seat's Smokeball work has stopped | You: get the client to sign in again; an agent fixes anything on SMD's side |
+| `[SMD Ops] <seat>: the Smokeball sign-in will die at the next restart` | A renewed token was not saved on the seat: it works until the seat restarts, then every Smokeball call fails | An agent fixes the saving before the seat restarts; the fix may still need the client to sign in again, which is yours to arrange |
+| `[SMD Ops] <seat>: the mailbox sign-in check is failing` | SMD's hourly sign-in check of the seat's mailbox failed; if the seat's own connection is healthy, SMD's copy of the secret is stale | An agent checks the mailbox's app credentials |
+| `[SMD Ops] <seat>: the <connection> connection is failing` | A connection failed twice in a row, or the mail reader has not succeeded for 15 minutes | An agent checks the credentials and the vendor |
 
 ### The seat self-test page
 
