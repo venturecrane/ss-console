@@ -103,13 +103,10 @@ def test_each_seat_loads_exactly_its_authored_surface(seat, name):
 
 def test_ashton_price_loads_exactly_what_it_loads_today(seat):
     doc = seat("ashton-price")
-    # Every lane but records, which is built and not yet switched on for any seat
-    # (ADR 0102 amendment 4; the switch-on PR deletes this exclusion).
-    records = set(load_plugin("hermes-smd-medchron").records.TOOLS)
-    assert capabilities.authored_lanes(doc) == [
-        lane for lane in capabilities.JOB_LANES if lane != "records"
-    ]
-    assert _registered("hermes-smd-medchron") == _medchron_today() - records
+    # Every lane, the records lane included (ADR 0102 amendment 4, switched on
+    # 2026-11-03 after the release that carried it).
+    assert capabilities.authored_lanes(doc) == list(capabilities.JOB_LANES)
+    assert _registered("hermes-smd-medchron") == _medchron_today()
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True
     assert _destructive_line(doc, as_today=False) == _destructive_line(doc, as_today=True)

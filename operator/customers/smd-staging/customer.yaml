@@ -202,6 +202,13 @@ personas:
         version: pending
         initiation: { manual: true, scheduled: false, webhook: false }
         enabled: true
+      # matter records by email as a queued lane (ADR 0102 amendment 4,
+      # ss-console#3717): staging proves the send path (a request from an SMD
+      # address, the review row, the sweeper's send) before a client seat.
+      - name: matter-records
+        version: pending
+        initiation: { manual: true, scheduled: false, webhook: false }
+        enabled: true
       - name: negotiation-watch
         version: pending
         initiation: { manual: true, scheduled: false, webhook: false }
@@ -324,6 +331,16 @@ escalation:
 # is exercised end-to-end on staging.
 voice_library:
   samples_path: 'r2://vaults/smd-staging/voice/samples/'
+
+# ---- MATTER FILES ON A STAFF REPLY (ADR 0102) ----
+# Who may receive a matter's files from this seat: the Captain's own address,
+# the sender of the staging send proof for the records lane (amendment 4,
+# ss-console#3717). The first ten files replies wait for SMD's review
+# (python -m shared.matter_file_review list / approve / reject, as root).
+matter_file_delivery:
+  recipients:
+    - scott@smd.services
+  review_first: 10
 
 # ---- MEMORY (per-customer isolation; must match customer_id) ----
 memory:
