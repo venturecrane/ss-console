@@ -56,7 +56,7 @@ model: claude-sonnet-4-6
 
 machine:
   size: shared-cpu-1x
-  memory_mb: 1024
+  memory_mb: 2048
 
 # ---- PEOPLE (ADR 0091) ----
 # One entry per partner. id is a stable slug used by cron spaces and by the

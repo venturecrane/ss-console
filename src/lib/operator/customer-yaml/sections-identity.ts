@@ -188,6 +188,15 @@ export function checkMachine(
   return checkMachineFields(m, errors)
 }
 
+/**
+ * No seat runs below 2 GB. The core Operator alone (gateway ~500 MB, webhook,
+ * gate) left the 1 GB seats 15-60 MB free and stalling (captain-mark,
+ * 2026-10-31; 49 MB on 2026-11-03 with no law machinery loaded), and pilot hit
+ * a startup crash loop at 1 GB on 2026-09-01. A size the product cannot run on
+ * is not a choice a seat gets to author.
+ */
+export const MIN_SEAT_MEMORY_MB = 2048
+
 function checkMachineFields(
   m: Record<string, unknown>,
   errors: ValidationError[]
@@ -210,11 +219,11 @@ function checkMachineFields(
       message: 'machine.memory_mb must be an integer',
     })
     ok = false
-  } else if (mem < 256 || mem > 8192) {
+  } else if (mem < MIN_SEAT_MEMORY_MB || mem > 8192) {
     errors.push({
       code: 'EnumViolation',
       path: 'machine.memory_mb',
-      message: 'machine.memory_mb must be between 256 and 8192',
+      message: `machine.memory_mb must be between ${MIN_SEAT_MEMORY_MB} and 8192`,
     })
     ok = false
   }

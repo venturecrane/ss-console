@@ -48,7 +48,7 @@ model: claude-sonnet-4-6
 
 machine:
   size: shared-cpu-1x
-  memory_mb: 1024
+  memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 # SMD runs the pilot; portal access for The Brokery was not decided.

@@ -55,11 +55,12 @@ PLAIN_ENV = {
 DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "WEBHOOK_SECRET_MCP")
 # Each run mode: the guest it boots and the seat whose customer.yaml the fixture
 # derives from, so the config's machine block (which the self-test reads) matches
-# the Machine. 2x-4096 is smd-staging's size; 1x-1024 is ring 2's (scott,
-# brokery, captain-mark), the size of the 2026-09-01 startup-watchdog crash loop.
+# the Machine. 2x-4096 is smd-staging's size; 1x-2048 is ring 2's (scott,
+# brokery, captain-mark), the smallest size a seat may author (2 GB since
+# 2026-11-03; 1 GB was the size of the 2026-09-01 startup-watchdog crash loop).
 SIZES = {
     "2x-4096": (("shared", 2, 4096), fixture.SOURCE_SLUG),
-    "1x-1024": (("shared", 1, 1024), fixture.SOURCE_1GB),
+    "1x-2048": (("shared", 1, 2048), fixture.SOURCE_SMALL),
     # SMD's own pilot (a Smokeball test firm, not a client): its 630 MB state.db is the
     # large-store timing case. A snapshot of it is only ever restored inside the harness app.
     "4x-8192": (("shared", 4, 8192), "pilot-smokeball"),

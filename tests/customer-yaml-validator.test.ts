@@ -49,7 +49,7 @@ function validFixture(): Record<string, unknown> {
     model: 'claude-opus-4-7',
     machine: {
       size: 'performance-1x',
-      memory_mb: 1024,
+      memory_mb: 2048,
     },
     users: [
       { email: 'partner@firm.com', role: 'principal', full_name: 'Jane Smith' },

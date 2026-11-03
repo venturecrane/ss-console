@@ -8,7 +8,7 @@ fly_region: 'iad'
 model: claude-opus-4-7
 machine:
   size: shared-cpu-1x
-  memory_mb: 1024
+  memory_mb: 2048
 users:
   - email: 'test@example.com'
     role: principal

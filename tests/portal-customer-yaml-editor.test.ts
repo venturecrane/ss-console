@@ -45,7 +45,7 @@ function validFixture(): Record<string, unknown> {
     practice_areas: ['personal-injury', 'workers-comp'],
     fly_region: 'lax',
     model: 'claude-opus-4-7',
-    machine: { size: 'performance-1x', memory_mb: 1024 },
+    machine: { size: 'performance-1x', memory_mb: 2048 },
     users: [{ email: 'partner@firm.com', role: 'principal', full_name: 'Jane Smith' }],
     personas: [
       {

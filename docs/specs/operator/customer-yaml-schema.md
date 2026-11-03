@@ -34,7 +34,7 @@ model: <string> # Anthropic model ID (e.g. claude-opus-4-7)
 
 machine:
   size: <string> # Fly VM class (performance-1x, etc.)
-  memory_mb: <int> # 256-8192
+  memory_mb: <int> # 2048-8192 (no seat runs below 2 GB)
 
 # ---- GOOGLE WORKSPACE AUTHORITY (OPTIONAL) ----
 # Present when Google Workspace uses customer-owned domain-wide delegation.

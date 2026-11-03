@@ -355,17 +355,17 @@ def test_the_pilot_fixture_reaches_nobody_and_keeps_its_roster_classes_disjoint(
     assert fixture._is_address("someone@example.com") and not fixture._is_address("law-firm/pi@0.3.0")
 
 
-def test_the_1gb_fixture_is_a_1gb_seat_that_reaches_nobody() -> None:
-    text = fixture.render(OPERATOR, fixture.SOURCE_1GB)
+def test_the_small_fixture_is_a_2gb_seat_that_reaches_nobody() -> None:
+    text = fixture.render(OPERATOR, fixture.SOURCE_SMALL)
     doc = yaml.safe_load(text)
     assert doc["customer_id"] == fixture.SLUG
-    assert doc["machine"] == {"size": "shared-cpu-1x", "memory_mb": 1024}
+    assert doc["machine"] == {"size": "shared-cpu-1x", "memory_mb": 2048}
     assert fixture.reachable_addresses(doc) == []
     for key in ("connectors", "webhook_triggers", "telegram", "record_stores"):
         assert key not in doc
     assert all("cron" not in p for p in doc["personas"])
-    assert f"vaults/{fixture.SOURCE_1GB}/" not in yaml.safe_dump(doc)
-    assert cli.SIZES["1x-1024"][0] == ("shared", 1, 1024)
+    assert f"vaults/{fixture.SOURCE_SMALL}/" not in yaml.safe_dump(doc)
+    assert cli.SIZES["1x-2048"][0] == ("shared", 1, 2048)
 
 
 # -- --volume: the cron store a seat volume carried survives the boot (audit 11) --------
@@ -407,7 +407,7 @@ def test_a_changed_schedule_or_no_managed_job_when_routines_are_authored_fails()
 
 
 def test_keep_routines_keeps_the_seats_routine_on_a_never_firing_slot() -> None:
-    doc = yaml.safe_load(fixture.render(OPERATOR, fixture.SOURCE_1GB, keep_routines=True))
+    doc = yaml.safe_load(fixture.render(OPERATOR, fixture.SOURCE_SMALL, keep_routines=True))
     crons = [c for p in doc["personas"] for c in p.get("cron") or []]
     assert crons and all(c["schedule"] == fixture.NEVER_IN_A_RUN for c in crons)
     assert fixture.reachable_addresses(doc) == []
