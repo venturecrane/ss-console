@@ -513,6 +513,13 @@ skill_bindings:
   smd-note:
     internal: []
     outbound: derived # one bound reply in her thread (copying her request's vetted participants), or one new email to an authored admin
+  # Matter records (ADR 0102 amendment 4): the turn only queues the records job
+  # and relays its one acknowledgement sentence; the job cuts pages into the
+  # broker's spool and writes nothing to any matter. The reply carrying the
+  # records is sent by SMD's review, in the requester's own thread.
+  matter-records:
+    internal: []
+    outbound: derived # the acknowledgement and the reviewed records reply, both in the firm colleague's own thread
   mediation-settlement-tracker:
     internal:
       - { artifact: brief_inputs, seam: session_output, class: staff }

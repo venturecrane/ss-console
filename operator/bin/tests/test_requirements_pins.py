@@ -66,7 +66,9 @@ def _image_venvs() -> list[tuple[Path, Path]]:
     """(pyproject, requirements file) for every venv the Dockerfile builds from a pyproject."""
     pairs: list[tuple[Path, Path]] = []
     for cdir in sorted((OPERATOR / "connectors").iterdir()):
-        if cdir.name == "_sdk" or not (cdir / "pyproject.toml").is_file():
+        # _sdk and _contract are libraries installed into other venvs; _contract has
+        # no dependency at all (its own tests prove it).
+        if cdir.name in ("_sdk", "_contract") or not (cdir / "pyproject.toml").is_file():
             continue
         pairs.append((cdir / "pyproject.toml", REQUIREMENTS / f"connector-{cdir.name}.txt"))
     pairs.append((OPERATOR / "runners/medchron/pyproject.toml", REQUIREMENTS / "medchron.txt"))

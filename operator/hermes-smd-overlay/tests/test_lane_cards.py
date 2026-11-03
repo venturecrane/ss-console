@@ -141,6 +141,33 @@ def test_a_held_case_file_apply_is_carded_under_its_request_with_its_mode_key(le
     assert len(_lane_cards(_decide(ledger, [_request(minutes_ago=2)], proven))) == 1
 
 
+def test_a_held_records_job_is_carded_under_its_request_with_its_matter(ledger, tmp_path):
+    """ADR 0102 amendment 4: the records ledger keys its id as job_id and its
+    matter as matter_id. FALSIFIER: drop "records" from _HOLD_SQL and a records
+    job waiting on its proof is never carded."""
+    ledger.conn.execute(
+        "CREATE TABLE records_jobs (job_id TEXT PRIMARY KEY, created_at TEXT, updated_at TEXT, "
+        "state TEXT, request_ref TEXT, reason TEXT, matter_id TEXT)"
+    )
+    ledger.conn.execute(
+        "INSERT INTO records_jobs VALUES (?,?,?,?,?,?,?)",
+        (
+            HELD,
+            "2026-10-07T11:58:00Z",
+            "2026-10-07T11:58:30Z",
+            "queued",
+            IMID,
+            "lane_unproven: matter-records",
+            "900201",
+        ),
+    )
+    ledger.conn.commit()
+    cards = _lane_cards(_decide(ledger, [_request(minutes_ago=2)], _proofs(tmp_path)))
+    assert len(cards) == 1
+    assert cards[0]["lane"]["job_lane"] == "records" and cards[0]["lane"]["held_job"] == HELD
+    assert cards[0]["matter"] == "900201" and CONSOLE_KEY_RE.match(cards[0]["card_key"])
+
+
 def test_an_unreadable_record_still_pages_a_hold_and_says_so(ledger, tmp_path):
     _hold(ledger, "demand_jobs", "demand-letter-drafter")
     broken = tmp_path / "broken"

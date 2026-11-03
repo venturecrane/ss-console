@@ -169,6 +169,7 @@ lane_skill() {
     drafting) echo document-drafter ;;
     litigation) echo litigation-status ;;
     casefile) echo case-file-manager ;;
+    records) echo matter-records ;;
     marketing) echo marketing-request-router ;;
     *) return 1 ;;
   esac
@@ -213,7 +214,7 @@ any_lane_runs() {
 lane_authored() {
   [ "${ENABLED_READ}" = 1 ] || return 0
   printf '%s\n' "${ENABLED_SKILLS}" | grep -qxF "$(lane_skill "$1")" || return 1
-  case "$1" in medchron|demand|drafting|litigation|casefile|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
+  case "$1" in medchron|demand|drafting|litigation|casefile|records|marketing) ! lane_inputs_absent "$1" ;; *) return 0 ;; esac
 }
 
 # ---------- one run ----------

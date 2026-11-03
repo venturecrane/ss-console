@@ -1,0 +1,71 @@
+{
+  "digest": "da33c632faab3d7e822d59d4dc0eec1b1edd8b7c896261ee2cc8b7e565a35e9c",
+  "input": {
+    "batches": [
+      [
+        {
+          "file_id": "f1",
+          "handle": "11111111111111111111111111111111",
+          "name": "file 1.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size": 1000
+        },
+        {
+          "file_id": "f2",
+          "handle": "22222222222222222222222222222222",
+          "name": "file 2.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "size": 2000
+        }
+      ]
+    ],
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "now": 1762000000.0,
+    "reason": "matter_files_review",
+    "redirect": false,
+    "session_id": "records:one_batch",
+    "text": "Hi,\n\nAttached:\n- file 1.pdf",
+    "to": "paralegal@firm.example"
+  },
+  "row": {
+    "batches": [
+      [
+        {
+          "file_id": "f1",
+          "handle": "11111111111111111111111111111111",
+          "name": "file 1.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size": 1000
+        },
+        {
+          "file_id": "f2",
+          "handle": "22222222222222222222222222222222",
+          "name": "file 2.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "size": 2000
+        }
+      ]
+    ],
+    "created_at": 1762000000.0,
+    "digest": "da33c632faab3d7e822d59d4dc0eec1b1edd8b7c896261ee2cc8b7e565a35e9c",
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "id": "309fb56c87c04801aac65a72",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "reason": "matter_files_review",
+    "session_id": "records:one_batch",
+    "status": "review",
+    "text": "Hi,\n\nAttached:\n- file 1.pdf",
+    "to": "paralegal@firm.example"
+  }
+}

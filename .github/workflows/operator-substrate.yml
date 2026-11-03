@@ -255,6 +255,11 @@ jobs:
           uv venv /tmp/sdkv
           uv pip install --python /tmp/sdkv/bin/python ./_sdk pytest
           /tmp/sdkv/bin/python -m pytest _sdk/tests -q
+          # The records contract (ADR 0102) once, in a bare venv: stdlib only, so
+          # its install with no requirements file is itself part of the proof.
+          uv venv --python 3.13 /tmp/contractv
+          uv pip install --python /tmp/contractv/bin/python ./_contract pytest
+          (cd _contract && /tmp/contractv/bin/python -m pytest -q)
           # Each connector: its own venv built exactly as the image builds it
           # (seat interpreter, its hash-locked requirements file, then the SDK
           # and the connector --no-deps), so the tests run against the pinned
@@ -263,7 +268,7 @@ jobs:
           # real `<name>-mcp` entry point.
           for cdir in */; do
             name="${cdir%/}"
-            [ "$name" = "_sdk" ] && continue
+            case "$name" in _sdk|_contract) continue ;; esac
             [ -f "${cdir}pyproject.toml" ] || continue
             echo "== conformance: ${name} =="
             venv="/tmp/connv-${name}"
@@ -285,7 +290,7 @@ jobs:
           set -euo pipefail
           uv venv --python 3.13 /tmp/medchronv
           uv pip install --python /tmp/medchronv/bin/python --no-config --require-hashes -r requirements/medchron.txt
-          uv pip install --python /tmp/medchronv/bin/python --no-deps ./connectors/_sdk ./connectors/smokeball ./runners/medchron
+          uv pip install --python /tmp/medchronv/bin/python --no-deps ./connectors/_sdk ./connectors/_contract ./connectors/smokeball ./runners/medchron
           uv pip install --python /tmp/medchronv/bin/python pytest
           /tmp/medchronv/bin/python -m pytest -c runners/medchron/pyproject.toml runners/medchron/tests -q
 
@@ -336,7 +341,7 @@ jobs:
           # source (HERMES_AGENT_SRC, below) need them since v0.22.5, which
           # reads YAML through ruamel (hermes_yaml.py) and imports psutil from
           # tools/file_tools.py. Versions are the ones v0.22.5's uv.lock pins.
-          uv pip install --python /tmp/overlayv/bin/python -e "./operator/hermes-smd-overlay[dev]" ruff==0.15.17 \
+          uv pip install --python /tmp/overlayv/bin/python -e "./operator/hermes-smd-overlay[dev]" ./operator/connectors/_contract ruff==0.15.17 \
             ruamel.yaml==0.18.16 psutil==7.2.2
 
       - name: ruff check + format (overlay)

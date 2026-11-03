@@ -404,6 +404,10 @@ def lane(monkeypatch, tmp_path):
         mod, "_HELD_STORE", mod.held_store.HeldReplyStore(str(tmp_path / "held.db")), raising=False
     )
     monkeypatch.setattr(mod, "_broker_request", broker)
+    # The in-turn stage tool is withdrawn (ADR 0102 amendment 4; the seat refuses
+    # it, test_records_lane_overlay.py). These tests keep the staging, hold and
+    # review machinery it shares with the records lane's review sweeper covered.
+    monkeypatch.setattr(mod, "IN_TURN_STAGING", True)
 
     def send_reply(message_id, comment, *, html="", session_id="", matter_ref=None, **kw):
         sent.append({"message_id": message_id, "comment": comment, **kw})

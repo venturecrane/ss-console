@@ -17,6 +17,10 @@
 operator/runners/medchron/**
 operator/connectors/smokeball/**
 operator/connectors/_sdk/**
+# The records contract (ADR 0102): the lane imports it from the bundle venv, the
+# overlay from the hermes venv, so a change builds an image AND a bundle (it is
+# deliberately not in operator-artifact-paths.txt).
+operator/connectors/_contract/**
 operator/requirements/medchron.txt
 operator/requirements/connector-smokeball.txt
 operator/adapter/cost_telemetry/anthropic_pricing.json

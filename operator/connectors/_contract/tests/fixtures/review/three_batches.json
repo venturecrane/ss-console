@@ -1,0 +1,115 @@
+{
+  "digest": "033f34d2197f77ab68b8205b8378960b92e9405845244e5926353cbd0fec7fcf",
+  "input": {
+    "batches": [
+      [
+        {
+          "file_id": "f1",
+          "handle": "11111111111111111111111111111111",
+          "name": "file 1.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size": 1000
+        }
+      ],
+      [
+        {
+          "file_id": "f2",
+          "handle": "22222222222222222222222222222222",
+          "name": "file 2.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "size": 2000
+        },
+        {
+          "file_id": "f3",
+          "handle": "33333333333333333333333333333333",
+          "name": "file 3.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "size": 3000
+        }
+      ],
+      [
+        {
+          "file_id": "f4",
+          "handle": "44444444444444444444444444444444",
+          "name": "file 4.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "size": 4000
+        }
+      ]
+    ],
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "now": 1762000000.0,
+    "reason": "matter_files_review",
+    "redirect": false,
+    "session_id": "records:three_batches",
+    "text": "Hi,\n\nAttached:\n- file 1.pdf",
+    "to": "paralegal@firm.example"
+  },
+  "row": {
+    "batches": [
+      [
+        {
+          "file_id": "f1",
+          "handle": "11111111111111111111111111111111",
+          "name": "file 1.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size": 1000
+        }
+      ],
+      [
+        {
+          "file_id": "f2",
+          "handle": "22222222222222222222222222222222",
+          "name": "file 2.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "size": 2000
+        },
+        {
+          "file_id": "f3",
+          "handle": "33333333333333333333333333333333",
+          "name": "file 3.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "size": 3000
+        }
+      ],
+      [
+        {
+          "file_id": "f4",
+          "handle": "44444444444444444444444444444444",
+          "name": "file 4.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "size": 4000
+        }
+      ]
+    ],
+    "created_at": 1762000000.0,
+    "digest": "033f34d2197f77ab68b8205b8378960b92e9405845244e5926353cbd0fec7fcf",
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "id": "a427695a214409566dbb3a0e",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "reason": "matter_files_review",
+    "session_id": "records:three_batches",
+    "status": "review",
+    "text": "Hi,\n\nAttached:\n- file 1.pdf",
+    "to": "paralegal@firm.example"
+  }
+}

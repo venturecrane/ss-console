@@ -28,62 +28,70 @@ that long); approving an expired row is refused and nothing is sent.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
-import re
-import stat
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
-REVIEW_DIR_ENV = "SMD_MATTER_FILE_REVIEW_DIR"
-DEFAULT_REVIEW_DIR = "/opt/data/matter-file-review"
-DECISIONS_DIR_ENV = "SMD_MATTER_FILE_DECISIONS_DIR"
-DEFAULT_DECISIONS_DIR = "/var/lib/smd-review"
-TTL_SECONDS = 24 * 60 * 60
-_ID_RE = re.compile(r"^[0-9a-f]{24}$")
-_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
-_DECISIONS = ("approve", "reject")
+# The row, its digest, the decision-file name and the released count are the
+# records contract's (ADR 0102 amendment 4): the records lane writes rows as
+# root with no turn, and this gateway sends them, so both build and read the
+# same bytes from one copy (operator/connectors/_contract).
+from records_contract.review_row import (
+    DECISIONS,
+    DECISIONS_DIR_ENV,
+    DEFAULT_DECISIONS_DIR,
+    DEFAULT_REVIEW_DIR,
+    DIGEST_RE,
+    HOLD_REASON,
+    ID_RE,
+    REVIEW_DIR_ENV,
+    STATUS_EXPIRED,
+    STATUS_FAILED,
+    STATUS_REJECTED,
+    STATUS_REVIEW,
+    STATUS_SENT,
+    TTL_SECONDS,
+    ReviewError,
+    decision_file,
+    decision_for,
+    decisions_dir,
+    digest,
+    expired,
+    hold_row,
+    read_rows,
+    released_count,
+    review_dir,
+    write_row,
+)
 
-#: The REPLY_HELD reason a files reply waiting for SMD carries.
-HOLD_REASON = "matter_files_review"
-STATUS_REVIEW = "review"
-STATUS_SENT = "sent"
-STATUS_REJECTED = "rejected"
-STATUS_FAILED = "failed"
-STATUS_EXPIRED = "expired"
-
-
-class ReviewError(ValueError):
-    """The review action is refused; the message says why."""
-
-
-def review_dir() -> Path:
-    return Path(os.environ.get(REVIEW_DIR_ENV, "").strip() or DEFAULT_REVIEW_DIR)
-
-
-def decisions_dir() -> Path:
-    return Path(os.environ.get(DECISIONS_DIR_ENV, "").strip() or DEFAULT_DECISIONS_DIR)
-
-
-def digest(row: dict[str, Any]) -> str:
-    """sha256 over who, what and which bytes; never a timestamp or a status."""
-    canon = {
-        "message_id": row.get("message_id"),
-        "to": row.get("to"),
-        # Only when set, so the digest of every row written before it is unchanged.
-        **({"redirect": True} if row.get("redirect") else {}),
-        "text": row.get("text"),
-        "html": row.get("html"),
-        "batches": [
-            [[f.get("handle"), f.get("sha256"), f.get("name")] for f in b]
-            for b in row.get("batches") or []
-        ],
-    }
-    raw = json.dumps(canon, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+__all__ = [
+    "DECISIONS_DIR_ENV",
+    "DEFAULT_DECISIONS_DIR",
+    "DEFAULT_REVIEW_DIR",
+    "HOLD_REASON",
+    "REVIEW_DIR_ENV",
+    "STATUS_EXPIRED",
+    "STATUS_FAILED",
+    "STATUS_REJECTED",
+    "STATUS_REVIEW",
+    "STATUS_SENT",
+    "TTL_SECONDS",
+    "ReviewError",
+    "decide",
+    "decision",
+    "decisions_dir",
+    "describe",
+    "digest",
+    "expired",
+    "finish",
+    "hold",
+    "main",
+    "released_count",
+    "review_dir",
+    "rows",
+]
 
 
 def hold(
@@ -108,93 +116,48 @@ def hold(
     check out, ``shared.matter_file_facts``); it is shown, not digested.
     ``redirect`` means ``to`` is a device's authored person, not the email's
     sender: the release aims the reply there (and the broker re-checks it)."""
-    base = directory or review_dir()
-    base.mkdir(mode=0o700, parents=True, exist_ok=True)
-    row: dict[str, Any] = {
-        "id": os.urandom(12).hex(),
-        "created_at": now if now is not None else time.time(),
-        "status": STATUS_REVIEW,
-        "message_id": message_id,
-        "to": to,
-        "text": text,
-        "html": html,
-        "batches": batches,
-        "matter_id": matter_id,
-        "session_id": session_id,
-        "reason": str(reason or "")[:500],
-        **({"redirect": True} if redirect else {}),
-    }
-    row["digest"] = digest(row)
-    _write(base / f"{row['id']}.json", row)
+    row = hold_row(
+        message_id=message_id,
+        to=to,
+        text=text,
+        html=html,
+        batches=batches,
+        matter_id=matter_id,
+        session_id=session_id,
+        reason=reason,
+        redirect=redirect,
+        now=now,
+    )
+    write_row(row, directory or review_dir())
     return row
 
 
-def _write(path: Path, row: dict[str, Any]) -> None:
-    tmp = path.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(row, fh)
-    os.replace(tmp, path)
-
-
 def rows(directory: Path | None = None) -> list[dict[str, Any]]:
-    base = directory or review_dir()
-    out = []
-    for path in sorted(base.glob("*.json")) if base.is_dir() else []:
-        try:
-            row = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(row, dict) and _ID_RE.fullmatch(str(row.get("id") or "")):
-            out.append(row)
-    return out
-
-
-def released_count(directory: Path | None = None) -> int:
-    """Held files replies SMD approved and the seat then SENT: the countdown
-    ``matter_file_delivery.review_first`` reads. Rows are never pruned.
-
-    Only a released reply counts. A rejected, expired, failed or still-waiting
-    row is a reply SMD has not let go, so it spends none of ``review_first``:
-    on 2026-11-02 the first A&P files reply was rejected, and counting every
-    held row would have sent the next one unreviewed."""
-    return sum(1 for row in rows(directory) if row.get("status") == STATUS_SENT)
+    """Every held row, the gateway's and the records lane's alike (a lane row's
+    ``session_id`` is ``records:<job_id>``, which no hermes session owns)."""
+    return read_rows(directory)
 
 
 def finish(
     row: dict[str, Any], status: str, *, note: str = "", directory: Path | None = None
 ) -> None:
     """Move a row to a terminal status and drop its words (the hashes stay)."""
-    base = directory or review_dir()
-    row = {
-        **row,
-        "status": status,
-        "decided_at": time.time(),
-        "note": note[:300],
-        "text": "",
-        "html": "",
-    }
-    _write(base / f"{row['id']}.json", row)
+    write_row(
+        {
+            **row,
+            "status": status,
+            "decided_at": time.time(),
+            "note": note[:300],
+            "text": "",
+            "html": "",
+        },
+        directory or review_dir(),
+    )
 
 
 def decision(row: dict[str, Any], *, directory: Path | None = None) -> str:
     """``approve`` / ``reject`` when ROOT decided this exact row, else ``""``."""
-    base = directory or decisions_dir()
-    for word in _DECISIONS:
-        path = base / f"{row.get('id')}.{row.get('digest')}.{word}"
-        try:
-            st = os.lstat(path)
-        except OSError:
-            continue
-        if stat.S_ISREG(st.st_mode) and st.st_uid == 0:
-            return word
-    return ""
-
-
-def expired(row: dict[str, Any], now: float | None = None) -> bool:
-    return (now if now is not None else time.time()) - float(
-        row.get("created_at") or 0
-    ) > TTL_SECONDS
+    return decision_for(directory, row) or ""
 
 
 def describe(row: dict[str, Any]) -> str:
@@ -234,9 +197,9 @@ def decide(
     row_id: str, word: str, dig: str, *, directory: Path | None = None, reviews: Path | None = None
 ) -> Path:
     """Root writes the decision file the gateway acts on."""
-    if word not in _DECISIONS:
+    if word not in DECISIONS:
         raise ReviewError("the decision is approve or reject")
-    if not _ID_RE.fullmatch(row_id or "") or not _DIGEST_RE.fullmatch(dig or ""):
+    if not ID_RE.fullmatch(row_id or "") or not DIGEST_RE.fullmatch(dig or ""):
         raise ReviewError("give the row id and the digest exactly as `list` printed them")
     row = next((r for r in rows(reviews) if r.get("id") == row_id), None)
     if row is None or row.get("status") != STATUS_REVIEW:
@@ -247,12 +210,7 @@ def decide(
         raise ReviewError(
             "that reply has expired (its files are gone from the broker's spool); nothing was sent"
         )
-    base = directory or decisions_dir()
-    base.mkdir(mode=0o755, parents=True, exist_ok=True)
-    path = base / f"{row_id}.{dig}.{word}"
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    os.close(fd)
-    return path
+    return decision_file(directory, row_id, dig, word)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -261,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
-    for word in _DECISIONS:
+    for word in DECISIONS:
         p = sub.add_parser(word)
         p.add_argument("row_id")
         p.add_argument("digest")

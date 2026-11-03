@@ -36,6 +36,7 @@ export const JOB_LANES = {
   casefile: 'case-file-manager',
   negotiation: 'negotiation-watch',
   note: 'smd-note',
+  records: 'matter-records',
 } as const satisfies Record<string, string>
 export type JobLane = keyof typeof JOB_LANES
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import types
 from pathlib import Path
 
-from medchron import casefile_lane, drafting_lane, lanes, litigation_lane, negotiation_lane, note_lane
+from medchron import casefile_lane, drafting_lane, lanes, litigation_lane, negotiation_lane, note_lane, records_lane
 
 
 def _record_starts(monkeypatch) -> list[str]:
@@ -16,6 +16,7 @@ def _record_starts(monkeypatch) -> list[str]:
         ("negotiation", negotiation_lane),
         ("note", note_lane),
         ("casefile", casefile_lane),
+        ("records", records_lane),
     ):
         monkeypatch.setattr(module, "start_lane", lambda *_a, _n=name, **_k: started.append(_n))
     return started
@@ -40,7 +41,7 @@ def test_an_entrypoint_from_before_the_list_starts_every_lane(monkeypatch) -> No
     started = _record_starts(monkeypatch)
     monkeypatch.delenv(lanes.AUTHORED_ENV, raising=False)
     lanes.start_other_lanes(object(), stop=lambda: True, poll_seconds=1.0)
-    assert started == ["drafting", "litigation", "negotiation", "note", "casefile"]
+    assert started == ["drafting", "litigation", "negotiation", "note", "casefile", "records"]
 
 
 def test_a_lane_not_started_leaves_no_beat_behind(monkeypatch, tmp_path: Path) -> None:

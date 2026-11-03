@@ -56,6 +56,7 @@ from . import (
     msgraph_drafts,
     note_verbs,
     records_order_acts,
+    records_verbs,
 )
 from .medchron_verbs import medchron_dispatch
 from .send_witness import append_escalation_event
@@ -230,6 +231,16 @@ VERBS: tuple[Verb, ...] = (
     Verb("casefile_job_resume", _only(ROOT), casefile_verbs.casefile_dispatch),
     Verb("casefile_job_close", _only(ROOT), casefile_verbs.casefile_dispatch),
     Verb("casefile_apply_submit", GATEWAY_OR_ROOT, casefile_verbs.casefile_dispatch),
+    # Matter records by email (records_verbs.py, ADR 0102 amendment 4): a staff
+    # member's request queued from the turn (gateway) or by SMD on the seat
+    # (root, which alone may queue with no acknowledgement). No agent uid: no
+    # cron or execute_code child queues a records job. Record, resume and close
+    # are the runner daemon's and SMD's, root only.
+    Verb("records_job_submit", GATEWAY_OR_ROOT, records_verbs.records_dispatch),
+    Verb("records_job_status", GATEWAY_ROOT_OR_AGENT, records_verbs.records_dispatch),
+    Verb("records_job_record", _only(ROOT), records_verbs.records_dispatch),
+    Verb("records_job_resume", _only(ROOT), records_verbs.records_dispatch),
+    Verb("records_job_close", _only(ROOT), records_verbs.records_dispatch),
     # SMD notes (note_verbs.py, 2026-10-15): SMD has the Operator tell a firm
     # colleague something in her own thread. Preview and record are root only
     # (a person on the seat, medchron/note_by_smd.py); the DELIVER turn reads
@@ -249,8 +260,10 @@ VERBS: tuple[Verb, ...] = (
     Verb("msgraph_send", _only(GATEWAY), transmit_verbs.msgraph),
     Verb("msgraph_reply", _only(GATEWAY), transmit_verbs.msgraph),
     # A file for a reply, in chunks, into the broker's own spool (ADR 0102,
-    # attachment_intake.py). Gateway-only like the reply that carries it.
-    Verb("attachment_put", _only(GATEWAY), attachment_intake.put_verb),
+    # attachment_intake.py). The gateway (a turn's files reply) or root (the
+    # records lane's report, which spools its cuts before writing the review
+    # row). Never the agent uid: a cron or execute_code child cannot stage bytes.
+    Verb("attachment_put", GATEWAY_OR_ROOT, attachment_intake.put_verb),
     # The verified reply binding (reply_binding.py): a turn no inbound opened
     # answers one earlier email, once, to its verified sender. Gateway-only like
     # the channel it transmits on; the check verb is gateway-only too, because
@@ -310,6 +323,8 @@ if set(negotiation_verbs.VERBS) != {v.name for v in VERBS if v.handler is negoti
     raise RuntimeError("the negotiation rows above and negotiation_verbs.VERBS disagree")
 if set(casefile_verbs.VERBS) != {v.name for v in VERBS if v.handler is casefile_verbs.casefile_dispatch}:
     raise RuntimeError("the casefile rows above and casefile_verbs.VERBS disagree")
+if set(records_verbs.VERBS) != {v.name for v in VERBS if v.handler is records_verbs.records_dispatch}:
+    raise RuntimeError("the records rows above and records_verbs.VERBS disagree")
 if set(note_verbs.VERBS) != {v.name for v in VERBS if v.name.startswith("note_")}:
     raise RuntimeError("the note rows above and note_verbs.VERBS disagree")
 

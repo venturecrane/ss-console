@@ -11,8 +11,8 @@ guest authors lower caps instead of paying for a bigger one:
       lane_memory_mb: {medchron: 1024, demand: 512}
 
 ``medchron`` caps the chronology cgroup. ``demand`` caps the demand cgroup,
-which the drafting, litigation, negotiation and casefile lanes share (each may
-create it at its own cap when it runs first, so all five get the same value). Unauthored,
+which the drafting, litigation, negotiation, casefile and records lanes share (each
+may create it at its own cap when it runs first, so all six get the same value). Unauthored,
 or a value outside the validator's bounds, means the code default exactly.
 
 The seat entrypoint runs ``python -m medchron.lane_memory <customer.yaml>``
@@ -44,6 +44,7 @@ LANE_ENVS: dict[str, tuple[str, ...]] = {
         "SMD_LITIGATION_MEMORY_MAX_BYTES",
         "SMD_NEGOTIATION_MEMORY_MAX_BYTES",
         "SMD_CASEFILE_MEMORY_MAX_BYTES",
+        "SMD_RECORDS_MEMORY_MAX_BYTES",
     ),
 }
 

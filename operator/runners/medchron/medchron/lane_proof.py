@@ -66,6 +66,7 @@ SKILLS = {
     "litigation": "litigation-status",
     "negotiation": "negotiation-watch",
     "casefile": "case-file-manager",
+    "records": "matter-records",
 }
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$")
 _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")

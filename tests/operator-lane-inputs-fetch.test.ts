@@ -42,15 +42,22 @@ const LANE_FILES = {
   drafting: code(readFileSync(resolve('operator/templates/entrypoint-drafting.sh'), 'utf8')),
   litigation: code(readFileSync(resolve('operator/templates/entrypoint-litigation.sh'), 'utf8')),
   casefile: code(readFileSync(resolve('operator/templates/entrypoint-casefile.sh'), 'utf8')),
+  records: code(readFileSync(resolve('operator/templates/entrypoint-records.sh'), 'utf8')),
 } as const
-const LANES = ['demand', 'drafting', 'litigation', 'casefile'] as const
+const LANES = ['demand', 'drafting', 'litigation', 'casefile', 'records'] as const
 // The env each lane file exports its inputs dir under (the runner reads it).
 const INPUTS_ENV: Record<(typeof LANES)[number], string> = {
   demand: 'MEDCHRON_DEMAND_INPUTS',
   drafting: 'MEDCHRON_DRAFTING_INPUTS',
   litigation: 'MEDCHRON_LITIGATION_INPUTS',
   casefile: 'MEDCHRON_CASEFILE_INPUTS_DIR',
+  records: 'MEDCHRON_RECORDS_INPUTS_DIR',
 }
+const PROVISION = code(readFileSync(resolve('operator/bin/provision-customer.sh'), 'utf8'))
+const STAGE_FILES = {
+  casefile: code(readFileSync(resolve('operator/bin/lib/stage-casefile-inputs.sh'), 'utf8')),
+  records: code(readFileSync(resolve('operator/bin/lib/stage-records-inputs.sh'), 'utf8')),
+} as const
 
 describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', () => {
   it('the helper retries the copy and distinguishes an absent prefix from an unreachable vault', () => {
@@ -108,8 +115,37 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
     })
   }
 
+  it('the provisioner stages the records inputs right after the case file inputs, the same way', () => {
+    // FALSIFIER: drop records from the stage loop, or let the block upload
+    // unreviewed or unvalidated inputs, and this fails.
+    expect(PROVISION).toMatch(
+      /for _stage in demand drafting litigation casefile records [a-z -]*; do source "\$\{BIN_DIR\}\/lib\/stage-\$\{_stage\}-inputs\.sh"; done/
+    )
+    for (const [lane, f] of Object.entries(STAGE_FILES)) {
+      expect(f).toMatch(new RegExp(`/operator/customers/\\$\\{SLUG\\}/${lane}"`))
+      expect(f).toMatch(
+        new RegExp(
+          `git -C "\\$\\{_eng\\}" show "origin/main:operator/customers/\\$\\{SLUG\\}/${lane}/`
+        )
+      )
+      expect(f).toMatch(
+        new RegExp(`python3 -m medchron\\.${lane}\\.firm "\\$\\{[A-Z]+_INPUTS_DIR\\}"`)
+      )
+      expect(f).toMatch(
+        new RegExp(
+          `aws s3 sync "\\$\\{[A-Z]+_INPUTS_DIR\\}/" "s3://\\$\\{R2_BUCKET_CONFIG\\}/vaults/\\$\\{SLUG\\}/${lane}/" --delete`
+        )
+      )
+      expect(f).toMatch(
+        new RegExp(
+          `assert_lane_not_on_main "operator/customers/\\$\\{SLUG\\}/${lane}/${lane}-firm\\.yaml"`
+        )
+      )
+    }
+  })
+
   it('boot smoke asserts each authored lane has its inputs on the seat, gated on the engagements checkout', () => {
-    expect(CHECKS).toMatch(/for _lane in demand drafting litigation casefile; do/)
+    expect(CHECKS).toMatch(/for _lane in demand drafting litigation casefile records; do/)
     // The expectation source is the transport's lane_authored. Over ssh it is
     // the working tree OR engagements origin/main (a stale shared checkout must
     // not turn a lane "absent"); behavior is pinned in

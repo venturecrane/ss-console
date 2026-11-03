@@ -63,6 +63,7 @@ def test_the_registry_agrees_with_the_runner_lane_skills() -> None:
         "casefile": "casefile_lane.py",
         "negotiation": "negotiation_lane.py",
         "note": "note_lane.py",
+        "records": "records_lane.py",
     }
     for lane, name in modules.items():
         tree = ast.parse((RUNNER / name).read_text(encoding="utf-8"))
@@ -120,12 +121,16 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     def seat(slug: str) -> dict:
         return cap.read(OPERATOR / "customers" / slug / "customer.yaml") or {}
 
-    assert cap.authored_lanes(seat("ashton-price")) == list(cap.JOB_LANES)
+    # The records lane (ADR 0102 amendment 4) is built but switched on nowhere yet:
+    # enabling matter-records on ashton-price and smd-staging is its own PR, after
+    # the release that carries the lane. That PR deletes this exclusion.
+    not_yet = [lane for lane in cap.JOB_LANES if lane != "records"]
+    assert cap.authored_lanes(seat("ashton-price")) == not_yet
     assert cap.authors_connector(seat("ashton-price"), "smokeball")
     assert cap.authors_connector(seat("pilot-smokeball"), "smokeball")
     # smd-staging is ring 0: it authors every lane A&P runs (manual only, no firm
     # inputs, so each lane's self-test notes "absent" by the boot fetch verdict).
-    assert cap.authored_lanes(seat("smd-staging")) == list(cap.JOB_LANES)
+    assert cap.authored_lanes(seat("smd-staging")) == not_yet
     assert not cap.authors_connector(seat("smd-staging"), "smokeball")
     for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug

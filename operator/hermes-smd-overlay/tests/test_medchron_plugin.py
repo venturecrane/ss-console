@@ -165,6 +165,8 @@ def test_the_three_tools_register_function_shaped_and_require_the_socket():
         "negotiation_job_status",
         # An SMD note's one (note.py): root records the note, no submit.
         "note_job_status",
+        # A matter-records request's one (records.py): it queues; the review sweeper sends.
+        "records_job_submit",
     }
     for name, t in tools.items():
         assert t["requires_env"] == ["SMD_WORKSPACE_BROKER_SOCKET"], name
@@ -461,6 +463,7 @@ def test_every_tool_has_exactly_one_lane_owner_and_every_lane_is_a_job_lane():
         **plugin.negotiation.TOOLS,
         **plugin.note.TOOLS,
         **plugin.casefile.TOOLS,
+        **plugin.records.TOOLS,
     }
     assert set(owners) == set(every), "a tool with no lane owner"
     assert all(len(v) == 1 for v in owners.values()), {

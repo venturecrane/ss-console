@@ -32,7 +32,7 @@ uv venv --quiet "${VENV}"
 # The load-bearing three-path install the tree already uses (CI and the seat
 # image build): the runner's deps resolve through the connector's path source.
 uv pip install --quiet --python "${VENV}/bin/python" \
-  "${OPERATOR_DIR}/connectors/_sdk" "${OPERATOR_DIR}/connectors/smokeball" "${OPERATOR_DIR}/runners/medchron"
+  "${OPERATOR_DIR}/connectors/_sdk" "${OPERATOR_DIR}/connectors/_contract" "${OPERATOR_DIR}/connectors/smokeball" "${OPERATOR_DIR}/runners/medchron"
 
 "${VENV}/bin/python" - "${DEST}" <<'PY'
 import sys

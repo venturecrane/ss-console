@@ -119,13 +119,10 @@ get_relationships_on_matter = "read"
 get_files_on_matter = "read"
 get_file = "read"
 # ADR 0102 (2026-11-02): find a matter's files by name/folder/extension, paged
-# server-side; and stage named files (whole, or a page range cut here) into the
-# seat's outbound spool for the reply to the colleague who asked. Staging writes
-# only the seat's own disk. COORDINATED CHANGE: the overlay carries both as
-# ActionClass.READ in the same change.
+# server-side. COORDINATED CHANGE: the overlay carries it as ActionClass.READ.
+# stage_matter_files and find_pages_in_file are no longer tools (ADR 0102
+# amendment 4, 2026-11-03): the records lane runs them as plain functions.
 find_files_on_matter = "read"
-stage_matter_files = "read"
-find_pages_in_file = "read"
 get_download_url = "read"
 read_document = "read"
 list_folders = "read"

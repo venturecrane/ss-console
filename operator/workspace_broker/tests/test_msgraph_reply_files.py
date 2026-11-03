@@ -431,13 +431,15 @@ def test_a_reply_without_files_is_unchanged(tmp_path: Path) -> None:
     assert "attachment_sha256" not in out and any(c[1].endswith("/reply") for c in graph.calls)
 
 
-def test_the_attachment_put_verb_is_gateway_only_and_answers_ok(tmp_path: Path) -> None:
+def test_the_attachment_put_verb_is_gateway_or_root_and_answers_ok(tmp_path: Path) -> None:
     from types import SimpleNamespace
 
     from workspace_broker import verbs
 
     verb = verbs.TABLE["attachment_put"]
-    assert verb.auth == frozenset({verbs.GATEWAY})
+    # Root too since the records lane spools its cuts as root (records_verbs.py);
+    # never the agent uid.
+    assert verb.auth == frozenset({verbs.GATEWAY, verbs.ROOT})
     broker = SimpleNamespace(audit_db_path=str(tmp_path / "audit.db"))
     data = b"%PDF-1.4 x"
     request = {

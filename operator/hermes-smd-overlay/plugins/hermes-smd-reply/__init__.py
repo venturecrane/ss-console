@@ -838,6 +838,7 @@ def on_post_tool_call(**kwargs: Any) -> None:
             _stage_matter_files(kwargs)
         return
     if (kwargs.get("tool_name") or "") == matter_file_facts.FIND_TOOL:
+        # Withdrawn from the connector (ADR 0102 am. 4); kept for an older connector: it holds the reply.
         _record_finder(kwargs)
         return
     if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:
@@ -968,13 +969,30 @@ def _files_recipient(cfg: CustomerConfig, sender: str) -> tuple[bool, bool, bool
     return cls is RecipientClass.INTERNAL, bool(cfg.sender_on_roster(sender)), device
 
 
+#: Whether a turn may still carry ``stage_matter_files`` output onto its reply.
+#: False since ADR 0102 amendment 4 (2026-11-03): matter records are a queued
+#: ``records`` job whose reply SMD's review releases (``_review_one``), and the
+#: stage tool is withdrawn from the connector. A seat on an older connector that
+#: still offers it stages nothing. The tests that cover the review and hold path
+#: this machinery shares turn it on in their fixture.
+IN_TURN_STAGING = False
+_STAGING_WITHDRAWN = (
+    "[matter files] NOT staged: files are no longer attached in a turn on this seat; a "
+    "records request is queued with records_job_submit. Do not say any file is attached."
+)
+
+
 def _stage_matter_files(kwargs: dict[str, Any]) -> str:
     """Carry a ``stage_matter_files`` result onto this turn's reply (ADR 0102).
+
+    Refused everywhere while :data:`IN_TURN_STAGING` is off (amendment 4).
 
     The fences that need the turn run here, where the session id is present:
     an email opened this turn, a Graph seat, its sender firm staff. The files
     then go from the connector's spool into the broker's. Returns the line the
     model reads after the connector's result. Never raises."""
+    if not IN_TURN_STAGING:
+        return _STAGING_WITHDRAWN
     try:
         session_id = str(kwargs.get("session_id") or "") or provenance.resolve_session("")
         if not session_id:
@@ -1174,9 +1192,24 @@ def _review_once() -> None:
             logger.warning("hermes-smd-reply: review release failed (%s)", type(exc).__name__)
 
 
+#: A review row the records lane wrote as root (ADR 0102 amendment 4) carries
+#: ``session_id`` ``records:<job_id>``: no hermes session owns it, so its rows
+#: name the row's own matter rather than asking a session which matter it read.
+LANE_SESSION_PREFIX = "records:"
+
+
+def _row_matter_ref(row: dict[str, Any]) -> str | None:
+    """The matter a lane row's audit rows carry (its own ``matter_id``); ``None``
+    for a turn's row, whose session still resolves it as before."""
+    if not str(row.get("session_id") or "").startswith(LANE_SESSION_PREFIX):
+        return None
+    return str(row.get("matter_id") or "") or None
+
+
 def _review_one(row: dict[str, Any]) -> None:
     if row.get("status") != matter_file_review.STATUS_REVIEW:
         return
+    matter_ref = _row_matter_ref(row)
     word = matter_file_review.decision(row)
     origin = inbound.InboundOrigin(
         sender_address=str(row.get("to") or ""),
@@ -1195,6 +1228,7 @@ def _review_one(row: dict[str, Any]) -> None:
                 action_type="REPLY_HELD",
                 metadata={"reason": f"matter_files_review_{status}", "review_id": row.get("id")},
                 session_id=str(row.get("session_id") or "") or None,
+                matter_ref=matter_ref,
             )
         return
     if word != "approve":
@@ -1217,12 +1251,18 @@ def _review_one(row: dict[str, Any]) -> None:
             text,
             html,
             session_id=session_id,
+            matter_ref=matter_ref,
             to=str(row.get("to") or "") if row.get("redirect") else None,
             attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)
-        _send_failed(f"reviewed reply: {type(exc).__name__}", origin, adapter=_ADAPTER_MSGRAPH)
+        _send_failed(
+            f"reviewed reply: {type(exc).__name__}",
+            origin,
+            adapter=_ADAPTER_MSGRAPH,
+            matter_ref=matter_ref,
+        )
         return
     _emit_reply_event(
         action_type="REPLY_SENT",
@@ -1236,10 +1276,11 @@ def _review_one(row: dict[str, Any]) -> None:
             **matter_file_reply.audit_fields(first),
         },
         session_id=session_id or None,
+        matter_ref=matter_ref,
     )
     request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
     if len(prepared.batches) > 1:
-        _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=None)
+        _send_file_continuations(prepared, origin, session_id=session_id, matter_ref=matter_ref)
     matter_file_review.finish(row, matter_file_review.STATUS_SENT)
 
 
@@ -2044,7 +2085,8 @@ def on_transform_tool_result(**kwargs: Any) -> str | None:
             return f"{result}\n\n{told}" if isinstance(result, str) and result else told
         if (kwargs.get("tool_name") or "") == matter_file_facts.FIND_TOOL:
             # Recorded from both hooks (whichever fires first; the record is
-            # the same each time), and the result is never altered.
+            # the same each time), and the result is never altered. Withdrawn
+            # from the connector (ADR 0102 am. 4); kept for an older connector.
             _record_finder(kwargs)
             return None
         if (kwargs.get("tool_name") or "") not in _CREATE_DRAFT_TOOLS:

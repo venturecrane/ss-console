@@ -63,6 +63,8 @@ def test_demand_value_reaches_every_lane_that_can_create_the_shared_cgroup() -> 
         negotiation_lane.MEMORY_ENV,
         # The case file manager (casefile_lane.MEMORY_ENV) joins it too.
         "SMD_CASEFILE_MEMORY_MAX_BYTES",
+        # And matter records (records_lane.MEMORY_ENV).
+        "SMD_RECORDS_MEMORY_MAX_BYTES",
     }
     assert LANE_ENVS["medchron"] == (daemon.MEMORY_MAX_ENV,)
     words = env_words(_doc({"demand": 512}))
@@ -77,7 +79,7 @@ def test_cli_prints_the_words_the_entrypoint_passes(tmp_path: Path) -> None:
     ).stdout.split()
     assert f"SMD_MEDCHRON_MEMORY_MAX_BYTES={1024 * MIB}" in out
     assert f"SMD_DEMAND_MEMORY_MAX_BYTES={512 * MIB}" in out
-    assert len(out) == 6
+    assert len(out) == 7
 
 
 def test_cli_prints_nothing_for_a_missing_file(tmp_path: Path) -> None:

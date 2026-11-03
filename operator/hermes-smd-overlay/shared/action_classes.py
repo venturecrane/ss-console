@@ -1152,6 +1152,13 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "casefile_job_submit": ActionClass.INTERNAL_WRITE,
     "casefile_job_status": ActionClass.READ,
     "casefile_apply_submit": ActionClass.INTERNAL_WRITE,
+    # A matter-records request (hermes-smd-medchron/records.py, ss-console
+    # records_verbs.py, ADR 0102 amendment 4). Submit queues a job on the
+    # Machine's own runner, which finds and cuts the records and writes the reply
+    # for SMD's review; nothing leaves the seat until SMD releases it:
+    # INTERNAL_WRITE. The requester and request are the turn's verified inbound,
+    # not tool arguments.
+    "records_job_submit": ActionClass.INTERNAL_WRITE,
     # The negotiation watch (hermes-smd-medchron/negotiation.py, ss-console
     # negotiation_verbs.py). Scheduled only: no submit tool exists (the cron's
     # pre_run submits to the broker directly). Status returns a notice's

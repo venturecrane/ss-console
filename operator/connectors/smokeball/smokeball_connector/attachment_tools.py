@@ -32,7 +32,6 @@ from .funding_case_eval import register as _register_funding_case_eval_tools
 from .layout_tools import register as _register_layout_tools
 from .post_journal import register as _register_post_journal_tools
 from .matter_files import register as _register_matter_file_tools
-from .page_finder_tools import register as _register_page_finder_tools
 
 
 def register(server: Any) -> None:
@@ -70,12 +69,11 @@ def register(server: Any) -> None:
     _register_layout_tools(server)
     # The post journal and its daily list (post_journal.py).
     _register_post_journal_tools(server)
-    # Find a matter's files by name, and stage named files for a staff reply
-    # (matter_files.py, ADR 0102), last.
+    # Find a matter's files by name (matter_files.py, ADR 0102), last. Finding
+    # pages in a file and staging files for a reply are NOT tools (ADR 0102
+    # amendment 4): the records lane calls page_finder.locate and
+    # matter_files.prepare_local itself, with a cost cap no turn can hold.
     _register_matter_file_tools(server)
-    # Find which pages of a (scanned) matter PDF hold a requested record
-    # (page_finder.py, ADR 0102 amendment 2), after the matter-file tools.
-    _register_page_finder_tools(server)
 
 
 __all__ = ["register"]

@@ -1,0 +1,64 @@
+{
+  "expected": {
+    "echoed": [],
+    "hold_reason": "this session read another matter's content, so no file facts go on this reply",
+    "html": "",
+    "names": [],
+    "stated": [],
+    "text": ""
+  },
+  "input": {
+    "files": [
+      {
+        "file_id": "f0",
+        "handle": "11111111111111111111111111111111",
+        "name": "A.pdf",
+        "page_count": 4,
+        "pages": "1-4",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1000
+      }
+    ],
+    "read_matters": ["5F0C1A2B-0000-4000-8000-00000000ABCD", "other-matter"],
+    "results": {
+      "f0": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 223,
+          "read": 223,
+          "unreadable": 0
+        },
+        "fileId": "f0",
+        "items": [
+          {
+            "asked": "x",
+            "closest": [],
+            "established": true,
+            "found": true,
+            "ranges": [
+              {
+                "evidence": [
+                  {
+                    "date": "",
+                    "heading": "H",
+                    "pages": "1-4",
+                    "section": "S1"
+                  }
+                ],
+                "pages": "1-4"
+              }
+            ],
+            "reason": "THE MODEL'S OWN SENTENCE",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "A",
+        "pageCount": 223,
+        "schemaVersion": 2
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}

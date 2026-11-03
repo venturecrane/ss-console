@@ -66,6 +66,7 @@ LANE_HEARTBEATS = (
     "negotiation-heartbeat",
     "note-heartbeat",
     "casefile-heartbeat",
+    "records-heartbeat",
 )
 
 #: A lane file older than this is stale. Lanes beat every poll (seconds) and the

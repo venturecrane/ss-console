@@ -1,0 +1,89 @@
+{
+  "expected": {
+    "echoed": ["the 2022 refills"],
+    "hold_reason": null,
+    "html": "<p>Attached:</p><ul><li>8-E Billing.pdf, the whole file (30 pages)</li></ul><p>Not established, 10 pages of Pharmacy Rx are not read yet:</p><ul><li>the 2022 refills: not found on the 0 pages of Pharmacy Rx that were read</li></ul>",
+    "names": ["8-E Billing.pdf", "Pharmacy Rx"],
+    "stated": ["0 page", "10 page", "30 page"],
+    "text": "Attached:\n- 8-E Billing.pdf, the whole file (30 pages)\n\nNot established, 10 pages of Pharmacy Rx are not read yet:\n- the 2022 refills: not found on the 0 pages of Pharmacy Rx that were read"
+  },
+  "input": {
+    "files": [
+      {
+        "file_id": "f2",
+        "handle": "33333333333333333333333333333333",
+        "name": "8-E Billing.pdf",
+        "page_count": 30,
+        "pages": "",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "size": 3000
+      }
+    ],
+    "read_matters": [],
+    "results": {
+      "f2": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 30,
+          "read": 30,
+          "unreadable": 0
+        },
+        "fileId": "f2",
+        "items": [
+          {
+            "asked": "all billing",
+            "closest": [],
+            "established": true,
+            "found": true,
+            "ranges": [
+              {
+                "evidence": [
+                  {
+                    "date": "",
+                    "heading": "ITEMIZED STATEMENT - EXHIBIT B",
+                    "pages": "1-30",
+                    "section": "S1"
+                  }
+                ],
+                "pages": "1-30"
+              }
+            ],
+            "reason": "THE MODEL'S OWN SENTENCE",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "8-E Billing.pdf",
+        "pageCount": 30,
+        "schemaVersion": 2
+      },
+      "f3": {
+        "complete": false,
+        "counts": {
+          "notReached": 10,
+          "pages": 10,
+          "read": 0,
+          "unreadable": 0
+        },
+        "fileId": "f3",
+        "items": [
+          {
+            "asked": "the 2022 refills",
+            "closest": [],
+            "established": false,
+            "found": false,
+            "ranges": [],
+            "reason": "There is no such record.",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "Pharmacy Rx",
+        "pageCount": 10,
+        "schemaVersion": 2
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}
