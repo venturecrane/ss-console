@@ -932,8 +932,12 @@ def _file_facts(session_id: str, origin: inbound.InboundOrigin) -> matter_file_f
     ``None`` when this turn neither searched a file nor staged one. A fault
     renders no block and holds the reply for SMD."""
     try:
+        membership = matter_binding.membership_for(provenance.resolve_session(session_id))
         return matter_file_facts.build(
-            session_id, origin.message_id, matter_file_reply.staged(session_id)
+            session_id,
+            origin.message_id,
+            matter_file_reply.staged(session_id),
+            read_matters=set(membership.content_read_matters()),
         )
     except Exception as exc:  # noqa: BLE001 - could not write the facts: SMD reads it
         logger.warning("hermes-smd-reply: facts block failed (%s)", type(exc).__name__)
@@ -1093,6 +1097,22 @@ def _send_file_continuations(
         request_index.record_reply_opening(origin.message_id, text, sent_message_id=sent_id)
 
 
+#: A records reply that must wait for SMD but cannot be released from review on
+#: this path (shared.matter_file_review releases a Graph reply to the email).
+_REVIEW_UNSUPPORTED_REASON = "matter_files_review_unsupported"
+
+
+def _review_unsupported(cfg: CustomerConfig, bound: bool, shared_people: tuple[str, ...]) -> str:
+    """Why a reply without files cannot wait for SMD's review, or ``""``."""
+    if _email_adapter(cfg) != _ADAPTER_MSGRAPH:
+        return "this seat's mail transport cannot release a reply from SMD's review"
+    if bound:
+        return "a reply bound to an earlier email cannot be released from SMD's review"
+    if shared_people:
+        return "a reply to several people cannot be released from SMD's review"
+    return ""
+
+
 def _hold_for_review(
     prepared: matter_file_reply.Prepared | None,
     origin: inbound.InboundOrigin,
@@ -1103,6 +1123,8 @@ def _hold_for_review(
     html: str,
     matter_ref: str | None,
     because: str = "",
+    to: str = "",
+    redirect: bool = False,
 ) -> None:
     """Write a records reply (with its files, or none) for SMD's review, commit
     the email as answered (a redraft must not slip past the review), and tell
@@ -1115,7 +1137,10 @@ def _hold_for_review(
     )
     row = matter_file_review.hold(
         message_id=origin.message_id,
-        to=origin.sender_address,
+        # The person it is for: a device's authored person on a redirect, which
+        # the release passes on (and the broker re-checks against the source).
+        to=to or origin.sender_address,
+        redirect=redirect,
         text=wire_text,
         html=wire_html,
         batches=prepared.rows() if prepared is not None else [],
@@ -1192,6 +1217,7 @@ def _review_one(row: dict[str, Any]) -> None:
             text,
             html,
             session_id=session_id,
+            to=str(row.get("to") or "") if row.get("redirect") else None,
             attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
@@ -1421,8 +1447,10 @@ def _relay_draft(**kwargs: Any) -> None:
         model_words = matter_file_facts.model_words(args)
         if facts is not None:
             facts_hold = facts.hold
+            # On a hold no block is written, but the marker still comes out: left
+            # in, its capitals bounce the reply to a redraft that cannot fix it.
+            args = matter_file_facts.insert(args, matter_file_facts.EMPTY if facts_hold else facts)
             if not facts_hold:
-                args = matter_file_facts.insert(args, facts)
                 extra = matter_file_facts.unstated(facts, model_words)
                 if extra:
                     facts_hold = (
@@ -1430,6 +1458,10 @@ def _relay_draft(**kwargs: Any) -> None:
                     )
 
         scan_text, send_text, send_html = relay.draft_body(args)
+        if facts is not None and not facts_hold:
+            # The invariant, checked on the body that would go: no marker, and
+            # the facts block present whenever there is one.
+            facts_hold = matter_file_facts.missing(facts, send_text, send_html)
 
         # (c) Re-apply the outbound floors to the draft body. ADR 0072 carve-out
         # (ss #1932): the send path deliberately does NOT content-floor a send
@@ -1522,17 +1554,23 @@ def _relay_draft(**kwargs: Any) -> None:
         if (
             checklist_hold is not None
             and facts is not None
-            and facts.text
-            and _checklist_violations(
-                model_words,
-                internal=internal,
-                tool_name=str(kwargs.get("tool_name") or ""),
-                session_id=session_id,
+            and (
+                facts_hold
+                or (
+                    facts.text
+                    and _checklist_violations(
+                        model_words,
+                        internal=internal,
+                        tool_name=str(kwargs.get("tool_name") or ""),
+                        session_id=session_id,
+                    )
+                    is None
+                )
             )
-            is None
         ):
-            # The facts block is code's: when only it trips the checklist, a
-            # redraft cannot fix it, so the reply waits for SMD instead.
+            # The facts block is code's: when only it trips the checklist, or the
+            # reply already waits for SMD over its facts, a redraft cannot fix
+            # it, so the reply waits for SMD instead of bouncing to the model.
             facts_hold = (
                 facts_hold or f"the facts block tripped the checklist ({checklist_hold[0]})"
             )
@@ -1697,6 +1735,26 @@ def _relay_draft(**kwargs: Any) -> None:
             files_turn
             and matter_file_reply.review_by_smd(_seat_doc(), matter_file_review.released_count())
         ):
+            # A held reply is released later as a Graph reply to the email,
+            # aimed at the person it is for. A files reply already met that in
+            # prepare(); a reply without files must meet it here, or it is
+            # refused rather than released some other way.
+            unsupported = (
+                ""
+                if prepared is not None
+                else _review_unsupported(cfg, bound is not None, shared_people)
+            )
+            if unsupported:
+                _commit_reply(reply_key, origin)
+                matter_file_reply.discard(session_id)
+                _held(
+                    _REVIEW_UNSUPPORTED_REASON,
+                    origin,
+                    held_because=facts_hold or "review",
+                    _detail=unsupported,
+                    _matter_ref=cited_matter_ref,
+                )
+                return
             _hold_for_review(
                 prepared,
                 origin,
@@ -1706,6 +1764,8 @@ def _relay_draft(**kwargs: Any) -> None:
                 html=send_html,
                 matter_ref=cited_matter_ref,
                 because=facts_hold,
+                to=reply_to,
+                redirect=redirected,
             )
             return
 

@@ -372,3 +372,188 @@ def test_lane_a_reply_that_never_searched_or_staged_is_untouched(lane) -> None:
     _email()
     assert _reply(mod, "Thanks, on it.") is None
     assert sent[0]["comment"] == "Thanks, on it." and rev.rows() == []
+
+
+# ---- second review of PR #3711 ------------------------------------------------
+
+
+def _device_seat(mod) -> None:
+    mod._YAML_PATH.write_text(
+        mod._YAML_PATH.read_text().replace(
+            "  admins:\n",
+            "  device_senders:\n"
+            "    - address: scanner@firm.example\n"
+            "      replies_to: office@firm.example\n"
+            "  admins:\n",
+        )
+    )
+
+
+def test_lane_a_held_device_reply_is_released_to_its_person_not_the_scanner(
+    lane, monkeypatch
+) -> None:
+    """Issue 1: a reply without files held for review kept the scanner as its
+    recipient, and the release sent it back to the scanner."""
+    mod, _d1, sent, _spool, _b = lane
+    _review_first(mod)
+    _device_seat(mod)
+    _email(sender="scanner@firm.example")
+    _find_call(mod, _finding())
+    notice = mod.on_transform_tool_result(
+        tool_name="mcp_msgraph_mail_create_draft",
+        args={
+            "to": ["office@firm.example"],
+            "subject": "Re",
+            "body_text": "Here is what we found.",
+        },
+        result='{"id": "draft-1"}',
+        session_id="s1",
+        tool_call_id="d1",
+    )
+    assert sent == [] and "matter_files_review" in notice
+    (row,) = rev.rows()
+    assert row["to"] == "office@firm.example" and row["redirect"] is True
+    monkeypatch.setattr(rev, "decision", lambda r, **k: "approve")
+    mod._review_once()
+    (out,) = sent
+    assert out["to"] == "office@firm.example"
+
+
+def test_the_redirect_is_digested_and_old_rows_keep_their_digest() -> None:
+    kw = dict(
+        message_id="m1",
+        to="o@firm.example",
+        text="t",
+        html="",
+        batches=[],
+        matter_id=MATTER,
+        session_id="s",
+    )
+    plain = rev.hold(**kw)
+    assert rev.digest({k: v for k, v in plain.items() if k != "redirect"}) == plain["digest"]
+    moved = rev.hold(**kw, redirect=True)
+    assert (
+        moved["digest"] != plain["digest"]
+        and rev.digest({**moved, "redirect": False}) != moved["digest"]
+    )
+
+
+def test_lane_a_reply_that_cannot_be_released_from_review_is_refused_not_held(lane) -> None:
+    """Issue 1: on a seat whose transport is not Graph, a held reply could never
+    be released correctly; it is refused with its reason, and nothing is sent."""
+    mod, d1, sent, _spool, _b = lane
+    _review_first(mod)
+    mod._YAML_PATH.write_text(
+        mod._YAML_PATH.read_text().replace("adapter: msgraph", "adapter: agentmail")
+    )
+    _email()
+    _find_call(mod, _finding())
+    notice = _reply(mod, "Here is what we found.")
+    assert sent == [] and rev.rows() == [] and "matter_files_review_unsupported" in notice
+    held = [m for kind, m in d1.events() if kind == "REPLY_HELD"]
+    assert held[-1]["reason"] == "matter_files_review_unsupported"
+    # The email is closed: a redraft does not slip out unreviewed.
+    _reply(mod, "Here it is again.", call="d2")
+    assert sent == []
+
+
+def test_review_unsupported_for_a_bound_reply(lane) -> None:
+    mod, _d1, _sent, _spool, _b = lane
+    from shared.customer_config import CustomerConfig
+
+    cfg = CustomerConfig.from_volume(str(mod._YAML_PATH))
+    assert "bound" in mod._review_unsupported(cfg, True, ())
+    assert mod._review_unsupported(cfg, False, ()) == ""
+
+
+@pytest.mark.parametrize(
+    ("staged", "listed"),
+    [
+        ([("f0", "", 223)], False),  # the whole file is attached
+        ([("f0", "1-14", 14)], False),  # a larger range covers the candidate
+        ([("f0", "1-4", 4)], True),  # not covered: listed as a candidate
+    ],
+)
+def test_a_candidate_inside_what_is_attached_is_never_listed_as_not_attached(
+    staged, listed
+) -> None:
+    """Issue 2: containment is page coverage, not an exact range match."""
+    result = _finding()
+    result["items"][0]["ranges"].append({"pages": "1-14", "evidence": []})
+    _searched(result)
+    block = facts.build("s1", "m1", _staging(*staged))
+    assert block.hold == ""
+    assert ("Lab Results" in block.text) is listed
+
+
+def test_found_with_every_section_dropped_is_never_printed_as_not_found() -> None:
+    """Issue 3: the model said found, but every id it gave was unknown."""
+    result = _finding()
+    result["items"][1].update(found=False, established=True, droppedSections=2)
+    _searched(result)
+    block = facts.build("s1", "m1", None)
+    assert block.text == "" and "whether it was found is unknown" in block.hold
+
+
+def test_a_result_with_no_bound_email_is_never_recorded() -> None:
+    """Issue 4: an empty message id matched every later reply."""
+    facts.record_from_result("s1", {}, json.dumps(_finding()), message_id="")
+    assert "s1" not in facts._SEARCHES  # nothing is kept without the email it answers
+    assert not facts.searched("s1", "m9") and not facts.searched("s1", "")
+    assert facts.build("s1", "m9", None) is None
+    # And a record with no email (however it got there) matches no reply.
+    facts._SEARCHES["s2"] = facts._Search("", {"f0": _finding()})
+    assert not facts.searched("s2", "m9") and facts.build("s2", "m9", None) is None
+
+
+def test_facts_from_another_matter_never_reach_a_reply() -> None:
+    """Issue 4: the record is bound to its matter."""
+    _searched(_finding(file_id="f0"))
+    other = _finding(file_id="f7")
+    other["matterId"] = "99999999-2222-3333-4444-555555555555"
+    _searched(other)
+    assert "not all from one matter" in facts.build("s1", "m1", None).hold
+    facts._reset_for_tests()
+    _searched(_finding())
+    read = {MATTER, "99999999-2222-3333-4444-555555555555"}
+    assert "another matter's content" in facts.build("s1", "m1", None, read_matters=read).hold
+    assert facts.build("s1", "m1", None, read_matters={MATTER}).hold == ""
+
+
+@pytest.mark.parametrize("case", ["old_bundle", "newer_bundle", "range_not_reported", "good"])
+@pytest.mark.parametrize("review", [False, True])
+def test_lane_no_reply_sends_with_the_marker_or_without_its_facts(
+    lane, monkeypatch, case, review
+) -> None:
+    """Issue 5: on a facts failure the marker stayed in the body, tripped the
+    capitals rule, and bounced the reply to a redraft that could not fix it.
+    Whatever goes out, now or after SMD approves, carries no marker and, in a
+    turn that used the finder, its facts block."""
+    mod, _d1, sent, spool, _b = lane
+    if review:
+        _review_first(mod)
+    _email()
+    version = {"old_bundle": None, "newer_bundle": 3}.get(case, 2)
+    _find_call(mod, _finding(version=version))
+    _stage_pages(mod, spool, [("1-5" if case == "range_not_reported" else "1-4", 4)])
+    notice = _reply(mod, f"Here are the records.\n\n{facts.MARKER}\n\nAnything else?")
+    assert "output_checklist" not in (notice or "")
+    for row in rev.rows():
+        assert facts.MARKER not in row["text"]
+    monkeypatch.setattr(rev, "decision", lambda r, **k: "approve")
+    mod._review_once()
+    for out in sent:
+        assert facts.MARKER not in out["comment"]
+        if case == "good":
+            assert "Attached:\n- Records p1-4.pdf, pages 1-4" in out["comment"]
+    if case != "good":
+        assert rev.rows() and all(r["reason"] for r in rev.rows())
+
+
+def test_the_invariant_names_a_body_missing_its_facts() -> None:
+    block = facts.Facts("Attached:\n- A.pdf", "<p>Attached:</p>", "", frozenset())
+    assert (
+        facts.missing(block, f"Hi {facts.MARKER}", "") == "the facts marker is still in the reply"
+    )
+    assert "missing from the reply's text" in facts.missing(block, "Hi.", "")
+    assert facts.missing(block, "Hi.\n\nAttached:\n- A.pdf", "") == ""

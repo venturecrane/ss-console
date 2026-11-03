@@ -168,6 +168,10 @@ def qualify(items: list[dict[str, Any]], unreadable: dict[str, str], remaining: 
             gaps.append(f"pages {blind} could not be read")
         if remaining:
             gaps.append(f"{remaining} pages are not read yet")
+        if item.get("droppedSections"):
+            # The match named only sections the index does not hold: it may
+            # have meant a real one, so "not found" would be a guess.
+            gaps.append("the match named sections this file's index does not hold")
         item["established"] = not gaps
         if gaps:
             # The model's own sentence is dropped from ``reason``, not prefixed:

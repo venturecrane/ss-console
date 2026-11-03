@@ -86,8 +86,12 @@ def record_from_result(session_id: str, args: Any, result: Any, *, message_id: s
 
     Called from the reply plugin's post-tool hooks, so the result is the
     connector's own (never the model's restatement). A call that errored still
-    counts as a search: the reply that follows is held while review is on."""
-    if not session_id:
+    counts as a search: the reply that follows is held while review is on.
+
+    Nothing is recorded without the email this turn answers: a record that
+    could match any later reply would carry one request's file facts into a
+    reply about another (second review of PR #3711)."""
+    if not session_id or not message_id:
         return
     parsed = result_unwrap.parse_tool_result(result)
     file_id = ""
@@ -108,7 +112,7 @@ def record_from_result(session_id: str, args: Any, result: Any, *, message_id: s
 def _search_for(session_id: str, message_id: str) -> _Search | None:
     with _LOCK:
         search = _SEARCHES.get(session_id) if session_id else None
-    if search is None or search.message_id not in ("", message_id):
+    if search is None or not message_id or search.message_id != message_id:
         return None
     return search
 
@@ -116,6 +120,10 @@ def _search_for(session_id: str, message_id: str) -> _Search | None:
 def searched(session_id: str, message_id: str) -> bool:
     """Did the turn answering ``message_id`` call ``find_pages_in_file``?"""
     return _search_for(session_id, message_id) is not None
+
+
+def _matters(results: dict[str, dict[str, Any]]) -> set[str]:
+    return {str(r.get("matterId") or "").strip().lower() for r in results.values()}
 
 
 def finder_matter(session_id: str, message_id: str) -> str:
@@ -197,6 +205,30 @@ def _reported(result: dict[str, Any]) -> set[str]:
     }
 
 
+def _span(pages: str) -> tuple[int, int] | None:
+    first, _, last = str(pages or "").partition("-")
+    try:
+        a, b = int(first), int(last or first)
+    except ValueError:
+        return None
+    return (a, b) if 0 < a <= b else None
+
+
+def _sent(file_id: str, pages: str, files: list[Any]) -> bool:
+    """Are ``pages`` of ``file_id`` already on the reply: a whole staged file,
+    or a staged range that covers them?"""
+    want = _span(pages)
+    for f in files:
+        if f.file_id != file_id:
+            continue
+        if not f.pages:
+            return True
+        have = _span(f.pages)
+        if want and have and have[0] <= want[0] and want[1] <= have[1]:
+            return True
+    return False
+
+
 def _attached(files: list[Any], results: dict[str, dict[str, Any]]) -> list[str]:
     lines = []
     for f in files:
@@ -211,7 +243,6 @@ def _sections(
     files: list[Any], results: dict[str, dict[str, Any]]
 ) -> tuple[list[str], list[str], list[tuple[str, list[str]]], list[str]]:
     """(related, not found, not established groups, asked texts printed)."""
-    staged = {(f.file_id, f.pages) for f in files}
     related: list[str] = []
     not_found: list[str] = []
     groups: list[tuple[str, list[str]]] = []
@@ -222,7 +253,7 @@ def _sections(
         pending: list[str] = []
         for item in result.get("items") or []:
             for ptr in item.get("relatedCandidates") or []:
-                if (file_id, str(ptr.get("pages") or "")) in staged:
+                if _sent(file_id, str(ptr.get("pages") or ""), files):
                     continue
                 line = f"- {name}, {_pointer(ptr)}"
                 if line not in related:
@@ -257,31 +288,55 @@ def _gap_heading(name: str, counts: dict[str, Any]) -> str:
     return "Not established, " + (" and ".join(parts) or f"{name} is not fully read") + ":"
 
 
-def build(session_id: str, message_id: str, staging: Any) -> Facts | None:
+def _hold_reason(
+    results: dict[str, dict[str, Any]], files: list[Any], staging: Any, read_matters: set[str]
+) -> str:
+    """Why no facts block can be written for this reply, or ``""``. Each one
+    sends the reply to SMD, never back to the model: it cannot fix code's facts."""
+    stale = [r for r in results.values() if not _version_ok(r)]
+    if stale:
+        return (
+            "the page finder's result is not the version this seat renders (schemaVersion "
+            f"{stale[0].get('schemaVersion')!r}, expected {SCHEMA_VERSION}); no facts were written"
+        )
+    matters = _matters(results)
+    if staging is not None and files:
+        matters.add(str(staging.matter_id or "").strip().lower())
+    if len(matters) > 1 or (bool(results) and "" in matters):
+        return "the page finder's results and the staged files are not all from one matter"
+    if matters and {m.strip().lower() for m in read_matters} - matters:
+        return "this session read another matter's content, so no file facts go on this reply"
+    for f in files:
+        if f.pages and f.file_id in results and f.pages not in _reported(results[f.file_id]):
+            return (
+                f"the staged pages {f.pages} of {f.name} are not a range the page finder reported"
+            )
+    for result in results.values():
+        for item in result.get("items") or []:
+            if not item.get("found") and int(item.get("droppedSections") or 0) > 0:
+                # The match named sections the index does not hold: what it
+                # meant is unknown, so "not found" would be a guess.
+                return (
+                    "the page finder named sections it does not hold for "
+                    f"{_tame(item.get('asked')) or 'a record'}; whether it was found is unknown"
+                )
+    return ""
+
+
+def build(
+    session_id: str, message_id: str, staging: Any, read_matters: set[str] | None = None
+) -> Facts | None:
     """The facts block for the reply to ``message_id``, or ``None`` when the
-    turn neither searched a file's pages nor staged a file."""
+    turn neither searched a file's pages nor staged a file. ``read_matters``
+    (the session's content reads) must name only the facts' own matter."""
     search = _search_for(session_id, message_id)
     files = list(staging.files) if staging is not None and not staging.refusal else []
     if search is None and not files:
         return None
     results = dict(search.results) if search else {}
-    stale = [fid for fid, r in results.items() if not _version_ok(r)]
-    if stale:
-        return Facts(
-            "",
-            "",
-            "the page finder's result is not the version this seat renders (schemaVersion "
-            f"{results[stale[0]].get('schemaVersion')!r}, expected {SCHEMA_VERSION}); no facts were written",
-            frozenset(),
-        )
-    for f in files:
-        if f.pages and f.file_id in results and f.pages not in _reported(results[f.file_id]):
-            return Facts(
-                "",
-                "",
-                f"the staged pages {f.pages} of {f.name} are not a range the page finder reported",
-                frozenset(),
-            )
+    why = _hold_reason(results, files, staging, read_matters or set())
+    if why:
+        return Facts("", "", why, frozenset())
     blocks: list[tuple[str, list[str]]] = []
     if files:
         blocks.append(("Attached:", _attached(files, results)))
@@ -362,6 +417,24 @@ def insert(args: dict[str, Any], facts: Facts) -> dict[str, Any]:
     return out
 
 
+#: No block: what :func:`insert` writes when the facts cannot be (it still takes the marker out).
+EMPTY = Facts("", "", "", frozenset())
+
+
+def missing(facts: Facts, send_text: str, send_html: str) -> str:
+    """Why the body about to go breaks the rule, or ``""``: it still carries the
+    marker, or it lacks the facts block a turn that used the finder must carry."""
+    if MARKER in (send_text or "") or MARKER in (send_html or ""):
+        return "the facts marker is still in the reply"
+    if facts.text and send_text and facts.text not in send_text:
+        return "the facts block is missing from the reply's text"
+    if facts.html and send_html and facts.html not in send_html:
+        return "the facts block is missing from the reply's html"
+    if facts.text and not (send_text or send_html):
+        return "the reply has no body to carry its facts"
+    return ""
+
+
 def model_words(args: dict[str, Any]) -> str:
     """What the model itself wrote in the body, the marker taken out."""
     key = _text_key(args)
@@ -373,12 +446,14 @@ def model_words(args: dict[str, Any]) -> str:
 
 __all__ = [
     "FIND_TOOL",
+    "EMPTY",
     "MARKER",
     "SCHEMA_VERSION",
     "Facts",
     "build",
     "finder_matter",
     "insert",
+    "missing",
     "model_words",
     "record_from_result",
     "searched",

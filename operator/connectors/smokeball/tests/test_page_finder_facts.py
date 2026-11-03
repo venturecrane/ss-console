@@ -276,3 +276,32 @@ def test_a_v4_index_shaped_like_the_seats_is_read_whole_from_cache(model: FakeMo
     assert pf.PROMPT_VERSION == 4
     out = pf.locate(src, "the visit", _work(tmp_path))
     assert model.index_calls() == 0 and out["readNow"] == 0 and out["fromCache"] == 40 and out["complete"]
+
+
+def test_found_with_every_section_unknown_is_not_established(model: FakeModel, tmp_path: Path) -> None:
+    """The model said found, but no id it gave is in the index: a whole, fully
+    read file, yet "not found" would be a guess."""
+    model.items = [{"asked": "the visit", "found": True, "sections": ["S77"], "reason": "S77"}]
+    (item,) = pf.locate(_set(tmp_path), "the visit", _work(tmp_path))["items"]
+    assert item["found"] is False and item["droppedSections"] == 1
+    assert item["established"] is False and "does not hold" in item["notEstablishedBecause"]
+
+
+def test_a_file_with_an_unreadable_page_caches_its_match(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The 8-C case: every page tried, one unreadable. The match must keep, so
+    the same request gets the same ranges, although the file is never ``complete``."""
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    src = _set(tmp_path, 8)
+    first = pf.locate(src, "the visit", _work(tmp_path))
+    again = pf.locate(src, "the visit", _work(tmp_path))
+    assert not first["complete"] and first["remainingPages"] == 0
+    assert again["matchFromCache"] and _matches(fake) == 1
+    assert [r["pages"] for r in again["items"][0]["ranges"]] == [r["pages"] for r in first["items"][0]["ranges"]]
+
+
+def test_a_file_with_pages_not_reached_never_caches_its_match(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = _refusing(monkeypatch, tmp_path, {3})
+    monkeypatch.setattr(pf, "PAGES_PER_CALL", 4)
+    src = _set(tmp_path, 8)
+    pf.locate(src, "the visit", _work(tmp_path))
+    assert pf.load_index(pf.file_sha256(src))["matches"] == {} and _matches(fake) == 1

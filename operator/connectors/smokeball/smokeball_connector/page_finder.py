@@ -576,14 +576,18 @@ def _ask_match(secs: list[dict[str, Any]], what: str) -> tuple[list[dict[str, An
 
 
 def _match_index(
-    index: dict[str, Any], what: str, *, complete: bool
+    index: dict[str, Any], what: str, *, settled: bool
 ) -> tuple[list[dict[str, Any]], dict[str, int], bool]:
     """(items, tokens, from_cache) for ``what`` against the file's sections.
 
     A match is reused only under the same model, sections, unreadable pages,
     request and match version (page_finder_match.match_key), and stored only
-    when every page is indexed: a match made over a partial index answers a
-    question about pages the next call may change."""
+    once every page has been TRIED (``settled``: each is read or unreadable,
+    none left to reach). A match made while pages remain answers a question
+    about pages the next call may change; a file with unreadable pages is the
+    case the cache exists for (a visit came back 1-4, then 1-5), so those
+    pages must not keep its match out. Their set is in the key, so a page read
+    on a later retry changes the key and asks again."""
     unreadable = index["unreadable"]
     secs = sections(index["pages"], unreadable)
     if not secs:
@@ -593,7 +597,7 @@ def _match_index(
     if raw is not None:
         return compose(raw, secs), zero_tokens(), True
     raw, tokens = _ask_match(secs, what)
-    if complete:
+    if settled:
         remember_match(index, key, raw)
     return compose(raw, secs), tokens, False
 
@@ -616,9 +620,13 @@ def locate(
     indexed = len(index["pages"])
     unreadable = index["unreadable"]
     complete = indexed >= total
+    # Pages not yet tried: neither read nor recorded unreadable (not reached,
+    # or failed on the wire). ``complete`` stays "every page READ": it tells
+    # the Operator to call again; ``remaining`` decides whether a match keeps.
+    remaining = max(0, total - indexed - len(unreadable))
     from_cache = False
     try:
-        items, match_tokens, from_cache = _match_index(index, what, complete=complete)
+        items, match_tokens, from_cache = _match_index(index, what, settled=remaining == 0)
     except _CallFailed as exc:
         items, match_tokens = [], dict(exc.tokens)
         built["match_error"] = str(exc)
@@ -627,7 +635,6 @@ def locate(
         index["spent"][key] = int(index["spent"].get(key) or 0) + value
     if any(match_tokens.values()):
         save_index(index, base)
-    remaining = max(0, total - indexed - len(unreadable))
     qualify(items, unreadable, remaining)
     out: dict[str, Any] = {
         "schemaVersion": SCHEMA_VERSION,
