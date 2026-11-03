@@ -55,6 +55,8 @@ import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from records_contract.facts import KNOWN_CAPS as _CONTRACT_KNOWN_CAPS
+
 from shared import report_render
 from shared.rule_confirm import RULE_TAG
 
@@ -226,42 +228,10 @@ _CAPTION = re.compile(r"\s(?:v|vs)\.\s")
 #: named, and the model writes it in ordinary case or the firm adds it here.
 #: Three-letter words are never checked, so MSC, FSC, RFP, MRI and CCP need no
 #: entry.
-KNOWN_CAPS: frozenset[str] = frozenset(
-    {
-        "PLAINTIFF",
-        "PLAINTIFFS",
-        "DEFENDANT",
-        "DEFENDANTS",
-        "EXHIBIT",
-        "DRAFT",
-        "FINAL",
-        "ESTATE",
-        "DHCS",
-        "IOLTA",
-        "HIPAA",
-        "ERISA",
-        "FRCP",
-        "LASC",
-        "USDC",
-        "CACI",
-        "JAMS",
-        "SROG",
-        "FROG",
-        "PLLC",
-        "GEICO",
-        "USAA",
-        "CSAA",
-        "OSHA",
-        "CDCR",
-        "SNAP",
-        "SSDI",
-        "LAPD",
-        "LASD",
-        "USPS",
-        "NHTSA",
-        "COVID",
-    }
-)
+#: The list itself lives in the records contract (ADR 0102 amendment 4), so the
+#: records lane's facts block keeps exactly the capitals this checklist allows;
+#: one source, no copy to drift. Add a word there.
+KNOWN_CAPS: frozenset[str] = _CONTRACT_KNOWN_CAPS
 
 _FRAGMENT_LEN = 40
 

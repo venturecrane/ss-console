@@ -100,7 +100,7 @@ POST_TIMEOUT_SECONDS = 5.0
 TICK_BUDGET_SECONDS = 20.0
 MAX_CARDS_PER_TICK = 10
 
-JOB_LANES = ("demand", "drafting", "litigation", "medchron", "casefile")
+JOB_LANES = ("demand", "drafting", "litigation", "medchron", "casefile", "records")
 JOB_TERMINAL = ("delivered", "failed", "held")
 
 _TOOL_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")
@@ -335,6 +335,17 @@ _JOB_SQL = {
         "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, attempt, id"
         " FROM casefile_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
     ),
+    # A records job (ADR 0102 amendment 4) is one matter's records for one
+    # colleague; the ledger keys its id as job_id and its matter as matter_id.
+    # A job whose reply waits for SMD's review (state ``review``) is carded as
+    # held, with its reason, the moment it gets there: that card is SMD's
+    # prompt to review, and the delivered or failed card that follows closes it
+    # (the console's card kinds and job states, unchanged).
+    "records": (
+        "SELECT request_ref, CASE state WHEN 'review' THEN 'held' ELSE state END AS state,"
+        " reason, matter_id AS matter_number, updated_at, attempt, job_id AS id"
+        " FROM records_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
+    ),
 }
 #: The same reads for a ledger older than the ``attempt`` column: attempt 1.
 _JOB_SQL_NO_ATTEMPT = {
@@ -361,6 +372,17 @@ _JOB_SQL_NO_ATTEMPT = {
     "casefile": (
         "SELECT request_ref, state, reason, NULL AS matter_number, updated_at, 1 AS attempt, id"
         " FROM casefile_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
+    ),
+    # A records job (ADR 0102 amendment 4) is one matter's records for one
+    # colleague; the ledger keys its id as job_id and its matter as matter_id.
+    # A job whose reply waits for SMD's review (state ``review``) is carded as
+    # held, with its reason, the moment it gets there: that card is SMD's
+    # prompt to review, and the delivered or failed card that follows closes it
+    # (the console's card kinds and job states, unchanged).
+    "records": (
+        "SELECT request_ref, CASE state WHEN 'review' THEN 'held' ELSE state END AS state,"
+        " reason, matter_id AS matter_number, updated_at, 1 AS attempt, job_id AS id"
+        " FROM records_jobs WHERE substr(updated_at,1,19) >= ? ORDER BY updated_at"
     ),
 }
 
@@ -431,6 +453,11 @@ _HOLD_SQL = {
     ),
     "casefile": (
         "SELECT id, request_ref, reason, created_at, updated_at, NULL AS matter_number FROM casefile_jobs"
+        " WHERE reason LIKE 'lane_unproven:%' AND state IN ('queued', 'failed')"
+    ),
+    # workspace_broker/records_store.py HOLD_SQL, the same statement.
+    "records": (
+        "SELECT job_id, request_ref, reason, created_at, updated_at, matter_id FROM records_jobs"
         " WHERE reason LIKE 'lane_unproven:%' AND state IN ('queued', 'failed')"
     ),
 }

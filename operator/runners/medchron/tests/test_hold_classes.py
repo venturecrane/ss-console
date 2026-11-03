@@ -48,6 +48,17 @@ CASES = [
     ("casefile", "nothing_approved: the approval named no proposed line", "smd_finishing", "gate_held"),
     ("casefile", "read_incomplete: 2 matters could not be read", "smd_finishing", "gate_held"),
     ("casefile", "something_new: never seen", "smd_finishing", "gate_held"),
+    ("records", "matter_files_review", "smd_finishing", "review_held"),
+    (
+        "records",
+        "per_job_cap_usd: the run's spend reached the job's cost cap during locate",
+        "smd_finishing",
+        "limit_held",
+    ),
+    ("records", "monthly_budget_usd: the month's spend reached the budget", "smd_finishing", "limit_held"),
+    ("records", "for_another_person: a record is about someone else", "another_person", "gate_held"),
+    ("records", "match_unsettled: record 2's file still has pages not read", "smd_finishing", "gate_held"),
+    ("records", "something_new: never seen", "smd_finishing", "gate_held"),
     (
         "medchron",
         "update_held: the independent review of the update left must-fix findings the finisher could not correct "

@@ -49,6 +49,9 @@ REPLY_KIND = {
     "litigation": "litigation_job",
     "negotiation": "negotiation_job",
     "casefile": "casefile_job",
+    # Matter records (records_lane.py): no DELIVER wake; the reply is the
+    # review row the gateway sends, watched by the lane itself.
+    "records": "records_job",
     # An SMD note (medchron/note_by_smd.py), watched by the note lane.
     "note": "note_job",
 }

@@ -1,9 +1,12 @@
-"""The ``find_pages_in_file`` tool and the page-finder CLI (page_finder.py, ADR 0102).
+"""``find_pages`` and the page-finder CLI (page_finder.py, ADR 0102).
 
-The TOOL (READ, registered through attachment_tools): fetch one PDF on a matter
-the way ``stage_matter_files`` does (its own record must name the matter), find
-which pages hold what a colleague asked for, and return page ranges with the
-evidence each rests on. Only on a seat that authors ``matter_file_delivery``.
+``find_pages`` fetches one PDF on a matter (its own record must name the
+matter), finds which pages hold what a colleague asked for, and returns page
+ranges with the evidence each rests on. Only on a seat that authors
+``matter_file_delivery``. It was the in-turn tool ``find_pages_in_file`` until
+ADR 0102 amendment 4 (2026-11-03): a turn cannot stop its own spend, so the
+tool is no longer registered on any seat and the records lane calls
+``page_finder.locate`` under a cost cap instead. The function stays importable.
 
 The CLI runs the same finder and the same send-side checks on a LOCAL copy, so
 an acceptance run in the ops workspace exercises exactly what the seat would
@@ -82,32 +85,6 @@ def find_pages(client: Any, matter_id: str, file_id: str, what: str, pages: str 
     except Exception as exc:  # noqa: BLE001 - could not look is never "not there"
         return {"error": f"the pages could not be read ({exc.__class__.__name__}); nothing was found or ruled out"}
     return {"matterId": matter_id, "fileId": file_id, "name": meta.get("name"), **out, "nextStep": TOOL_NOTE}
-
-
-def register(server: Any) -> None:
-    def _client() -> Any:
-        from . import server as _server
-
-        return _server._get_client()
-
-    @server.tool()
-    def find_pages_in_file(matter_id: str, file_id: str, what: str, pages: str | None = None) -> Any:
-        """Find WHICH PAGES of a matter PDF hold the record a colleague asked
-        for, including in scanned, image-only files. ``what`` is the request in
-        its own words ("the 3/3/2021 clinic visit and the discharge
-        summary"); ``pages`` optionally limits the look to a range like
-        "1-120". Returns, per record asked for, ``found``, page ranges with the
-        evidence printed on those pages (date, provider, document type,
-        heading), and a ``documents`` outline of the file. Up to 100 new pages
-        are read per call; pages already read are free. Use it when a file is
-        too large or refused whole, then stage just those pages. Prefer a
-        record's own standalone file on the matter when one exists."""
-        from . import server as _server
-
-        resp = find_pages(_client(), matter_id, file_id, what, pages)
-        if resp.get("matterId") and not resp.get("error"):
-            _server._attach_matter_ref(_client(), resp, matter_id=resp["matterId"])
-        return resp
 
 
 # ---------------------------------------------------------------------------
@@ -296,4 +273,4 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
-__all__ = ["check_cut", "find_pages", "main", "register"]
+__all__ = ["check_cut", "find_pages", "main"]

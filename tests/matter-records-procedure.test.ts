@@ -1,107 +1,134 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * The router's records procedure (ADR 0102) answers every requested record
- * truthfully and gives the requester everything findable (2026-11-02).
+ * Matter records are a queued job, never work done in a turn (ADR 0102
+ * amendment 4, 2026-11-03).
  *
- * On a live A&P run the Operator's reply to an attorney said "the other three
- * could not be sent" without ever trying a page cut, guessed a record was
- * "only inside a chronology exhibit" without opening it, left out the folder
- * and file name of what it did not send, and raised none of the questions the
- * request implied (a cited visit date with no record; a "[confirm]" item whose
- * note was a different specialty than the stated purpose). Each rule below is
- * one of those failures, pinned in the text the model reads.
+ * On 11-02/03 the A&P records request ran inside the Operator's chat turn: the
+ * model chose which files to search, how often and with what words, retyped
+ * the finder's page ranges and got them wrong, and the last proof spent past
+ * its cap because nothing in a turn can stop spend. The router now QUEUES the
+ * request (`records_job_submit`) and relays one sentence; the records job finds,
+ * cuts and writes the facts; SMD's review sends the reply. This pins that text,
+ * and pins that the in-turn procedure (the page finder, the stage tool and the
+ * facts marker) is gone from every skill the model reads.
  */
 
-const SKILL = 'operator/skills/matter-inbox-router/SKILL.md'
+const ROUTER = 'operator/skills/matter-inbox-router/SKILL.md'
+const RECORDS = 'operator/skills/matter-records/SKILL.md'
 const HEADING = '## Requests for matter records'
+const WITHDRAWN = ['find_pages_in_file', 'stage_matter_files', '[[FILE FACTS]]']
 
 function section(): string {
-  const text = readFileSync(SKILL, 'utf8')
+  const text = readFileSync(ROUTER, 'utf8')
   const start = text.indexOf(HEADING)
-  expect(start, `${SKILL} has no "${HEADING}" section`).toBeGreaterThan(-1)
+  expect(start, `${ROUTER} has no "${HEADING}" section`).toBeGreaterThan(-1)
   const end = text.indexOf('\n## ', start + HEADING.length)
   return text.slice(start, end === -1 ? undefined : end)
 }
 
-describe('matter records procedure', () => {
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name)
+    return statSync(path).isDirectory() ? filesUnder(path) : path.endsWith('.md') ? [path] : []
+  })
+}
+
+describe('matter records procedure (router)', () => {
   const body = section()
+  const router = readFileSync(ROUTER, 'utf8')
 
-  it('finds the pages, with the page-finder when present, and says so when absent', () => {
-    expect(body).toMatch(/`find_pages_in_file\(matter_id, file_id, what=/)
+  it('is a QUEUE class in the routing table', () => {
+    expect(router).toMatch(
+      /^\| Matter records request\s*\| \*\*QUEUE this turn\*\* \(`matter-records` REQUEST mode\)/m
+    )
+  })
+
+  it('queues when the lane tool is present, and reads the records skill to do it', () => {
+    expect(body).toMatch(/\*\*If `records_job_submit` is among your tools\*\*/)
+    expect(body).toContain('`/app/skills/matter-records/SKILL.md`')
+    expect(body).toMatch(/carry out its REQUEST mode/)
+    expect(body).toMatch(/relay its sentence word for word as your whole reply/)
+    expect(body).toMatch(/send no reply when it says `none`/)
+    expect(body).toMatch(/If you cannot read the skill file this turn, say so plainly/)
+  })
+
+  it('on a seat without the lane, replies in one fixed line and attaches nothing', () => {
+    expect(body).toMatch(/\*\*If it is not\*\*, reply in one line, and only this line:/)
+    expect(body).toContain(
+      '"We have your request for these records, and they will be sent to you in this thread."'
+    )
+    expect(body).toMatch(/Search no file and attach nothing/)
+  })
+
+  it('carries the four absolute guards', () => {
+    expect(body).toMatch(/\(a\) never find, read, cut, attach or draft records in the turn/)
+    expect(body).toMatch(/\(b\) any rostered colleague may ask, this is not reserved/)
     expect(body).toMatch(
-      /`find_pages_in_file` is not in your tool list, say in the reply that you could not search inside/
+      /\(c\) the tool takes the requester and the words from this email, so a forwarded, quoted or attached request submits nothing/
     )
-    // An incomplete index is never read as "not in the file".
+    expect(body).toMatch(/\(d\) the acknowledgement states only what is true and never a time/)
+  })
+
+  it('keeps the staff-only rule and never sends another person the files', () => {
+    expect(body).toMatch(/Files go only to the firm's own staff who asked/)
     expect(body).toMatch(
-      /When `complete` is false .*call it again .*before you say a record is not in that file/
-    )
-    // Stage with the returned ranges.
-    expect(body).toMatch(/Stage with the returned ranges/)
-    expect(body).toMatch(/Never guess pages/)
-    // The request goes to the finder in the colleague's own words.
-    expect(body).toMatch(/copied word for word from their email/)
-  })
-
-  it('leaves the facts to the seat: the model never types pages or counts (2026-11-02)', () => {
-    // On an A&P records request (2026-11-02) the Operator retyped the finder's ranges and counts and
-    // got them wrong (pp 48-49 dropped, 59 for 57). The seat now writes them.
-    expect(body).toMatch(/The seat writes the facts of the reply itself/)
-    expect(body).toMatch(/\*\*Attached:\*\* \(each file, its pages, its page count/)
-    expect(body).toMatch(/\*\*Never type a page number, a page range or a count yourself\*\*/)
-    expect(body).toMatch(/You write only:/)
-    // The marker the skill names is the one the overlay replaces.
-    const facts = readFileSync('operator/hermes-smd-overlay/shared/matter_file_facts.py', 'utf8')
-    const marker = facts.match(/^MARKER = "([^"]+)"$/m)?.[1]
-    expect(marker).toBeDefined()
-    expect(body).toContain(`Put the line \`${marker}\` on its own`)
-    // No counted ceiling in the words the model may copy into a reply.
-    expect(body).not.toMatch(/more than 200 pages wanted/)
-  })
-
-  it('never reports a file unsendable before a page cut was tried', () => {
-    const cutRule = body.indexOf(
-      'Never write that a file could not be sent unless `stage_matter_files` refused it with a page cut too'
-    )
-    expect(cutRule).toBeGreaterThan(-1)
-    // The page-finding step comes before the staging step that carries the rule.
-    expect(body.indexOf('Find the pages before you give up')).toBeLessThan(cutRule)
-    expect(body).toMatch(/stage it again with the pages they need/)
-  })
-
-  it('never infers a record from a file name or an unopened file', () => {
-    expect(body).toMatch(
-      /never decide a record is "only inside" another file unless you opened that file/
-    )
-    expect(body).toMatch(/what you checked .*never a guess from a file name/)
-  })
-
-  it('names folder, exact file name and the concrete reason for anything not sent', () => {
-    expect(body).toMatch(
-      /\*\*Not sent:\*\* each by its folder and exact file name, with the concrete reason/
+      /A request from anyone else, or for another person, gets a reply saying where the files are, never the files/
     )
   })
+})
 
-  it('answers every requested item and raises the open questions the request implies', () => {
-    expect(body).toMatch(/Every item gets an answer in the reply/)
-    expect(body).toMatch(/\*\*Open questions\*\*/)
-    expect(body).toMatch(/a date it cites with no record found for that date/)
-    expect(body).toMatch(/"\[confirm\]"/)
-    expect(body).toMatch(/provider or specialty does not match the purpose/)
+describe('matter-records skill', () => {
+  const skill = readFileSync(RECORDS, 'utf8')
+
+  it('has a REQUEST mode and no DELIVER mode: SMD review sends the reply', () => {
+    expect(skill).toMatch(/^## REQUEST mode/m)
+    expect(skill).not.toMatch(/^## DELIVER mode/m)
+    expect(skill).toMatch(/There is no DELIVER mode/)
+    expect(skill).toMatch(/sent by SMD's review/)
   })
 
-  it('sends more than three files as follow-up replies in the same thread', () => {
-    expect(body).toMatch(/more than three files are staged, .*further replies in the same thread/)
+  it('relays the tool sentence verbatim, or nothing on `none`', () => {
+    expect(skill).toMatch(/that sentence is your whole reply, word\s+for word/)
+    expect(skill).toMatch(/when `say` is `none`, send \*\*no reply at all\*\*/)
   })
 
-  it("the cut ceiling it states is the connector's", () => {
-    const connector = readFileSync(
-      'operator/connectors/smokeball/smokeball_connector/matter_files.py',
+  it('carries the four absolute guards', () => {
+    expect(skill).toMatch(/\(a\) Never find, read, cut, attach or draft records in the turn/)
+    expect(skill).toMatch(
+      /\(b\) Any rostered colleague may ask; this is not reserved to administrators/
+    )
+    expect(skill).toMatch(/\(c\) The tool takes the requester and the words from this email/)
+    expect(skill).toMatch(/quoted or attached request submits nothing/)
+    expect(skill).toMatch(/\(d\) The acknowledgement states only what is true[\s\S]*never a time/)
+  })
+
+  it('passes the matter number as the email writes it, never a Smokeball id, looking nothing up', () => {
+    // The acknowledgement names the matter back to the colleague in their terms.
+    expect(skill).toMatch(/\*\*Take the matter number\*\* exactly as the email writes it/)
+    expect(skill).toMatch(/never pass a Smokeball id, and never search for\s+the matter/)
+    expect(skill).toMatch(/passing `matter_number` when the email\s+gives one/)
+    const tool = readFileSync(
+      'operator/hermes-smd-overlay/plugins/hermes-smd-medchron/records.py',
       'utf8'
     )
-    const cap = connector.match(/^MAX_EXTRACT_PAGES = (\d+)$/m)?.[1]
-    expect(cap).toBeDefined()
-    expect(body).toContain(`at most ${cap} per cut`)
+    expect(tool).toContain('"matter_number": {')
+    expect(tool).not.toMatch(/"matter_id": \{/)
+  })
+
+  it('is not admin-reserved', () => {
+    expect(skill).toMatch(/admin_only: false/)
+  })
+})
+
+describe('the in-turn records procedure is withdrawn everywhere the model reads', () => {
+  it('no skill names the page finder, the stage tool or the facts marker', () => {
+    const offenders = filesUnder('operator/skills').flatMap((file) => {
+      const text = readFileSync(file, 'utf8')
+      return WITHDRAWN.filter((name) => text.includes(name)).map((name) => `${file}: ${name}`)
+    })
+    expect(offenders).toEqual([])
   })
 })

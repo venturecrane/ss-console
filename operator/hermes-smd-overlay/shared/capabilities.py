@@ -49,6 +49,7 @@ JOB_LANES: dict[str, str] = {
     "casefile": "case-file-manager",
     "negotiation": "negotiation-watch",
     "note": "smd-note",
+    "records": "matter-records",
 }
 
 #: Connector capability -> the ``connectors.<name>.backend`` values that author it.

@@ -1,0 +1,42 @@
+{
+  "expected": {
+    "echoed": ["the MRI of the lumbar spine"],
+    "hold_reason": null,
+    "html": "<p>Not found:</p><ul><li>the MRI of the lumbar spine: not found in Imaging_Records CPT.pdf (all 12 pages were read)</li></ul>",
+    "names": ["Imaging_Records CPT.pdf"],
+    "stated": ["12 page"],
+    "text": "Not found:\n- the MRI of the lumbar spine: not found in Imaging_Records CPT.pdf (all 12 pages were read)"
+  },
+  "input": {
+    "files": [],
+    "read_matters": [],
+    "results": {
+      "f1": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 12,
+          "read": 12,
+          "unreadable": 0
+        },
+        "fileId": "f1",
+        "items": [
+          {
+            "asked": "the MRI of the lumbar spine",
+            "closest": [],
+            "established": true,
+            "found": false,
+            "ranges": [],
+            "reason": "There is no such record.",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "Imaging_Records CPT.pdf",
+        "pageCount": 12,
+        "schemaVersion": 2
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}

@@ -768,7 +768,7 @@ fi
 # lane "defer every job", which no earlier check could see: every lane check
 # above holds on an inputs-less seat BY DESIGN. FALSIFIER: empty the vault
 # prefix (or break the fetch) and reboot a seat that authors the lane.
-for _lane in demand drafting litigation casefile; do
+for _lane in demand drafting litigation casefile records; do
   if lane_authored "${_lane}"; then
     check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:medchron:640 ]"
   else

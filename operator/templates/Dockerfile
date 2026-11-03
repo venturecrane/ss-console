@@ -436,14 +436,25 @@ RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
 #      the rule Hermes' installer applies (pm/pip_check.py). That
 #      is the backstop for an overlay that grows a dependency before compile.sh
 #      is re-run; the `overlay` CI job runs compile.sh and fails on a diff.
+#
+# The records contract (operator/connectors/_contract, ADR 0102) goes in beside
+# it, the same way: a path install, --no-deps (it has none, by rule: its own
+# tests prove it imports with no site-packages). The overlay's records reply and
+# the records lane in the jobs bundle both import it, so neither keeps a copy.
+# Only this venv needs it: the overlay pack Hermes loads (below) is source the
+# gateway imports with THIS interpreter, so `import records_contract` resolves here.
 COPY operator/hermes-smd-overlay/ /app/overlay-src/
+COPY operator/connectors/_contract/ /app/records-contract-src/
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-overlay.txt \
  && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
+      --no-deps /app/records-contract-src \
+ && uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-deps /app/overlay-src \
+ && /opt/hermes/.venv/bin/python -c "import records_contract.review_row, records_contract.batches, records_contract.facts" \
  && python3 -I /app/requirements/hermes_pip_check.py \
       /opt/hermes/.venv/bin/python /app/requirements/hermes-security.txt /opt/hermes/uv.lock \
- && rm -rf /app/overlay-src
+ && rm -rf /app/overlay-src /app/records-contract-src
 
 # ---------- Workspace capability broker ----------
 # Google libraries and credentials live in a broker-only venv. The Hermes venv
@@ -734,6 +745,10 @@ COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh
 # vaults/<slug>/casefile/ validated at boot, the broker's copy of its budget;
 # the text cache is the litigation lane's).
 COPY operator/templates/entrypoint-casefile.sh /app/entrypoint-casefile.sh
+# The matter-records lane's twin (ADR 0102 amendment 4): queue, job dirs, the
+# page index moved to the lane's own directory, firm inputs from
+# vaults/<slug>/records/ and the broker's copy of its budget.
+COPY operator/templates/entrypoint-records.sh /app/entrypoint-records.sh
 # The negotiation watch's twin (queue, job dirs, state dir; no firm inputs).
 COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # A marketing seat's advertising-gate registers (ADR 0098) from

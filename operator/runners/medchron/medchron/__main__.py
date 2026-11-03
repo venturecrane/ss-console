@@ -594,8 +594,10 @@ def main(argv: list[str] | None = None) -> int:
     dr.set_defaults(fn=_cmd_draft)
     _add_litigate(sub)
     from .casefile.cli import add_parser as _casefile_parser
+    from .records.cli import add_parser as _records_parser
 
     _casefile_parser(sub)
+    _records_parser(sub)
     ng = sub.add_parser("negotiate", help="run one negotiation-watch job: new offer documents to Negotiation Details")
     ng.add_argument("job_dir")
     ng.add_argument("--pricing", default=None)

@@ -1,0 +1,77 @@
+{
+  "expected": {
+    "echoed": [],
+    "hold_reason": null,
+    "html": "<p>Attached:</p><ul><li>8-C Hospital.pdf, pages 1-4 (4 pages): Office Visit, 3/3/2021</li></ul><p>Possibly relevant, not attached (candidates the finder named):</p><ul><li>Hospital records, pages 5-14, Lab Results, 3/3/2021</li></ul>",
+    "names": ["8-C Hospital.pdf", "Hospital records"],
+    "stated": ["4 page", "p1-4", "p5-14"],
+    "text": "Attached:\n- 8-C Hospital.pdf, pages 1-4 (4 pages): Office Visit, 3/3/2021\n\nPossibly relevant, not attached (candidates the finder named):\n- Hospital records, pages 5-14, Lab Results, 3/3/2021"
+  },
+  "input": {
+    "files": [
+      {
+        "file_id": "f0",
+        "handle": "11111111111111111111111111111111",
+        "name": "8-C Hospital.pdf",
+        "page_count": 4,
+        "pages": "1-4",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1000
+      }
+    ],
+    "read_matters": [],
+    "results": {
+      "f0": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 223,
+          "read": 223,
+          "unreadable": 0
+        },
+        "fileId": "f0",
+        "items": [
+          {
+            "asked": "the 3/3/2021 clinic visit",
+            "closest": [],
+            "established": true,
+            "found": true,
+            "ranges": [
+              {
+                "evidence": [
+                  {
+                    "date": "3/3/2021",
+                    "heading": "OFFICE VISIT",
+                    "pages": "1-4",
+                    "section": "S1"
+                  }
+                ],
+                "pages": "1-4"
+              }
+            ],
+            "reason": "THE MODEL'S OWN SENTENCE",
+            "relatedCandidates": [
+              {
+                "date": "3/3/2021",
+                "heading": "LAB RESULTS",
+                "pages": "5-14",
+                "section": "S2"
+              },
+              {
+                "date": "3/3/2021",
+                "heading": "VITALS",
+                "pages": "2-3",
+                "section": "S3"
+              }
+            ]
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "Hospital records",
+        "pageCount": 223,
+        "schemaVersion": 2
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}

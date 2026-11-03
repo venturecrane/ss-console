@@ -414,6 +414,51 @@ def test_a_casefile_job_suppresses_the_alarm_and_cards_when_it_ends(ledger) -> N
     assert cards[0]["matter"] is None
 
 
+def test_a_records_job_suppresses_the_alarm_and_cards_with_its_matter(ledger) -> None:
+    """ADR 0102 amendment 4. The records ledger keys its id as job_id and its
+    matter as matter_id. FALSIFIER: drop "records" from JOB_LANES and a queued
+    records job neither suppresses the no-reply alarm nor cards when it ends."""
+    ledger.conn.execute(
+        "CREATE TABLE records_jobs (job_id TEXT PRIMARY KEY, request_ref TEXT, message_ref TEXT, "
+        "matter_id TEXT, created_at TEXT, updated_at TEXT, state TEXT, reason TEXT, attempt INTEGER)"
+    )
+    ledger.conn.execute(
+        "INSERT INTO records_jobs (job_id, request_ref, message_ref, matter_id, created_at, "
+        "updated_at, state, reason, attempt) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "01JRECORDS00000000000000AB",
+            IMID,
+            "AAMk=",
+            "900201",
+            _ts(15),
+            _ts(10),
+            "running",
+            None,
+            1,
+        ),
+    )
+    ledger.conn.commit()
+    assert _decide(ledger, [_request(60)]) == []
+    # Its reply waits for SMD: carded at once as held, with the reason, so SMD
+    # knows to review (the console's states are delivered, failed and held).
+    ledger.conn.execute(
+        "UPDATE records_jobs SET state='review', reason='matter_files_review', updated_at=?",
+        (_ts(8),),
+    )
+    ledger.conn.commit()
+    held = _decide(ledger, [_request(60)])
+    assert _kinds(held) == ["job_done"]
+    assert held[0]["job"] == {"lane": "records", "state": "held", "reason": "matter_files_review"}
+    assert held[0]["matter"] == "900201"
+    # SMD released it: the delivered card follows the held one.
+    ledger.conn.execute("UPDATE records_jobs SET state='delivered', updated_at=?", (_ts(4),))
+    ledger.conn.commit()
+    cards = _decide(ledger, [_request(60)], done={held[0]["card_key"]})
+    assert _kinds(cards) == ["job_done"]
+    assert cards[0]["job"]["lane"] == "records" and cards[0]["job"]["state"] == "delivered"
+    assert cards[0]["card_key"] != held[0]["card_key"]
+
+
 #: The console's reason contract (ss-console src/lib/operator/request-card.ts
 #: TOKEN_RE): a card whose job reason fails it is refused outright.
 _CONSOLE_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")

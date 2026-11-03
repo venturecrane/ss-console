@@ -110,6 +110,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Sets up a new matter at day one: folders, standard tasks, and the deadlines in view for attorney confirmation. Never computes a final SOL, never files.',
   'matter-memo-on-update':
     'Logs a short factual internal memo whenever a matter changes in Smokeball. Passive supervision, never analysis.',
+  'matter-records':
+    'Sends a colleague the records they name on a matter, attached in their own email thread, after SMD has reviewed the reply. Never sends records to anyone outside the firm.',
   'matter-status-digest':
     'Assembles a periodic internal digest of your matters from Smokeball. Reports state, never decides next steps.',
   'matter-status-responder':

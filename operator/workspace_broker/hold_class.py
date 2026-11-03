@@ -115,6 +115,22 @@ _CASEFILE = {
 }
 
 
+#: Matter records (lane ``records``, ADR 0102 amendment 4). Every records reply
+#: waits in an SMD review row, so the firm hears nothing from a hold directly;
+#: each one pages. A delivered reply waiting for SMD's release is
+#: ``matter_files_review`` (``records_contract.review_row.HOLD_REASON``).
+_RECORDS = {
+    "matter_files_review": (SMD_FINISHING, "review_held"),
+    "per_job_cap_usd": (SMD_FINISHING, "limit_held"),
+    "monthly_budget_usd": (SMD_FINISHING, "limit_held"),
+    "finder_failed": (SMD_FINISHING, "gate_held"),
+    "cut_refused": (SMD_FINISHING, "gate_held"),
+    "scope_unresolved": (SMD_FINISHING, "gate_held"),
+    "match_unsettled": (SMD_FINISHING, "gate_held"),
+    "for_another_person": (ANOTHER_PERSON, "gate_held"),
+}
+
+
 def _code(reason: str) -> str:
     return reason.split(":", 1)[0].strip()
 
@@ -146,7 +162,7 @@ def _medchron(reason: str) -> tuple[str, str | None]:
 def classify(lane: str, reason: str | None) -> tuple[str, str | None]:
     """``(hold class, page code or None)`` for a HELD job's reason.
 
-    On the chronology, litigation and casefile lanes a reason this module does not know
+    On the chronology, litigation, casefile and records lanes a reason this module does not know
     is ours (``smd_finishing``) and pages: an unrecognised hold must never reach
     the firm as a question, and never go unseen by SMD."""
     text = str(reason or "").strip()
@@ -156,6 +172,8 @@ def classify(lane: str, reason: str | None) -> tuple[str, str | None]:
         return _LITIGATION.get(_code(text), (SMD_FINISHING, "gate_held"))
     if lane == "casefile":
         return _CASEFILE.get(_code(text), (SMD_FINISHING, "gate_held"))
+    if lane == "records":
+        return _RECORDS.get(_code(text), (SMD_FINISHING, "gate_held"))
     if lane == "medchron":
         return _medchron(text)
     # Demand, drafting, negotiation and note holds are not classified here yet:

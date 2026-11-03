@@ -39,6 +39,7 @@ def _medchron_today() -> set[str]:
             **m.negotiation.TOOLS,
             **m.note.TOOLS,
             **m.casefile.TOOLS,
+            **m.records.TOOLS,
         }
     )
 
@@ -102,8 +103,13 @@ def test_each_seat_loads_exactly_its_authored_surface(seat, name):
 
 def test_ashton_price_loads_exactly_what_it_loads_today(seat):
     doc = seat("ashton-price")
-    assert capabilities.authored_lanes(doc) == list(capabilities.JOB_LANES)
-    assert _registered("hermes-smd-medchron") == _medchron_today()
+    # Every lane but records, which is built and not yet switched on for any seat
+    # (ADR 0102 amendment 4; the switch-on PR deletes this exclusion).
+    records = set(load_plugin("hermes-smd-medchron").records.TOOLS)
+    assert capabilities.authored_lanes(doc) == [
+        lane for lane in capabilities.JOB_LANES if lane != "records"
+    ]
+    assert _registered("hermes-smd-medchron") == _medchron_today() - records
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True
     assert _destructive_line(doc, as_today=False) == _destructive_line(doc, as_today=True)
@@ -114,7 +120,7 @@ def test_pilot_smokeball_drops_only_its_unauthored_lanes(seat):
     medchron = load_plugin("hermes-smd-medchron")
     dropped = _medchron_today() - _registered("hermes-smd-medchron")
     unauthored = set(capabilities.JOB_LANES) - set(capabilities.authored_lanes(doc))
-    assert unauthored == {"drafting", "litigation", "negotiation"}
+    assert unauthored == {"drafting", "litigation", "negotiation", "records"}
     assert dropped == set().union(*(set(medchron.LANE_TOOLS[lane]) for lane in unauthored))
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True

@@ -503,7 +503,10 @@ def stage(client: Any, matter_id: str, files: Any, *, recipients: tuple[str, ...
 
 
 def register(server: Any) -> None:
-    """The two tools, registered through attachment_tools (server.py is size-ratcheted)."""
+    """``find_files_on_matter``, registered through attachment_tools (server.py
+    is size-ratcheted). ``stage_matter_files`` is no longer a tool on any seat
+    (ADR 0102 amendment 4): the records lane stages through
+    :func:`prepare_local` itself, and :func:`stage` stays importable."""
 
     def _client() -> Any:
         from . import server as _server
@@ -537,19 +540,6 @@ def register(server: Any) -> None:
         ``matchCount`` and ``searchComplete`` (false means a match could exist
         past what was searched; say so rather than "not on the matter")."""
         return _enrich(find_files(_client(), matter_id, name=name, folder=folder, extension=extension, limit=limit))
-
-    @server.tool()
-    def stage_matter_files(matter_id: str, files: list[dict[str, Any]]) -> Any:
-        """Stage matter PDFs to go ATTACHED on your reply to the firm colleague
-        who emailed asking for them. ``files``: up to 9 of
-        ``{"file_id": "<from find_files_on_matter>", "pages": "3-11"}``;
-        ``pages`` is optional and cuts just those pages out of a large file.
-
-        The seat fetches the files itself and attaches them to the reply you
-        then draft, only to that colleague, only in this turn. Each file that
-        cannot go is listed under ``refused`` with its reason; tell the person.
-        Only on a seat that authors matter_file_delivery."""
-        return _enrich(stage(_client(), matter_id, files))
 
 
 __all__ = [

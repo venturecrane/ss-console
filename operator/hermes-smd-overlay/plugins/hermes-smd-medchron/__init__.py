@@ -28,7 +28,7 @@ from shared import capabilities, seat_doc
 from shared.medchron_client import MedchronBrokerClient
 from shared.tool_registration import register_wrapped_tool
 
-from . import casefile, demand, drafting, litigation, negotiation, note
+from . import casefile, demand, drafting, litigation, negotiation, note, records
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +326,7 @@ LANE_TOOLS: dict[str, dict[str, Any]] = {
     "casefile": casefile.TOOLS,
     "negotiation": negotiation.TOOLS,
     "note": note.TOOLS,
+    "records": records.TOOLS,
 }
 
 

@@ -195,6 +195,14 @@ const EXPECTED_VERBS = [
   'ops_close_by_smd',
   'ops_propose',
   'ops_resolve',
+  // ADR 0102 amendment 4: the matter-records job's request edge
+  // (records_verbs.py): submit and status gateway or root; record, resume and
+  // close root only. The reply itself is sent by SMD review, never by a verb.
+  'records_job_close',
+  'records_job_record',
+  'records_job_resume',
+  'records_job_status',
+  'records_job_submit',
   // Letter 416 #10, the weekly records chase: the records orders the Operator
   // placed (committed acts), read-only, no facility or client. Agent uid and root.
   'records_orders_placed',

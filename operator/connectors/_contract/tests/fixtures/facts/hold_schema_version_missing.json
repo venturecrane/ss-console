@@ -1,0 +1,53 @@
+{
+  "expected": {
+    "echoed": [],
+    "hold_reason": "the page finder's result is not the version this seat renders (schemaVersion None, expected 2); no facts were written",
+    "html": "",
+    "names": [],
+    "stated": [],
+    "text": ""
+  },
+  "input": {
+    "files": [],
+    "read_matters": [],
+    "results": {
+      "f0": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 223,
+          "read": 223,
+          "unreadable": 0
+        },
+        "fileId": "f0",
+        "items": [
+          {
+            "asked": "x",
+            "closest": [],
+            "established": true,
+            "found": true,
+            "ranges": [
+              {
+                "evidence": [
+                  {
+                    "date": "3/3/2021",
+                    "heading": "OFFICE VISIT",
+                    "pages": "1-4",
+                    "section": "S1"
+                  }
+                ],
+                "pages": "1-4"
+              }
+            ],
+            "reason": "THE MODEL'S OWN SENTENCE",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "Hospital records",
+        "pageCount": 223
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}

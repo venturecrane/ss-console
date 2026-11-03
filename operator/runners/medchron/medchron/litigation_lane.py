@@ -60,7 +60,7 @@ MEMORY_ENV = "SMD_LITIGATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "litigation-status"
 #: The demand cgroup's other children (the case file job shares it too).
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid")
+BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid", "records-child.pid")
 CHILD_PID = "litigation-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0

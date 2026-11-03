@@ -1,0 +1,43 @@
+{
+  "expected": {
+    "echoed": [],
+    "hold_reason": "the page finder named sections it does not hold for the ER Visit notes; whether it was found is unknown",
+    "html": "",
+    "names": [],
+    "stated": [],
+    "text": ""
+  },
+  "input": {
+    "files": [],
+    "read_matters": [],
+    "results": {
+      "f0": {
+        "complete": true,
+        "counts": {
+          "notReached": 0,
+          "pages": 223,
+          "read": 223,
+          "unreadable": 0
+        },
+        "fileId": "f0",
+        "items": [
+          {
+            "asked": "the ER VISIT notes",
+            "closest": [],
+            "droppedSections": 2,
+            "established": true,
+            "found": false,
+            "ranges": [],
+            "reason": "There is no such record.",
+            "relatedCandidates": []
+          }
+        ],
+        "matterId": "5f0c1a2b-0000-4000-8000-00000000abcd",
+        "name": "A",
+        "pageCount": 223,
+        "schemaVersion": 2
+      }
+    },
+    "staged_matter": "5f0c1a2b-0000-4000-8000-00000000abcd"
+  }
+}

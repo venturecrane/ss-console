@@ -28,7 +28,7 @@ set -eu
 SRC="${SRC:-/app}"
 OPT="${JOBS_RUNTIME_OPT:-/opt}"
 
-# Each connector under $SRC/connectors/ (except the `_sdk` library it shares) is
+# Each connector under $SRC/connectors/ (except the `_sdk` and `_contract` libraries) is
 # a Python stdio MCP server, installed into its OWN venv so connectors never
 # share a dependency closure with each other or with the Hermes venv. The overlay
 # registry launches each by the ABSOLUTE path to its venv console-script
@@ -58,7 +58,8 @@ connectors() {
   skip="${1:-}"
   for cdir in "${SRC}"/connectors/*/; do
     name=$(basename "$cdir")
-    [ "$name" = "_sdk" ] && continue
+    # _sdk and _contract are libraries the venvs install, not connectors.
+    case "$name" in _sdk|_contract) continue ;; esac
     case " ${skip} " in *" ${name} "*) continue ;; esac
     [ -f "${cdir}pyproject.toml" ] || continue
     install_connector "$cdir"
@@ -76,12 +77,13 @@ connector() {
 # The build-time import smoke: every lane module the runner ships, plus the two
 # readers the litigation job needs. FAILS THE BUILD, not a seat.
 import_check() {
-  "$1" -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm"
+  "$1" -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, medchron.records_lane, medchron.records.run, medchron.records.firm"
   command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }
 }
 
 # The chronology runner (routine 11, ss#2614), in its OWN root-owned venv from the
-# connector SDK, the Smokeball connector and the runner, so the daemon and the
+# connector SDK, the records contract (stdlib only; the records lane and the
+# overlay share it, ADR 0102), the Smokeball connector and the runner, so the daemon and the
 # driver child never share a dependency closure with the Hermes or broker venv.
 # root:root a+rX: the medchron uid executes it and can write nothing in it.
 medchron() {
@@ -93,7 +95,7 @@ medchron() {
   uv pip install --python "${OPT}/medchron/.venv/bin/python" --no-cache --no-config \
     --require-hashes -r "${SRC}/requirements/medchron.txt"
   uv pip install --python "${OPT}/medchron/.venv/bin/python" --no-cache --no-deps \
-    "${SRC}/connectors/_sdk" "${SRC}/connectors/smokeball" "${SRC}/runners/medchron"
+    "${SRC}/connectors/_sdk" "${SRC}/connectors/_contract" "${SRC}/connectors/smokeball" "${SRC}/runners/medchron"
   [ -x "${OPT}/medchron/.venv/bin/medchron" ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }
   import_check "${OPT}/medchron/.venv/bin/python"
   chown -R root:root "${OPT}/medchron"

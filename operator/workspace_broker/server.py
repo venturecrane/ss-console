@@ -37,6 +37,8 @@ from .job_ledger import JobLedgerWriter
 from .demand_verbs import DemandVerbs
 from .drafting_verbs import DraftingVerbs
 from .casefile_verbs import CasefileVerbs
+from .records_store import queue_dir_from_env as records_queue_dir
+from .records_verbs import RecordsVerbs
 from .litigation_verbs import LitigationVerbs
 from .negotiation_verbs import NegotiationVerbs
 from .medchron_verbs import MedchronVerbs
@@ -151,6 +153,8 @@ class Broker:
     negotiation: NegotiationVerbs | None = None
     # The Case File Manager's request edge (casefile_verbs.py), same posture.
     casefile: CasefileVerbs | None = None
+    # The matter records lane's request edge (records_verbs.py), same posture.
+    records: RecordsVerbs | None = None
     msgraph: MsGraphOps | None = None
 
     def __init__(self) -> None:
@@ -260,6 +264,12 @@ class Broker:
         self.casefile = CasefileVerbs.build(
             self, audit_db_path=audit_db_path, queue_dir=os.environ.get("SMD_CASEFILE_QUEUE_DIR")
         )
+        # Matter records by email (a staff member's named records, found, cut and
+        # held for SMD review): its own tables on the same DB file, its own queue
+        # dir (SMD_RECORDS_QUEUE_DIR), the firm's monthly budget read from
+        # SMD_RECORDS_FIRM_CONFIG. Unset, the queue is /opt/data/medchron/records-queue;
+        # a seat that does not list the skill refuses every submit regardless.
+        self.records = RecordsVerbs.build(self, audit_db_path=audit_db_path, queue_dir=records_queue_dir())
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway
         # keeps an inbox-scoped key with message_send/draft_send WITHHELD, so the
         # agent process can read and draft but is vendor-refused from

@@ -790,7 +790,7 @@ DELIVERY_PROOF_CODES = frozenset(
 #: The job lanes that write a delivery-proof row (``delivery_proof.LANES``).
 #: An event's tool is ``<lane>_job``, the lane's own status tool's prefix.
 DELIVERY_PROOF_LANES = frozenset(
-    {"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile"}
+    {"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile", "records"}
 )
 
 #: The ``tool`` a delivery-proof event carries when its lane is not one above.

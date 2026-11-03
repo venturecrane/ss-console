@@ -136,6 +136,13 @@ class MedchronBrokerClient:
             }
         )
 
+    # -- a matter-records request (ss-console operator/workspace_broker/records_verbs.py) --
+    def records_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        """``accepted`` with a ``job_id`` and the ``ack`` sentence to relay, or
+        ``accepted: False`` with a ``reason`` (``already_queued`` /
+        ``already_done`` when this email already has a job)."""
+        return self._request({"action": "records_job_submit", "envelope": envelope})
+
     # -- the negotiation watch (ss-console operator/workspace_broker/negotiation_verbs.py) --
     def negotiation_status(self, job_id: str) -> dict[str, Any]:
         """A notice's composed message and subject, or a job's state and counts."""

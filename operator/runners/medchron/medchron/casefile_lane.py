@@ -56,7 +56,7 @@ MEMORY_ENV = "SMD_CASEFILE_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "case-file-manager"
 #: A job does not START while any of these is live.
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid", "litigation-child.pid")
+BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid", "litigation-child.pid", "records-child.pid")
 #: A running job waits between matters while any of these is live: a client waiting.
 YIELD_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid")
 CHILD_PID = "casefile-child.pid"

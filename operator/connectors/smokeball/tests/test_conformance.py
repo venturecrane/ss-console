@@ -85,9 +85,11 @@ EXPECTED_TOOLS = {
     "record_post_batch",
     "get_post_list",
     "find_files_on_matter",
-    "stage_matter_files",
-    "find_pages_in_file",
 }
+
+#: ADR 0102 amendment 4 (2026-11-03): the in-turn records tools are gone from
+#: every seat; the records lane calls the functions under a cost cap.
+REMOVED_TOOLS = {"stage_matter_files", "find_pages_in_file"}
 
 _SCRIPT = shutil.which("smokeball-mcp")
 
@@ -110,6 +112,17 @@ def test_manifest_loads_and_is_client_credentials() -> None:
 
 def test_full_surface_matches() -> None:
     assert {t.name for t in server.tool_surface()} == EXPECTED_TOOLS
+
+
+def test_the_in_turn_records_tools_are_not_on_the_mcp_surface() -> None:
+    names = {t.name for t in server.tool_surface()}
+    assert not (names & REMOVED_TOOLS)
+    assert not (set(_manifest().tool_classes) & REMOVED_TOOLS)
+    # The functions stay importable for the records lane.
+    from smokeball_connector import matter_files, page_finder_tools
+
+    assert callable(matter_files.stage) and callable(matter_files.prepare_local)
+    assert callable(matter_files.find_files) and callable(page_finder_tools.find_pages)
 
 
 def test_conformance_every_tool_classified() -> None:

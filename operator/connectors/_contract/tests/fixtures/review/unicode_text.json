@@ -1,0 +1,53 @@
+{
+  "digest": "53a94fbb04dc182bc66bbfba11e69ba40a71e67c5563be0a272d7f79bd2df763",
+  "input": {
+    "batches": [
+      [
+        {
+          "file_id": "f6",
+          "handle": "66666666666666666666666666666666",
+          "name": "file 6.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+          "size": 6000
+        }
+      ]
+    ],
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "now": 1762000000.0,
+    "reason": "matter_files_review",
+    "redirect": false,
+    "session_id": "records:unicode_text",
+    "text": "Here are the records \u2014 caf\u00e9 \u00bd.",
+    "to": "paralegal@firm.example"
+  },
+  "row": {
+    "batches": [
+      [
+        {
+          "file_id": "f6",
+          "handle": "66666666666666666666666666666666",
+          "name": "file 6.pdf",
+          "page_count": 3,
+          "pages": "",
+          "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+          "size": 6000
+        }
+      ]
+    ],
+    "created_at": 1762000000.0,
+    "digest": "53a94fbb04dc182bc66bbfba11e69ba40a71e67c5563be0a272d7f79bd2df763",
+    "html": "<p>Hi,</p><ul><li>file 1.pdf</li></ul>",
+    "id": "68d83f8eda47d80c6e814496",
+    "matter_id": "5f0c1a2b-0000-4000-8000-00000000abcd",
+    "message_id": "AAMkAGI2TG93AAA=",
+    "reason": "matter_files_review",
+    "session_id": "records:unicode_text",
+    "status": "review",
+    "text": "Here are the records \u2014 caf\u00e9 \u00bd.",
+    "to": "paralegal@firm.example"
+  }
+}

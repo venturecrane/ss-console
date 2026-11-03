@@ -36,7 +36,8 @@ IMPORT_LIST = (
     "medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, "
     "medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, "
     "striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, "
-    "medchron.casefile.firm"
+    "medchron.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, "
+    "medchron.records_lane, medchron.records.run, medchron.records.firm"
 )
 
 # uv: `venv X` makes X/bin/python (itself a recording stub); a --no-deps install
@@ -82,10 +83,19 @@ def box(tmp_path: Path) -> dict[str, Path]:
     for name in ("chown", "chmod", "antiword"):
         _exe(stubs / name, RECORD_STUB)
     src = tmp_path / "src"
-    for d in ("connectors/_sdk", "connectors/smokeball", "connectors/no-pyproject", "runners/medchron", "requirements"):
+    for d in (
+        "connectors/_sdk",
+        "connectors/_contract",
+        "connectors/smokeball",
+        "connectors/no-pyproject",
+        "runners/medchron",
+        "requirements",
+    ):
         (src / d).mkdir(parents=True)
     (src / "connectors/smokeball/pyproject.toml").write_text("")
     (src / "connectors/_sdk/pyproject.toml").write_text("")
+    # A library with a pyproject, like _sdk: the connector loop must skip it.
+    (src / "connectors/_contract/pyproject.toml").write_text("")
     (src / "requirements/connector-smokeball.txt").write_text("")
     (src / "requirements/medchron.txt").write_text("")
     return {"tmp": tmp_path, "stubs": stubs, "src": src, "opt": tmp_path / "opt", "log": tmp_path / "log"}
@@ -126,7 +136,7 @@ def test_medchron_runs_exactly_the_replaced_runner_build(box: dict[str, Path]) -
     assert _log(box) == [
         "uv venv /opt/medchron/.venv",
         f"uv pip install --python {py} --no-cache --no-config --require-hashes -r /app/requirements/medchron.txt",
-        f"uv pip install --python {py} --no-cache --no-deps /app/connectors/_sdk /app/connectors/smokeball /app/runners/medchron",
+        f"uv pip install --python {py} --no-cache --no-deps /app/connectors/_sdk /app/connectors/_contract /app/connectors/smokeball /app/runners/medchron",
         f"python -c {IMPORT_LIST}",
         "chown -R root:root /opt/medchron",
         "chmod -R a+rX /opt/medchron",

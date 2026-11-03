@@ -22,7 +22,7 @@
 # inherits it, the gateway included, and seat-probe rebuilds the gateway's env by
 # word-splitting; a space-separated value broke every probe on smd-staging
 # (2026-10-31). tests/operator-entrypoint.test.ts pins the separator.
-_ALL_LANES="medchron,demand,drafting,litigation,casefile,negotiation,note"
+_ALL_LANES="medchron,demand,drafting,litigation,casefile,records,negotiation,note"
 if _lanes="$(/opt/hermes/.venv/bin/python -I -m shared.capabilities lanes "${LIVE_CUSTOMER_YAML}")"; then
   SMD_AUTHORED_LANES="$(printf '%s' "${_lanes}" | paste -sd, -)"
 else
@@ -36,6 +36,7 @@ lane_on() { case ",${SMD_AUTHORED_LANES}," in *",$1,"*) return 0 ;; esac; return
 # empty queue dir makes its verbs answer fail-closed (medchron_verbs.py build).
 SMD_MEDCHRON_QUEUE_DIR="" SMD_DEMAND_QUEUE_DIR="" SMD_DRAFTING_QUEUE_DIR="" SMD_LITIGATION_QUEUE_DIR=""
 SMD_LITIGATION_FIRM_CONFIG="" SMD_CASEFILE_QUEUE_DIR="" SMD_CASEFILE_FIRM_CONFIG="" SMD_NEGOTIATION_QUEUE_DIR=""
+SMD_RECORDS_QUEUE_DIR="" SMD_RECORDS_FIRM_CONFIG=""
 
 # ss#2614: the chronology runner's per-firm config rides the same vault prefix.
 # Same fail-static shape as customer.yaml above, without the FATAL arm: a seat
