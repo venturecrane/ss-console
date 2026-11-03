@@ -84,7 +84,7 @@ from .page_finder_match import (
     remember_match,
     zero_tokens,
 )
-from .page_finder_batches import REFUSAL_TRIES, _covered, _run_batches, _settle_unreadable, _settled, settle_unreached
+from .page_finder_batches import REFUSAL_TRIES, _covered, _estimate, _run_batches, _settle_unreadable, _settled
 from .page_finder_sections import documents, section_lines, sections
 from .page_finder_prompts import (
     _SECTION_FIELDS,
@@ -144,8 +144,6 @@ class CallRefused(Exception):
 #: still carried usage (a refusal bills its input).
 CALL_HOOK: Any = None
 _HOOK_LOCK = threading.Lock()
-#: A scanned page's request cost, the estimate ``before`` is given per page.
-_TOKENS_PER_PAGE = 1600
 
 
 class _CallFailed(RuntimeError):
@@ -264,19 +262,6 @@ def _hooked(hook: Any) -> Any:
     finally:
         with _HOOK_LOCK:
             CALL_HOOK = prior
-
-
-def _estimate(body: dict[str, Any]) -> int:
-    """Tokens a request may cost: its text at four characters a token, each
-    page document at :data:`_TOKENS_PER_PAGE`, and the output it may write."""
-    est = int(body.get("max_tokens") or 0)
-    for message in body.get("messages") or []:
-        for block in message.get("content") or []:
-            if block.get("type") == "document":
-                est += _TOKENS_PER_PAGE
-            else:
-                est += len(str(block.get("text") or "")) // 4
-    return est
 
 
 def _post(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
@@ -644,6 +629,18 @@ def locate_cached(sha: str, what: str, *, base: Path | None = None, hook: Any = 
         return _result({"index": index, **_no_facts()}, what, base)
 
 
+def locate_index(sha: str, what: str, *, base: Path | None = None, hook: Any = None) -> dict[str, Any]:
+    """The match against a file's index AS IT STANDS: no page is read, the
+    match may be asked (through ``hook``). The records lane calls it after its
+    own reading loop, so pages that loop did not reach stay unread in the
+    index (``remainingPages`` in the result) and are never marked unreadable:
+    a page one job did not reach is that job's state, not the file's."""
+    if not str(what or "").strip():
+        raise FinderRefused("say what to look for: the request's own words")
+    with _hooked(hook):
+        return _result({"index": load_index(sha, base), **_no_facts()}, what, base)
+
+
 def _result(built: dict[str, Any], what: str, base: Path | None) -> dict[str, Any]:
     index = built["index"]
     total = int(index.get("page_count") or 0)
@@ -729,7 +726,7 @@ __all__ = [
     "load_index",
     "locate",
     "locate_cached",
-    "settle_unreached",
+    "locate_index",
     "match",
     "parse_window",
     "purge",

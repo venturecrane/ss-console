@@ -16,7 +16,6 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 from . import vision
@@ -179,21 +178,18 @@ def _covered(index: dict[str, Any], retry_refused: bool = True) -> bool:
     return len(index["pages"]) + settled >= total
 
 
-def settle_unreached(sha: str, base: Path | None = None, reason: str = "not reached") -> int:
-    """Record every page of a file that is neither read nor unreadable as
-    unreadable (``reason``), for good: no call retries it. The records lane
-    calls it when a pass made no progress, so one page the wire kept failing
-    can never keep a file unsettled, or a loop running. Returns how many."""
-    index = _pf().load_index(sha, base)
-    total = index.get("page_count")
-    if not isinstance(total, int) or total < 1:
-        return 0
-    missing = [
-        str(n) for n in range(1, total + 1) if str(n) not in index["pages"] and str(n) not in index["unreadable"]
-    ]
-    for key in missing:
-        index["unreadable"][key] = reason
-        index["refusals"][key] = REFUSAL_TRIES
-    if missing:
-        _pf().save_index(index, base)
-    return len(missing)
+#: A scanned page's request cost, the estimate ``before`` is given per page.
+_TOKENS_PER_PAGE = 1600
+
+
+def _estimate(body: dict[str, Any]) -> int:
+    """Tokens a request may cost: its text at four characters a token, each
+    page document at :data:`_TOKENS_PER_PAGE`, and the output it may write."""
+    est = int(body.get("max_tokens") or 0)
+    for message in body.get("messages") or []:
+        for block in message.get("content") or []:
+            if block.get("type") == "document":
+                est += _TOKENS_PER_PAGE
+            else:
+                est += len(str(block.get("text") or "")) // 4
+    return est

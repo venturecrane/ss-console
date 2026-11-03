@@ -173,11 +173,14 @@ def test_without_retries_a_declined_page_is_never_asked_for_again(
     assert fake.index_calls() == first + 1
 
 
-def test_settle_unreached_records_the_missing_pages_for_good(model: FakeModel, tmp_path: Path) -> None:
+def test_locate_index_matches_on_the_index_as_it_stands_and_writes_no_page(model: FakeModel, tmp_path: Path) -> None:
     src = _set(tmp_path, 10)
     pf.build_index(src, _work(tmp_path), window=(1, 8))
     sha = pf.file_sha256(src)
-    assert pf.settle_unreached(sha) == 2
-    index = pf.load_index(sha)
-    assert index["unreadable"] == {"9": "not reached", "10": "not reached"}
-    assert pf._covered(index) and pf.settle_unreached(sha) == 0
+    before = (pf.index_dir() / f"{sha}.json").read_text()
+    reads = model.index_calls()
+    out = pf.locate_index(sha, "the visit")
+    assert model.index_calls() == reads and out["remainingPages"] == 2 and out["readNow"] == 0
+    saved = json.loads((pf.index_dir() / f"{sha}.json").read_text())
+    assert saved["unreadable"] == {} and len(saved["pages"]) == 8  # pages 9-10 stay unread, not unreadable
+    assert json.loads(before)["pages"] == saved["pages"]

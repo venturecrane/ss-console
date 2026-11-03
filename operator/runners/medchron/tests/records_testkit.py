@@ -37,7 +37,9 @@ PARSED = {
         },
         {
             "asked": "the discharge summary",
-            "hints": {"date": "", "provider": "", "pages": ""},
+            # The provider the email names for both records: a file is ranked by
+            # it (rank.py), since no file name carries "discharge summary".
+            "hints": {"date": "", "provider": "Northside Clinic", "pages": ""},
             "for_another_person": False,
         },
     ]
@@ -124,7 +126,11 @@ class FakeFinderModel:
         *,
         refuse: frozenset[int] = frozenset(),
         fail: frozenset[int] = frozenset(),
+        match_fn: Any = None,
     ) -> None:
+        #: ``match_fn(what, sections_text) -> items | None`` answers a match from
+        #: the file's own sections (None: the match request fails on the wire).
+        self.match_fn = match_fn
         self.match = {k: list(v) for k, v in (MATCH if match is None else match).items()}
         self.bodies: list[dict[str, Any]] = []
         #: Pages the model declines on every request that carries them (billed input, as a refusal is).
@@ -174,7 +180,14 @@ class FakeFinderModel:
         else:
             words = next(b["text"] for b in content if b["text"].startswith("THE COLLEAGUE'S REQUEST:"))
             what = words.split("\n", 1)[1].strip()
-            answer = {"items": self.match.get(what, [])}
+            if self.match_fn is not None:
+                secs = next(b["text"] for b in content if b["text"].startswith("SECTIONS:"))
+                items = self.match_fn(what, secs)
+                if items is None:
+                    return httpx.Response(400, json={"error": {"type": "invalid_request_error"}})
+                answer = {"items": items}
+            else:
+                answer = {"items": self.match.get(what, [])}
         return httpx.Response(
             200,
             json={
