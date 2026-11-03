@@ -54,6 +54,10 @@ def cmd(args: argparse.Namespace) -> int:
             except Exception as exc:  # noqa: BLE001 - a verdict, never a trace on stdout
                 v = Verdict("failed", stage="setup", reason=f"unexpected: {type(exc).__name__}: {str(exc)[:300]}")
             else:
+                if args.measure:
+                    report = r.measure()
+                    print(report, file=sys.__stdout__)
+                    return 0
                 r.reopen([x.strip() for x in (args.redo or "").split(",") if x.strip()])
                 v = r.run()
     except stop_request.StopRequested as stop:
@@ -79,6 +83,11 @@ def add_parser(sub: Any) -> None:
         default=None,
         metavar="DIR",
         help="the capped rehearsal on copies of a seat's page indexes: no page is read; the match may be asked",
+    )
+    rc.add_argument(
+        "--measure",
+        action="store_true",
+        help="$0: print each record's ranked candidate files and what the pre-flight would price; run nothing",
     )
     rc.add_argument("--cap", type=float, default=2.0, help="the rehearsal's dollar cap (default 2.00)")
     rc.set_defaults(fn=cmd)

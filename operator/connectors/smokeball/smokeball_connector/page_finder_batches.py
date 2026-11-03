@@ -162,3 +162,34 @@ def _run_batches(
         list(pool.map(reader.read, batches))
     if reader.stopped is not None:
         raise reader.stopped
+
+
+def _covered(index: dict[str, Any], retry_refused: bool = True) -> bool:
+    """Every page of the file is in the index: read, or unreadable for good
+    (:func:`_settled`). A page declined only once is still owed its one retry,
+    so it keeps the build going exactly as :func:`_wanted` would, unless
+    ``retry_refused`` is False (any unreadable page then counts as settled)."""
+    total = index.get("page_count")
+    if not isinstance(total, int) or isinstance(total, bool) or total < 1:
+        return False
+    settled = sum(
+        1 for k in index["unreadable"] if (not retry_refused or _settled(index, k)) and k not in index["pages"]
+    )
+    return len(index["pages"]) + settled >= total
+
+
+#: A scanned page's request cost, the estimate ``before`` is given per page.
+_TOKENS_PER_PAGE = 1600
+
+
+def _estimate(body: dict[str, Any]) -> int:
+    """Tokens a request may cost: its text at four characters a token, each
+    page document at :data:`_TOKENS_PER_PAGE`, and the output it may write."""
+    est = int(body.get("max_tokens") or 0)
+    for message in body.get("messages") or []:
+        for block in message.get("content") or []:
+            if block.get("type") == "document":
+                est += _TOKENS_PER_PAGE
+            else:
+                est += len(str(block.get("text") or "")) // 4
+    return est

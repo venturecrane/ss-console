@@ -49,7 +49,7 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, parse as parse_mod, search
+from . import assemble, firm as firm_mod, job as job_mod, measure, parse as parse_mod, rank, search
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -57,11 +57,6 @@ STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
 MATTER_STATUSES = ("Open", "Pending")
 #: Candidate files per record, at most.
 MAX_CANDIDATES = 3
-#: Words that never make a file-name search narrower.
-_STOP = frozenset(
-    "a an and any all as at by for from in into me my of on or our please send the their this to with records record "
-    "copy copies file files documents document".split()
-)
 
 
 class CapStop(pf.CallRefused):
@@ -95,15 +90,18 @@ class CapHook:
             raise CapStop(hold) from hold
 
     def after(self, model: str, usage: dict[str, int]) -> None:
+        """One ledger row per request, in the ledger's own shape (``in``/``out``,
+        ``ledger.usage_dict``, read from the page finder's ``input_tokens`` /
+        ``output_tokens``), with the page images it carried in ``pages``."""
         tokens = SimpleNamespace(
-            input_tokens=int(usage.get("input_tokens") or 0), output_tokens=int(usage.get("output_tokens") or 0)
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            cache_read_input_tokens=int(usage.get("cache_read_input_tokens") or 0),
+            cache_creation_input_tokens=int(usage.get("cache_creation_input_tokens") or 0),
         )
-        self.run.ledger.record(self.stage, model, tokens, effort="low", cache=False, batch=False)
-
-
-def _query(text: str) -> str:
-    words = [w for w in " ".join(str(text or "").split()).split() if w.casefold().strip(".,;:") not in _STOP]
-    return " ".join(words[:8])
+        self.run.ledger.record(
+            self.stage, model, tokens, effort="low", cache=False, batch=False, pages=int(usage.get("pages") or 0)
+        )
 
 
 class _ListingCache:
@@ -287,84 +285,86 @@ class RecordsRun(RunBase):
         }
         return True
 
-    def _candidates(self, mid: str, rec: dict[str, Any]) -> list[str]:
+    def _ranked(self, mid: str, rec: dict[str, Any], files: dict[str, Any]) -> list[tuple[str, int]]:
+        """The record's candidates: the matter's PDFs ranked by its words
+        (``rank.py``), the best :data:`rank.TOP` downloaded, then ties broken
+        by a complete page index and fewer pages; the best
+        :data:`MAX_CANDIDATES` kept. ``[]`` when no file scores for it."""
         from smokeball_connector import matter_files as mf
 
-        for words in (_query(rec["asked"]), _query(rec["hints"].get("provider", ""))):
-            if not words:
-                continue
-            got = mf.find_files(self.client, mid, name=words, extension="pdf", limit=MAX_CANDIDATES)
-            if got.get("error"):
-                raise RecordsHold("finder_failed: the matter's files could not be searched")
-            ids = [str(f["fileId"]) for f in got.get("files") or [] if f.get("fileId")]
-            if ids:
-                return ids[:MAX_CANDIDATES]
-        return []
+        try:
+            rows, _complete = mf._all_files(self.client, mid)
+        except Exception as exc:  # could not look is never "no file is named for it"
+            raise RecordsHold("finder_failed: the matter's files could not be listed") from exc
+        got = [(fid, sc) for fid, sc in rank.rank(rows, rec) if self._fetch(mid, fid, files)]
+        # Every free file (a complete index: only its match costs anything),
+        # then the best-scored priced ones, at most MAX_CANDIDATES of those.
+        free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
+        priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
+        priced.sort(key=lambda fs: (-fs[1], search.read_none(files[fs[0]]), int(files[fs[0]]["page_count"]), fs[0]))
+        return free + priced[:MAX_CANDIDATES]
 
     def _resolve(self) -> None:
         mid = self._matter_id()
         dump(self.data / "matter.json", {"matter_id": mid})
         files: dict[str, Any] = {}
         candidates: dict[str, list[str]] = {}
+        scores: dict[str, dict[str, int]] = {}
+        holds = search.item_holds(self.data)
         for rec in self._records():
-            ids = [fid for fid in self._candidates(mid, rec) if self._fetch(mid, fid, files)]
-            candidates[str(rec["n"])] = ids
-        # A record whose own words and provider name no file ("the discharge
-        # summary") is looked for in the files the request's other records led
-        # to: one email's records are almost always from the same sets.
-        shared = list(dict.fromkeys(fid for ids in candidates.values() for fid in ids))[:MAX_CANDIDATES]
-        for n, ids in candidates.items():
-            if not ids:
-                candidates[n] = list(shared)
+            ranked = self._ranked(mid, rec, files)
+            candidates[str(rec["n"])] = [fid for fid, _ in ranked]
+            scores[str(rec["n"])] = dict(ranked)
+            if not ranked:
+                # No file on the matter carries the record's words: nothing is
+                # read for it, and the reply names it as not established.
+                holds[int(rec["n"])] = search.NO_FILE
         dump(self.data / "files.json", files)
         dump(self.data / "candidates.json", candidates)
+        dump(self.data / search.SCORES, scores)
+        dump(self.data / search.HOLDS, {str(k): v for k, v in holds.items()})
+
+    def measure(self) -> str:
+        """``--measure``: $0. Per record, the ranked candidates and what the
+        pre-flight would price; no model call, no page read, no stage written.
+        Records come from the job's own parse, or the parse cache."""
+        from smokeball_connector import page_finder as pf
+
+        if (self.data / "records.json").is_file():
+            records = self._records()
+        else:
+
+            def refuse(_model: str, _text: str) -> dict[str, Any]:
+                raise parse_mod.ParseRefused("the request is not parsed yet; --measure makes no model call")
+
+            records = parse_mod.parse(self.job.request_text, pf.model(), refuse, cache=self.state / "parse")
+        mid = self._matter_id()
+        files: dict[str, Any] = {}
+        price = search.price_per_page(self)
+        lines = [f"matter {mid[:8]}; {len(records)} records; {price:.4f} USD a page"]
+        total = 0.0
+        for rec in records:
+            ranked = self._ranked(mid, rec, files)
+            lines.append(f"record {rec['n']}: " + ("no file is named for it" if not ranked else ""))
+            for fid, sc in ranked:
+                meta = files[fid]
+                index = pf.load_index(meta["sha256"])
+                left = search.unread(meta)
+                total += left * price if fid == ranked[0][0] else 0.0
+                lines.append(
+                    f"  {fid[: search.ID_PREFIX]} score {sc} pages {meta['page_count']} read {len(index['pages'])} "
+                    f"unreadable {len(index['unreadable'])} unread {left} first-read {left * price:.2f} USD"
+                )
+        lines.append(f"pre-flight for the top candidates: {total:.2f} USD")
+        return "\n".join(lines)
 
     # ---- preflight --------------------------------------------------------------------
     def _preflight(self) -> None:
         search.preflight(self)
 
     # ---- locate --------------------------------------------------------------------
-    def _read_all(self, source: Path, mid: str, hook: CapHook) -> None:
-        """Read the file's every page, a pass at a time, while pages remain and
-        a pass made progress (bounded by the page count)."""
-        from smokeball_connector import page_finder as pf
-
-        passes = 0
-        while True:
-            with tempfile.TemporaryDirectory(dir=self.data) as tmp:
-                built = pf.build_index(source, Path(tmp), window=None, matter_id=mid, hook=hook)
-            index = built["index"]
-            left = int(index.get("page_count") or 0) - len(index["pages"]) - len(index["unreadable"])
-            passes += 1
-            progress = len(built["read_now"]) + len(built["unreadable_now"])
-            if left <= 0 or not progress or passes > int(index.get("page_count") or 0) // pf.PAGES_PER_CALL + 2:
-                return
-
     def locate_path(self, n: int, file_id: str) -> Path:
         return self.data / "locate" / str(n) / f"{file_id}.json"
-
-    def _locate_one(
-        self, n: int, file_id: str, what: str, mid: str, meta: dict[str, Any], hook: CapHook
-    ) -> dict[str, Any]:
-        from smokeball_connector import page_finder as pf
-
-        path = self.locate_path(n, file_id)
-        if path.is_file():
-            return json.loads(path.read_text(encoding="utf-8"))
-        source = self.data / "files" / f"{file_id}.pdf"
-        try:
-            self._read_all(source, mid, hook)
-            with tempfile.TemporaryDirectory(dir=self.data) as tmp:
-                out = pf.locate(source, what, Path(tmp), matter_id=mid, hook=hook)
-        except pf.FinderRefused as exc:
-            raise RecordsHold(f"finder_failed: {exc}") from exc
-        out["items"] = [{k: v for k, v in item.items() if not k.startswith("_")} for item in out.get("items") or []]
-        out.update(matterId=mid, fileId=file_id, name=meta.get("name") or "")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never overwritten
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(out, fh, sort_keys=True)
-        return out
 
     def located(self) -> list[tuple[int, str, dict[str, Any]]]:
         """Every saved (record, file, result), in record then candidate order."""
@@ -461,6 +461,7 @@ class RecordsRun(RunBase):
             hold = "cut_refused: a record was found and no cut carries it"
         if hold is not None:
             return self.compose_held(hold, results, mid, records, owners, unresolved)
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
         text, html = assemble.compose(block_t, block_h, held=False)
         doc = {
             "text": block_t,
@@ -529,6 +530,7 @@ class RecordsRun(RunBase):
         if any(o["outcome"] in ("unplaced", "unresolved") for o in outcomes):
             return self.compose_held(hold, results, mid, records, owners, unresolved)
         block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
         block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
@@ -586,7 +588,13 @@ class RecordsRun(RunBase):
         v = self._verdict(stage, hold, failed, doc)
         if v.reason and not REASON.match(v.reason):
             v.reason = f"unexpected: {v.reason}"
+        # The one spend figure: the usage ledger, priced (budget.Budget), the
+        # same rows the cap reads before every request.
         v.cents = int(round(self.budget.refresh() * 100))
+        try:
+            measure.record_job(self.state, self.data, self.ledger.path, self.pricing)
+        except OSError as exc:  # a lost measurement must never change a verdict
+            self.log(f"[measure] not recorded: {type(exc).__name__}")
         return v
 
     def _verdict(self, stage: str, hold: str | None, failed: str | None, doc: dict[str, Any] | None) -> Verdict:

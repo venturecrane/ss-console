@@ -116,12 +116,41 @@ def held_line(asked: str, reason: str) -> str:
     """One held record, in the reply's words: its own words and why it is not
     established yet, never a dollar figure, a setting name or a file id."""
     m = _HELD_PAGES.search(reason or "")
-    why = (
-        f"{int(m.group(1)):,} pages of the file it is in are not read yet, and SMD is finishing it"
-        if m
-        else "SMD is finishing it"
-    )
+    if str(reason or "").startswith("scope_unresolved"):
+        why = "no file on the matter is named for it, and SMD is finishing it"
+    elif m:
+        n = int(m.group(1))
+        are = "is" if n == 1 else "are"
+        why = f"{n:,} {'page' if n == 1 else 'pages'} of the file it is in {are} not read yet, and SMD is finishing it"
+    else:
+        why = "SMD is finishing it"
     return f"- {facts_mod._tame(asked) or 'the record asked for'}: not established yet; {why}"
+
+
+def with_gaps(
+    block_text: str, block_html: str, results: dict[str, dict[str, Any]], files: list[dict[str, Any]]
+) -> tuple[str, str]:
+    """The facts block, plus each ATTACHED file with pages the model could not
+    read: a record found on the readable pages goes out (2026-11-03: 47 pages,
+    23 unreadable, the visit found on 1-2 and 6-39), and the reply says, in the
+    contract's gap words, how many pages of that file were not read. A file the
+    renderer already named in a "Not established" heading is not named twice."""
+    lines = []
+    for fid in dict.fromkeys(str(f.get("file_id")) for f in files):
+        result = results.get(fid) or {}
+        counts = result.get("counts") or {}
+        name = facts_mod._name(result.get("name") or "the file")
+        for count, words in ((counts.get("unreadable"), "could not be read"), (counts.get("notReached"), "not read")):
+            n = int(count or 0)
+            verb = "" if words.startswith("could") else ("was " if n == 1 else "were ")
+            said = f"{facts_mod._plural(n, 'page')} of {name} {verb}{words}"
+            if int(count or 0) and said not in block_text:
+                lines.append(f"- {said}")
+    if not lines:
+        return block_text, block_html
+    head = "Could not be read:"
+    text = "\n\n".join(p for p in (block_text, head + "\n" + "\n".join(lines)) if p)
+    return text, block_html + facts_mod.html_blocks([(head, lines)])
 
 
 def with_held(

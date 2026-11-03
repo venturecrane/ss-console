@@ -84,7 +84,7 @@ from .page_finder_match import (
     remember_match,
     zero_tokens,
 )
-from .page_finder_batches import _run_batches, _settle_unreadable, _settled
+from .page_finder_batches import REFUSAL_TRIES, _covered, _estimate, _run_batches, _settle_unreadable, _settled
 from .page_finder_sections import documents, section_lines, sections
 from .page_finder_prompts import (
     _SECTION_FIELDS,
@@ -144,8 +144,6 @@ class CallRefused(Exception):
 #: still carried usage (a refusal bills its input).
 CALL_HOOK: Any = None
 _HOOK_LOCK = threading.Lock()
-#: A scanned page's request cost, the estimate ``before`` is given per page.
-_TOKENS_PER_PAGE = 1600
 
 
 class _CallFailed(RuntimeError):
@@ -266,19 +264,6 @@ def _hooked(hook: Any) -> Any:
             CALL_HOOK = prior
 
 
-def _estimate(body: dict[str, Any]) -> int:
-    """Tokens a request may cost: its text at four characters a token, each
-    page document at :data:`_TOKENS_PER_PAGE`, and the output it may write."""
-    est = int(body.get("max_tokens") or 0)
-    for message in body.get("messages") or []:
-        for block in message.get("content") or []:
-            if block.get("type") == "document":
-                est += _TOKENS_PER_PAGE
-            else:
-                est += len(str(block.get("text") or "")) // 4
-    return est
-
-
 def _post(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
     """One Messages request through :data:`CALL_HOOK` (``before`` may refuse
     it; ``after`` hears what it cost, failed or not)."""
@@ -286,14 +271,17 @@ def _post(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
     name = str(body.get("model") or "")
     if hook is not None:
         hook.before(name, _estimate(body))
+    # The page images this request carries: ``after`` hears them beside the
+    # tokens, so a lane can price what one page attempt really costs.
+    pages = sum(1 for m in body.get("messages") or [] for b in m.get("content") or [] if b.get("type") == "document")
     try:
         answer = _post_raw(body)
     except _CallFailed as exc:
         if hook is not None and any(exc.tokens.values()):
-            hook.after(name, dict(exc.tokens))
+            hook.after(name, {**exc.tokens, "pages": pages})
         raise
     if hook is not None:
-        hook.after(name, dict(answer[1]))
+        hook.after(name, {**answer[1], "pages": pages})
     return answer
 
 
@@ -439,9 +427,11 @@ def _batches(pages: list[tuple[int, bytes]]) -> list[list[tuple[int, bytes]]]:
     return out
 
 
-def _wanted(index: dict[str, Any], total: int, window: tuple[int, int] | None) -> list[int]:
+def _wanted(index: dict[str, Any], total: int, window: tuple[int, int] | None, retry_refused: bool = True) -> list[int]:
+    """Pages to read now. ``retry_refused=False`` (the records lane) never asks
+    again for a page the index already records as unreadable, retry or not."""
     first, last = window or (1, total)
-    known = index["pages"].keys() | {k for k in index["unreadable"] if _settled(index, k)}
+    known = index["pages"].keys() | {k for k in index["unreadable"] if not retry_refused or _settled(index, k)}
     todo = [n for n in range(first, min(last, total) + 1) if str(n) not in known]
     room = max(0, MAX_PAGES_PER_FILE - len(known))
     return todo[: min(PAGES_PER_CALL, room)]
@@ -455,29 +445,20 @@ def build_index(
     base: Path | None = None,
     matter_id: str | None = None,
     hook: Any = None,
+    retry_refused: bool = True,
 ) -> dict[str, Any]:
     """Index the pages of ``source`` not yet in its cached index (at most
     :data:`PAGES_PER_CALL` this call). Returns the index plus this call's facts.
     One run at a time per seat; a second waits briefly, then is refused.
-    ``hook`` sets :data:`CALL_HOOK` for this call."""
+    ``hook`` sets :data:`CALL_HOOK` for this call; ``retry_refused=False``
+    never asks again for a page already recorded unreadable (:func:`_wanted`)."""
     if not _LOCK.acquire(timeout=vision.lock_timeout()):
         raise FinderRefused("another file's pages are being read right now; try again in a minute")
     try:
         with _hooked(hook):
-            return _build(source, workdir, window=window, base=base, matter_id=matter_id)
+            return _build(source, workdir, window=window, base=base, matter_id=matter_id, retry_refused=retry_refused)
     finally:
         _LOCK.release()
-
-
-def _covered(index: dict[str, Any]) -> bool:
-    """Every page of the file is in the index: read, or unreadable for good
-    (:func:`_settled`). A page declined only once is still owed its one retry,
-    so it keeps the build going exactly as :func:`_wanted` would."""
-    total = index.get("page_count")
-    if not isinstance(total, int) or isinstance(total, bool) or total < 1:
-        return False
-    settled = sum(1 for k in index["unreadable"] if _settled(index, k) and k not in index["pages"])
-    return len(index["pages"]) + settled >= total
 
 
 def _no_facts() -> dict[str, Any]:
@@ -491,7 +472,13 @@ def _no_facts() -> dict[str, Any]:
 
 
 def _build(
-    source: Path, workdir: Path, *, window: tuple[int, int] | None, base: Path | None, matter_id: str | None
+    source: Path,
+    workdir: Path,
+    *,
+    window: tuple[int, int] | None,
+    base: Path | None,
+    matter_id: str | None,
+    retry_refused: bool = True,
 ) -> dict[str, Any]:
     from .page_cut import CutRefused
     from .page_split import split
@@ -500,7 +487,7 @@ def _build(
         raise FinderRefused("this seat cannot read page images (no model credential, or reading is turned off)")
     sha = file_sha256(source)
     index = load_index(sha, base)
-    if _covered(index):
+    if _covered(index, retry_refused):
         # Every page already read or recorded unreadable: nothing is split and
         # no request is made (a records job re-run on the same file is free).
         if matter_id and matter_id not in index["matters"]:
@@ -509,7 +496,7 @@ def _build(
         return {"index": index, **_no_facts()}
     try:
         total, _ = split(source, 1, 0, workdir)  # counts pages, writes none
-        todo = _wanted(index, total, window)
+        todo = _wanted(index, total, window, retry_refused)
         written = split(source, todo[0], todo[-1], workdir, view=view())[1] if todo else []
     except CutRefused as exc:
         raise FinderRefused(str(exc)) from exc
@@ -601,6 +588,7 @@ def locate(
     base: Path | None = None,
     matter_id: str | None = None,
     hook: Any = None,
+    retry_refused: bool = True,
 ) -> dict[str, Any]:
     """The whole finding behind the records lane and the CLI. ``hook`` sets
     :data:`CALL_HOOK` for every request this call makes (pages and match); a
@@ -608,7 +596,9 @@ def locate(
     if not str(what or "").strip():
         raise FinderRefused("say what to look for: the request's own words")
     with _hooked(hook):
-        return _locate(source, what, workdir, window=window, base=base, matter_id=matter_id)
+        return _locate(
+            source, what, workdir, window=window, base=base, matter_id=matter_id, retry_refused=retry_refused
+        )
 
 
 def _locate(
@@ -619,8 +609,9 @@ def _locate(
     window: tuple[int, int] | None,
     base: Path | None,
     matter_id: str | None,
+    retry_refused: bool = True,
 ) -> dict[str, Any]:
-    built = build_index(source, workdir, window=window, base=base, matter_id=matter_id)
+    built = build_index(source, workdir, window=window, base=base, matter_id=matter_id, retry_refused=retry_refused)
     return _result(built, what, base)
 
 
@@ -636,6 +627,18 @@ def locate_cached(sha: str, what: str, *, base: Path | None = None, hook: Any = 
         raise FinderRefused("the file's cached index does not cover every page; nothing was read")
     with _hooked(hook):
         return _result({"index": index, **_no_facts()}, what, base)
+
+
+def locate_index(sha: str, what: str, *, base: Path | None = None, hook: Any = None) -> dict[str, Any]:
+    """The match against a file's index AS IT STANDS: no page is read, the
+    match may be asked (through ``hook``). The records lane calls it after its
+    own reading loop, so pages that loop did not reach stay unread in the
+    index (``remainingPages`` in the result) and are never marked unreadable:
+    a page one job did not reach is that job's state, not the file's."""
+    if not str(what or "").strip():
+        raise FinderRefused("say what to look for: the request's own words")
+    with _hooked(hook):
+        return _result({"index": load_index(sha, base), **_no_facts()}, what, base)
 
 
 def _result(built: dict[str, Any], what: str, base: Path | None) -> dict[str, Any]:
@@ -710,6 +713,7 @@ def _compress(numbers: list[int]) -> str:
 
 __all__ = [
     "CALL_HOOK",
+    "REFUSAL_TRIES",
     "CallRefused",
     "FinderRefused",
     "build_index",
@@ -722,6 +726,7 @@ __all__ = [
     "load_index",
     "locate",
     "locate_cached",
+    "locate_index",
     "match",
     "parse_window",
     "purge",

@@ -146,4 +146,41 @@ def test_before_is_given_the_requests_model_and_an_estimate(model: FakeModel, tm
     (index_model, index_est), (match_model, _) = hook.before_calls
     assert index_model == match_model == pf.model()
     assert index_est >= 8 * 1600
-    assert hook.after_calls[0][1] == {"input_tokens": 1600, "output_tokens": 80}
+    # The page images the request carried ride beside its tokens; the match carries none.
+    assert hook.after_calls[0][1] == {"input_tokens": 1600, "output_tokens": 80, "pages": 8}
+    assert hook.after_calls[1][1]["pages"] == 0
+
+
+def test_without_retries_a_declined_page_is_never_asked_for_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+
+    from smokeball_connector import vision
+
+    fake = FakeModel(refuse=frozenset({3}))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("SMOKEBALL_VISION_DISABLED", raising=False)
+    monkeypatch.setenv(pf.INDEX_DIR_ENV, str(tmp_path / "index"))
+    monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(fake)))
+    src = _set(tmp_path, 8)
+    pf.build_index(src, _work(tmp_path), window=None, retry_refused=False)
+    first = fake.index_calls()
+    again = pf.build_index(src, _work(tmp_path), window=None, retry_refused=False)
+    assert fake.index_calls() == first and again["read_now"] == []
+    # The default still owes the page its one retry.
+    pf.build_index(src, _work(tmp_path), window=None)
+    assert fake.index_calls() == first + 1
+
+
+def test_locate_index_matches_on_the_index_as_it_stands_and_writes_no_page(model: FakeModel, tmp_path: Path) -> None:
+    src = _set(tmp_path, 10)
+    pf.build_index(src, _work(tmp_path), window=(1, 8))
+    sha = pf.file_sha256(src)
+    before = (pf.index_dir() / f"{sha}.json").read_text()
+    reads = model.index_calls()
+    out = pf.locate_index(sha, "the visit")
+    assert model.index_calls() == reads and out["remainingPages"] == 2 and out["readNow"] == 0
+    saved = json.loads((pf.index_dir() / f"{sha}.json").read_text())
+    assert saved["unreadable"] == {} and len(saved["pages"]) == 8  # pages 9-10 stay unread, not unreadable
+    assert json.loads(before)["pages"] == saved["pages"]
