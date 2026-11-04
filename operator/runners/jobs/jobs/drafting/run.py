@@ -64,11 +64,13 @@ from . import (
     caption as caption_mod,
     caption_stage,
     compose,
+    evidence_cost,
     firm as firm_mod,
     howell,
     job as job_mod,
     review as review_mod,
 )
+from .evidence_lane import CHARGES_LINE, EvidenceLane
 from .placing import Placing
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
@@ -122,7 +124,7 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
     )
 
 
-class DraftingRun(Placing):
+class DraftingRun(EvidenceLane, Placing):
     def __init__(
         self,
         job_dir: Path,
@@ -269,7 +271,14 @@ class DraftingRun(Placing):
             )
 
     def _preflight(self) -> None:
-        report = preflight.run(self.data, self.dview, self._json("facts.json"), self.log)
+        # The ledger path is priced stage by stage from the file's real pages
+        # (evidence_cost.py), never by the digest path's flat tail.
+        tail = (
+            (lambda rows: evidence_cost.project(rows, self.firm.data, self.pricing, self.cls))
+            if self.evidence.ledger
+            else None
+        )
+        report = preflight.run(self.data, self.dview, self._json("facts.json"), self.log, tail=tail)
         if not report["documents"]:
             raise DraftingHold(
                 "no_readable_documents: the matter file has no readable documents to draft from; nothing was spent"
@@ -367,7 +376,9 @@ class DraftingRun(Placing):
         if (self.data / "caption.json").is_file():
             out += caption_stage.context(self._json("caption.json"))
         table = self._json("howell.json")["table"] if (self.data / "howell.json").is_file() else []
-        if table:
+        if table and self.evidence.ledger:
+            out.append(CHARGES_LINE)
+        elif table:
             out.append(
                 "THE CHARGES TABLE (computed by code from the bills, EOBs, liens, ledgers and the Medicals tab; "
                 "each cell names its source document; paid is the Howell figure; place it and use its figures "
@@ -453,7 +464,12 @@ class DraftingRun(Placing):
             self.reexec()
         client = set(f.get("client_emails") or [])
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.dview, client, self.log))
-        digest = self._digest()
+        if self.evidence.ledger:
+            # The evidence-first path (evidence_lane.py): the whole file read
+            # into verified facts; digest.md is the fact index's text.
+            digest = self.evidence_digest()
+        else:
+            digest = self._digest()
         # Measured, never refused: digest cites spanning a block of pages
         # rather than the fact's own page (summarize.cite_widths).
         self._done("summarize", **summarize.cite_widths(digest))
@@ -505,13 +521,17 @@ class DraftingRun(Placing):
         return v
 
     def _current(self) -> str:
-        head = ("facts", "destination", "pull", "preflight", "transcribe", "summarize", "howell", "caption")
+        mid = ("evidence-extract", "evidence-verify", "evidence-images", "index") if self.evidence.ledger else ()
+        head = ("facts", "destination", "pull", "preflight", "transcribe", *mid, "summarize", "howell", "caption")
         st = self._state()
         skip = {"howell"} if self.cls not in CHARGES_CLASSES else set()
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()
         order = [s for s in head if s not in skip]
         for u in self.units() if "units" in st else []:
-            per_unit = ("placed",) if self.placing() else ("compose", "audit", "finalpass", "gate", "rendered")
+            checked = ("check",) if self.evidence.ledger else ()
+            per_unit = (
+                ("placed",) if self.placing() else ("compose", "audit", *checked, "finalpass", "gate", "rendered")
+            )
             order += [u.stage(s) for s in per_unit]
         order += ["review", "manifest"]
         return next((s for s in order if st.get(s, {}).get("status") != "done"), "file")

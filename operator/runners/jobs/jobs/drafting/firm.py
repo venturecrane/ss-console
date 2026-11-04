@@ -34,6 +34,10 @@ The schema (the engagements author writes to exactly this)::
     attachments: {decl_2030_050, pos}
     inputs:      {<relative path>: <sha256>}   every file referenced above
     delivery:    {rehearsal_matters: [matter numbers]}   OPTIONAL
+    evidence:    {mode, classes, page_window, image_pages, prompts}   OPTIONAL,
+                 the brief's drafting path (evidence_config.py); default digest
+    verify:      {enabled, classes, max_loops, model, parallelism, authorities}
+                 OPTIONAL, the source check on the ledger path (verify/config.py)
     attorneys:   [{email, block: [lines]}]   OPTIONAL, the caption's attorney block
                  per attorney (attorneys.py)
 
@@ -53,7 +57,8 @@ from typing import Any
 
 import yaml
 
-from . import attorneys as attorneys_mod
+from . import attorneys as attorneys_mod, evidence_config
+from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
 DEFAULT_DIR = "/var/lib/smd-config/drafting"
@@ -162,10 +167,16 @@ def _shape(data: Any) -> list[str]:
     out = [
         f"{s}: unknown section (closed key set)"
         for s in data
-        if s not in SCHEMA and s not in OPTIONAL and s != attorneys_mod.KEY
+        if s not in SCHEMA
+        and s not in OPTIONAL
+        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY)
     ]
     if attorneys_mod.KEY in data:
         out += attorneys_mod.validate(data[attorneys_mod.KEY])
+    if evidence_config.KEY in data:
+        out += evidence_config.validate(data[evidence_config.KEY], CLASSES)
+    if verify_config.KEY in data:
+        out += verify_config.validate(data[verify_config.KEY], CLASSES, None)
     for name, keys in SCHEMA.items():
         if keys == "path":
             if not _type_ok(data.get(name), "path"):
@@ -275,7 +286,7 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
         refs.append((f"classes.{cls}.skeleton", entry["skeleton"]))
         refs += [(f"classes.{cls}.prompts.{k}", v) for k, v in entry["prompts"].items()]
         refs += [(f"classes.{cls}.exemplars[{i}]", v) for i, v in enumerate(entry["exemplars"])]
-    return refs
+    return refs + evidence_config.referenced_paths(data)
 
 
 def _semantics(data: dict[str, Any]) -> list[str]:
@@ -317,9 +328,18 @@ def _semantics(data: dict[str, Any]) -> list[str]:
     return out
 
 
+def _store_pins(data: dict[str, Any]) -> list[str]:
+    """The source check's authority store has pinned files (verify/config.py)."""
+    if verify_config.KEY not in data:
+        return []
+    return [
+        e for e in verify_config.validate(data[verify_config.KEY], CLASSES, data["inputs"]) if "no pinned file" in e
+    ]
+
+
 def validate(data: Any) -> list[str]:
     """Every problem as ``section.key: message``; empty means valid."""
-    return _shape(data) or _semantics(data)
+    return _shape(data) or _semantics(data) or _store_pins(data)
 
 
 @dataclass(frozen=True)

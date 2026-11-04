@@ -43,6 +43,11 @@ REASON_CODES = (
     "review_held",
     # The read-back downloaded a filed file and its bytes are not ours (2026-10-13).
     "readback_mismatch",
+    # The ledger path (evidence_lane.py): the drafter's markup still hand-types a cite, quote,
+    # figure or date after its one scoped repair, or names a fact render cannot fill.
+    "markup_lint",
+    # The source check's planted controls said the checker did not discriminate (verify/controls_adapter.py).
+    "check_invalid",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
