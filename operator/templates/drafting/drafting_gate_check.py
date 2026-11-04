@@ -129,8 +129,14 @@ _MD_INLINE_RE = re.compile(r"\*\*|__|~~|\*|`")
 _MD_BLOCKQUOTE_RE = re.compile(r"(?:^|(?<=\s))>+(?=\s|$)", re.MULTILINE)
 
 # Transcript gutter: " 17   A.  A little behind." The two-space floor after the
-# number keeps ordered lists ("1. First item") out of the match.
-_GUTTER_RE = re.compile(r"^[ \t]{0,10}(\d{1,3})[ \t]{2,}(.*)$")
+# number keeps ordered lists ("1. First item") out of the match. A reporter's
+# text layer often sets the gutter and the label tabs with middle-dot spacers
+# instead ("17· ·A.· · ·A little behind."); those are typesetting, read as spaces.
+_GUTTER_RE = re.compile(r"^[ \t]{0,10}(\d{1,3})(?:[ \t]{2,}|[ \t]*·[ \t·]*)(.*)$")
+# What typesetting leaves in a text layer and a quotation never carries: a spacer,
+# or a line number standing before a Q./A. label. A quote holding either is a
+# garble that the raw view would otherwise find verbatim, so it is never located.
+_TYPESET_RE = re.compile(r"·|(?:^|\s)\d{1,2} [QA][.:](?:\s|$)")
 _PAGE_RE = re.compile(r"^[ \t]*(?:Page|PAGE)[ \t]+(\d{1,4})[ \t]*$")
 _QUESTION_RE = re.compile(r"^(?:BY [A-Z][^:]{0,60}:\s*)?Q[.:]?\s")
 _ANSWER_RE = re.compile(r"^A[.:]?\s")
@@ -264,8 +270,9 @@ class SourceView:
     """One flattened, offset-indexed view of a source file.
 
     Two views are built per file. ``raw`` keeps every line as written. ``gutter``
-    strips transcript line numbers so that a quote spanning transcript lines is
-    contiguous in the flattened text. A splice does not become contiguous under
+    strips transcript line numbers, middle-dot spacers and page-marker lines so
+    that a quote spanning transcript lines (or a page break) is contiguous in
+    the flattened text. A splice does not become contiguous under
     either view, because the intervening question text is still present, so the
     second view only ever removes false failures.
     """
@@ -280,9 +287,10 @@ class SourceView:
         for index, raw_line in enumerate(lines, start=1):
             content = raw_line
             if kind == "gutter":
+                # Line numbers, spacers and page markers are not testimony: a
+                # quote that runs across them is contiguous in this view.
                 match = _GUTTER_RE.match(raw_line)
-                if match:
-                    content = match.group(2)
+                content = "" if _PAGE_RE.match(raw_line) else (match.group(2) if match else raw_line).replace("·", " ")
             piece = normalize(strip_markdown(content))
             if not piece:
                 continue
@@ -332,7 +340,7 @@ class SourceDoc:
             gutter_match = _GUTTER_RE.match(raw_line)
             if not gutter_match:
                 continue
-            self.stripped[index] = gutter_match.group(2).strip()
+            self.stripped[index] = gutter_match.group(2).replace("·", " ").strip()
             if current_page is not None:
                 self.page_line[index] = (current_page, int(gutter_match.group(1)))
 
@@ -674,7 +682,7 @@ def gate_quote_contiguity(draft: Draft, docs: list[SourceDoc]) -> tuple[list[Fin
         )
         return findings, hits
     for quote in extract_quotes(draft.body_text):
-        hit = locate_quote(quote, docs)
+        hit = None if _TYPESET_RE.search(quote.normalized) else locate_quote(quote, docs)
         if hit is not None:
             hits.append((quote, hit))
             continue

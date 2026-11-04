@@ -97,11 +97,16 @@ still fail.
 ## Transcript structure the checker looks for
 
 Gate 2b needs two things in a source: page markers on their own line (`Page 23`)
-and a numbered line gutter (`22   A.  No, I cannot.`). Where it finds them it
-builds a page:line index and can walk back from a quoted answer to the question
-that governs it. Sources are also flattened a second way, with the line gutter
-stripped, so that a quote spanning transcript lines reads as contiguous. That
-second view only ever removes false failures.
+and a numbered line gutter (`22   A.  No, I cannot.`, or a reporter's text
+layer with middle-dot spacers, `22· ·A.· · ·No, I cannot.`). Where it finds them
+it builds a page:line index and can walk back from a quoted answer to the
+question that governs it. Sources are also flattened a second way, with the
+line gutter, the spacers and the page-marker lines stripped, so that a quote
+spanning transcript lines or a page break reads as contiguous. That second view
+only ever removes false failures. The other direction is closed too: a
+quotation that itself carries a spacer, or a line number before a `Q.`/`A.`
+label, fails 2a even when the raw text layer holds it verbatim, because
+typesetting in a quotation is a garble, never the record's words.
 
 Because a phrase can appear in more than one document and more than once in the
 same one, pairing is judged at the occurrence the draft cited, not at whichever

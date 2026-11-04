@@ -228,6 +228,55 @@ class TestQuoteContiguity(GateTestCase):
         self.assertEqual(self.findings(payload, "2a", "FAIL"), [])
         self.assertEqual(code, 0)
 
+    DOTTED = (
+        "Page 50\n"
+        "20· ·Q.· · ·So alpha bravo charlie delta on echo foxtrot golf hotel\n"
+        "21· ·india; juliet?\n"
+        "22· ·A.· · ·Kilo lima mike november, oscar.\n"
+        "Page 51\n"
+        "1· · · ·Q.· · ·Papa quebec?\n"
+        "2· ·A.· · ·Romeo.\n"
+    )
+
+    def test_a_dotted_gutter_transcript_quote_across_lines_and_pages_passes(self) -> None:
+        """A reporter's text layer sets the gutter with middle-dot spacers
+        (2026-11-03); line numbers, spacers and page markers are not testimony."""
+        (self.sources / "depo-dotted.txt").write_text(self.DOTTED, encoding="utf-8")
+        draft = self.write_draft(
+            '# DRAFT\n\nHe testified: "Q. So alpha bravo charlie delta on echo foxtrot golf hotel '
+            'india; juliet? A. Kilo lima mike november, oscar." (Xxxx 50:20-22.) Then: '
+            '"oscar. Q. Papa quebec? A. Romeo." (Xxxx 50:20-51:2.)\n'
+        )
+        code, payload = self.run_gate(draft)
+        self.assertEqual(self.failures(payload), [])
+        self.assertEqual(code, 0)
+
+    def test_a_dotted_gutter_quote_with_a_changed_word_still_fails(self) -> None:
+        (self.sources / "depo-dotted.txt").write_text(self.DOTTED, encoding="utf-8")
+        draft = self.write_draft(
+            '# DRAFT\n\nHe testified: "Q. So alpha bravo charlie delta on echo foxtrot golf hotel '
+            'india; juliet? A. Kilo lima mike december, oscar." (Xxxx 50:20-22.)\n'
+        )
+        code, payload = self.run_gate(draft)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(self.findings(payload, "2a", "FAIL")), 1)
+
+    def test_a_quote_carrying_line_numbers_or_spacers_fails_though_raw_text_has_it(self) -> None:
+        """Both quotes are verbatim in a raw text layer; typesetting in a
+        quotation is a garble, never the record's words."""
+        (self.sources / "depo-dotted.txt").write_text(self.DOTTED, encoding="utf-8")
+        (self.sources / "depo-single-space.txt").write_text(
+            "21 india; juliet?\n22 A. Kilo lima mike november, oscar.\n", encoding="utf-8"
+        )
+        for garbled in (
+            "· ·So alpha bravo charlie delta on echo foxtrot golf hotel 21· ·india; juliet?",
+            "india; juliet? 22 A. Kilo lima mike november, oscar.",
+        ):
+            draft = self.write_draft(f'# DRAFT\n\nHe testified: "{garbled}" (Xxxx 50:20-22.)\n')
+            code, payload = self.run_gate(draft)
+            self.assertEqual(code, 1, garbled)
+            self.assertEqual(len(self.findings(payload, "2a", "FAIL")), 1, garbled)
+
     def test_words_added_inside_quotation_marks_still_fail(self) -> None:
         draft = self.write_draft(
             '# DRAFT\n\nThe witness said "The white truck came across without '
