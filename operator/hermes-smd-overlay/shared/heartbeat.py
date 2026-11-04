@@ -689,6 +689,15 @@ MAIL_ROUTINE_SKILL = "combined-post-intake"
 #: would be a page for nothing.
 _PARTIAL_IDLE_SECONDS = 30 * 60
 
+#: The REPLY_HELD reason the reply plugin writes when SMD rejects a records
+#: reply in review (``hermes-smd-reply._review_one``).
+MATTER_FILES_REVIEW_REJECTED = "matter_files_review_rejected"
+
+#: A records-lane review row's session (``hermes-smd-reply.LANE_SESSION_PREFIX``):
+#: ``records:<job_id>``. No gateway session owns it, so its rows join the request
+#: through the job.
+RECORDS_LANE_SESSION_PREFIX = "records:"
+
 #: The reply relay's own reasons for holding a reply (``hermes-smd-reply``:
 #: ``_held`` call sites, ``relay.gate_body``, ``relay.RateLimiter``,
 #: ``spec_gate.REASON_OUTPUT_CHECKLIST``). A CLOSED vocabulary: a reason not
@@ -716,12 +725,23 @@ REPLY_HOLD_REASONS = frozenset(
         "rate_limited_global",
         "rate_limited_backstop",
         "queued_behind_held",
+        # SMD's review of a records reply (``shared.matter_file_review``): the
+        # reply is waiting for SMD, the wait ran out with no decision, or the
+        # reply could not be held for review on this path at all.
+        "matter_files_review",
+        "matter_files_review_expired",
+        "matter_files_review_unsupported",
     }
 )
 
 #: Holds that are NOT a person going unanswered. ``duplicate_reply``: a reply
 #: to that message already went out, and this second draft was the extra one.
-_REPLY_HOLDS_NOT_A_SHORTFALL = frozenset({"duplicate_reply"})
+#: ``matter_files_review_rejected``: SMD itself rejected the reply in review
+#: (only ``python -m shared.matter_file_review reject``, run as root, writes
+#: it). Paging SMD about its own decision told the Captain "a check held it,
+#: reason other, no request linked" (A&P 2026-11-03 21:11 MST): the second and
+#: third pages for one deliberate act, after the limit page that asked for it.
+_REPLY_HOLDS_NOT_A_SHORTFALL = frozenset({"duplicate_reply", MATTER_FILES_REVIEW_REJECTED})
 
 #: How long a REPLY_HELD row may stand before it is a shortfall. The redraft
 #: the hold notice asks for lands in the same turn, within seconds; three
@@ -1161,10 +1181,23 @@ def _reply_events(
                 ),
                 code=_reply_code(action_type, reason),
                 key=_event_key("failed", row_id),
-                join=("message", message_id),
+                join=_reply_join(message_id, session_id),
             )
         )
     return out
+
+
+def _reply_join(message_id: object, session_id: object) -> tuple[str, object]:
+    """What a reply row joins its request through: the inbound message, or, for
+    a records-lane review row that carries none, the lane's job (A&P 2026-11-03:
+    "no person's request is linked" on a lane reply SMD had in review)."""
+    if isinstance(message_id, str) and message_id:
+        return ("message", message_id)
+    if isinstance(session_id, str) and session_id.startswith(RECORDS_LANE_SESSION_PREFIX):
+        job_id = session_id[len(RECORDS_LANE_SESSION_PREFIX) :]
+        if job_id:
+            return ("job", job_id)
+    return ("message", message_id)
 
 
 def _could_not_code(value: object) -> str:
@@ -1238,8 +1271,13 @@ def _proof_events(conn: sqlite3.Connection, horizon: str, cutoff: str) -> list[d
         " ORDER BY ts, id",
         (horizon, cutoff),
     ).fetchall()
+    rejected = _review_rejected_jobs(conn, horizon, cutoff)
     out: list[dict] = []
     for row_id, ts, lane, code, job_id in rows:
+        if code == "reply_unproven" and isinstance(job_id, str) and job_id in rejected:
+            # SMD rejected that job's reply in review: the reply is unproven
+            # because SMD decided it should not go, not because it went missing.
+            continue
         lane_text = lane.strip() if isinstance(lane, str) else ""
         out.append(
             _shortfall_event(
@@ -1252,6 +1290,24 @@ def _proof_events(conn: sqlite3.Connection, horizon: str, cutoff: str) -> list[d
                 join=("job", job_id),
             )
         )
+    return out
+
+
+def _review_rejected_jobs(conn: sqlite3.Connection, horizon: str, cutoff: str) -> set[str]:
+    """The records-lane jobs whose reply SMD rejected in review within the window."""
+    rows = conn.execute(
+        "SELECT json_extract(metadata,'$.session_id') FROM audit_log"
+        " WHERE action_type = 'REPLY_HELD'"
+        " AND json_extract(metadata,'$.reason') = ?"
+        " AND substr(ts,1,19) >= ? AND substr(ts,1,19) <= ?",
+        (MATTER_FILES_REVIEW_REJECTED, horizon, cutoff),
+    ).fetchall()
+    out: set[str] = set()
+    for (session_id,) in rows:
+        if isinstance(session_id, str) and session_id.startswith(RECORDS_LANE_SESSION_PREFIX):
+            job_id = session_id[len(RECORDS_LANE_SESSION_PREFIX) :]
+            if job_id:
+                out.add(job_id)
     return out
 
 

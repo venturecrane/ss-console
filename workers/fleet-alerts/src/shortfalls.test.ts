@@ -420,6 +420,21 @@ describe('shape', () => {
     const cases: Array<[Record<string, string>, RegExp, RegExp]> = [
       [{ class: 'failed', code: 'reply_held:output_checklist' }, /held it/, /may be waiting/],
       [{ class: 'failed', code: 'reply_failed:send_error' }, /did not go out/, /may be waiting/],
+      [
+        { class: 'failed', code: 'reply_held:matter_files_review' },
+        /waiting for SMD's review/,
+        /approve or reject/,
+      ],
+      [
+        { class: 'failed', code: 'reply_held:matter_files_review_expired' },
+        /nobody approved or rejected it in time/,
+        /may be waiting/,
+      ],
+      [
+        { class: 'failed', code: 'reply_held:matter_files_review_unsupported' },
+        /cannot wait for review/,
+        /may be waiting/,
+      ],
       [{ class: 'limit', code: 'over_page_cap' }, /limit stopped/, /past the limit/],
     ]
     for (const [r, happened, step] of cases) {

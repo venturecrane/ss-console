@@ -2872,3 +2872,63 @@ def test_the_proof_vocabulary_matches_the_broker_list():
         "casefile",
         "records",
     }
+
+
+# SMD's review of a records reply (A&P 2026-11-03 21:11 MST): SMD rejected a
+# records-lane reply, and the pager said "a check held it, reason other, no
+# request linked", then paged the same job's reply as unproven. One deliberate
+# decision, three pages, none naming it.
+
+
+def _lane_review_row(led, ts, reason, *, job_id=_PROOF_JOB_ID):
+    _reply_row(
+        led,
+        ts,
+        "REPLY_HELD",
+        message_id=None,
+        reason=reason,
+        review_id="r1",
+        session_id=hb.RECORDS_LANE_SESSION_PREFIX + job_id,
+    )
+
+
+def test_smds_own_review_reject_is_not_a_shortfall(tmp_path):
+    """FALSIFIER: drop the reason from ``_REPLY_HOLDS_NOT_A_SHORTFALL`` and this
+    pages as ``reply_held:other``, the 2026-11-03 email."""
+    facts = _shortfalls(
+        tmp_path, lambda led: _lane_review_row(led, _ts(2), hb.MATTER_FILES_REVIEW_REJECTED)
+    )
+    assert facts.count == 0
+
+
+def test_a_rejected_jobs_unproven_reply_is_not_a_shortfall_but_another_jobs_is(tmp_path):
+    def build(led):
+        _lane_review_row(led, _ts(2), hb.MATTER_FILES_REVIEW_REJECTED)
+        _proof_row(led, _ts(1.9), lane="records", code="reply_unproven")
+
+    assert _shortfalls(tmp_path, build).count == 0
+
+    def other_job(led):
+        _lane_review_row(led, _ts(2), hb.MATTER_FILES_REVIEW_REJECTED, job_id="01JOTHERJOB")
+        _proof_row(led, _ts(1.9), lane="records", code="reply_unproven")
+
+    facts = _shortfalls(tmp_path, other_job)
+    assert [e["code"] for e in facts.events] == ["proof:reply_unproven"]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["matter_files_review", "matter_files_review_expired", "matter_files_review_unsupported"],
+)
+def test_a_review_hold_pages_under_its_own_name(tmp_path, reason):
+    """Waiting on SMD, expired with no decision, or unholdable: each is a reply
+    that did not go out, and the email has to say which."""
+    facts = _shortfalls(tmp_path, lambda led: _reply_row(led, _ts(2), "REPLY_HELD", reason=reason))
+    assert [e["code"] for e in facts.events] == [f"reply_held:{reason}"]
+
+
+def test_a_lane_review_row_joins_its_request_through_the_job():
+    assert hb._reply_join(None, "records:01JOB") == ("job", "01JOB")
+    assert hb._reply_join("<m1>", "records:01JOB") == ("message", "<m1>")
+    assert hb._reply_join(None, "sess-1") == ("message", None)
+    assert hb._reply_join(None, "records:") == ("message", None)

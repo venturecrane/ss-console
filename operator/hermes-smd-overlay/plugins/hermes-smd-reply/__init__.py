@@ -1238,7 +1238,13 @@ def _review_one(row: dict[str, Any]) -> None:
             matter_file_review.finish(row, status)
             _emit_reply_event(
                 action_type="REPLY_HELD",
-                metadata={"reason": f"matter_files_review_{status}", "review_id": row.get("id")},
+                metadata={
+                    "reason": f"matter_files_review_{status}",
+                    "review_id": row.get("id"),
+                    # The email the reply answers, so an expired review's page
+                    # names that request (A&P 2026-11-03: "no request linked").
+                    **({"message_id": origin.message_id} if origin.message_id else {}),
+                },
                 session_id=str(row.get("session_id") or "") or None,
                 matter_ref=matter_ref,
             )

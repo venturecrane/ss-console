@@ -238,6 +238,17 @@ export function phoenixTime(ts: string): string {
 
 /** What happened, in a sentence. Only the kinds emailsAPerson lets through reach here. */
 export function whatHappened(r: Pick<LedgerRow, 'class' | 'code'>): string {
+  // SMD's review of a records reply (A&P 2026-11-03): "a check held it" read as
+  // a defect when the reply was waiting on SMD itself.
+  if (r.code === 'reply_held:matter_files_review') {
+    return "The Operator wrote a records reply, and it is waiting for SMD's review before it is sent."
+  }
+  if (r.code === 'reply_held:matter_files_review_expired') {
+    return "The Operator's records reply waited for SMD's review, nobody approved or rejected it in time, so it was not sent."
+  }
+  if (r.code === 'reply_held:matter_files_review_unsupported') {
+    return "The Operator wrote a records reply that needed SMD's review, but this kind of reply cannot wait for review, so it was not sent."
+  }
   if (r.code.startsWith('reply_held:')) {
     return 'The Operator wrote a reply, but a check held it before it was sent.'
   }
@@ -262,6 +273,12 @@ export function nextStep(
     return (
       `Decide whether it should go past the limit (${request} says what was asked). ` +
       `If yes, an agent can raise it for this job. If no, tell the person what does fit.`
+    )
+  }
+  if (r.code === 'reply_held:matter_files_review') {
+    return (
+      `Someone is waiting on this reply (${request} says what was asked). ` +
+      `Give this email to an agent to approve or reject it.`
     )
   }
   return (
