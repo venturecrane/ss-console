@@ -1527,3 +1527,65 @@ def test_a_second_wording_refusal_still_names_the_text() -> None:
         )
     )
     assert HELD_TEXT in text and "Do NOT redraft" not in text
+
+
+# -- a job's delivery reply never speaks the system's vocabulary (2026-11-03)
+#
+# A delivered mediation brief's reply told the requesting attorney "The job
+# searched his reports" and "The job's source for this is the complaint". The
+# skill said to report the files and the marked items; nothing checked the words.
+
+
+_JOB_WORDS = (
+    "The mediation brief is filed to matter 900201. The job searched his reports and the "
+    "job's source for this is the complaint."
+)
+_FIRM_WORDS = (
+    "The mediation brief is filed to matter 900201. His reports were searched, and the "
+    "source for this is the complaint. He could not return to the job until March."
+)
+
+
+def test_a_drafting_delivery_reply_naming_the_job_is_held_for_a_redraft(lane) -> None:
+    """FALSIFIER: drop ``job_reply=_is_job_reply(bound)`` from the relay's checklist
+    call and the attorney reads "The job searched his reports"."""
+    mod, d1, broker, _ = lane
+    _drafting_wake(mod)
+    _bind(mod, {"job_id": JOB})
+    _draft(mod, [ADMIN], body=_JOB_WORDS)
+    assert broker.bound_sends == []
+    held = _held(d1)
+    assert held and "system_vocabulary" in json.dumps(held)
+
+
+def test_the_same_reply_in_the_firms_terms_goes(lane) -> None:
+    """The happy path the refusal above means nothing without, carrying the
+    employment sense of "the job" a personal injury file holds."""
+    mod, d1, broker, _ = lane
+    _drafting_wake(mod)
+    _bind(mod, {"job_id": JOB})
+    _draft(mod, [ADMIN], body=_FIRM_WORDS)
+    assert len(broker.bound_sends) == 1 and not _held(d1)
+
+
+def test_a_demand_delivery_reply_meets_the_same_rule(lane) -> None:
+    mod, d1, broker, _ = lane
+    _wake(mod)
+    _bind(mod, {"job_id": JOB})
+    _draft(mod, [ADMIN], body="The demand job filed the letter to matter 900201.")
+    assert broker.bound_sends == [] and "system_vocabulary" in json.dumps(_held(d1))
+
+
+def test_only_a_jobs_bound_reply_is_a_job_reply() -> None:
+    mod = load_plugin("hermes-smd-reply")
+    assert mod._is_job_reply(None) is False
+    note = mod.binding.Binding(
+        sender=ADMIN, request=(("kind", "note_job"), ("job_id", JOB)), graph_message_id=GRAPH_ID
+    )
+    drafting = mod.binding.Binding(
+        sender=ADMIN,
+        request=(("kind", "drafting_job"), ("job_id", JOB)),
+        graph_message_id=GRAPH_ID,
+    )
+    # An SMD note's words are SMD's, recorded verbatim: never this rule's.
+    assert mod._is_job_reply(note) is False and mod._is_job_reply(drafting) is True

@@ -4,6 +4,14 @@ Each shape the skill may send, and the one it never sends. All are plain
 email in the requester's own thread, no em dashes, no timing, no figure, no
 job id. Matter numbers come only from a record read this turn or the job row.
 
+**The firm never reads about our machinery.** A reply speaks of the document,
+the file and the record, never of a job, a run, a pipeline, a model, a lane or
+the system. Not "The job searched his reports" but "His reports were
+searched"; not "The job's source for this is the complaint" but "The source
+for this is the complaint". The seat holds a job's delivery reply that names
+the job (the output checklist's `system_vocabulary` rule) and asks for a
+redraft in the firm's terms.
+
 ## REQUEST mode
 
 - **Accepted.** "Received. The mediation brief for matter 900201 is being

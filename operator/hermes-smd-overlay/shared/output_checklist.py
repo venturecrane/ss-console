@@ -235,6 +235,45 @@ KNOWN_CAPS: frozenset[str] = _CONTRACT_KNOWN_CAPS
 
 _FRAGMENT_LEN = 40
 
+#: The system's own vocabulary, in a job's delivery reply (2026-11-03, a
+#: mediation brief's DELIVER reply to the requesting attorney said "The job
+#: searched his reports" and "The job's source for this is the complaint"). The
+#: firm asked for a brief and reads about the brief, the file and the record,
+#: never about our work as a job, a pipeline, a model or a lane. The drafting
+#: runner's review refuses the same class in the attorney notes
+#: (ss-console ``medchron/drafting/review.py`` check 9).
+#:
+#: NARROW BY DESIGN. "job" and "lane" are ordinary words in a personal injury
+#: file: "unable to return to the job", "the job site", "his job was full time",
+#: "entered the lane". So "job" is refused only where it names OUR work: the job
+#: doing something a program does ("the job searched", "the job filed"), the
+#: job's possession of a record or a source ("the job's source"), a lane's name
+#: on it ("drafting job"), or a job id. Bare "lane", "run", "system" and
+#: "Operator" are never refused (the Operator is the firm's own name for the
+#: seat; a held job's fixed wording names the firm's Operator Library).
+_SYSTEM_VOCAB = re.compile(
+    r"(?i)"
+    r"\b(?:the|this|that|our|each|every|a|one)\s+"
+    r"(?:(?:drafting|chronology|demand|litigation|records|case\s+file|negotiation|status)\s+)?"
+    r"job(?:'s|\u2019s)\s+"
+    r"(?:own\s+)?(?:sources?|records?|reports?|reasons?|files?|runs?|search(?:es)?|read(?:ing)?|notes?|"
+    r"outputs?|findings?|answers?|work|results?|checks?|drafts?|lists?)\b"
+    r"|\b(?:the|this|that|our|each|every)\s+"
+    r"(?:(?:drafting|chronology|demand|litigation|records|case\s+file|negotiation|status)\s+)?"
+    r"job\s+(?:also\s+|only\s+|then\s+|itself\s+)?"
+    r"(?:searched|searches|read|reads|found|finds|filed|files|drafted|drafts|reported|reports|"
+    r"held(?!\s+by\b)|holds|ran|runs|checked|checks|looked|looks|used|uses|produced|produces|"
+    r"stopped|stops|corrected|corrects|placed|places|marked|marks|named|names|pulled|pulls|"
+    r"relied|relies|quoted|quotes|matched|matches|flagged|flags|skipped|skips|counted|counts|"
+    r"listed|lists|cited|cites|could\s+not\s+find|did\s+not\s+find|found\s+no|treated|treats)\b"
+    r"|\b(?:drafting|chronology|demand|litigation|records|case\s+file|negotiation)\s+jobs?\b"
+    r"|\bjob[\s_-]?ids?\b|\bqueued\s+jobs?\b|\bthe\s+job\s+queue\b|\bunder\s+the\s+job\b|\bjob\s+rule\b"
+    r"|\bthe\s+pipeline\b|\bthe\s+(?:AI|language)\s+model\b|\bthe\s+LLM\b"
+    r"|\bthe\s+model\s+(?:read|reads|wrote|writes|found|finds|drafted|drafts|searched|searches|flagged|flags)\b"
+    r"|\bcompose\s+stage\b|\bdrafting\s+gate\b|\bcounted\s+by\s+code\b|\bcode\s+counts\b"
+    r"|\b(?:drafting|chronology|demand|litigation|records)\s+lane\b"
+)
+
 
 # ---------------------------------------------------------------------------
 # Scanner
@@ -475,8 +514,14 @@ def _at(text: str, pos: int, what: str) -> str:
     return f"line {_line_of(text, pos)} carries {what}"
 
 
-def check(body: str, surface: str, profile: str = PROFILE_PARALEGAL) -> list[Violation]:
+def check(
+    body: str, surface: str, profile: str = PROFILE_PARALEGAL, *, job_reply: bool = False
+) -> list[Violation]:
     """Every checklist rule ``body`` breaks on ``surface``. Empty means it complies.
+
+    ``job_reply`` adds ``system_vocabulary``: the body is a job's delivery reply
+    to the firm (a bound reply on a job's completion wake), where the work is
+    the brief, the file and the record, never "the job" (``_SYSTEM_VOCAB``).
 
     Returns every violation, one per rule, each quoting the first offending
     fragment, for the reason :func:`shared.format_check.check` gives: a writer
@@ -488,6 +533,8 @@ def check(body: str, surface: str, profile: str = PROFILE_PARALEGAL) -> list[Vio
     if spec is None or not isinstance(body, str) or not body.strip():
         return []
     rules, ceiling, on_wire = spec
+    if job_reply:
+        rules = (*rules, "system_vocabulary")
     dropped = _PROFILE_DROPS.get(profile, frozenset())
     if dropped:
         rules = tuple(rule for rule in rules if rule not in dropped)
@@ -640,6 +687,18 @@ def check(body: str, surface: str, profile: str = PROFILE_PARALEGAL) -> list[Vio
                     "caps_emphasis",
                     f"{_at(text, caps.start(), 'the capitals ' + repr(caps.group(0)))}. "
                     "Write the word in ordinary case.",
+                )
+            )
+    if "system_vocabulary" in rules:
+        vocab = _first(_SYSTEM_VOCAB, text)
+        if vocab:
+            found.append(
+                Violation(
+                    "system_vocabulary",
+                    f"{_at(text, vocab.start(), 'our own vocabulary ' + repr(_fragment(vocab.group(0))))}. "
+                    "The firm reads about its document, its file and its record, never about a job, "
+                    "a pipeline, a model or a lane. Say what the file shows in the firm's terms, for "
+                    'example "His reports were searched" or "The source for this is the complaint".',
                 )
             )
     if ceiling is not None:

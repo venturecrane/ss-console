@@ -376,8 +376,9 @@ to move for:` had no cases that fit; and `cases_skipped` cases already had
        moved."
    - In every message, never ask the firm to resubmit, repeat, narrow, split or change
      its request, never tell it to send anything to SMD or offer SMD as a route, and
-     never mention a gate, a token, a limit, a cap, a cost, a dollar figure or a job id.
-     A hold of ours is ours to solve. The only exceptions are the fixed wordings of
+     never mention a gate, a token, a limit, a cap, a cost, a dollar figure or a job id,
+     and never describe the work as a job, a run, a pipeline, a model or a lane (the
+     seat holds a reply that names the job). A hold of ours is ours to solve. The only exceptions are the fixed wordings of
      `staff_unresolved` and `requester_unresolved` above: which person a name means,
      and whose files "my" means when Smokeball cannot say, are the firm's answer.
 4. **Stop.** The one message is the whole of this mode. No second message, no follow-up,

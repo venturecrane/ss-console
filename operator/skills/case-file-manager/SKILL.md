@@ -197,7 +197,9 @@ the `job_id` once (that call is what raises SMD's shortfall alert) and end the t
        `smd_finishing`.
    - In every message, never ask the firm to resubmit, repeat, narrow or split its
      request, never tell it to send anything to SMD or offer SMD as a route, and
-     never mention a check, a limit, a cost, a dollar figure or a job id. The only
+     never mention a check, a limit, a cost, a dollar figure or a job id, and never
+     describe the work as a job, a run, a pipeline, a model or a lane (the seat holds
+     a reply that names the job). The only
      exception is the fixed wording of `staff_unresolved`: which person a name
      means is the firm's answer.
 4. **Stop.** The one message is the whole of this mode. No second message, no

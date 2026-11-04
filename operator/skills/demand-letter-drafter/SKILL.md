@@ -174,6 +174,9 @@ reply for a failed job in any case.
    - In every reply, never ask the firm to narrow, split or change its request, and
      never mention a token, a limit, a cap, a cost, a dollar figure or a job id. A
      limit of ours is ours to solve; the firm hears only what its file needs.
+   - Never describe the work as a job, a run, a pipeline, a model or a lane: say what
+     the letter, the file or the record shows ("His records were searched", never
+     "The job searched his records"). The seat holds a reply that names the job.
 4. **Stop.** The reply is the whole of this mode. No second reply, no follow-up email,
    no `smd_send_message`, no task, brief or memo. The seat refuses every send tool in a
    demand job's wake except the bound reply.
