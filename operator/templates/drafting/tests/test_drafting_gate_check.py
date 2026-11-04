@@ -381,7 +381,6 @@ class TestQuestionPairing(GateTestCase):
         self.assertIn("single point", notes[0]["message"])
         self.assertEqual(code, 0)
 
-
     # A reporter's text layer prints single-digit lines with a LEADING spacer
     # ("·9· ·Q."); lines 10+ print without it (2026-11-04, A&P ops workspace).
     LEADING_DOT = (
