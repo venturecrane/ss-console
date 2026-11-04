@@ -113,7 +113,7 @@ def _tool_of(wired_via: str) -> str:
 
 
 #: `wired_via` prefix for a control that fires as a mandatory stage of the
-#: medchron runner's fixed DAG (ss#2614) — neither a hook nor an agent-called
+#: jobs runner's fixed DAG (ss#2614) — neither a hook nor an agent-called
 #: tool. The remainder is the gate module's repo path.
 _RUNNER_PREFIX = "runner"
 
@@ -276,15 +276,15 @@ def test_wired_via_hooks_exist_in_surface() -> None:
 
 def test_runner_wired_controls_name_a_module_the_runner_ships() -> None:
     """ss#2614: a third wiring shape beside hooks and tools. `runner / <path>`
-    means the control fires because it is a mandatory stage of the medchron
+    means the control fires because it is a mandatory stage of the chronology
     runner's fixed DAG — no hook wraps it and no agent chooses to call it; the
     driver cannot reach delivery without it. The claim is checkable two ways:
     the named module exists in this tree, and the runner's DAG module names it
     (a gate module the DAG never binds would be inert by construction)."""
-    dag_src = (_OP / "runners" / "medchron" / "medchron" / "dag.py").read_text(encoding="utf-8")
-    stages_dir = _OP / "runners" / "medchron" / "medchron" / "stages"
+    dag_src = (_OP / "runners" / "jobs" / "jobs" / "medchron" / "dag.py").read_text(encoding="utf-8")
+    stages_dir = _OP / "runners" / "jobs" / "jobs" / "stages"
     stage_srcs = "\n".join(p.read_text(encoding="utf-8") for p in stages_dir.glob("*.py"))
-    audit_dir = _OP / "runners" / "medchron" / "medchron" / "audit"
+    audit_dir = _OP / "runners" / "jobs" / "jobs" / "medchron" / "audit"
     audit_srcs = "\n".join(p.read_text(encoding="utf-8") for p in audit_dir.glob("*.py"))
     for key, spec in _controls().items():
         path = _runner_of(spec.get("wired_via", ""))

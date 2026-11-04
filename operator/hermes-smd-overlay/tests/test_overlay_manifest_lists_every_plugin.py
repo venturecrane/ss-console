@@ -1,6 +1,6 @@
 """Every plugin directory is LISTED in the overlay's own manifest.
 
-THE DEFECT THIS CLOSES (2026-09-14). `hermes-smd-medchron` was never listed in
+THE DEFECT THIS CLOSES (2026-09-14). `hermes-smd-lanes` was never listed in
 `plugin.yaml`. The overlay enumerates the plugins it loads, so `register()` was
 never called and `medchron_job_submit` / `medchron_job_status` /
 `medchron_allowance` never existed on any surface, on any platform, from the day

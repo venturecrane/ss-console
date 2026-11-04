@@ -14,7 +14,7 @@ current state plus the requested changes and ``put_event_update`` sends it;
 ``with_responsible_attorney`` is the create-side rule: ``server.create_event``
 puts the matter's responsible attorney on every event it creates on a matter.
 ``create_event_proven`` is the create itself (the body, the POST and the
-read-back), shared by ``server.create_event`` and the medchron runner's apply of
+read-back), shared by ``server.create_event`` and the jobs runner's apply of
 an approved calendar line, so both write an event exactly one way.
 """
 

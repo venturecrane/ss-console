@@ -1,7 +1,7 @@
 """scripts/ci-publish-bundle.sh: the content check reads a listing file, never a pipe.
 
 2026-10-31, the first real publish (run 41238271283): `tar -tf | grep -qx` under
-`set -o pipefail` reported "the tarball holds no medchron/.venv/bin/medchron"
+`set -o pipefail` reported "the tarball holds no jobs/.venv/bin/jobs"
 right after `tar: stdout: write error`. grep -q exits at its first match, tar
 then fails writing the rest of the listing to the closed pipe, and pipefail
 turns a FOUND entry into a failed check.
@@ -31,7 +31,7 @@ def test_the_check_still_requires_both_entry_points() -> None:
     # The guaranteed set is one file the image also records (ADR 0100 W5).
     assert "operator/templates/jobs-bundle-paths.txt" in code
     listed = (SCRIPT.parents[1] / "operator" / "templates" / "jobs-bundle-paths.txt").read_text(encoding="utf-8")
-    for entry in ("medchron/.venv/bin/medchron", "connectors/smokeball/.venv/bin/smokeball-mcp"):
+    for entry in ("jobs/.venv/bin/jobs", "connectors/smokeball/.venv/bin/smokeball-mcp"):
         assert entry in listed.splitlines()
     assert 'for entry in "${guaranteed[@]}"; do' in code
     assert 'grep -qxF "${entry}" "${work}/listing.txt"' in code

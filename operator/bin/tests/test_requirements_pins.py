@@ -32,7 +32,7 @@ REQUIREMENTS = OPERATOR / "requirements"
 
 #: Our own packages, resolved from the tree and installed with --no-deps; they
 #: are deliberately absent from the requirement files (a path has no hash).
-LOCAL_PACKAGES = {"operator-connector-sdk", "smokeball-connector", "medchron"}
+LOCAL_PACKAGES = {"operator-connector-sdk", "smokeball-connector", "jobs"}
 
 PIN_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\]+)")
 RANGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\s*(>=|<=|~=|!=|<|>)")
@@ -71,7 +71,7 @@ def _image_venvs() -> list[tuple[Path, Path]]:
         if cdir.name in ("_sdk", "_contract") or not (cdir / "pyproject.toml").is_file():
             continue
         pairs.append((cdir / "pyproject.toml", REQUIREMENTS / f"connector-{cdir.name}.txt"))
-    pairs.append((OPERATOR / "runners/medchron/pyproject.toml", REQUIREMENTS / "medchron.txt"))
+    pairs.append((OPERATOR / "runners/jobs/pyproject.toml", REQUIREMENTS / "jobs.txt"))
     return pairs
 
 
@@ -87,7 +87,7 @@ def test_every_declared_dependency_is_pinned(pyproject: Path, requirements: Path
     # dependencies must be pinned in the connector's file.
     if "connectors" in pyproject.parts:
         declared |= _declared(OPERATOR / "connectors/_sdk/pyproject.toml") - LOCAL_PACKAGES
-    if pyproject.parent.name == "medchron":
+    if pyproject.parent.name == "jobs":
         declared |= _declared(OPERATOR / "connectors/smokeball/pyproject.toml") - LOCAL_PACKAGES
         declared |= _declared(OPERATOR / "connectors/_sdk/pyproject.toml") - LOCAL_PACKAGES
     pinned = _pinned(requirements)

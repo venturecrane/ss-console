@@ -68,6 +68,7 @@ RESERVED_PREFIXES: tuple[str, ...] = (
     "/opt/data/smokeball-extract-cache",
     "/opt/data/.smd",
     "/opt/data/medchron",
+    "/opt/data/jobs",
 )
 
 #: A record is prose the size of an email. Anything larger is not a record.

@@ -1,5 +1,5 @@
 # The kinds of job PROVEN on this seat (the lane-proof gate,
-# operator/runners/medchron/medchron/lane_proof.py; runbook
+# operator/runners/jobs/jobs/lane_proof.py; runbook
 # docs/runbooks/operator/lane-proof.md).
 #
 # None yet. Every job this seat is asked for waits (queued, never failed) and

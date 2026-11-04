@@ -164,8 +164,8 @@ def test_a_job_linked_credit_is_that_jobs_own_headroom_when_it_is_metered(verbs)
 def test_the_hold_no_longer_fires_when_the_credit_brings_the_job_under(verbs):
     """The runner's page check, fed the broker's figure exactly as the daemon
     stamps it (`job.stamp_period`)."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "runners" / "medchron"))
-    from medchron.limits import LimitHold, Limits
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "runners" / "jobs"))
+    from jobs.limits import LimitHold, Limits
 
     v, db = verbs
     _job(v, db, pages=800, cents=10, created_at=OCT, number="OTHER")

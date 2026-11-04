@@ -5,9 +5,9 @@
 #     cites one (16 tracker skills run /opt/connectors/smokeball/.venv/bin/python)
 #     is not refused by `fleet release --skills` on an image that no longer
 #     carries the runner itself.
-# Add a path here before a skill cites a new one under /opt/medchron or
+# Add a path here before a skill cites a new one under /opt/jobs or
 # /opt/connectors/smokeball; tests/fleet-skill-needs.test.ts fails otherwise.
-medchron/.venv/bin/medchron
-medchron/.venv/bin/python
+jobs/.venv/bin/jobs
+jobs/.venv/bin/python
 connectors/smokeball/.venv/bin/smokeball-mcp
 connectors/smokeball/.venv/bin/python

@@ -40,7 +40,7 @@ from . import bound_replies
 AUDIT_TYPE = "DELIVERY_PROOF_FAILED"
 PROVEN_TYPE = "DELIVERY_PROVEN"
 LANES = frozenset({"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile", "records"})
-#: Mirrors ``medchron/proof/gate.py`` CODES: the wire vocabulary.
+#: Mirrors ``jobs/proof/gate.py`` CODES: the wire vocabulary.
 CODES = frozenset(
     {
         "proof_missing",

@@ -414,11 +414,11 @@ def _read_medchron_jobs() -> dict[str, Any]:
     """The chronology-package ledger as the ``medchron_jobs`` kind (ss-console
     #2614). One page, newest first as the broker orders it; an unreachable or
     unconfigured broker is an honest empty page."""
-    from shared.medchron_client import MedchronBrokerClient, MedchronBrokerError
+    from shared.jobs_client import JobsBrokerClient, JobsBrokerError
 
     try:
-        rows, credit_rows = MedchronBrokerClient().list_with_credits()
-    except MedchronBrokerError:
+        rows, credit_rows = JobsBrokerClient().list_with_credits()
+    except JobsBrokerError:
         return {"entries": [], "cursor": None, "credits": []}
     entries = [{col: row.get(col) for col in _MEDCHRON_JOBS_COLUMNS} for row in rows]
     credits = [{col: row.get(col) for col in _MEDCHRON_CREDIT_COLUMNS} for row in credit_rows]

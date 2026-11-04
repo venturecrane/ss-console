@@ -116,7 +116,7 @@ const MECHANICS_CLIENT_PLAN = [
   '## Premises',
   '| Premise | Evidence |',
   '|---|---|',
-  '| the lane spool dir is writable | read `operator/runners/medchron/medchron/records_lane.py:40` |',
+  '| the lane spool dir is writable | read `operator/runners/jobs/jobs/records_lane.py:40` |',
   '| the seat grants Smokeball file reads | read `operator/customers/ashton-price/customer.yaml:120` |',
   '## Workstreams',
   'Build the lane.',

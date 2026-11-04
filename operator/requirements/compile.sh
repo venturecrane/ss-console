@@ -5,7 +5,7 @@
 #
 #   broker.txt                  the workspace broker venv (broker.in is the input)
 #   connector-<name>.txt        one per author-built connector under connectors/
-#   medchron.txt                the medchron runner venv
+#   jobs.txt                    the jobs runner venv
 #   hermes-overlay.txt          the overlay's deps Hermes does not install (below)
 #   hermes-security.txt         security overrides for the Hermes venv (below)
 #
@@ -80,7 +80,7 @@ for cdir in operator/connectors/*/; do
   [ -f "${cdir}pyproject.toml" ] || continue
   compile "connector-${name}.txt" "${cdir}pyproject.toml"
 done
-compile medchron.txt operator/runners/medchron/pyproject.toml
+compile jobs.txt operator/runners/jobs/pyproject.toml
 
 # hermes-overlay.txt: the overlay's third-party dependencies that the Hermes
 # venv does not already carry (2026-09-25 code review, Dependencies 3). The

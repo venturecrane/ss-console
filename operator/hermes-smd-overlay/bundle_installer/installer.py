@@ -10,7 +10,7 @@ INSTALLED LAYOUT::
     /opt/data/.smd-root/bundles/<name>/
       current -> <version>        (symlink; the commit point, swapped atomically)
       <version>/
-        medchron/ ...             (the tarball's members, root-owned, a+rX)
+        jobs/ ...             (the tarball's members, root-owned, a+rX)
         connectors/smokeball/ ...
         manifest.json             (the verified manifest bytes)
         VERSION                   (written last: present = import check passed)
@@ -89,7 +89,7 @@ DEFAULT_JOBS_RUNTIME = "/app/jobs-runtime.sh"
 #: Absolute symlink targets a bundle may carry. A venv's ``bin/python`` points
 #: at the base interpreter under /usr; nothing in a bundle points into the
 #: agent's volume, /tmp or /run.
-_LINK_ROOTS = ("/usr/", "/opt/medchron/", "/opt/connectors/")
+_LINK_ROOTS = ("/usr/", "/opt/jobs/", "/opt/connectors/")
 _CHUNK = 1024 * 1024
 _IMPORT_TIMEOUT_SECONDS = 300
 
@@ -204,7 +204,7 @@ def member_filter(spec: BundleSpec) -> Callable[[tarfile.TarInfo, str], tarfile.
     Only the spec's members, only files, dirs and links, links that stay in the
     bundle (absolute ones only into :data:`_LINK_ROOTS`), owner root, modes
     a+rX with no setuid and no group/other write (what the image gives
-    ``/opt/medchron`` today: ``chown -R root:root`` and ``chmod -R a+rX``).
+    ``/opt/jobs`` today: ``chown -R root:root`` and ``chmod -R a+rX``).
     """
 
     def _filter(member: tarfile.TarInfo, dest: str) -> tarfile.TarInfo:

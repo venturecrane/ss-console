@@ -3,8 +3,8 @@
 
 An update INTO the delivered chronology: the named documents go into the
 delivered chronology, which comes back as one complete document
-(``operator/runners/medchron/medchron/update/``). The runner's
-``medchron.job.parse_update`` checks the same shape again on the other side.
+(``operator/runners/jobs/jobs/medchron/update/``). The runner's
+``jobs.medchron.job.parse_update`` checks the same shape again on the other side.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import json
 import re
 from typing import Any
 
-#: The one update kind (medchron/job.py UPDATE_INTO): the named documents go
+#: The one update kind (jobs/medchron/job.py UPDATE_INTO): the named documents go
 #: INTO the delivered chronology, which comes back as one complete document.
 UPDATE_INTO = "delivered_chronology"
 _FILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -31,7 +31,7 @@ ADDED_COLUMNS = (
 
 def update_block(req: dict[str, Any], env: dict[str, Any]) -> dict[str, Any]:
     """``{"update": {...}}`` for an update into the delivered chronology, ``{}``
-    when the request is not one. Checked the way ``medchron.job.parse_update``
+    when the request is not one. Checked the way ``jobs.medchron.job.parse_update``
     checks it again: ONE client (a delivered chronology is one client's), the
     documents to read named by id (``selection.include_file_ids``), and the
     delivered document's id when the skill read it off the matter (absent,

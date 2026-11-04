@@ -131,9 +131,9 @@ def _tips() -> list[dict[str, str]] | None:
 
 
 def _job_reader(days: int) -> dict[str, Any]:
-    from shared.medchron_client import MedchronBrokerClient
+    from shared.jobs_client import JobsBrokerClient
 
-    return MedchronBrokerClient().help_job_signals(days)
+    return JobsBrokerClient().help_job_signals(days)
 
 
 def run_review() -> dict[str, Any]:

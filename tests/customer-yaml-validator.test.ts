@@ -593,7 +593,7 @@ describe('validate — EnumViolation', () => {
   })
 
   // machine.lane_memory_mb (2026-10-13): optional lane cgroup caps in MiB; the
-  // seat entrypoint exports them to the medchron daemon.
+  // seat entrypoint exports them to the jobs daemon.
   it('leaves machine.lane_memory_mb absent when unauthored', () => {
     const r = validate(validFixture())
     expect(r.ok).toBe(true)

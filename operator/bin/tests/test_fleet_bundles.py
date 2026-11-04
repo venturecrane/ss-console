@@ -288,7 +288,7 @@ def _git_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dic
     commit("skills-only", "operator/skills/x/SKILL.md")
     commit("docs-only", "docs/readme.md")
     commit("ci-only", ".github/workflows/deploy.yml")
-    commit("runner", "operator/runners/medchron/x.py")
+    commit("runner", "operator/runners/jobs/x.py")
     commit("core", "operator/hermes-smd-overlay/x.py")
     commit("skills-after-core", "operator/skills/y/SKILL.md")
     git("update-ref", "refs/remotes/origin/main", shas["skills-after-core"])

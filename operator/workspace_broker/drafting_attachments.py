@@ -3,7 +3,7 @@
 An attorney who drafted his own sets of discovery attaches them to the request
 ("put these in the caption on pleading paper"); the drafting job places each
 one in the court's caption on the firm's paper (ss-console
-``runners/medchron/medchron/drafting/place.py``). The overlay's
+``runners/jobs/jobs/drafting/place.py``). The overlay's
 ``drafting_job_submit`` reads the attachments of the request email itself
 (the turn's verified origin, never a file the model names) and sends their
 bytes in the envelope; this module is the broker's check of that field, and

@@ -1,5 +1,5 @@
 /**
- * Scrub gate for the medchron runner (ss#2613, ADR 0087).
+ * Scrub gate for the jobs runner (ss#2613, ADR 0087).
  *
  * The runner is firm-agnostic code in a PUBLIC repo, ported from a pipeline whose
  * source carried a firm's provider aliases, client surnames, and matter numbers

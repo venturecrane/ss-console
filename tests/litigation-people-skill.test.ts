@@ -24,7 +24,7 @@ const TOOL = flat(
   readFileSync(
     resolve(
       import.meta.dirname,
-      '../operator/hermes-smd-overlay/plugins/hermes-smd-medchron/litigation.py'
+      '../operator/hermes-smd-overlay/plugins/hermes-smd-lanes/litigation.py'
     ),
     'utf8'
   )

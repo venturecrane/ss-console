@@ -316,7 +316,7 @@
         "warned_count": 1,
         "failed_streak": 2,
         "failed": ["retired-skills-absent"],
-        "warned": ["medchron-daemon-idle"]
+        "warned": ["jobs-daemon-idle"]
       }
     },
     {

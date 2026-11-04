@@ -1,13 +1,13 @@
 """The kinds of job proven on this seat, as the request cards read them.
 
-The seat's lane-proof gate lives in ss-console's medchron runner
-(``operator/runners/medchron/medchron/lane_proof.py``): the root daemon holds a
+The seat's lane-proof gate lives in ss-console's jobs runner
+(``operator/runners/jobs/jobs/lane_proof.py``): the root daemon holds a
 job whose kind is not proven, and notes ``lane_unproven: <key>`` on its ledger
 row. This module is the READ side the gate's heartbeat leg needs to page SMD
 (``request_cards``): the same two root-owned files, read the same way.
 
 * ``lane-proofs.yaml``          the authored seed and revocations, from the vault;
-* ``lane-proofs.runtime.json``  events ``medchron lane-proof accept|revoke`` appends.
+* ``lane-proofs.runtime.json``  events ``jobs lane-proof accept|revoke`` appends.
 
 A key is proven when the authored file does not revoke it and either its last
 runtime event is ``proven`` or it has none and the authored file proves it.

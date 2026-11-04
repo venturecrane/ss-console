@@ -5,7 +5,7 @@ WHY (2026-10-15). The Operator filed a document on SMD's request and could not
 tell the colleague who asked: a turn an inbound email opened may answer only
 its sender, and the only SMD-initiated way for the Operator to speak was a
 job's completion wake. A note job is that wake with no job behind it. The root
-command ``medchron.note_by_smd`` records the note here, then wakes the
+command ``jobs.note_by_smd`` records the note here, then wakes the
 smd-note skill, whose DELIVER mode binds ``note_job`` (``reply_binding.py``)
 and sends the recorded words, verbatim, as a reply on the colleague's email,
 copying that email's vetted participants (``MsGraphOps._request_participants``).
@@ -59,7 +59,7 @@ corroborate against, its checks are:
   bound into the digest: nothing on the seat can vouch for them, so SMD reading
   them is the check.
 
-WHO VOUCHES FOR ``matters``. ``medchron.note_by_smd`` resolves each number on
+WHO VOUCHES FOR ``matters``. ``jobs.note_by_smd`` resolves each number on
 Smokeball (``lookup_matter``) and passes what it found. This verb is root only,
 and it trusts root's list exactly as it trusts root's words: the guard is
 against SMD typing the wrong matter number, not against root. The live run

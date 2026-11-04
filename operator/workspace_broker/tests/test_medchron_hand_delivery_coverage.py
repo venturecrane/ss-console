@@ -1,4 +1,4 @@
-"""A hand-recorded update delivery (``medchron.deliver_by_smd``) ADDS to the
+"""A hand-recorded update delivery (``jobs.medchron.deliver_by_smd``) ADDS to the
 matter's coverage; it never replaces what an earlier delivery covered.
 
 The tool records THIS delivery's sets on its own row. The ledger unions every

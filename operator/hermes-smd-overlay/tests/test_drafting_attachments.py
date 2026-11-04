@@ -1,5 +1,5 @@
 """A discovery-set request carries the request email's own Word documents
-(hermes-smd-medchron/drafting.py ``_request_attachments``): an attorney's own
+(hermes-smd-lanes/drafting.py ``_request_attachments``): an attorney's own
 sets, for the job to place in the court's caption on the firm's paper
 (ss-console drafting/place.py). Read by the turn's VERIFIED origin message id,
 never an id or a file the model names. Each test fails if its guard is removed."""

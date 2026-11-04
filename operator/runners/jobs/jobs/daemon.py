@@ -1,0 +1,683 @@
+"""The on-Machine runner daemon (routine 11, ss#2614): `python -m jobs.daemon`.
+
+Runs as root under the entrypoint's respawn loop, forked before the exec-drop.
+Watches the queue the broker writes (`<run_dir>/queue/<job_id>.json`), runs
+one job at a time as the dedicated `jobs` uid under a memory cap, and
+reports every transition back through the broker (`medchron_job_record`, root
+only), which writes the ledger row and the audit row under its own uid.
+
+What it holds itself to:
+
+* One job at a time, oldest first (job ids are ULIDs; the file name sorts).
+* An envelope with no ledger row is quarantined, never run.
+* A seat at HARD_STOP runs nothing: the job is recorded `held` once, stays
+  queued, and is re-checked every poll without a new record.
+* A crash mid-job resumes at the same job: the driver's state file skips the
+  stages that finished; the daemon re-runs `jobs run` on restart.
+* The child gets an allow-listed env: the Anthropic key (the seat's workspace,
+  ADR 0062), the Smokeball credentials, the firm config path, and the job
+  marker JOBS_DAEMON_JOB_ID (the Smokeball connector's audit-record
+  exemption keys on it). Nothing else.
+* Workdirs are wiped 72 h after a terminal state, and after a longer window
+  when a job stopped and waited (`retention.py`) -- never before either.
+* Liveness is a tick file and a heartbeat json (`memory_cap` says whether the
+  cgroup controller was present; boot smoke reads it). No Sentry here or in
+  the child: exception locals carry the envelope.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import signal
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable
+
+from .broker_client import BrokerClient, BrokerError
+from .medchron.covered import delivery_fields, wake_folder_lines
+from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
+
+from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, verdict as verdict_mod, wake_grace
+from . import resume as resume_mod, retention
+from .medchron import allowance as allowance_mod, config as config_mod, job as job_mod
+from .proof import holds as proof_holds, watch as proof_watch
+from .skill_load import load_line
+from .stages import vision_seed
+
+logger = logging.getLogger("jobs.daemon")
+
+RUN_DIR_ENV = "SMD_JOBS_RUN_DIR"
+DEFAULT_RUN_DIR = "/run/smd-medchron"
+SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
+STICKY_DB_ENV = "SMD_STICKY_STOP_DB_PATH"
+DEFAULT_STICKY_DB = "/opt/data/smd/sticky_stop.db"
+POLL_ENV = "SMD_JOBS_POLL_SECONDS"
+MEMORY_MAX_ENV = "SMD_MEDCHRON_MEMORY_MAX_BYTES"
+DEFAULT_MEMORY_MAX = 2560 * 1024 * 1024
+WIPE_HOURS_ENV = "SMD_JOBS_WIPE_HOURS"
+DEFAULT_WIPE_HOURS = 72
+RUNNER_BIN = "/opt/jobs/.venv/bin/jobs"
+GATE_URL_ENV = "SMD_JOBS_GATE_URL"
+DEFAULT_GATE_URL = "http://127.0.0.1:8643"
+WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"
+WAKE_MAX_ATTEMPTS = 5
+#: ``main``'s exit when the Machine's stop signal ended the loop (128 + SIGINT,
+#: the shell's own convention). ``operator/templates/entrypoint.sh`` does not
+#: respawn on it; every other exit is a crash and is respawned.
+STOPPED_EXIT = 130
+CHILD_UID_NAME = "jobs"
+CHILD_ENV_PASS = (
+    "ANTHROPIC_API_KEY",
+    "SMOKEBALL_REGION",
+    "SMOKEBALL_ENVIRONMENT",
+    "SMOKEBALL_CLIENT_ID",
+    "SMOKEBALL_CLIENT_SECRET",
+    "SMOKEBALL_API_KEY",
+    "SMOKEBALL_AUTH_MODE",
+    "SMOKEBALL_ACCOUNT_ID",
+    "SMOKEBALL_REFRESH_TOKEN_FILE",
+    "MEDCHRON_FIRM_CONFIG",
+    "JOBS_PRICING_JSON",
+    "CUSTOMER_SLUG",
+)
+TERMINAL = frozenset({"delivered", "failed"})
+
+
+def default_runner_cmd() -> list[str]:
+    return [
+        "setpriv",
+        f"--reuid={CHILD_UID_NAME}",
+        f"--regid={CHILD_UID_NAME}",
+        "--init-groups",
+        "--no-new-privs",
+        "nice",
+        "-n",
+        "10",
+        RUNNER_BIN,
+        "run",
+    ]
+
+
+@dataclass
+class Daemon:
+    run_dir: Path
+    broker: Any
+    runner_cmd: list[str]
+    customer_slug: str
+    sticky_db: str = DEFAULT_STICKY_DB
+    cgroup_root: Path = CGROUP_ROOT
+    memory_max: int = DEFAULT_MEMORY_MAX
+    wipe_hours: float = DEFAULT_WIPE_HOURS
+    held_wipe_hours: float = retention.DEFAULT_HELD_WIPE_HOURS
+    child_uid: str | None = None
+    clock: Callable[[], float] = time.time
+    child_env: dict[str, str] = field(default_factory=dict)
+    started_at: float = field(default_factory=time.time)
+    #: Wake id -> when THIS process first found the gateway unreachable for it
+    #: (``wake_grace``). Never written to the volume.
+    _unreachable_since: dict[str, float] = field(default_factory=dict)
+    jobs_run: int = 0
+    wakes_failed: int = 0
+    #: The loop's stop flag, bound by ``run_forever``; a lane reads it when its
+    #: child exits to tell a Machine stop from a failure.
+    stopping: Callable[[], bool] = lambda: False
+    #: Explicit firm-config path; None resolves the env/default the seat uses.
+    firm_config: str | None = None
+    #: How often a running job's beat thread rewrites the heartbeat
+    #: (``child.run_child``), and how long a stop waits for a child to
+    #: checkpoint before terminating it.
+    heartbeat_seconds: float = 30.0
+    drain_seconds: float = field(default_factory=child_mod.drain_seconds)
+    #: The quiesce lines this lane already logged (``quiesce.py``: once each).
+    _quiesce_logged: set[str] = field(default_factory=set)
+    gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
+    wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
+    #: What a lane names itself by: the wake's handoff id prefix, the memory
+    #: cgroup, and the heartbeat file. The demand and drafting lanes override
+    #: them (the drafting lane also joins the demand lane's memory cgroup).
+    LANE = "medchron"
+    HEARTBEAT = "heartbeat"
+
+    # -- paths -------------------------------------------------------------
+    @property
+    def queue(self) -> Path:
+        return self.run_dir / "queue"
+
+    @property
+    def jobs(self) -> Path:
+        return self.run_dir / "jobs"
+
+    def job_dir(self, job_id: str) -> Path:
+        return self.jobs / job_id
+
+    # -- liveness ------------------------------------------------------------
+    def heartbeat(self, *, running: str | None) -> None:
+        cap = memory_cap_mode(self.cgroup_root)
+        payload = {
+            "pid": os.getpid(),
+            "started_at": self.started_at,
+            "last_poll_at": self.clock(),
+            "jobs_run": self.jobs_run,
+            "running": running,
+            "memory_cap": cap,
+            "queued": len(self._queued()),
+            "wakes_pending": len(self._wakes_pending()),
+            "wakes_failed": self.wakes_failed,
+            "quiesced": quiesce.active(self),
+        }
+        tmp = self.run_dir / f".{self.HEARTBEAT}.tmp"
+        try:
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            os.chmod(tmp, 0o644)
+            tmp.replace(self.run_dir / f"{self.HEARTBEAT}.json")
+            (self.run_dir / ("tick" if self.LANE == "medchron" else f"{self.LANE}-tick")).touch()
+        except OSError as exc:  # the daemon IS the thing the heartbeat reports on
+            logger.warning("heartbeat write failed: %s", exc)
+
+    # -- queue ---------------------------------------------------------------
+    def _queued(self) -> list[Path]:
+        if not self.queue.is_dir():
+            return []
+        return sorted(p for p in self.queue.glob("*.json") if not p.name.startswith("."))
+
+    def _daemon_state(self, job_id: str) -> dict[str, Any]:
+        p = self.job_dir(job_id) / "daemon.json"
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+
+    def _write_state(self, job_id: str, **fields: Any) -> dict[str, Any]:
+        st = self._daemon_state(job_id)
+        st.update(fields)
+        p = self.job_dir(job_id) / "daemon.json"
+        p.write_text(json.dumps(st, indent=1), encoding="utf-8")
+        return st
+
+    def _beat(self, job_id: str, stop: Any) -> None:
+        while not stop.wait(self.heartbeat_seconds):
+            self.heartbeat(running=job_id)
+
+    def _in_progress(self) -> list[str]:
+        # A quiesced lane resumes nothing either: a resume starts a child.
+        if not self.jobs.is_dir() or quiesce.active(self):
+            return []
+        out = []
+        for d in sorted(self.jobs.iterdir()):
+            st = self._daemon_state(d.name)
+            if not (d.is_dir() and st.get("state") not in TERMINAL and st.get("claimed")):
+                continue
+            # A runner-held job (a refusal, an unexplained file, an unmatched
+            # folder) is PARKED: it needs a person, and re-running it changes
+            # nothing but the audit log (live-caught 2026-08-31: a cap-refused
+            # job re-ran every tick, one RUNNING/HELD pair per cycle). Only a
+            # seat-pause hold resumes by itself, via the sticky-stop path.
+            if st.get("state") == "held" and not st.get("held_paused"):
+                continue
+            out.append(d.name)
+        return out
+
+    def claim_next(self) -> str | None:
+        """Move the oldest envelope into its job dir. A file the broker has no
+        row for is quarantined. An idle lane runs a requested proof first; a
+        job whose kind is not proven on this seat waits (``lane_proof.py``)."""
+        if quiesce.active(self) or proof_run.run_pending(self):
+            return None
+        for env_path in self._queued():
+            job_id = env_path.stem
+            try:
+                row = self.broker.status(job_id)
+            except BrokerError as exc:
+                logger.warning("broker unreachable while claiming %s: %s", job_id, exc)
+                return None
+            if row is None:
+                q = self.queue / "quarantine"
+                q.mkdir(exist_ok=True, mode=0o700)
+                env_path.replace(q / env_path.name)
+                logger.error("quarantined %s: the broker has no ledger row for it", job_id)
+                continue
+            if not lane_proof.admits(self, job_id, env_path, row):
+                continue
+            jd = self.job_dir(job_id)
+            jd.mkdir(parents=True, exist_ok=True, mode=0o700)
+            env_path.replace(jd / "envelope.json")
+            self._write_state(job_id, claimed=True, state="submitted", claimed_at=self.clock(), attempts=0)
+            return job_id
+        return None
+
+    # -- one job ---------------------------------------------------------------
+    def _write_job_yaml(self, job_id: str) -> Path:
+        jd = self.job_dir(job_id)
+        env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
+        data_root = jd / "data"
+        data_root.mkdir(exist_ok=True)
+        doc: dict[str, Any] = {
+            "slug": self.customer_slug,
+            "matter": env["matter"],
+            "units": env["units"],
+            "incident": env["incident"],
+            "data_root": str(data_root),
+            # The install-level tree the entrypoint pre-seeds from the vault
+            # every boot (`controls/controls.json` + PDFs, `controls/icd/`,
+            # both staged there by provision-customer.sh): the run dir itself,
+            # shared by every job, root-owned and read-only to the child. The
+            # child never fetches into it (only a laptop install, where
+            # install_root == data_root, fetches its own ICD tables). A fresh
+            # per-job data_root can never carry the classifier's falsifier, so
+            # a job that resolved controls there refused forever (2026-09-04).
+            "install_root": str(self.run_dir),
+        }
+        for key in (
+            "injuries",
+            "cap_usd",
+            "allowance_remaining_documents",
+            "allowance_remaining_pages",
+            "selection",
+            "requested_by",
+            "request_ref",
+            "update",
+        ):
+            if env.get(key) is not None:
+                doc[key] = env[key]
+        doc.update(vision_seed.staged_fields(env, self.run_dir, job_id))
+        # The month's state is read FRESH here, on every run and every resume,
+        # never taken from the envelope: the envelope's copy was true when the
+        # job was submitted and is stale the moment any other job records cents.
+        # This job's own row is excluded so a resume is not metered against the
+        # spend it already recorded.
+        job_mod.stamp_period(doc, self.broker.allowance(exclude_job_id=job_id))
+        import yaml
+
+        (jd / "job.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+        self._chown_child(jd)
+        return jd
+
+    def _chown_child(self, path: Path) -> None:
+        if not self.child_uid:
+            return
+        try:
+            import pwd
+
+            pw = pwd.getpwnam(self.child_uid)
+        except KeyError:
+            logger.error("child uid %s does not exist; the child would run as root, refusing", self.child_uid)
+            raise
+        for p in [path, *path.rglob("*")]:
+            os.chown(p, pw.pw_uid, pw.pw_gid)
+        # The child owns its job dir outright; nobody else needs a mode bit
+        # (root reads regardless, and the broker never traverses jobs/).
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - owner-only; the rule fires on any chmod, and 0700 is the tightest mode that lets the child write its own workdir.
+        os.chmod(path, 0o700)
+
+    def _cgroup_preexec(self) -> Callable[[], None] | None:
+        mode = memory_cap_mode(self.cgroup_root)
+        if mode == "none":
+            return None
+        if mode == "cgroup2":
+            cg = self.cgroup_root / self.LANE
+            limit_file, limit = cg / "memory.max", str(self.memory_max)
+        else:  # cgroup1: the hybrid layout Fly guests run
+            cg = self.cgroup_root / "memory" / self.LANE
+            limit_file, limit = cg / "memory.limit_in_bytes", str(self.memory_max)
+        try:
+            cg.mkdir(exist_ok=True)
+            limit_file.write_text(limit)
+        except OSError as exc:
+            logger.error("cgroup setup failed (%s); running uncapped", exc)
+            return None
+
+        def preexec() -> None:
+            (cg / "cgroup.procs").write_text(str(os.getpid()))
+
+        return preexec
+
+    def run_job(self, job_id: str) -> str:
+        # The firm config first, before anything is recorded. A seat whose
+        # firm.yaml has not caught up with this runner's schema DEFERS: the job
+        # stays claimed, nothing is written to the ledger, and the next tick
+        # tries again. That is what makes the rollout safe in either order --
+        # customer.yaml and firm.yaml can land minutes apart without a job
+        # failing in between.
+        try:
+            config_mod.load(self.firm_config)
+        except config_mod.ConfigError as exc:
+            logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
+            return "deferred"
+        try:
+            jd = self._write_job_yaml(job_id)
+        except BrokerError as exc:
+            logger.warning("could not read the month's allowance for %s, deferring: %s", job_id, exc)
+            return "deferred"
+        try:
+            self.broker.record(job_id, "running", {})
+        except BrokerError as exc:
+            logger.warning("could not record running for %s: %s", job_id, exc)
+            return "deferred"
+        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
+        # The job marker: the Smokeball connector exempts the jobs uid from
+        # recording each write in the audit ledger ONLY on a job this daemon
+        # launched, because this job's own MEDCHRON_JOB_* rows record it. A person
+        # running as jobs by hand has no marker and must name themselves or
+        # is refused (smokeball_connector/write_record.py).
+        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+        env.setdefault("JOBS_SEAT", "client")
+        env.setdefault("PATH", "/usr/bin:/bin")
+        env.setdefault("HOME", str(jd))
+        verdict_mod.clear(jd)
+        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
+            code, out = child_mod.run_child(
+                self,
+                job_id,
+                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
+                cwd=jd,
+                env=env,
+                log=log,
+                pidfile=self.run_dir / "child.pid",
+                preexec=self._cgroup_preexec(),
+            )
+        self.jobs_run += 1
+        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
+            return "interrupted"
+        return self._report(job_id, code, out or "")
+
+    def _report(self, job_id: str, code: int, out: str) -> str:
+        outcomes = verdict_mod.read(self.job_dir(job_id), out)
+        stage: str | None = None
+        if not outcomes:  # `verdict.read` always returns a list; empty is "no verdict from either source"
+            state, fields = "failed", {"reason": verdict_mod.lost(code)[:500]}
+        else:
+            rank = {"delivered": 0, "dry_run": 0, "held": 1, "refused": 2, "failed": 3}
+            worst = max(outcomes, key=lambda o: rank.get(str(o.get("outcome")), 3))
+            outcome = str(worst.get("outcome"))
+            # Each unit reports JOB-level figures, never its own: `pages` is the
+            # matter's one extracted file and `dollars` the job's whole ledger
+            # set (driver.Budget reads every unit's). So the job's figure is
+            # the largest any unit saw, taken once. Summed, a joint job was
+            # debited its shared file once per client (2026-10-28).
+            cents = int(round(max(float(o.get("dollars") or 0) for o in outcomes) * 100))
+            pages = int(max(int(o.get("pages") or 0) for o in outcomes))
+            documents = int(max(int(o.get("documents") or 0) for o in outcomes))
+            reason = worst.get("reason")
+            stage = str(worst.get("stage") or "") or None
+            if outcome == "refused":
+                state, reason = "held", f"refused: {reason}"
+            elif outcome == "delivered":
+                state = "delivered"
+            elif outcome == "held":
+                state = "held"
+            else:
+                state = "failed"
+            fields = {"documents": documents, "pages": pages, "cents": cents}
+            if reason:
+                fields["reason"] = str(reason)[:500]
+            if state == "delivered":
+                # The delivery's own fields, including the covered/uncovered
+                # document id sets a later UPDATE reads its delta from.
+                fields.update(delivery_fields(worst, outcomes))
+        # An infrastructure ending (network, model API, a slow index, a runner
+        # killed by a signal) is retried after a delay, bounded (requeue.py):
+        # before settle, so a retry is not a page.
+        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
+            return "requeued"
+        # Proven delivery: a dry run is never a delivery, a delivered claim
+        # without its proof is a failure, and a hold or read-back failure pages.
+        state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
+        try:
+            self.broker.record(job_id, state, fields)
+        except BrokerError as exc:
+            logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
+        finished = self.clock() if state in TERMINAL or state == "held" else None
+        self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
+        if finished is not None and proof_watch.wake_owed(self, state, fields.get("reason")):
+            self._write_state(
+                job_id,
+                wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
+            )
+        return state
+
+    # -- the deliver wake (ss#2616) --------------------------------------------
+    def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:
+        """The handoff task text. Only broker/envelope-authored fields ride it
+        (requester, ref, matter number, counts, folder id) — never a file name,
+        a client name, or a DOB: the deliver turn reads the folder itself, so
+        no tenant-authored string reaches the unfenced wake prompt.
+
+        A hold or failure names WHERE it stopped, never why: `stage` is a DAG
+        stage name (code-authored vocabulary), whereas the runner's `reason` is
+        free text that quotes matter file names and folder names (a decision
+        hold lists the files it could not place). The ledger row and the
+        console keep the full reason for a person reading their own tenant."""
+        env: dict[str, Any] = {}
+        try:
+            env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        matter_no = (env.get("matter") or {}).get("number", "")
+        from .medchron.update import outcome as update_outcome
+
+        # Code-authored: an update INTO the delivered chronology says so, plus
+        # an already-current update's counts per reason.
+        upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env)
+        lines = [
+            f"Run the medical-chronology-maintainer skill's DELIVER mode for chronology job {job_id}.",
+            load_line("medical-chronology-maintainer"),
+            f"Outcome: {state}. Matter number: {matter_no}.",
+            update_outcome.totals_line(fields, len(upd) > 1),
+            *upd,
+        ]
+        lines.extend(wake_folder_lines(state, fields))
+        lines.extend(allowance_mod.credit_wake_lines(getattr(self, "broker", None), job_id, state, fields))
+        if state != "delivered":
+            lines.append(f"Held at: {stage or 'runner (no verdict)'}.")
+        if state == "held":  # the firm-safe token the skill words; the reason stays SMD's
+            lines.append(proof_holds.wake_line("medchron", fields.get("reason")))
+        requester = env.get("requested_by") or ""
+        ref = env.get("request_ref") or ""
+        none_note = "(none - a rehearsal submission; report in the memo, create no task, send nothing)"
+        lines.append(f"Requester: {requester or none_note}.")
+        if ref:
+            lines.append(f"Request ref: {ref}.")
+        return "\n".join(lines)
+
+    def _wakes_pending(self) -> list[str]:
+        if not self.jobs.is_dir():
+            return []
+        return [
+            d.name for d in sorted(self.jobs.iterdir()) if (self._daemon_state(d.name).get("wake") or {}).get("pending")
+        ]
+
+    def dispatch_wakes(self) -> None:
+        """At-most-once with a loud loss: consumed on a 2xx answer AND on a
+        timeout after the request was sent (a duplicate deliver turn is worse
+        than a lost one). Consuming a wake is NOT counting the reply as sent:
+        a consumed wake arms the reply watch (``proof/watch.py``), which pages
+        SMD when the requester's reply is not seen in Sent Items in time. A
+        paused seat's 503 retries without consuming an attempt, and so does a
+        gateway that cannot be reached at all, for
+        ``wake_grace.WAKE_UNREACHABLE_GRACE_SECONDS`` of this process; five real failures
+        write a same-state ledger note (an audit row) and page."""
+        self._dispatch_wakes()
+        proof_watch.check_reply_watches(self)
+        proof_watch.check_reroutes(self)
+
+    def _dispatch_wakes(self) -> None:
+        import http.client
+        from urllib.parse import urlparse
+
+        for job_id in self._wakes_pending():
+            wake = dict(self._daemon_state(job_id).get("wake") or {})
+            if not self.wake_secret:
+                logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
+                return
+            # Each distinct wake gets its own id and every re-post of one wake the
+            # same id (`rewake.handoff_id`): the gateway drops a reused id with the
+            # same text and refuses one with different text (admission_conflict).
+            # The number is persisted BEFORE the post (`rewake.post_id`).
+            body = json.dumps({"handoff_id": rewake.post_id(self, job_id, wake), "task": wake["task"]})
+            url = urlparse(self.gate_url)
+            sent = False
+            outcome = "error"
+            try:
+                conn = http.client.HTTPConnection(url.hostname or "127.0.0.1", url.port or 8643, timeout=15)
+                try:
+                    conn.connect()
+                    sent = True
+                    conn.request(
+                        "POST",
+                        "/webhooks/handoff",
+                        body=body,
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.wake_secret}"},
+                    )
+                    resp = conn.getresponse()
+                    raw = resp.read()
+                    if 200 <= resp.status < 300:
+                        outcome = "delivered"
+                    elif resp.status == 503 and b"paused" in raw:
+                        outcome = "paused"
+                    else:
+                        outcome = f"status {resp.status}"
+                finally:
+                    conn.close()
+            except Exception as exc:  # noqa: BLE001 - each shape maps to a wake decision
+                outcome = wake_grace.failed_outcome(exc, sent=sent)
+            # Before every other branch, so any answer (delivered, paused, a
+            # timeout) ends this wake's grace and a later outage starts afresh.
+            if wake_grace.waiting(self, job_id, outcome):
+                continue
+            if outcome == "delivered" or (sent and outcome.startswith("timeout")):
+                wake.update(pending=False, sent_at=self.clock(), outcome=outcome)
+                self._write_state(job_id, wake=wake)
+                proof_watch.arm_reply_watch(self, job_id)
+                continue
+            if outcome == "paused":
+                logger.info("seat paused; wake for %s stays pending without consuming an attempt", job_id)
+                continue
+            wake["attempts"] = int(wake.get("attempts", 0)) + 1
+            logger.warning(
+                "wake for %s failed (%s), attempt %d/%d", job_id, outcome, wake["attempts"], WAKE_MAX_ATTEMPTS
+            )
+            if wake["attempts"] >= WAKE_MAX_ATTEMPTS:
+                wake.update(pending=False, outcome=f"failed: {outcome}")
+                self.wakes_failed += 1
+                try:
+                    state = self._daemon_state(job_id).get("state") or "failed"
+                    self.broker.record(job_id, state, {"wake": {"wake_failed": True, "outcome": outcome}})
+                except BrokerError as exc:
+                    logger.error("could not record the lost wake for %s: %s", job_id, exc)
+                proof_watch.wake_lost(self, job_id, outcome)
+            self._write_state(job_id, wake=wake)
+
+    # -- the loop ------------------------------------------------------------------
+    def _paused(self, job_id: str) -> bool:
+        level = sticky_level(self.sticky_db)
+        if level != "HARD_STOP":
+            return False
+        if not self._daemon_state(job_id).get("held_paused"):
+            try:
+                self.broker.record(job_id, "held", {"reason": "seat paused (sticky stop HARD_STOP)"})
+            except BrokerError as exc:
+                logger.warning("could not record the pause hold for %s: %s", job_id, exc)
+            self._write_state(job_id, state="held", held_paused=True)
+        return True
+
+    def wipe_expired(self) -> list[str]:
+        """Terminal jobs at `wipe_hours`, parked ones at `held_wipe_hours`
+        (`retention.py` carries the policy and why it is two windows)."""
+        return retention.wipe_expired(self, TERMINAL)
+
+    def tick(self) -> str | None:
+        """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
+        resume_mod.take_requests(self)
+        self.wipe_expired()
+        self.dispatch_wakes()
+        current = requeue.due(self, self._in_progress())
+        job_id = current[0] if current else self.claim_next()
+        self.heartbeat(running=job_id)
+        if job_id is None:
+            return None
+        if self._paused(job_id):
+            return "paused"
+        if self._daemon_state(job_id).get("held_paused"):
+            self._write_state(job_id, held_paused=False)
+        return self.run_job(job_id)
+
+    def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
+        self.stopping = stop
+        while not stop():
+            try:
+                self.tick()
+            except Exception:
+                logger.exception("tick failed")
+            slept = 0.0
+            while slept < poll_seconds and not stop():
+                time.sleep(min(1.0, poll_seconds - slept))
+                slept += 1.0
+
+
+def _require(name: str) -> str:
+    v = os.environ.get(name, "").strip()
+    if not v:
+        raise SystemExit(f"{name} is required")
+    return v
+
+
+def build() -> Daemon:
+    run_dir = Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
+    return Daemon(
+        run_dir=run_dir,
+        broker=BrokerClient(_require(SOCKET_ENV)),
+        runner_cmd=default_runner_cmd(),
+        customer_slug=_require("CUSTOMER_SLUG"),
+        sticky_db=os.environ.get(STICKY_DB_ENV) or DEFAULT_STICKY_DB,
+        memory_max=int(os.environ.get(MEMORY_MAX_ENV) or DEFAULT_MEMORY_MAX),
+        wipe_hours=float(os.environ.get(WIPE_HOURS_ENV) or DEFAULT_WIPE_HOURS),
+        held_wipe_hours=float(os.environ.get(retention.HELD_WIPE_HOURS_ENV) or retention.DEFAULT_HELD_WIPE_HOURS),
+        child_uid=CHILD_UID_NAME,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(
+        level=os.environ.get("SMD_JOBS_LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
+    stopped: dict[str, Any] = {"flag": False, "at": None}
+
+    def _stop(*_: Any) -> None:
+        stopped["flag"] = True
+        stopped["at"] = stopped["at"] or time.monotonic()
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        d = build()
+    except SystemExit as exc:
+        logger.error("jobs daemon not started: %s", exc)
+        return 2
+    if memory_cap_mode(d.cgroup_root) == "none":
+        logger.error(
+            "no cgroup memory controller at %s; jobs will run UNCAPPED (boot smoke fails on this)", d.cgroup_root
+        )
+    poll = float(os.environ.get(POLL_ENV) or 5)
+    logger.info("jobs daemon up: run_dir=%s poll=%ss", d.run_dir, poll)
+    from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
+
+    threads = [start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)]
+    from .lanes import start_other_lanes  # drafting and negotiation, each in its own module
+
+    threads += start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll) or []
+    d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
+    # Each lane drains its own child under the same deadline; the process waits
+    # for them instead of abandoning them mid-checkpoint (they are daemon threads).
+    if stopped["flag"]:
+        child_mod.join_lanes([t for t in threads if t is not None], since=stopped["at"], budget=d.drain_seconds)
+    # The Machine's stop is FINAL for this process: the entrypoint's loop
+    # restarts the daemon on any other exit, and a daemon respawned inside a
+    # dying Machine has no stop flag. On 2026-10-15 one did exactly that,
+    # re-running claimed work and spending a DELIVER wake's five attempts on a
+    # gateway that was already gone (proof:wake_lost, a page for a deploy).
+    return STOPPED_EXIT if stopped["flag"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

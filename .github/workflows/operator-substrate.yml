@@ -279,20 +279,20 @@ jobs:
             PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q
           done
 
-      # ss#2613: the medchron runner is installed exactly as the seat image
+      # ss#2613: the jobs runner is installed exactly as the seat image
       # installs it (its hash-locked file, then sdk, connector, runner
       # --no-deps), and its tests run against that artifact. Not the bare env:
       # the runner's seat access imports the connector's client.
-      - name: medchron runner tests (own venv)
+      - name: jobs runner tests (own venv)
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         run: |
           set -euo pipefail
-          uv venv --python 3.13 /tmp/medchronv
-          uv pip install --python /tmp/medchronv/bin/python --no-config --require-hashes -r requirements/medchron.txt
-          uv pip install --python /tmp/medchronv/bin/python --no-deps ./connectors/_sdk ./connectors/_contract ./connectors/smokeball ./runners/medchron
-          uv pip install --python /tmp/medchronv/bin/python pytest
-          /tmp/medchronv/bin/python -m pytest -c runners/medchron/pyproject.toml runners/medchron/tests -q
+          uv venv --python 3.13 /tmp/jobsv
+          uv pip install --python /tmp/jobsv/bin/python --no-config --require-hashes -r requirements/jobs.txt
+          uv pip install --python /tmp/jobsv/bin/python --no-deps ./connectors/_sdk ./connectors/_contract ./connectors/smokeball ./runners/jobs
+          uv pip install --python /tmp/jobsv/bin/python pytest
+          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'

@@ -257,11 +257,11 @@ if . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_engagements_checkout_pre
   # config that was wrong. The two outcomes now carry different exit codes
   # and different sentences.
   rc=0
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
+  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
     uv run --quiet --with pyyaml python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' || rc=$?
 import sys
 try:
-    from medchron import config
+    from jobs.medchron import config
 except Exception as exc:  # the validator itself could not start
     print(f"medchron firm validator could not run: {exc}", file=sys.stderr)
     sys.exit(3)
@@ -298,7 +298,7 @@ fi
 # tables are public CMS data, vendored HERE on the console by the runner's own
 # icd_fetch.vendor() and staged alongside. Both land under
 # vaults/<slug>/medchron-controls/, which the entrypoint pulls into a
-# root-owned 0750 tree on every boot. That tree is read-only to the medchron
+# root-owned 0750 tree on every boot. That tree is read-only to the jobs
 # uid by design (a classifier that can edit its own controls measures
 # nothing), so a seat can never fetch the tables for itself; only a laptop
 # install (install_root == data_root) does. A seat that authors a firm config

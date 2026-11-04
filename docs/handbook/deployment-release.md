@@ -629,7 +629,7 @@ heartbeat already reports a newer skills version is never moved back.
 
 ### A jobs bundle release
 
-The job runner (`/opt/medchron`, with its pricing table) and the Smokeball
+The job runner (`/opt/jobs`, with its pricing table) and the Smokeball
 connector venv (`/opt/connectors/smokeball`) also ship as a versioned artifact,
 the jobs bundle (ADR 0100 W3), so a change to them reaches only the seats that
 run jobs. A merge touching a path in `.github/operator-bundle-paths.txt` makes

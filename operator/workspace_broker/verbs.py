@@ -6,7 +6,7 @@ WHY A TABLE (code review 2026-09-10, Architecture 1, carried three reviews).
 authorization was POSITIONAL: a gateway-PID gate sat two thirds of the way
 down, five hand-rolled agent-uid checks sat above it, and whether a verb was
 gated at all depended on where in the chain someone had typed it. A verb
-added above the gate was ungated by accident; the medchron group already
+added above the gate was ungated by accident; the jobs group already
 showed the alternative (a table with ``_gate`` as its first statement).
 
 THE CONTRACT. Each ``Verb`` declares an ``auth`` set. ``dispatch`` resolves
@@ -32,7 +32,7 @@ THE FOUR CLASSES.
 ``ROOT``       uid 0: the runner daemon, the rehearsal, a Captain-side skill.
 ``ANY``        no gate. Only ``health``, which is read-only.
 
-A verb may declare several classes (any-of); the medchron group does, and its
+A verb may declare several classes (any-of); the jobs group does, and its
 own ``_gate`` still runs behind this one with the same answer.
 
 Unknown actions are gateway-gated and then refused by name, in the order and
@@ -85,7 +85,7 @@ def _only(cls: str) -> frozenset[str]:
     return frozenset({cls})
 
 
-# The medchron group's compound gates, as documented in medchron_verbs.py.
+# The jobs group's compound gates, as documented in medchron_verbs.py.
 GATEWAY_OR_ROOT = frozenset({GATEWAY, ROOT})
 GATEWAY_ROOT_OR_AGENT = frozenset({GATEWAY, ROOT, AGENT})
 ROOT_OR_AGENT = frozenset({ROOT, AGENT})
@@ -243,7 +243,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("records_job_close", _only(ROOT), records_verbs.records_dispatch),
     # SMD notes (note_verbs.py, 2026-10-15): SMD has the Operator tell a firm
     # colleague something in her own thread. Preview and record are root only
-    # (a person on the seat, medchron/note_by_smd.py); the DELIVER turn reads
+    # (a person on the seat, jobs/note_by_smd.py); the DELIVER turn reads
     # the recorded words through the status verb, gateway or root.
     Verb("note_preview", _only(ROOT), note_verbs.preview_verb),
     Verb("note_record", _only(ROOT), note_verbs.record_verb),

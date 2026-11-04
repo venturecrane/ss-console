@@ -789,7 +789,7 @@ _INBOUND_MCP_PROMPT = (
 # Async handoff channel (ADR 0043 path B; ss-console #2616). Two authenticated
 # callers reach this route, both already trusted to name work: the console's
 # operator_handoff_task (a person on the console handed a task over), and the
-# seat's own medchron runner daemon (a chronology job finished and the deliver
+# seat's own jobs runner daemon (a chronology job finished and the deliver
 # mode must run). The task TEXT is authored by that caller — but values quoted
 # INSIDE it may originate elsewhere (a requester's email address, a hold
 # reason), so the worker treats quoted values as data while following the
@@ -1105,7 +1105,7 @@ def _materialize_webhook_platform(
 
     # Async handoff route (ss-console #2616). Materialized whenever the MCP
     # bearer exists — NOT gated on mcp_connector.enabled, because the two
-    # callers (the console's operator_handoff_task and the seat's medchron
+    # callers (the console's operator_handoff_task and the seat's jobs
     # runner daemon) are wired at provision, not authored per-connector.
     # Before this route existed the gate 202'd /webhooks/handoff and the
     # adapter 404'd the forward: a documented black hole

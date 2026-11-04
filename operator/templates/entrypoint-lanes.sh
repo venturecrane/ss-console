@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # entrypoint-lanes.sh: the job lanes' shared boot work, SOURCED by entrypoint.sh
 # (same shell, as root) after the volume sweep and before the per-lane fragments,
-# the broker and the medchron daemon launch. It decides which lanes this seat
+# the broker and the jobs daemon launch. It decides which lanes this seat
 # runs (ADR 0100) and builds only their tree: the chronology runner's firm config
 # and controls, the runner's run dir and bind mount, each authored lane's dirs.
 # Exports SMD_AUTHORED_LANES and lane_on for the entrypoint and the lane files.
-# Reads CONFIG_DIR, LIVE_CUSTOMER_YAML, MEDCHRON_DATA_DIR, CUSTOMER_SLUG,
+# Reads CONFIG_DIR, LIVE_CUSTOMER_YAML, JOBS_DATA_DIR, CUSTOMER_SLUG,
 # R2_* and _seed_endpoint from the entrypoint.
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
@@ -41,7 +41,7 @@ SMD_RECORDS_QUEUE_DIR="" SMD_RECORDS_FIRM_CONFIG=""
 # ss#2614: the chronology runner's per-firm config rides the same vault prefix.
 # Same fail-static shape as customer.yaml above, without the FATAL arm: a seat
 # without it boots fine and the runner refuses every job with one loud line.
-# Root-owned, group medchron read-only (the driver child reads it; the agent
+# Root-owned, group jobs read-only (the driver child reads it; the agent
 # uid has no group membership and no need to read the firm's tables).
 MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
 # The fetch verdict is recorded like every other lane's inputs (fetched | kept |
@@ -73,7 +73,7 @@ else
 fi
 rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
 if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  chown root:medchron "${MEDCHRON_FIRM_CONFIG}"
+  chown root:jobs "${MEDCHRON_FIRM_CONFIG}"
   chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
 fi
 
@@ -82,31 +82,31 @@ fi
 # explains why). queue/ is written by the broker uid (submit) and read by root
 # (the daemon); jobs/ is root only; both reach their users through the bind
 # mount, exactly like the audit ledger. The Smokeball refresh token becomes
-# group-shared (setgid dir, 0660 file) so the medchron uid can mint and rotate
+# group-shared (setgid dir, 0660 file) so the jobs uid can mint and rotate
 # it alongside the connector; the connector preserves that mode on rotation.
-MEDCHRON_RUN_DIR="/run/smd-medchron"
+JOBS_RUN_DIR="/run/smd-medchron"
 # ADR 0100: the lane tree exists only on a seat that authors a lane.
 if [ -n "${SMD_AUTHORED_LANES//,/}" ]; then
-install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"
-mkdir -p "${MEDCHRON_RUN_DIR}"
-mountpoint -q "${MEDCHRON_RUN_DIR}" \
-  || mount --bind "${MEDCHRON_DATA_DIR}" "${MEDCHRON_RUN_DIR}" \
-  || { log "FATAL: could not bind-mount ${MEDCHRON_DATA_DIR} -> ${MEDCHRON_RUN_DIR}"; exit 1; }
+install -d -o root -g root -m 0755 "${JOBS_DATA_DIR}"
+mkdir -p "${JOBS_RUN_DIR}"
+mountpoint -q "${JOBS_RUN_DIR}" \
+  || mount --bind "${JOBS_DATA_DIR}" "${JOBS_RUN_DIR}" \
+  || { log "FATAL: could not bind-mount ${JOBS_DATA_DIR} -> ${JOBS_RUN_DIR}"; exit 1; }
 fi
 if lane_on medchron; then
-install -d -o root -g workspace-broker -m 0770 "${MEDCHRON_DATA_DIR}/queue"
-# jobs/: root-owned, group medchron EXECUTE-ONLY (0710) — the driver child
+install -d -o root -g workspace-broker -m 0770 "${JOBS_DATA_DIR}/queue"
+# jobs/: root-owned, group jobs EXECUTE-ONLY (0710) — the driver child
 # must traverse it to reach its own job dir (live-caught 2026-08-31: 0700
 # gave the child PermissionError on its job.yaml) but must not be able to
-# list or open sibling jobs; each job dir is 0700 medchron.
-install -d -o root -g medchron -m 0710 "${MEDCHRON_DATA_DIR}/jobs"
-export SMD_MEDCHRON_QUEUE_DIR="${MEDCHRON_RUN_DIR}/queue"
+# list or open sibling jobs; each job dir is 0700 jobs.
+install -d -o root -g jobs -m 0710 "${JOBS_DATA_DIR}/jobs"
+export SMD_MEDCHRON_QUEUE_DIR="${JOBS_RUN_DIR}/queue"
 fi
-# The SMD note lane (2026-10-15, medchron/note_lane.py): no queue and no child.
+# The SMD note lane (2026-10-15, jobs/note_lane.py): no queue and no child.
 # note-jobs/ is written by root's note_by_smd command and read by the root
 # daemon's note lane, which sends each note's wake and watches its reply; no
 # other uid touches it, so it is root-only.
-if lane_on note; then install -d -o root -g root -m 0700 "${MEDCHRON_DATA_DIR}/note-jobs"; fi
+if lane_on note; then install -d -o root -g root -m 0700 "${JOBS_DATA_DIR}/note-jobs"; fi
 # The chronology runner's INSTALL-level artifacts — the scanned-page
 # classifier's authored control pages (`controls.json` + the PDFs it names) and
 # the vendored ICD tables (`icd/`) — ride the same vault prefix as the firm
@@ -117,10 +117,10 @@ if lane_on note; then install -d -o root -g root -m 0700 "${MEDCHRON_DATA_DIR}/n
 # instead of refusing every job until someone copies files in by hand. Same
 # fail-static shape as medchron-firm.yaml, no FATAL arm: a seat with nothing in
 # its vault boots fine and the runner refuses the classify stage of each job
-# with one loud line. Root-owned, group medchron read-only: the child reads
+# with one loud line. Root-owned, group jobs read-only: the child reads
 # its falsifier and can never rewrite it (a classifier that can edit its own
 # controls measures nothing).
-MEDCHRON_CONTROLS_DIR="${MEDCHRON_DATA_DIR}/controls"
+MEDCHRON_CONTROLS_DIR="${JOBS_DATA_DIR}/controls"
 rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
 if ! lane_on medchron; then
   :
@@ -143,13 +143,13 @@ else
 fi
 rm -rf "${MEDCHRON_CONTROLS_DIR}.r2.tmp"
 if [ -d "${MEDCHRON_CONTROLS_DIR}" ]; then
-  chown -R root:medchron "${MEDCHRON_CONTROLS_DIR}"
+  chown -R root:jobs "${MEDCHRON_CONTROLS_DIR}"
   find "${MEDCHRON_CONTROLS_DIR}" -type d -exec chmod 0750 {} +
   find "${MEDCHRON_CONTROLS_DIR}" -type f -exec chmod 0640 {} +
 fi
 
-# ADR 0100 W3: the jobs bundle, installed and bind-mounted over /opt/medchron and
+# ADR 0100 W3: the jobs bundle, installed and bind-mounted over /opt/jobs and
 # /opt/connectors/smokeball on a seat that authors a lane. Last in this file so it
-# runs before the lane fragments, the medchron daemon and the gateway use either.
+# runs before the lane fragments, the jobs daemon and the gateway use either.
 # shellcheck source=/dev/null
 . /app/entrypoint-bundles.sh

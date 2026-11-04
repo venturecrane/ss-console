@@ -464,7 +464,7 @@ def test_a_records_job_suppresses_the_alarm_and_cards_with_its_matter(ledger) ->
 _CONSOLE_TOKEN_RE = re.compile(r"^[a-z0-9_:.-]{1,64}$")
 
 #: The shapes of reason the drafting runner records through drafting_job_record
-#: (ss-console #3093, medchron/drafting/run.py + limits.py): free-text sentences,
+#: (ss-console #3093, jobs/drafting/run.py + limits.py): free-text sentences,
 #: a limit's setting-led sentence, and an unexpected exception's class name.
 _DRAFTING_RUNNER_REASONS = [
     "the request is missing what the draft needs: the deponent's name",

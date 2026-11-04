@@ -649,7 +649,7 @@ def test_audit_gate_hold_reason_is_the_one_the_broker_resumes():
     runner's source rather than trusting the two strings to stay in step."""
     from workspace_broker.medchron_verbs import AUDIT_GATE_HOLD_PREFIX
 
-    dag = Path(__file__).resolve().parents[2] / "runners" / "medchron" / "medchron" / "dag.py"
+    dag = Path(__file__).resolve().parents[2] / "runners" / "jobs" / "jobs" / "medchron" / "dag.py"
     src = dag.read_text(encoding="utf-8")
     audit = src[src.index('        "audit",\n') :]
     audit = audit[: audit.index("    Stage(")]
@@ -662,8 +662,8 @@ def test_update_review_hold_reason_is_the_one_the_broker_resumes():
     broker's prefix cannot drift from it."""
     from workspace_broker.medchron_verbs import UPDATE_REVIEW_HOLD_PREFIX
 
-    pkg = Path(__file__).resolve().parents[2] / "runners" / "medchron" / "medchron"
-    dag = (pkg / "dag_update.py").read_text(encoding="utf-8")
+    pkg = Path(__file__).resolve().parents[2] / "runners" / "jobs" / "jobs"
+    dag = (pkg / "medchron" / "dag_update.py").read_text(encoding="utf-8")
     stage = dag[dag.index('        "update_review",\n') :]
     stage = stage[: stage.index("    Stage(")]
     assert f'"{UPDATE_REVIEW_HOLD_PREFIX} ' in stage
@@ -1500,7 +1500,7 @@ def test_a_job_that_is_not_held_carries_no_hold_class(verbs):
 
 def test_the_broker_hold_classifier_is_the_runners_byte_for_byte():
     """The runner package is not importable here; the broker carries a copy of
-    ``medchron/proof/holds.py``. Two copies of one classifier must not drift."""
+    ``jobs/proof/holds.py``. Two copies of one classifier must not drift."""
     here = Path(__file__).resolve().parents[1]
-    runner = here.parent / "runners/medchron/medchron/proof/holds.py"
+    runner = here.parent / "runners/jobs/jobs/proof/holds.py"
     assert (here / "hold_class.py").read_bytes() == runner.read_bytes()

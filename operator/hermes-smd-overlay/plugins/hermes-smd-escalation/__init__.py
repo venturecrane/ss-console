@@ -741,9 +741,9 @@ def _reply_verdicts(args: dict[str, Any], **kwargs: Any) -> str:
 def _casefile_apply(thread_ref: str, origin: Any, numbers: list[int]) -> dict[str, Any]:
     """The Case File Manager's apply, from the verified reply's own origin: the
     approver, the email and its words are the reply's, never the model's."""
-    from shared.medchron_client import MedchronBrokerClient
+    from shared.jobs_client import JobsBrokerClient
 
-    return MedchronBrokerClient().casefile_apply(
+    return JobsBrokerClient().casefile_apply(
         thread_ref,
         str(getattr(origin, "sender_address", "") or ""),
         str(getattr(origin, "internet_message_id", "") or ""),

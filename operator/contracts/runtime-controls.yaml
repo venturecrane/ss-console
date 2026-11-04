@@ -706,8 +706,8 @@ controls:
   medchron_claim_audit:
     control: medchron_claim_audit
     class: dispatch-guard
-    substrate_module: runners/medchron/medchron/gates/claim_audit.py
-    wired_via: 'runner / runners/medchron/medchron/gates/claim_audit.py'
+    substrate_module: runners/jobs/jobs/medchron/gates/claim_audit.py
+    wired_via: 'runner / runners/jobs/jobs/medchron/gates/claim_audit.py'
     live_probe: runner_claim_audit_refuses_unsupported_claim
     probe_surface: prod-boot
     status: enforced
@@ -726,14 +726,14 @@ controls:
       unresolved past the repair cap. Registered `unprobed` because the code is
       real and ran, and `enforced` requires a driver that plants an unsupported
       claim and observes the refusal (ss#2614). Target home once the audit
-      moves in-process (ss#2613 PR 7): runners/medchron/medchron/gates/claim_audit.py;
+      moves in-process (ss#2613 PR 7): runners/jobs/jobs/medchron/gates/claim_audit.py;
       the row repoints in the PR that creates that file, never before.
 
   medchron_extractive_gate:
     control: medchron_extractive_gate
     class: dispatch-guard
-    substrate_module: runners/medchron/medchron/gates/extractive.py
-    wired_via: 'runner / runners/medchron/medchron/gates/extractive.py'
+    substrate_module: runners/jobs/jobs/medchron/gates/extractive.py
+    wired_via: 'runner / runners/jobs/jobs/medchron/gates/extractive.py'
     live_probe: runner_extractive_gate_refuses_characterization
     probe_surface: prod-boot
     status: enforced
@@ -751,13 +751,13 @@ controls:
       removes vendor order forms, request letters, and vendor AI summaries
       from the exhibits). Promotion requires a driver that plants a valuation
       sentence and observes the sweep refuse it. Target home (ss#2613 PR 9):
-      runners/medchron/medchron/gates/extractive.py; repointed in that PR.
+      runners/jobs/jobs/medchron/gates/extractive.py; repointed in that PR.
 
   medchron_cross_client_gate:
     control: medchron_cross_client_gate
     class: dispatch-guard
-    substrate_module: runners/medchron/medchron/gates/cross_client.py
-    wired_via: 'runner / runners/medchron/medchron/gates/cross_client.py'
+    substrate_module: runners/jobs/jobs/medchron/gates/cross_client.py
+    wired_via: 'runner / runners/jobs/jobs/medchron/gates/cross_client.py'
     live_probe: runner_cross_client_gate_refuses_foreign_page
     probe_surface: prod-boot
     status: enforced
@@ -775,13 +775,13 @@ controls:
       is moved and disclosed in the document's limitations section. Promotion
       requires a driver that plants a foreign page in a unit and observes the
       quarantine. Target home (ss#2613 PR 9):
-      runners/medchron/medchron/gates/cross_client.py; repointed in that PR.
+      runners/jobs/jobs/medchron/gates/cross_client.py; repointed in that PR.
 
   medchron_provenance_gate:
     control: medchron_provenance_gate
     class: dispatch-guard
-    substrate_module: runners/medchron/medchron/gates/provenance.py
-    wired_via: 'runner / runners/medchron/medchron/gates/provenance.py'
+    substrate_module: runners/jobs/jobs/medchron/gates/provenance.py
+    wired_via: 'runner / runners/jobs/jobs/medchron/gates/provenance.py'
     live_probe: runner_provenance_gate_halts_unexplained_file
     probe_surface: prod-boot
     status: enforced
@@ -798,4 +798,4 @@ controls:
       delivery and the document's records-reviewed section names exclusions.
       Promotion requires a driver that plants an unowned record and observes
       the halt. Target home (ss#2613 PR 9):
-      runners/medchron/medchron/gates/provenance.py; repointed in that PR.
+      runners/jobs/jobs/medchron/gates/provenance.py; repointed in that PR.

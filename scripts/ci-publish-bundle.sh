@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI: build and publish a CANDIDATE `jobs` bundle to R2 (ADR 0100 W3). Never live on merge.
 #
-# The jobs bundle is what the seat image installs at /opt/medchron (the runner
+# The jobs bundle is what the seat image installs at /opt/jobs (the runner
 # venv and its pricing table) and /opt/connectors/smokeball (the connector venv),
 # built again on merge so a change to the job runtime reaches only the seats that
 # author a job lane, without a new image for every seat. The release controller
@@ -16,7 +16,7 @@
 # seat bind-mounts the bundle on, so no shebang or venv prefix moves. As root,
 # because the image build ran those steps as root (root:root a+rX).
 #
-#   fleet/bundles/jobs/<version>.tar.zst   root: medchron/ and connectors/smokeball/
+#   fleet/bundles/jobs/<version>.tar.zst   root: jobs/ and connectors/smokeball/
 #   fleet/bundles/jobs/<version>.json      {"name","version","sha256","size",
 #                                           "ss_console_sha","base_image_ref","python"}
 #
@@ -72,12 +72,12 @@ docker run --rm --platform linux/amd64 --user 0 --entrypoint /bin/sh \
     set -eu
     mkdir -p /tmp/src
     cp -R /src/connectors /src/runners /src/requirements /src/templates /tmp/src/
-    rm -rf /opt/medchron /opt/connectors/smokeball
+    rm -rf /opt/jobs /opt/connectors/smokeball
     export SRC=/tmp/src
     sh /tmp/src/templates/jobs-runtime.sh connector smokeball
-    PRICING_JSON=/src/adapter/cost_telemetry/anthropic_pricing.json sh /tmp/src/templates/jobs-runtime.sh medchron
-    /opt/medchron/.venv/bin/python -c "import platform; print(platform.python_version())" > /out/python
-    tar --numeric-owner -C /opt -cf /out/bundle.tar medchron connectors/smokeball
+    PRICING_JSON=/src/adapter/cost_telemetry/anthropic_pricing.json sh /tmp/src/templates/jobs-runtime.sh jobs
+    /opt/jobs/.venv/bin/python -c "import platform; print(platform.python_version())" > /out/python
+    tar --numeric-owner -C /opt -cf /out/bundle.tar jobs connectors/smokeball
   '
 
 PYTHON_VERSION="$(tr -d '[:space:]' < "${work}/out/python")"

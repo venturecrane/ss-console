@@ -111,7 +111,7 @@ describe('matter-records skill', () => {
     expect(skill).toMatch(/never pass a Smokeball id, and never search for\s+the matter/)
     expect(skill).toMatch(/passing `matter_number` when the email\s+gives one/)
     const tool = readFileSync(
-      'operator/hermes-smd-overlay/plugins/hermes-smd-medchron/records.py',
+      'operator/hermes-smd-overlay/plugins/hermes-smd-lanes/records.py',
       'utf8'
     )
     expect(tool).toContain('"matter_number": {')

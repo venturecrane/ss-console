@@ -1,7 +1,7 @@
 /**
  * The entrypoint's Machine-stop supervisor (fleet job-safe restarts), run for
  * real: bash sourcing operator/runners/supervisor/entrypoint-supervisor.sh,
- * python stand-ins for the medchron daemon, a job child and the gateway, and
+ * python stand-ins for the jobs daemon, a job child and the gateway, and
  * the stop delivered the way tini `-g` delivers it, to the entrypoint's whole
  * process group.
  *
@@ -54,7 +54,7 @@ while True:
     time.sleep(0.1)
 `
 
-// A daemon that, like medchron.daemon, starts a job child (in its own session
+// A daemon that, like jobs.daemon, starts a job child (in its own session
 // unless OLD_SHAPE), drains for a while on SIGTERM, then exits 130.
 const DAEMON_PY = `
 import json, os, signal, subprocess, sys, time
@@ -131,7 +131,7 @@ function scenario(dir: string, body: string, env: Record<string, string> = {}) {
     'set -euo pipefail',
     `log() { echo "$*" >> "${dir}/log"; }`,
     `export OUT="${dir}" TMPDIR="${dir}" PATH="${bin}:$PATH"`,
-    `MEDCHRON_RUN_DIR="${dir}/run"`,
+    `JOBS_RUN_DIR="${dir}/run"`,
     body,
   ].join('\n')
   writeFileSync(`${dir}/entry.sh`, script)
@@ -210,7 +210,7 @@ smd_supervisor_boot
     ${process.env.PYTHON ?? 'python3'} "$OUT/daemon.py" && rc=0 || rc=$?
     { [ "\${rc}" = 130 ] || [ -n "\${_mc_stop}" ]; } && break
   done ) &
-SMD_MEDCHRON_LOOP_PID=$!
+SMD_JOBS_LOOP_PID=$!
 unset DROPPED_SECRET
 export LATE_VAR=late
 smd_supervise
@@ -242,7 +242,7 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the Machine stop drains before 
     const q = JSON.parse(readFileSync(`${r.dir}/run/quiesce`, 'utf8'))
     expect(q.by).toBe('machine-stop')
     expect(q.until).toBeGreaterThan(Date.now() / 1000 + 500)
-    expect(r.log).toMatch(/medchron daemon drained/)
+    expect(r.log).toMatch(/jobs daemon drained/)
   }, 30000)
 
   it('runs the gateway as the held pid, in its own session, with the FINAL environment', async () => {
@@ -340,7 +340,7 @@ describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesc
         'bash',
         [
           '-c',
-          `set -euo pipefail\nlog() { :; }\nMEDCHRON_RUN_DIR="${dir}/run"\n. "${SUPERVISOR}"\nsmd_quiesce_clear_stale`,
+          `set -euo pipefail\nlog() { :; }\nJOBS_RUN_DIR="${dir}/run"\n. "${SUPERVISOR}"\nsmd_quiesce_clear_stale`,
         ],
         { encoding: 'utf8' }
       )
@@ -463,7 +463,7 @@ describe('entrypoint.sh wires the supervisor', () => {
   })
 
   it('records the daemon loop pid and ends in smd_supervise, never an exec into bootstrap', () => {
-    expect(code).toMatch(/done \) &\n\s+SMD_MEDCHRON_LOOP_PID=\$!/)
+    expect(code).toMatch(/done \) &\n\s+SMD_JOBS_LOOP_PID=\$!/)
     expect(code.trimEnd().endsWith('smd_supervise')).toBe(true)
     expect(code).not.toMatch(/exec\s+setpriv/)
   })
@@ -479,7 +479,7 @@ describe('entrypoint.sh wires the supervisor', () => {
 
   it('the broker respawn loop ignores the group stop signal, so the broker outlives the gateway', () => {
     // 2026-10-20: tini -g signals this group at a Machine stop; the broker has
-    // no handler and died at once while the gateway and the medchron daemon
+    // no handler and died at once while the gateway and the jobs daemon
     // drained for minutes with nothing to record to.
     expect(code).toMatch(/\( trap '' TERM INT\n\s+while true; do\n\s+if launch_broker; then/)
   })

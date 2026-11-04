@@ -1,6 +1,6 @@
 """operator/templates/jobs-runtime.sh: the job runtime is built by one script, and it is the old build.
 
-ADR 0100 W3 moved the connector-venv loop and the medchron venv out of the
+ADR 0100 W3 moved the connector-venv loop and the jobs venv out of the
 Dockerfile's RUN lines into one script, because a second build (CI's `jobs`
 bundle, scripts/ci-publish-bundle.sh) must produce the same trees at the same
 paths, and two copies of a build drift. This change reaches every seat image, so
@@ -32,12 +32,12 @@ DOCKERFILE = OPERATOR / "templates" / "Dockerfile"
 
 # The build-time import smoke, verbatim from the replaced RUN line (Dockerfile:712 at 84f47cbc2).
 IMPORT_LIST = (
-    "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, "
-    "medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, "
-    "medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, "
-    "striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, "
-    "medchron.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, "
-    "medchron.records_lane, medchron.records.run, medchron.records.firm"
+    "import jobs.daemon, jobs.stages.upload, jobs.demand_lane, jobs.demand.run, "
+    "jobs.drafting_lane, jobs.drafting.run, jobs.negotiation_lane, jobs.negotiation.run, "
+    "jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane, jobs.litigation.run, "
+    "striprtf.striprtf, smokeball_connector.docx_format, docx, jobs.casefile_lane, jobs.casefile.run, "
+    "jobs.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, "
+    "jobs.records_lane, jobs.records.run, jobs.records.firm"
 )
 
 # uv: `venv X` makes X/bin/python (itself a recording stub); a --no-deps install
@@ -52,7 +52,7 @@ fi
 case "$*" in
   *--no-deps*) venv=$(dirname "$(dirname "$4")")
     case "$venv" in
-      */medchron/.venv) : > "$venv/bin/medchron"; chmod_real +x "$venv/bin/medchron" ;;
+      */jobs/.venv) : > "$venv/bin/jobs"; chmod_real +x "$venv/bin/jobs" ;;
       *) name=$(basename "$(dirname "$venv")"); : > "$venv/bin/${name}-mcp" ;;
     esac ;;
 esac
@@ -88,7 +88,7 @@ def box(tmp_path: Path) -> dict[str, Path]:
         "connectors/_contract",
         "connectors/smokeball",
         "connectors/no-pyproject",
-        "runners/medchron",
+        "runners/jobs",
         "requirements",
     ):
         (src / d).mkdir(parents=True)
@@ -97,7 +97,7 @@ def box(tmp_path: Path) -> dict[str, Path]:
     # A library with a pyproject, like _sdk: the connector loop must skip it.
     (src / "connectors/_contract/pyproject.toml").write_text("")
     (src / "requirements/connector-smokeball.txt").write_text("")
-    (src / "requirements/medchron.txt").write_text("")
+    (src / "requirements/jobs.txt").write_text("")
     return {"tmp": tmp_path, "stubs": stubs, "src": src, "opt": tmp_path / "opt", "log": tmp_path / "log"}
 
 
@@ -129,17 +129,17 @@ def test_connectors_runs_exactly_the_replaced_connector_loop(box: dict[str, Path
     ]
 
 
-def test_medchron_runs_exactly_the_replaced_runner_build(box: dict[str, Path]) -> None:
-    res = _run(box, "medchron")
+def test_jobs_runs_exactly_the_replaced_runner_build(box: dict[str, Path]) -> None:
+    res = _run(box, "jobs")
     assert res.returncode == 0, res.stderr + res.stdout
-    py = "/opt/medchron/.venv/bin/python"
+    py = "/opt/jobs/.venv/bin/python"
     assert _log(box) == [
-        "uv venv /opt/medchron/.venv",
-        f"uv pip install --python {py} --no-cache --no-config --require-hashes -r /app/requirements/medchron.txt",
-        f"uv pip install --python {py} --no-cache --no-deps /app/connectors/_sdk /app/connectors/_contract /app/connectors/smokeball /app/runners/medchron",
+        "uv venv /opt/jobs/.venv",
+        f"uv pip install --python {py} --no-cache --no-config --require-hashes -r /app/requirements/jobs.txt",
+        f"uv pip install --python {py} --no-cache --no-deps /app/connectors/_sdk /app/connectors/_contract /app/connectors/smokeball /app/runners/jobs",
         f"python -c {IMPORT_LIST}",
-        "chown -R root:root /opt/medchron",
-        "chmod -R a+rX /opt/medchron",
+        "chown -R root:root /opt/jobs",
+        "chmod -R a+rX /opt/jobs",
     ]
 
 
@@ -163,14 +163,14 @@ def _expected_connector_lines() -> list[str]:
 def test_the_pricing_table_is_copied_beside_the_venv_when_asked(box: dict[str, Path]) -> None:
     pricing = box["tmp"] / "anthropic_pricing.json"
     pricing.write_text('{"x": 1}')
-    assert _run(box, "medchron", extra={"PRICING_JSON": str(pricing)}).returncode == 0
-    assert (box["opt"] / "medchron/anthropic_pricing.json").read_text() == '{"x": 1}'
+    assert _run(box, "jobs", extra={"PRICING_JSON": str(pricing)}).returncode == 0
+    assert (box["opt"] / "jobs/anthropic_pricing.json").read_text() == '{"x": 1}'
 
 
 def test_the_build_fails_without_its_assertions_met(box: dict[str, Path]) -> None:
     """FALSIFIERS: each assertion the replaced RUN lines made still fails the build."""
     (box["stubs"] / "antiword").unlink()
-    res = _run(box, "medchron")
+    res = _run(box, "jobs")
     assert res.returncode != 0 and "antiword is missing" in res.stdout
     (box["src"] / "requirements/connector-smokeball.txt").unlink()
     res = _run(box, "connectors")
@@ -202,16 +202,16 @@ def test_the_dockerfile_runs_the_script_where_the_replaced_lines_ran() -> None:
     at = {ln: i for i, ln in enumerate(lines)}
     copy_script = at["COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh"]
     run_conn = at["RUN sh /app/jobs-runtime.sh image-connectors"]
-    mounts = at["RUN install -d -o root -g root -m 0755 /opt/medchron /opt/connectors/smokeball"]
+    mounts = at["RUN install -d -o root -g root -m 0755 /opt/jobs /opt/connectors/smokeball"]
     assert at["COPY operator/requirements/ /app/requirements/"] < run_conn
     assert at["COPY operator/connectors/ /app/connectors/"] < copy_script < run_conn < mounts
     assert at["COPY operator/runners/ /app/runners/"] < mounts
-    assert "RUN sh /app/jobs-runtime.sh medchron" not in at
+    assert "RUN sh /app/jobs-runtime.sh jobs" not in at
     assert "RUN sh /app/jobs-runtime.sh connectors" not in at
     assert at["COPY operator/templates/jobs-bundle-paths.txt /app/jobs-bundle-paths.txt"] < max(
         i for ln, i in at.items() if "gen-image-capabilities.py /app/image-capabilities.json" in ln
     )
     code = "\n".join(lines)
-    for gone in ("uv venv /opt/medchron", "/opt/connectors/${name}", "medchron.casefile.firm", "command -v antiword"):
+    for gone in ("uv venv /opt/jobs", "/opt/connectors/${name}", "jobs.casefile.firm", "command -v antiword"):
         assert gone not in code, f"the Dockerfile builds the job runtime itself again ({gone}); use jobs-runtime.sh"
     assert os.access(SCRIPT, os.R_OK)

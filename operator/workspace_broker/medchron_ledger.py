@@ -154,7 +154,7 @@ _ACTIVE_TWIN_SQL = (
 )
 
 #: The runner wipes a held job's workdir AND its queue file after this long
-#: (`medchron/retention.py` DEFAULT_HELD_WIPE_HOURS, one working week). A hold
+#: (`jobs/retention.py` DEFAULT_HELD_WIPE_HOURS, one working week). A hold
 #: past it cannot resume, so it is not work a resubmission would duplicate.
 HELD_STALE_AFTER = timedelta(hours=24 * 7)
 
@@ -281,7 +281,7 @@ def work_digest(envelope: dict[str, Any]) -> str:
 
 
 def validate_envelope(req: dict[str, Any]) -> dict[str, Any]:
-    """The fields the broker owns, checked the way ``medchron.job.parse`` will
+    """The fields the broker owns, checked the way ``jobs.medchron.job.parse`` will
     check them again on the other side. Returns the envelope to queue (only
     known keys, in a fixed shape)."""
     matter = req.get("matter")

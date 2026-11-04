@@ -25,11 +25,11 @@ WHO IS WRITING. Decided from the process, never from anything the model sends:
 * anyone else: ``SMD_DIRECT_WRITE_ACTOR`` must name them. ``seat-probe.sh``
   sets it for every script it runs, and the boot/connect webhook reconciler sets
   its own. A process with neither is refused;
-* the chronology runner is exempt when BOTH hold: it runs as the ``medchron``
-  uid AND the daemon stamped ``MEDCHRON_DAEMON_JOB_ID`` on the job. It cannot
+* the jobs runner is exempt when BOTH hold: it runs as the ``jobs``
+  uid AND the daemon stamped ``JOBS_DAEMON_JOB_ID`` on the job. It cannot
   reach the broker socket by design, and its daemon records each job as
   ``MEDCHRON_JOB_*`` rows (a delivery names the folder and every file). A person
-  running as medchron by hand has no marker and is treated like anyone else.
+  running as jobs by hand has no marker and is treated like anyone else.
 
 OFF A SEAT (no ``SMD_AUDIT_BROKER_SOCKET`` and no socket at the seat's fixed
 path: tests, local development) nothing is recorded and nothing is refused. The firm's credentials live only on the seat's
@@ -55,11 +55,11 @@ ACTOR_ENV = "SMD_DIRECT_WRITE_ACTOR"
 VERB = "smokeball_write_append"
 ACTION_TYPE = "SMOKEBALL_WRITE"
 #: The chronology runner's own uid, exempt ONLY when the daemon launched this
-#: job (it stamps MEDCHRON_JOB_MARKER_ENV in the job's filtered environment,
-#: operator/runners/medchron/medchron/daemon.py). A person running as medchron by
+#: job (it stamps JOBS_JOB_MARKER_ENV in the job's filtered environment,
+#: operator/runners/jobs/jobs/daemon.py). A person running as jobs by
 #: hand has no marker and must name themselves like anyone else.
-EXEMPT_USER = "medchron"
-MEDCHRON_JOB_MARKER_ENV = "MEDCHRON_DAEMON_JOB_ID"
+EXEMPT_USER = "jobs"
+JOBS_JOB_MARKER_ENV = "JOBS_DAEMON_JOB_ID"
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 #: Above the broker's 5 s sqlite busy timeout (workspace_broker/audit_ledger.py),
 #: so a slow lock is waited out rather than refused after the row landed.
@@ -70,11 +70,11 @@ class WriteNotRecorded(RuntimeError):
     """The audit row for this write could not be written, so the write was not sent."""
 
 
-#: Set by the medchron daemon on a PROOF RUN's child only (runners/medchron/
-#: medchron/proof_mode.py): the lane's real pipeline on a real matter, which
+#: Set by the jobs daemon on a PROOF RUN's child only (runners/jobs/
+#: jobs/proof_mode.py): the lane's real pipeline on a real matter, which
 #: must reach no firm record. Checked here, below every runner, so a runner
 #: that forgets its own stop still cannot write.
-PROOF_RUN_ENV = "MEDCHRON_PROOF_RUN"
+PROOF_RUN_ENV = "JOBS_PROOF_RUN"
 
 
 class ProofRunWriteRefused(WriteNotRecorded):
@@ -129,7 +129,7 @@ def _user() -> str:
 
 
 def _exempt() -> bool:
-    return _user() == EXEMPT_USER and bool(os.environ.get(MEDCHRON_JOB_MARKER_ENV, "").strip())
+    return _user() == EXEMPT_USER and bool(os.environ.get(JOBS_JOB_MARKER_ENV, "").strip())
 
 
 def resolve_actor() -> str | None:

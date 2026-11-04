@@ -8,12 +8,12 @@
 # shellcheck shell=bash
 
 # ---------- Step 2f': the case file manager's firm inputs ----------
-# The casefile job (runners/medchron/medchron/casefile/) reads the firm's
+# The casefile job (runners/jobs/jobs/casefile/) reads the firm's
 # casefile-firm.yaml (models, the per-job and monthly spend caps, the File
 # Status shape, the fields a numbered change may write) and its prompts/
 # (contract.md, reader.md, auditor.md), private, in engagements
 # operator/customers/<slug>/casefile/. Validated against THIS checkout's runner
-# (python -m medchron.casefile.firm: exit 0 OK, 1 problems, 2 usage), refused
+# (python -m jobs.casefile.firm: exit 0 OK, 1 problems, 2 usage), refused
 # unless casefile-firm.yaml and every prompt are engagements origin/main, and
 # SYNCED with --delete to vaults/<slug>/casefile/ (gone means gone). The prompts
 # are markdown, so unlike the litigation sync only top-level notes are left out.
@@ -31,10 +31,10 @@ if [ -f "${CASEFILE_INPUTS_DIR}/casefile-firm.yaml" ]; then
     done
     unset _cf_rel
   fi
-  [ -f "${REPO_ROOT}/operator/runners/medchron/medchron/casefile/firm.py" ] \
-    || die "this checkout's runner has no casefile firm validator (medchron/casefile/firm.py); not uploading unvalidated casefile inputs"
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
-    uv run --quiet --with pyyaml python3 -m medchron.casefile.firm "${CASEFILE_INPUTS_DIR}" \
+  [ -f "${REPO_ROOT}/operator/runners/jobs/jobs/casefile/firm.py" ] \
+    || die "this checkout's runner has no casefile firm validator (jobs/casefile/firm.py); not uploading unvalidated casefile inputs"
+  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
+    uv run --quiet --with pyyaml python3 -m jobs.casefile.firm "${CASEFILE_INPUTS_DIR}" \
     || die "the casefile firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"
   log "Syncing the casefile firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/casefile/"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \

@@ -4,7 +4,7 @@
 #
 # WHY THIS EXISTS (2026-09-04, #2696 review): on a seat the chronology runner
 # resolves its ICD tables under install_root/controls/icd/, and that tree is
-# root-owned 0750 by the entrypoint so the medchron uid can read its
+# root-owned 0750 by the entrypoint so the jobs uid can read its
 # falsifier and never rewrite it. The runner's own icd_tables stage therefore
 # cannot fetch on a seat (PermissionError), and a vault without icd/ failed
 # every job at that stage until someone uploaded the tables by hand. The
@@ -32,13 +32,13 @@ uv venv --quiet "${VENV}"
 # The load-bearing three-path install the tree already uses (CI and the seat
 # image build): the runner's deps resolve through the connector's path source.
 uv pip install --quiet --python "${VENV}/bin/python" \
-  "${OPERATOR_DIR}/connectors/_sdk" "${OPERATOR_DIR}/connectors/_contract" "${OPERATOR_DIR}/connectors/smokeball" "${OPERATOR_DIR}/runners/medchron"
+  "${OPERATOR_DIR}/connectors/_sdk" "${OPERATOR_DIR}/connectors/_contract" "${OPERATOR_DIR}/connectors/smokeball" "${OPERATOR_DIR}/runners/jobs"
 
 "${VENV}/bin/python" - "${DEST}" <<'PY'
 import sys
 from pathlib import Path
 
-from medchron.stages.icd_fetch import vendor
+from jobs.stages.icd_fetch import vendor
 
 v = vendor(Path(sys.argv[1]))
 print(f"vendored {v['icd10cm']['label']} ({v['icd10cm']['sha256'][:12]}) and {v['icd9cm']['label']} ({v['icd9cm']['sha256'][:12]})")

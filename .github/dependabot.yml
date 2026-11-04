@@ -169,7 +169,7 @@ updates:
       - /operator/connectors/_reference
       - /operator/connectors/msgraph-mail
       - /operator/connectors/smokeball
-      - /operator/runners/medchron
+      - /operator/runners/jobs
     exclude-paths:
       - 'operator/requirements/**'
     schedule:

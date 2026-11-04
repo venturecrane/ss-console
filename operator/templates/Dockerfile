@@ -138,7 +138,7 @@ ENV PATH="/opt/data/.local/bin:/usr/lib/postgresql/17/bin:${PATH}"
 # python (rc=126 crash-loop; the pilot seat went down and was restored by
 # image-ref rollback). UV_PYTHON outranks .python-version, so this keeps the
 # venvs that name no interpreter (the workspace broker, the connectors, the
-# medchron runner) on Debian 13's python3, 3.13. The one exception is the
+# jobs runner) on Debian 13's python3, 3.13. The one exception is the
 # Hermes venv: since v0.22 Hermes runs only on 3.14 (its tree's
 # .python-version says 3.14), so its `uv sync` passes an explicit --python for
 # /opt/python3.14 (the python314_source stage above, world-readable, never
@@ -191,16 +191,20 @@ RUN groupadd -r workspace-connectors \
  && usermod -a -G workspace-connectors workspace-broker \
  && usermod -a -G audit-readers hermes \
  && usermod -a -G audit-readers workspace-broker
-# medchron (ss#2614): the uid the chronology runner's driver child runs as. No
-# home, no shell, no group beyond smokeball-token, which is the ONE thing it
+# jobs (ss#2614, named medchron until ADR 0103): the uid the jobs runner's
+# driver child runs as, gid 995 to match the seats. No home, no shell, no
+# group beyond smokeball-token, which is the ONE thing it
 # shares with hermes: the Smokeball refresh-token file (setgid dir, 0660),
 # because both principals mint against the same rotating token. The runner
 # daemon itself stays root (it owns the queue and the job dirs); only the
 # stages that read the matter and call the model run as this uid.
 RUN groupadd -r smokeball-token \
- && useradd -u 10002 -r -M -d /nonexistent -s /usr/sbin/nologin medchron \
- && usermod -a -G smokeball-token medchron \
- && usermod -a -G smokeball-token hermes
+ && groupadd -g 995 jobs \
+ && useradd -u 10002 -g jobs -r -M -d /nonexistent -s /usr/sbin/nologin jobs \
+ && usermod -a -G smokeball-token jobs \
+ && usermod -a -G smokeball-token hermes \
+ && test "$(id -u jobs)" = 10002 \
+ && test "$(id -g jobs)" = 995
 COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 
 # Node 26 + npm from the node_source stage (see the stage comment above). npm
@@ -676,26 +680,26 @@ COPY operator/connectors/ /app/connectors/
 COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh
 RUN sh /app/jobs-runtime.sh image-connectors
 
-# ---------- The chronology runner (routine 11, ss#2614) ----------
-# operator/runners/medchron is installed into its OWN root-owned venv from the
+# ---------- The jobs runner (routine 11, ss#2614; ADR 0103) ----------
+# operator/runners/jobs is installed into its OWN root-owned venv from the
 # same three paths CI installs it from (the connector SDK, the Smokeball
 # connector, the runner), so the daemon and the driver child never share a
 # dependency closure with the Hermes venv or the broker venv. The venv is
-# root:root a+rX: the medchron uid executes it and can write nothing in it.
-# The `medchron` console-script assertion fails the BUILD, not a seat.
+# root:root a+rX: the jobs uid executes it and can write nothing in it.
+# The `jobs` console-script assertion fails the BUILD, not a seat.
 # The demand job (docs/specs/operator/demand-drafting-routine.md) ships in the
 # same venv: its house renderer and format check are package modules
-# (medchron/demand/house.py, format_check.py) over python-docx, which the
+# (jobs/demand/house.py, format_check.py) over python-docx, which the
 # hash-locked requirements already carry; the import line below fails the build
 # if either is missing. The firm's house reference .docx is NOT baked in: it is
 # a firm input, fetched from the vault (vaults/<slug>/demand/) by entrypoint.sh
 # with the voice files, the skeleton and the prompts, each sha-pinned.
-# The drafting job (medchron/drafting/) ships in the same venv the same way:
+# The drafting job (jobs/drafting/) ships in the same venv the same way:
 # its renderer is the connector's docx_format, its inputs vaults/<slug>/drafting/.
-# The litigation status job (medchron/litigation/) ships in the same venv too:
-# striprtf (hash-pinned in medchron.txt) reads .rtf court papers, the apt
+# The litigation status job (jobs/litigation/) ships in the same venv too:
+# striprtf (hash-pinned in jobs.txt) reads .rtf court papers, the apt
 # antiword above reads .doc, and its inputs come from vaults/<slug>/litigation/.
-# The case file manager (medchron/casefile/) ships in the same venv: it reads
+# The case file manager (jobs/casefile/) ships in the same venv: it reads
 # with the litigation job's extractors and text cache, and its inputs come from
 # vaults/<slug>/casefile/ (casefile-firm.yaml and prompts/).
 #
@@ -710,7 +714,7 @@ RUN sh /app/jobs-runtime.sh image-connectors
 # seat that authors none carries 0 bytes of it. /app/runners/ stays: the
 # supervisor and the root ledger run from it.
 COPY operator/runners/ /app/runners/
-RUN install -d -o root -g root -m 0755 /opt/medchron /opt/connectors/smokeball
+RUN install -d -o root -g root -m 0755 /opt/jobs /opt/connectors/smokeball
 
 # Safety-substrate tests — bootstrap.sh runs these on container start
 COPY operator/safety_substrate/ /app/safety_substrate/
@@ -731,7 +735,7 @@ COPY operator/templates/entrypoint-fetch-inputs.sh /app/entrypoint-fetch-inputs.
 # chronology firm config and controls, the run dir and its bind mount.
 COPY operator/templates/entrypoint-lanes.sh /app/entrypoint-lanes.sh
 # Sourced at the end of entrypoint-lanes.sh (ADR 0100 W3): the jobs bundle's root
-# install and its bind mounts over /opt/medchron and /opt/connectors/smokeball.
+# install and its bind mounts over /opt/jobs and /opt/connectors/smokeball.
 COPY operator/templates/entrypoint-bundles.sh /app/entrypoint-bundles.sh
 # Sourced by entrypoint.sh (the demand lane's queue, job dirs and firm inputs);
 # its own file because entrypoint.sh sits at its shell size ratchet.

@@ -16,7 +16,7 @@ R2 LAYOUT (written by ss-console CI ``publish-bundle`` and the release tick):
        "python": "..."}
 
 * ``fleet/bundles/<name>/<v>.tar.zst`` — the tarball. Its root holds the spec's
-  members (for ``jobs``: ``medchron/`` and ``connectors/smokeball/``).
+  members (for ``jobs``: ``jobs/`` and ``connectors/smokeball/``).
 
 The pointer parser is :func:`skills_applier.manifest.parse_pointer` with the
 bundle prefix: one parser, one set of refusal rules, for every artifact a seat
@@ -72,17 +72,17 @@ class BundleSpec:
 JOBS = BundleSpec(
     name="jobs",
     mounts=(
-        ("medchron", "/opt/medchron"),
+        ("jobs", "/opt/jobs"),
         ("connectors/smokeball", "/opt/connectors/smokeball"),
     ),
     required=(
-        "medchron/.venv/bin/python",
-        "medchron/.venv/bin/medchron",
-        "medchron/anthropic_pricing.json",
+        "jobs/.venv/bin/python",
+        "jobs/.venv/bin/jobs",
+        "jobs/anthropic_pricing.json",
         "connectors/smokeball/.venv/bin/python",
         "connectors/smokeball/.venv/bin/smokeball-mcp",
     ),
-    import_check="medchron/.venv/bin/python",
+    import_check="jobs/.venv/bin/python",
 )
 
 SPECS: dict[str, BundleSpec] = {JOBS.name: JOBS}

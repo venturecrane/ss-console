@@ -50,4 +50,4 @@ plugins:
   - plugins/hermes-smd-research
   - plugins/hermes-smd-drafting
   - plugins/hermes-smd-establishment
-  - plugins/hermes-smd-medchron
+  - plugins/hermes-smd-lanes

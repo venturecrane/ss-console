@@ -1099,7 +1099,7 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "job_status": ActionClass.READ,
     "job_cancel": ActionClass.INTERNAL_WRITE,
     "job_record_sideeffect": ActionClass.INTERNAL_WRITE,
-    # Chronology-package tools (hermes-smd-medchron, ss-console #2614). Submit
+    # Chronology-package tools (hermes-smd-lanes, ss-console #2614). Submit
     # queues a job on the Machine's own runner through the broker: the agent
     # hands over a resolved matter and its clients, and the work that follows
     # (reading the matter, calling the model, filing the folder) happens in a
@@ -1117,7 +1117,7 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # follows still goes through create_draft and every reply floor.
     # INTERNAL_WRITE: it changes what this turn's reply lane may answer.
     "reply_bind": ActionClass.INTERNAL_WRITE,
-    # The demand job (hermes-smd-medchron/demand.py, ss-console demand_verbs.py):
+    # The demand job (hermes-smd-lanes/demand.py, ss-console demand_verbs.py):
     # the same shape as the chronology. Submit queues a job on the Machine's own
     # runner, which files the gap audit and draft demand on the firm's matter:
     # INTERNAL_WRITE, never sent outside the firm. The requester and request are
@@ -1126,7 +1126,7 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "demand_job_submit": ActionClass.INTERNAL_WRITE,
     "demand_job_status": ActionClass.READ,
     "demand_allowance": ActionClass.READ,
-    # The drafting job (hermes-smd-medchron/drafting.py, ss-console
+    # The drafting job (hermes-smd-lanes/drafting.py, ss-console
     # drafting_verbs.py): the demand job's shape for five litigation document
     # classes. Submit queues a job on the Machine's own runner, which files the
     # draft on the firm's matter: INTERNAL_WRITE. The requester and request are
@@ -1135,14 +1135,14 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "drafting_job_submit": ActionClass.INTERNAL_WRITE,
     "drafting_job_status": ActionClass.READ,
     "drafting_allowance": ActionClass.READ,
-    # The litigation status job (hermes-smd-medchron/litigation.py, ss-console
+    # The litigation status job (hermes-smd-lanes/litigation.py, ss-console
     # litigation_verbs.py). Submit queues a job on the Machine's own runner,
     # which files the status workbook on the firm's filing matter:
     # INTERNAL_WRITE. The requester and request are the turn's verified
     # inbound, not tool arguments. Status returns states and counts only.
     "litigation_job_submit": ActionClass.INTERNAL_WRITE,
     "litigation_job_status": ActionClass.READ,
-    # The case file job (hermes-smd-medchron, ss-console casefile_verbs.py).
+    # The case file job (hermes-smd-lanes, ss-console casefile_verbs.py).
     # Submit queues a job on the Machine's own runner, which files a File
     # Status into each matter it reads: INTERNAL_WRITE. Apply submit queues the
     # changes the firm approved by number in its reply (called from the reply
@@ -1152,19 +1152,19 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "casefile_job_submit": ActionClass.INTERNAL_WRITE,
     "casefile_job_status": ActionClass.READ,
     "casefile_apply_submit": ActionClass.INTERNAL_WRITE,
-    # A matter-records request (hermes-smd-medchron/records.py, ss-console
+    # A matter-records request (hermes-smd-lanes/records.py, ss-console
     # records_verbs.py, ADR 0102 amendment 4). Submit queues a job on the
     # Machine's own runner, which finds and cuts the records and writes the reply
     # for SMD's review; nothing leaves the seat until SMD releases it:
     # INTERNAL_WRITE. The requester and request are the turn's verified inbound,
     # not tool arguments.
     "records_job_submit": ActionClass.INTERNAL_WRITE,
-    # The negotiation watch (hermes-smd-medchron/negotiation.py, ss-console
+    # The negotiation watch (hermes-smd-lanes/negotiation.py, ss-console
     # negotiation_verbs.py). Scheduled only: no submit tool exists (the cron's
     # pre_run submits to the broker directly). Status returns a notice's
     # broker-held message (composed in code on the runner) or a job's counts.
     "negotiation_job_status": ActionClass.READ,
-    # An SMD note (hermes-smd-medchron/note.py, ss-console note_verbs.py). No
+    # An SMD note (hermes-smd-lanes/note.py, ss-console note_verbs.py). No
     # submit tool exists: root records the note on SMD's command. Status
     # returns the job's state and the recorded text the wake sends verbatim.
     "note_job_status": ActionClass.READ,

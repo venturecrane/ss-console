@@ -265,7 +265,7 @@ def test_a_lane_schema_module_with_another_digest_is_unmet(image, tmp_path):
     key = Ed25519PrivateKey.generate()
     objects: dict[str, bytes] = {}
     module = b"SCHEMA = {}\n"
-    files = {"/app/runners/medchron/medchron/demand/firm.py": module}
+    files = {"/app/runners/jobs/jobs/demand/firm.py": module}
     lane_image = ImageView(
         manifest_path=image.manifest_path,
         capabilities_path=image.capabilities_path,
@@ -274,7 +274,7 @@ def test_a_lane_schema_module_with_another_digest_is_unmet(image, tmp_path):
     spec = make_spec()
     spec["requires"]["lane_schema_digests"] = {
         "demand": {
-            "path": "/app/runners/medchron/medchron/demand/firm.py",
+            "path": "/app/runners/jobs/jobs/demand/firm.py",
             "sha256": hashlib.sha256(module).hexdigest(),
         }
     }

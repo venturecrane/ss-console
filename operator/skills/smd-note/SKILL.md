@@ -115,6 +115,6 @@ that cannot go as approved does not go, and SMD sees that it did not.
 
 ## How to Run
 
-SMD runs `python -m medchron.note_by_smd` on the Machine (runbook:
+SMD runs `python -m jobs.note_by_smd` on the Machine (runbook:
 `docs/runbooks/operator/smd-note.md`). Each recorded note wakes DELIVER mode
 once. The firm does not switch this skill on or off and never triggers it.

@@ -47,27 +47,27 @@ export const SPEC_SCHEMA_VERSION = 1
  */
 export const LANE_INPUTS: Record<string, { module: string; manifest: string }> = {
   medchron: {
-    module: 'operator/runners/medchron/medchron/config.py',
+    module: 'operator/runners/jobs/jobs/medchron/config.py',
     manifest: 'medchron-firm.yaml',
   },
   demand: {
-    module: 'operator/runners/medchron/medchron/demand/firm.py',
+    module: 'operator/runners/jobs/jobs/demand/firm.py',
     manifest: 'demand/demand-firm.yaml',
   },
   drafting: {
-    module: 'operator/runners/medchron/medchron/drafting/firm.py',
+    module: 'operator/runners/jobs/jobs/drafting/firm.py',
     manifest: 'drafting/drafting-firm.yaml',
   },
   litigation: {
-    module: 'operator/runners/medchron/medchron/litigation/firm.py',
+    module: 'operator/runners/jobs/jobs/litigation/firm.py',
     manifest: 'litigation/litigation-firm.yaml',
   },
   casefile: {
-    module: 'operator/runners/medchron/medchron/casefile/firm.py',
+    module: 'operator/runners/jobs/jobs/casefile/firm.py',
     manifest: 'casefile/casefile-firm.yaml',
   },
   records: {
-    module: 'operator/runners/medchron/medchron/records/firm.py',
+    module: 'operator/runners/jobs/jobs/records/firm.py',
     manifest: 'records/records-firm.yaml',
   },
 }

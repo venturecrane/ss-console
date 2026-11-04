@@ -66,13 +66,11 @@ def _entry(tar: tarfile.TarFile, name: str, data: bytes = b"", *, mode=0o644, li
 def make_tarball(extra=()) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:zst") as tar:  # pyright: ignore[reportCallIssue, reportArgumentType]
-        for d in ("medchron/", "medchron/.venv/", "medchron/.venv/bin/"):
+        for d in ("jobs/", "jobs/.venv/", "jobs/.venv/bin/"):
             _entry(tar, d)
-        _entry(tar, "medchron/.venv/bin/python", link="/usr/bin/python3")
-        _entry(
-            tar, "medchron/.venv/bin/medchron", b"#!/opt/medchron/.venv/bin/python\n", mode=0o700
-        )
-        _entry(tar, "medchron/anthropic_pricing.json", b"{}")
+        _entry(tar, "jobs/.venv/bin/python", link="/usr/bin/python3")
+        _entry(tar, "jobs/.venv/bin/jobs", b"#!/opt/jobs/.venv/bin/python\n", mode=0o700)
+        _entry(tar, "jobs/anthropic_pricing.json", b"{}")
         for d in ("connectors/", "connectors/smokeball/", "connectors/smokeball/.venv/"):
             _entry(tar, d)
         _entry(tar, "connectors/smokeball/.venv/bin/", b"")
@@ -148,12 +146,12 @@ def test_installs_verifies_and_flips_current(tmp_path):
     assert d.path is not None
     assert (d.path / "VERSION").read_text().strip() == V1
     # The bundle's own python, checked from staging before the flip.
-    assert len(checks.calls) == 1 and str(checks.calls[0]).endswith("medchron/.venv/bin/python")
+    assert len(checks.calls) == 1 and str(checks.calls[0]).endswith("jobs/.venv/bin/python")
     assert ".staging-" in str(checks.calls[0])
-    # a+rX, as the image gives /opt/medchron (the 0700 script became 0755).
-    assert stat.S_IMODE(os.lstat(d.path / "medchron/.venv/bin/medchron").st_mode) == 0o755
-    assert stat.S_IMODE(os.lstat(d.path / "medchron/anthropic_pricing.json").st_mode) == 0o644
-    assert os.readlink(d.path / "medchron/.venv/bin/python") == "/usr/bin/python3"
+    # a+rX, as the image gives /opt/jobs (the 0700 script became 0755).
+    assert stat.S_IMODE(os.lstat(d.path / "jobs/.venv/bin/jobs").st_mode) == 0o755
+    assert stat.S_IMODE(os.lstat(d.path / "jobs/anthropic_pricing.json").st_mode) == 0o644
+    assert os.readlink(d.path / "jobs/.venv/bin/python") == "/usr/bin/python3"
     assert not [p for p in os.listdir(store(tmp_path)) if p.startswith(".")]
 
 
@@ -285,8 +283,8 @@ def test_no_r2_config_uses_on_disk(tmp_path):
     "extra",
     [
         (("etc/cron.d/x", b"* * * * * root sh"), {}),
-        (("medchron/.venv/bin/python3",), {"link": "/opt/data/evil"}),
-        (("medchron/esc",), {"link": "../../../../x"}),
+        (("jobs/.venv/bin/python3",), {"link": "/opt/data/evil"}),
+        (("jobs/esc",), {"link": "../../../../x"}),
         (("../outside", b"x"), {}),
     ],
     ids=["outside-members", "link-into-volume", "relative-escape", "dotdot"],
@@ -302,8 +300,8 @@ def test_members_outside_the_bundle_are_refused(tmp_path, extra):
 def test_a_required_path_missing_is_refused(tmp_path):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:zst") as tar:  # pyright: ignore[reportCallIssue, reportArgumentType]
-        _entry(tar, "medchron/")
-        _entry(tar, "medchron/anthropic_pricing.json", b"{}")
+        _entry(tar, "jobs/")
+        _entry(tar, "jobs/anthropic_pricing.json", b"{}")
     s3 = FakeS3()
     publish(s3, V1, tarball=buf.getvalue())
     d = run(s3, tmp_path)
@@ -316,7 +314,7 @@ def test_a_writable_entry_in_an_installed_tree_is_never_mounted(tmp_path, monkey
     run(s3, tmp_path)
     # The falsifier: the tree check sees one group-writable file (reported
     # through lstat, so the test never widens a real file's mode).
-    planted = str(store(tmp_path) / V1 / "medchron/anthropic_pricing.json")
+    planted = str(store(tmp_path) / V1 / "jobs/anthropic_pricing.json")
     real_lstat = os.lstat
 
     def lstat(path, *args, **kwargs):

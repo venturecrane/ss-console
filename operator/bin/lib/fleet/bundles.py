@@ -1,6 +1,6 @@
 """One seat's `jobs` bundle release, and which seats get one at all (ADR 0100 W3).
 
-WHAT A BUNDLE IS. The job runner venv (/opt/medchron, with its pricing table)
+WHAT A BUNDLE IS. The job runner venv (/opt/jobs, with its pricing table)
 and the Smokeball connector venv (/opt/connectors/smokeball), built by CI on
 merge inside the published core image at those exact paths
 (scripts/ci-publish-bundle.sh, operator/templates/jobs-runtime.sh), packed as

@@ -154,7 +154,7 @@ GATEWAY_LIVENESS_LEDGER_DIR="${HERMES_HOME:-/opt/data}/.smd-root/gateway-livenes
 # from the sweep for the same reason as the audit subtree, and reached by the
 # broker and the daemon through a bind mount below (the gateway's mid-boot
 # chmod of /opt/data severs a child dir's group-traverse; see the audit note).
-MEDCHRON_DATA_DIR="/opt/data/medchron"
+JOBS_DATA_DIR="/opt/data/medchron"
 # Group-readable default so the broker's rollback journal is readable by the
 # hermes mode=ro read seam during a write window. Explicit chmods below for the
 # 0700/0600 broker paths are unaffected by this.
@@ -165,7 +165,7 @@ umask 027
 # to hermes on every reboot and silently false-close the tamper-resistance.
 # .smd-root is root's own audit-loss tally (overlay audit_failure_counter); re-
 # owning it would make smd_root_loss_dir wipe it as agent-planted every boot.
-find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${MEDCHRON_DATA_DIR}" -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to
@@ -322,7 +322,7 @@ export SMD_CUSTOMER_YAML="${LIVE_CUSTOMER_YAML}"
 # SMD_GATEWAY_PID (the broker's SO_PEERCRED identity for it, the liveness
 # watcher's kill target) is its real pid before the broker starts. The
 # entrypoint no longer execs into it: it stays tini's child and supervises the
-# Machine stop (drain the medchron daemon, then the gateway). Both halves live
+# Machine stop (drain the jobs daemon, then the gateway). Both halves live
 # in the sourced file, which says why.
 # shellcheck source=/dev/null
 . /app/runners/supervisor/entrypoint-supervisor.sh
@@ -483,7 +483,7 @@ launch_broker() {
 # signal stays ignored across setpriv, env -i and exec). tini -g signals this
 # whole process group at a Machine stop, and the broker has no handler, so it
 # used to die at the first instant of the stop while the gateway (its own
-# session since the job-safe stop) ran on for up to 45 s and the medchron
+# session since the job-safe stop) ran on for up to 45 s and the jobs
 # daemon drained for up to 240 s with nothing to record to: the daemon's
 # job_record calls failed, the gateway's rows were held and lost, and a send
 # in flight could leave with no row (2026-10-20). Now the broker outlives both
@@ -645,7 +645,7 @@ fi
 # Root-side chronology runner daemon (routine 11, ss#2614). Same fork point and
 # respawn discipline as the appliers above, for the same reason: it owns the
 # root-only job dirs and the queue, and it drops each driver child to the
-# medchron uid itself (setpriv), which a hermes process could never do. What
+# jobs uid itself (setpriv), which a hermes process could never do. What
 # the child gets is an ALLOW-LIST from this env (the daemon copies only the
 # Anthropic key, the Smokeball credentials and the firm config path; R2 and
 # Google credentials never reach it). Import-gated so an image whose venv is
@@ -654,37 +654,37 @@ fi
 #
 # Lane memory caps (2026-10-13): customer.yaml machine.lane_memory_mb, when
 # authored, becomes the SMD_*_MEMORY_MAX_BYTES env each lane writes into its
-# cgroup (medchron.lane_memory prints the NAME=BYTES words; nothing when
+# cgroup (jobs.lane_memory prints the NAME=BYTES words; nothing when
 # unauthored, so the code defaults stand). Re-read on every respawn so a live
 # config change reaches the next daemon start. The words are digits only.
 # ADR 0100: only a seat that authors a job lane runs the runner, and the runner
 # starts only the lanes this seat authors (SMD_AUTHORED_LANES, exported above).
 if [ -z "${SMD_AUTHORED_LANES//,/}" ]; then
-  log "Root medchron daemon NOT launched (this seat authors no job lane)"
-elif [ -x /opt/medchron/.venv/bin/python ] \
-   && /opt/medchron/.venv/bin/python -c "import medchron.daemon" 2>/dev/null; then
+  log "Root jobs daemon NOT launched (this seat authors no job lane)"
+elif [ -x /opt/jobs/.venv/bin/python ] \
+   && /opt/jobs/.venv/bin/python -c "import jobs.daemon" 2>/dev/null; then
   # The stop flag: the supervisor (and tini's group signal) TERMs this loop
   # and the daemon together; the loop waits for the daemon's drain, then ends.
   ( _mc_stop=""; trap '_mc_stop=1' TERM INT
     while true; do
       # shellcheck disable=SC2046  # word-split on purpose: NAME=BYTES words
-      /usr/bin/env $(/opt/medchron/.venv/bin/python -m medchron.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_MEDCHRON_RUN_DIR="${MEDCHRON_RUN_DIR}" \
+      /usr/bin/env $(/opt/jobs/.venv/bin/python -m jobs.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" \
       SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
       MEDCHRON_FIRM_CONFIG="${MEDCHRON_FIRM_CONFIG}" \
-      MEDCHRON_PRICING_JSON="/opt/medchron/anthropic_pricing.json" \
-      /opt/medchron/.venv/bin/python -m medchron.daemon && rc=0 || rc=$?
-      # 130 (medchron.daemon.STOPPED_EXIT): the Machine is stopping. A daemon
+      JOBS_PRICING_JSON="/opt/jobs/anthropic_pricing.json" \
+      /opt/jobs/.venv/bin/python -m jobs.daemon && rc=0 || rc=$?
+      # 130 (jobs.daemon.STOPPED_EXIT): the Machine is stopping. A daemon
       # respawned now has no stop flag and works inside a dying Machine
       # (2026-10-15: a lost wake paged SMD for a deploy). Any other exit is a
       # crash, and the loop restarts it as before.
-      { [ "${rc}" = 130 ] || [ -n "${_mc_stop}" ]; } && { log "medchron daemon stopped by the Machine stop (${rc}); not restarting"; break; }
-      log "medchron daemon exited (${rc}); restarting in 5s"; sleep 5
+      { [ "${rc}" = 130 ] || [ -n "${_mc_stop}" ]; } && { log "jobs daemon stopped by the Machine stop (${rc}); not restarting"; break; }
+      log "jobs daemon exited (${rc}); restarting in 5s"; sleep 5
     done ) &
   # shellcheck disable=SC2034 # read by _smd_supervisor_stop in the sourced supervisor
-  SMD_MEDCHRON_LOOP_PID=$!
-  log "Root medchron daemon launched (uid 0; runs chronology jobs as the medchron uid from ${MEDCHRON_RUN_DIR}/queue)"
+  SMD_JOBS_LOOP_PID=$!
+  log "Root jobs daemon launched (uid 0; runs chronology jobs as the jobs uid from ${JOBS_RUN_DIR}/queue)"
 else
-  log "ERROR: Root medchron daemon NOT launched: this seat authors job lanes (${SMD_AUTHORED_LANES}) but no jobs bundle is mounted at /opt/medchron (the image carries no runner since ADR 0100 W5)"
+  log "ERROR: Root jobs daemon NOT launched: this seat authors job lanes (${SMD_AUTHORED_LANES}) but no jobs bundle is mounted at /opt/jobs (the image carries no runner since ADR 0100 W5)"
 fi
 
 # Root-side authored-spec applier (ss ADR 0083 #2084). Same shape, same

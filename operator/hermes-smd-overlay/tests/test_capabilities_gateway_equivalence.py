@@ -29,7 +29,7 @@ NO_LANE_SEATS = {"captain-mark", "scott", "brokery", "ashton-price-marketing"}
 
 def _medchron_today() -> set[str]:
     """Every tool the plugin defines: what register() offered every seat before."""
-    m = load_plugin("hermes-smd-medchron")
+    m = load_plugin("hermes-smd-lanes")
     return set(
         {
             **m.TOOLS,
@@ -84,11 +84,11 @@ def test_each_seat_loads_exactly_its_authored_surface(seat, name):
     doc = seat(name)
     lanes = capabilities.authored_lanes(doc)
     smokeball = capabilities.authors_connector(doc, "smokeball")
-    medchron = load_plugin("hermes-smd-medchron")
+    lanes_plugin = load_plugin("hermes-smd-lanes")
     expected = set()
     for lane in lanes:
-        expected |= set(medchron.LANE_TOOLS[lane])
-    assert _registered("hermes-smd-medchron") == expected
+        expected |= set(lanes_plugin.LANE_TOOLS[lane])
+    assert _registered("hermes-smd-lanes") == expected
     escalation = _registered("hermes-smd-escalation")
     assert (CASEWORK <= escalation) is smokeball
     assert not (CASEWORK & escalation) or smokeball
@@ -106,7 +106,7 @@ def test_ashton_price_loads_exactly_what_it_loads_today(seat):
     # Every lane, the records lane included (ADR 0102 amendment 4, switched on
     # 2026-11-03 after the release that carried it).
     assert capabilities.authored_lanes(doc) == list(capabilities.JOB_LANES)
-    assert _registered("hermes-smd-medchron") == _medchron_today()
+    assert _registered("hermes-smd-lanes") == _medchron_today()
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True
     assert _destructive_line(doc, as_today=False) == _destructive_line(doc, as_today=True)
@@ -114,11 +114,11 @@ def test_ashton_price_loads_exactly_what_it_loads_today(seat):
 
 def test_pilot_smokeball_drops_only_its_unauthored_lanes(seat):
     doc = seat("pilot-smokeball")
-    medchron = load_plugin("hermes-smd-medchron")
-    dropped = _medchron_today() - _registered("hermes-smd-medchron")
+    lanes_plugin = load_plugin("hermes-smd-lanes")
+    dropped = _medchron_today() - _registered("hermes-smd-lanes")
     unauthored = set(capabilities.JOB_LANES) - set(capabilities.authored_lanes(doc))
     assert unauthored == {"drafting", "litigation", "negotiation", "records"}
-    assert dropped == set().union(*(set(medchron.LANE_TOOLS[lane]) for lane in unauthored))
+    assert dropped == set().union(*(set(lanes_plugin.LANE_TOOLS[lane]) for lane in unauthored))
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True
     # pilot authors destructive: confirm and Smokeball: the line is unchanged.
@@ -130,12 +130,12 @@ def test_smd_staging_loads_its_lanes_and_no_smokeball_surface(seat):
     lanes' tools (derived from its config, whichever lanes those are), no
     casework, no Smokeball route, no destructive line."""
     doc = seat("smd-staging")
-    medchron = load_plugin("hermes-smd-medchron")
+    lanes_plugin = load_plugin("hermes-smd-lanes")
     lanes = capabilities.authored_lanes(doc)
     assert lanes, "staging authors at least one lane"
     assert capabilities.authors_connector(doc, "smokeball") is False
-    expected = set().union(*(set(medchron.LANE_TOOLS[lane]) for lane in lanes))
-    assert _registered("hermes-smd-medchron") == expected
+    expected = set().union(*(set(lanes_plugin.LANE_TOOLS[lane]) for lane in lanes))
+    assert _registered("hermes-smd-lanes") == expected
     assert not (CASEWORK & _registered("hermes-smd-escalation"))
     assert gate._route_served("smokeball") is False
     assert _destructive_line(doc, as_today=False) is False
@@ -145,7 +145,7 @@ def test_smd_staging_loads_its_lanes_and_no_smokeball_surface(seat):
 def test_seats_that_author_nothing_load_none_of_the_gated_surface(seat, name):
     doc = seat(name)
     assert capabilities.authored_lanes(doc) == []
-    assert _registered("hermes-smd-medchron") == set()
+    assert _registered("hermes-smd-lanes") == set()
     assert not (CASEWORK & _registered("hermes-smd-escalation"))
     assert gate._route_served("smokeball") is False
     assert _destructive_line(doc, as_today=False) is False
