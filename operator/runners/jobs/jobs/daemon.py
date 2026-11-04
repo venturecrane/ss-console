@@ -1,14 +1,19 @@
-"""The on-Machine runner daemon (routine 11, ss#2614): `python -m jobs.daemon`.
+"""The on-Machine jobs runner daemon (routine 11, ss#2614): `python -m jobs.daemon`.
 
 Runs as root under the entrypoint's respawn loop, forked before the exec-drop.
-Watches the queue the broker writes (`<run_dir>/queue/<job_id>.json`), runs
-one job at a time as the dedicated `jobs` uid under a memory cap, and
-reports every transition back through the broker (`medchron_job_record`, root
-only), which writes the ledger row and the audit row under its own uid.
+It starts every lane in ``lanes.LANES`` on its own thread and then only waits
+on the main thread (``supervise``), where the stop signal lands. ``Daemon`` is
+what every lane shares: it watches the lane's queue the broker writes
+(``<queue>/<job_id>.json``), runs one job at a time as the dedicated `jobs`
+uid under the lane's memory cap, and reports every transition back through
+the broker (each lane's ``*_job_record`` verb, root only), which writes the
+ledger row and the audit row under its own uid. What a job IS (its input file,
+its child, its verdict, its wake) is the lane's: ``run_job``, ``_report`` and
+``_compose_wake`` are hooks each lane defines. This module imports no lane.
 
-What it holds itself to:
+What every lane holds itself to:
 
-* One job at a time, oldest first (job ids are ULIDs; the file name sorts).
+* One job at a time per lane, oldest first (job ids are ULIDs; the file name sorts).
 * An envelope with no ledger row is quarantined, never run.
 * A seat at HARD_STOP runs nothing: the job is recorded `held` once, stays
   queued, and is re-checked every poll without a new record.
@@ -38,15 +43,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .broker_client import BrokerClient, BrokerError
-from .medchron.covered import delivery_fields, wake_folder_lines
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, verdict as verdict_mod, wake_grace
+from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, wake_grace
 from . import resume as resume_mod, retention
-from .medchron import allowance as allowance_mod, config as config_mod, job as job_mod
-from .proof import holds as proof_holds, watch as proof_watch
-from .skill_load import load_line
-from .stages import vision_seed
+from .proof import watch as proof_watch
 
 logger = logging.getLogger("jobs.daemon")
 
@@ -56,7 +57,6 @@ SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 STICKY_DB_ENV = "SMD_STICKY_STOP_DB_PATH"
 DEFAULT_STICKY_DB = "/opt/data/smd/sticky_stop.db"
 POLL_ENV = "SMD_JOBS_POLL_SECONDS"
-MEMORY_MAX_ENV = "SMD_MEDCHRON_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY_MAX = 2560 * 1024 * 1024
 WIPE_HOURS_ENV = "SMD_JOBS_WIPE_HOURS"
 DEFAULT_WIPE_HOURS = 72
@@ -87,21 +87,6 @@ CHILD_ENV_PASS = (
 TERMINAL = frozenset({"delivered", "failed"})
 
 
-def default_runner_cmd() -> list[str]:
-    return [
-        "setpriv",
-        f"--reuid={CHILD_UID_NAME}",
-        f"--regid={CHILD_UID_NAME}",
-        "--init-groups",
-        "--no-new-privs",
-        "nice",
-        "-n",
-        "10",
-        RUNNER_BIN,
-        "run",
-    ]
-
-
 @dataclass
 class Daemon:
     run_dir: Path
@@ -125,8 +110,6 @@ class Daemon:
     #: The loop's stop flag, bound by ``run_forever``; a lane reads it when its
     #: child exits to tell a Machine stop from a failure.
     stopping: Callable[[], bool] = lambda: False
-    #: Explicit firm-config path; None resolves the env/default the seat uses.
-    firm_config: str | None = None
     #: How often a running job's beat thread rewrites the heartbeat
     #: (``child.run_child``), and how long a stop waits for a child to
     #: checkpoint before terminating it.
@@ -137,19 +120,24 @@ class Daemon:
     gate_url: str = field(default_factory=lambda: os.environ.get(GATE_URL_ENV) or DEFAULT_GATE_URL)
     wake_secret: str = field(default_factory=lambda: os.environ.get(WAKE_SECRET_ENV, ""))
     #: What a lane names itself by: the wake's handoff id prefix, the memory
-    #: cgroup, and the heartbeat file. The demand and drafting lanes override
-    #: them (the drafting lane also joins the demand lane's memory cgroup).
-    LANE = "medchron"
-    HEARTBEAT = "heartbeat"
+    #: cgroup, the heartbeat file and (unless ``TICK`` says otherwise) the tick
+    #: file ``<LANE>-tick``. Every lane sets them; the base is no lane, only the
+    #: seat's shared settings each lane is built from (``build``). The drafting
+    #: lane also joins the demand lane's memory cgroup.
+    LANE = ""
+    HEARTBEAT = ""
+    #: The tick file's name when it is not ``<LANE>-tick`` (the chronology's is
+    #: ``tick``, from when it was this class).
+    TICK = ""
 
     # -- paths -------------------------------------------------------------
     @property
     def queue(self) -> Path:
-        return self.run_dir / "queue"
+        return self.run_dir / f"{self.LANE}-queue"
 
     @property
     def jobs(self) -> Path:
-        return self.run_dir / "jobs"
+        return self.run_dir / f"{self.LANE}-jobs"
 
     def job_dir(self, job_id: str) -> Path:
         return self.jobs / job_id
@@ -174,7 +162,7 @@ class Daemon:
             tmp.write_text(json.dumps(payload), encoding="utf-8")
             os.chmod(tmp, 0o644)
             tmp.replace(self.run_dir / f"{self.HEARTBEAT}.json")
-            (self.run_dir / ("tick" if self.LANE == "medchron" else f"{self.LANE}-tick")).touch()
+            (self.run_dir / (self.TICK or f"{self.LANE}-tick")).touch()
         except OSError as exc:  # the daemon IS the thing the heartbeat reports on
             logger.warning("heartbeat write failed: %s", exc)
 
@@ -246,52 +234,20 @@ class Daemon:
             return job_id
         return None
 
-    # -- one job ---------------------------------------------------------------
-    def _write_job_yaml(self, job_id: str) -> Path:
-        jd = self.job_dir(job_id)
-        env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
-        data_root = jd / "data"
-        data_root.mkdir(exist_ok=True)
-        doc: dict[str, Any] = {
-            "slug": self.customer_slug,
-            "matter": env["matter"],
-            "units": env["units"],
-            "incident": env["incident"],
-            "data_root": str(data_root),
-            # The install-level tree the entrypoint pre-seeds from the vault
-            # every boot (`controls/controls.json` + PDFs, `controls/icd/`,
-            # both staged there by provision-customer.sh): the run dir itself,
-            # shared by every job, root-owned and read-only to the child. The
-            # child never fetches into it (only a laptop install, where
-            # install_root == data_root, fetches its own ICD tables). A fresh
-            # per-job data_root can never carry the classifier's falsifier, so
-            # a job that resolved controls there refused forever (2026-09-04).
-            "install_root": str(self.run_dir),
-        }
-        for key in (
-            "injuries",
-            "cap_usd",
-            "allowance_remaining_documents",
-            "allowance_remaining_pages",
-            "selection",
-            "requested_by",
-            "request_ref",
-            "update",
-        ):
-            if env.get(key) is not None:
-                doc[key] = env[key]
-        doc.update(vision_seed.staged_fields(env, self.run_dir, job_id))
-        # The month's state is read FRESH here, on every run and every resume,
-        # never taken from the envelope: the envelope's copy was true when the
-        # job was submitted and is stale the moment any other job records cents.
-        # This job's own row is excluded so a resume is not metered against the
-        # spend it already recorded.
-        job_mod.stamp_period(doc, self.broker.allowance(exclude_job_id=job_id))
-        import yaml
+    # -- one job: the lane's own (each lane defines these) -------------------
+    def run_job(self, job_id: str) -> str:
+        """HOOK. Run one claimed job to a ledger state: write the job's input
+        file, record running, spawn the child (``child.run_child``) and report.
+        Returns the state, or ``deferred`` / ``interrupted`` / ``requeued``."""
+        raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no job")
 
-        (jd / "job.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
-        self._chown_child(jd)
-        return jd
+    def _report(self, job_id: str, code: int, out: str) -> str:
+        """HOOK. Map the child's verdict onto the ledger and the wake."""
+        raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no verdict mapping")
+
+    def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:
+        """HOOK. The DELIVER turn's task text for a finished job."""
+        raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no wake")
 
     def _chown_child(self, path: Path) -> None:
         if not self.child_uid:
@@ -332,154 +288,7 @@ class Daemon:
 
         return preexec
 
-    def run_job(self, job_id: str) -> str:
-        # The firm config first, before anything is recorded. A seat whose
-        # firm.yaml has not caught up with this runner's schema DEFERS: the job
-        # stays claimed, nothing is written to the ledger, and the next tick
-        # tries again. That is what makes the rollout safe in either order --
-        # customer.yaml and firm.yaml can land minutes apart without a job
-        # failing in between.
-        try:
-            config_mod.load(self.firm_config)
-        except config_mod.ConfigError as exc:
-            logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
-            return "deferred"
-        try:
-            jd = self._write_job_yaml(job_id)
-        except BrokerError as exc:
-            logger.warning("could not read the month's allowance for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        try:
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("could not record running for %s: %s", job_id, exc)
-            return "deferred"
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        # The job marker: the Smokeball connector exempts the jobs uid from
-        # recording each write in the audit ledger ONLY on a job this daemon
-        # launched, because this job's own MEDCHRON_JOB_* rows record it. A person
-        # running as jobs by hand has no marker and must name themselves or
-        # is refused (smokeball_connector/write_record.py).
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = child_mod.run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
-                cwd=jd,
-                env=env,
-                log=log,
-                pidfile=self.run_dir / "child.pid",
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
-            return "interrupted"
-        return self._report(job_id, code, out or "")
-
-    def _report(self, job_id: str, code: int, out: str) -> str:
-        outcomes = verdict_mod.read(self.job_dir(job_id), out)
-        stage: str | None = None
-        if not outcomes:  # `verdict.read` always returns a list; empty is "no verdict from either source"
-            state, fields = "failed", {"reason": verdict_mod.lost(code)[:500]}
-        else:
-            rank = {"delivered": 0, "dry_run": 0, "held": 1, "refused": 2, "failed": 3}
-            worst = max(outcomes, key=lambda o: rank.get(str(o.get("outcome")), 3))
-            outcome = str(worst.get("outcome"))
-            # Each unit reports JOB-level figures, never its own: `pages` is the
-            # matter's one extracted file and `dollars` the job's whole ledger
-            # set (driver.Budget reads every unit's). So the job's figure is
-            # the largest any unit saw, taken once. Summed, a joint job was
-            # debited its shared file once per client (2026-10-28).
-            cents = int(round(max(float(o.get("dollars") or 0) for o in outcomes) * 100))
-            pages = int(max(int(o.get("pages") or 0) for o in outcomes))
-            documents = int(max(int(o.get("documents") or 0) for o in outcomes))
-            reason = worst.get("reason")
-            stage = str(worst.get("stage") or "") or None
-            if outcome == "refused":
-                state, reason = "held", f"refused: {reason}"
-            elif outcome == "delivered":
-                state = "delivered"
-            elif outcome == "held":
-                state = "held"
-            else:
-                state = "failed"
-            fields = {"documents": documents, "pages": pages, "cents": cents}
-            if reason:
-                fields["reason"] = str(reason)[:500]
-            if state == "delivered":
-                # The delivery's own fields, including the covered/uncovered
-                # document id sets a later UPDATE reads its delta from.
-                fields.update(delivery_fields(worst, outcomes))
-        # An infrastructure ending (network, model API, a slow index, a runner
-        # killed by a signal) is retried after a delay, bounded (requeue.py):
-        # before settle, so a retry is not a page.
-        if not proof_watch.in_proof_run(self) and requeue.maybe_requeue(self, job_id, outcomes, state, fields, stage):
-            return "requeued"
-        # Proven delivery: a dry run is never a delivery, a delivered claim
-        # without its proof is a failure, and a hold or read-back failure pages.
-        state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
-        try:
-            self.broker.record(job_id, state, fields)
-        except BrokerError as exc:
-            logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
-        finished = self.clock() if state in TERMINAL or state == "held" else None
-        self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
-        if finished is not None and proof_watch.wake_owed(self, state, fields.get("reason")):
-            self._write_state(
-                job_id,
-                wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
-            )
-        return state
-
     # -- the deliver wake (ss#2616) --------------------------------------------
-    def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:
-        """The handoff task text. Only broker/envelope-authored fields ride it
-        (requester, ref, matter number, counts, folder id) — never a file name,
-        a client name, or a DOB: the deliver turn reads the folder itself, so
-        no tenant-authored string reaches the unfenced wake prompt.
-
-        A hold or failure names WHERE it stopped, never why: `stage` is a DAG
-        stage name (code-authored vocabulary), whereas the runner's `reason` is
-        free text that quotes matter file names and folder names (a decision
-        hold lists the files it could not place). The ledger row and the
-        console keep the full reason for a person reading their own tenant."""
-        env: dict[str, Any] = {}
-        try:
-            env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            pass
-        matter_no = (env.get("matter") or {}).get("number", "")
-        from .medchron.update import outcome as update_outcome
-
-        # Code-authored: an update INTO the delivered chronology says so, plus
-        # an already-current update's counts per reason.
-        upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env)
-        lines = [
-            f"Run the medical-chronology-maintainer skill's DELIVER mode for chronology job {job_id}.",
-            load_line("medical-chronology-maintainer"),
-            f"Outcome: {state}. Matter number: {matter_no}.",
-            update_outcome.totals_line(fields, len(upd) > 1),
-            *upd,
-        ]
-        lines.extend(wake_folder_lines(state, fields))
-        lines.extend(allowance_mod.credit_wake_lines(getattr(self, "broker", None), job_id, state, fields))
-        if state != "delivered":
-            lines.append(f"Held at: {stage or 'runner (no verdict)'}.")
-        if state == "held":  # the firm-safe token the skill words; the reason stays SMD's
-            lines.append(proof_holds.wake_line("medchron", fields.get("reason")))
-        requester = env.get("requested_by") or ""
-        ref = env.get("request_ref") or ""
-        none_note = "(none - a rehearsal submission; report in the memo, create no task, send nothing)"
-        lines.append(f"Requester: {requester or none_note}.")
-        if ref:
-            lines.append(f"Request ref: {ref}.")
-        return "\n".join(lines)
-
     def _wakes_pending(self) -> list[str]:
         if not self.jobs.is_dir():
             return []
@@ -623,18 +432,37 @@ def _require(name: str) -> str:
 
 
 def build() -> Daemon:
+    """The seat's shared settings every lane is built from (each lane's
+    ``build_lane``). It runs nothing itself: it has no lane, so no queue, no
+    child and no beat; ``runner_cmd`` and ``memory_max`` are each lane's own."""
     run_dir = Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
     return Daemon(
         run_dir=run_dir,
         broker=BrokerClient(_require(SOCKET_ENV)),
-        runner_cmd=default_runner_cmd(),
+        runner_cmd=[],
         customer_slug=_require("CUSTOMER_SLUG"),
         sticky_db=os.environ.get(STICKY_DB_ENV) or DEFAULT_STICKY_DB,
-        memory_max=int(os.environ.get(MEMORY_MAX_ENV) or DEFAULT_MEMORY_MAX),
         wipe_hours=float(os.environ.get(WIPE_HOURS_ENV) or DEFAULT_WIPE_HOURS),
         held_wipe_hours=float(os.environ.get(retention.HELD_WIPE_HOURS_ENV) or retention.DEFAULT_HELD_WIPE_HOURS),
         child_uid=CHILD_UID_NAME,
     )
+
+
+#: How often the supervisor wakes to look at the stop flag and the lanes.
+SUPERVISE_SECONDS = 0.5
+
+
+def supervise(threads: list[Any], *, stop: Callable[[], bool]) -> None:
+    """The main thread's loop: it runs no lane, it only waits, so the signal
+    handlers and ``STOPPED_EXIT`` stay on the main thread. It returns on the
+    Machine's stop, or when every lane thread has ended without one (each
+    lane's loop catches its ticks' errors, so that is a crash and the
+    entrypoint respawns the daemon)."""
+    while not stop():
+        if not any(t.is_alive() for t in threads):
+            logger.error("no lane is running; the jobs daemon exits for the entrypoint to respawn it")
+            return
+        time.sleep(SUPERVISE_SECONDS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -660,17 +488,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     poll = float(os.environ.get(POLL_ENV) or 5)
     logger.info("jobs daemon up: run_dir=%s poll=%ss", d.run_dir, poll)
-    from .demand_lane import start_lane  # its own slot: a demand never waits on a chronology, nor the reverse
+    # Every lane on its own thread, started the same way from one table, so no
+    # lane waits on another's job (``lanes.LANES``). Imported here, not at the
+    # top: the runner core imports no lane (test_runner_core_imports_no_lane).
+    from .lanes import start_lanes
 
-    threads = [start_lane(d, stop=lambda: stopped["flag"], poll_seconds=poll)]
-    from .lanes import start_other_lanes  # drafting and negotiation, each in its own module
-
-    threads += start_other_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll) or []
-    d.run_forever(stop=lambda: stopped["flag"], poll_seconds=poll)
-    # Each lane drains its own child under the same deadline; the process waits
-    # for them instead of abandoning them mid-checkpoint (they are daemon threads).
+    threads = [t for t in start_lanes(d, stop=lambda: stopped["flag"], poll_seconds=poll) or [] if t is not None]
+    supervise(threads, stop=lambda: stopped["flag"])
+    # Each lane drains its own child under the same deadline, measured from the
+    # stop; the process waits for them instead of abandoning them mid-checkpoint
+    # (they are daemon threads).
     if stopped["flag"]:
-        child_mod.join_lanes([t for t in threads if t is not None], since=stopped["at"], budget=d.drain_seconds)
+        child_mod.join_lanes(threads, since=stopped["at"], budget=d.drain_seconds)
     # The Machine's stop is FINAL for this process: the entrypoint's loop
     # restarts the daemon on any other exit, and a daemon respawned inside a
     # dying Machine has no stop flag. On 2026-10-15 one did exactly that,

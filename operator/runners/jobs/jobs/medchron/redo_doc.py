@@ -155,9 +155,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", required=True, help="why (a PR, a vfy_ id)")
     ap.add_argument("--dry-run", action="store_true", help="print what would be done; change nothing")
     a = ap.parse_args(argv)
-    from .. import daemon as daemon_mod
+    from . import lane as lane_mod
 
-    d = daemon_mod.build()
+    d = lane_mod.build()
     try:
         p = plan(d, a.job_id, by=a.by, source=a.source)
     except (Refused, OSError, ValueError) as exc:

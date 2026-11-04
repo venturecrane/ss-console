@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -254,19 +255,25 @@ def test_run_forever_binds_the_loop_stop_flag_the_lanes_read(tmp_path):
 
 # ---- the stop is final for the daemon process (2026-10-15) --------------------------
 def _main_with(monkeypatch, run_forever) -> int:
-    """``daemon.main`` with the seat parts stubbed: no broker socket, no lanes."""
+    """``daemon.main`` with the seat parts stubbed: no broker socket, and one
+    lane whose loop is ``run_forever`` (each lane runs on its own thread; the
+    main thread only supervises, so the stop signal still lands there)."""
     monkeypatch.setattr(
         daemon_mod,
         "build",
         lambda: daemon_mod.Daemon(run_dir=Path("/nonexistent"), broker=None, runner_cmd=[], customer_slug="example"),
     )
     monkeypatch.setattr(daemon_mod, "memory_cap_mode", lambda _root: "v2")
-    import jobs.demand_lane as dl
+    import threading
+
     import jobs.lanes as lanes
 
-    monkeypatch.setattr(dl, "start_lane", lambda *a, **k: None)
-    monkeypatch.setattr(lanes, "start_other_lanes", lambda *a, **k: None)
-    monkeypatch.setattr(daemon_mod.Daemon, "run_forever", run_forever)
+    def start_lanes(d, *, stop, poll_seconds):
+        t = threading.Thread(target=run_forever, args=(d, stop, poll_seconds), name="medchron-lane", daemon=True)
+        t.start()
+        return [t]
+
+    monkeypatch.setattr(lanes, "start_lanes", start_lanes)
     old = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
     try:
         return daemon_mod.main([])
@@ -281,8 +288,9 @@ def test_main_exits_stopped_when_the_machine_stop_ended_the_loop(monkeypatch):
     spent a DELIVER wake on a gateway already gone, and SMD was paged)."""
 
     def run_forever(self, stop, poll_seconds):
-        os.kill(os.getpid(), signal.SIGTERM)
-        assert stop()
+        os.kill(os.getpid(), signal.SIGTERM)  # delivered to the main thread, which sets the flag
+        while not stop():
+            time.sleep(0.01)
 
     assert _main_with(monkeypatch, run_forever) == daemon_mod.STOPPED_EXIT == 130
 

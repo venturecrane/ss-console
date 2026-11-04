@@ -15,7 +15,8 @@ import yaml
 
 from jobs.medchron import config as config_mod, job as job_mod
 from jobs import daemon as daemon_mod, resume as resume_mod, wake_grace
-from jobs.daemon import BrokerError, Daemon, memory_cap_mode, sticky_level
+from jobs.daemon import BrokerError, memory_cap_mode, sticky_level
+from jobs.medchron.lane import MedchronLane
 from jobs.stages import upload
 from jobs.stages.base import StageRun
 from medchron_testkit import FIRM_CONFIG, FakeSeat
@@ -437,13 +438,13 @@ def _firm_yaml(tmp_path: Path) -> Path:
     return p
 
 
-def _daemon(tmp_path: Path, script: str = OK_RUNNER, **kw) -> tuple[Daemon, FakeBroker]:
+def _daemon(tmp_path: Path, script: str = OK_RUNNER, **kw) -> tuple[MedchronLane, FakeBroker]:
     run_dir = tmp_path / "run"
     (run_dir / "queue").mkdir(parents=True, exist_ok=True)
     broker = FakeBroker()
     now = {"t": 1_000_000.0}
     kw.setdefault("firm_config", str(_firm_yaml(tmp_path)))
-    d = Daemon(
+    d = MedchronLane(
         run_dir=run_dir,
         broker=broker,
         runner_cmd=_fake_runner(tmp_path, script),
@@ -458,7 +459,7 @@ def _daemon(tmp_path: Path, script: str = OK_RUNNER, **kw) -> tuple[Daemon, Fake
     return d, broker
 
 
-def _submit(d: Daemon, broker: FakeBroker, job_id: str) -> None:
+def _submit(d: MedchronLane, broker: FakeBroker, job_id: str) -> None:
     broker.rows[job_id] = {"state": "submitted"}
     (d.queue / f"{job_id}.json").write_text(json.dumps(_envelope(job_id)))
 
@@ -557,7 +558,7 @@ def test_daemon_wipes_terminal_jobs_after_the_hold_and_never_live_ones(tmp_path)
 # ---- retention: a job that stopped and waited is not kept forever (ss#2912) ----
 
 
-def _parked(d: Daemon, broker: FakeBroker, job_id: str, state: str = "held") -> None:
+def _parked(d: MedchronLane, broker: FakeBroker, job_id: str, state: str = "held") -> None:
     """A job that ran, stopped, and is waiting for a person: `finished_at` is
     stamped (it always was) but the state is not terminal."""
     _submit(d, broker, job_id)
@@ -618,7 +619,7 @@ def test_a_live_job_is_never_wiped_however_old(tmp_path):
     assert d.wipe_expired() == [] and (d.jobs / "01B").exists()
 
 
-def _fail_job(d: Daemon, broker: FakeBroker, job_id: str = "01A") -> None:
+def _fail_job(d: MedchronLane, broker: FakeBroker, job_id: str = "01A") -> None:
     """Run a job to a recorded failure, the state a resume acts on."""
     _submit(d, broker, job_id)
     d.tick()
@@ -1024,7 +1025,7 @@ def test_the_grace_is_this_processs_own_never_carried_across_a_boot(tmp_path):
     d.tick()
     assert "unreachable" not in json.dumps(d._daemon_state("01A"))
     now[0] += 3600  # the Machine was down an hour
-    d2 = daemon_mod.Daemon(run_dir=d.run_dir, broker=broker, runner_cmd=d.runner_cmd, customer_slug=d.customer_slug)
+    d2 = MedchronLane(run_dir=d.run_dir, broker=broker, runner_cmd=d.runner_cmd, customer_slug=d.customer_slug)
     d2.wake_secret, d2.gate_url, d2.clock = d.wake_secret, d.gate_url, d.clock
     for _ in range(3):
         now[0] += 60

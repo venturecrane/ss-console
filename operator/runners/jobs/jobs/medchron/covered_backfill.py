@@ -112,11 +112,11 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0:
         print("REFUSED: run as root on the seat, in the runner daemon's environment", file=sys.stderr)
         return 2
-    from .. import daemon as daemon_mod
+    from . import lane as lane_mod
     from ..broker_client import BrokerError
 
     try:
-        d = daemon_mod.build()
+        d = lane_mod.build()
         cfg = config_mod.load(d.firm_config)
         counts = run(d.jobs, d.broker, cfg, dry_run=a.dry_run)
     except (BrokerError, OSError, SystemExit, config_mod.ConfigError) as exc:

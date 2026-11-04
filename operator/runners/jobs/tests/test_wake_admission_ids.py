@@ -140,7 +140,7 @@ def test_a_wake_is_numbered_past_every_wake_the_job_already_posted(state, seq):
 
 def test_every_waking_lane_posts_through_the_numbered_dispatch():
     """drafting, demand, negotiation, litigation, casefile, note and the
-    chronology daemon all wake through ``Daemon._dispatch_wakes``; the records
+    chronology lane all wake through ``Daemon._dispatch_wakes``; the records
     lane wakes nothing (its review watch replies instead)."""
     from jobs.casefile_lane import CasefileLane
     from jobs.demand_lane import DemandLane
@@ -148,9 +148,10 @@ def test_every_waking_lane_posts_through_the_numbered_dispatch():
     from jobs.litigation_lane import LitigationLane
     from jobs.negotiation_lane import NegotiationLane
     from jobs.note_lane import NoteLane
+    from jobs.medchron.lane import MedchronLane
     from jobs.records_lane import RecordsLane
 
-    for cls in (DraftingLane, DemandLane, NegotiationLane, LitigationLane, CasefileLane, NoteLane):
+    for cls in (DraftingLane, DemandLane, NegotiationLane, LitigationLane, CasefileLane, NoteLane, MedchronLane):
         assert cls._dispatch_wakes is Daemon._dispatch_wakes, cls.__name__
         assert cls.dispatch_wakes is Daemon.dispatch_wakes, cls.__name__
     assert RecordsLane.dispatch_wakes is not Daemon.dispatch_wakes

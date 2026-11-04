@@ -319,9 +319,9 @@ def main(argv: list[str] | None = None) -> int:
     c_ap.add_argument("--job", default=None, help="the job the waived pages are read by (optional)")
     c_ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
-    from .. import daemon as daemon_mod
+    from . import lane as lane_mod
 
-    d = daemon_mod.build()
+    d = lane_mod.build()
     if a.cmd == "credit":
         return _main_credit(d, a)
     try:

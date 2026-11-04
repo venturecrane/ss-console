@@ -120,9 +120,10 @@ def test_a_proof_run_stops_before_filing_the_records_review_and_says_what_it_wou
 
 
 def test_the_daemon_wake_for_an_already_current_delivery_carries_the_counts(tmp_path: Path) -> None:
-    from jobs import daemon as daemon_mod, verdict
+    from jobs import verdict
+    from jobs.medchron.lane import MedchronLane
 
-    d = daemon_mod.Daemon.__new__(daemon_mod.Daemon)
+    d = MedchronLane.__new__(MedchronLane)
     jd = tmp_path / "jobs" / "J1"
     jd.mkdir(parents=True)
     (jd / "envelope.json").write_text(json.dumps({"matter": {"number": "2099-EX-0001"}, "update": {"into": "x"}}))

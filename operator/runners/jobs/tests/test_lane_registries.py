@@ -1,7 +1,7 @@
 """Every daemon lane is registered in every runner-side table that names lanes.
 
-A lane added to ``jobs.lanes.LANES`` (or the two built-in slots, the
-chronology daemon and the demand lane) must also appear in each registry the
+A lane added to ``jobs.lanes.LANES`` (every lane is there, the
+chronology and the demand lane among them) must also appear in each registry the
 runner keys by lane name, or the lane runs while one of its edges silently
 falls through: its reply is watched under no kind, its proof key is
 ``unknown-lane``, ``lane-proof`` cannot find its queue, ``rewake`` refuses it,
@@ -21,7 +21,8 @@ from types import ModuleType
 
 import pytest
 
-from jobs import daemon, demand_lane, lane_memory, lane_proof, lane_proof_cli, lanes, rewake
+from jobs import lane_memory, lane_proof, lane_proof_cli, lanes, rewake
+from jobs.medchron import lane as medchron_lane
 from jobs.proof import holds, watch
 
 
@@ -41,12 +42,12 @@ def _short(mod: ModuleType) -> str:
 
 
 #: ``lanes._module`` is the daemon's own fixed name -> module table.
-MODULES = [daemon, demand_lane] + [lanes._module(name) for name in lanes.LANES]
+MODULES = [lanes._module(name) for name in lanes.LANES]
 #: Lanes that take jobs from a queue (a module with ``QUEUE_ENV``, plus the
-#: chronology daemon's own queue). A watch-only lane (the SMD note) has none.
-QUEUED = [m for m in MODULES if m is daemon or hasattr(m, "QUEUE_ENV")]
+#: chronology lane's own queue). A watch-only lane (the SMD note) has none.
+QUEUED = [m for m in MODULES if m is medchron_lane or hasattr(m, "QUEUE_ENV")]
 #: Lanes whose child joins the shared demand cgroup.
-DEMAND_CGROUP = [m for m in MODULES if m is not daemon and hasattr(m, "MEMORY_ENV")]
+DEMAND_CGROUP = [m for m in MODULES if m is not medchron_lane and hasattr(m, "MEMORY_ENV")]
 
 
 def test_every_lane_module_names_its_lane() -> None:
@@ -77,7 +78,7 @@ def test_every_queued_lane_has_its_queue_and_jobs_dirs(mod: ModuleType) -> None:
     assert lane in lane_proof_cli.QUEUES, f"lane_proof_cli.QUEUES has no queue for lane {lane!r}"
     assert lane in lane_proof_cli.JOBS, f"lane_proof_cli.JOBS has no jobs dir for lane {lane!r}"
     assert lane in rewake.JOBS, f"rewake.JOBS has no jobs dir for lane {lane!r}"
-    if mod is not daemon:
+    if mod is not medchron_lane:
         # The seat entrypoints export the lane's queue under the run dir by the
         # same names the CLI looks in (``<lane>-queue``, ``<lane>-jobs``).
         assert lane_proof_cli.QUEUES[lane] == f"{lane}-queue"
@@ -99,7 +100,7 @@ def test_every_demand_cgroup_lane_reads_the_authored_demand_cap(mod: ModuleType)
 
 
 def test_the_chronology_cap_is_its_own() -> None:
-    assert lane_memory.LANE_ENVS["medchron"] == (daemon.MEMORY_MAX_ENV,)
+    assert lane_memory.LANE_ENVS["medchron"] == (medchron_lane.MEMORY_MAX_ENV,)
 
 
 @pytest.mark.parametrize("mod", MODULES, ids=_short)

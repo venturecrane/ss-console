@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 import test_upload_daemon as ud
-from jobs import daemon as daemon_mod
+from jobs.medchron import lane as lane_mod
 from jobs.medchron import deliver_by_smd as dbs
 
 JOB = "01M4AAAAAAAAAAAAAAAAAAAAAA"
@@ -278,7 +278,7 @@ def test_dry_run_prints_everything_and_writes_nothing(tmp_path, monkeypatch, cap
     before = (d.job_dir(JOB) / "daemon.json").read_text()
     rec = tmp_path / "record.json"
     rec.write_text(json.dumps(RECORD))
-    monkeypatch.setattr(daemon_mod, "build", lambda: d)
+    monkeypatch.setattr(lane_mod, "build", lambda: d)
     assert dbs.main([JOB, str(rec), "--update", "--dry-run"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["dry_run"] is True and out["records"][1][0] == "delivered"
@@ -293,7 +293,7 @@ def test_main_applies_and_a_refusal_exits_nonzero(tmp_path, monkeypatch, capsys)
     d, broker = _seat(tmp_path)
     rec = tmp_path / "record.json"
     rec.write_text(json.dumps(RECORD))
-    monkeypatch.setattr(daemon_mod, "build", lambda: d)
+    monkeypatch.setattr(lane_mod, "build", lambda: d)
     assert dbs.main([JOB, str(rec), "--update"]) == 0
     assert d._daemon_state(JOB)["wake"]["pending"] is True
     assert dbs.main([JOB, str(rec), "--update"]) == 2

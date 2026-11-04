@@ -305,9 +305,9 @@ def test_an_update_is_its_own_lane_and_waits_for_its_own_proof() -> None:
 
 
 def test_the_wake_says_the_request_was_an_update(tmp_path: Path) -> None:
-    from jobs import daemon as daemon_mod
+    from jobs.medchron.lane import MedchronLane
 
-    d = daemon_mod.Daemon.__new__(daemon_mod.Daemon)
+    d = MedchronLane.__new__(MedchronLane)
     jd = tmp_path / "jobs" / "J1"
     jd.mkdir(parents=True)
     (jd / "envelope.json").write_text(

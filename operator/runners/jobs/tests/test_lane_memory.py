@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from jobs import daemon, demand_lane, drafting_lane, litigation_lane, negotiation_lane
+from jobs.medchron import lane as medchron_lane
 from jobs.lane_memory import LANE_ENVS, authored_bytes, env_words
 
 MIB = 1024 * 1024
@@ -66,7 +67,7 @@ def test_demand_value_reaches_every_lane_that_can_create_the_shared_cgroup() -> 
         # And matter records (records_lane.MEMORY_ENV).
         "SMD_RECORDS_MEMORY_MAX_BYTES",
     }
-    assert LANE_ENVS["medchron"] == (daemon.MEMORY_MAX_ENV,)
+    assert LANE_ENVS["medchron"] == (medchron_lane.MEMORY_MAX_ENV,)
     words = env_words(_doc({"demand": 512}))
     assert sorted(words) == sorted(f"{n}={512 * MIB}" for n in LANE_ENVS["demand"])
 
@@ -101,7 +102,7 @@ def test_built_lanes_carry_the_authored_caps(lane_mod: Any, monkeypatch: pytest.
     monkeypatch.setenv(daemon.RUN_DIR_ENV, str(tmp_path))
     monkeypatch.setenv(lane_mod.QUEUE_ENV, str(tmp_path / "queue"))
     d = daemon.build()
-    assert d.memory_max == 1024 * MIB
+    assert medchron_lane.build_lane(d).memory_max == 1024 * MIB
     lane = lane_mod.build_lane(d)
     assert lane is not None and lane.memory_max == 512 * MIB
 

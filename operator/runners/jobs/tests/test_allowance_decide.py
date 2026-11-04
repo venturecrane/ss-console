@@ -322,10 +322,10 @@ def test_a_refused_credit_is_reported_as_refused(tmp_path):
 
 
 def test_the_cli_dry_run_sends_nothing_and_refuses_with_exit_2(tmp_path, monkeypatch, capsys):
-    from jobs import daemon as daemon_mod
+    from jobs.medchron import lane as lane_mod
 
     d, b = _credit_daemon(tmp_path)
-    monkeypatch.setattr(daemon_mod, "build", lambda: d)
+    monkeypatch.setattr(lane_mod, "build", lambda: d)
     argv = ["credit", "--pages", "856", "--by", "Scott", "--why", "SMD's miss", "--job", JOB]
     assert allowance.main([*argv, "--dry-run"]) == 0 and b.credits == []
     assert json.loads(capsys.readouterr().out)["dry_run"] is True

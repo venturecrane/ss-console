@@ -180,10 +180,10 @@ def test_the_command_prints_counts_only(monkeypatch, capsys, seat):
         def __init__(self) -> None:
             self.jobs, self.broker = jobs, _Broker(v)
 
-    from jobs import daemon as daemon_mod
+    from jobs.medchron import lane as lane_mod
 
     monkeypatch.setattr(units_backfill.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(daemon_mod, "build", _Daemon)
+    monkeypatch.setattr(lane_mod, "build", _Daemon)
     assert units_backfill.main([]) == 0
     out = capsys.readouterr().out
     assert json.loads(out) == {"dry_run": False, "jobs_seen": 1, "recorded": 1, "skipped": {}}

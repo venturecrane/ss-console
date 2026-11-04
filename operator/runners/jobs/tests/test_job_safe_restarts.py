@@ -227,25 +227,30 @@ def test_join_lanes_waits_for_a_draining_lane_and_names_one_past_the_deadline(mo
 def test_main_waits_for_a_lane_still_draining_when_the_loop_ends(monkeypatch):
     """FALSIFIER: lane threads are daemon threads; without the join the process
     returned 130 while a lane was mid-checkpoint, and its exit killed the lane."""
-    import jobs.demand_lane as dl
     import jobs.lanes as lanes
 
     done: list[bool] = []
 
-    def lane_thread(_d, *, stop, poll_seconds):
-        def run() -> None:
-            while not stop():
-                time.sleep(0.01)
-            time.sleep(0.4)  # the lane's child checkpointing
-            done.append(True)
+    def slow() -> None:
+        while not stop_flag():
+            time.sleep(0.01)
+        time.sleep(0.4)  # the lane's child checkpointing
+        done.append(True)
 
-        t = threading.Thread(target=run, name="slow-lane", daemon=True)
-        t.start()
-        return t
-
-    def run_forever(self, stop, poll_seconds):
+    def quick() -> None:  # the lane that sees the Machine stop first and returns at once
         os.kill(os.getpid(), signal.SIGTERM)
-        assert stop()
+        while not stop_flag():
+            time.sleep(0.01)
+
+    def start_lanes(_d, *, stop, poll_seconds):
+        nonlocal stop_flag
+        stop_flag = stop
+        threads = [threading.Thread(target=f, name=f.__name__, daemon=True) for f in (slow, quick)]
+        for t in threads:
+            t.start()
+        return threads
+
+    stop_flag = lambda: False  # noqa: E731 - bound by start_lanes to main's stop flag
 
     monkeypatch.setattr(
         daemon_mod,
@@ -253,9 +258,7 @@ def test_main_waits_for_a_lane_still_draining_when_the_loop_ends(monkeypatch):
         lambda: daemon_mod.Daemon(run_dir=Path("/nonexistent"), broker=None, runner_cmd=[], customer_slug="example"),
     )
     monkeypatch.setattr(daemon_mod, "memory_cap_mode", lambda _root: "v2")
-    monkeypatch.setattr(dl, "start_lane", lane_thread)
-    monkeypatch.setattr(lanes, "start_other_lanes", lambda *a, **k: [])
-    monkeypatch.setattr(daemon_mod.Daemon, "run_forever", run_forever)
+    monkeypatch.setattr(lanes, "start_lanes", start_lanes)
     old = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
     try:
         assert daemon_mod.main([]) == 130

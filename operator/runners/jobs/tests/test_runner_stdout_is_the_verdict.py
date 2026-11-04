@@ -1,4 +1,4 @@
-"""The daemon reads the runner's STDOUT as its JSON verdict (daemon.py `_report`),
+"""The daemon reads the runner's STDOUT as its JSON verdict (medchron/lane.py `_report`),
 so nothing a stage imports or runs may write there. Live 2026-09-16: `import
 fitz` printed a one-line deprecation notice to stdout inside the exhibit build,
 the verdict failed to parse, and a recoverable refusal was recorded `failed`,

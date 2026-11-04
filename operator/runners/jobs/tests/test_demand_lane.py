@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from demand_testkit import job_doc, make_inputs
-from jobs.daemon import Daemon
+from jobs.medchron.lane import MedchronLane
 from jobs.demand_lane import DemandBroker, DemandLane, build_lane
 
 RUNNER = """
@@ -153,7 +153,7 @@ def test_an_unknown_month_spend_defers_rather_than_running_unmetered(tmp_path):
 
 def test_the_lane_has_its_own_slot_queue_cgroup_and_heartbeat(tmp_path, monkeypatch):
     lane, client = _lane(tmp_path)
-    chron = Daemon(
+    chron = MedchronLane(
         run_dir=lane.run_dir,
         broker=object(),
         runner_cmd=["true"],

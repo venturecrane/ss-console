@@ -57,7 +57,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-#: The daemon's own wording (daemon.py `_compose_wake`); the DELIVER skill reads
+#: The lane's own wording (medchron/lane.py `_compose_wake`); the DELIVER skill reads
 #: this line as "the reply says the chronology was updated".
 UPDATE_LINE = "Request: update into the delivered chronology."
 REPLY_KIND = "medchron_job"
@@ -207,9 +207,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--update", action="store_true", help="the delivery is an update into the delivered chronology")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
     a = ap.parse_args(argv)
-    from .. import daemon as daemon_mod
+    from . import lane as lane_mod
 
-    d = daemon_mod.build()
+    d = lane_mod.build()
     try:
         rec = json.loads(Path(a.record).read_text(encoding="utf-8"))
         p = plan(d, a.job_id, rec, update=a.update)

@@ -152,18 +152,22 @@ def test_no_queue_env_no_lane(monkeypatch, tmp_path):
 
 def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives_its_failure(monkeypatch):
     src = (Path(__file__).resolve().parents[1] / "jobs" / "daemon.py").read_text()
-    demand = src.index("start_lane(d, stop=")
-    assert "start_other_lanes(d, stop=" in src[demand : demand + 400]
-    from jobs import casefile_lane, drafting_lane, lanes, litigation_lane, negotiation_lane, note_lane, records_lane
+    assert "start_lanes(d, stop=" in src
+    from jobs import casefile_lane, demand_lane, drafting_lane, lanes, litigation_lane, negotiation_lane, note_lane
+    from jobs import records_lane
+    from jobs.medchron import lane as medchron_lane
 
     assert lanes.LANES == (
+        "demand_lane",
         "drafting_lane",
         "litigation_lane",
         "negotiation_lane",
         "note_lane",
         "casefile_lane",
         "records_lane",
+        "medchron",
     )
+    assert lanes._module("demand_lane") is demand_lane and lanes._module("medchron") is medchron_lane
     assert lanes._module("casefile_lane") is casefile_lane
     assert lanes._module("records_lane") is records_lane
     assert lanes._module("drafting_lane") is drafting_lane and lanes._module("negotiation_lane") is negotiation_lane
@@ -173,15 +177,17 @@ def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives
     def boom(*_a, **_k):
         raise RuntimeError("drafting lane cannot start")
 
+    monkeypatch.setattr(demand_lane, "start_lane", lambda *_a, **_k: started.append("demand"))
     monkeypatch.setattr(drafting_lane, "start_lane", boom)
     monkeypatch.setattr(litigation_lane, "start_lane", lambda *_a, **_k: started.append("litigation"))
     monkeypatch.setattr(negotiation_lane, "start_lane", lambda *_a, **_k: started.append("negotiation"))
     monkeypatch.setattr(note_lane, "start_lane", lambda *_a, **_k: started.append("note"))
     monkeypatch.setattr(casefile_lane, "start_lane", lambda *_a, **_k: started.append("casefile"))
     monkeypatch.setattr(records_lane, "start_lane", lambda *_a, **_k: started.append("records"))
-    lanes.start_other_lanes(object(), stop=lambda: True, poll_seconds=1.0)
-    # one lane failing to start stops neither other
-    assert started == ["litigation", "negotiation", "note", "casefile", "records"]
+    monkeypatch.setattr(medchron_lane, "start_lane", lambda *_a, **_k: started.append("medchron"))
+    lanes.start_lanes(object(), stop=lambda: True, poll_seconds=1.0)
+    # one lane failing to start stops none of the others
+    assert started == ["demand", "litigation", "negotiation", "note", "casefile", "records", "medchron"]
 
 
 def test_unusable_inputs_defer_once_then_fail_with_config_missing(tmp_path):

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .medchron.config import FirmConfig
+from .firm_levers import FirmLevers
 from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
@@ -62,7 +62,7 @@ class DoorwayError(RuntimeError):
     pass
 
 
-def model_for(cfg: FirmConfig, tier: str) -> str:
+def model_for(cfg: FirmLevers, tier: str) -> str:
     """The model for a tier (transcription, mechanical, composition, audit,
     judgment), from the firm config's authored table."""
     tiers = cfg.get("models", "tiers") or {}
@@ -324,7 +324,7 @@ class Doorway:
     @classmethod
     def from_config(
         cls,
-        cfg: FirmConfig,
+        cfg: FirmLevers,
         ledger: Ledger,
         *,
         client: Any = None,

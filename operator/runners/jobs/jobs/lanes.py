@@ -1,7 +1,14 @@
-"""The daemon's lanes beyond the chronology and demand slots, started from one
-table so ``daemon.py`` does not grow by a block per lane (it sits at its module
-size ceiling). Each lane lives in its own module and exposes ``start_lane``; one
-that fails to start is logged and stops nothing else."""
+"""The jobs runner's lanes, every one started from one table by ``start_lanes``.
+
+Each lane lives in its own module and exposes ``start_lane(d, stop=,
+poll_seconds=)``, which builds the lane from the seat's shared settings ``d``
+(``daemon.build``) and returns its thread, or None when this seat has no queue
+for it; one that fails to start is logged and stops nothing else.
+
+The lane modules are imported only inside ``_module``, when a lane is started,
+never at this module's import: the runner core imports no lane
+(``tests/test_runner_core_imports_no_lane.py`` imports this module and checks).
+"""
 
 from __future__ import annotations
 
@@ -11,12 +18,38 @@ from typing import Any, Callable
 
 logger = logging.getLogger("jobs.daemon")
 
-#: The lanes, in start order. A name not in ``_module`` is refused.
-LANES = ("drafting_lane", "litigation_lane", "negotiation_lane", "note_lane", "casefile_lane", "records_lane")
+#: The lanes, in start order. A name not in ``_module`` is refused. The
+#: chronology is last, where it started before it was a lane (it ran on the
+#: main thread after the others were up).
+LANES = (
+    "demand_lane",
+    "drafting_lane",
+    "litigation_lane",
+    "negotiation_lane",
+    "note_lane",
+    "casefile_lane",
+    "records_lane",
+    "medchron",
+)
+
+#: Lanes started whatever the seat authors, as they were before ADR 0100's
+#: predicate existed, so its arrival changed nothing for them: the chronology
+#: carries the daemon's own liveness (``tick``, ``heartbeat.json``, which the
+#: self-test's daemon-ticking check reads), and the demand lane gates itself on
+#: its queue env (``SMD_DEMAND_QUEUE_DIR``, empty unless the seat authors it).
+UNGATED = frozenset({"medchron", "demand_lane"})
 
 
 def _module(name: str) -> Any:
     """A lane module by name, from a fixed table (imported only when started)."""
+    if name == "medchron":
+        from .medchron import lane as medchron_lane
+
+        return medchron_lane
+    if name == "demand_lane":
+        from . import demand_lane
+
+        return demand_lane
     if name == "drafting_lane":
         from . import drafting_lane
 
@@ -69,12 +102,12 @@ def _forget(d: Any, name: str) -> None:
             logger.warning("could not remove %s: %s", leftover, exc)
 
 
-def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> list[Any]:
+def start_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) -> list[Any]:
     """Start each authored lane; returns the threads that started, which the daemon
     joins on a Machine stop so a lane's child drains instead of being cut."""
     threads: list[Any] = []
     for lane in LANES:
-        if not authored(lane):
+        if lane not in UNGATED and not authored(lane):
             logger.info("%s not started: this seat does not author it", lane)
             _forget(d, lane.removesuffix("_lane"))
             continue
@@ -88,4 +121,4 @@ def start_other_lanes(d: Any, *, stop: Callable[[], bool], poll_seconds: float) 
     return threads
 
 
-__all__ = ["LANES", "start_other_lanes"]
+__all__ = ["LANES", "UNGATED", "start_lanes"]
