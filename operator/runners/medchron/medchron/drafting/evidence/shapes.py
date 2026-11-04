@@ -38,8 +38,10 @@ UNITS: tuple[str, ...] = ("usd", "pct", "number", "")
 
 #: The markup token kinds (``markup``). F cite, Q quote, N figure, D date,
 #: SUM / COUNT / SPAN aggregates computed in code, T the charges table, A an
-#: attorney marker (on a fact id, or ``?`` with free text).
-TOKEN_KINDS: tuple[str, ...] = ("F", "Q", "N", "D", "SUM", "COUNT", "SPAN", "T", "A")
+#: attorney marker (on a fact id, or ``?`` with free text), L a legal
+#: authority (a slug in the firm's authority store, or ``?`` with the
+#: citation text when no primary text is on file).
+TOKEN_KINDS: tuple[str, ...] = ("F", "Q", "N", "D", "SUM", "COUNT", "SPAN", "T", "A", "L")
 
 
 @dataclass(frozen=True)
@@ -212,7 +214,10 @@ class Token:
     """One markup token: ``{{KIND:args}}`` at ``start``..``end`` of the
     markup text. ``ids`` are fact ids (F/Q/N/D/SUM/COUNT/SPAN/A);
     ``text`` is the free part after ``|`` (a Q fragment, an A:? note, a
-    SPAN unit); ``name`` is T's table name."""
+    SPAN unit, an L:? citation); ``name`` is T's table name. An L token on
+    the store is ``Token("L", ids=(slug,))``; with no primary text on file
+    it is ``Token("L", (), text=citation)``. L ids are store slugs, never
+    ledger ids."""
 
     kind: str
     ids: tuple[str, ...]
