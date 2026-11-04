@@ -370,18 +370,18 @@ def test_a_base_nothing_proves_stops_before_any_edit(tmp_path, renderer) -> None
 
 
 def test_formatting_asks_are_read_in_the_word_xml(tmp_path, renderer) -> None:
-    """The style keys are brief-format's renderer options: until the renderer
-    honors them, the check says not met (honest), never met on trust."""
-    layout = {"line_spacing": 2.0, "table_font_pt": 10}
+    """The asks are the renderer's firm style keys (#3757), applied as layout
+    options and read back in the XML: met when the file carries them, never on
+    trust."""
+    layout = {"table_font_pt": 10, "heading_line_spacing_pt": 24, "table_header_fill": "D9E2F3"}
     path = renderer(BRIEF, tmp_path / "rev.docx", layout)
-    probs = checks.check_docx(path, layout, 12, 1)
+    assert checks.check_docx(path, layout, 12, 1) == []
     plain_path = renderer(BRIEF, tmp_path / "plain.docx")
     # The firm's authored body (line_spacing_pt 24, the testkit layout) reads met; 30 pt does not.
     assert checks.check_docx(plain_path, {"line_spacing_pt": 24}, 12, 1) == []
     assert checks.check_docx(plain_path, {"line_spacing_pt": 30}, 12, 1)
     plain = checks.check_docx(plain_path, {"table_font_pt": 10}, 12, 1)
     assert plain, "a file whose tables are not 10 pt must not read as met"
-    assert isinstance(probs, list)  # met once the renderer applies the option (brief-format)
 
 
 # ---- new versions in place -----------------------------------------------------------------
