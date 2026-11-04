@@ -50,7 +50,7 @@ from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
 from . import assemble, firm as firm_mod, free as free_mod, job as job_mod, measure, parse as parse_mod, rank, search
-from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
+from .outcome import REASON, RecordsFailed, RecordsHold, Verdict, proof_ending
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
 #: The statuses a matter named by its number is resolved among.
@@ -430,9 +430,9 @@ class RecordsRun(RunBase):
         the reply is words only (rendered with no file attached)."""
         records = self._records() if (self.data / "records.json").is_file() else []
         mid = self._matter() if (self.data / "matter.json").is_file() else (self.job.matter_id or "")
-        located = self.located() if records else []
-        results, owners = assemble.merge(located)
-        held_items = search.item_holds(self.data)
+        held_items, meta = search.item_holds(self.data), search._read(self.data / "files.json", {})
+        located, looked = assemble.one_heading(self.located() if records else [], held_items, meta)
+        self._held_facts, (results, owners) = (looked, meta), assemble.merge(located)
         if held_items and hold is None:
             # Some records wait for SMD (a file that would pass the cap); the
             # others are attached as they were found, and the reply says which.
@@ -488,7 +488,7 @@ class RecordsRun(RunBase):
         outcomes = assemble.outcomes(
             records, rendered.items if ok and rendered is not None else [], owners, unresolved, {}, held=set(held_items)
         )
-        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items, *self._held_facts)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,
@@ -528,8 +528,8 @@ class RecordsRun(RunBase):
         if any(o["outcome"] in ("unplaced", "unresolved") for o in outcomes):
             return self.compose_held(hold, results, mid, records, owners, unresolved)
         block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items, *self._held_facts)
         block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
-        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,
@@ -599,13 +599,14 @@ class RecordsRun(RunBase):
         if failed is not None or doc is None:
             return Verdict("failed", stage=stage, reason=failed or "unexpected: no reply was composed")
         items, cuts = doc["items"], doc["cuts"]
+        would_be = proof_ending(hold, items) if proof_mode.active() else None
+        if would_be:  # a proof run's reply and row are its product, held or not
+            self._proof_out(doc)
+            return Verdict(proof_mode.OUTCOME, stage="verdict", reason=hold, items=items, cuts=cuts, would_be=would_be)
         if hold is not None:
             # A record-level hold still carries the cuts of the records found:
             # SMD's review sends them with the rest once it is finished.
             return Verdict("held", stage=stage, reason=hold, items=items, cuts=cuts)
-        if proof_mode.active():
-            self._proof_out(doc)
-            return Verdict(proof_mode.OUTCOME, stage="verdict", items=items, cuts=cuts)
         proof = {
             "readback": "confirmed",
             "files": [

@@ -10,7 +10,9 @@ it, and the ONE JSON verdict object the lane reads.
   not tie to a file).
 * ``failed``: our machinery before any reply could be composed (the envelope,
   the firm inputs, an unexpected error). Resumable.
-* ``dry_run``: a proof run, stopped before the review row.
+* ``dry_run``: a proof run that reached its reply; ``would_be`` says how the
+  live job would end (``held`` or ``delivered``), with the hold's reason. A
+  capped run that wrote its row is the designed outcome, so it judges passed.
 
 THE VERDICT CARRIES NO CLIENT TEXT. Ids, counts, sha256s and coded reasons
 only: no file name, no page text, no request words. The reply's words live in
@@ -61,6 +63,8 @@ class Verdict:
     #: ``[{n, k, file_id, pages, page_count, sha256, size}]``: the cuts on disk.
     cuts: list[dict[str, Any]] = field(default_factory=list)
     proof: dict[str, Any] | None = None
+    #: A proof run's real ending (``held`` or ``delivered``) beside its ``dry_run``.
+    would_be: str | None = None
 
     def to_json(self) -> str:
         d: dict[str, Any] = {
@@ -77,6 +81,8 @@ class Verdict:
         }
         if self.reason and self.verdict != "delivered":
             d["reason"] = self.reason[:500]
+        if self.would_be:
+            d["would_be"] = self.would_be
         if self.proof is not None and self.verdict == "delivered":
             d["proof"] = dict(self.proof)
         return json.dumps(d, sort_keys=True)
@@ -84,6 +90,18 @@ class Verdict:
     @property
     def exit_code(self) -> int:
         return EXIT.get(self.verdict, 2)
+
+
+def proof_ending(hold: str | None, items: list[dict[str, Any]]) -> str | None:
+    """A proof run's ``would_be`` (``held`` or ``delivered``), or None when it
+    never reached a reply worth reviewing (the finder failed, or no record was
+    tied to any file): that run stays ``held`` and judges failed."""
+    h = hold or ""
+    if h.startswith("finder_failed") or (
+        h.startswith("scope_unresolved") and not any(i["outcome"] == "attached" for i in items)
+    ):
+        return None
+    return "delivered" if hold is None else "held"
 
 
 __all__ = [
@@ -95,4 +113,5 @@ __all__ = [
     "RecordsFailed",
     "RecordsHold",
     "Verdict",
+    "proof_ending",
 ]

@@ -112,18 +112,95 @@ def outcomes(
 _HELD_PAGES = re.compile(r"\b(\d{1,7}) pages\b")
 
 
-def held_line(asked: str, reason: str) -> str:
-    """One held record, in the reply's words: its own words and why it is not
-    established yet, never a dollar figure, a setting name or a file id."""
-    m = _HELD_PAGES.search(reason or "")
-    if str(reason or "").startswith("scope_unresolved"):
-        why = "no file on the matter is named for it, and SMD is finishing it"
+#: The file id prefix a hold reason names (``<code>: <8 hex> ...``).
+_HELD_FILE = re.compile(r"^[a-z_]+: ([0-9a-f]{8})\b")
+#: Item classes, best first: the ONE heading a record goes under (2026-11-03,
+#: dry run 3: record 5 sat under "Not found" and "still to be read" at once).
+_ATTACHED, _PARTLY, _NOT_FOUND = range(3)
+
+
+def _klass(item: dict[str, Any]) -> int:
+    if item.get("found") and item.get("ranges"):
+        return _ATTACHED
+    return _NOT_FOUND if item.get("established") else _PARTLY
+
+
+def one_heading(
+    located: list[tuple[int, str, dict[str, Any]]], holds: dict[int, str], files: dict[str, Any]
+) -> tuple[list[tuple[int, str, dict[str, Any]]], dict[int, list[str]]]:
+    """Each record's results reduced to its ONE heading, in this order:
+    attached; held ("still to be read"); not established on a partly read
+    file; not found (every page read). A held record's results all leave the
+    block and come back as where it was looked for, folded into its one held
+    entry (``looked``, by record n). The same (record, file) is kept once."""
+    best: dict[int, int] = {}
+    for n, _fid, result in located:
+        for item in result.get("items") or []:
+            best[n] = min(best.get(n, _NOT_FOUND), _klass(item))
+    kept: list[tuple[int, str, dict[str, Any]]] = []
+    looked: dict[int, list[str]] = {}
+    seen: set[tuple[int, str]] = set()
+    named: dict[str, str] = {}
+    cut = {fid for _n, fid, r in located for i in r.get("items") or [] if _klass(i) == _ATTACHED}
+    for n, fid, result in located:
+        if (n, fid) in seen:
+            continue
+        seen.add((n, fid))
+        if n in holds:
+            looked.setdefault(n, []).extend(_looked(fid, result, files, named))
+            continue
+        items = [i for i in result.get("items") or [] if _klass(i) == best.get(n)]
+        if items:
+            # Two files with one name (dry run 3: two 3-page files read as one
+            # line twice): the second is said to be one. A cut file keeps its name.
+            name = str(result.get("name") or "")
+            shown = name if fid in cut or named.setdefault(name, fid) == fid else f"a second file also named {name}"
+            kept.append((n, fid, {**result, "items": items, "name": shown}))
+    return kept, looked
+
+
+def _looked(fid: str, result: dict[str, Any], files: dict[str, Any], named: dict[str, str]) -> list[str]:
+    """Where a held record was looked for in one file, in the reply's words.
+    A second file with the same name is said to be one, never shown as a repeat."""
+    name = facts_mod._name(result.get("name") or (files.get(fid) or {}).get("name") or "the file")
+    shown = name if named.setdefault(name, fid) == fid else f"a second file also named {name}"
+    counts = result.get("counts") or {}
+    total = int(counts.get("pages") or result.get("pageCount") or 0)
+    read = int(counts.get("read") or 0)
+    pointer = facts_mod._Renderer(facts_mod.KNOWN_CAPS).pointer
+    out = []
+    for item in result.get("items") or []:
+        if item.get("established"):
+            out.append(f"{shown} (all {_pages(total)} read)")
+            continue
+        closest = "; ".join(pointer(p) for p in item.get("closest") or [])
+        out.append(f"{shown} ({read:,} of {_pages(total)} read" + (f"; closest: {closest})" if closest else ")"))
+    return list(dict.fromkeys(out))
+
+
+def _pages(n: int) -> str:
+    return f"{n:,} {'page' if n == 1 else 'pages'}"
+
+
+def _and(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def held_line(asked: str, reason: str, looked: list[str] | None = None, files: dict[str, Any] | None = None) -> str:
+    """One held record, in the reply's words: its own words, where it was
+    looked for, and why it is not established yet, never a dollar figure, a
+    setting name or a file id."""
+    reason = str(reason or "")
+    parts = [f"looked for in {_and(looked)}"] if looked else []
+    m, f = _HELD_PAGES.search(reason), _HELD_FILE.match(reason)
+    if reason.startswith("scope_unresolved"):
+        parts.append("no file on the matter is named for it")
     elif m:
         n = int(m.group(1))
-        are = "is" if n == 1 else "are"
-        why = f"{n:,} {'page' if n == 1 else 'pages'} of the file it is in {are} not read yet, and SMD is finishing it"
-    else:
-        why = "SMD is finishing it"
+        which = next((v.get("name") for k, v in (files or {}).items() if f and k.startswith(f.group(1))), None)
+        where = facts_mod._name(which) if which else "the file it is in"
+        parts.append(f"{_pages(n)} of {where} {'is' if n == 1 else 'are'} not read yet")
+    why = "; ".join(parts) + ", and SMD is finishing it" if parts else "SMD is finishing it"
     return f"- {facts_mod._tame(asked) or 'the record asked for'}: not established yet; {why}"
 
 
@@ -134,8 +211,10 @@ def with_gaps(
     read: a record found on the readable pages goes out (2026-11-03: 47 pages,
     23 unreadable, the visit found on 1-2 and 6-39), and the reply says, in the
     contract's gap words, how many pages of that file were not read. A file the
-    renderer already named in a "Not established" heading is not named twice."""
+    renderer already named in a "Not established" heading, or a record's own
+    entry, with the same count is not named twice."""
     lines = []
+    before = block_text.splitlines()
     for fid in dict.fromkeys(str(f.get("file_id")) for f in files):
         result = results.get(fid) or {}
         counts = result.get("counts") or {}
@@ -144,7 +223,7 @@ def with_gaps(
             n = int(count or 0)
             verb = "" if words.startswith("could") else ("was " if n == 1 else "were ")
             said = f"{facts_mod._plural(n, 'page')} of {name} {verb}{words}"
-            if int(count or 0) and said not in block_text:
+            if n and not any(name in ln and f"{n:,} " in ln for ln in before):
                 lines.append(f"- {said}")
     if not lines:
         return block_text, block_html
@@ -154,13 +233,23 @@ def with_gaps(
 
 
 def with_held(
-    block_text: str, block_html: str, records: list[dict[str, Any]], holds: dict[int, str]
+    block_text: str,
+    block_html: str,
+    records: list[dict[str, Any]],
+    holds: dict[int, str],
+    looked: dict[int, list[str]] | None = None,
+    files: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """The facts block with every held record under "Not established", so no
-    record the sender asked for is ever left out of the reply."""
+    record the sender asked for is ever left out of the reply; each with
+    where it was looked for (:func:`one_heading`)."""
     if not holds:
         return block_text, block_html
-    lines = [held_line(str(r.get("asked") or ""), holds[int(r["n"])]) for r in records if int(r["n"]) in holds]
+    lines = [
+        held_line(str(r.get("asked") or ""), holds[int(r["n"])], (looked or {}).get(int(r["n"])), files)
+        for r in records
+        if int(r["n"]) in holds
+    ]
     head = "Not established, still to be read:"
     text = "\n\n".join(p for p in (block_text, head + "\n" + "\n".join(lines)) if p)
     return text, block_html + facts_mod.html_blocks([(head, lines)])
@@ -180,7 +269,25 @@ def compose(block_text: str, block_html: str, *, held: bool) -> tuple[str, str]:
     if held:
         parts_t.append(HELD_LINE)
         parts_h.append(f"<p>{html_lib.escape(HELD_LINE)}</p>")
-    return "\n\n".join(parts_t), "".join(parts_h)
+    return _once("\n\n".join(parts_t)), _LI_TWICE.sub(r"\1", "".join(parts_h))
+
+
+#: An html list line repeated straight after itself.
+_LI_TWICE = re.compile(r"(<li>[^<]*</li>)(?:\1)+")
+
+
+def _once(text: str) -> str:
+    """No bullet line twice in one block (two same-named files, one count)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for line in text.split("\n"):
+        if not line.strip():
+            seen = set()
+        elif line.startswith("- ") and line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+    return "\n".join(out)
 
 
 def render(results: dict[str, dict[str, Any]], files: list[dict[str, Any]], matter_id: str) -> facts_mod.Facts:
@@ -188,4 +295,4 @@ def render(results: dict[str, dict[str, Any]], files: list[dict[str, Any]], matt
     return facts_mod.render(results, files, staged_matter=matter_id, read_matters={matter_id})
 
 
-__all__ = ["HELD_LINE", "OPENING", "compose", "found", "merge", "outcomes", "ranges_to_cut", "render"]
+__all__ = ["HELD_LINE", "OPENING", "compose", "found", "merge", "one_heading", "outcomes", "ranges_to_cut", "render"]
