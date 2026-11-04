@@ -44,12 +44,19 @@ _SCANS = re.compile(
 
 
 def _plain_warning(w: str) -> str:
-    """The record check's warnings in the attorney's words, not the system's."""
+    """The record check's warnings in the attorney's words, not the system's.
+
+    Only what the check measured: how many of the documents it read have pages
+    whose text software read from a scan, and which. Never "N of the file's M
+    documents": the check's total counts every text it compared against (the
+    firm's house style, skeleton and attachments, the walled emails), so on
+    2026-11-04 a brief's notes stated a document count the file does not have."""
     m = _SCANS.match(str(w))
     if m:
+        n = int(m.group(1))
         return (
-            f"{m.group(1)} of the file's {m.group(2)} documents are scanned images whose text was read by software; "
-            f"check any figure or quotation taken from them against the scan: {m.group(3)}"
+            f"{n} {'document has' if n == 1 else 'documents have'} pages that were scanned images whose text was "
+            f"read by software; check any figure or quotation taken from them against the scan: {m.group(3)}"
         )
     return str(w)
 

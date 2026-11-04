@@ -11,6 +11,7 @@ read as "agrees") and a cost limit (``LimitHold``), both raised through.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -34,6 +35,34 @@ def _journaled(data: Path) -> list[dict[str, Any]]:
     p = data / "caption-writes.jsonl"
     rows = [json.loads(ln) for ln in p.read_text(encoding="utf-8").splitlines() if ln] if p.is_file() else []
     return [r for r in rows if r.get("event") == "result" and r.get("status") == caption_fix.APPLIED]
+
+
+#: A skeleton slot code fills from the court's caption:
+#: ``{{FILL: CAPTION court_name | THE CAPTION}}``. Written as a FILL so a seat
+#: on an image without this code still reads a known marker kind and fills it
+#: from THE CAPTION block the drafter is given; with it, code fills the slot.
+_SLOT = re.compile(r"`?\{\{FILL:\s*CAPTION\s+([a-z_]+)\s*\|\s*THE CAPTION\s*\}\}`?")
+
+
+def fill_skeleton(skeleton: str, cap: dict[str, Any] | None) -> str:
+    """The class skeleton with each ``{{FILL: CAPTION <field> | THE CAPTION}}`` slot set to the
+    court's caption as the caption stage read it (``caption.json`` fields),
+    or a NOT IN RECORD marker when the court's paper does not carry the field.
+
+    A skeleton that prints a caption line itself states the firm's guess at
+    what every court's paper says: on 2026-11-04 a brief's court line carried
+    a word its pleadings do not, while the caption stage held the court's own
+    form. Code fills the slot, so the drafter never chooses."""
+
+    def one(m: re.Match[str]) -> str:
+        field = m.group(1)
+        v = ((cap or {}).get("fields") or {}).get(field)
+        value = v.get("value") if isinstance(v, dict) else None
+        if value and str(value).strip():
+            return str(value).strip()
+        return "{{NOT IN RECORD: " + field.replace("_", " ") + ", not on the court's caption}}"
+
+    return _SLOT.sub(one, skeleton)
 
 
 def context(cap: dict[str, Any]) -> list[str]:

@@ -61,6 +61,9 @@ indistinguishable from a checker that passed.
 | 2b   | A transcript quote's cited page:line range includes the question the answer actually answered.                                                                                                                                       | FAIL             |
 | 2b   | A transcript quote does not appear anywhere within its cited range.                                                                                                                                                                  | FAIL             |
 | 2b   | Any condition under which pairing could not be evaluated. Fail-open by design, see limits below.                                                                                                                                     | INFO             |
+| 2c   | A quotation followed by `(FILE: <name>, p. N)` is on page N of that document, read from the extractor's `[p.N]` markers. Run by the drafting job (`medchron/drafting/pincheck.py`), after this checker.                              | FAIL             |
+| 2c   | A pin that is wrong but whose words are on exactly one other page (or page pair) of the same document is moved there in code, and said in the notes.                                                                                 | repaired         |
+| 2c   | A pin that could not be tested (no page markers, or 2a refuses the quotation). Counted in the gate record's `pins`.                                                                                                                  | INFO             |
 | 1    | Eight or more consecutive words shared between the draft body and a held-out document, or between the body and the draft's own HELD OUT section.                                                                                     | FAIL             |
 | 6    | Internal file paths in the draft body: `operator/` paths, `r2://` URIs, `vaults/` paths, backticked `.md` or `.py` references, `.claude/` paths, absolute `/Users/` paths. Repeats are grouped into one finding per distinct string. | FAIL             |
 | 3    | Blanket completeness sentences. Seed list in `_SELF_CERT_PATTERNS`; extend there, not at the call site. Itemized what-was-done reporting does not trigger.                                                                           | FAIL             |
@@ -101,7 +104,8 @@ and a numbered line gutter (`22   A.  No, I cannot.`, or a reporter's text
 layer with middle-dot spacers, `22· ·A.· · ·No, I cannot.`). Where it finds them
 it builds a page:line index and can walk back from a quoted answer to the
 question that governs it. Sources are also flattened a second way, with the
-line gutter, the spacers and the page-marker lines stripped, so that a quote
+line gutter, the spacers and the page-marker lines (a transcript's `Page 23` and
+the extractor's `[p.4]`) stripped, so that a quote
 spanning transcript lines or a page break reads as contiguous. That second view
 only ever removes false failures. The other direction is closed too: a
 quotation that itself carries a spacer, or a line number before a `Q.`/`A.`

@@ -245,10 +245,17 @@ class Drafter:
         context: list[str],
         workers: int,
         log: Any,
+        skeleton: str | None = None,
     ) -> None:
+        """``skeleton``: the class skeleton with its caption slots filled by code
+        (``caption_stage.fill_skeleton``); the firm's own when not given."""
         self.data, self.doorway, self.firm, self.cls, self.log = data, doorway, firm, document_class, log
+        self._skel = skeleton
         self.workers = workers
         self.context = "\n\n---\n\n".join([request_block(request), *context])
+
+    def skeleton(self) -> str:
+        return self._skel if self._skel is not None else self.firm.skeleton(self.cls)
 
     # ---- plumbing ------------------------------------------------------------------
     def _read(self, name: str) -> str:
@@ -304,7 +311,7 @@ class Drafter:
     def compose_system(self) -> str:
         blocks = [
             "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
-            "## THE SKELETON (structure is fixed; fill it)\n\n" + self.firm.skeleton(self.cls),
+            "## THE SKELETON (structure is fixed; fill it)\n\n" + self.skeleton(),
             self.firm.prompt(self.cls, "compose"),
         ]
         ex = self.exemplars()
@@ -343,7 +350,7 @@ class Drafter:
         system = (
             self.firm.prompt(self.cls, "audit")
             + "\n\n---\n\n## THE SKELETON (its standing boilerplate is not a claim)\n\n"
-            + self.firm.skeleton(self.cls)
+            + self.skeleton()
             + "\n\n---\n\n## THE MATTER RECORD, THE CAPTION AND THE HOWELL TABLE (valid sources; the request itself "
             "is NOT one)\n\n" + self.context + "\n\n---\n\n## THE RECORD DIGEST\n\n" + digest
         )
