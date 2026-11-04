@@ -24,6 +24,8 @@ import datetime as dt
 import json
 import re
 import struct
+
+# nosemgrep: python.lang.security.use-defused-xml.use-defused-xml - only parse_xml uses it, which refuses any DTD or entity declaration before parsing and reads only GPO XML fetched over https from HOSTS
 import xml.etree.ElementTree as ET
 import zlib
 from typing import Any
@@ -213,13 +215,23 @@ def parse_cfr(citation: str) -> tuple[str, str, str] | None:
     return (m.group(1), m.group(2), m.group(3)) if m else None
 
 
+def parse_xml(raw: bytes) -> Any:
+    """GPO's XML, refusing any document type or entity declaration (the
+    granule carries none) so no entity is ever expanded."""
+    if re.search(rb"<!(?:DOCTYPE|ENTITY)", raw, re.I):
+        raise LookupError("govinfo's XML carries a DTD or entity declaration; refused")
+    return ET.fromstring(
+        raw
+    )  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml - DTD and entity declarations refused above
+
+
 def _block_text(el: Any) -> str:
     return " ".join("".join(el.itertext()).split())
 
 
 def cfr_xml_text(raw: bytes) -> tuple[str, str]:
     """(section text, edition date) from a govinfo CFR section granule."""
-    root = ET.fromstring(raw)
+    root = parse_xml(raw)
     sect = root.find(".//SECTION")
     if sect is None:
         raise LookupError("govinfo's answer carries no SECTION")

@@ -411,6 +411,11 @@ class TestCfr(unittest.TestCase):
         self.assertIn("[36 FR 20298", got.text)
         self.assertIn("revised as of 2025-10-01", got.meta["edition"])
 
+    def test_an_entity_declaration_is_refused_before_parsing(self) -> None:
+        bomb = b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><CFRGRANULE>&a;</CFRGRANULE>'
+        with self.assertRaises(LookupError):
+            codes.cfr_xml_text(bomb)
+
     def test_a_challenge_page_is_reported_not_parsed(self) -> None:
         net = Net({self.LINK: (200, b"<!DOCTYPE html><title>Request Access</title>")})
         with tempfile.TemporaryDirectory() as d:
