@@ -195,7 +195,9 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     // Every run dir of the epoch (the jobs-volume block, driven below).
     expect(BOOT_CODE).toMatch(/mount --bind "\$\{JOBS_DATA_DIR\}" "\$\{_rd\}"/)
     // Pruned from the hermes chown sweep like the audit subtree.
-    expect(BOOT_CODE).toMatch(/-o -path "\$\{JOBS_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/)
+    expect(BOOT_CODE).toMatch(
+      /-o -path "\$\{JOBS_DATA_DIR\}" -o -path \/opt\/data\/jobs (-o -path [^ ]+ )?\\\) -prune/
+    )
   })
 
   it('carries the queue path into the broker env allowlist', () => {

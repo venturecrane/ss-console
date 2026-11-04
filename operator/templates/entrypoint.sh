@@ -165,7 +165,10 @@ umask 027
 # to hermes on every reboot and silently false-close the tamper-resistance.
 # .smd-root is root's own audit-loss tally (overlay audit_failure_counter); re-
 # owning it would make smd_root_loss_dir wipe it as agent-planted every boot.
-find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
+# Both names of the jobs tree are pruned, whatever entrypoint-lanes.sh's
+# JOBS_VOLUME_EPOCH says (ADR 0103): this sweep runs before that fragment, and an
+# image booting over the other name must never hand the root-owned tree to hermes.
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path /opt/data/jobs -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to

@@ -650,6 +650,32 @@ the runner and connector, frozen at its own build. A seat whose pointed-at
 bundle fails to verify or import runs the version it ran before (the installer
 keeps it, N-1), and only with none on disk the image's seed.
 
+**A seat never runs an image with a bundle of another layout (ADR 0103).**
+The bundle's tarball layout is numbered (`layout` in its manifest; 1 was the
+`medchron/` root at `/opt/medchron`, 2 is `jobs/` at `/opt/jobs`), and every
+publish also writes `fleet/bundles/jobs/layout-<n>/latest.json`. At boot the
+installer compares the seat pointer's layout with the image's own: on a
+mismatch it installs the latest bundle of the image's layout instead of the
+pointer; otherwise it behaves as above, so the controller's pointer rollback
+keeps working. The controller writes a seat's pointer without a restart when
+the seat already reports that version. Before this rule an image whose
+expected layout differed from the pointed-at bundle booted with no runner,
+failed its self-test, was rolled back, and the bundle stayed deferred: the
+rename of the runner (2026-11-04) could not have shipped.
+
+**The runner rename and its hand rollback (ADR 0103).** R1, the code rename,
+is forward-compatible and rolls back on its own: a failing seat returns to
+the previous image, whose installer runs the old-layout bundle it still holds
+on disk. R2, the one-time move of `/opt/data/medchron` to `/opt/data/jobs`, is
+built `--not-volume-forward-compatible`, so a failing seat halts on the new
+image with the volume snapshot the halt recorded, and the recovery is by hand:
+`fleet hold` the seat; start a Machine on the previous image with the
+entrypoint overridden and run `mv /opt/data/jobs /opt/data/medchron` before
+the old image's boot sweep runs (an old image booting over the moved tree
+would chown it to the agent uid); restore the bundle pointer; or restore the
+volume snapshot. Rehearse it once on smd-staging before R2 reaches any other
+seat.
+
 The release controller steps bundle releases after skills, ring by ring with
 the same bake, holds, halt and lease, but only on the seats whose
 `customer.yaml` authors a job lane (`operator/hermes-smd-overlay/shared/capabilities.py`).
