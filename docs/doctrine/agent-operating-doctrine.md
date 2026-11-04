@@ -483,7 +483,7 @@ enforcement:
   - tests/doctrine-integrity.test.ts
 incidents:
   - date: 2026-11-02
-    ref: 'A&P 201904 records request: the job was built inside the Operator chat turn, the model choosing which files to search, how often, with what words, and writing the reply; twenty hours of guards each closed the failure just seen and the next paid run on the live client seat failed a new way (about $58 of tests, one $17.06 run against a $15 cap, two wrong emails to the attorney). Rebuilt as a lane with fixed stages and rehearsed at $0 on copies of the seat indexes in the ops workspace, it found four defects in minutes and was proven the same evening.'
+    ref: 'A&P records request (one matter, 11-02): the job was built inside the Operator chat turn, the model choosing which files to search, how often, with what words, and writing the reply; twenty hours of guards each closed the failure just seen and the next paid run on the live client seat failed a new way (about $58 of tests, one $17.06 run against a $15 cap, two wrong emails to the attorney). Rebuilt as a lane with fixed stages and rehearsed at $0 on copies of the seat indexes in the ops workspace, it found four defects in minutes and was proven the same evening.'
   - date: 2026-11-04
     ref: 'The jobs runner (ADR 0103): born as the chronology runner on 2026-08-29, it grew six more lanes without a rename, the chronology lane staying the daemon base class every lane inherited. Captain: "we should have realized we needed a job runner when we first built the medchron runner, named it accordingly, and designed it as a job runner in general vs building it only to run a specific job."'
   - date: 2026-11-04
