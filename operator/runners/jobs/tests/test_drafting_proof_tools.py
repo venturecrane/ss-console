@@ -211,6 +211,14 @@ def test_authority_fetch_writes_what_the_store_reads(tmp_path: Path) -> None:
         assert af.render_entry(c, "https://x.test", "2026-11-04", "T.") == authorities.render_entry(
             c, "https://x.test", "2026-11-04", "T."
         )
+        extra = {"edition": "CACI 2026 Edition", "printed_pages": "296-301"}
+        assert af.render_entry(c, "https://x.test", "t", "T.", extra) == authorities.render_entry(
+            c, "https://x.test", "t", "T.", extra
+        )
+    # optional frontmatter is read past: the entry still parses to its text
+    af.write_entry(tmp_path, "CACI No. 430", "https://x.test", "Substantial factor.", now="t", extra=extra)
+    e = authorities.Store.from_dir(tmp_path).lookup("CACI No. 430")
+    assert e is not None and e.text == "Substantial factor."
     af.write_entry(tmp_path, "Civ. Code, § 3333.4", "https://leginfo.legislature.ca.gov/x", "Section text.", now="t")
     st = authorities.Store.from_dir(tmp_path)
     assert st.citation(authorities.slug("Civ. Code, § 3333.4")) == "Civ. Code, § 3333.4"

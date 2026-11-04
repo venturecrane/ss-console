@@ -6,6 +6,7 @@
     citation: <the citation as the brief prints it>
     source: <the URL or path the text was read from>
     fetched_at: <ISO time>
+    edition | printed_pages | pagination: <optional, where the source has them>
     ---
     <the opinion, statute or instruction text>
 
@@ -83,10 +84,13 @@ def parse_entry(text: str, name: str) -> Entry:
     return Entry(name, meta["citation"], meta["source"], meta["fetched_at"], primary)
 
 
-def render_entry(citation: str, source: str, fetched_at: str, text: str) -> str:
-    """A store file's text (``authority_fetch.render_entry`` writes the same)."""
+def render_entry(citation: str, source: str, fetched_at: str, text: str, extra: Mapping[str, str] | None = None) -> str:
+    """A store file's text (``authority_fetch.render_entry`` writes the same).
+    ``extra`` adds optional frontmatter (``edition``, ``printed_pages``,
+    ``pagination``) that ``parse_entry`` reads past."""
     one = [" ".join(str(v).split()) for v in (citation, source, fetched_at)]
-    return f"---\ncitation: {one[0]}\nsource: {one[1]}\nfetched_at: {one[2]}\n---\n{text.strip()}\n"
+    more = "".join(f"{k}: {' '.join(str(v).split())}\n" for k, v in (extra or {}).items() if str(v).strip())
+    return f"---\ncitation: {one[0]}\nsource: {one[1]}\nfetched_at: {one[2]}\n{more}---\n{text.strip()}\n"
 
 
 class Store:
