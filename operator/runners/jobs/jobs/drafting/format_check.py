@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import citations, frontpage
 from .house import rules_for
 from .render import DECL_LINE, FIGURE, RESERVED, _outside_markers, decl_decision
 
@@ -204,7 +205,7 @@ def check_paper(doc: Any, res: Result) -> None:
             res.fails.append("paper: line numbering present (pleading paper)")
 
 
-def check_headings(doc: Any, rules: Any, res: Result) -> None:
+def check_headings(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
     from docx.shared import Inches, Pt
 
@@ -223,6 +224,8 @@ def check_headings(doc: Any, rules: Any, res: Result) -> None:
             res.fails.append(f"heading: level {lv} should be {word}: {p.text[:40]}")
         if (_eff(p, "left_indent") or 0) != Inches(rules.heading_indent_in[i]):
             res.fails.append(f"heading: level {lv} not indented {rules.heading_indent_in[i]} inch: {p.text[:40]}")
+        if pitch:
+            continue  # pleading paper: every line at the paper's pitch (pleading.check)
         if rules.heading_line_spacing_pt is not None:
             if (
                 _eff(p, "line_spacing") != Pt(rules.heading_line_spacing_pt)
@@ -412,7 +415,13 @@ def check_footer(doc: Any, blob: bytes, rules: Any, res: Result) -> None:
 
 
 def check(
-    path: Path, cls: str, fmt: dict[str, Any], digest: str = "", corpus: Any = None, paper: str = "plain"
+    path: Path,
+    cls: str,
+    fmt: dict[str, Any],
+    digest: str = "",
+    corpus: Any = None,
+    paper: str = "plain",
+    cites: Any = None,
 ) -> Result:
     """``digest`` carries the DISCOVERY-SETS index and ``corpus`` the document
     texts the cumulative section 2030.050 rule reads (``render.decl_decision``,
@@ -430,8 +439,8 @@ def check(
     check_tables(doc, rules, res)
     if fmt.get("plain_letter_paper"):
         check_paper(doc, res)
-    check_headings(doc, rules, res)
     pitch = paper == "pleading"
+    check_headings(doc, rules, res, pitch)
     if pitch:
         spec = pleading.spec_for(fmt)
         if spec is None:
@@ -440,6 +449,8 @@ def check(
             res.fails += pleading.check(doc, blob, spec)
     check_body(doc, rules, res, pitch)
     check_footer(doc, blob, rules, res)
+    res.fails += frontpage.check(doc, fmt, cls)
+    res.fails += citations.check(doc_text(doc), cites, corpus if isinstance(corpus, dict) else {})
     if cls == "mediation_brief":
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):
