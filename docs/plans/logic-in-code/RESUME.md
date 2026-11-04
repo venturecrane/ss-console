@@ -15,6 +15,16 @@ The 2026-11-04 audit found the model restating, computing or deciding facts code
 - **W6 `logic-in-code/litigation-events`:** started minutes before the pause; worktree `.claude/worktrees/agent-a8183a514b666fc86`; pause reply at the bottom.
 - **Audit + ADR 0104 + this kit:** branch `worktree-audit-model-as-logic`, pushed 2026-11-04 ~12:00 MST as PR #3750 (auto mode was switched off so the lead could push). #3741 was enqueued in the merge queue at the same time. It adds `docs/reviews/model-as-logic-audit-2026-11-04{,-agent-reports}.md`, `docs/adr/0104-logic-in-code-six-mechanisms.md`, index entries, regenerated `docs/handbook/adr-index.md`.
 
+## UPDATE 12:40 MST (auto mode was switched off, so the lead could publish)
+
+- #3741 (W0 token-sdk) MERGED to main as 8d910681.
+- #3742 (C fixed-wording) rebased onto main, tip 0a12ce0c, pre-push verify passed; CI re-running.
+- A connector-values: rebased onto main, PR #3752 (one commit effc8caa), pre-push verify passed (vitest 7679 passed).
+- B writes-and-conflict: rebased onto main, PR #3753 (one commit 7c80058e), pre-push verify passed (vitest 7715 passed); must merge AFTER #3752 and be rebased once A lands (shared register() lines and trust-balance-nudge).
+- Nothing of wave 1 remains only on this Mac. The agent worktrees (`agent-a9b8cc8cca1af4e88`, `agent-ad9ad7b51ae95a6d1`, `agent-af4d46e2ae25807ae`) can be removed; their branches are on origin.
+- Audit + ADR 0104 + this kit: PR #3750.
+- The orphaned-supervisor root cause (below) was found and the processes stopped; the pre-push hooks pass again.
+
 ## Merge order
 
 #3741 (W0) -> A -> B (rebased on A; shares register() lines and trust-balance-nudge) -> C (#3742, independent) -> wave 2 lanes (W6, then W7/W8/W9 as they land; W9 imports A's `printed_money`).
