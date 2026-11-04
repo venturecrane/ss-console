@@ -127,7 +127,7 @@ def _klass(item: dict[str, Any]) -> int:
 
 def one_heading(
     located: list[tuple[int, str, dict[str, Any]]], holds: dict[int, str], files: dict[str, Any]
-) -> tuple[list[tuple[int, str, dict[str, Any]]], dict[int, list[str]]]:
+) -> tuple[list[tuple[int, str, dict[str, Any]]], dict[int, list[str]], dict[str, Any]]:
     """Each record's results reduced to its ONE heading, in this order:
     attached; held ("still to be read"); not established on a partly read
     file; not found (every page read). A held record's results all leave the
@@ -135,7 +135,15 @@ def one_heading(
     entry (``looked``, by record n). A record's results are grouped by the
     file's sha256: two file ids with one sha are one upload twice (dry run 3:
     a9a240c1 and fc1e2f7b, one 3-page file uploaded twice, rendered as one
-    line twice under the first name), kept once, under the first file tried."""
+    line twice under the first name), kept once, under the first file tried.
+
+    ``folds``: what a record's one entry still owes the reader from the results
+    its heading dropped (dry run 4, 2026-11-04: record 3 asked for two visits,
+    one was attached, and the reply said nothing of the other, looked for and
+    not found). An attached record's item not found anywhere becomes a sentence
+    on its attached line (``folds["attached"][n]``); a record not established
+    on a partly read file says the files it was looked for in and not found
+    (``folds["lines"]``, a line's start and the sentence it ends with)."""
     best: dict[int, int] = {}
     for n, _fid, result in located:
         for item in result.get("items") or []:
@@ -145,7 +153,10 @@ def one_heading(
     seen: set[tuple[int, str]] = set()  # (record, sha256, else the file id)
     named: dict[str, str] = {}
     cut = {fid for _n, fid, r in located for i in r.get("items") or [] if _klass(i) == _ATTACHED}
+    owed: dict[tuple[int, str], list[str]] = {}
     for n, fid, result in located:
+        if n not in holds and best.get(n) != _NOT_FOUND:
+            _owe(owed, n, fid, result, best[n])
         key = (n, str((files.get(fid) or {}).get("sha256") or fid))
         if n in holds:
             if key not in seen:
@@ -163,7 +174,73 @@ def one_heading(
             name = str(result.get("name") or "")
             shown = name if fid in cut or named.setdefault(name, fid) == fid else f"a second file also named {name}"
             kept.append((n, fid, {**result, "items": items, "name": shown}))
-    return kept, looked
+    return kept, looked, _folds(owed, kept, best, located)
+
+
+def _asked(item: dict[str, Any]) -> str:
+    return facts_mod._tame(item.get("asked")) or "the record asked for"
+
+
+def _owe(owed: dict[tuple[int, str], list[str]], n: int, fid: str, result: dict[str, Any], best: int) -> None:
+    """Where one dropped item of record ``n`` was not found in this file, in
+    the reply's words, keyed by the item's own words."""
+    name = facts_mod._name(result.get("name") or "the file")
+    counts = result.get("counts") or {}
+    total = int(counts.get("pages") or result.get("pageCount") or 0)
+    pointer = facts_mod._Renderer(facts_mod.KNOWN_CAPS).pointer
+    for item in result.get("items") or []:
+        if _klass(item) == best or _klass(item) == _ATTACHED:
+            continue
+        if item.get("established"):
+            where = f"in {name} (all {_pages(total)} read)"
+        else:
+            closest = "; ".join(pointer(p) for p in item.get("closest") or [])
+            where = f"on the {int(counts.get('read') or 0):,} pages read of {name}"
+            where += f" (closest: {closest})" if closest else ""
+        owed.setdefault((n, _asked(item)), []).append(where)
+
+
+def _folds(
+    owed: dict[tuple[int, str], list[str]],
+    kept: list[tuple[int, str, dict[str, Any]]],
+    best: dict[int, int],
+    located: list[tuple[int, str, dict[str, Any]]],
+) -> dict[str, Any]:
+    found = {(n, _asked(i)) for n, _f, r in located for i in r.get("items") or [] if _klass(i) == _ATTACHED}
+    partly = {n: _asked(i) for n, _f, r in kept for i in r.get("items") or [] if _klass(i) == _PARTLY}
+    attached: dict[int, list[str]] = {}
+    lines: list[tuple[str, str]] = []
+    for (n, asked), wheres in owed.items():
+        wheres = list(dict.fromkeys(wheres))
+        if best.get(n) == _ATTACHED and (n, asked) not in found:
+            attached.setdefault(n, []).append(f"{asked[:1].upper()}{asked[1:]} was not found {' or '.join(wheres)}.")
+        elif best.get(n) == _PARTLY and n in partly:
+            lines.append((f"- {partly[n]}: not found on the", f"Also looked for in {_and([w[3:] for w in wheres])}."))
+    return {"attached": attached, "lines": lines}
+
+
+def with_folds(
+    block_text: str, block_html: str, folds: dict[str, Any] | None, files: list[dict[str, Any]]
+) -> tuple[str, str]:
+    """Each fold's sentence at the end of its record's one line, text and html
+    alike: an attached record's on its last attached file's line."""
+    if not folds:
+        return block_text, block_html
+    ends = list(folds.get("lines") or [])
+    for n, sentences in (folds.get("attached") or {}).items():
+        mine = [f for f in files if int(f.get("n") or 0) == n]
+        if mine:
+            ends.append((f"- {facts_mod._name(mine[-1].get('name'))}, ", " ".join(sentences)))
+    lines = block_text.split("\n")
+    for start, sentence in ends:
+        at = next((k for k, ln in enumerate(lines) if ln.startswith(start)), None)
+        if at is None:
+            continue
+        old = lines[at]
+        lines[at] = f"{old}{' ' if old.endswith('.') else '. '}{sentence}"
+        li = f"<li>{html_lib.escape(old[2:])}</li>"
+        block_html = block_html.replace(li, f"<li>{html_lib.escape(lines[at][2:])}</li>", 1)
+    return "\n".join(lines), block_html
 
 
 def _looked(fid: str, result: dict[str, Any], files: dict[str, Any], named: dict[str, str]) -> list[str]:
@@ -212,14 +289,20 @@ def held_line(asked: str, reason: str, looked: list[str] | None = None, files: d
 
 
 def with_gaps(
-    block_text: str, block_html: str, results: dict[str, dict[str, Any]], files: list[dict[str, Any]]
+    block_text: str,
+    block_html: str,
+    results: dict[str, dict[str, Any]],
+    files: list[dict[str, Any]],
+    folds: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     """The facts block, plus each ATTACHED file with pages the model could not
     read: a record found on the readable pages goes out (2026-11-03: 47 pages,
     23 unreadable, the visit found on 1-2 and 6-39), and the reply says, in the
     contract's gap words, how many pages of that file were not read. A file the
     renderer already named in a "Not established" heading, or a record's own
-    entry, with the same count is not named twice."""
+    entry, with the same count is not named twice. Each record's ``folds``
+    (:func:`one_heading`) end its line first."""
+    block_text, block_html = with_folds(block_text, block_html, folds, files)
     lines = []
     before = block_text.splitlines()
     for fid in dict.fromkeys(str(f.get("file_id")) for f in files):
@@ -302,4 +385,15 @@ def render(results: dict[str, dict[str, Any]], files: list[dict[str, Any]], matt
     return facts_mod.render(results, files, staged_matter=matter_id, read_matters={matter_id})
 
 
-__all__ = ["HELD_LINE", "OPENING", "compose", "found", "merge", "one_heading", "outcomes", "ranges_to_cut", "render"]
+__all__ = [
+    "HELD_LINE",
+    "OPENING",
+    "compose",
+    "found",
+    "merge",
+    "one_heading",
+    "with_folds",
+    "outcomes",
+    "ranges_to_cut",
+    "render",
+]
