@@ -395,7 +395,11 @@ def test_the_estimator_reads_every_rate_card_the_tree_keeps():
     for card in cards:
         p = evidence_cost.load_pricing(card)
         assert p.rate_for("claude-opus-5-5").input_per_million_cents > 0, card
-    assert evidence_cost.tree_pricing() == cards[2] and evidence_cost.pricing_path(None).is_file()
+    # The walk-up from a checkout's own source file finds the tree's card; an installed runner (CI's
+    # non-editable venv) has no adapter/ above it, which the next test covers.
+    in_tree = OPERATOR / "runners" / "jobs" / "jobs" / "drafting" / "evidence_cost.py"
+    assert evidence_cost.tree_pricing(in_tree) == cards[2]
+    assert evidence_cost.pricing_path(str(cards[2])) == cards[2]
 
 
 def test_an_installed_runner_with_no_card_asks_for_one(tmp_path, monkeypatch, capsys):
@@ -440,6 +444,8 @@ def test_the_cost_cli_runs_without_the_firms_pinned_files(tmp_path, pricing, cap
     with pytest.raises(firm_mod.DraftingConfigError):
         firm_mod.load(tmp_path / "inputs")
     capsys.readouterr()
-    assert evidence_cost.main([str(r.job.job_dir), "--inputs", str(tmp_path / "inputs")]) == 0
+    card = OPERATOR / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
+    argv = [str(r.job.job_dir), "--inputs", str(tmp_path / "inputs"), "--pricing", str(card)]
+    assert evidence_cost.main(argv) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["total_usd"] >= out["total_low_usd"] > 0 and out["rate_card"].endswith("anthropic_pricing.json")
