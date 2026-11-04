@@ -453,8 +453,9 @@ top_level:
       `review: smd` holds every files reply for SMD's approval
       (shared/matter_file_review.py); `review_first: N` holds every files
       reply until SMD has released N of them, then sends normally (the seat
-      counts only reviewed replies that were approved and sent; a rejected,
-      expired or waiting one counts for nothing).
+      counts only the Operator's reviewed replies that were approved and sent;
+      a rejected, expired or waiting one, or a reply SMD wrote itself, counts
+      for nothing).
   voice_library:
     status: implemented
     materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)

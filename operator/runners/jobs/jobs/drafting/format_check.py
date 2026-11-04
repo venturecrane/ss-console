@@ -7,7 +7,8 @@ render used, so the check reads the document back against what the firm wrote.
 The specimen briefs are exemplars and review aids, never measured. Each
 assertion reads the rendered .docx:
 
-* every run with text is the authored font at the authored size;
+* every run with text is the authored font at the authored size (a chart's at
+  the authored chart size); charts boxed and shaded as authored;
 * plain US Letter paper with no line numbering, when the firm says so;
 * headings at each level: alignment, bold, underline and indent per the rules;
 * body paragraphs: line spacing (exact points or a multiple), justification and
@@ -128,20 +129,68 @@ def _front_count(doc: Any) -> int:
     return n
 
 
-def check_font(doc: Any, fmt: dict[str, Any], res: Result) -> None:
+def _charts(doc: Any, rules: Any) -> list[Any]:
+    """Every table but the caption (the first, on a class whose first table is one)."""
+    return list(doc.tables[1:] if rules.caption_table_first else doc.tables)
+
+
+def check_font(doc: Any, fmt: dict[str, Any], res: Result, rules: Any = None) -> None:
+    """Every run is the authored font at the authored size; a chart's runs at
+    the firm's authored chart size when it wrote one (``table_font_pt``)."""
     from docx.oxml.ns import qn
     from docx.shared import Pt
 
-    runs = [r for p in doc.paragraphs for r in _text_runs(p)]
-    runs += [r for t in doc.tables for c in t._cells for p in c.paragraphs for r in _text_runs(p)]
+    first_chart = 1 if rules is not None and rules.caption_table_first else 0
+    chart_pt = getattr(rules, "table_font_pt", None)
+    sized: list[tuple[Any, float]] = [(r, float(fmt["size_pt"])) for p in doc.paragraphs for r in _text_runs(p)]
+    for i, t in enumerate(doc.tables):
+        size = float(chart_pt) if chart_pt and i >= first_chart else float(fmt["size_pt"])
+        sized += [(r, size) for c in t._cells for p in c.paragraphs for r in _text_runs(p)]
     bad = 0
-    for r in runs:
+    for r, size in sized:
         rpr = r._r.rPr
         fonts = rpr.find(qn("w:rFonts")) if rpr is not None else None
-        if fonts is None or fonts.get(qn("w:ascii")) != fmt["font"] or r.font.size != Pt(float(fmt["size_pt"])):
+        if fonts is None or fonts.get(qn("w:ascii")) != fmt["font"] or r.font.size != Pt(size):
             bad += 1
     if bad:
-        res.fails.append(f"font: {bad} run(s) are not {fmt['font']} {fmt['size_pt']}")
+        sizes = f"{fmt['size_pt']}" + (f" ({chart_pt} in charts)" if chart_pt else "")
+        res.fails.append(f"font: {bad} run(s) are not {fmt['font']} {sizes}")
+
+
+def _fill(cell: Any) -> str:
+    from docx.oxml.ns import qn
+
+    tc_pr = cell._tc.tcPr
+    shd = tc_pr.find(qn("w:shd")) if tc_pr is not None else None
+    return (shd.get(qn("w:fill")) or "").upper() if shd is not None else ""
+
+
+_EDGES = ("top", "left", "bottom", "right", "insideH", "insideV")
+
+
+def check_tables(doc: Any, rules: Any, res: Result) -> None:
+    """The firm's authored chart look: a box and grid of the authored width,
+    the header row and the total row shaded in the authored colours."""
+    from docx.oxml.ns import qn
+    from smokeball_connector.docx_base import border_eighths
+    from smokeball_connector.docx_classes import is_total_row
+
+    for n, t in enumerate(_charts(doc, rules), start=1):
+        if rules.table_border_pt:
+            want = str(border_eighths(rules.table_border_pt))
+            b = t._tbl.tblPr.find(qn("w:tblBorders"))
+            els = [b.find(qn(f"w:{e}")) if b is not None else None for e in _EDGES]
+            if any(el is None or el.get(qn("w:val")) != "single" or el.get(qn("w:sz")) != want for el in els):
+                res.fails.append(f"chart {n}: not boxed and ruled at {rules.table_border_pt} point")
+        rows = list(t.rows)
+        if rules.table_header_fill and rows:
+            if any(_fill(c) != rules.table_header_fill.upper() for c in rows[0].cells):
+                res.fails.append(f"chart {n}: the header row is not shaded {rules.table_header_fill}")
+        if rules.table_total_fill:
+            for row in rows[1:]:
+                cells = row.cells
+                if is_total_row([cells[0].text]) and any(_fill(c) != rules.table_total_fill.upper() for c in cells):
+                    res.fails.append(f"chart {n}: the total row is not shaded {rules.table_total_fill}")
 
 
 def check_paper(doc: Any, res: Result) -> None:
@@ -156,8 +205,8 @@ def check_paper(doc: Any, res: Result) -> None:
 
 
 def check_headings(doc: Any, rules: Any, res: Result) -> None:
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+    from docx.shared import Inches, Pt
 
     for p in _paras(doc):
         lv = _level(p)
@@ -174,6 +223,22 @@ def check_headings(doc: Any, rules: Any, res: Result) -> None:
             res.fails.append(f"heading: level {lv} should be {word}: {p.text[:40]}")
         if (_eff(p, "left_indent") or 0) != Inches(rules.heading_indent_in[i]):
             res.fails.append(f"heading: level {lv} not indented {rules.heading_indent_in[i]} inch: {p.text[:40]}")
+        if rules.heading_line_spacing_pt is not None:
+            if (
+                _eff(p, "line_spacing") != Pt(rules.heading_line_spacing_pt)
+                or _eff(p, "line_spacing_rule") != WD_LINE_SPACING.EXACTLY
+            ):
+                res.fails.append(
+                    f"heading: level {lv} not exactly {rules.heading_line_spacing_pt} point: {p.text[:40]}"
+                )
+        elif rules.heading_line_spacing is not None and _eff(p, "line_spacing") != rules.heading_line_spacing:
+            res.fails.append(f"heading: level {lv} not at {rules.heading_line_spacing} line spacing: {p.text[:40]}")
+        for attr, want in (
+            ("space_before", rules.heading_space_before_pt),
+            ("space_after", rules.heading_space_after_pt),
+        ):
+            if want is not None and (_eff(p, attr) or Pt(0)) != Pt(want):
+                res.fails.append(f"heading: level {lv} {attr.replace('_', ' ')} not {want} point: {p.text[:40]}")
 
 
 def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
@@ -256,6 +321,13 @@ def check_mediation(doc: Any, fmt: dict[str, Any], res: Result) -> None:
             res.fails.append(
                 f"reserved: settlement authority/target/bracket without an {{{{ATTORNEY}}}} marker: {p.text[:60]}"
             )
+
+
+def headings(path: Path) -> list[str]:
+    """The rendered document's level-1 headings, in order (the sections a page limit spans)."""
+    import docx
+
+    return [p.text.strip() for p in _paras(docx.Document(str(path))) if _level(p) == 1]
 
 
 def doc_text(doc: Any) -> str:
@@ -354,7 +426,8 @@ def check(
     doc = docx.Document(io.BytesIO(blob))
     rules = rules_for(fmt, cls)
     res = Result()
-    check_font(doc, fmt, res)
+    check_font(doc, fmt, res, rules)
+    check_tables(doc, rules, res)
     if fmt.get("plain_letter_paper"):
         check_paper(doc, res)
     check_headings(doc, rules, res)

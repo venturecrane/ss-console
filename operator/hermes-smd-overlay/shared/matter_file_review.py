@@ -19,6 +19,12 @@ USAGE, as root on the seat::
     python -m shared.matter_file_review list
     python -m shared.matter_file_review approve <id> <digest>
     python -m shared.matter_file_review reject <id> <digest>
+    python -m shared.matter_file_review history           (every row, read-only)
+    python -m shared.matter_file_review mark-smd <id>     (a hand reply SMD wrote)
+
+A reply SMD writes by hand is held with ``hold(..., author="smd")``: its
+release is SMD's own, so it never spends one of the Operator's
+``matter_file_delivery.review_first`` releases.
 
 The gateway's held-reply sweeper thread acts on a decision within a minute.
 A held row expires after :data:`TTL_SECONDS` (the broker spool keeps the files
@@ -39,6 +45,7 @@ from typing import Any
 # root with no turn, and this gateway sends them, so both build and read the
 # same bytes from one copy (operator/connectors/_contract).
 from records_contract.review_row import (
+    AUTHOR_SMD,
     DECISIONS,
     DECISIONS_DIR_ENV,
     DEFAULT_DECISIONS_DIR,
@@ -63,10 +70,12 @@ from records_contract.review_row import (
     read_rows,
     released_count,
     review_dir,
+    smd_authored,
     write_row,
 )
 
 __all__ = [
+    "AUTHOR_SMD",
     "DECISIONS_DIR_ENV",
     "DEFAULT_DECISIONS_DIR",
     "DEFAULT_REVIEW_DIR",
@@ -88,6 +97,7 @@ __all__ = [
     "finish",
     "hold",
     "main",
+    "mark_smd",
     "released_count",
     "review_dir",
     "rows",
@@ -107,6 +117,7 @@ def hold(
     redirect: bool = False,
     now: float | None = None,
     directory: Path | None = None,
+    author: str = "",
 ) -> dict[str, Any]:
     """Write one held reply for review; return the row (with ``id`` and ``digest``).
 
@@ -115,7 +126,9 @@ def hold(
     reply is here when it is not the seat's review setting (its facts did not
     check out, ``shared.matter_file_facts``); it is shown, not digested.
     ``redirect`` means ``to`` is a device's authored person, not the email's
-    sender: the release aims the reply there (and the broker re-checks it)."""
+    sender: the release aims the reply there (and the broker re-checks it).
+    ``author="smd"`` marks a reply SMD wrote by hand: its release is not one of
+    the Operator's ``review_first`` releases."""
     row = hold_row(
         message_id=message_id,
         to=to,
@@ -127,6 +140,7 @@ def hold(
         reason=reason,
         redirect=redirect,
         now=now,
+        author=author,
     )
     write_row(row, directory or review_dir())
     return row
@@ -155,6 +169,37 @@ def finish(
     )
 
 
+def mark_smd(row_id: str, *, directory: Path | None = None) -> dict[str, Any]:
+    """Record that SMD wrote row ``row_id`` by hand (``author: smd``), so its
+    release stops counting toward ``review_first``. Root's correction for a
+    hand reply held before rows carried an author. The digest is unchanged (the
+    author is not digested) and the file keeps its owner and mode, so the
+    gateway still reads it."""
+    if not ID_RE.fullmatch(row_id or ""):
+        raise ReviewError("give the row id exactly as `history` printed it")
+    base = directory or review_dir()
+    row = next((r for r in read_rows(base) if r.get("id") == row_id), None)
+    if row is None:
+        raise ReviewError("no review row has that id")
+    path = base / f"{row_id}.json"
+    st = os.stat(path)
+    write_row({**row, "author": AUTHOR_SMD}, base)
+    if os.geteuid() == 0:
+        os.chown(path, st.st_uid, st.st_gid)
+    os.chmod(path, st.st_mode & 0o777)
+    return {**row, "author": AUTHOR_SMD}
+
+
+def history_line(row: dict[str, Any]) -> str:
+    """One row, every status, for finding a row to correct: no words, no files."""
+    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(row.get("created_at") or 0)))
+    who = "SMD" if smd_authored(row) else "Operator"
+    return (
+        f"{row.get('id')}  {row.get('status'):<8}  held {when}  by {who:<8}  to {row.get('to')}  "
+        f"matter {row.get('matter_id')}  session {row.get('session_id')}"
+    )
+
+
 def decision(row: dict[str, Any], *, directory: Path | None = None) -> str:
     """``approve`` / ``reject`` when ROOT decided this exact row, else ``""``."""
     return decision_for(directory, row) or ""
@@ -173,6 +218,11 @@ def describe(row: dict[str, Any]) -> str:
         ),
         f"answers:  graph message {row.get('message_id')}",
         f"matter:   {row.get('matter_id')}",
+        *(
+            ["written:  by SMD by hand (its release does not count toward review_first)"]
+            if smd_authored(row)
+            else []
+        ),
         *([f"held because: {row.get('reason')}"] if row.get("reason") else []),
         "words (sent exactly as below):",
         "-" * 60,
@@ -219,6 +269,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
+    sub.add_parser("history")
+    p = sub.add_parser("mark-smd")
+    p.add_argument("row_id")
     for word in DECISIONS:
         p = sub.add_parser(word)
         p.add_argument("row_id")
@@ -232,8 +285,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(f"{len(waiting)} repl{'y' if len(waiting) == 1 else 'ies'} waiting for review.")
         print(
-            f"{released_count()} released after review on this seat so far (review_first counts these)."
+            f"{released_count()} of the Operator's replies released after review on this seat so far "
+            "(review_first counts these; a reply SMD wrote itself does not)."
         )
+        return 0
+    if args.cmd == "history":
+        for row in rows():
+            print(history_line(row))
+        print(f"{released_count()} counted toward review_first.")
         return 0
     if os.geteuid() != 0:
         print(
@@ -241,6 +300,16 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.cmd == "mark-smd":
+        try:
+            mark_smd(args.row_id)
+        except (ReviewError, OSError) as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
+        print(
+            f"marked {args.row_id} as SMD's own reply; {released_count()} now counted toward review_first."
+        )
+        return 0
     try:
         path = decide(args.row_id, args.cmd, args.digest)
     except (ReviewError, OSError) as exc:

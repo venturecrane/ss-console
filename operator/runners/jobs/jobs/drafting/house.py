@@ -41,6 +41,14 @@ def house_for(fmt: dict[str, Any], cls: str) -> Any:
         page_numbers_always=bool(lay.get("page_numbers_always"))
         or (cls == "depo_outline" and bool(fmt.get("depo_outline_page_numbers"))),
         footer_title=lay.get("footer_title"),
+        heading_line_spacing=lay.get("heading_line_spacing"),
+        heading_line_spacing_pt=lay.get("heading_line_spacing_pt"),
+        heading_space_before_pt=lay.get("heading_space_before_pt"),
+        heading_space_after_pt=lay.get("heading_space_after_pt"),
+        table_font_pt=lay.get("table_font_pt"),
+        table_header_fill=lay.get("table_header_fill"),
+        table_total_fill=lay.get("table_total_fill"),
+        table_border_pt=lay.get("table_border_pt"),
     )
 
 

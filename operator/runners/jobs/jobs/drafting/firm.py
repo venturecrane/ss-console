@@ -23,12 +23,17 @@ The schema (the engagements author writes to exactly this)::
                   discovery_label_style, depo_outline_page_numbers,
                   plain_letter_paper?: bool,
                   pleading?: {lines, line_pitch_pt, margins_in: [4]},
+                  limits?: {<class>: {<section title>: max pages}},
                   layout?: {<class>: {line_spacing, line_spacing_pt, justify,
                             first_line_indent_in, heading_indent_in: [3],
                             heading_underline: [3], item_line_spacing,
                             item_space_after_pt, centered_court_lines,
                             bold_italic_heading_indent_in, page_numbers_always,
-                            footer_title}}   every layout key optional
+                            footer_title, heading_line_spacing,
+                            heading_line_spacing_pt,
+                            heading_space_before_pt, heading_space_after_pt,
+                            table_font_pt, table_header_fill, table_total_fill,
+                            table_border_pt}}   every layout key optional
     classes:     {<class>: {skeleton, prompts: {digest, compose, audit, repair},
                   exemplars: [paths]}}   one entry for each of the five classes
     attachments: {decl_2030_050, pos}
@@ -57,7 +62,7 @@ from typing import Any
 
 import yaml
 
-from . import attorneys as attorneys_mod, evidence_config
+from . import attorneys as attorneys_mod, evidence_config, page_limits
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -87,6 +92,17 @@ LAYOUT_KEYS = {
     "bold_italic_heading_indent_in": "num",
     "page_numbers_always": "bool",
     "footer_title": "str",
+    # The attorney's spacing of headings and his charts (2026-11-04, Chris
+    # Price: double spaced including the headings; charts boxed, larger, with
+    # some colour).
+    "heading_line_spacing": "num",
+    "heading_line_spacing_pt": "num",  # exact points: wins over the multiple
+    "heading_space_before_pt": "num",
+    "heading_space_after_pt": "num",
+    "table_font_pt": "pt",  # every table but the caption
+    "table_header_fill": "hex",  # RRGGBB
+    "table_total_fill": "hex",  # a row whose first cell starts with "Total"
+    "table_border_pt": "border",
 }
 
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
@@ -122,6 +138,9 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         # for it (pleading.py): {lines, line_pitch_pt, margins_in: [top, right,
         # bottom, left]}. Absent, a pleading request is held for SMD.
         "pleading": ("map", False),
+        # Optional: {<class>: {<section title>: max pages}}, measured on the
+        # rendered pages (page_limits.py).
+        "limits": ("map", False),
     },
     "classes": None,
     "attachments": {"decl_2030_050": ("str", True), "pos": ("str", True)},
@@ -221,6 +240,12 @@ def _layout_value_ok(value: object, kind: str) -> bool:
         return isinstance(value, str) and bool(value.strip())
     if kind == "num3":
         return isinstance(value, list) and len(value) == 3 and all(num(v) for v in value)
+    if kind == "pt":
+        return num(value) and 8 <= float(value) <= 20  # type: ignore[arg-type]
+    if kind == "border":
+        return num(value) and 0.25 <= float(value) <= 6  # type: ignore[arg-type]
+    if kind == "hex":
+        return isinstance(value, str) and bool(re.fullmatch(r"[0-9A-Fa-f]{6}", value))
     if kind == "bool3":
         return isinstance(value, list) and len(value) == 3 and all(isinstance(v, bool) for v in value)
     return False
@@ -289,14 +314,8 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
     return refs + evidence_config.referenced_paths(data)
 
 
-def _semantics(data: dict[str, Any]) -> list[str]:
+def _format(fmt: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    for key in ("per_job_cap_usd", "monthly_budget_usd", "usd_per_million_chars", "usd_per_scanned_page"):
-        if float(data["budget"][key]) <= 0:
-            out.append(f"budget.{key}: must be > 0")
-    if float(data["budget"]["usd_drafting_fixed"]) < 0:
-        out.append("budget.usd_drafting_fixed: must be >= 0")
-    fmt = data["format"]
     if len(fmt["mediation_brief_sections"]) != MEDIATION_SECTIONS:
         out.append(f"format.mediation_brief_sections: expected exactly {MEDIATION_SECTIONS} section titles")
     if fmt["discovery_label_style"] not in LABEL_STYLES:
@@ -304,6 +323,19 @@ def _semantics(data: dict[str, Any]) -> list[str]:
     if not 8 <= float(fmt["size_pt"]) <= 16:
         out.append("format.size_pt: expected 8..16")
     out += _layout(fmt.get("layout") or {}) + (_pleading(fmt["pleading"]) if "pleading" in fmt else [])
+    if "limits" in fmt:
+        out += page_limits.validate(fmt["limits"], CLASSES, fmt["mediation_brief_sections"])
+    return out
+
+
+def _semantics(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for key in ("per_job_cap_usd", "monthly_budget_usd", "usd_per_million_chars", "usd_per_scanned_page"):
+        if float(data["budget"][key]) <= 0:
+            out.append(f"budget.{key}: must be > 0")
+    if float(data["budget"]["usd_drafting_fixed"]) < 0:
+        out.append("budget.usd_drafting_fixed: must be >= 0")
+    out += _format(data["format"])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:
         try:

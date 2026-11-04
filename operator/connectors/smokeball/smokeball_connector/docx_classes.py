@@ -81,6 +81,16 @@ class ClassRules:
     body_justify: bool = False
     front_matter_plain: bool = False  # before the caption: left; all-bold lines centered
     bold_italic_heading_indent_in: float | None = None  # a bold-italic line alone is a heading
+    heading_line_spacing: float | None = None  # a multiple, on every heading
+    heading_line_spacing_pt: float | None = None  # exact points: wins over the multiple
+    heading_space_before_pt: float | None = None
+    heading_space_after_pt: float | None = None
+    # Every table but the caption: its runs' size, its header row's and total
+    # row's shading (RRGGBB), and a box-and-grid border of this width.
+    table_font_pt: float | None = None
+    table_header_fill: str | None = None
+    table_total_fill: str | None = None
+    table_border_pt: float | None = None
 
 
 CLASS_RULES: dict[str, ClassRules] = {
@@ -132,6 +142,14 @@ class HouseStyle:
     bold_italic_heading_indent_in: float | None = None
     page_numbers_always: bool = False
     footer_title: str | None = None
+    heading_line_spacing: float | None = None
+    heading_line_spacing_pt: float | None = None
+    heading_space_before_pt: float | None = None
+    heading_space_after_pt: float | None = None
+    table_font_pt: float | None = None
+    table_header_fill: str | None = None
+    table_total_fill: str | None = None
+    table_border_pt: float | None = None
 
 
 def apply_house(rules: ClassRules, house: HouseStyle | None) -> ClassRules:
@@ -153,8 +171,28 @@ def apply_house(rules: ClassRules, house: HouseStyle | None) -> ClassRules:
         ("bold_italic_heading_indent_in", house.bold_italic_heading_indent_in),
         ("page_numbers_always", house.page_numbers_always or None),
         ("footer_title", house.footer_title),
+        ("heading_line_spacing", house.heading_line_spacing),
+        ("heading_line_spacing_pt", house.heading_line_spacing_pt),
+        ("heading_space_before_pt", house.heading_space_before_pt),
+        ("heading_space_after_pt", house.heading_space_after_pt),
+        ("table_font_pt", house.table_font_pt),
+        ("table_header_fill", house.table_header_fill),
+        ("table_total_fill", house.table_total_fill),
+        ("table_border_pt", house.table_border_pt),
     )
     over.update({k: v for k, v in pairs if v is not None})
     if house.page_numbers_always or house.footer_title:
         over["page_numbers"] = True
     return dataclasses.replace(rules, **over)  # type: ignore[arg-type]
+
+
+_TOTAL = re.compile(r"^\W*total\b", re.IGNORECASE)
+
+
+def is_total_row(row) -> bool:
+    """A table row whose first cell starts with "Total" (the damages chart's sum)."""
+    if not row:
+        return False
+    first = row[0]
+    text = first if isinstance(first, str) else "".join(getattr(x, "text", "") for x in first)
+    return bool(_TOTAL.match(text.strip()))
