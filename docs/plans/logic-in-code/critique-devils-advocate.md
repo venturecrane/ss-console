@@ -1,0 +1,81 @@
+## Devil's Advocate Critique
+
+Plan: `/Users/scottdurgan/.claude/plans/nifty-napping-planet.md`. Audit: `docs/reviews/model-as-logic-audit-2026-11-04.md`. Every file:line below was read in the worktree `/Users/scottdurgan/dev/ss-console/.claude/worktrees/audit-model-as-logic` (HEAD 32c8a3c3) unless the path says otherwise.
+
+**Strengths**
+
+- The six mechanisms are the right abstraction: each is already the second or third instance of a fix one lane has, and the plan names the existing primitive each generalises (`resolution_token`, `cited_facts.confirm`, `held_wording`, `defstatus`, `records_contract`).
+- The premises table is evidence-bound and every line I checked reproduced. The `__signature__` idea in particular is sound: the installed mcp 1.23.3 builds the arg model from `inspect.signature(func, eval_str=True)` (`mcp/server/fastmcp/utilities/func_metadata.py:221`), which stops unwrapping at an object carrying `__signature__`, so a wrapper-level signature is exactly what the model sees as the input schema.
+- The rehearsal ladder is stated per workstream and the $0-first rule is honoured for every lane that has a replay; the demand lane's missing replay is named rather than hidden.
+
+**Issues Found**
+
+### 1. W2's blast radius is three times what the plan budgets, and two gated tools cannot take the generic check
+
+The plan updates 11 skills. A grep of `operator/skills/*/SKILL.md` for the write tools (`create_task|update_task|create_event|update_memo|render_firm_form_letter|add_medicals_row|add_negotiation_rows|file_attachment_pages_to_matter|render_sr1|render_sr19|render_docx_draft|stage_vendor_invoice|...`) finds 29 skills: combined-post-intake, conflict-intake-router, client-verification-tracker, deadline-miss-escalator, discovery-response-drafter, discovery-served-watch, discovery-response-staging, discovery-response-tracker, document-library-establishment, follow-up-discovery-drafter, matter-inbox-router, file-work-requests, lien-ledger-tracker, matter-memo-on-update, mediation-settlement-tracker, medical-chronology-maintainer, matter-initiation-setup, mediation-brief-drafter, minors-compromise-packet, meet-and-confer-drafter, new-matter-intake, medical-records-chaser, motion-package-assembler, service-confirmation-watcher, settlement-statement-feeder, separate-statement-assembler, task-list-keeper, vendor-invoice-intake, trial-binder-assembler. With `requires_resolution` fail-closed, the first A&P image release refuses every write on the 18 unlisted skills, including the chronology's review task and the escalation acknowledgement's `update_task` writes.
+
+Separately, `update_task(task_id, subject, note, due_date, is_completed, assignee_ids, staff_id)` (`smokeball_connector/server.py:820-827`) and `update_event(event_id, ...)` (`server.py:965-972`) carry no `matter_id`, so the wrapper's `resolution_token.verify(token, matter_id)` (`resolution_token.py:136`) has nothing to verify against. The escalation path is worse: the trust gate replaces the model's `update_task` arguments with the writes the person approved (`matter-inbox-router/SKILL.md`, "writes_queued" branch), so a token requirement there breaks a code-authored write.
+
+Why it matters: a refusing write tool on the daily post bundle is a client-visible outage on the only live seat, and the plan's own verification probes one tool (`render_firm_form_letter`).
+
+Fix: declare the gated set as name to matter-arg resolver (a per-tool callable that fetches the task's or event's matter when the arg is absent), not a bare name set in `server.py`. Add a connector test that every skill naming a token-gated tool also names the resolver call (grep-driven, the forbidden-strings shape). Ship the flag with a per-seat `observe | enforce` switch, observe for one daily cycle on pilot-smokeball and A&P with every would-be refusal logged, the shadow-mode pattern ADR 0094's signed seat spec used. Exempt gate-authored writes (`reply_verdicts` `writes_queued`) or let the gate mint the token.
+
+### 2. W4's fence sits at the wrong seam and its hit rule is undefined
+
+A sender not on the roster is already held before any send (`hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:1423-1425`, `_held("sender_not_on_roster", origin)`), so a reply-time fence on "a sender who is not rostered internal" adds nothing to sends. The rubric's HALT is "no reply, no wedge-skill handoff, no draft" (`operator/skills/matter-inbox-router/references/routing-rubric.md`, "The conflict cross-check" section); the acts a conflict must stop are the matter writes, and a reply fence lets all of them proceed.
+
+The hit rule is the larger problem. Rostered staff forward adverse-party mail every day: the post bundle (carrier letters), vendor invoices, served documents. A tool whose `hit` means "a named party holds an adverse role on an existing matter" fires on every carrier letter and refuses the live daily path, or a redraft loop starts on every bundle. The rubric's real conflict is a new relationship (a prospective client whose opponent is an existing client, or vice versa), with the served-document carve-out, and the plan does not write that table down. For webhook-handoff inbounds the fence as designed has nothing to key on: the finder-recording pattern it reuses (`__init__.py:853-855, 927-940`) records a tool result against `SESSION_INBOUND_ORIGIN.bound_this_turn`, which exists for an email turn; a matter webhook turn has no inbound origin and no sender.
+
+Fix: write the rule table into the design before an agent builds it: `hit` iff the sender or a named party is a contact in an adverse role on an OPEN matter AND the inbound was not resolved to that matter by the router (a new relationship), `clear` otherwise, `search_failed` on a tenant fault, served-document capture exempt. Put the fence in hermes-smd-trust's `on_pre_tool_call` (`plugins/hermes-smd-trust/__init__.py:277`), which already classifies `INTERNAL_WRITE` and fences by action class (`:169, :223`): on a turn whose inbound is from a non-roster sender, or is a roster-forwarded new-client inquiry, no write and no send without a recorded `clear`; a recorded `hit` refuses both. Scope the fence to the inbound classes where a conflict is possible, never to webhook turns.
+
+### 3. W1's derivation lets an omitted keying step read as clean, and the ledger key collides across runs
+
+The plan derives a PLACED_CHECK issue only from "later keying rows on the span". A model that files a medical bill and never calls `add_medicals_row` leaves no row, so the derived `issue` is empty, the daily list says filed cleanly, and the Medicals tab is silently empty. Today's validator (`post_journal.py:137-158`) at least forces the model to name an issue vocabulary; the derivation removes that without replacing it.
+
+`resolve_invoice_matter` has no sha256 or page parameters today (`vendor_invoice_tools.py:79-87`); the skill partitions pages (step 2, `combined-post-intake/SKILL.md:223`) before resolving (step 3, `:251-254`), so the range is known, but if the new parameters are optional (they must be, for vendor-invoice-intake's single invoice) a model can omit them and an unfiled letter has no verdict row either. Keying rows by sha256 alone merges runs: the same PDF re-sent by the scanner, or the step-6 reply (`SKILL.md:587-600`) that re-runs resolve on the same bundle, appends into the previous run's file.
+
+Exceptions leave no row: the SDK wrapper translates the tool's exception after the body returns (`_sdk/operator_connector_sdk/server.py:166-173`), so a tool that raises before its outcome write records nothing and the derivation reads the span as never attempted.
+
+Fix: derive the required act from `kind` (medical_bill needs a medicals row, vendor_bill a stage, settlement_offer a negotiation row) and emit `tab_not_written` / `expense_not_staged` / `offer_not_written` with detail "no attempt recorded" when the row is absent, naming `kind` in the ADR as the one residual model input. Add a `not_attempted` issue for a span with neither a filing nor a verdict, so the record is honest instead of refused forever. Key rows by (sha256, message_id), which `record_post_batch` already receives (`post_journal.py:225`). Write each outcome row in a `finally` with the exception's class as `status`.
+
+### 4. Fixed wording on delivered replies carries content the runner does not own at delivery time
+
+The chronology's delivered reply closes with allowance consumed and remaining from `medchron_allowance`, an overlay tool that calls the runner's API at reply time (`plugins/hermes-smd-medchron/__init__.py:188-191`); it names joint-matter folders from `get_files_on_matter`; and the SMD page credit is written after submission (`medical-chronology-maintainer/SKILL.md:523-526`, "SMD writes credits after a submission"). The casefile's delivered reply carries the wake's `Count on the 1st:` line plus five counts (`case-file-manager/SKILL.md:153-170`), and the broker raises the numbered lines itself after the send (`workspace_broker/casefile_casework.py:133-145`, `after_bound_reply`). A `reply_text` frozen into `delivery_json` at delivery goes stale when a credit lands or another job delivers first; the broker then refuses the true figures or forces the stale ones.
+
+`held_wording._matches` fills slots with `.+?` and `_slot_ok` only checks shape (`workspace_broker/held_wording.py:253-266`): any slot left in a template is unchecked model content, so a W5/W10 template with `<matters_total>` style slots re-admits the restatement the mechanism exists to remove. I could not find a `test_held_wording_parity` by that name in `operator/workspace_broker/tests/` or `operator/hermes-smd-overlay/tests/`.
+
+Fix: render `reply_text` at bind time in the broker, which already has the row and already renders held texts there (`reply_binding.py:565-569`, `_held_texts`), and return it in the bind result the way the records lane does; the status tools call the same renderer. Templates carry zero slots: every figure is rendered by code or the sentence is omitted. Name the real parity test to extend, or add one that pins skill text to the renderer's output.
+
+### 5. W9's dollar lint cannot work without A5, and it misses the restated total
+
+The skeleton's `## Damages` section (`/Users/scottdurgan/dev/engagements/operator/customers/ashton-price/demand/skeleton-demand-house-ap.md:109-127`) has a per-provider narrative slot ending in "the charge" and a payer-status sentence (lien, med-pay, health plan paid), so legitimate `$` figures outside the specials table exist by design. "Not in the table or a cited source" needs the cited-source check that A5 provides and the plan defers, so the lint either blocks every demand (a redraft loop, blocking) or degrades to table-only and lets a narrative charge disagree with its row. The `## Demand` table restates the total as Past Medical Expenses (skeleton:174), outside DAMAGES, and `demand/review.py:222-244` accepts a total equal to the letter's own rows.
+
+"Placed at the skeleton's specials slot" is underspecified: `house.table_kind` already recognises the specials table by its `Provider | Amount` header (`runners/medchron/medchron/demand/house.py:235-244`), and the model will write rows under it regardless of the rule.
+
+Fix: code fills the specials table, its total, AND the Demand table's Past Medical Expenses cell. The lint rule becomes "every `$` in the letter equals a table figure or a per-provider charge from the howell table", computable now; the cited-source clause is deferred to A5 by name. Code REPLACES the rows under the recognised header, logs the diff against what the model wrote, and refuses the draft (not the letter to the firm) if no such table exists.
+
+### 6. The dependency graph is misdeclared and the team split is the wrong shape
+
+Tool registration is per module, not in `server.py`: `medicals_tools.py:505` (`server.tool()(add_medicals_row)`), `layout_tools.py:490`, `form_letters.py:658`, `letter_tools.py:477`, `vendor_invoice_tools.py:228`. W2 can only avoid W1's modules by declaring the set by name in `server.py`, and issue 1 forces per-tool resolvers, so W2 and W1 are not disjoint. W3 depends on W2 (the plan text admits "after W2 merges or rebased onto it"; both edit the file-work-requests and trust-balance-nudge skills) but the yaml declares `blocked_by: [outcome-ledger]` only. W5 must edit `hermes-smd-reply/__init__.py` (`_HELD_WORDING_REASON` at `:540-541`, the `HeldWordingRefused` handler at `:1949-1956`), which W4 also edits, so those two are not disjoint either. Against the heuristic, wave 1 is five workstreams of which two are chained rebases onto a peer's mid-flight files, and the chained pairs each re-learn the same modules.
+
+Fix: restructure wave 1 as one small upstream PR (SDK flag with per-tool matter resolver, token API, `resolve_matter_by_id`, no skills), then three truly disjoint agents in parallel: W1+W3 as one agent (same tool modules, one signature change, one skill version bump, one conformance update); W2-skills+W4 as one agent (write-tool declarations, the 29 skills, the conflict tool and the trust-plugin fence); W5 alone (broker plus the overlay reply plugin). Three agents under the cap of four, no rebases onto a peer's branch. Team mode remains justified for wave 2 as declared (four runner lanes, disjoint directories).
+
+### 7. Two verification lines name things that do not exist
+
+"Then the next real A&P bundle under the daily list, read by SMD before the list goes": the daily list pre_run dispatches through a consume-once envelope with no hold or preview (`operator/skills/post-intake-daily-list/pre_run.py:13-31`, "QUIET BY DESIGN"). There is no "before the list goes". Either build a review hold (scope not in the plan) or replace the sentence with reading the sent list afterwards.
+
+"The A&P seat picks it up on the next image release behind the busy gate" for W2 skips any pilot lane-proof of the 29 skill write paths. Fix: the pilot lane-proof exercises each enabled skill's write path (the 14 lane keys in `lane-proofs.yaml:31-144` plus the in-turn skills), or observe mode runs first (issue 1).
+
+### 8. Implementation details on the SDK augmentation
+
+Build the wrapper's `__signature__` from `inspect.signature(fn, eval_str=True)` so the parameter annotations are objects: the tool modules use `from __future__ import annotations` (`medicals_tools.py:1`, `server.py:1`), and `eval_str` on the wrapper would evaluate string annotations in the SDK module's globals and raise `InvalidSignature` (`func_metadata.py:221-225`). Pop `matter_resolution` from kwargs before calling `fn`, or the original function receives an unknown keyword. `test_conformance` pins tool names only (`operator/connectors/smokeball/tests/test_conformance.py:114, 254-256`), so add a schema assertion that `matter_resolution` is in `required` for every gated tool. `Tool.from_function` reads `fn.__doc__` for the description (`mcp/server/fastmcp/tools/base.py:65`); append one sentence about the token to the wrapper's copied `__doc__`.
+
+### 9. Minor
+
+W3's `get_matter_balances` reading `customer.yaml` live from the connector is feasible (the connector already reads customer config in `layout_config.py`, `library.py`, `form_emails.py`), but the authored key `skills[trust-balance-nudge].settings.trust_floor_usd` must pass the bootstrap validator and the overlay's customer-config parity test (`hermes-smd-overlay/tests/test_customer_config.py:700`) in the same PR, or the seat refuses the config at boot.
+
+**Alternative Approach**
+
+For mechanism 5, replace the model-called connector tool plus reply-time fence with a trust-plugin gate (issue 2). The router already resolves the sender against Smokeball in step 1, so the plugin can record that result against the turn and require a `clear` before any write or send on the inbound classes where a conflict is possible. It closes the HALT at the seam that matters (the writes) and does not fire on the firm's own forwarded post.
+
+**Verdict:** Proceed with fixes. Issues 1, 2 and 6 change what the agents are briefed to build and should land in the plan before any agent starts; 3, 4 and 5 are design corrections inside their workstreams; 7, 8 and 9 are verification and implementation notes.
