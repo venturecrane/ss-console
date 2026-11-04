@@ -125,9 +125,24 @@ const MECHANICS_CLIENT_PLAN = [
 const MEASURED_ROW =
   '| the real request names 5 records across 9 candidate files | measured via `seat-probe ashton-price`: 5 records, 9 files, 4,775 pages unindexed |'
 
-const MEASURED_CLIENT_PLAN = MECHANICS_CLIENT_PLAN.replace(
+// Law 18 (2026-11-04): a client plan that lands on a seat also names its
+// off-seat rehearsal, so the measured plan below carries one.
+const REHEARSAL_ROW =
+  '| the lane replays at $0 on copies of the seat indexes in the ops workspace against the 11-02 answer key | rehearsal via `ops-handoff ashton-price` |'
+
+const MEASURED_ONLY_SEAT_PLAN = MECHANICS_CLIENT_PLAN.replace(
   '## Workstreams',
   `${MEASURED_ROW}\n## Workstreams`
+)
+
+const MEASURED_CLIENT_PLAN = MECHANICS_CLIENT_PLAN.replace(
+  '## Workstreams',
+  `${MEASURED_ROW}\n${REHEARSAL_ROW}\n## Workstreams`
+)
+
+const REHEARSAL_OPTOUT_PLAN = MEASURED_ONLY_SEAT_PLAN.replace(
+  '## Workstreams',
+  'Off-seat rehearsal: none (a config-only change; the seat self-test is the proof)\n## Workstreams'
 )
 
 const NUMBER_WITHOUT_PROBE_PLAN = MECHANICS_CLIENT_PLAN.replace(
@@ -173,6 +188,42 @@ describe('premise-gate: Law 16 corollary, client plans need a measured premise',
 
   it('"Premises: none" still passes on a client plan', () => {
     expect(permission(runHook(payload({ tool_input: { plan: CLIENT_OPTOUT_PLAN } })))).toBeNull()
+  })
+})
+
+// Law 18 (2026-11-04): nothing runs first on a client seat. A client plan that
+// lands on a seat names its off-seat rehearsal or states the opt-out line.
+describe('premise-gate: Law 18, seat plans name their off-seat rehearsal', () => {
+  it('DENIES a measured seat plan with no rehearsal row (control)', () => {
+    const r = runHook(payload({ tool_input: { plan: MEASURED_ONLY_SEAT_PLAN } }))
+    expect(r.status).toBe(0)
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/Law 18/)
+  })
+
+  it('passes the same plan once a row names the ops-workspace rehearsal', () => {
+    expect(permission(runHook(payload({ tool_input: { plan: MEASURED_CLIENT_PLAN } })))).toBeNull()
+  })
+
+  it('passes with the explicit "Off-seat rehearsal: none (<why>)" line', () => {
+    expect(permission(runHook(payload({ tool_input: { plan: REHEARSAL_OPTOUT_PLAN } })))).toBeNull()
+  })
+
+  it('a client plan that lands on no seat is unaffected', () => {
+    const plan = [
+      '# Quote page for a matter in the client portal',
+      '## Premises',
+      '| Premise | Evidence |',
+      '|---|---|',
+      '| the quote table carries the columns the page renders | read `src/lib/db/quotes.ts:12` |',
+      '| the matter lists 3 records today | measured via `register list`: 3 records |',
+      '## Workstreams',
+      'Build the page.',
+    ].join('\n')
+    expect(plan).not.toMatch(
+      /\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|smd-staging|customer\.yaml/
+    )
+    expect(permission(runHook(payload({ tool_input: { plan } })))).toBeNull()
   })
 })
 

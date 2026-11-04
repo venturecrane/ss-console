@@ -469,6 +469,34 @@ So: state the answer, from data already on hand, to the Captain within the hour,
 
 It is `primer` because no hook can tell that a question was answered rather than worked on. The cost is `low`: one paragraph to the Captain before any build.
 
+### Law 18: Logic in code, proven off the client seat, and the second instance designs the general thing
+
+```yaml
+id: logic-in-code-proven-off-seat
+primer_line: 'Logic lives in code: a model call returns a value a script acts on, never decides which files, how many passes, what the reply says, when to stop or what it costs. Nothing runs first on a client seat: unit tests, then a $0 rehearsal on the real inputs in the client ops workspace against an answer key, then staging or the pilot, then one capped dry-run on the client seat. The second instance of anything is the moment to name and design the general thing.'
+cost: medium
+tier: primer
+enforcement:
+  - .claude/hooks/reflex-primer.sh
+  - .claude/hooks/plan-premise-gate.mjs
+  - tests/plan-premise-gate.test.ts
+  - tests/doctrine-integrity.test.ts
+incidents:
+  - date: 2026-11-02
+    ref: 'A&P 201904 records request: the job was built inside the Operator chat turn, the model choosing which files to search, how often, with what words, and writing the reply; twenty hours of guards each closed the failure just seen and the next paid run on the live client seat failed a new way (about $58 of tests, one $17.06 run against a $15 cap, two wrong emails to the attorney). Rebuilt as a lane with fixed stages and rehearsed at $0 on copies of the seat indexes in the ops workspace, it found four defects in minutes and was proven the same evening.'
+  - date: 2026-11-04
+    ref: 'The jobs runner (ADR 0103): born as the chronology runner on 2026-08-29, it grew six more lanes without a rename, the chronology lane staying the daemon base class every lane inherited. Captain: "we should have realized we needed a job runner when we first built the medchron runner, named it accordingly, and designed it as a job runner in general vs building it only to run a specific job."'
+  - date: 2026-11-04
+    ref: 'Captain, on the records post-mortem: "not solving with a script maybe, like letting the model handle logic or something like that, and then testing on the main seat instead of like a staging space. this is something you should know and should not rely on my memory."'
+escalation: none pending
+```
+
+Three faults that compound. A model deciding control flow (which files, how many passes, what the reply says, when to stop, what it costs) cannot be tested, replayed, capped or made to behave the same twice; it can only be observed, one paid run at a time. A client seat is the most expensive and most visible place to observe it: every try costs money and can reach the client. And a thing built for its first case and reused for the second without being redesigned carries the first case's name and shape into every later one, which is how the runner that executes every Operator lane was named after one of them for two months.
+
+So: a model call is allowed only where a judgement is genuinely needed (parse the ask, match a page, draft a sentence from facts) and returns a value a script acts on; the stage list and the cap are code. The order of proof is fixed: unit tests on synthetic shapes; a $0 rehearsal on the real inputs in the client's ops workspace (copies of the seat's own indexes, files and request, Law 15) against an answer key; smd-staging or the pilot for the send path; only then one capped dry-run on the client seat, after the Captain's yes with a cap. smd-staging has no Smokeball connector, so the ops-workspace rehearsal is the staging space for matter-document logic, and the rehearsal harness is built before the feature, not after. When a second lane, connector, seat type or client reuses a thing built for the first, the reuse is a design decision taken then: the general name, the general shape, and a test that keeps the specific out of the general.
+
+The gate half: a client-work plan that lands on a seat must carry a premise row naming its off-seat rehearsal (the ops workspace, an answer key, smd-staging or the pilot, a lane-proof dry-run) or state `Off-seat rehearsal: none (<why>)`; `plan-premise-gate.mjs` denies the plan-mode exit otherwise. The rest is `primer`, because no hook can see where a model call's result goes or whether a second instance was redesigned. The cost is `medium`: a rehearsal harness per matter-document feature, and a design pause at every second instance.
+
 ---
 
 ## Mechanisms under review
@@ -502,6 +530,12 @@ mechanisms:
     success_criterion: 'Zero client-job dry-runs between 2026-11-04 and 2026-12-03 that fail on a property of the real request or the real file set (request parse, file count, page volume, cost against the cap) that a read-only probe could have measured before the build. Second half, from ~/.claude/ss-board/premise-gate.log: entries with mode "client" are counted, and a sample of the passing measured rows is read; if the measured numbers are mostly not from the real inputs (fixtures, guesses, the cap itself), the rule is being satisfied by ceremony.'
     review: 2026-12-03
     on_failure: 'If dry-runs still fail on unmeasured inputs, the shape check is not reaching the behavior: move the measurement into the job runner as a $0 pre-flight on the real request that must run before release. If the bounce fires mostly on plans that are not client work, narrow CLIENT_RE rather than teach agents to type a ceremonial number.'
+  - id: plan-premise-gate-rehearsal-row
+    file: .claude/hooks/plan-premise-gate.mjs
+    hypothesis: 'Requiring a client-work plan that lands on a seat to name its off-seat rehearsal (Law 18, 2026-11-04) moves "tested first on the client seat" from the first paid run to plan time.'
+    success_criterion: 'Between 2026-11-05 and 2026-12-05, zero paid runs on a client seat that are the FIRST run of a changed lane or connector (the ops-workspace rehearsal or staging/pilot run precedes every one, visible in the plan premises and the verify ledger); and in ~/.claude/ss-board/premise-gate.log the "rehearsal" denials are mostly plans that then gained a real rehearsal row, not the opt-out line.'
+    review: 2026-12-05
+    on_failure: 'If client seats still take first runs, the rule is being satisfied by ceremony (an opt-out line typed by habit): drop the opt-out, or move the check into lane-proof itself so a seat refuses a dry-run whose job has no rehearsal record. If the bounce fires on plans that are not seat work, narrow SEAT_RE.'
   - id: session-board
     file: .claude/hooks/lib/board.mjs
     hypothesis: 'Per-turn injection of every live peer mission line ends mutually-blind concurrent sessions (Law 10 extended to peers) without a brittle collision matcher.'
