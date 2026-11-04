@@ -314,14 +314,8 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
     return refs + evidence_config.referenced_paths(data)
 
 
-def _semantics(data: dict[str, Any]) -> list[str]:
+def _format(fmt: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    for key in ("per_job_cap_usd", "monthly_budget_usd", "usd_per_million_chars", "usd_per_scanned_page"):
-        if float(data["budget"][key]) <= 0:
-            out.append(f"budget.{key}: must be > 0")
-    if float(data["budget"]["usd_drafting_fixed"]) < 0:
-        out.append("budget.usd_drafting_fixed: must be >= 0")
-    fmt = data["format"]
     if len(fmt["mediation_brief_sections"]) != MEDIATION_SECTIONS:
         out.append(f"format.mediation_brief_sections: expected exactly {MEDIATION_SECTIONS} section titles")
     if fmt["discovery_label_style"] not in LABEL_STYLES:
@@ -331,6 +325,17 @@ def _semantics(data: dict[str, Any]) -> list[str]:
     out += _layout(fmt.get("layout") or {}) + (_pleading(fmt["pleading"]) if "pleading" in fmt else [])
     if "limits" in fmt:
         out += page_limits.validate(fmt["limits"], CLASSES, fmt["mediation_brief_sections"])
+    return out
+
+
+def _semantics(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for key in ("per_job_cap_usd", "monthly_budget_usd", "usd_per_million_chars", "usd_per_scanned_page"):
+        if float(data["budget"][key]) <= 0:
+            out.append(f"budget.{key}: must be > 0")
+    if float(data["budget"]["usd_drafting_fixed"]) < 0:
+        out.append("budget.usd_drafting_fixed: must be >= 0")
+    out += _format(data["format"])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:
         try:
