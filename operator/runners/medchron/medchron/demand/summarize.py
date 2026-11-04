@@ -33,6 +33,24 @@ def sha(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()[:12]
 
 
+#: A digest cite whose page range runs past this many pages cites a block (a
+#: whole encounter), not the page a fact is on: the drafter takes its first
+#: page and the brief's pin is wrong (2026-11-04, seven of ten wrong pins).
+WIDE_PAGES = 3
+_DIGEST_RANGE = re.compile(r"\(FILE:[^()\n]*?,\s*pp?\.\s*(\d+)\s*[-–]\s*(\d+)")
+_DIGEST_CITE = re.compile(r"\(FILE:[^()\n]*?,\s*pp?\.\s*\d+")
+
+
+def cite_widths(digest: str) -> dict[str, int]:
+    """How many of the digest's document cites span more than ``WIDE_PAGES``
+    pages, of how many. A measure recorded on the stage, never a refusal: the
+    digest prompt asks for each fact's own page, and this shows whether it
+    holds."""
+    cites = len(_DIGEST_CITE.findall(digest))
+    wide = sum(1 for a, b in _DIGEST_RANGE.findall(digest) if int(b) - int(a) + 1 > WIDE_PAGES)
+    return {"cites": cites, "wide_cites": wide, "wide_pages_over": WIDE_PAGES}
+
+
 def corpus_files(data: Path) -> list[dict[str, Any]]:
     rows = [json.loads(line) for line in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if line]
     return [

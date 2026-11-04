@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from ..demand.gate import strip_names
+from . import pincheck
 
 #: The leakage gate's window: a run this long that a held-out email shares
 #: with the draft is a refusal (record_check's consecutive-word test).
@@ -105,13 +106,32 @@ def run(data: Path, firm: Any, cls: str, md: str, name: str = "gate.json") -> di
     out = {
         "passed": v.passed,
         "disposition": v.disposition,
-        "refusals": v.refusals,
+        "refusals": list(v.refusals),
         "warnings": v.warnings,
-        "infos": v.infos,
+        "infos": list(v.infos),
         "checked_sources": v.checked_sources,
     }
+    if v.disposition in ("pass", "fail_findings"):
+        # Gate 2c (pincheck.py): every FILE-cited quotation on its cited page.
+        # Run only where the record check itself ran; its counts are kept,
+        # untestable ones included, so a fail-open is visible.
+        pins, counts = pincheck.check(md, sources + vision)
+        refused, infos = pincheck.findings(pins)
+        out["pins"] = counts
+        out["infos"] += infos
+        if refused:
+            out["refusals"] += refused
+            out["passed"], out["disposition"] = False, "fail_findings"
+    else:
+        out["pins"] = {"checked": 0, "not_run": 1}
     (data / name).write_text(json.dumps(out, indent=1), encoding="utf-8")
     return out
+
+
+def named_sources(data: Path, firm: Any, cls: str) -> list[tuple[str, str]]:
+    """Every source the gate reads, by name (pincheck, quotefix's cited-file preference)."""
+    sources, vision, _held = collect(data, firm, cls)
+    return sources + vision
 
 
 def source_texts(data: Path, firm: Any, cls: str) -> list[str]:

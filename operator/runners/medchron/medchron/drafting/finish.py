@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import citefix, compose, format_check, gate, nestquote, pleading, render, review as review_mod, sets
+from . import caption_stage, citefix, compose, format_check, gate, nestquote, pincheck, pleading, render
+from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
@@ -213,8 +214,18 @@ class Finish:
 
     def _drafter(self, u: Unit) -> compose.Drafter:
         context = ([u.instruction] if u.instruction else []) + self._shared(u) + self._context()
+        cp = self.data / "caption.json"
+        cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
         return compose.Drafter(
-            u.data, self.doorway, self.firm, self.cls, self.job.request_text, context, CONCURRENCY, self.log
+            u.data,
+            self.doorway,
+            self.firm,
+            self.cls,
+            self.job.request_text,
+            context,
+            CONCURRENCY,
+            self.log,
+            skeleton=caption_stage.fill_skeleton(self.firm.skeleton(self.cls), cap),
         )
 
     def _draft(self, u: Unit, digest: str) -> str:
@@ -310,7 +321,8 @@ class Finish:
         name = f"{u.key}/gate.json" if u.key else "gate.json"
         g = gate.run(self.data, self.firm, self.cls, doc, name=name)
         if not g["passed"] and quotefix.quote_findings(g["refusals"]):
-            doc, log2 = quotefix.repair(doc, g["refusals"], gate.source_texts(self.data, self.firm, self.cls))
+            named = gate.named_sources(self.data, self.firm, self.cls)
+            doc, log2 = quotefix.repair(doc, g["refusals"], [t for _n, t in named], pincheck.cited_text(named))
             log += log2
             md = self._join(doc, notes)
             self._uatomic(u, FINAL, md)
@@ -319,6 +331,15 @@ class Finish:
             doc, fixed = citefix.repair(doc, g["refusals"])
             if fixed:
                 log += fixed
+                md = self._join(doc, notes)
+                self._uatomic(u, FINAL, md)
+                g = gate.run(self.data, self.firm, self.cls, doc, name=name)
+        if not g["passed"] and any(str(r).startswith(f"[{pincheck.GATE}]") for r in g["refusals"]):
+            # A quotation pinned to a page that does not carry it, on exactly
+            # one other page of the same document: the pin moves (pincheck.py).
+            doc, moved = pincheck.repair(doc, gate.named_sources(self.data, self.firm, self.cls))
+            if moved:
+                log += moved
                 md = self._join(doc, notes)
                 self._uatomic(u, FINAL, md)
                 g = gate.run(self.data, self.firm, self.cls, doc, name=name)

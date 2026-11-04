@@ -141,6 +141,10 @@ _GUTTER_RE = re.compile(r"^[ \t·]{0,10}(\d{1,3})(?:[ \t]{2,}|[ \t]*·[ \t·]*)(
 # garble that the raw view would otherwise find verbatim, so it is never located.
 _TYPESET_RE = re.compile(r"·|(?:^|\s)\d{1,2} [QA][.:](?:\s|$)")
 _PAGE_RE = re.compile(r"^[ \t]*(?:Page|PAGE)[ \t]+(\d{1,4})[ \t]*$")
+# The extractor's own page marker ("[p.4]", "[p.4] (machine transcription)"):
+# a quotation that runs over a PDF page break is contiguous once it is read as
+# typesetting, exactly as a transcript's "Page 51" line is.
+_PDF_PAGE_RE = re.compile(r"^[ \t]*\[p\.\d{1,5}\](?:[ \t]*\(machine transcription\))?[ \t]*$")
 _QUESTION_RE = re.compile(r"^(?:BY [A-Z][^:]{0,60}:\s*)?Q[.:]?\s")
 _ANSWER_RE = re.compile(r"^A[.:]?\s")
 
@@ -293,7 +297,11 @@ class SourceView:
                 # Line numbers, spacers and page markers are not testimony: a
                 # quote that runs across them is contiguous in this view.
                 match = _GUTTER_RE.match(raw_line)
-                content = "" if _PAGE_RE.match(raw_line) else (match.group(2) if match else raw_line).replace("·", " ")
+                content = (
+                    ""
+                    if _PAGE_RE.match(raw_line) or _PDF_PAGE_RE.match(raw_line)
+                    else (match.group(2) if match else raw_line).replace("·", " ")
+                )
             piece = normalize(strip_markdown(content))
             if not piece:
                 continue

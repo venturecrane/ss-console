@@ -454,7 +454,9 @@ class DraftingRun(Placing):
         client = set(f.get("client_emails") or [])
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.dview, client, self.log))
         digest = self._digest()
-        self._done("summarize")
+        # Measured, never refused: digest cites spanning a block of pages
+        # rather than the fact's own page (summarize.cite_widths).
+        self._done("summarize", **summarize.cite_widths(digest))
         if self.cls in CHARGES_CLASSES:
             self._stage("howell", self._howell)
         if self.cls in COURT_CLASSES:

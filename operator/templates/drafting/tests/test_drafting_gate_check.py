@@ -251,6 +251,27 @@ class TestQuoteContiguity(GateTestCase):
         self.assertEqual(self.failures(payload), [])
         self.assertEqual(code, 0)
 
+    def test_a_quote_over_an_extracted_pdf_page_break_passes(self) -> None:
+        """The extractor marks each PDF page "[p.N]" on its own line (2026-11-04);
+        the marker is not the record's words, so a quotation that runs over it is
+        contiguous, and a changed word across it still fails."""
+        (self.sources / "chart.txt").write_text(
+            "[p.3]\nDelta echo notes the foxtrot golf improved with rest\n[p.4] (machine transcription)\n"
+            "and ice. Hotel india plan.\n",
+            encoding="utf-8",
+        )
+        draft = self.write_draft(
+            '# DRAFT\n\nIt reads "the foxtrot golf improved with rest and ice." (FILE: chart, pp. 3-4.)\n'
+        )
+        code, payload = self.run_gate(draft)
+        self.assertEqual(self.failures(payload), [])
+        self.assertEqual(code, 0)
+        draft = self.write_draft(
+            '# DRAFT\n\nIt reads "the foxtrot golf improved with rest and heat." (FILE: chart, pp. 3-4.)\n'
+        )
+        code, payload = self.run_gate(draft)
+        self.assertNotEqual(self.findings(payload, "2a", "FAIL"), [])
+
     def test_a_dotted_gutter_quote_with_a_changed_word_still_fails(self) -> None:
         (self.sources / "depo-dotted.txt").write_text(self.DOTTED, encoding="utf-8")
         draft = self.write_draft(

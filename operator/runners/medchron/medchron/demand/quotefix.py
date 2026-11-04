@@ -35,7 +35,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Callable
 
 THRESHOLD = 0.85
 _FINDING = re.compile(r'^\[2a\] quoted passage is not contiguous in any source: "(.*)"(?: — .*)?$', re.S)
@@ -115,10 +115,16 @@ class _Source:
 
 def best_region(quote: str, sources: list[_Source]) -> tuple[float, str] | None:
     """(similarity, the source's own words) for the closest region, or None."""
+    got = _best(quote, sources)
+    return None if got is None else got[:2]
+
+
+def _best(quote: str, sources: list[_Source]) -> tuple[float, str, _Source] | None:
+    """(similarity, the source's own words, the source they are from)."""
     qk = [_key(w) for w in quote.split()]
     if len(qk) < 3:
         return None
-    best: tuple[float, str] | None = None
+    best: tuple[float, str, _Source] | None = None
     for src in sources:
         votes: dict[int, int] = {}
         for i in range(len(qk) - 2):
@@ -127,8 +133,28 @@ def best_region(quote: str, sources: list[_Source]) -> tuple[float, str] | None:
         for start, _n in sorted(votes.items(), key=lambda kv: -kv[1])[:5]:
             span = src.region(qk, start)
             if span is not None and (best is None or span[0] > best[0]):
-                best = (span[0], src.text[src.spans[span[1]][0] : src.spans[span[2] - 1][1]])
+                best = (span[0], src.text[src.spans[span[1]][0] : src.spans[span[2] - 1][1]], src)
     return best
+
+
+_END_PUNCT = ".,;:?!'"
+
+
+def exact(words: str, src: _Source) -> str | None:
+    """``words`` as the source's exact characters, punctuation included, or
+    None. The gate's 2a tolerates a trailing mark the source does not carry
+    (a quotation's end is the sentence's), so a repair that changed one (a
+    semicolon for the record's comma, 2026-11-04) passed it. A repaired
+    quotation is held to the source character for character instead: a
+    trailing mark the source does not carry at that place comes off, and words
+    that are still not the source's are not written."""
+    while words:
+        if words in src.text:
+            return words
+        if words[-1] not in _END_PUNCT:
+            return None
+        words = words[:-1].rstrip()
+    return None
 
 
 _CLOSE = re.compile(r"'[.,;:?!]*$")
@@ -150,9 +176,19 @@ def _fit(words: str, quote: str) -> str:
     return words
 
 
-def repair(md: str, refusals: list[str], source_texts: list[str]) -> tuple[str, list[str]]:
+def repair(
+    md: str,
+    refusals: list[str],
+    source_texts: list[str],
+    cited: Callable[[str, Any], str | None] | None = None,
+) -> tuple[str, list[str]]:
     """``(the repaired markdown, a line per repair)``. Spans are rewritten from
-    the end of the document backwards so earlier offsets stay valid."""
+    the end of the document backwards so earlier offsets stay valid.
+
+    ``cited(md, quote)`` returns the text of the document the quotation's own
+    cite names, when the lane can resolve one (drafting's pincheck): a region
+    there is preferred to the same words in any other document, which may
+    carry other punctuation (a later record restating the earlier one)."""
     wanted = quote_findings(refusals)
     if not wanted:
         return md, []
@@ -164,11 +200,23 @@ def repair(md: str, refusals: list[str], source_texts: list[str]) -> tuple[str, 
         if q.normalized not in wanted:
             continue
         start, end = q.start - 1, q.start + len(q.raw) + 1  # the quotation marks themselves
-        near = best_region(q.normalized, sources)
+        near = None
+        own = cited(md, q) if cited is not None else None
+        if own and own.strip():
+            near = _best(q.normalized, [_Source(own, ck)])
+            if near is not None and near[0] < THRESHOLD:
+                near = None
+        if near is None:
+            near = _best(q.normalized, sources)
         if near is not None and near[0] >= THRESHOLD:
             words = _fit(near[1], q.normalized)
             if q.raw.rstrip()[-1:] not in ".,;:":  # the sentence's punctuation, not the record's word
                 words = words.rstrip(".,;:")
+            held = exact(words, near[2])
+            if held is None:
+                log_only.append(f"quote not repaired, the record's words could not be matched exactly: {words[:120]}")
+                continue
+            words = held
             if _TYPESET.search(words):
                 # Never splice typesetting into the brief: the quote stays as it
                 # was and the gate refuses it, failing the job for the attorney.
