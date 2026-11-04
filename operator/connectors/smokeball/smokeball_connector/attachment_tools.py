@@ -32,6 +32,8 @@ from .funding_case_eval import register as _register_funding_case_eval_tools
 from .layout_tools import register as _register_layout_tools
 from .post_journal import register as _register_post_journal_tools
 from .matter_files import register as _register_matter_file_tools
+from .matter_by_id import register as _register_matter_by_id_tools
+from .resolution_gate import install as _install_resolution_gate
 
 
 def register(server: Any) -> None:
@@ -48,7 +50,13 @@ def register(server: Any) -> None:
     rep-letter form, filled, form_letters.py), neither attachment-rooted, last
     for the same reason. The records-order, SR1, SR19 and funding-form tools
     follow, and the layout read and Negotiation Details write
-    (layout_tools.py) register after all of them, for the same reason."""
+    (layout_tools.py) register after all of them, for the same reason.
+
+    The matter-resolution gate is installed FIRST (``resolution_gate.py``): the
+    SDK reads it at call time, so it covers the tools ``server.py`` registered
+    before this call as well as the ones below. ``resolve_matter_by_id``
+    (matter_by_id.py) registers last."""
+    _install_resolution_gate(server)
     _register_vendor_invoice_tools(server)
     _register_letter_tools(server)
     _register_workbook_tools(server)
@@ -74,6 +82,8 @@ def register(server: Any) -> None:
     # amendment 4): the records lane calls page_finder.locate and
     # matter_files.prepare_local itself, with a cost cap no turn can hold.
     _register_matter_file_tools(server)
+    # Confirm a matter already held by id before writing on it (matter_by_id.py).
+    _register_matter_by_id_tools(server)
 
 
 __all__ = ["register"]

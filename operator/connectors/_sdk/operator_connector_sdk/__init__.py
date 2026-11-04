@@ -6,6 +6,9 @@ Deliberately minimal. It ships exactly the pieces with teeth:
   well-formed, non-empty ``inputSchema`` where Hermes' MCP client reads it.
 - ``ConnectorManifest`` — the in-package self-description (capability, required
   secret *names*, ``auth_model``, and ``tool_classes`` as a conformance ORACLE).
+- ``ResolutionGate`` / ``matter_arg``: a write on a matter the model chose
+  opens only with a resolution minted for that matter, declared once per tool
+  at registration (``resolution.py``).
 - the conformance harness — spawns/introspects the server and proves the tool
   surface is well-formed and that every live tool is classified under its
   *runtime-prefixed* name (``mcp_<server>_<tool>``), the exact thing that has
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 from .manifest import ACTION_CLASSES, AuthModel, ConnectorManifest, SecretSpec
 from .naming import runtime_tool_name
+from .resolution import ResolutionGate, matter_arg
 from .server import ConnectorServer, ResultBound
 
 __all__ = [
@@ -30,7 +34,9 @@ __all__ = [
     "AuthModel",
     "ConnectorManifest",
     "ConnectorServer",
+    "ResolutionGate",
     "ResultBound",
     "SecretSpec",
+    "matter_arg",
     "runtime_tool_name",
 ]

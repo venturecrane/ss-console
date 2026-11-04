@@ -49,6 +49,7 @@ id/ts; chain intact).
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -159,21 +160,19 @@ def peer_parent_pid(pid: int) -> int | None:
         return None
 
 
-def build_smokeball_write_row(
-    row: Any, peer_pid: int, peer_uid: int | None, *, gateway_pid: int | None = None
-) -> dict[str, Any]:
-    if not isinstance(row, dict) or row.get("action_type") != "SMOKEBALL_WRITE":
-        raise ValueError("smokeball_write_append only accepts action_type=SMOKEBALL_WRITE")
-    phase = row.get("phase")
-    if phase not in _SMOKEBALL_WRITE_PHASES:
-        raise ValueError("smokeball_write_append requires phase 'intent' or 'result'")
-    method = str(row.get("method") or "").upper()
-    if method not in _SMOKEBALL_WRITE_METHODS:
-        raise ValueError("smokeball_write_append records writes only (POST, PUT, PATCH, DELETE)")
+#: ``would_refuse`` (2026-11-04): a gated write the matter-resolution gate would
+#: have refused, recorded while the gate runs in observe mode
+#: (operator/connectors/_sdk/operator_connector_sdk/resolution.py). No request
+#: is made at that point, so the row carries the tool and a reason CODE from the
+#: closed set below in place of a method and path; never a token or body text.
+_WOULD_REFUSE_PHASE = "would_refuse"
+_WOULD_REFUSE_REASONS = frozenset({"missing", "malformed", "unknown", "expired", "bound_elsewhere", "no_matter"})
+_TOOL_NAME = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
+
+
+def _verified_actor(row: dict[str, Any], peer_pid: int, gateway_pid: int | None) -> str:
     actor = _bounded(row.get("actor"), 200)
-    path = _bounded(row.get("path"), 300)
-    write_id = _bounded(row.get("write_id"), 64)
-    if not actor or not path or not write_id:
+    if not actor:
         raise ValueError("smokeball_write_append requires actor, path and write_id")
     # The Operator's attribution is VERIFIED here, never taken from the caller.
     # Every agent-uid process can reach this verb (seat-probe scripts, cron
@@ -183,6 +182,54 @@ def build_smokeball_write_row(
     # refused, and the client refuses the write with it.
     if actor == "operator" and (gateway_pid is None or peer_parent_pid(peer_pid) != gateway_pid):
         raise ValueError("smokeball_write_append: 'operator' is only accepted from a child of the gateway")
+    return actor
+
+
+def _would_refuse_row(row: dict[str, Any], actor: str, peer_pid: int, peer_uid: int | None) -> dict[str, Any]:
+    tool = str(row.get("tool") or "")
+    reason = row.get("reason")
+    write_id = _bounded(row.get("write_id"), 64)
+    if not _TOOL_NAME.match(tool) or reason not in _WOULD_REFUSE_REASONS or not write_id:
+        raise ValueError(
+            "smokeball_write_append: a would_refuse row needs a tool name, a write_id and a reason "
+            f"from {sorted(_WOULD_REFUSE_REASONS)}"
+        )
+    metadata = {
+        "write_id": write_id,
+        "phase": _WOULD_REFUSE_PHASE,
+        "tool": tool,
+        "reason": reason,
+        "peer_pid": peer_pid,
+        "peer_uid": peer_uid,
+    }
+    return {
+        "action_type": "SMOKEBALL_WRITE",
+        "actor": actor,
+        "actor_role": "agent" if actor == "operator" else "captain",
+        "matter_ref": _bounded(row.get("matter_id"), 80),
+        "input_digest": None,
+        "metadata": json.dumps({k: v for k, v in metadata.items() if v is not None}, sort_keys=True),
+    }
+
+
+def build_smokeball_write_row(
+    row: Any, peer_pid: int, peer_uid: int | None, *, gateway_pid: int | None = None
+) -> dict[str, Any]:
+    if not isinstance(row, dict) or row.get("action_type") != "SMOKEBALL_WRITE":
+        raise ValueError("smokeball_write_append only accepts action_type=SMOKEBALL_WRITE")
+    phase = row.get("phase")
+    if phase == _WOULD_REFUSE_PHASE:
+        return _would_refuse_row(row, _verified_actor(row, peer_pid, gateway_pid), peer_pid, peer_uid)
+    if phase not in _SMOKEBALL_WRITE_PHASES:
+        raise ValueError("smokeball_write_append requires phase 'intent', 'result' or 'would_refuse'")
+    method = str(row.get("method") or "").upper()
+    if method not in _SMOKEBALL_WRITE_METHODS:
+        raise ValueError("smokeball_write_append records writes only (POST, PUT, PATCH, DELETE)")
+    path = _bounded(row.get("path"), 300)
+    write_id = _bounded(row.get("write_id"), 64)
+    if not _bounded(row.get("actor"), 200) or not path or not write_id:
+        raise ValueError("smokeball_write_append requires actor, path and write_id")
+    actor = _verified_actor(row, peer_pid, gateway_pid)
     status = row.get("status")
     metadata = {
         "write_id": write_id,

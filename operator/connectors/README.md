@@ -44,6 +44,32 @@ The image install (one isolated venv per connector), the secret staging, and the
 fail-closed governance are built once and apply to every connector — adding #N is
 declarative, not bespoke wiring.
 
+## Writes on a matter the model chose (the resolution gate)
+
+A write tool whose target matter comes from the model, not from an object it
+already names, is declared once at registration:
+`server.tool(requires_resolution=matter_arg())` (`_sdk/operator_connector_sdk/resolution.py`).
+`matter_arg("<argument>")` reads the target from that argument; any callable
+taking the call's arguments and returning a matter id or None also works. The
+registered MCP tool then gains a required `matter_resolution` argument and one
+sentence in its description, and the SDK claims the token for that matter before
+the body runs, puts it back if the body raises, and spends it when the body
+returns. Python callers of the decorated name are unchanged. A connector supplies
+the gate with `server.install_resolution_gate(...)` (the token store, the mode,
+where an observation is recorded) and names its minting tools in
+`ConnectorServer(name, resolvers=(...))`. In `observe` mode a call the gate would
+refuse is recorded and dispatched; in `enforce` mode it is refused. Conformance
+(`check_resolution_schemas`, part of `run_all`) fails a gated tool whose schema
+does not list `matter_resolution` as required. A tool that checks a resolution in
+its own body must not also declare one; the SDK refuses the registration.
+
+The Smokeball connector's gate is `smokeball/smokeball_connector/resolution_gate.py`;
+its switch is `matter_resolution_mode: observe | enforce` on the `mcp:smokeball`
+connector entry in `customer.yaml` (absent is `observe`), and a refusal it would
+have made is a `SMOKEBALL_WRITE` audit row with phase `would_refuse` (tool,
+matter, reason code). It mints from `resolve_invoice_matter` (a letter's facts)
+and `resolve_matter_by_id` (a matter id and the number read with it).
+
 ## What the platform generalizes — and does not
 
 The connector **lifecycle** (author → install → activate → govern → verify) is

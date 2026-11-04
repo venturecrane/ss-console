@@ -60,6 +60,7 @@ EXPECTED_TOOLS = {
     "get_expenses",
     "read_attachment_text",
     "resolve_invoice_matter",
+    "resolve_matter_by_id",
     "stage_vendor_invoice",
     "read_attachment_pages",
     "file_attachment_pages_to_matter",
@@ -151,6 +152,22 @@ def test_conformance_every_tool_classified() -> None:
     assert runtime_map[runtime_tool_name("smokeball", "prepare_records_order")] == "read"
     assert runtime_map[runtime_tool_name("smokeball", "place_records_order")] == "commitment"
     assert runtime_map[runtime_tool_name("smokeball", "records_orders_for_matter")] == "read"
+
+
+#: The tools whose MCP wrapper refuses a write without a matter resolution for
+#: the matter it targets (operator_connector_sdk.resolution, declared with
+#: ``requires_resolution`` at registration). A tool joins this set in the same
+#: change that declares it, so a declaration nobody meant, or a gated tool that
+#: quietly lost its gate, fails here. ``stage_vendor_invoice`` and
+#: ``file_attachment_pages_to_matter`` check their resolution in their own
+#: bodies and are not declared (the SDK refuses a tool that does both).
+EXPECTED_RESOLUTION_GATED: set[str] = set()
+
+
+def test_the_resolution_gated_set_is_the_declared_one_and_each_schema_requires_it() -> None:
+    assert set(server.gated_tools()) == EXPECTED_RESOLUTION_GATED
+    assert conformance.check_resolution_schemas(server) == EXPECTED_RESOLUTION_GATED
+    assert _manifest().tool_classes["resolve_matter_by_id"] == "read"
 
 
 def test_write_surface_is_memo_document_and_deadline_engine() -> None:

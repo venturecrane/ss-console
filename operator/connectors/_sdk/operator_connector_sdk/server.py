@@ -20,6 +20,9 @@ Thin wrapper over the MCP SDK's MCPServer (mcp 2.x; FastMCP before 2.0). Two job
    into Hermes' breaker with nothing but the tool's name to go on. The wrapper
    below re-raises as ``ToolError`` with the type and text, and logs the
    traceback itself so nothing is lost on the server side either.
+4. Gate a write on a matter resolution when the tool declares
+   ``requires_resolution`` (``resolution.py`` says why and how): declared once
+   here, so no tool body has to remember it.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ import functools
 import inspect
 import json
 import logging
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,6 +40,9 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp.types import Tool
+
+from . import resolution
+from .resolution import ResolutionGate
 
 logger = logging.getLogger("operator_connector_sdk")
 
@@ -118,16 +125,69 @@ def _as_tool_error(exc: Exception, connector: str, tool_name: str) -> ToolError:
     return ToolError(f"{type(exc).__name__}: {exc}")
 
 
-class ConnectorServer:
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self._mcp = MCPServer(name)
+class _GatedMCPServer(MCPServer):
+    """MCPServer whose tool listing marks ``matter_resolution`` REQUIRED on every
+    gated tool. The signature gives the parameter a default so that observe mode
+    can see a call that left it out (``resolution.py``); the schema the model
+    reads must still say required, because that is the contract it follows."""
 
-    def tool(self, *args, bound: ResultBound | None = None, **kwargs):
+    def __init__(self, name: str, gated: Mapping[str, Any]) -> None:
+        super().__init__(name)
+        self._gated = gated  # the ConnectorServer's own dict: tools register after construction
+
+    async def list_tools(self):  # type: ignore[override]
+        tools = await super().list_tools()
+        for t in tools:
+            if t.name in self._gated:
+                _mark_required(t.input_schema)
+        return tools
+
+
+def _mark_required(schema: Any) -> None:
+    if not isinstance(schema, dict):
+        return
+    required = schema.setdefault("required", [])
+    if isinstance(required, list) and resolution.PARAM not in required:
+        required.append(resolution.PARAM)
+    prop = (schema.get("properties") or {}).get(resolution.PARAM)
+    if isinstance(prop, dict):
+        prop.pop("default", None)
+
+
+class ConnectorServer:
+    def __init__(self, name: str, *, resolvers: tuple[str, ...] = ()) -> None:
+        """``resolvers`` names this connector's tools that mint a matter
+        resolution; a gated tool's description tells the model to call one."""
+        self.name = name
+        self._gated: dict[str, Callable[[dict[str, Any]], str | None]] = {}
+        self._mcp = _GatedMCPServer(name, self._gated)
+        self._resolvers = tuple(resolvers)
+        self._gate: ResolutionGate | None = None
+
+    def install_resolution_gate(self, gate: ResolutionGate) -> None:
+        """Install the connector's gate. Read at CALL time, so a connector may
+        install it after its tools register."""
+        self._gate = gate
+
+    def gated_tools(self) -> dict[str, Callable[[dict[str, Any]], str | None]]:
+        """Each gated tool's name and the resolver that reads its target matter."""
+        return dict(self._gated)
+
+    def tool(
+        self,
+        *args,
+        bound: ResultBound | None = None,
+        requires_resolution: Callable[[dict[str, Any]], str | None] | None = None,
+        **kwargs,
+    ):
         """Register a tool. Delegates to MCPServer; the input schema is derived from
         the function signature and type hints. Optional ``bound`` declares the list
         result safe to bound to recent-N (see :class:`ResultBound`) — fail-closed:
         omit it and the result is never truncated, only observed if oversized.
+
+        Optional ``requires_resolution`` gates the tool on a matter resolution: a
+        callable that reads the target ``matter_id`` from the call's arguments
+        (``resolution.matter_arg()`` for the common case). See ``resolution.py``.
 
         The decorator hands back the ORIGINAL function. The MCP boundary (result
         governance, exception translation) lives on the registered wrapper only;
@@ -135,13 +195,61 @@ class ConnectorServer:
         tests, the medchron runner) keep the plain Python contract: complete
         results and the connector's own exception types, which their ``except``
         clauses are written against."""
-        mcp_register = self._mcp.tool(*args, **kwargs)
 
         def register(fn):
-            mcp_register(self._wrap_result(fn, bound))
+            wrapped = self._wrap_result(fn, bound)
+            options = dict(kwargs)
+            if requires_resolution is not None:
+                tool_name = options.get("name") or (args[0] if args and isinstance(args[0], str) else fn.__name__)
+                wrapped = self._gate_wrapper(fn, wrapped, requires_resolution, tool_name)
+                if options.get("description"):
+                    options["description"] = f"{options['description'].rstrip()}\n\n{self._sentence()}"
+                self._gated[tool_name] = requires_resolution
+            self._mcp.tool(*args, **options)(wrapped)
             return fn
 
         return register
+
+    def _sentence(self) -> str:
+        return resolution.doc_sentence(self._resolvers)
+
+    def _gate_wrapper(self, fn, wrapped, resolver: Callable[[dict[str, Any]], str | None], tool_name: str):
+        """The resolution door around an already-wrapped tool: pop the token,
+        claim it for the resolved matter, run the tool, put it back on a raise."""
+
+        def door(a: tuple, k: dict[str, Any]) -> resolution.Admission:
+            token = k.pop(resolution.PARAM, None)
+            arguments = resolution.call_arguments(fn, a, k)
+            try:
+                return resolution.admit(self._gate, tool_name, resolver, arguments, token)
+            except resolution.GateRefused as exc:
+                raise ToolError(f"ResolutionRefused: {exc}") from exc
+
+        if inspect.iscoroutinefunction(fn):
+
+            @functools.wraps(wrapped)
+            async def agated(*a, **k):
+                admission = door(a, k)
+                try:
+                    return await wrapped(*a, **k)
+                except BaseException:
+                    resolution.release(self._gate, admission)
+                    raise
+
+            resolution.augment(fn, agated, self._sentence())
+            return agated
+
+        @functools.wraps(wrapped)
+        def gated(*a, **k):
+            admission = door(a, k)
+            try:
+                return wrapped(*a, **k)
+            except BaseException:
+                resolution.release(self._gate, admission)
+                raise
+
+        resolution.augment(fn, gated, self._sentence())
+        return gated
 
     def _wrap_result(self, fn, bound: ResultBound | None):
         # Preserve signature/annotations via functools.wraps so MCPServer still
