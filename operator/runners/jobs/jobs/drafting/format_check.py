@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import briefpage, citations, frontpage
 from .house import rules_for
 from .render import DECL_LINE, FIGURE, RESERVED, _outside_markers, decl_decision
 
@@ -204,7 +205,7 @@ def check_paper(doc: Any, res: Result) -> None:
             res.fails.append("paper: line numbering present (pleading paper)")
 
 
-def check_headings(doc: Any, rules: Any, res: Result) -> None:
+def check_headings(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
     from docx.shared import Inches, Pt
 
@@ -223,6 +224,8 @@ def check_headings(doc: Any, rules: Any, res: Result) -> None:
             res.fails.append(f"heading: level {lv} should be {word}: {p.text[:40]}")
         if (_eff(p, "left_indent") or 0) != Inches(rules.heading_indent_in[i]):
             res.fails.append(f"heading: level {lv} not indented {rules.heading_indent_in[i]} inch: {p.text[:40]}")
+        if pitch:
+            continue  # pleading paper: every line at the paper's pitch (pleading.check)
         if rules.heading_line_spacing_pt is not None:
             if (
                 _eff(p, "line_spacing") != Pt(rules.heading_line_spacing_pt)
@@ -241,12 +244,14 @@ def check_headings(doc: Any, rules: Any, res: Result) -> None:
                 res.fails.append(f"heading: level {lv} {attr.replace('_', ' ')} not {want} point: {p.text[:40]}")
 
 
-def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
+def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False, front_single: bool = False) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
     from docx.shared import Inches, Pt
 
     n = _front_count(doc)
     everything = list(doc.paragraphs)
+    if front_single:  # everything above the first heading is the single-spaced front (briefpage)
+        n = next((i for i, p in enumerate(everything) if _level(p)), len(everything))
     front_paras = [p for p in everything[:n] if p.text.strip()]
     paras = [p for p in everything[n:] if p.text.strip()]
     if rules.front_matter_plain:
@@ -289,7 +294,11 @@ def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False) -> None:
             res.fails.append(f"spacing: {len(bad)} body paragraph(s) not exactly {rules.body_exact_pt} point")
     elif rules.body_line_spacing != 1.0 and [p for p in prose if _eff(p, "line_spacing") != rules.body_line_spacing]:
         res.fails.append(f"spacing: body paragraph(s) not at {rules.body_line_spacing} line spacing")
-    flowing = [p for p in prose if not _NUMBERED.match(p.text)]  # a numbered item hangs instead
+    # A numbered item hangs instead; a signature line set by briefpage sits in its column.
+    sig = Inches(briefpage.SIGNATURE_INDENT_IN)
+    flowing = [
+        p for p in prose if not _NUMBERED.match(p.text) and _eff(p, "left_indent") != sig and "\tBy:" not in p.text
+    ]
     if rules.body_justify and [p for p in flowing if p.alignment != WD_ALIGN_PARAGRAPH.JUSTIFY]:
         res.fails.append("alignment: body paragraph(s) not justified")
     if rules.body_first_line_indent_in is not None:
@@ -412,7 +421,13 @@ def check_footer(doc: Any, blob: bytes, rules: Any, res: Result) -> None:
 
 
 def check(
-    path: Path, cls: str, fmt: dict[str, Any], digest: str = "", corpus: Any = None, paper: str = "plain"
+    path: Path,
+    cls: str,
+    fmt: dict[str, Any],
+    digest: str = "",
+    corpus: Any = None,
+    paper: str = "plain",
+    cites: Any = None,
 ) -> Result:
     """``digest`` carries the DISCOVERY-SETS index and ``corpus`` the document
     texts the cumulative section 2030.050 rule reads (``render.decl_decision``,
@@ -430,16 +445,20 @@ def check(
     check_tables(doc, rules, res)
     if fmt.get("plain_letter_paper"):
         check_paper(doc, res)
-    check_headings(doc, rules, res)
     pitch = paper == "pleading"
+    check_headings(doc, rules, res, pitch)
     if pitch:
         spec = pleading.spec_for(fmt)
         if spec is None:
             res.fails.append("pleading: the request asks for pleading paper and the firm has none authored")
         else:
-            res.fails += pleading.check(doc, blob, spec)
-    check_body(doc, rules, res, pitch)
+            res.fails += pleading.check(doc, blob, spec, briefpage.opts(fmt, cls)["front_single_spaced"])
+    check_body(doc, rules, res, pitch, briefpage.opts(fmt, cls)["front_single_spaced"])
     check_footer(doc, blob, rules, res)
+    res.fails += frontpage.check(doc, fmt, cls)
+    spec_pt = pleading.spec_for(fmt).pitch_pt if pitch and pleading.spec_for(fmt) else None  # type: ignore[union-attr]
+    res.fails += briefpage.check(doc, fmt, cls, spec_pt)
+    res.fails += citations.check(doc_text(doc), cites, corpus if isinstance(corpus, dict) else {})
     if cls == "mediation_brief":
         check_mediation(doc, fmt, res)
     if cls in ("discovery_set", "discovery_response"):

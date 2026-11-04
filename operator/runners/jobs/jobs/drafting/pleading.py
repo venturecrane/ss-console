@@ -160,15 +160,47 @@ def _all_paragraphs(doc: Any) -> list[Any]:
 
 def title_of(doc: Any) -> str:
     """The paper's title as its caption prints it: the first bold line naming
-    a discovery set, else the first level-1 heading."""
+    a discovery set, in the caption table or alone above it. Never body prose:
+    on 2026-11-04 a brief's first paragraph that mentioned a request for
+    admission was printed in its footer as the brief's title."""
     pat = re.compile(r"(?i)interrogatories|requests?\s+for\s+(admission|production)|responses?\s+to")
+
+    def titled(p: Any) -> bool:
+        runs = [r for r in p.runs if r.text.strip()]
+        return bool(runs) and pat.search(p.text) is not None and all(r.bold for r in runs) and len(p.text) <= 200
+
     for t in doc.tables:
         for row in t.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    if pat.search(p.text) and any(r.bold for r in p.runs if r.text.strip()):
+                    if titled(p):
                         return " ".join(p.text.split())
-    return next((" ".join(p.text.split()) for p in doc.paragraphs if pat.search(p.text)), "")
+    return next((" ".join(p.text.split()) for p in doc.paragraphs if titled(p)), "")
+
+
+def paper_for(fmt: dict[str, Any], cls: str, request_text: str) -> str:
+    """``pleading`` when the request asks for it, or the firm files this class
+    on pleading paper by default (``format.pleading_classes``), and the firm
+    authored its pleading paper; otherwise ``plain``."""
+    asked = wants_pleading(request_text) or cls in (fmt.get("pleading_classes") or ())
+    return "pleading" if asked and spec_for(fmt) is not None else "plain"
+
+
+def apply_for(path: Path, fmt: dict[str, Any], cls: str) -> list[str]:
+    """``apply`` with the firm's paper and the class's authored footer title."""
+    spec = spec_for(fmt)
+    if spec is None:
+        raise ValueError("pleading paper: the firm has none authored")
+    from . import briefpage
+
+    notes = apply(path, spec, authored_title(fmt, cls))
+    briefpage.apply(path, fmt, cls, spec.pitch_pt, signature=False)  # the first page, at half the pitch
+    return notes
+
+
+def authored_title(fmt: dict[str, Any], cls: str) -> str | None:
+    """The footer title the firm wrote for the class (``layout.<class>.footer_title``)."""
+    return ((fmt.get("layout") or {}).get(cls) or {}).get("footer_title") or None
 
 
 _ATTACHMENT_TITLE = re.compile(r"(?i)^\s*(proof of service|declaration for additional discovery)\b")
@@ -195,8 +227,10 @@ def _court_and_attachments(doc: Any) -> None:
             p.paragraph_format.page_break_before = True
 
 
-def apply(path: Path, spec: Spec) -> list[str]:
-    """Lay the rendered file at ``path`` onto pleading paper, in place."""
+def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
+    """Lay the rendered file at ``path`` onto pleading paper, in place. The
+    footer carries ``title`` (the firm's authored one) when given, else the
+    title the paper's caption prints (``title_of``)."""
     import docx
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import parse_xml
@@ -246,7 +280,7 @@ def apply(path: Path, spec: Spec) -> list[str]:
     page = footer.add_paragraph()
     page.alignment = WD_ALIGN_PARAGRAPH.CENTER
     set_run_font(add_page_field(page), spec.font, spec.size_pt)
-    title = title_of(doc)
+    title = title or title_of(doc)
     tp = footer.add_paragraph()
     tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
     ppr = tp._p.get_or_add_pPr()
@@ -270,8 +304,10 @@ def apply(path: Path, spec: Spec) -> list[str]:
     return notes
 
 
-def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
-    """What is wrong with ``doc`` as pleading paper under ``spec``; empty is a pass."""
+def check(doc: Any, blob: bytes, spec: Spec, front_single: bool = False) -> list[str]:
+    """What is wrong with ``doc`` as pleading paper under ``spec``; empty is a
+    pass. ``front_single``: the lines above the body are at half the pitch
+    (``briefpage``, which checks them), so this pitch rule skips them."""
     import zipfile
 
     from docx.enum.text import WD_LINE_SPACING
@@ -299,10 +335,15 @@ def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
         fails.append("pleading: the margin rules are missing")
     if not re.search(rf'name="{BOX_NAME}"', headers):
         fails.append("pleading: no line-number box")
+    from . import briefpage
+
+    front = briefpage.front_paragraphs(doc) if front_single else []
+    skip = {id(p._p) for p in front}
     off = [
         p
         for p in _all_paragraphs(doc)
         if p.text.strip()
+        and id(p._p) not in skip
         and (
             p.paragraph_format.line_spacing != Pt(spec.pitch_pt)
             or p.paragraph_format.line_spacing_rule != WD_LINE_SPACING.EXACTLY

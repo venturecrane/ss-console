@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck, pleading, render
+from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
+from . import pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
@@ -107,9 +108,9 @@ class Finish:
     def paper(self) -> str:
         """``pleading`` when the request asks for it and the firm authored its
         pleading paper; otherwise plain (house style D1, the default). A
-        pleading request the firm cannot honor is the review's MUST-FIX."""
-        asked = pleading.wants_pleading(self.job.request_text)
-        return "pleading" if asked and pleading.spec_for(self.firm.data["format"]) is not None else "plain"
+        pleading request the firm cannot honor is the review's MUST-FIX. A class
+        the firm files on pleading paper by default is asked for (``pleading.paper_for``)."""
+        return pleading.paper_for(self.firm.data["format"], self.cls, self.job.request_text)
 
     def corpus(self) -> dict[str, str]:
         got = getattr(self, "_corpus", None)
@@ -377,10 +378,11 @@ class Finish:
             doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
+        doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
         path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
-        laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
-        res = format_check.check(path, self.cls, fmt, digest, self.corpus(), paper)
+        laid = pleading.apply_for(path, fmt, self.cls) if paper == "pleading" else []
+        res = format_check.check(path, self.cls, fmt, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
@@ -417,7 +419,7 @@ class Finish:
                 "located": markers_located(doc) + body_fills,
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
-                "notes": [*attached, *reserved, *laid],
+                "notes": [*attached, *reserved, *cited, *laid],
                 "render_report": report.get("notes", []),
             },
         )

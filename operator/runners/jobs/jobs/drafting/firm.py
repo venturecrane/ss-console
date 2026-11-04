@@ -45,6 +45,10 @@ The schema (the engagements author writes to exactly this)::
                  OPTIONAL, the source check on the ledger path (verify/config.py)
     attorneys:   [{email, block: [lines]}]   OPTIONAL, the caption's attorney block
                  per attorney (attorneys.py)
+    citations:   {<class>: {allow: [kinds], forbid?: [kinds]}}   OPTIONAL, which
+                 files a document may cite (citations.py)
+    opening_demand: {<class>: {marker, chart, column, sentence}}   OPTIONAL, the
+                 demand code computes from the damages chart (opening_demand.py)
 
 ``delivery`` is the one optional section: the matter numbers a job may file to
 when they are not the matter it read (the firm's Operator library matter, for
@@ -62,7 +66,7 @@ from typing import Any
 
 import yaml
 
-from . import attorneys as attorneys_mod, evidence_config, page_limits
+from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -103,6 +107,14 @@ LAYOUT_KEYS = {
     "table_header_fill": "hex",  # RRGGBB
     "table_total_fill": "hex",  # a row whose first cell starts with "Total"
     "table_border_pt": "border",
+    # The first page's gaps, in blank lines (frontpage.py; A&P, 2026-11-04).
+    "front_attorney_gap_lines": "lines",
+    "front_caption_gap_lines": "lines",
+    # The first page single spaced, a rule under the caption, the date beside
+    # the "By:" line (briefpage.py; A&P, 2026-11-04 3:28 PM).
+    "front_single_spaced": "bool",
+    "caption_rule_below": "bool",
+    "signature_date_beside": "bool",
 }
 
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
@@ -141,6 +153,9 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         # Optional: {<class>: {<section title>: max pages}}, measured on the
         # rendered pages (page_limits.py).
         "limits": ("map", False),
+        # Optional: the classes filed on the firm's pleading paper by default,
+        # asked for or not (finish.paper); needs format.pleading.
+        "pleading_classes": ("list[str]", False),
     },
     "classes": None,
     "attachments": {"decl_2030_050": ("str", True), "pos": ("str", True)},
@@ -188,8 +203,12 @@ def _shape(data: Any) -> list[str]:
         for s in data
         if s not in SCHEMA
         and s not in OPTIONAL
-        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY)
+        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
     ]
+    if opening_demand.KEY in data:
+        out += opening_demand.validate(data[opening_demand.KEY], CLASSES)
+    if citations.KEY in data:
+        out += citations.validate(data[citations.KEY], CLASSES)
     if attorneys_mod.KEY in data:
         out += attorneys_mod.validate(data[attorneys_mod.KEY])
     if evidence_config.KEY in data:
@@ -244,6 +263,8 @@ def _layout_value_ok(value: object, kind: str) -> bool:
         return num(value) and 8 <= float(value) <= 20  # type: ignore[arg-type]
     if kind == "border":
         return num(value) and 0.25 <= float(value) <= 6  # type: ignore[arg-type]
+    if kind == "lines":
+        return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 6
     if kind == "hex":
         return isinstance(value, str) and bool(re.fullmatch(r"[0-9A-Fa-f]{6}", value))
     if kind == "bool3":
@@ -325,6 +346,9 @@ def _format(fmt: dict[str, Any]) -> list[str]:
     out += _layout(fmt.get("layout") or {}) + (_pleading(fmt["pleading"]) if "pleading" in fmt else [])
     if "limits" in fmt:
         out += page_limits.validate(fmt["limits"], CLASSES, fmt["mediation_brief_sections"])
+    bad = [c for c in fmt.get("pleading_classes") or [] if c not in CLASSES]
+    if bad or (fmt.get("pleading_classes") and "pleading" not in fmt):
+        out.append(f"format.pleading_classes: classes from {list(CLASSES)}, and format.pleading authored")
     return out
 
 

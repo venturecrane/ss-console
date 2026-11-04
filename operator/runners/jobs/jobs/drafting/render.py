@@ -573,6 +573,7 @@ def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dic
     house style (``fmt``, the ``format`` block) as the renderer's override."""
     from smokeball_connector.docx_format import render_document
 
+    from . import briefpage, frontpage
     from .house import house_for
 
     md = re.sub(r"`+(\{\{[^{}]*\}\})`+", r"\1", md)  # a slot never carries stray backticks
@@ -581,4 +582,6 @@ def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dic
     part = out.with_name(f".{out.name}.tmp")
     part.write_bytes(blob)
     part.replace(out)
+    frontpage.space(out, fmt, cls)
+    briefpage.apply(out, fmt, cls)
     return out, report.to_dict()
