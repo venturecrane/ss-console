@@ -253,7 +253,7 @@ def test_a_500_forward_stays_a_retryable_failure(gate):
 
 
 def test_submit_passes_include_file_ids_through(monkeypatch, authors_everything):
-    mod = load_plugin("hermes-smd-medchron")
+    mod = load_plugin("hermes-smd-lanes")
     sent: dict = {}
 
     class _Client:
@@ -261,7 +261,7 @@ def test_submit_passes_include_file_ids_through(monkeypatch, authors_everything)
             sent.update(envelope)
             return {"accepted": True, "job_id": "01J", "state": "submitted"}
 
-    monkeypatch.setattr(mod, "MedchronBrokerClient", _Client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", _Client)
     ctx = FakePluginContext()
     mod.register(ctx)
     out = json.loads(
@@ -283,7 +283,7 @@ def test_submit_passes_include_file_ids_through(monkeypatch, authors_everything)
 
 
 def test_submit_omits_selection_when_not_given(monkeypatch, authors_everything):
-    mod = load_plugin("hermes-smd-medchron")
+    mod = load_plugin("hermes-smd-lanes")
     sent: dict = {}
 
     class _Client:
@@ -291,7 +291,7 @@ def test_submit_omits_selection_when_not_given(monkeypatch, authors_everything):
             sent.update(envelope)
             return {"accepted": True, "job_id": "01J", "state": "submitted"}
 
-    monkeypatch.setattr(mod, "MedchronBrokerClient", _Client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", _Client)
     ctx = FakePluginContext()
     mod.register(ctx)
     ctx.tools["medchron_job_submit"]["handler"](

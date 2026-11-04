@@ -97,7 +97,7 @@ the matter's ledger rows (`medchron_job_status(matter_id=...)`, which unions eve
 chronology on the matter so a second update does not re-read the first).
 
 Since 2026-10-13 an update goes INTO the delivered chronology (`update: {into:
-"delivered_chronology"}`, `operator/runners/medchron/medchron/update/`): the runner pulls the
+"delivered_chronology"}`, `operator/runners/jobs/jobs/medchron/update/`): the runner pulls the
 delivered document and its exhibits, proves the document re-renders to itself, reads only the new
 documents' pages the delivered exhibits do not already hold, and files one complete document into
 the delivered folder, retiring the old document by id after the new one is proven. What was

@@ -321,7 +321,7 @@ def test_a_bundle_that_fits_the_estimate_is_still_read(monkeypatch: pytest.Monke
 
 
 def test_the_post_lane_carries_its_own_page_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Sixty scanned pages: over the shared 40-page cap that fences medchron,
+    """Sixty scanned pages: over the shared 40-page cap that fences the jobs runner,
     under this lane's 80. The shared cap and its default are untouched."""
     from smokeball_connector import vision
 

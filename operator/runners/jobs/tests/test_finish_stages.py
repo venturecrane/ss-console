@@ -1,0 +1,793 @@
+"""group, filter (scope), exhibits, condense and summarize in-process, against
+a scripted SDK client and real PDFs."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from types import SimpleNamespace as NS
+
+import pytest
+import yaml
+
+from jobs.medchron import config as config_mod, job as job_mod
+from jobs.stages import condense as condense_stage, exhibits as exhibits_stage, group as group_stage
+from jobs.stages import scope as scope_stage, summarize as summarize_stage
+from jobs.stages.base import StageRun
+from jobs_testkit import FIRM_CONFIG, FakeSeat, job_yaml, make_pdf
+
+
+class Usage:
+    input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens = 100, 20, 0, 0
+
+
+def _msg(text: str) -> NS:
+    return NS(content=[NS(type="text", text=text)], stop_reason="end_turn", usage=Usage())
+
+
+class Stream:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get_final_message(self):
+        return self.msg
+
+
+class Scripted:
+    def __init__(self, reply):
+        self.calls: list[dict] = []
+        self._reply = reply
+        self.messages = NS(create=self._create, stream=self._stream, batches=None)
+
+    def _create(self, **params):
+        self.calls.append(params)
+        return self._reply(params, len(self.calls))
+
+    def _stream(self, **params):
+        self.calls.append(params)
+        return Stream(self._reply(params, len(self.calls)))
+
+
+@pytest.fixture
+def firm(tmp_path: Path) -> Path:
+    cfg = json.loads(json.dumps(FIRM_CONFIG))
+    cfg["providers"]["aliases"] = [
+        {"match": r"example clinic|ex clinic", "label": "Example Clinic"},
+        {"match": r"example health|exh\b", "label": "Example Health System"},
+    ]
+    cfg["format"]["subsections"] = [
+        "Patient Complaints & Limitations",
+        "HPI & Prior Medical History",
+        "Medical Diagnoses",
+        "Treatments Administered During This Visit",
+        "Treatment Recommendations",
+        "All Other Information",
+    ]
+    p = tmp_path / "firm.yaml"
+    p.write_text(yaml.safe_dump(cfg))
+    return p
+
+
+@pytest.fixture
+def joint_job_dir(tmp_path: Path, data_root: Path) -> Path:
+    """A two-plaintiff job: the only kind with a co-client to remove."""
+    d = tmp_path / "joint-job"
+    d.mkdir()
+    (d / "job.yaml").write_text(job_yaml(data_root, joint=True), encoding="utf-8")
+    return d
+
+
+def _sr(job_dir: Path, firm: Path, data_root: Path, client=None, log: list[str] | None = None) -> StageRun:
+    job = job_mod.load(job_dir)
+    cfg = config_mod.load(str(firm))
+    lines = log if log is not None else []
+    return StageRun(
+        job=job,
+        cfg=cfg,
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided={},
+        log=lines.append,
+        seat_factory=lambda: FakeSeat([], [], {}),
+        client_factory=lambda: client,
+    )
+
+
+# ---- group ---------------------------------------------------------------------
+def test_canon_collapses_clinicians_and_brands_decide_first(firm: Path) -> None:
+    canon = group_stage.Canon(config_mod.load(str(firm)))
+    assert canon("Internal Medicine, Example Health System Fairfield") == "Example Health System"
+    assert canon("EX CLINIC (Jane Doe, MD)") == "Example Clinic"
+    assert canon("Riverside Imaging, John Q Public, M.D.") == "Riverside Imaging"
+    assert (
+        canon("Riverside Imaging, Sacramento Emergency Department")
+        == "Riverside Imaging, Sacramento Emergency Department"
+    )
+    assert canon("Philip Q. Sample, M.D., Inc.") == "Philip Q. Sample, M.D., Inc."
+    assert canon("Riverside Chiropractic - NEED UPDATED RECS") == "Riverside Chiropractic"
+
+
+def _seed_unit(sr: StageRun, files: list[dict], index_lines: list[str]) -> None:
+    (sr.slug_dir / "units").mkdir(parents=True, exist_ok=True)
+    (sr.slug_dir / "units" / "alpha.json").write_text(json.dumps(files))
+    rd = sr.slug_dir / "runs" / "alpha"
+    rd.mkdir(parents=True, exist_ok=True)
+    (rd / "map-01.md").write_text(
+        "## ENTRIES\nnone in this chunk\n\n## INDEX\n" + "\n".join(index_lines) + "\n\n## FILES-SEEN\n"
+    )
+
+
+def test_group_attributes_by_index_then_folder_then_sentinel(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL/Riverside Imaging"},
+            {"id": "b", "name": "bill", "ext": ".pdf", "folder": "/MEDICAL/Riverside Imaging - NEED"},
+            {"id": "c", "name": "EXH statement", "ext": ".pdf", "folder": "/(root)"},
+            {"id": "d", "name": "Invoice 12345", "ext": ".pdf", "folder": "/(root)"},
+            {"id": "e", "name": "eob", "ext": ".pdf", "folder": "/Carrier (Policy) 250/500"},
+        ],
+        ["2026-01-02 | Example Clinic (Jane Doe, MD) | S13.4 | clinic note.pdf"],
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert groups["Example Clinic"]["file_ids"] == ["a"] and groups["Example Clinic"]["exhibit"] is True
+    assert groups["Riverside Imaging"]["file_ids"] == ["b"] and groups["Riverside Imaging"]["exhibit"] is False
+    assert groups["Example Health System"]["file_ids"] == ["c"]
+    assert groups["(unattributed)"]["file_ids"] == ["d"]  # a filename is not a provider
+    assert groups["Carrier (Policy) 250"]["file_ids"] == ["e"]  # the numeric leaf "500" is skipped
+
+
+def test_group_never_names_a_lane_after_the_clients_renamed_folder(tmp_path: Path, firm: Path, data_root: Path) -> None:
+    """Row 22 follow-up (2026-10-24): when the firm renames the client's folder
+    ("Alpha_Example" became "ALPHA EXAMPLE"), decide_selection resolves it and
+    units.json carries the real name. group compared folder segments against
+    the job's original prefix, so a file filed straight under the client folder
+    got a lane, and an exhibit title, named after the client's folder."""
+    from jobs_testkit import job_yaml
+
+    jd = tmp_path / "job"
+    jd.mkdir()
+    (jd / "job.yaml").write_text(job_yaml(data_root, joint=True))
+    sr = _sr(jd, firm, data_root)
+    (sr.slug_dir / "units.json").write_text(
+        json.dumps(
+            {
+                "alpha": {"folder_prefix": "/ALPHA EXAMPLE", "surname": "Example"},
+                "beta": {"folder_prefix": "/Beta_Example", "surname": "Example"},
+            }
+        )
+    )
+    _seed_unit(sr, [{"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/ALPHA EXAMPLE/MEDICAL"}], [])
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"] for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert groups == {"(unattributed)"}, groups
+
+
+class _BrandCfg:
+    """A firm config whose brand list names the ambulance company only."""
+
+    def get(self, section: str, key: str):
+        if (section, key) == ("providers", "aliases"):
+            return [{"match": r"Example Ambulance|EAR\b", "label": "Example Ambulance Response"}]
+        return None
+
+
+def test_a_minority_brand_never_names_a_record_set_another_facility_dominates() -> None:
+    """2026-10-29: a 400-page hospital records file carried a few ambulance
+    run-sheet rows; the ambulance company is on the brand list, the hospital
+    is not, and the hospital's exhibit was titled after the ambulance."""
+    canon = group_stage.Canon(_BrandCfg())
+    hospital = ["Example Valley Hospital", "Example Valley Hospital, Jane Doe, MD"] * 20
+    assert canon(group_stage.lane_name(["Example Ambulance Response"] * 3 + hospital, canon)) == (
+        "Example Valley Hospital"
+    )
+    # A brand still beats bare clinicians however many rows they hold ...
+    assert group_stage.lane_name(["EAR"] + ["Jane Doe, MD"] * 30, canon) == "EAR"
+    # ... and still names a file it holds a real share of.
+    assert group_stage.lane_name(["EAR"] * 10 + ["Example Valley Hospital"] * 20, canon) == "EAR"
+
+
+def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_the_first_row(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """Live 2026-09-16: a client letter holding an ED record drew two INDEX rows,
+    'Emergency Department, Jane Doe, MD' and 'Provider not identified in this
+    chunk (per client letter)'; the tie broke by set order and the delivered
+    package carried the placeholder as an exhibit title."""
+    canon = group_stage.Canon(config_mod.load(str(firm)))
+    # the placeholder first AND in the majority: a name still wins
+    assert (
+        group_stage.lane_name(
+            [
+                "Provider not identified in this chunk (per client letter)",
+                "Provider not identified in this chunk (per client letter)",
+                "Riverside Emergency Department, Jane Doe, MD",
+            ],
+            canon,
+        )
+        == "Riverside Emergency Department, Jane Doe, MD"
+    )
+    assert group_stage.lane_name(
+        ["Provider not identified in this chunk", "Provider not identified in this chunk"], canon
+    ).startswith("Provider not identified"), "only placeholders: the truth is still reported"
+    # a tie between two real names goes to the row seen first, whatever set order says
+    assert group_stage.lane_name(["Clinic B", "Clinic A"], canon) == "Clinic B"
+    assert group_stage.lane_name(["Clinic A", "Clinic B", "Clinic B"], canon) == "Clinic B", "the majority still wins"
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [{"id": "q", "name": "update letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"}],
+        [
+            "2026-02-10 | Provider not identified in this chunk (per client letter) | -- | update letter from client.pdf",
+            "2026-02-11 | Riverside Emergency Department, Jane Doe, MD | -- | update letter from client.pdf",
+            "2026-02-12 | Provider not identified in this chunk (per client letter) | -- | update letter from client.pdf",
+        ],
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert list(groups) == ["Riverside Emergency Department"], groups
+
+
+def test_group_reads_an_index_cell_naming_several_files_and_an_id_marker_names_that_file(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The composer lists every file an entry drew on in one INDEX cell, `;`
+    separated, and tells two same-named attachments apart with the file id in
+    parentheses. Live 2026-09-15: keying on the raw cell attributed none of
+    them and 28 cited records fell to the sentinel lane."""
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "msgatt-1", "name": "image001", "ext": ".jpg", "folder": "/(email attachment)"},
+            {"id": "msgatt-2", "name": "image001 (2)", "ext": ".jpg", "folder": "/(email attachment)"},
+            {"id": "q", "name": "letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"},
+        ],
+        [
+            "2026-01-02 | Example Clinic (Jane Doe, MD) | -- | clinic note.pdf; image001.jpg (msgatt-2); letter from client.pdf"
+        ],
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    lane = groups["Example Clinic"]
+    assert sorted(lane["file_ids"]) == ["a", "msgatt-2", "q"], lane
+    assert lane["exhibit"] is True and lane["first"] == "2026-01-02"
+    assert "msgatt-1" not in lane["file_ids"], "the bare name is the first file; the marker named the second"
+
+
+def test_group_attributes_a_cited_but_unindexed_file_to_the_citing_entry_never_over_the_index(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A client's letter carrying a copy of an MRI report is cited inside the
+    imaging facility's entry and has no INDEX row of its own; that entry is the
+    record's own statement of who produced it. An INDEX row still outvotes a
+    citation."""
+    sr = _sr(job_dir, firm, data_root)
+    _seed_unit(
+        sr,
+        [
+            {"id": "m", "name": "mri report", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "q", "name": "letter from client", "ext": ".pdf", "folder": "/CORRESPONDENCE"},
+            {"id": "r", "name": "rad note", "ext": ".pdf", "folder": "/MEDICAL"},
+        ],
+        [],
+    )
+    (sr.slug_dir / "runs" / "alpha" / "map-01.md").write_text(
+        "## ENTRIES\n01/09/2026\nExample Imaging | Medical Diagnoses\n\n"
+        "MRI of the cervical spine shows a disc bulge. (FILE: mri report.pdf, p. 1)\n\n"
+        "A further copy of the same report appears in the client's letter. (FILE: letter from client.pdf, p. 4-5)\n\n"
+        "The radiology note repeats the impression. (FILE: rad note.pdf, p. 2)\n\n"
+        "## INDEX\n2026-01-09 | Example Imaging | -- | mri report.pdf\n"
+        "2026-01-11 | Riverside Imaging | -- | rad note.pdf\n\n## FILES-SEEN\n"
+    )
+    assert group_stage.run(sr) == 0
+    groups = {g["provider"]: g for g in json.loads((sr.slug_dir / "groups" / "alpha.json").read_text())}
+    assert sorted(groups["Example Imaging"]["file_ids"]) == ["m", "q"], groups
+    assert groups["Example Imaging"]["exhibit"] is True and groups["Example Imaging"]["last"] == "2026-01-09"
+    assert groups["Riverside Imaging"]["file_ids"] == ["r"], "the INDEX row wins over the citing entry"
+    assert not any(p.startswith("(unattributed") for p in groups), groups
+
+
+# ---- scope (filter) ------------------------------------------------------------------
+E_PRE_ROUTINE = "06/01/2025\nExample Clinic | Medical Diagnoses\n\nSeasonal allergies. (Exhibit 1 - p. 1)\n"
+E_PRE_MATERIAL = "09/01/2025\nExample Clinic | Medical Diagnoses\n\nChronic neck pain. (Exhibit 1 - p. 2)\n"
+E_POST = (
+    "01/20/2026\nExample Clinic | Patient Complaints & Limitations\n\n"
+    "Neck pain since the Subject Incident. (Exhibit 1 - p. 3)\n"
+)
+
+
+def test_scope_omits_with_disclosure_and_keeps_unclassified(job_dir: Path, firm: Path, data_root: Path) -> None:
+    client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n"))  # entry 2 unclassified -> kept
+    sr = _sr(job_dir, firm, data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text("\n\n".join([E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]))
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Seasonal allergies" not in scoped and "Chronic neck pain" in scoped and "Subject Incident" in scoped
+    omitted = json.loads((d / "omitted_preincident.json").read_text())
+    assert omitted == [
+        {
+            "date": "2025-06-01",
+            "reason": "unrelated allergy visit",
+            "head": "Example Clinic | Medical Diagnoses",
+            "cites": [{"exhibit": 1, "file": None, "n": 1}],
+        }
+    ]
+    assert (
+        "1 additional pre-incident encounters dated 2025-06-01 to 2025-06-01"
+        in (d / "preincident_note.txt").read_text()
+    )
+    payload = client.calls[0]["messages"][0]["content"]
+    assert (
+        payload.startswith("CLAIM INJURIES: example injury")
+        and "1. 2025-06-01" in payload
+        and "2. 2025-09-01" in payload
+    )
+    assert (d / "entries_full.md").is_file()
+
+
+def test_scope_removes_entries_attributed_to_the_co_plaintiff(joint_job_dir: Path, firm: Path, data_root: Path) -> None:
+    """A chronology is ONE patient's.
+
+    Live 2026-09-23 on a two-plaintiff matter: folder scoping kept every FILE out of the
+    co-client's folder and 29 of her entries still reached the document,
+    because her records sit inside files filed under the client's own folder
+    and the matter root - same collision, same providers, same dates. The
+    composer labels the patient in the provider line, so attribution can
+    separate what folders cannot.
+
+    The keeps matter as much as the drop: a clinical parenthetical carries no
+    surname and must survive, or `(PD)` home dialysis and `(CMS-1500)` billing
+    entries would vanish from every joint matter.
+    """
+    co = "01/05/2026\nSutter Health Radiology (Beta Example) | Medical Diagnoses\n\nAnkle series. (Exhibit 1 - p. 9)"
+    pd = "01/06/2026\nVacaValley Home Training (PD) | Treatments\n\nDialysis session. (Exhibit 1 - p. 10)"
+    mine = "01/07/2026\nExample Clinic (Alpha Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 11)"
+    # The shape that survived the first fix: the co-plaintiff's block has NO
+    # date line of its own, it simply follows the client's prose inside one
+    # entry. Testing only the entry's second line left these in the document.
+    nested = (
+        "01/08/2026\nExample Clinic (Alpha Example) | Patient Complaints & Limitations\n\n"
+        "Neck pain since the collision. (Exhibit 1 - p. 12)\n"
+        "Riverside ED, A. Baker, D.O. (Beta Example) | Patient Complaints & Limitations\n\n"
+        "Beta Example, a 53-year-old female, was the restrained driver. (Exhibit 1 - p. 13)"
+    )
+    sr = _sr(joint_job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text("\n\n".join([co, pd, mine, nested]))
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Ankle series." not in scoped, "a co-plaintiff-only entry goes whole"
+    assert "Dialysis session." in scoped, "a clinical parenthetical is not a patient name"
+    assert "Cervical strain." in scoped, "the client's own labelled entry stays"
+    assert "restrained driver" not in scoped, "a co-plaintiff block nested mid-entry must go too"
+    assert "Neck pain since the collision." in scoped, "its host entry keeps the client's own block"
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert [x["patient"] for x in dropped] == ["Beta Example", "Beta Example"]
+
+
+def test_scope_keeps_a_surname_parenthetical_on_a_single_client_job(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """N1 (2026-10-24): a single-client job has no co-plaintiff, so nothing is
+    removed as one. The surname test alone would drop the client's own care
+    under a provider named for the family (`(Example Chiropractic)`) or a short
+    given name, and coverage would tell the firm it was another patient's."""
+    clinic = "01/05/2026\nNorth Spine (Example Chiropractic) | Treatments\n\nAdjustment. (Exhibit 1 - p. 9)"
+    nick = "01/06/2026\nExample Clinic (Al Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 10)"
+    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    assert not sr.job.joint
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "omitted_coclient.json").write_text("[]")  # an earlier run's list goes
+    (d / "entries.md").write_text("\n\n".join([clinic, nick]))
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Adjustment." in scoped and "Cervical strain." in scoped
+    assert not (d / "omitted_coclient.json").exists()
+
+
+def test_scope_records_the_citations_each_removed_block_carried(
+    joint_job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """2026-10-24: the coverage gate held a finished joint chronology on a
+    shared intake form the composer drew one entry from, because that entry
+    was the co-plaintiff's and filter removed it; nothing recorded which file
+    the removed block cited, so the gate could only call it loss. Each removed
+    block (co-client and pre-incident omit alike) now records its citations
+    and the file each names, which the gate reads to explain the file by rule."""
+    co = "01/05/2026\nSutter Health Radiology (Beta Example) | Medical Diagnoses\n\nAnkle. (Exhibit 2 - p. 9)"
+    mine = "01/07/2026\nExample Clinic (Alpha Example) | Medical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 1)"
+    client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n"))
+    sr = _sr(joint_job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "exhibit_map.json").write_text(json.dumps({"clinic.pdf": 1, "intake form.pdf": 2, "allergy.pdf": 3}))
+    pre = E_PRE_ROUTINE.replace("(Exhibit 1", "(Exhibit 3")
+    (d / "entries.md").write_text("\n\n".join([pre, co, mine]))
+    assert scope_stage.run(sr) == 0
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert dropped[0]["cites"] == [{"exhibit": 2, "file": "intake form.pdf", "n": 1}]
+    omitted = json.loads((d / "omitted_preincident.json").read_text())
+    assert omitted[0]["cites"] == [{"exhibit": 3, "file": "allergy.pdf", "n": 1}]
+    # and what they are weighed against: every citation in the full assembly
+    assert json.loads((d / "full_cites.json").read_text()) == {"1": 1, "2": 1, "3": 1}
+
+
+def test_scope_keeps_an_unlabelled_client_block_after_a_co_plaintiff_block(
+    joint_job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The map prompt writes `<provider> | <heading>` and never requires a
+    patient label, so on a joint matter the client's own blocks are often
+    UNLABELLED. Review 2026-10-06 (N11): leaving the co-client's block ended
+    only on a header containing "(", so every unlabelled client block after a
+    labelled co-client block was deleted, and omitted_coclient.json named only
+    the co-client. Any new block header ends the co-client block."""
+    mixed = (
+        "01/09/2026\nRiverside ED (Beta Example) | Patient Complaints & Limitations\n\n"
+        "Beta Example reported wrist pain. (Exhibit 1 - p. 14)\n"
+        "Example Clinic | Medical Diagnoses\n\n"
+        "Lumbar strain diagnosed. (Exhibit 1 - p. 15)\n"
+        "Example Imaging | Diagnostic Imaging\n\n"
+        "Lumbar MRI unremarkable. (Exhibit 1 - p. 16)"
+    )
+    text, removed = scope_stage.strip_coclient(mixed, "Alpha Example", "Example")
+    assert removed == ["Beta Example"]
+    assert "wrist pain" not in text
+    assert "Lumbar strain diagnosed." in text and "Lumbar MRI unremarkable." in text
+    assert "Example Clinic | Medical Diagnoses" in text
+
+    sr = _sr(joint_job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text(mixed)
+    assert scope_stage.run(sr) == 0
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "wrist pain" not in scoped
+    assert "Lumbar strain diagnosed." in scoped and "Lumbar MRI unremarkable." in scoped
+    dropped = json.loads((d / "omitted_coclient.json").read_text())
+    assert [x["patient"] for x in dropped] == ["Beta Example"]
+
+
+def test_scope_refuses_when_clusters_have_no_merge(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm, data_root, Scripted(lambda p, n: _msg("")))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text(E_POST)
+    (d / "clusters.md").write_text("##### CLUSTER 2026-01-02 | x (2 fragments)\n")
+    assert scope_stage.run(sr) == 1
+
+
+def _with_policy(firm: Path, policy: str) -> Path:
+    """The same firm config with `chronology.pre_incident_history` set."""
+    data = yaml.safe_load(firm.read_text())
+    data["chronology"]["pre_incident_history"] = policy
+    firm.write_text(yaml.safe_dump(data))
+    return firm
+
+
+def _no_call(p, n):
+    raise AssertionError("itemize_all must make no model call")
+
+
+def _seed_scope_with_stale_note(d: Path) -> None:
+    """Two pre-incident entries, one post-incident, plus the note and triage
+    reply an earlier `include` run would have left behind."""
+    d.mkdir(parents=True)
+    (d / "entries.md").write_text("\n\n".join([E_POST, E_PRE_MATERIAL, E_PRE_ROUTINE]))
+    (d / "preincident_note.txt").write_text("[NTD: 1 additional pre-incident encounters dated x were reviewed]")
+    (d / "preincident_triage.txt").write_text("1 | OMIT | unrelated allergy visit\n")
+
+
+def test_scope_itemize_all_keeps_every_pre_incident_entry_with_no_call_and_clears_a_stale_note(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """A firm that asked for ALL previous records: nothing is triaged out, no
+    judgment call is paid for, and a note from an earlier run cannot survive
+    into a document that now itemizes everything (build_doc renders the note
+    whenever the file exists)."""
+    client = Scripted(_no_call)
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    _seed_scope_with_stale_note(d)
+    assert scope_stage.run(sr) == 0
+    assert client.calls == []
+    assert not (d / "usage-ledger.jsonl").exists(), "no call means no ledger row"
+    scoped = (d / "entries_scoped.md").read_text()
+    assert scoped == "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]), "every entry, date order"
+    assert json.loads((d / "omitted_preincident.json").read_text()) == []
+    assert not (d / "preincident_note.txt").exists(), "a stale disclosure note must be removed"
+    assert not (d / "preincident_triage.txt").exists(), "a stale triage reply must be removed"
+
+
+def test_scope_include_still_triages_and_writes_the_note_on_the_same_fixture(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The falsifier for the test above: the identical fixture under `include`
+    pays one call, drops the routine entry, and writes the note. If the runner
+    ignored the policy, the itemize_all test would see this behaviour and fail."""
+    client = Scripted(lambda p, n: _msg("1 | OMIT | unrelated allergy visit\n2 | MATERIAL | neck\n"))
+    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    _seed_scope_with_stale_note(d)
+    assert scope_stage.run(sr) == 0
+    assert len(client.calls) == 1
+    scoped = (d / "entries_scoped.md").read_text()
+    assert "Seasonal allergies" not in scoped and "Chronic neck pain" in scoped and "Subject Incident" in scoped
+    assert [x["date"] for x in json.loads((d / "omitted_preincident.json").read_text())] == ["2025-06-01"]
+    assert (
+        "1 additional pre-incident encounters dated 2025-06-01 to 2025-06-01"
+        in (d / "preincident_note.txt").read_text()
+    )
+
+
+# ---- exhibits ----------------------------------------------------------------------
+def test_exhibits_merges_a_providers_files_and_remaps_citations(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm, data_root)
+    d = sr.slug_dir
+    raw = d / "raw"
+    raw.mkdir(parents=True)
+    (raw / "a.pdf").write_bytes(make_pdf(["", "", ""]))
+    (raw / "b.pdf").write_bytes(make_pdf(["", ""]))
+    (d / "raw_manifest.jsonl").write_text(
+        json.dumps({"id": "a", "ok": True, "path": str(raw / "a.pdf")})
+        + "\n"
+        + json.dumps({"id": "b", "ok": True, "path": str(raw / "b.pdf")})
+        + "\n"
+    )
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "b", "name": "clinic bill", "ext": ".pdf", "folder": "/MEDICAL"},
+        ],
+        ["2026-01-02 | Example Clinic | -- | clinic note.pdf", "2026-01-09 | Example Clinic | -- | clinic bill.pdf"],
+    )
+    rd = d / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "clinic bill.pdf": 2}))
+    (rd / "entries_scoped.md").write_text(
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (Exhibit 1 - p. 2)\n\n"
+        "01/09/2026\nExample Clinic | Medical Diagnoses\n\nBilled. (Exhibit 2 - p. 1-2)\n"
+    )
+    assert group_stage.run(sr) == 0
+    assert exhibits_stage.run(sr) == 0
+    page_map = json.loads((d / "out" / "alpha" / "page_map.json").read_text())
+    assert (
+        len(page_map) == 1
+        and page_map[0]["total_pages"] == 5
+        and page_map[0]["record_type"] == "Medical Records & Bills"
+    )
+    assert page_map[0]["title"] == "Exhibit 1 - Example Clinic - 01-02-2026 - 01-09-2026 (Medical Records & Bills)"
+    final = (rd / "entries_final.md").read_text()
+    assert "(Exhibit 1 - p. 2)" in final and "(Exhibit 1 - p. 4-5)" in final
+    assert [p.name for p in (d / "out" / "alpha").glob("Exhibit *.pdf")] == [page_map[0]["title"] + ".pdf"]
+
+
+def test_exhibits_renders_a_cited_image_as_an_exhibit_page(job_dir: Path, firm: Path, data_root: Path) -> None:
+    """A client's phone photo of a consent form is a record the chronology
+    cites. Skipped, the exhibit had no page for it and the citation could not
+    be remapped (live 2026-09-15: twelve cited photos, zero pages, refused)."""
+    import fitz
+
+    sr = _sr(job_dir, firm, data_root)
+    d = sr.slug_dir
+    raw = d / "raw"
+    raw.mkdir(parents=True)
+    (raw / "a.pdf").write_bytes(make_pdf(["", ""]))
+    fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 6, 6), False).save(str(raw / "photo.png"))
+    (d / "raw_manifest.jsonl").write_text(
+        json.dumps({"id": "a", "ok": True, "path": str(raw / "a.pdf")})
+        + "\n"
+        + json.dumps({"id": "p", "ok": True, "path": str(raw / "photo.png")})
+        + "\n"
+    )
+    _seed_unit(
+        sr,
+        [
+            {"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"},
+            {"id": "p", "name": "photo", "ext": ".png", "folder": "/(email attachment)"},
+        ],
+        ["2026-01-02 | Example Clinic | -- | clinic note.pdf", "2026-01-09 | Example Clinic | -- | photo.png"],
+    )
+    rd = d / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "photo.png": 2}))
+    (rd / "entries_scoped.md").write_text(
+        "01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (Exhibit 1 - p. 2)\n\n"
+        "01/09/2026\nExample Clinic | Medical Diagnoses\n\nConsent photographed. (Exhibit 2 - p. 1)\n"
+    )
+    assert group_stage.run(sr) == 0
+    assert exhibits_stage.run(sr) == 0
+    page_map = json.loads((d / "out" / "alpha" / "page_map.json").read_text())
+    assert len(page_map) == 1 and page_map[0]["total_pages"] == 3, page_map
+    assert [f["file"] for f in page_map[0]["files"]] == ["clinic note.pdf", "photo.png"]
+    final = (rd / "entries_final.md").read_text()
+    assert "(Exhibit 1 - p. 2)" in final and "(Exhibit 1 - p. 3)" in final, final
+
+
+def test_exhibits_refuses_a_citation_it_cannot_remap(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm, data_root)
+    d = sr.slug_dir
+    (d / "raw_manifest.jsonl").parent.mkdir(parents=True, exist_ok=True)
+    (d / "raw_manifest.jsonl").write_text("")
+    _seed_unit(sr, [{"id": "a", "name": "clinic note", "ext": ".pdf", "folder": "/MEDICAL"}], [])
+    rd = d / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1}))
+    (rd / "entries.md").write_text("01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (Exhibit 7 - p. 2)\n")
+    (d / "groups").mkdir()
+    (d / "groups" / "alpha.json").write_text(
+        json.dumps(
+            [
+                {
+                    "provider": "Example Clinic",
+                    "file_ids": ["a"],
+                    "first": "2026-01-02",
+                    "last": "2026-01-02",
+                    "dated_files": 1,
+                    "exhibit": True,
+                }
+            ]
+        )
+    )
+    assert exhibits_stage.run(sr) == 1
+
+
+# ---- condense ------------------------------------------------------------------------
+LONG_PT = (
+    "02/03/2026\nExample Physical Therapy | Patient Complaints & Limitations\n\n"
+    + "The patient reports continued neck pain and stiffness with difficulty turning the head while driving and "
+    "limited tolerance for sitting at a desk for more than thirty minutes at a time. (Exhibit 2 - p. 4)\n\n"
+    "Treatments Administered During This Visit\n\n"
+    + "Therapeutic exercise, manual therapy to the cervical paraspinals, and moist heat were administered for a "
+    "total of forty five minutes with the patient tolerating all interventions well and without adverse "
+    "response, and vital signs were within normal limits and unchanged from the prior visit. (Exhibit 2 - p. 4)\n\n"
+    "All Other Information\n\n"
+    + "The plan of care was reviewed and the patient was instructed to continue the home exercise program as "
+    "previously issued and to return in two days for the next scheduled session. (Exhibit 2 - p. 5)\n"
+)
+SHORT_PT = (
+    "02/03/2026\nExample Physical Therapy | Patient Complaints & Limitations\n\n"
+    "Continued neck pain and stiffness limiting driving and desk work. (Exhibit 2 - p. 4)\n\n"
+    "Treatments Administered During This Visit\n\n"
+    "Therapeutic exercise, manual therapy and moist heat, tolerated well. (Exhibit 2 - p. 4)\n"
+)
+MAJOR = (
+    "01/20/2026\nExample Health System Emergency Department | Patient Complaints & Limitations\n\n"
+    + "Neck pain after the collision. " * 20
+    + "(Exhibit 1 - p. 3)\n"
+)
+
+
+def test_condense_shortens_routine_entries_and_rejects_invented_citations(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    def reply(p, n):
+        return _msg(SHORT_PT if n == 1 else SHORT_PT.replace("(Exhibit 2 - p. 4)", "(Exhibit 9 - p. 4)", 1))
+
+    client = Scripted(reply)
+    log: list[str] = []
+    sr = _sr(job_dir, firm, data_root, client, log=log)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    pre = "Prior Medical History\n\nOld history. (Exhibit 1 - p. 1)\n\n"
+    second = LONG_PT.replace("02/03/2026", "02/05/2026")
+    (d / "entries_scoped_final.md").write_text(pre + "\n\n".join([MAJOR, LONG_PT, second]))
+    monkey = condense_stage.PAUSE_SECONDS
+    condense_stage.PAUSE_SECONDS = 0
+    try:
+        assert condense_stage.run(sr) == 0
+    finally:
+        condense_stage.PAUSE_SECONDS = monkey
+    body = (d / "entries_condensed.md").read_text()
+    assert body.startswith("Prior Medical History")  # the preamble survives
+    assert "Neck pain after the collision." in body  # the major entry is untouched
+    assert SHORT_PT.strip() in body and second.strip() in body  # one condensed, one kept long
+    assert len(client.calls) == 2 and any("kept long (invented citation)" in line for line in log)
+
+
+def test_condense_never_touches_pre_incident_routine_entries(job_dir: Path, firm: Path, data_root: Path) -> None:
+    client = Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("no call expected")))
+    sr = _sr(job_dir, firm, data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_final.md").write_text(LONG_PT.replace("02/03/2026", "12/03/2025"))
+    assert condense_stage.run(sr) == 0
+    assert (d / "entries_condensed.md").read_text() == LONG_PT.replace("02/03/2026", "12/03/2025")
+
+
+# ---- summarize ------------------------------------------------------------------------
+def test_summarize_collapses_pre_incident_and_rejects_a_reach_beyond_source(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    block = (
+        "Prior Medical History\n\nThe patient carried a diagnosis of chronic neck pain before the incident. "
+        "(Exhibit 1 - p. 2)"
+    )
+    client = Scripted(lambda p, n: _msg(block))
+    sr = _sr(job_dir, firm, data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_condensed.md").write_text("\n\n".join([E_PRE_MATERIAL, E_POST]))
+    assert summarize_stage.run(sr) == 0
+    out = (d / "entries_scoped_final.md").read_text()
+    assert out.startswith("Prior Medical History") and "Subject Incident" in out and "Chronic neck pain." not in out
+    assert client.calls[0]["messages"][0]["content"] == E_PRE_MATERIAL.strip()
+    # A summary still beyond the source after its one retry is never kept:
+    # the pre-incident entry is itemized instead (2026-10-24 audit, row 9).
+    client2 = Scripted(lambda p, n: _msg(block.replace("p. 2", "p. 7")))
+    sr2 = _sr(job_dir, firm, data_root, client2)
+    assert summarize_stage.run(sr2) == 0 and len(client2.calls) == 2
+    out2 = (d / "entries_scoped_final.md").read_text()
+    assert "p. 7" not in out2 and "Chronic neck pain." in out2 and (d / summarize_stage.FALLBACK).is_file()
+    assert summarize_stage.beyond_source("(Exhibit 1 - p. 2-4)", "(Exhibit 1 - p. 3) (Exhibit 2 - p. 1)") == [
+        "Exhibit 2 never cited in source"
+    ]
+
+
+def test_summarize_with_no_pre_incident_is_free(job_dir: Path, firm: Path, data_root: Path) -> None:
+    client = Scripted(lambda p, n: (_ for _ in ()).throw(AssertionError("no call expected")))
+    sr = _sr(job_dir, firm, data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_final.md").write_text(E_POST)
+    assert summarize_stage.run(sr) == 0 and (d / "entries_scoped_final.md").read_text() == E_POST.strip()
+
+
+def test_summarize_itemize_all_writes_the_block_then_every_entry_in_date_order(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """itemize_all: the cited Prior Medical History block is produced and
+    checked exactly as under `include`, and the body after it itemizes every
+    entry, pre-incident included."""
+    block = (
+        "Prior Medical History\n\nThe patient carried a diagnosis of chronic neck pain before the incident. "
+        "(Exhibit 1 - p. 2)"
+    )
+    client = Scripted(lambda p, n: _msg(block))
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_condensed.md").write_text("\n\n".join([E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]))
+    assert summarize_stage.run(sr) == 0
+    out = (d / "entries_scoped_final.md").read_text()
+    assert out == block + "\n\n" + "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST])
+    assert len(client.calls) == 1
+    assert client.calls[0]["messages"][0]["content"] == "\n\n".join([E_PRE_ROUTINE.strip(), E_PRE_MATERIAL.strip()])
+    # The containment check still binds under itemize_all: a block that
+    # reaches beyond the source twice is omitted, every entry stays.
+    client2 = Scripted(lambda p, n: _msg(block.replace("p. 2", "p. 7")))
+    assert summarize_stage.run(_sr(job_dir, _with_policy(firm, "itemize_all"), data_root, client2)) == 0
+    out2 = (d / "entries_scoped_final.md").read_text()
+    assert out2 == "\n\n".join(e.strip() for e in [E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST])
+
+
+def test_summarize_include_on_the_same_fixture_drops_pre_incident_from_the_body(
+    job_dir: Path, firm: Path, data_root: Path
+) -> None:
+    """The falsifier for the itemize_all summarize test: under `include` the
+    same input yields block + post-incident only."""
+    block = "Prior Medical History\n\nChronic neck pain predates the incident. (Exhibit 1 - p. 2)"
+    client = Scripted(lambda p, n: _msg(block))
+    sr = _sr(job_dir, _with_policy(firm, "include"), data_root, client)
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_condensed.md").write_text("\n\n".join([E_PRE_ROUTINE, E_PRE_MATERIAL, E_POST]))
+    assert summarize_stage.run(sr) == 0
+    assert (d / "entries_scoped_final.md").read_text() == block + "\n\n" + E_POST.strip()
+
+
+def test_summarize_itemize_all_with_no_pre_incident_is_free(job_dir: Path, firm: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, _with_policy(firm, "itemize_all"), data_root, Scripted(_no_call))
+    d = sr.slug_dir / "runs" / "alpha"
+    d.mkdir(parents=True)
+    (d / "entries_final.md").write_text(E_POST)
+    assert summarize_stage.run(sr) == 0 and (d / "entries_scoped_final.md").read_text() == E_POST.strip()

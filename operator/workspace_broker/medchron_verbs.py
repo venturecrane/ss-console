@@ -24,14 +24,14 @@ Peer gating, per verb:
                            uid 0 only, with NO agent tool (2026-10-29). Keeps the
                            units of a job submitted before the broker kept them
                            (``medchron_identity.backfill``), read by
-                           ``medchron.units_backfill`` from the runner's job dir.
+                           ``jobs.medchron.units_backfill`` from the runner's job dir.
                            An update reuses the date of birth it keeps, so the
                            date must come from the job's own envelope on the
                            seat, never from a conversation.
     medchron_covered_recompute
                            uid 0 only, with NO agent tool (2026-10-29). Replaces
                            a DELIVERED job's coverage record with one recomputed
-                           from its job dir by ``medchron.covered_backfill``
+                           from its job dir by ``jobs.medchron.covered_backfill``
                            (``medchron_coverage.recompute``): a joint matter's
                            record had every cited exhibit uncovered. An update
                            skips what the record covers, so a conversation
@@ -46,11 +46,11 @@ Peer gating, per verb:
                            stage on its cached verdicts; and a job HELD on the
                            cycle page allowance when the request carries SMD's
                            approved overage (``allowance_approved_pages`` +
-                           ``allowance_approved_by``, from ``medchron.allowance
+                           ``allowance_approved_by``, from ``jobs.medchron.allowance
                            approve``), audited on the resume row; and an update
                            HELD by its independent review (``update_held: the
                            independent review ...``), after SMD records the
-                           correction with ``medchron.update_decide``. Every
+                           correction with ``jobs.medchron.update_decide``. Every
                            other hold stays refused.
     medchron_allowance_credit
                            uid 0 only, with NO agent tool (2026-10-29). SMD
@@ -148,7 +148,7 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     # correct: "SMD finishes it" in its own words. 2026-10-29: Oleksandra's
     # update held there with the reviewer right and the audit wrong, and this
     # rule refused the resume, so SMD had no way to finish what the hold says
-    # SMD finishes. The correction is recorded first (``medchron.update_decide``,
+    # SMD finishes. The correction is recorded first (``jobs.medchron.update_decide``,
     # root on the seat, which writes its own marker); a bare resume settles the
     # held findings again by today's rules at $0 and holds again if any is left.
     if reason.startswith(UPDATE_REVIEW_HOLD_PREFIX):
@@ -162,7 +162,7 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
 
 
 def _allowance_overage(request: dict[str, Any], row: dict[str, Any]) -> dict[str, Any] | None:
-    """SMD's approval of pages past the cycle allowance (``medchron.allowance
+    """SMD's approval of pages past the cycle allowance (``jobs.medchron.allowance
     approve``, root only, no agent tool): the one resume a page-allowance hold
     takes. None when the request carries no approval; refused when it carries
     a malformed one or the job is not held on the allowance."""
@@ -423,7 +423,7 @@ class MedchronVerbs:
                 return {"ok": True, "job": None}
             job = _with_hold_class(self._db.project(row), "medchron")
             # 2026-10-29: the pages SMD waived on this job's work
-            # (`medchron.allowance credit --job`), 0 when none. The
+            # (`jobs.medchron.allowance credit --job`), 0 when none. The
             # Operator says the waiver sentence only when this is > 0.
             job["smd_page_credit_pages"] = self._db.job_credited_pages(job_id)
             return {"ok": True, "job": job}
@@ -441,7 +441,7 @@ class MedchronVerbs:
         from where it stopped.
 
         This writes a MARKER into the queue dir and nothing else. It cannot do
-        the re-queue itself: `jobs/` is root:medchron 0710 and this process is
+        the re-queue itself: `jobs/` is root:jobs 0710 and this process is
         workspace-broker (uid 10001, groups workspace-connectors and
         audit-readers), so it can neither read a job's envelope nor tell a wiped
         job dir from a present one. The daemon is root, owns `jobs/`, and is the

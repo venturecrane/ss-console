@@ -1,5 +1,5 @@
 # The kinds of job PROVEN on this seat (the lane-proof gate,
-# operator/runners/medchron/medchron/lane_proof.py; runbook
+# operator/runners/jobs/jobs/lane_proof.py; runbook
 # docs/runbooks/operator/lane-proof.md).
 #
 # A job of a kind listed here runs the moment it is asked for. A job of any
@@ -24,7 +24,7 @@
 # ledger for an in-flight job before saying more.
 #
 # Revocations go under `revoked:` and win over every runtime proof until this
-# file changes (a runtime `medchron lane-proof revoke` is the faster, undoable
+# file changes (a runtime `jobs lane-proof revoke` is the faster, undoable
 # kind).
 schema: 1
 lanes:

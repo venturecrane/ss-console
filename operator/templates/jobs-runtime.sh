@@ -1,7 +1,7 @@
 #!/bin/sh
 # The job runtime's install steps, written once (ADR 0100 W3).
 #
-# Two builds install the job runner (/opt/medchron) and the author-built
+# Two builds install the job runner (/opt/jobs) and the author-built
 # connector venvs (/opt/connectors/<name>): the seat image (operator/templates/
 # Dockerfile) and the `jobs` bundle CI publishes on merge (scripts/
 # ci-publish-bundle.sh, which runs this script INSIDE the published core image so
@@ -14,12 +14,12 @@
 #   jobs-runtime.sh connectors           every connector under $SRC/connectors
 #   jobs-runtime.sh image-connectors     every connector the bundle does not carry (the image)
 #   jobs-runtime.sh connector <name>     one connector venv (the bundle: smokeball)
-#   jobs-runtime.sh medchron             the chronology runner venv (the bundle only, since W5)
+#   jobs-runtime.sh jobs                 the jobs runner venv (the bundle only, since W5)
 #   jobs-runtime.sh import-check <py>    the import list + antiword, against <py>
 #
 # SRC (default /app) is where connectors/, runners/ and requirements/ are read
 # from; the bundle build points it at the merge's checkout. PRICING_JSON, when
-# set, is copied to /opt/medchron/anthropic_pricing.json (the image COPYs it
+# set, is copied to /opt/jobs/anthropic_pricing.json (the image COPYs it
 # there itself). JOBS_RUNTIME_OPT (default /opt) exists only so the equivalence
 # test (operator/bin/tests/test_jobs_runtime.py) can run this off a real /opt.
 # POSIX sh: the image runs it with /bin/sh, as the RUN lines it replaced did.
@@ -77,7 +77,7 @@ connector() {
 # The build-time import smoke: every lane module the runner ships, plus the two
 # readers the litigation job needs. FAILS THE BUILD, not a seat.
 import_check() {
-  "$1" -c "import medchron.daemon, medchron.stages.upload, medchron.demand_lane, medchron.demand.run, medchron.drafting_lane, medchron.drafting.run, medchron.negotiation_lane, medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, medchron.records_lane, medchron.records.run, medchron.records.firm"
+  "$1" -c "import jobs.daemon, jobs.stages.upload, jobs.demand_lane, jobs.demand.run, jobs.drafting_lane, jobs.drafting.run, jobs.negotiation_lane, jobs.negotiation.run, jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane, jobs.litigation.run, striprtf.striprtf, smokeball_connector.docx_format, docx, jobs.casefile_lane, jobs.casefile.run, jobs.casefile.firm, records_contract.review_row, records_contract.batches, records_contract.facts, jobs.records_lane, jobs.records.run, jobs.records.firm"
   command -v antiword >/dev/null || { echo "FATAL: antiword is missing (the litigation job and the negotiation watch read .doc with it)"; exit 1; }
 }
 
@@ -85,28 +85,28 @@ import_check() {
 # connector SDK, the records contract (stdlib only; the records lane and the
 # overlay share it, ADR 0102), the Smokeball connector and the runner, so the daemon and the
 # driver child never share a dependency closure with the Hermes or broker venv.
-# root:root a+rX: the medchron uid executes it and can write nothing in it.
-medchron() {
+# root:root a+rX: the jobs uid executes it and can write nothing in it.
+jobs() {
   if [ -n "${PRICING_JSON:-}" ]; then
-    mkdir -p "${OPT}/medchron"
-    cp "$PRICING_JSON" "${OPT}/medchron/anthropic_pricing.json"
+    mkdir -p "${OPT}/jobs"
+    cp "$PRICING_JSON" "${OPT}/jobs/anthropic_pricing.json"
   fi
-  uv venv "${OPT}/medchron/.venv"
-  uv pip install --python "${OPT}/medchron/.venv/bin/python" --no-cache --no-config \
-    --require-hashes -r "${SRC}/requirements/medchron.txt"
-  uv pip install --python "${OPT}/medchron/.venv/bin/python" --no-cache --no-deps \
-    "${SRC}/connectors/_sdk" "${SRC}/connectors/_contract" "${SRC}/connectors/smokeball" "${SRC}/runners/medchron"
-  [ -x "${OPT}/medchron/.venv/bin/medchron" ] || { echo "FATAL: the medchron runner produced no console-script"; exit 1; }
-  import_check "${OPT}/medchron/.venv/bin/python"
-  chown -R root:root "${OPT}/medchron"
-  chmod -R a+rX "${OPT}/medchron"
+  uv venv "${OPT}/jobs/.venv"
+  uv pip install --python "${OPT}/jobs/.venv/bin/python" --no-cache --no-config \
+    --require-hashes -r "${SRC}/requirements/jobs.txt"
+  uv pip install --python "${OPT}/jobs/.venv/bin/python" --no-cache --no-deps \
+    "${SRC}/connectors/_sdk" "${SRC}/connectors/_contract" "${SRC}/connectors/smokeball" "${SRC}/runners/jobs"
+  [ -x "${OPT}/jobs/.venv/bin/jobs" ] || { echo "FATAL: the jobs runner produced no console-script"; exit 1; }
+  import_check "${OPT}/jobs/.venv/bin/python"
+  chown -R root:root "${OPT}/jobs"
+  chmod -R a+rX "${OPT}/jobs"
 }
 
 case "${1:-}" in
   connectors) connectors ;;
   image-connectors) connectors "${BUNDLED_CONNECTORS}" ;;
   connector) [ $# -eq 2 ] || { echo "usage: jobs-runtime.sh connector <name>" >&2; exit 2; }; connector "$2" ;;
-  medchron) medchron ;;
+  jobs) jobs ;;
   import-check) [ $# -eq 2 ] || { echo "usage: jobs-runtime.sh import-check <python>" >&2; exit 2; }; import_check "$2" ;;
-  *) echo "usage: jobs-runtime.sh connectors | image-connectors | connector <name> | medchron | import-check <python>" >&2; exit 2 ;;
+  *) echo "usage: jobs-runtime.sh connectors | image-connectors | connector <name> | jobs | import-check <python>" >&2; exit 2 ;;
 esac

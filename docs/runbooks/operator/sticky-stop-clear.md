@@ -15,7 +15,7 @@ budget (`operator/contracts/runtime-controls.yaml`, the
 `sticky_stop_*` rows). State is one row per `(customer, persona)` in
 `/opt/data/smd/sticky_stop.db` on the seat's volume; it survives reprovision by
 design. At HARD_STOP the trust plugin blocks every tool call, the gate 503s
-inbound routes, and the medchron daemon pause-holds its jobs. **Transitions are
+inbound routes, and the jobs daemon pause-holds its jobs. **Transitions are
 forward-only: nothing auto-resumes a system stop.** The only path back to OK is
 a human clear.
 
@@ -35,10 +35,10 @@ at the same count now. A seat still running a pre-collapse overlay can report
   the level (from the heartbeat's `sticky_stop_level`) and, at HARD_STOP,
   renders the **"Clear cost stop"** form. It still renders at a legacy
   SOFT_STOP too, so a pre-collapse seat is clearable from the same place.
-- **On the seat** (when the heartbeat is in doubt): the medchron daemon's
+- **On the seat** (when the heartbeat is in doubt): the jobs daemon's
   heartbeat json carries the level's consequences, and the state row itself is
   readable via a read-only query of `sticky_stop_state` (the shape
-  `operator/runners/medchron/medchron/daemon.py` `sticky_level()` uses).
+  `operator/runners/jobs/jobs/daemon.py` `sticky_level()` uses).
 - **Why it tripped:** the row's `reason`/`condition` columns, and the Machine
   audit ledger around the trip (`AGENT_STOPPED` for HARD_STOP;
   `INVARIANT_VIOLATION` now marks an observation that changed no level, and on

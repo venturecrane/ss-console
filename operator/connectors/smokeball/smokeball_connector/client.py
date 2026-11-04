@@ -305,7 +305,7 @@ class SmokeballClient:
         try:
             # ss#2614: the file's mode bits survive rotation. Two principals
             # share this token on a seat that runs the chronology runner (the
-            # connector as hermes, the runner as medchron, through a setgid
+            # connector as hermes, the runner as jobs, through a setgid
             # group dir), and ``os.replace`` creates a NEW inode owned by
             # whoever rotated. A fixed 0600 here would lock the other one out
             # at the first rotation; keeping the prior mode (0660 when it was

@@ -18,7 +18,15 @@
 
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -177,16 +185,19 @@ describe('Operator customer Machine entrypoint — ADR 0085 establishment spool 
 describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   it('converges the queue and jobs dirs with explicit owners and modes, then binds them', () => {
     expect(BOOT_CODE).toMatch(
-      /install -d -o root -g workspace-broker -m 0770 "\$\{MEDCHRON_DATA_DIR\}\/queue"/
+      /install -d -o root -g workspace-broker -m 0770 "\$\{JOBS_DATA_DIR\}\/queue"/
     )
     expect(BOOT_CODE).toMatch(
-      // 0710 group medchron: the driver child traverses to its own job dir but
+      // 0710 group jobs: the driver child traverses to its own job dir but
       // cannot list or open siblings (live-caught 2026-08-31 at 0700).
-      /install -d -o root -g medchron -m 0710 "\$\{MEDCHRON_DATA_DIR\}\/jobs"/
+      /install -d -o root -g jobs -m 0710 "\$\{JOBS_DATA_DIR\}\/jobs"/
     )
-    expect(BOOT_CODE).toMatch(/mount --bind "\$\{MEDCHRON_DATA_DIR\}" "\$\{MEDCHRON_RUN_DIR\}"/)
+    // Every run dir of the epoch (the jobs-volume block, driven below).
+    expect(BOOT_CODE).toMatch(/mount --bind "\$\{JOBS_DATA_DIR\}" "\$\{_rd\}"/)
     // Pruned from the hermes chown sweep like the audit subtree.
-    expect(BOOT_CODE).toMatch(/-o -path "\$\{MEDCHRON_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/)
+    expect(BOOT_CODE).toMatch(
+      /-o -path "\$\{JOBS_DATA_DIR\}" -o -path \/opt\/data\/jobs (-o -path [^ ]+ )?\\\) -prune/
+    )
   })
 
   it('carries the queue path into the broker env allowlist', () => {
@@ -197,7 +208,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     expect(launchFn).toMatch(/SMD_MEDCHRON_QUEUE_DIR="\$\{SMD_MEDCHRON_QUEUE_DIR\}"/)
   })
 
-  it('fetches the firm config from the vault without a FATAL arm and fences it to root:medchron', () => {
+  it('fetches the firm config from the vault without a FATAL arm and fences it to root:jobs', () => {
     expect(BOOT_CODE).toMatch(
       /_vault="s3:\/\/\$\{R2_BUCKET_CONFIG\}\/vaults\/\$\{CUSTOMER_SLUG\}\/"/
     )
@@ -207,7 +218,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     for (const verdict of ['fetched', 'kept', 'absent', 'unreachable']) {
       expect(BOOT_CODE).toMatch(new RegExp(`_record_lane_inputs_state medchron ${verdict}`))
     }
-    expect(BOOT_CODE).toMatch(/chown root:medchron "\$\{MEDCHRON_FIRM_CONFIG\}"/)
+    expect(BOOT_CODE).toMatch(/chown root:jobs "\$\{MEDCHRON_FIRM_CONFIG\}"/)
     expect(BOOT_CODE).toMatch(/chmod 0640 "\$\{MEDCHRON_FIRM_CONFIG\}"/)
     expect(BOOT_CODE).toMatch(/the chronology runner will refuse jobs/)
   })
@@ -215,10 +226,10 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   // 2026-09-04: the classifier's controls and the ICD tables are INSTALL-level
   // (a job's data_root is fresh per job and can never carry them), so the
   // entrypoint seeds them from the vault on every boot, fail-static like the
-  // firm config, into a root-owned tree the medchron uid can read and not
+  // firm config, into a root-owned tree the jobs uid can read and not
   // write. Boot smoke asserts the result on the seat; this pins the shape.
-  it('seeds the medchron controls tree from the vault on every boot, root-owned and medchron-readable, without a FATAL arm', () => {
-    expect(BOOT_CODE).toMatch(/MEDCHRON_CONTROLS_DIR="\$\{MEDCHRON_DATA_DIR\}\/controls"/)
+  it('seeds the medchron controls tree from the vault on every boot, root-owned and jobs-readable, without a FATAL arm', () => {
+    expect(BOOT_CODE).toMatch(/MEDCHRON_CONTROLS_DIR="\$\{JOBS_DATA_DIR\}\/controls"/)
     expect(BOOT_CODE).toMatch(
       /aws s3 cp[\s\S]*?--recursive[\s\S]*?"s3:\/\/\$\{R2_BUCKET_CONFIG\}\/vaults\/\$\{CUSTOMER_SLUG\}\/medchron-controls\/"/
     )
@@ -227,7 +238,7 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     expect(BOOT_CODE).toMatch(
       /&& \[ -f "\$\{MEDCHRON_CONTROLS_DIR\}\.r2\.tmp\/controls\.json" \]; then/
     )
-    expect(BOOT_CODE).toMatch(/chown -R root:medchron "\$\{MEDCHRON_CONTROLS_DIR\}"/)
+    expect(BOOT_CODE).toMatch(/chown -R root:jobs "\$\{MEDCHRON_CONTROLS_DIR\}"/)
     expect(BOOT_CODE).toMatch(/find "\$\{MEDCHRON_CONTROLS_DIR\}" -type d -exec chmod 0750 \{\} \+/)
     expect(BOOT_CODE).toMatch(/find "\$\{MEDCHRON_CONTROLS_DIR\}" -type f -exec chmod 0640 \{\} \+/)
     expect(BOOT_CODE).toMatch(/the chronology runner will refuse the classify stage of every job/)
@@ -235,11 +246,11 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     // BEFORE the daemon forks (the entrypoint sources the fragment before it).
     const seedIdx = LANES_CODE.indexOf('medchron-controls/')
     expect(seedIdx).toBeGreaterThan(
-      LANES_CODE.indexOf('install -d -o root -g root -m 0755 "${MEDCHRON_DATA_DIR}"')
+      LANES_CODE.indexOf('install -d -o root -g root -m 0755 "${JOBS_DATA_DIR}"')
     )
     expect(ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')).toBeGreaterThan(-1)
     expect(ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')).toBeLessThan(
-      ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
+      ENTRYPOINT_CODE.indexOf('-m jobs.daemon')
     )
     // No FATAL arm anywhere in the controls block (it runs to the end of the fragment).
     expect(LANES_CODE.slice(seedIdx)).not.toMatch(/FATAL/)
@@ -257,40 +268,38 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
   })
 
   it('launches the daemon from its own venv under an import-gated respawn loop, before the exec-drop', () => {
+    expect(ENTRYPOINT_CODE).toMatch(/\/opt\/jobs\/\.venv\/bin\/python -c "import jobs\.daemon"/)
     expect(ENTRYPOINT_CODE).toMatch(
-      /\/opt\/medchron\/\.venv\/bin\/python -c "import medchron\.daemon"/
+      /while\s+true;?\s*do[\s\S]*?-m jobs\.daemon[\s\S]*?done\s*\)\s*&/
     )
-    expect(ENTRYPOINT_CODE).toMatch(
-      /while\s+true;?\s*do[\s\S]*?-m medchron\.daemon[\s\S]*?done\s*\)\s*&/
-    )
-    const launchIdx = ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
+    const launchIdx = ENTRYPOINT_CODE.indexOf('-m jobs.daemon')
     const hermesExec = ENTRYPOINT_CODE.search(/^smd_supervise$/m)
     expect(launchIdx).toBeGreaterThan(-1)
     expect(launchIdx < hermesExec, 'the daemon must be forked while still root').toBe(true)
-    expect(ENTRYPOINT_CODE).toMatch(/Root medchron daemon NOT launched/)
+    expect(ENTRYPOINT_CODE).toMatch(/Root jobs daemon NOT launched/)
   })
 
   // machine.lane_memory_mb (2026-10-13): the authored caps reach the daemon as
   // SMD_*_MEMORY_MAX_BYTES on the SAME command line that starts it, re-read
-  // from the live root-owned customer.yaml on every respawn. medchron.lane_memory
+  // from the live root-owned customer.yaml on every respawn. jobs.lane_memory
   // prints nothing when unauthored, so the code defaults stand.
   // 2026-10-15: a daemon the loop respawned INSIDE a stopping Machine had no
   // stop flag, so it re-ran claimed work and spent a DELIVER wake's attempts on
   // a gateway that was already gone (proof:wake_lost, a page for our own
-  // deploy). medchron.daemon exits 130 (STOPPED_EXIT) on the Machine's stop;
+  // deploy). jobs.daemon exits 130 (STOPPED_EXIT) on the Machine's stop;
   // the loop must not respawn on it, and must still respawn a crash.
   it('does not respawn the daemon after the Machine stop, and does after a crash', () => {
     // The loop that encloses the daemon start: the last loop opener before it.
-    const launch = ENTRYPOINT_CODE.indexOf('-m medchron.daemon')
+    const launch = ENTRYPOINT_CODE.indexOf('-m jobs.daemon')
     const open = ENTRYPOINT_CODE.lastIndexOf('( _mc_stop=', launch)
     const close = ENTRYPOINT_CODE.indexOf('done ) &', launch)
-    expect(launch > -1 && open > -1 && close > launch, 'the medchron respawn loop').toBe(true)
+    expect(launch > -1 && open > -1 && close > launch, 'the jobs respawn loop').toBe(true)
     const body = ENTRYPOINT_CODE.slice(open, close + 'done ) &'.length)
-      .replace(/\/usr\/bin\/env \$\([\s\S]*?-m medchron\.daemon/, '"$STUB"')
+      .replace(/\/usr\/bin\/env \$\([\s\S]*?-m jobs\.daemon/, '"$STUB"')
       .replace(/sleep 5/, 'sleep 0')
       .replace(/\) &$/, ')')
     const run = (codes: number[]) => {
-      const dir = mkdtempSync(join(tmpdir(), 'medchron-loop-'))
+      const dir = mkdtempSync(join(tmpdir(), 'jobs-loop-'))
       const stub = join(dir, 'stub.sh')
       // Exit with the next code in the list; after the list, 130 (a stop) so a
       // loop that kept respawning still ends.
@@ -315,11 +324,11 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     // Inside the respawn loop, so each start re-reads the config; an unscrubbed
     // env (never env -i), since the daemon copies its child allow-list from it.
     expect(ENTRYPOINT_CODE).toMatch(
-      /while\s+true;?\s*do\s+\/usr\/bin\/env \$\(\/opt\/medchron\/\.venv\/bin\/python -m medchron\.lane_memory "\$\{LIVE_CUSTOMER_YAML\}" 2>\/dev\/null \|\| true\) SMD_MEDCHRON_RUN_DIR="[^"]*" \\\n(\s+[A-Z_]+="[^"]*" \\\n)+\s+\/opt\/medchron\/\.venv\/bin\/python -m medchron\.daemon/
+      /while\s+true;?\s*do\s+\/usr\/bin\/env \$\(\/opt\/jobs\/\.venv\/bin\/python -m jobs\.lane_memory "\$\{LIVE_CUSTOMER_YAML\}" 2>\/dev\/null \|\| true\) SMD_JOBS_RUN_DIR="[^"]*" \\\n(\s+[A-Z_]+="[^"]*" \\\n)+\s+\/opt\/jobs\/\.venv\/bin\/python -m jobs\.daemon/
     )
   })
 
-  it('shares the Smokeball token with the medchron uid through a setgid dir, never by widening the file to world', () => {
+  it('shares the Smokeball token with the jobs uid through a setgid dir, never by widening the file to world', () => {
     expect(ENTRYPOINT_CODE).toMatch(/chmod 2770 "\$\{SMOKEBALL_TOKEN_DIR\}"/)
     expect(ENTRYPOINT_CODE).toMatch(/chmod 0660 "\$\{SMOKEBALL_TOKEN_DIR\}\/refresh_token"/)
     expect(ENTRYPOINT_CODE).not.toMatch(
@@ -551,9 +560,9 @@ describe('Operator customer Machine entrypoint — gateway liveness supervisor (
 /**
  * ADR 0100 W3: the jobs bundle. A seat that authors a job lane installs the
  * published bundle (overlay bundle_installer) and bind-mounts it over
- * /opt/medchron and /opt/connectors/smokeball BEFORE anything runs either: the
- * lane fragments (casefile checks its inputs with /opt/medchron's python), the
- * medchron daemon, and the gateway (which spawns the Smokeball MCP from
+ * /opt/jobs and /opt/connectors/smokeball BEFORE anything runs either: the
+ * lane fragments (casefile checks its inputs with /opt/jobs's python), the
+ * jobs daemon, and the gateway (which spawns the Smokeball MCP from
  * /opt/connectors/smokeball). The behavioural half drives the real fragment
  * with mount/setpriv stubbed, so it proves what is called in each case rather
  * than that the source contains certain words.
@@ -572,8 +581,8 @@ describe('entrypoint: the jobs bundle mount (ADR 0100 W3)', () => {
     expect(LANES_CODE.slice(lanesSource).trim()).toBe('. /app/entrypoint-bundles.sh')
     const lanes = ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')
     for (const later of [
-      'for _lane in fetch-inputs', // the lane fragments (casefile runs /opt/medchron python)
-      '-m medchron.daemon', // the runner launch
+      'for _lane in fetch-inputs', // the lane fragments (casefile runs /opt/jobs python)
+      '-m jobs.daemon', // the runner launch
       'smd_supervisor_boot', // the gateway fork (it later spawns the Smokeball MCP)
     ]) {
       expect(ENTRYPOINT_CODE.indexOf(later), later).toBeGreaterThan(lanes)
@@ -632,8 +641,8 @@ mount() {
 }
 umount() { echo "umount $1" >> "${calls}"; rm -f "${dir}/m\${1//\\//_}"; }
 setpriv() { echo "setpriv $1" >> "${calls}"; ${c.unreachable ? 'return 1' : 'return 0'}; }
-mkdir -p "${dir}/root/opt/medchron" "${dir}/root/opt/connectors/smokeball" "${dir}/empty"
-mkdir -p "${dir}/v1/medchron" "${dir}/v1/connectors/smokeball"
+mkdir -p "${dir}/root/opt/jobs" "${dir}/root/opt/connectors/smokeball" "${dir}/empty"
+mkdir -p "${dir}/v1/jobs" "${dir}/v1/connectors/smokeball"
 SMD_AUTHORED_LANES="${c.lanes}"
 SMD_BUNDLE_STATE_DIR="${dir}/state"
 SMD_BUNDLE_PYTHON="${py}"
@@ -672,20 +681,20 @@ SMD_BUNDLE_TARGET_ROOT="${dir}/root"
   })
 
   it('the happy path: both bind mounts, the read-only remounts, both uid probes, the version', () => {
-    const r = runFragment({ lanes: 'medchron demand', out: 'v1' })
-    expect(r.calls).toMatch(/mount --bind \S+\/v1\/medchron \S+\/root\/opt\/medchron\n/)
+    const r = runFragment({ lanes: 'jobs demand', out: 'v1' })
+    expect(r.calls).toMatch(/mount --bind \S+\/v1\/jobs \S+\/root\/opt\/jobs\n/)
     expect(r.calls).toMatch(
       /mount --bind \S+\/v1\/connectors\/smokeball \S+\/root\/opt\/connectors\/smokeball\n/
     )
-    expect(r.calls).toMatch(/mount -o remount,bind,ro \S+\/opt\/medchron/)
-    expect(r.calls).toMatch(/setpriv --reuid=medchron[\s\S]*setpriv --reuid=hermes/)
+    expect(r.calls).toMatch(/mount -o remount,bind,ro \S+\/opt\/jobs/)
+    expect(r.calls).toMatch(/setpriv --reuid=jobs[\s\S]*setpriv --reuid=hermes/)
     expect(r.calls).not.toMatch(/umount/)
     expect(r.state).toBe('202610310101-aaaaaaaa\n')
   })
 
   it('a failed second mount unmounts the first: the image copy runs whole', () => {
     const r = runFragment({ lanes: 'medchron', out: 'v1', failMountOf: 'smokeball' })
-    expect(r.calls).toMatch(/umount \S+\/opt\/medchron/)
+    expect(r.calls).toMatch(/umount \S+\/opt\/jobs/)
     expect(r.calls).toMatch(/JOBS BUNDLE NOT MOUNTED/)
     expect(r.state).toBe('image\n')
   })
@@ -693,11 +702,184 @@ SMD_BUNDLE_TARGET_ROOT="${dir}/root"
   it('a mount the job uids cannot run is taken down again', () => {
     const r = runFragment({ lanes: 'medchron', out: 'v1', unreachable: true })
     expect(r.calls).toMatch(/umount \S+\/opt\/connectors\/smokeball/)
-    expect(r.calls).toMatch(/umount \S+\/opt\/medchron/)
+    expect(r.calls).toMatch(/umount \S+\/opt\/jobs/)
     expect(r.state).toBe('image\n')
   })
 
   it('never fails the boot', () => {
     expect(BUNDLES_CODE).not.toMatch(/FATAL|exit /)
+  })
+
+  it('logs how the installer chose the version beside it', () => {
+    // The installer's third field ("layout 2, via layout-latest") reaches the boot log.
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-how-'))
+    const calls = join(dir, 'calls')
+    const py = join(dir, 'python')
+    writeFileSync(
+      py,
+      `#!/bin/bash\nprintf '%s\\t%s\\t%s' 202611040101-aaaaaaaa "${dir}/v1" 'layout 2, via layout-latest'\n`,
+      { mode: 0o755 }
+    )
+    const driver = join(dir, 'driver.sh')
+    writeFileSync(
+      driver,
+      `
+log() { echo "log $*" >> "${calls}"; }
+install() { mkdir -p "\${@: -1}"; }
+mountpoint() { return 1; }
+mount() { echo "mount $*" >> "${calls}"; }
+umount() { :; }
+setpriv() { return 0; }
+mkdir -p "${dir}/root/opt/jobs" "${dir}/root/opt/connectors/smokeball" "${dir}/v1/jobs" "${dir}/v1/connectors/smokeball"
+SMD_AUTHORED_LANES=records SMD_BUNDLE_STATE_DIR="${dir}/state" SMD_BUNDLE_PYTHON="${py}" SMD_BUNDLE_TARGET_ROOT="${dir}/root"
+. "${BUNDLES_PATH}"
+`
+    )
+    const r = spawnSync('bash', [driver], { encoding: 'utf8', timeout: 10000 })
+    expect(r.status, r.stderr).toBe(0)
+    const log = readFileSync(calls, 'utf8')
+    expect(log).toMatch(/mount --bind \S+\/v1\/jobs /)
+    expect(log).toContain(
+      'jobs bundle 202611040101-aaaaaaaa (layout 2, via layout-latest) mounted over /opt/jobs'
+    )
+    expect(readFileSync(join(dir, 'state', 'jobs'), 'utf8')).toBe('202611040101-aaaaaaaa\n')
+  })
+})
+
+/**
+ * ADR 0103 R2: the jobs volume tree's rename, behind JOBS_VOLUME_EPOCH in
+ * entrypoint-lanes.sh. The block between its markers is run as written, with
+ * mount/install stubbed and a fake root for /opt/data and /run, across two boots
+ * of the same volume (a fresh /run each time). The falsifiers: a move that
+ * merges into an existing tree (`mv a b` with b a directory nests a inside b),
+ * a second boot that moves again, a link planted under /opt/data, and a held
+ * job's /run/smd-medchron path left unbound.
+ */
+describe('entrypoint-lanes: the jobs volume epoch (ADR 0103)', () => {
+  const LANES_RAW = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+  const start = LANES_RAW.indexOf('# >>> jobs-volume')
+  const end = LANES_RAW.indexOf('# <<< jobs-volume')
+  const BLOCK = LANES_RAW.slice(start, end)
+
+  it('ships at epoch 1 (R2 flips it)', () => {
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(BLOCK.match(/^JOBS_VOLUME_EPOCH=\d+$/gm)).toEqual(['JOBS_VOLUME_EPOCH=1'])
+  })
+
+  const boot = (root: string, epoch: number, lanes = 'medchron,records') => {
+    const run = mkdtempSync(join(tmpdir(), 'jobs-volume-run-'))
+    const calls = join(run, 'calls')
+    const block = BLOCK.replace(/^JOBS_VOLUME_EPOCH=1$/m, `JOBS_VOLUME_EPOCH=${epoch}`)
+    const driver = join(run, 'driver.sh')
+    writeFileSync(
+      driver,
+      `set -e
+log() { echo "log $*" >> "${calls}"; }
+install() { mkdir -p "\${@: -1}"; }
+mountpoint() { [ -f "${run}/m\${2//\\//_}" ]; }
+mount() { echo "mount $*" >> "${calls}"; touch "${run}/m\${3//\\//_}"; }
+SMD_AUTHORED_LANES="${lanes}"
+JOBS_DATA_DIR="${root}/opt/data/medchron"
+SMD_JOBS_VOLUME_ROOT="${root}"
+${block}
+echo "DATA=\${JOBS_DATA_DIR}" >> "${calls}"
+echo "RUN=\${JOBS_RUN_DIR}" >> "${calls}"
+echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
+`
+    )
+    const r = spawnSync('bash', [driver], { encoding: 'utf8', timeout: 10000 })
+    expect(r.status, r.stderr).toBe(0)
+    return readFileSync(calls, 'utf8')
+  }
+  const volume = (files: string[]) => {
+    const root = mkdtempSync(join(tmpdir(), 'jobs-volume-'))
+    for (const f of files) {
+      mkdirSync(join(root, f, '..'), { recursive: true })
+      writeFileSync(join(root, f), 'x')
+    }
+    return root
+  }
+  const links = (dir: string): string[] =>
+    readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((p) =>
+      lstatSync(join(dir, p)).isSymbolicLink()
+    )
+  const HELD = ['opt/data/medchron/queue/q1.json', 'opt/data/medchron/jobs/j1/job.yaml']
+
+  it('epoch 1 changes nothing: the old name, bound at /run/smd-medchron', () => {
+    const root = volume(HELD)
+    const log = boot(root, 1)
+    expect(log).toContain(`DATA=${root}/opt/data/medchron\n`)
+    expect(log).toContain(`RUN=${root}/run/smd-medchron\n`)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/medchron ${root}/run/smd-medchron`,
+    ])
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
+    expect(log).not.toMatch(/jobs volume|REFUSED/)
+  })
+
+  it('epoch 2, first boot: one rename, then both run dirs bound to the new tree', () => {
+    const root = volume(HELD)
+    const log = boot(root, 2)
+    expect(log).toContain(
+      `jobs volume: moved ${root}/opt/data/medchron to ${root}/opt/data/jobs (6 entries before, 6 after)`
+    )
+    expect(existsSync(join(root, 'opt/data/medchron'))).toBe(false)
+    expect(readFileSync(join(root, 'opt/data/jobs/jobs/j1/job.yaml'), 'utf8')).toBe('x')
+    expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
+    expect(log).toContain(`RUN=${root}/run/smd-jobs\n`)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
+    ])
+    expect(links(join(root, 'opt/data'))).toEqual([])
+  })
+
+  it('epoch 2, second boot: nothing moves, the same binds', () => {
+    const root = volume(HELD)
+    boot(root, 2)
+    const log = boot(root, 2)
+    expect(log).not.toMatch(/jobs volume: moved|REFUSED/)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
+    ])
+    expect(readdirSync(join(root, 'opt/data/jobs')).sort()).toEqual(['jobs', 'queue'])
+    expect(links(join(root, 'opt/data'))).toEqual([])
+  })
+
+  it('epoch 2 with both trees refuses the lanes and merges nothing', () => {
+    const root = volume([...HELD, 'opt/data/jobs/queue/other.json'])
+    const log = boot(root, 2)
+    expect(log).toMatch(
+      /JOBS VOLUME REFUSED: both \S+ and \S+ exist; the two trees are never merged/
+    )
+    expect(log).toContain('LANES=\n')
+    expect(log).not.toMatch(/^mount /m)
+    expect(readFileSync(join(root, HELD[1]), 'utf8')).toBe('x')
+    expect(readdirSync(join(root, 'opt/data/jobs/queue'))).toEqual(['other.json'])
+    expect(existsSync(join(root, 'opt/data/jobs/medchron'))).toBe(false)
+  })
+
+  it('epoch 2 refuses a link at either name', () => {
+    const root = volume(['opt/data/elsewhere/x'])
+    const r = spawnSync('ln', [
+      '-s',
+      join(root, 'opt/data/elsewhere'),
+      join(root, 'opt/data/medchron'),
+    ])
+    expect(r.status).toBe(0)
+    const log = boot(root, 2)
+    expect(log).toMatch(/JOBS VOLUME REFUSED: a symlink stands at/)
+    expect(log).not.toMatch(/^mount /m)
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
+  })
+
+  it('epoch 2 on a seat with neither tree binds the new name', () => {
+    const root = volume([])
+    const log = boot(root, 2)
+    expect(log).not.toMatch(/moved|REFUSED/)
+    expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(true)
   })
 })

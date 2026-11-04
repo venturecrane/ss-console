@@ -90,7 +90,7 @@ def test_the_proof_verbs_are_root_only(tmp_path, action):
 def test_the_two_code_lists_are_one_vocabulary():
     """The daemon's codes and the broker's are two copies of one wire
     vocabulary (the runner package is not importable here); they must agree."""
-    gate = Path(__file__).resolve().parents[2] / "runners/medchron/medchron/proof/gate.py"
+    gate = Path(__file__).resolve().parents[2] / "runners/jobs/jobs/proof/gate.py"
     text = gate.read_text(encoding="utf-8")
     block = text.split("CODES = frozenset(", 1)[1].split("\n)\n", 1)[0]
     assert set(re.findall(r'"([a-z_]+)"', block)) == set(delivery_proof.CODES)

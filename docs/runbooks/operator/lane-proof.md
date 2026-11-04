@@ -34,7 +34,7 @@ An in-turn skill (`file-work-requests`, the router) is never held: the turn is
 the act. Its first live use pages once, so SMD reads that first answer.
 
 The proven set per seat is `operator/customers/<slug>/lane-proofs.yaml` (seed,
-reviewed in git) plus the runtime events `medchron lane-proof accept|revoke`
+reviewed in git) plus the runtime events `jobs lane-proof accept|revoke`
 writes on the seat's volume. Both are root-owned on the seat: the agent cannot
 prove its own lanes.
 

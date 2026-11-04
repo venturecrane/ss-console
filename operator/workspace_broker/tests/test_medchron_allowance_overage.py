@@ -1,7 +1,7 @@
 """``medchron_job_resume`` with SMD's approved overage (2026-10-28).
 
 A chronology held on the cycle page allowance resumes only when the request
-carries an approval (``medchron.allowance approve`` on the seat, root only, no
+carries an approval (``jobs.medchron.allowance approve`` on the seat, root only, no
 agent tool). The resume's audit row is the billable record of the overage.
 Every other use of the extra is refused, and a plain resume of an allowance
 hold is still refused."""

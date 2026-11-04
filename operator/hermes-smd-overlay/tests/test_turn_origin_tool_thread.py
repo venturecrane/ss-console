@@ -106,11 +106,11 @@ def seat(monkeypatch, fake_ctx, authors_everything):
     from tests.conftest import load_plugin
 
     provenance._reset_for_tests()
-    medchron = load_plugin("hermes-smd-medchron")
+    lanes_plugin = load_plugin("hermes-smd-lanes")
     client = _Client()
-    monkeypatch.setattr(medchron.drafting, "MedchronBrokerClient", lambda: client)
-    monkeypatch.setattr(medchron, "MedchronBrokerClient", lambda: client)
-    medchron.register(fake_ctx)
+    monkeypatch.setattr(lanes_plugin.drafting, "JobsBrokerClient", lambda: client)
+    monkeypatch.setattr(lanes_plugin, "JobsBrokerClient", lambda: client)
+    lanes_plugin.register(fake_ctx)
     plugins = {
         "inbound": load_plugin("hermes-smd-inbound"),
         "router": load_plugin("hermes-smd-webhook-router"),

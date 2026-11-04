@@ -1,4 +1,4 @@
-"""The negotiation watch's agent tool (hermes-smd-medchron/negotiation.py).
+"""The negotiation watch's agent tool (hermes-smd-lanes/negotiation.py).
 
 Scheduled only: there is no submit tool. The one status read hands the
 completion wake a notice's composed message, or a failed job's shortfall.
@@ -39,7 +39,7 @@ class _Status:
 def neg():
     from tests.conftest import load_plugin
 
-    return load_plugin("hermes-smd-medchron").negotiation
+    return load_plugin("hermes-smd-lanes").negotiation
 
 
 def test_there_is_no_submit_tool(neg) -> None:
@@ -50,7 +50,7 @@ def test_there_is_no_submit_tool(neg) -> None:
 
 
 def test_a_notice_reads_back_its_message_and_subject_only(neg, monkeypatch) -> None:
-    monkeypatch.setattr(neg, "MedchronBrokerClient", lambda: _Status(NOTICE))
+    monkeypatch.setattr(neg, "JobsBrokerClient", lambda: _Status(NOTICE))
     out = json.loads(neg.negotiation_job_status({"job_id": JOB}))
     assert out["job"]["message"] == NOTICE["message"] and out["job"]["subject"] == NOTICE["subject"]
     assert "reply_sent_at" not in out["job"] and "status" not in {k for k in out if k != "job"}
@@ -61,7 +61,7 @@ def test_a_failed_job_is_a_shortfall_for_smd(neg, monkeypatch) -> None:
 
     monkeypatch.setattr(
         neg,
-        "MedchronBrokerClient",
+        "JobsBrokerClient",
         lambda: _Status({"job_id": JOB, "kind": "job", "state": "failed"}),
     )
     result = neg.negotiation_job_status({"job_id": JOB})
@@ -73,7 +73,7 @@ def test_a_failed_job_is_a_shortfall_for_smd(neg, monkeypatch) -> None:
 def test_a_delivered_notice_is_an_ordinary_read(neg, monkeypatch) -> None:
     from tests.conftest import load_plugin
 
-    monkeypatch.setattr(neg, "MedchronBrokerClient", lambda: _Status(NOTICE))
+    monkeypatch.setattr(neg, "JobsBrokerClient", lambda: _Status(NOTICE))
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(neg.negotiation_job_status({"job_id": JOB})) == ("ok", None)
 
@@ -83,7 +83,7 @@ def test_no_job_id_asks_nothing(neg, monkeypatch) -> None:
         def negotiation_status(self, job_id):
             raise AssertionError("asked the broker")
 
-    monkeypatch.setattr(neg, "MedchronBrokerClient", lambda: _Never())
+    monkeypatch.setattr(neg, "JobsBrokerClient", lambda: _Never())
     assert json.loads(neg.negotiation_job_status({}))["job"] is None
 
 

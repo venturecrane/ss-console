@@ -7,7 +7,7 @@
  * same request, or send it to SMD". No template produced that: the wake carried
  * counts only and the skill said "surface and ask", so the model improvised.
  * The runner now classifies every hold into a closed, firm-safe token
- * (`operator/runners/medchron/medchron/proof/holds.py`) the wake carries as
+ * (`operator/runners/jobs/jobs/proof/holds.py`) the wake carries as
  * `Hold class: <token>.`, and the skills map each token to fixed wording.
  *
  * A string gate on the skill bodies, because the seat reads SKILL.md at turn
@@ -33,9 +33,7 @@ import { resolve } from 'path'
 const read = (p: string) => readFileSync(p, 'utf8')
 const flat = (s: string) => s.replace(/\s+/g, ' ')
 
-const HOLDS_PY = read(
-  resolve(import.meta.dirname, '../operator/runners/medchron/medchron/proof/holds.py')
-)
+const HOLDS_PY = read(resolve(import.meta.dirname, '../operator/runners/jobs/jobs/proof/holds.py'))
 const CLASSES = [...HOLDS_PY.matchAll(/^[A-Z_]+ = "([a-z_]+)" {2}#/gm)].map((m) => m[1])
 
 const SKILLS = {

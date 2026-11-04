@@ -53,7 +53,7 @@ _PLUGINS = {
     "hermes-smd-workspace": 18,
     "hermes-smd-peer-memory": 1,
     "hermes-smd-jobs": None,  # count not pinned (preventive); just must be > 0
-    "hermes-smd-medchron": 16,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's three, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
+    "hermes-smd-lanes": 16,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's three, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
 }
 
 
@@ -71,7 +71,7 @@ def _registered_tools(plugin_name: str) -> dict:
 
 @pytest.mark.parametrize("plugin_name,expected_count", _PLUGINS.items())
 def test_every_registered_tool_is_function_shaped(plugin_name, expected_count, request):
-    if plugin_name == "hermes-smd-medchron":
+    if plugin_name == "hermes-smd-lanes":
         # ADR 0100: lane tools register only where a lane is authored, so the
         # pinned count is a seat that authors every lane.
         request.getfixturevalue("authors_everything")

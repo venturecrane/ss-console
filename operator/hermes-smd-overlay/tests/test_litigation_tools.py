@@ -1,4 +1,4 @@
-"""The litigation status job's agent tools (hermes-smd-medchron/litigation.py).
+"""The litigation status job's agent tools (hermes-smd-lanes/litigation.py).
 
 The drafting job's rules. Who asked is never the model's to say: requester,
 message_ref and the request text come from the turn's verified inbound email,
@@ -14,7 +14,7 @@ import pytest
 
 from shared import inbound, provenance
 from shared.action_classes import ActionClass, classify_tool
-from shared.medchron_client import MedchronBrokerError
+from shared.jobs_client import JobsBrokerError
 
 ADMIN = "admin@firm.example"
 IMID = "<CA1x2y3z@mail.firm.example>"
@@ -50,9 +50,9 @@ def _clear() -> None:
 def lit(monkeypatch):
     from tests.conftest import load_plugin
 
-    mod = load_plugin("hermes-smd-medchron").litigation
+    mod = load_plugin("hermes-smd-lanes").litigation
     client = _Client()
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: client)
     _clear()
     yield mod, client
     _clear()
@@ -236,7 +236,7 @@ def test_an_email_whose_words_could_not_be_read_submits_nothing(lit) -> None:
 def test_a_broker_refusal_is_relayed_with_the_existing_job(lit, monkeypatch) -> None:
     mod, _ = lit
     client = _Client({"ok": True, "accepted": False, "reason": "already underway", "job_id": JOB})
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: client)
     _email()
     out = json.loads(mod.litigation_job_submit({}))
     assert out == {"accepted": False, "reason": "already underway", "job_id": JOB}
@@ -244,7 +244,7 @@ def test_a_broker_refusal_is_relayed_with_the_existing_job(lit, monkeypatch) -> 
 
 def test_a_broker_answer_without_accepted_needs_a_job_id(lit, monkeypatch) -> None:
     mod, _ = lit
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Client({"ok": True, "reason": "x"}))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Client({"ok": True, "reason": "x"}))
     _email()
     assert json.loads(mod.litigation_job_submit({}))["accepted"] is False
 
@@ -254,9 +254,9 @@ def test_an_unreachable_broker_queues_nothing(lit, monkeypatch) -> None:
 
     class _Down:
         def litigation_submit(self, envelope):
-            raise MedchronBrokerError("broker refused: not_allowed: no")
+            raise JobsBrokerError("broker refused: not_allowed: no")
 
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Down())
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Down())
     _email()
     out = json.loads(mod.litigation_job_submit({}))
     assert out["accepted"] is False and "not_allowed" in out["reason"]
@@ -268,10 +268,10 @@ def test_the_tools_are_classified() -> None:
 
 
 def test_the_client_speaks_the_broker_verbs(monkeypatch) -> None:
-    from shared.medchron_client import MedchronBrokerClient
+    from shared.jobs_client import JobsBrokerClient
 
     sent: list[dict] = []
-    client = MedchronBrokerClient.__new__(MedchronBrokerClient)
+    client = JobsBrokerClient.__new__(JobsBrokerClient)
     monkeypatch.setattr(client, "_request", lambda payload: sent.append(payload) or {"ok": True})
     client.litigation_submit({"x": 1})
     client.litigation_status(JOB)
@@ -304,7 +304,7 @@ class _Status:
 def test_status_projects_counts_only(lit, monkeypatch, nested) -> None:
     """FALSIFIER: return the broker row and spend and the requester leave with it."""
     mod, _ = lit
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("delivered", nested))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("delivered", nested))
     out = json.loads(mod.litigation_job_status({"job_id": JOB}))
     assert out == {
         "job": {
@@ -326,7 +326,7 @@ def test_status_without_a_job_id_asks_nothing(lit, monkeypatch) -> None:
         def litigation_status(self, job_id):
             raise AssertionError("asked the broker")
 
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Never())
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Never())
     assert json.loads(mod.litigation_job_status({}))["job"] is None
 
 
@@ -336,7 +336,7 @@ def test_a_failed_job_status_is_a_shortfall_for_smd(lit, monkeypatch) -> None:
     from tests.conftest import load_plugin
 
     mod, _ = lit
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("failed"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("failed"))
     result = mod.litigation_job_status({"job_id": JOB})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("shortfall", "litigation_job_failed")
@@ -348,7 +348,7 @@ def test_a_non_failed_job_status_is_an_ordinary_read(lit, monkeypatch, state) ->
     from tests.conftest import load_plugin
 
     mod, _ = lit
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status(state))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status(state))
     result = mod.litigation_job_status({"job_id": JOB})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("ok", None)

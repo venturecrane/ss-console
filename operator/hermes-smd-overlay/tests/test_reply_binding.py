@@ -644,7 +644,7 @@ def test_the_bound_reply_path_stays_open_in_a_drafting_wake(lane) -> None:
 
 
 def _chronology_wake(mod, session: str = WAKE, job: str = JOB) -> None:
-    # The runner's own first line (ss-console operator/runners/medchron/medchron/daemon.py).
+    # The runner's own first line (ss-console operator/runners/jobs/jobs/daemon.py).
     mod.on_pre_llm_call(
         session_id=session,
         sender_id="webhook:handoff",
@@ -1076,7 +1076,7 @@ def test_a_negotiation_wake_answers_no_email(lane) -> None:
 
 
 def _note_wake(mod, session: str = WAKE, job: str = JOB, scheduled: bool = False) -> None:
-    # The runner's own wake (ss-console operator/runners/medchron/medchron/note_by_smd.py).
+    # The runner's own wake (ss-console operator/runners/jobs/jobs/note_by_smd.py).
     trigger = "\nTrigger: scheduled." if scheduled else ""
     mod.on_pre_llm_call(
         session_id=session,

@@ -47,11 +47,11 @@ const LANE_FILES = {
 const LANES = ['demand', 'drafting', 'litigation', 'casefile', 'records'] as const
 // The env each lane file exports its inputs dir under (the runner reads it).
 const INPUTS_ENV: Record<(typeof LANES)[number], string> = {
-  demand: 'MEDCHRON_DEMAND_INPUTS',
-  drafting: 'MEDCHRON_DRAFTING_INPUTS',
-  litigation: 'MEDCHRON_LITIGATION_INPUTS',
-  casefile: 'MEDCHRON_CASEFILE_INPUTS_DIR',
-  records: 'MEDCHRON_RECORDS_INPUTS_DIR',
+  demand: 'JOBS_DEMAND_INPUTS',
+  drafting: 'JOBS_DRAFTING_INPUTS',
+  litigation: 'JOBS_LITIGATION_INPUTS',
+  casefile: 'JOBS_CASEFILE_INPUTS_DIR',
+  records: 'JOBS_RECORDS_INPUTS_DIR',
 }
 const PROVISION = code(readFileSync(resolve('operator/bin/provision-customer.sh'), 'utf8'))
 const STAGE_FILES = {
@@ -128,9 +128,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
           `git -C "\\$\\{_eng\\}" show "origin/main:operator/customers/\\$\\{SLUG\\}/${lane}/`
         )
       )
-      expect(f).toMatch(
-        new RegExp(`python3 -m medchron\\.${lane}\\.firm "\\$\\{[A-Z]+_INPUTS_DIR\\}"`)
-      )
+      expect(f).toMatch(new RegExp(`python3 -m jobs\\.${lane}\\.firm "\\$\\{[A-Z]+_INPUTS_DIR\\}"`))
       expect(f).toMatch(
         new RegExp(
           `aws s3 sync "\\$\\{[A-Z]+_INPUTS_DIR\\}/" "s3://\\$\\{R2_BUCKET_CONFIG\\}/vaults/\\$\\{SLUG\\}/${lane}/" --delete`
@@ -154,7 +152,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
     expect(SMOKE).toMatch(/authored "operator\/customers\/\$\{SLUG\}\/\$1\/\$1-firm\.yaml"/)
     expect(SMOKE).toMatch(/cat-file -e "origin\/main:\$1"/)
     expect(CHECKS).toMatch(
-      /check "\$\{_lane\}-firm-inputs-present" "\[ \\"\\\$\(stat -c %U:%G:%a \$\{SEAT_ROOT\}\/var\/lib\/smd-config\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml\)\\" = root:medchron:640 \]"/
+      /check "\$\{_lane\}-firm-inputs-present" "\[ \\"\\\$\(stat -c %U:%G:%a \$\{SEAT_ROOT\}\/var\/lib\/smd-config\/\$\{_lane\}\/\$\{_lane\}-firm\.yaml\)\\" = root:jobs:640 \]"/
     )
     // The expectation source is defined before the list that reads it runs.
     expect(SMOKE.indexOf('ENGAGEMENTS_DIR="${SS_ENGAGEMENTS_DIR:-')).toBeLessThan(
@@ -176,10 +174,10 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
     expect(f).not.toMatch(/aws s3 cp/)
     expect(f).toMatch(/elif \[ "\$\{_FETCH_INPUTS_STATE\}" = absent \]; then/)
     expect(f).toMatch(/ERROR: the marketing registers could not be fetched/)
-    // Both readers are the hermes uid; group medchron would lock the gate out.
+    // Both readers are the hermes uid; group jobs would lock the gate out.
     expect(f).toMatch(/chown -R root:hermes "\$\{SMD_MARKETING_INPUTS\}"/)
     expect(f).toMatch(/-type f -exec chmod 0640/)
-    expect(f).not.toMatch(/root:medchron/)
+    expect(f).not.toMatch(/root:jobs/)
     // Only a marketing seat pays the fetch; cannot-evaluate still fetches.
     expect(f).toMatch(/if \[ "\$\{_marketing_rc\}" = 3 \]; then/)
     // The smoke expects exactly that ownership on a seat that authors registers.

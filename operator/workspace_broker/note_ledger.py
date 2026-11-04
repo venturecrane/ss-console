@@ -5,7 +5,7 @@ new-message note) in one new email to an authored admin.
 WHY IT EXISTS (2026-10-15). The Operator filed a document on SMD's request and
 could not tell the person who asked: a turn opened by an inbound email may
 answer only its sender, and the only SMD-initiated way for the Operator to
-speak to the firm was a job's completion wake (``medchron/deliver_by_smd.py``).
+speak to the firm was a job's completion wake (``jobs/medchron/deliver_by_smd.py``).
 A note is that wake with no job behind it: SMD records the exact words against
 the colleague's request email (``note_verbs.note_record``, root only), and the
 smd-note skill's DELIVER mode sends them through the verified reply binding,

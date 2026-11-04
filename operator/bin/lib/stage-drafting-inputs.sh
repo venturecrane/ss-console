@@ -7,11 +7,11 @@
 # shellcheck shell=bash
 
 # ---------- Step 2e: the drafting job's firm inputs (2026-10-07) ----------
-# The drafting job (runners/medchron/medchron/drafting/) reads the firm's house
+# The drafting job (runners/jobs/jobs/drafting/) reads the firm's house
 # style, per-class skeletons, prompts and exemplars, and the served attachments,
 # all private, all in engagements operator/customers/<slug>/drafting/, and
 # drafting-firm.yaml pins every one by sha256. Validated against THIS
-# checkout's runner (python -m medchron.drafting.firm: schema AND pins),
+# checkout's runner (python -m jobs.drafting.firm: schema AND pins),
 # refused unless drafting-firm.yaml is engagements origin/main, and SYNCED with
 # --delete to vaults/<slug>/drafting/ (gone means gone). The entrypoint pulls
 # the prefix into a root-owned tree on every boot. A seat with no drafting
@@ -51,8 +51,8 @@ PY
         --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
       || log "WARN pinned drafting input ${_rel_in} is in neither the checkout nor R2"
   done <<< "${_missing}"
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
-    uv run --quiet --with pyyaml python3 -m medchron.drafting.firm "${_drafting_stage}" \
+  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
+    uv run --quiet --with pyyaml python3 -m jobs.drafting.firm "${_drafting_stage}" \
     || { rm -rf "${_drafting_stage}"; die "the drafting firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"; }
   log "Syncing the drafting firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/drafting/"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \

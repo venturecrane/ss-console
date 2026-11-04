@@ -30,7 +30,7 @@ MAX_ID_LEN = 200
 #: Why an uncovered document went unread, as a fixed code-authored token
 #: (``covered.why``). Never a file name or any text from a document: this
 #: record holds ids and counts only (ADR 0052). Pinned to the runner's
-#: ``medchron.uncovered_why.TOKENS`` by a test, since the two cannot import
+#: ``jobs.medchron.uncovered_why.TOKENS`` by a test, since the two cannot import
 #: each other.
 WHY_TOKENS = frozenset(
     {"retrieval_failed", "not_pdf_or_image", "image_unreadable", "password_protected", "no_text", "not_explained"}
@@ -210,7 +210,7 @@ RECOMPUTE_OUTCOMES = ("recomputed", "unchanged", "unknown_job", "not_delivered",
 
 def recompute(ledger: Any, job_id: str, covered: Any, *, dry_run: bool = False) -> tuple[str, dict[str, int]]:
     """Replace a DELIVERED job's coverage record with one recomputed from its
-    own job directory on the seat (``medchron.covered_backfill``, root).
+    own job directory on the seat (``jobs.medchron.covered_backfill``, root).
 
     WHY (2026-10-29). A joint matter (two clients, one job) recorded every
     cited exhibit of both clients as uncovered: each unit judged the whole

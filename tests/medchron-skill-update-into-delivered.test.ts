@@ -5,7 +5,7 @@
  * run": the runner built a standalone package of only those documents, and
  * the firm got a second, partial chronology beside the first. The runner now
  * takes `update: {into: "delivered_chronology"}` and files ONE complete
- * document (operator/runners/medchron/medchron/update/). A string gate on the
+ * document (operator/runners/jobs/jobs/medchron/update/). A string gate on the
  * skill body, because the seat reads SKILL.md at turn time and submits what
  * it says:
  *

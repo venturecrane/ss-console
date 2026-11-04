@@ -1,4 +1,4 @@
-"""An SMD note's agent tool (hermes-smd-medchron/note.py).
+"""An SMD note's agent tool (hermes-smd-lanes/note.py).
 
 Root records a note on SMD's command; there is no submit tool. The one status
 read hands the completion wake the recorded text, or a shortfall when there is
@@ -40,7 +40,7 @@ class _Status:
 def note():
     from tests.conftest import load_plugin
 
-    return load_plugin("hermes-smd-medchron").note
+    return load_plugin("hermes-smd-lanes").note
 
 
 def test_there_is_no_submit_tool(note) -> None:
@@ -53,7 +53,7 @@ def test_the_read_projects_the_text_and_nothing_else(note, monkeypatch) -> None:
     """FALSIFIER: project the whole job and the requester, the anchor's id and
     the approver reach the model."""
     status = _Status({"ok": True, "job": NOTE})
-    monkeypatch.setattr(note, "MedchronBrokerClient", lambda: status)
+    monkeypatch.setattr(note, "JobsBrokerClient", lambda: status)
     out = json.loads(note.note_job_status({"job_id": JOB}))
     assert out == {"job": {"job_id": JOB, "state": "delivered", "text": NOTE["text"]}}
     assert status.asked == [JOB]
@@ -62,7 +62,7 @@ def test_the_read_projects_the_text_and_nothing_else(note, monkeypatch) -> None:
 def test_a_note_with_text_is_an_ordinary_read(note, monkeypatch) -> None:
     from tests.conftest import load_plugin
 
-    monkeypatch.setattr(note, "MedchronBrokerClient", lambda: _Status({"job": NOTE}))
+    monkeypatch.setattr(note, "JobsBrokerClient", lambda: _Status({"job": NOTE}))
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(note.note_job_status({"job_id": JOB})) == ("ok", None)
 
@@ -80,7 +80,7 @@ def test_no_text_to_send_is_a_shortfall_for_smd(note, monkeypatch, resp) -> None
     reads as an ordinary success, so SMD never hears the note did not go."""
     from tests.conftest import load_plugin
 
-    monkeypatch.setattr(note, "MedchronBrokerClient", lambda: _Status(resp))
+    monkeypatch.setattr(note, "JobsBrokerClient", lambda: _Status(resp))
     result = note.note_job_status({"job_id": JOB})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("shortfall", "note_job_unavailable")
@@ -92,7 +92,7 @@ def test_no_job_id_asks_nothing(note, monkeypatch) -> None:
         def note_status(self, job_id):
             raise AssertionError("asked the broker")
 
-    monkeypatch.setattr(note, "MedchronBrokerClient", lambda: _Never())
+    monkeypatch.setattr(note, "JobsBrokerClient", lambda: _Never())
     assert json.loads(note.note_job_status({}))["job"] is None
 
 

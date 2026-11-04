@@ -10,7 +10,7 @@ INSTALLED LAYOUT::
     /opt/data/.smd-root/bundles/<name>/
       current -> <version>        (symlink; the commit point, swapped atomically)
       <version>/
-        medchron/ ...             (the tarball's members, root-owned, a+rX)
+        jobs/ ...             (the tarball's members, root-owned, a+rX)
         connectors/smokeball/ ...
         manifest.json             (the verified manifest bytes)
         VERSION                   (written last: present = import check passed)
@@ -18,6 +18,12 @@ INSTALLED LAYOUT::
 WHAT GETS MOUNTED (:func:`decide`):
 
 * the pointed-at version, once installed and checked (fresh or already on disk);
+* a pointer naming a bundle of ANOTHER layout than the image mounts (ADR 0103,
+  the layout rule in manifest.py): the version ``layout-<n>/latest.json`` names
+  for the image's layout, through the same checks; when that is absent or
+  refused, the on-disk ``current`` if it is of the image's layout, else NOTHING;
+* the on-disk ``current`` is only ever mounted when its stored manifest names
+  the image's layout: a bundle built for other paths never runs;
 * no pointer: NOTHING (the image copy runs, today's behaviour), and ``current``
   is dropped so a later boot that cannot reach R2 does not resurrect a bundle
   the release controller withdrew;
@@ -56,6 +62,8 @@ from bundle_installer.manifest import (
     MAX_MANIFEST_BYTES,
     BundleManifest,
     BundleSpec,
+    layout_latest_key,
+    manifest_layout,
     parse_bundle_manifest,
     parse_bundle_pointer,
     pointer_key,
@@ -89,7 +97,7 @@ DEFAULT_JOBS_RUNTIME = "/app/jobs-runtime.sh"
 #: Absolute symlink targets a bundle may carry. A venv's ``bin/python`` points
 #: at the base interpreter under /usr; nothing in a bundle points into the
 #: agent's volume, /tmp or /run.
-_LINK_ROOTS = ("/usr/", "/opt/medchron/", "/opt/connectors/")
+_LINK_ROOTS = ("/usr/", "/opt/jobs/", "/opt/connectors/")
 _CHUNK = 1024 * 1024
 _IMPORT_TIMEOUT_SECONDS = 300
 
@@ -101,12 +109,24 @@ class BundleError(RuntimeError):
 
 
 class Decision(NamedTuple):
-    """``path`` set = mount it; ``path`` None = the image copy runs."""
+    """``path`` set = mount it; ``path`` None = the image copy runs.
+
+    ``via`` names what chose the version: ``seat pointer`` (the release
+    controller's), ``layout-latest`` (the seat pointer named a bundle of another
+    layout, so the newest one of the image's layout was adopted) or ``on-disk
+    current`` (R2 could not answer, or what it named was refused).
+    """
 
     source: str  # installed | unchanged | on-disk | image
     version: str | None = None
     path: Path | None = None
     reasons: tuple[str, ...] = ()
+    layout: int | None = None
+    via: str | None = None
+
+    def describe(self) -> str:
+        """``layout 2, via layout-latest``: what the boot log says beside the version."""
+        return f"layout {self.layout}, via {self.via}"
 
 
 def _image(*reasons: str) -> Decision:
@@ -204,7 +224,7 @@ def member_filter(spec: BundleSpec) -> Callable[[tarfile.TarInfo, str], tarfile.
     Only the spec's members, only files, dirs and links, links that stay in the
     bundle (absolute ones only into :data:`_LINK_ROOTS`), owner root, modes
     a+rX with no setuid and no group/other write (what the image gives
-    ``/opt/medchron`` today: ``chown -R root:root`` and ``chmod -R a+rX``).
+    ``/opt/jobs`` today: ``chown -R root:root`` and ``chmod -R a+rX``).
     """
 
     def _filter(member: tarfile.TarInfo, dest: str) -> tarfile.TarInfo:
@@ -295,6 +315,10 @@ def install(
     if hashlib.sha256(raw).hexdigest() != pointer.manifest_sha256:
         raise BundleError("manifest bytes do not match pointer.manifest_sha256")
     manifest = parse_bundle_manifest(raw, name=spec.name, expected_version=pointer.version)
+    if manifest.layout != spec.layout:
+        raise BundleError(
+            f"{spec.name} {pointer.version} is layout {manifest.layout}; this image mounts layout {spec.layout}"
+        )
     token = secrets.token_hex(4)
     staging = store / f".staging-{pointer.version}-{token}"
     tarball = store / f".staging-{pointer.version}-{token}.tar.zst"
@@ -327,21 +351,61 @@ def install(
     return final
 
 
+def _stored_layout(version_dir: Path, name: str) -> int | None:
+    """The layout an installed version dir's manifest names, or None when unreadable."""
+    raw = _read_nofollow(version_dir / MANIFEST_FILE, MAX_MANIFEST_BYTES)
+    if raw is None:
+        return None
+    try:
+        return manifest_layout(raw, name)
+    except ManifestError:
+        return None
+
+
 def _on_disk(store: Path, spec: BundleSpec, owner_uid: int, why: str) -> Decision:
+    """The installed ``current``, when it still verifies AND is of the image's layout."""
     target = _current_target(store)
     if not target or read_version_file(store / target) != target:
         return _image(f"{why}; no installed bundle on disk")
+    layout = _stored_layout(store / target, spec.name)
+    if layout != spec.layout:
+        return _image(
+            f"{why}; on-disk {target} is layout {layout}, this image mounts layout {spec.layout}"
+        )
     try:
         verify_tree(store / target, spec, owner_uid)
     except (BundleError, OSError) as exc:
         return _image(f"{why}; on-disk {target} refused: {exc}")
     logger.warning("bundle_installer: %s; mounting on-disk %s", why, target)
-    return Decision("on-disk", target, store / target, (why,))
+    return Decision("on-disk", target, store / target, (why,), spec.layout, "on-disk current")
 
 
 def _read_pointer(s3_client: Any, bucket: str, slug: str, spec: BundleSpec) -> Pointer:
     data = fetch(s3_client, bucket, pointer_key(slug, spec.name), MAX_POINTER_BYTES)
     return parse_bundle_pointer(data, spec.name)
+
+
+def _read_layout_latest(s3_client: Any, bucket: str, spec: BundleSpec) -> Pointer:
+    """``layout-<spec.layout>/latest.json``: the newest bundle CI published for this image's layout."""
+    data = fetch(s3_client, bucket, layout_latest_key(spec.name, spec.layout), MAX_POINTER_BYTES)
+    return parse_bundle_pointer(data, spec.name)
+
+
+def _pointer_manifest(
+    s3_client: Any, bucket: str, store: Path, spec: BundleSpec, pointer: Pointer
+) -> BundleManifest:
+    """The manifest ``pointer`` names: the installed copy when its bytes match, else R2's (sha checked)."""
+    raw = _read_nofollow(store / pointer.version / MANIFEST_FILE, MAX_MANIFEST_BYTES)
+    if raw is None or hashlib.sha256(raw).hexdigest() != pointer.manifest_sha256:
+        raw = fetch(s3_client, bucket, pointer.manifest_key, MAX_MANIFEST_BYTES)
+        if hashlib.sha256(raw).hexdigest() != pointer.manifest_sha256:
+            raise BundleError("manifest bytes do not match pointer.manifest_sha256")
+    return parse_bundle_manifest(raw, name=spec.name, expected_version=pointer.version)
+
+
+def _refusal(spec: BundleSpec, pointer: Pointer, exc: Exception, *notes: str) -> str:
+    reasons = exc.reasons if isinstance(exc, ManifestError) else (str(exc),)
+    return "; ".join((*notes, f"{spec.name} {pointer.version} refused", *reasons))
 
 
 def _drop_current(store: Path) -> None:
@@ -360,7 +424,15 @@ def decide(
     import_check: ImportCheck = run_import_check,
     owner_uid: int = 0,
 ) -> Decision:
-    """Install what the pointer names if needed; say what to mount. Never raises."""
+    """Install what the pointer names if needed; say what to mount. Never raises.
+
+    The layout rule (manifest.py): a seat pointer naming a bundle of another
+    layout than ``spec.layout`` is not installed; ``layout-<n>/latest.json`` for
+    the image's own layout is, through the same verification. The seat
+    pointer's version stays on disk when it is there, so a rollback to the image
+    of its layout mounts it without a download. Same layout: exactly the
+    pointer, so the release controller's pointer rollback keeps working.
+    """
     try:
         store = ensure_store(home, spec.name, owner_uid)
     except (BundleError, OSError) as exc:
@@ -377,6 +449,38 @@ def decide(
     except SkillsApplyError as exc:
         return _on_disk(store, spec, owner_uid, f"R2 unreachable ({exc})")
     previous = _current_target(store)
+    seat_version = pointer.version
+    try:
+        layout = _pointer_manifest(s3_client, bucket, store, spec, pointer).layout
+    except (BundleError, ManifestError, SkillsApplyError, OSError) as exc:
+        return _on_disk(store, spec, owner_uid, _refusal(spec, pointer, exc))
+    via, notes = "seat pointer", ()
+    if layout != spec.layout:
+        mismatch = (
+            f"the seat pointer names {spec.name} {pointer.version}, layout {layout}; "
+            f"this image mounts layout {spec.layout}"
+        )
+        latest_key = layout_latest_key(spec.name, spec.layout)
+        try:
+            pointer = _read_layout_latest(s3_client, bucket, spec)
+        except PointerMissing:
+            return _on_disk(
+                store, spec, owner_uid, f"{mismatch}; nothing published at {latest_key}"
+            )
+        except ManifestError as exc:
+            return _on_disk(
+                store, spec, owner_uid, "; ".join((mismatch, f"{latest_key} refused", *exc.reasons))
+            )
+        except SkillsApplyError as exc:
+            return _on_disk(store, spec, owner_uid, f"{mismatch}; {latest_key} unreadable ({exc})")
+        logger.warning(
+            "bundle_installer: %s; adopting %s %s from %s",
+            mismatch,
+            spec.name,
+            pointer.version,
+            latest_key,
+        )
+        via, notes = "layout-latest", (mismatch,)
     final = store / pointer.version
     source = "unchanged" if previous == pointer.version else "installed"
     try:
@@ -392,16 +496,21 @@ def decide(
                 import_check=import_check,
             )
         verify_tree(final, spec, owner_uid)
+        installed_layout = _stored_layout(final, spec.name)
+        if installed_layout != spec.layout:
+            raise BundleError(
+                f"installed {pointer.version} is layout {installed_layout}, not {spec.layout}"
+            )
         commit(store, pointer.version)
     except (BundleError, ManifestError, SkillsApplyError, OSError) as exc:
-        reasons = exc.reasons if isinstance(exc, ManifestError) else (str(exc),)
-        why = "; ".join((f"{spec.name} {pointer.version} refused", *reasons))
         # The version that ran last boot, not the image: the image's copy is a
         # seed frozen at its last build, and runner changes no longer build one.
-        return _on_disk(store, spec, owner_uid, why)
-    keep = {pointer.version} | ({previous} if previous and valid_version(previous) else set())
+        return _on_disk(store, spec, owner_uid, _refusal(spec, pointer, exc, *notes))
+    keep = {pointer.version, seat_version} | (
+        {previous} if previous and valid_version(previous) else set()
+    )
     prune(store, keep)
-    return Decision(source, pointer.version, final)
+    return Decision(source, pointer.version, final, notes, spec.layout, via)
 
 
 __all__ = [

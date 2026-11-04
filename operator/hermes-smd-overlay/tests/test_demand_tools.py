@@ -1,4 +1,4 @@
-"""The demand job's agent tools (hermes-smd-medchron/demand.py).
+"""The demand job's agent tools (hermes-smd-lanes/demand.py).
 
 Who asked is never the model's to say: requested_by, request_ref and the
 request text come from the turn's verified inbound email, and a turn no email
@@ -52,9 +52,9 @@ def _clear() -> None:
 def demand(monkeypatch):
     from tests.conftest import load_plugin
 
-    mod = load_plugin("hermes-smd-medchron").demand
+    mod = load_plugin("hermes-smd-lanes").demand
     client = _Client()
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: client)
     _clear()
     yield mod, client
     _clear()
@@ -218,7 +218,7 @@ def test_a_failed_job_status_is_a_shortfall_for_smd(demand, monkeypatch) -> None
     from tests.conftest import load_plugin
 
     mod, _client = demand
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("failed"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("failed"))
     result = mod.demand_job_status({"job_id": "01J0000000000000000000000Z"})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("shortfall", "demand_job_failed")
@@ -228,7 +228,7 @@ def test_a_delivered_job_status_is_an_ordinary_read(demand, monkeypatch) -> None
     from tests.conftest import load_plugin
 
     mod, _client = demand
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("delivered"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("delivered"))
     result = mod.demand_job_status({"job_id": "01J0000000000000000000000Z"})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("ok", None)
@@ -261,9 +261,9 @@ def test_a_chronology_requester_comes_from_the_email_not_the_model(demand, monke
     completion reply binds to whoever the model named (the 2026-10-07 class)."""
     from tests.conftest import load_plugin
 
-    plugin = load_plugin("hermes-smd-medchron")
+    plugin = load_plugin("hermes-smd-lanes")
     client = _ChronologyClient()
-    monkeypatch.setattr(plugin, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(plugin, "JobsBrokerClient", lambda: client)
     _email()
     assert json.loads(plugin._medchron_job_submit(dict(_CHRONOLOGY)))["accepted"] is True
     env = client.envelopes[0]
@@ -273,9 +273,9 @@ def test_a_chronology_requester_comes_from_the_email_not_the_model(demand, monke
 def test_a_chronology_submit_with_no_email_keeps_the_model_values(demand, monkeypatch) -> None:
     from tests.conftest import load_plugin
 
-    plugin = load_plugin("hermes-smd-medchron")
+    plugin = load_plugin("hermes-smd-lanes")
     client = _ChronologyClient()
-    monkeypatch.setattr(plugin, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(plugin, "JobsBrokerClient", lambda: client)
     plugin._medchron_job_submit(dict(_CHRONOLOGY))
     env = client.envelopes[0]
     assert env["requested_by"] == "attorney@firm.example" and env["request_ref"] == "the thread"
@@ -290,9 +290,9 @@ def test_an_unbound_email_chronology_submits_nothing_and_never_the_model_values(
     to a recipient and thread the model chose. The sibling lanes refuse."""
     from tests.conftest import load_plugin
 
-    plugin = load_plugin("hermes-smd-medchron")
+    plugin = load_plugin("hermes-smd-lanes")
     client = _ChronologyClient()
-    monkeypatch.setattr(plugin, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(plugin, "JobsBrokerClient", lambda: client)
     _turn(_prompt("AAMkUNBOUND="))
     out = json.loads(plugin._medchron_job_submit(dict(_CHRONOLOGY)))
     assert out["accepted"] is False and "nothing was queued" in out["reason"]

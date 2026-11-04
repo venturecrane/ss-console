@@ -100,7 +100,7 @@ def test_each_declared_class_opens_the_gate(verb: verbs.Verb) -> None:
         try:
             verbs.dispatch(broker, {"action": verb.name}, pid, uid)
         except PermissionError as exc:
-            # The medchron group re-checks behind the table with its own
+            # The jobs group re-checks behind the table with its own
             # message; the table must still have agreed with it.
             raise AssertionError(f"{verb.name} refused a peer in its declared class {cls}: {exc}") from exc
         except Exception:  # noqa: BLE001 - past the gate, an unconfigured handler refuses however it likes

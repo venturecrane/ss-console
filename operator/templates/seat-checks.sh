@@ -596,30 +596,33 @@ check_lever "for e in ${SEAT_ROOT}/proc/[0-9]*/environ; do if tr \"\\000\" \"\\n
 # wrapper), that the memory controller the cap depends on is really there
 # (the heartbeat says which; `none` means jobs would run uncapped beside the
 # gateway on a 4 GB guest, the #2465 shape), that the queue and job dirs
-# carry the modes the trust argument rests on, and that the medchron uid can
+# carry the modes the trust argument rests on, and that the jobs uid can
 # read the firm config but not write it.
 #
 # What makes these able to FAIL: stop the daemon and the tick ages past 90 s;
 # run the image on a guest without cgroup v2 memory and memory_cap reads
 # `none`; loosen an install -d mode in entrypoint.sh and the stat reads it;
 # drop the chown of the firm config and the write test passes.
-check "medchron-uid-exists" "id -u medchron >/dev/null"
+check "jobs-uid-exists" "id -u jobs >/dev/null"
 if any_lane_runs; then
-check "medchron-daemon-ticking" "t=${SEAT_ROOT}/run/smd-medchron/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "medchron-daemon-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/child.pid"
+check "jobs-daemon-ticking" "t=${SEAT_ROOT}/run/smd-medchron/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "jobs-daemon-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/child.pid"
 # cgroup2 on a unified guest, cgroup1 on Fly's hybrid layout (live-probed
 # 2026-08-31: v2 is mounted bare at /sys/fs/cgroup/unified with no
 # controllers; memory is on the v1 mount). `none` is the failure.
-check "medchron-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/smd-medchron/heartbeat.json"
+check "jobs-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/smd-medchron/heartbeat.json"
 # ADR 0100 W3: what the heartbeat's bundles.jobs says runs is what is mounted. A
 # version means both image paths are bind mounts; "image" means neither is. Fails
 # when the boot wrote no state, or the state and the mounts disagree (a release
 # controller reading bundles.jobs back would otherwise trust a wrong answer).
-check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}/opt/medchron && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}/opt/medchron && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
+check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}/opt/jobs && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}/opt/jobs && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
 fi
 if lane_runs medchron; then
-check "medchron-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/queue)\" = root:workspace-broker:770 ]"
-check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/jobs)\" = root:medchron:710 ]"
+check "jobs-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/queue)\" = root:workspace-broker:770 ]"
+check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/jobs)\" = root:jobs:710 ]"
+# ADR 0103: the jobs group is gid 995 on every seat and in the image, so a
+# job dir written before the rename is still traversable by the child.
+check "jobs-gid-owns-jobs-dir" "[ \"\$(stat -c %g ${SEAT_ROOT}/run/smd-medchron/jobs)\" = \"\$(id -g jobs)\" ]"
 fi
 # The demand lane (2026-10-06): its own thread in the same daemon, its own tick,
 # queue and job dirs. A lane thread that died leaves the chronology ticking and
@@ -628,7 +631,7 @@ if lane_runs demand; then
 check "demand-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "demand-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/demand-child.pid"
 check "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/demand-queue)\" = root:workspace-broker:770 ]"
-check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/demand-jobs)\" = root:medchron:710 ]"
+check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/demand-jobs)\" = root:jobs:710 ]"
 fi
 # The drafting lane (2026-10-07): the daemon's third thread, the same four checks.
 # A seat that authors document-drafter runs it (ADR 0100); one with
@@ -637,7 +640,7 @@ if lane_runs drafting; then
 check "drafting-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "drafting-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/drafting-child.pid"
 check "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/drafting-queue)\" = root:workspace-broker:770 ]"
-check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/drafting-jobs)\" = root:medchron:710 ]"
+check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/drafting-jobs)\" = root:jobs:710 ]"
 fi
 # The litigation status lane (2026-10-07): the daemon's fourth thread, the same
 # four checks plus its state dir (client facts: the child's alone, 0700) and the
@@ -647,11 +650,11 @@ if lane_runs litigation; then
 check "litigation-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/litigation-child.pid"
 check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-queue)\" = root:workspace-broker:770 ]"
-check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-jobs)\" = root:medchron:710 ]"
-check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/state)\" = medchron:medchron:700 ]"
+check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation-jobs)\" = root:jobs:710 ]"
+check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/state)\" = jobs:jobs:700 ]"
 # The text cache (2026-10-24): transcribed matter text, the child's alone, and
 # the child must be able to write it (its parent is root-owned).
-check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\" = medchron:medchron:700 ]"
+check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\" = jobs:jobs:700 ]"
 check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/litigation/litigation-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 fi
 # The case file manager: the litigation lane's checks for its own thread,
@@ -662,8 +665,8 @@ if lane_runs casefile; then
 check "casefile-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-medchron/casefile-child.pid"
 check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-queue)\" = root:workspace-broker:770 ]"
-check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-jobs)\" = root:medchron:710 ]"
-check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile/state)\" = medchron:medchron:700 ]"
+check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile-jobs)\" = root:jobs:710 ]"
+check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/casefile/state)\" = jobs:jobs:700 ]"
 check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/casefile/casefile-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 fi
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
@@ -674,9 +677,9 @@ fi
 # not made yet (no job since boot) counts at the cap the daemon WILL write: the
 # authored machine.lane_memory_mb value when the customer.yaml authors one
 # (2026-10-13; the entrypoint exports it to the daemon through
-# medchron.lane_memory, the same function counted here), else the code default
+# jobs.lane_memory, the same function counted here), else the code default
 # read from the runner itself, so a bigger default fails here before the first
-# job. An image without medchron.lane_memory exports nothing, so its lanes
+# job. An image without jobs.lane_memory exports nothing, so its lanes
 # count at their defaults, which is what that daemon would write. The
 # litigation, casefile and drafting lanes share the demand cgroup, so it counts once.
 # A lane that CANNOT run a job on this seat counts zero: with no firm inputs
@@ -693,7 +696,7 @@ fi
 # cgroup, so there is no cap to sum (ring 2's scott seat failed this on
 # rel-ab97b966, 2026-11-03).
 if any_lane_runs; then
-check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/medchron/.venv/bin/python" "lane-memory-caps-probe.py"
+check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/jobs/.venv/bin/python" "lane-memory-caps-probe.py"
 else
 check_note "lane-memory-caps-leave-gateway-reserve" "this seat runs no job lane, so no lane cgroup takes memory from the gateway"
 fi
@@ -702,8 +705,8 @@ fi
 if lane_runs negotiation; then
 check "negotiation-lane-ticking" "t=${SEAT_ROOT}/run/smd-medchron/negotiation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
 check "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation-queue)\" = root:workspace-broker:770 ]"
-check "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation-jobs)\" = root:medchron:710 ]"
-check "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation/state)\" = medchron:medchron:700 ]"
+check "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation-jobs)\" = root:jobs:710 ]"
+check "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/negotiation/state)\" = jobs:jobs:700 ]"
 fi
 # The SMD note lane (2026-10-15): its own daemon thread (wakes and reply
 # watches only, no child) and its root-only job dir.
@@ -737,9 +740,9 @@ fi
 MEDCHRON_AUTHORED=0
 lane_authored medchron && MEDCHRON_AUTHORED=1
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
-  check "medchron-firm-config-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml)\" = root:medchron:640 ]"
-  check "medchron-uid-cannot-write-config" "setpriv --reuid=medchron --regid=medchron --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml\""
-  check "medchron-token-shared" "[ \"\$(stat -c %G:%a ${SEAT_ROOT}/run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
+  check "medchron-firm-config-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml)\" = root:jobs:640 ]"
+  check "jobs-uid-cannot-write-config" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml\""
+  check "jobs-token-shared" "[ \"\$(stat -c %G:%a ${SEAT_ROOT}/run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
   # A seat that authors a firm config must also carry the
   # install-level tree the entrypoint seeds from vaults/<slug>/medchron-controls/
   # — the scanned-page classifier's falsifier (controls.json + its PDFs) and
@@ -752,9 +755,9 @@ if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   # controls measures nothing). What makes these able to FAIL: empty the vault
   # prefix and reboot; drop the chown/chmod in entrypoint.sh and the stat or
   # the write test reads it.
-  check "medchron-controls-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/controls)\" = root:medchron:750 ] && test -f ${SEAT_ROOT}/run/smd-medchron/controls/controls.json"
+  check "medchron-controls-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/controls)\" = root:jobs:750 ] && test -f ${SEAT_ROOT}/run/smd-medchron/controls/controls.json"
   check "medchron-icd-tables-present" "test -f ${SEAT_ROOT}/run/smd-medchron/controls/icd/VERSION.json"
-  check "medchron-uid-reads-controls-cannot-write" "setpriv --reuid=medchron --regid=medchron --init-groups sh -c \"test -r ${SEAT_ROOT}/run/smd-medchron/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-medchron/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-medchron/controls\""
+  check "jobs-uid-reads-controls-cannot-write" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"test -r ${SEAT_ROOT}/run/smd-medchron/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-medchron/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-medchron/controls\""
 else
   check_note "medchron-firm-config-absent" "not authored for this seat; runner refuses jobs by design, so the config-perm, token, controls, and gate-refusal checks are skipped"
 fi
@@ -770,13 +773,13 @@ fi
 # prefix (or break the fetch) and reboot a seat that authors the lane.
 for _lane in demand drafting litigation casefile records; do
   if lane_authored "${_lane}"; then
-    check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:medchron:640 ]"
+    check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:jobs:640 ]"
   else
     check_note "${_lane}-firm-inputs-absent" "not authored for this seat; the ${_lane} lane defers jobs by design"
   fi
 done
 # A marketing seat's advertising-gate registers (ADR 0098), the same expectation
-# source. Group hermes, not medchron: the readers are the gateway's outbound gate
+# source. Group hermes, not jobs: the readers are the gateway's outbound gate
 # and the WordPress connector, both the hermes uid (entrypoint-marketing.sh).
 # FALSIFIER: empty vaults/<slug>/marketing/ and reboot, or drop the chown in
 # entrypoint-marketing.sh; the stat or the read/write probe fails.
@@ -788,7 +791,7 @@ else
 fi
 
 # ---------- Step 14b: the four registered runner gates refuse their planted violations (ss#2614, ADR 0087) ----------
-# `medchron probe <gate>` builds a throwaway synthetic matter, plants exactly
+# `jobs probe <gate>` builds a throwaway synthetic matter, plants exactly
 # the violation the registry names, runs the gate module the registry points
 # at, and prints REFUSED only when the gate held. $0 and offline. These back
 # the `enforced` status of the four medchron_* rows in runtime-controls.yaml
@@ -799,10 +802,10 @@ fi
 # on a seat with no medchron authored the runner refuses every job, and the
 # pass-annotated skip is emitted by the firm-config branch.
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
-  check "medchron-gate-claim-audit-refuses" "${SEAT_ROOT}/opt/medchron/.venv/bin/medchron probe claim_audit | grep -q REFUSED"
-  check "medchron-gate-extractive-refuses" "${SEAT_ROOT}/opt/medchron/.venv/bin/medchron probe extractive | grep -q REFUSED"
-  check "medchron-gate-cross-client-refuses" "${SEAT_ROOT}/opt/medchron/.venv/bin/medchron probe cross_client | grep -q REFUSED"
-  check "medchron-gate-provenance-refuses" "${SEAT_ROOT}/opt/medchron/.venv/bin/medchron probe provenance | grep -q REFUSED"
+  check "medchron-gate-claim-audit-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe claim_audit | grep -q REFUSED"
+  check "medchron-gate-extractive-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe extractive | grep -q REFUSED"
+  check "medchron-gate-cross-client-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe cross_client | grep -q REFUSED"
+  check "medchron-gate-provenance-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe provenance | grep -q REFUSED"
 fi
 
 }

@@ -104,16 +104,16 @@ def test_bundle_paths_are_recorded_only_under_a_mount_root_the_image_leaves(tmp_
     listing = OPERATOR / "templates" / "jobs-bundle-paths.txt"
     mod = _module()
     assert mod.bundle_paths(listing, str(tmp_path)) == []
-    (tmp_path / "medchron").mkdir()
+    (tmp_path / "jobs").mkdir()
     (tmp_path / "connectors" / "smokeball").mkdir(parents=True)
     got = mod.bundle_paths(listing, str(tmp_path))
     assert "/opt/connectors/smokeball/.venv/bin/python" in got
-    assert "/opt/medchron/.venv/bin/medchron" in got
+    assert "/opt/jobs/.venv/bin/jobs" in got
     assert mod.bundle_paths(tmp_path / "absent.txt", str(tmp_path)) == []
 
 
 def test_every_bundle_path_a_skill_cites_is_guaranteed() -> None:
-    # A skill citing a new /opt/medchron or /opt/connectors/smokeball path the
+    # A skill citing a new /opt/jobs or /opt/connectors/smokeball path the
     # bundle does not guarantee would be refused on every seat at its release.
     sys.path.insert(0, str(OPERATOR / "bin" / "lib"))
     import skill_needs
@@ -128,7 +128,7 @@ def test_every_bundle_path_a_skill_cites_is_guaranteed() -> None:
         for d in sorted((OPERATOR / "skills").iterdir())
         if d.is_dir()
         for p in skill_needs.paths_needed(d)
-        if p.startswith(("/opt/medchron", "/opt/connectors/smokeball"))
+        if p.startswith(("/opt/jobs", "/opt/connectors/smokeball"))
     }
     assert cited, "no skill cites a bundle path any more; this test's premise changed"
     assert cited <= listed, f"cited but not guaranteed by the bundle: {sorted(cited - listed)}"

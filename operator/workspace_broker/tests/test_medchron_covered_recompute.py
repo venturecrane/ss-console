@@ -1,7 +1,7 @@
 """A delivered job's coverage record is replaced by one recomputed from its job dir (2026-10-29).
 
 A joint matter recorded every cited exhibit of both clients as uncovered, and
-the next update re-filed exhibits the firm already had. ``medchron.covered_backfill``
+the next update re-filed exhibits the firm already had. ``jobs.medchron.covered_backfill``
 (root, on the seat) recomputes the record and hands it to the root-only verb
 ``medchron_covered_recompute``, which changes only ``covered_json`` on a
 DELIVERED row that already carries one. Synthetic names and ids throughout."""

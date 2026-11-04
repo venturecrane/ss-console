@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seat check: the runner lanes' memory caps leave the gateway its reserve.
 
-Run with the medchron venv python (it imports the runner's own defaults). The
+Run with the jobs venv python (it imports the runner's own defaults). The
 boot smoke sends this file's text to the Machine over ssh; the in-image
 self-test runs the image's copy at /app/lane-memory-caps-probe.py. One program,
 two transports (operator/templates/seat-checks.sh).
@@ -44,12 +44,12 @@ def _root() -> str:
 
 def default_caps(doc: dict) -> dict[str, int]:
     """The cap each lane's daemon would write: authored bytes over code defaults."""
-    import medchron.daemon as d
-    import medchron.demand_lane as dl
+    import jobs.daemon as d
+    import jobs.demand_lane as dl
 
     defaults = {"medchron": int(d.DEFAULT_MEMORY_MAX), "demand": int(dl.DEFAULT_MEMORY)}
     try:
-        from medchron.lane_memory import authored_bytes
+        from jobs.lane_memory import authored_bytes
     except ImportError:
         return defaults
     defaults.update({k: int(v) for k, v in authored_bytes(doc).items()})

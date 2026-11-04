@@ -14,7 +14,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import os
+import shutil
 import stat
 import tarfile
 from pathlib import Path
@@ -23,7 +25,15 @@ import pytest
 
 from bundle_installer import __main__ as cli
 from bundle_installer import installer as ins
-from bundle_installer.manifest import JOBS, pointer_key, tarball_key
+from bundle_installer.manifest import (
+    JOBS,
+    UNKEYED_LAYOUT,
+    layout_latest_key,
+    parse_bundle_manifest,
+    pointer_key,
+    tarball_key,
+)
+from skills_applier.manifest import ManifestError
 
 zstd = pytest.importorskip("compression.zstd", reason="the seat's Python 3.14 reads .tar.zst")
 
@@ -66,13 +76,11 @@ def _entry(tar: tarfile.TarFile, name: str, data: bytes = b"", *, mode=0o644, li
 def make_tarball(extra=()) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:zst") as tar:  # pyright: ignore[reportCallIssue, reportArgumentType]
-        for d in ("medchron/", "medchron/.venv/", "medchron/.venv/bin/"):
+        for d in ("jobs/", "jobs/.venv/", "jobs/.venv/bin/"):
             _entry(tar, d)
-        _entry(tar, "medchron/.venv/bin/python", link="/usr/bin/python3")
-        _entry(
-            tar, "medchron/.venv/bin/medchron", b"#!/opt/medchron/.venv/bin/python\n", mode=0o700
-        )
-        _entry(tar, "medchron/anthropic_pricing.json", b"{}")
+        _entry(tar, "jobs/.venv/bin/python", link="/usr/bin/python3")
+        _entry(tar, "jobs/.venv/bin/jobs", b"#!/opt/jobs/.venv/bin/python\n", mode=0o700)
+        _entry(tar, "jobs/anthropic_pricing.json", b"{}")
         for d in ("connectors/", "connectors/smokeball/", "connectors/smokeball/.venv/"):
             _entry(tar, d)
         _entry(tar, "connectors/smokeball/.venv/bin/", b"")
@@ -84,7 +92,21 @@ def make_tarball(extra=()) -> bytes:
     return buf.getvalue()
 
 
-def publish(s3: FakeS3, version: str, *, tarball: bytes | None = None, manifest_patch=None):
+def publish(
+    s3: FakeS3,
+    version: str,
+    *,
+    tarball: bytes | None = None,
+    manifest_patch=None,
+    layout: int | None = JOBS.layout,
+    seat: bool = True,
+    latest: bool = False,
+):
+    """CI's publish of ``version`` (``layout=None``: a manifest from before the key).
+
+    ``seat`` writes this seat's pointer at it (the release tick); ``latest``
+    writes ``layout-<layout>/latest.json`` (CI, every publish).
+    """
     data = make_tarball() if tarball is None else tarball
     s3.objects[tarball_key("jobs", version)] = data
     doc = {
@@ -96,17 +118,24 @@ def publish(s3: FakeS3, version: str, *, tarball: bytes | None = None, manifest_
         "base_image_ref": "registry.fly.io/hermes-fleet:x",
         "python": "3.13",
     }
+    if layout is not None:
+        doc["layout"] = layout
     doc.update(manifest_patch or {})
     raw = json.dumps(doc).encode()
     key = f"fleet/bundles/jobs/{version}.json"
     s3.objects[key] = raw
-    s3.objects[pointer_key(SLUG, "jobs")] = json.dumps(
+    pointer = json.dumps(
         {
             "version": version,
             "manifest_key": key,
             "manifest_sha256": hashlib.sha256(raw).hexdigest(),
         }
     ).encode()
+    if seat:
+        s3.objects[pointer_key(SLUG, "jobs")] = pointer
+    if latest:
+        s3.objects[layout_latest_key("jobs", layout or UNKEYED_LAYOUT)] = pointer
+    return raw
 
 
 class Checks:
@@ -148,12 +177,12 @@ def test_installs_verifies_and_flips_current(tmp_path):
     assert d.path is not None
     assert (d.path / "VERSION").read_text().strip() == V1
     # The bundle's own python, checked from staging before the flip.
-    assert len(checks.calls) == 1 and str(checks.calls[0]).endswith("medchron/.venv/bin/python")
+    assert len(checks.calls) == 1 and str(checks.calls[0]).endswith("jobs/.venv/bin/python")
     assert ".staging-" in str(checks.calls[0])
-    # a+rX, as the image gives /opt/medchron (the 0700 script became 0755).
-    assert stat.S_IMODE(os.lstat(d.path / "medchron/.venv/bin/medchron").st_mode) == 0o755
-    assert stat.S_IMODE(os.lstat(d.path / "medchron/anthropic_pricing.json").st_mode) == 0o644
-    assert os.readlink(d.path / "medchron/.venv/bin/python") == "/usr/bin/python3"
+    # a+rX, as the image gives /opt/jobs (the 0700 script became 0755).
+    assert stat.S_IMODE(os.lstat(d.path / "jobs/.venv/bin/jobs").st_mode) == 0o755
+    assert stat.S_IMODE(os.lstat(d.path / "jobs/anthropic_pricing.json").st_mode) == 0o644
+    assert os.readlink(d.path / "jobs/.venv/bin/python") == "/usr/bin/python3"
     assert not [p for p in os.listdir(store(tmp_path)) if p.startswith(".")]
 
 
@@ -285,8 +314,8 @@ def test_no_r2_config_uses_on_disk(tmp_path):
     "extra",
     [
         (("etc/cron.d/x", b"* * * * * root sh"), {}),
-        (("medchron/.venv/bin/python3",), {"link": "/opt/data/evil"}),
-        (("medchron/esc",), {"link": "../../../../x"}),
+        (("jobs/.venv/bin/python3",), {"link": "/opt/data/evil"}),
+        (("jobs/esc",), {"link": "../../../../x"}),
         (("../outside", b"x"), {}),
     ],
     ids=["outside-members", "link-into-volume", "relative-escape", "dotdot"],
@@ -302,8 +331,8 @@ def test_members_outside_the_bundle_are_refused(tmp_path, extra):
 def test_a_required_path_missing_is_refused(tmp_path):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:zst") as tar:  # pyright: ignore[reportCallIssue, reportArgumentType]
-        _entry(tar, "medchron/")
-        _entry(tar, "medchron/anthropic_pricing.json", b"{}")
+        _entry(tar, "jobs/")
+        _entry(tar, "jobs/anthropic_pricing.json", b"{}")
     s3 = FakeS3()
     publish(s3, V1, tarball=buf.getvalue())
     d = run(s3, tmp_path)
@@ -316,7 +345,7 @@ def test_a_writable_entry_in_an_installed_tree_is_never_mounted(tmp_path, monkey
     run(s3, tmp_path)
     # The falsifier: the tree check sees one group-writable file (reported
     # through lstat, so the test never widens a real file's mode).
-    planted = str(store(tmp_path) / V1 / "medchron/anthropic_pricing.json")
+    planted = str(store(tmp_path) / V1 / "jobs/anthropic_pricing.json")
     real_lstat = os.lstat
 
     def lstat(path, *args, **kwargs):
@@ -371,8 +400,10 @@ def test_cli_prints_the_dir_to_mount_or_nothing(tmp_path, monkeypatch, capsys, c
     monkeypatch.setenv("CUSTOMER_SLUG", SLUG)
     monkeypatch.setenv("R2_BUCKET_CONFIG", BUCKET)
     kw = {"client_factory": lambda: s3, "require_root": False, "owner_uid": UID}
+    caplog.set_level(logging.INFO, logger="bundle_installer")
     assert cli.main(["jobs"], import_check=Checks(), **kw) == 0
-    assert capsys.readouterr().out == f"{V1}\t{store(tmp_path) / V1}\n"
+    assert capsys.readouterr().out == f"{V1}\t{store(tmp_path) / V1}\tlayout 2, via seat pointer\n"
+    assert f"jobs bundle {V1} installed (layout 2, via seat pointer)" in caplog.text
     del s3.objects[pointer_key(SLUG, "jobs")]
     assert cli.main(["jobs"], import_check=Checks(), **kw) == 0
     assert capsys.readouterr().out == ""
@@ -389,3 +420,162 @@ def test_cli_a_crash_is_the_image_not_a_failed_boot(tmp_path, monkeypatch, capsy
     assert cli.main(["jobs"], client_factory=boom, **kw) == 0
     assert capsys.readouterr().out == ""
     assert cli.main(["nope"], **kw) == 2
+
+
+# ---------------------------------------------------------------------------
+# The layout rule (ADR 0103): a seat never runs an image with a bundle of
+# another layout. The image's spec is layout 2 (the jobs/ root at /opt/jobs);
+# every manifest from before the key existed is layout 1 (medchron/ root).
+# ---------------------------------------------------------------------------
+
+
+def test_a_manifest_without_a_layout_key_is_layout_one():
+    def doc(**extra):
+        return json.dumps(
+            {"name": "jobs", "version": V1, "sha256": "a" * 64, "size": 1, **extra}
+        ).encode()
+
+    assert parse_bundle_manifest(doc(), name="jobs", expected_version=V1).layout == 1
+    assert parse_bundle_manifest(doc(layout=2), name="jobs", expected_version=V1).layout == 2
+    for bad in ("2", True, 0, -1, 1.5):
+        with pytest.raises(ManifestError, match="manifest.layout"):
+            parse_bundle_manifest(doc(layout=bad), name="jobs", expected_version=V1)
+
+
+def test_a_seat_pointer_of_another_layout_installs_the_latest_of_the_images_layout(tmp_path):
+    """FALSIFIER: install the seat pointer as before and the layout-1 bundle is
+    refused (or, without the install check, mounted at paths its venv was not
+    built for): the seat boots with no runner and the image is rolled back."""
+    s3 = FakeS3()
+    publish(s3, V2, seat=False, latest=True)
+    publish(s3, V1, layout=None)  # the seat pointer: a pre-rename bundle
+    d = run(s3, tmp_path)
+    assert (d.source, d.version, d.path) == ("installed", V2, store(tmp_path) / V2)
+    assert (d.layout, d.via) == (2, "layout-latest")
+    assert d.describe() == "layout 2, via layout-latest"
+    assert f"names jobs {V1}, layout 1; this image mounts layout 2" in d.reasons[0]
+    assert current(tmp_path) == V2
+    assert tarball_key("jobs", V1) not in s3.gets, "the other layout's tarball is never downloaded"
+    # The seat pointer is untouched: the release tick still owns it.
+    assert json.loads(s3.objects[pointer_key(SLUG, "jobs")])["version"] == V1
+
+
+def test_a_seat_pointer_of_the_images_layout_is_installed_whatever_latest_says(tmp_path):
+    """FALSIFIER: prefer latest always and the tick's pointer rollback (back to
+    N-1) is silently undone by every boot."""
+    s3 = FakeS3()
+    publish(s3, V2, seat=False, latest=True)
+    publish(s3, V1)
+    d = run(s3, tmp_path)
+    assert (d.version, d.via, d.reasons) == (V1, "seat pointer", ())
+    assert layout_latest_key("jobs", 2) not in s3.gets
+
+
+def test_another_layout_with_no_latest_mounts_the_on_disk_current_of_the_images_layout(tmp_path):
+    s3 = FakeS3()
+    publish(s3, V1)
+    run(s3, tmp_path)
+    publish(s3, V2, layout=1)
+    d = run(s3, tmp_path)
+    assert (d.source, d.version, d.via) == ("on-disk", V1, "on-disk current")
+    assert "nothing published at fleet/bundles/jobs/layout-2/latest.json" in d.reasons[0]
+    assert current(tmp_path) == V1
+
+
+def _rewrite_stored_manifest(home: Path, which: str, **changes) -> bytes:
+    """Rewrite an installed version's stored manifest (``layout=None`` drops the key)."""
+    path = store(home) / which / "manifest.json"
+    doc = json.loads(path.read_bytes())
+    for key, value in changes.items():
+        if value is None:
+            doc.pop(key, None)
+        else:
+            doc[key] = value
+    raw = json.dumps(doc).encode()
+    path.unlink()
+    path.write_bytes(raw)
+    os.chmod(path, 0o644)
+    return raw
+
+
+def test_nothing_of_the_images_layout_anywhere_runs_the_image_with_the_loud_line(
+    tmp_path, monkeypatch, capsys, caplog
+):
+    """FALSIFIER: fall back to the on-disk current without its layout check and a
+    layout-1 tree is mounted over /opt/jobs."""
+    s3 = FakeS3()
+    publish(s3, V1)
+    run(s3, tmp_path)
+    _rewrite_stored_manifest(tmp_path, V1, layout=None)  # what an old image left as current
+    publish(s3, V2, layout=1)
+    d = run(s3, tmp_path)
+    assert d.path is None and d.source == "image"
+    assert f"on-disk {V1} is layout 1, this image mounts layout 2" in d.reasons[0]
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.setenv("CUSTOMER_SLUG", SLUG)
+    monkeypatch.setenv("R2_BUCKET_CONFIG", BUCKET)
+    kw = {"client_factory": lambda: s3, "require_root": False, "owner_uid": UID}
+    assert cli.main(["jobs"], import_check=Checks(), **kw) == 0
+    assert capsys.readouterr().out == ""
+    assert "jobs bundle NOT mounted, the image copy runs" in caplog.text
+
+
+def test_r2_unreachable_never_mounts_an_on_disk_current_of_another_layout(tmp_path):
+    s3 = FakeS3()
+    publish(s3, V1)
+    run(s3, tmp_path)
+    _rewrite_stored_manifest(tmp_path, V1, layout=None)
+    s3.down = True
+    d = run(s3, tmp_path)
+    assert d.path is None and "is layout 1" in d.reasons[0]
+
+
+def test_a_latest_naming_another_layout_is_refused_not_mounted(tmp_path):
+    """A mispublished latest: same verification path, so the install's layout check refuses it."""
+    s3 = FakeS3()
+    raw = publish(s3, V2, layout=1, seat=False)
+    s3.objects[layout_latest_key("jobs", 2)] = json.dumps(
+        {"version": V2, "manifest_key": f"fleet/bundles/jobs/{V2}.json",
+         "manifest_sha256": hashlib.sha256(raw).hexdigest()}
+    ).encode()  # fmt: skip
+    publish(s3, V1, layout=1)
+    d = run(s3, tmp_path)
+    assert d.path is None and f"jobs {V2} is layout 1; this image mounts layout 2" in d.reasons[0]
+    assert not (store(tmp_path) / V2).exists()
+
+
+def test_a_latest_whose_manifest_does_not_match_is_refused(tmp_path):
+    s3 = FakeS3()
+    publish(s3, V2, seat=False, latest=True)
+    s3.objects[f"fleet/bundles/jobs/{V2}.json"] += b" "
+    publish(s3, V1, layout=None)
+    d = run(s3, tmp_path)
+    assert d.path is None and "pointer.manifest_sha256" in d.reasons[0]
+
+
+def test_the_seat_pointers_version_stays_on_disk_for_a_rollback_to_its_image(tmp_path):
+    """FALSIFIER: prune to the adopted version and its previous only, and a
+    rollback to the old image has to download its bundle again (or, with R2
+    down, boots with none)."""
+    s3 = FakeS3()
+    publish(s3, V1)
+    run(s3, tmp_path)
+    # V3 on disk as an old image installed it: a layout-1 manifest the pointer names.
+    shutil.copytree(store(tmp_path) / V1, store(tmp_path) / V3, symlinks=True)
+    (store(tmp_path) / V3 / "VERSION").unlink()
+    (store(tmp_path) / V3 / "VERSION").write_text(f"{V3}\n")
+    raw = _rewrite_stored_manifest(tmp_path, V3, layout=None, version=V3)
+    s3.objects[pointer_key(SLUG, "jobs")] = json.dumps(
+        {"version": V3, "manifest_key": f"fleet/bundles/jobs/{V3}.json",
+         "manifest_sha256": hashlib.sha256(raw).hexdigest()}
+    ).encode()  # fmt: skip
+    publish(s3, V2, seat=False, latest=True)
+    s3.gets.clear()
+    d = run(s3, tmp_path)
+    assert (d.version, d.via) == (V2, "layout-latest")
+    assert f"fleet/bundles/jobs/{V3}.json" not in s3.gets, (
+        "the layout was read from the installed copy"
+    )
+    assert (store(tmp_path) / V3 / "VERSION").read_text().strip() == V3
+    # V1 (previous) and V3 (the seat pointer's) kept beside the adopted V2.
+    assert sorted(p for p in os.listdir(store(tmp_path)) if p != "current") == [V1, V2, V3]

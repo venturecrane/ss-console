@@ -213,7 +213,7 @@ describe('compileSpec: golden cases', () => {
       const paths = readJobsBundlePaths(REPO_ROOT)
       expect(paths).toContain(SB)
       expect(paths.every((p) => p.startsWith('/opt/'))).toBe(true)
-      expect(paths).toContain('/opt/medchron/.venv/bin/medchron')
+      expect(paths).toContain('/opt/jobs/.venv/bin/jobs')
     })
   })
 
@@ -247,7 +247,7 @@ describe('compileSpec: golden cases', () => {
     expect(
       (r.spec.requires as Record<string, Record<string, unknown>>).lane_schema_digests.demand
     ).toEqual({
-      path: '/app/runners/medchron/medchron/demand/firm.py',
+      path: '/app/runners/jobs/jobs/demand/firm.py',
       sha256: 'd'.repeat(64),
     })
   })

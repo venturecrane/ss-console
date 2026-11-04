@@ -4,7 +4,7 @@
 # WHY. 451 Python files, no root manifest, no type checker, no formatter, and
 # 33 `sys.path.insert` shims plus 130 `# noqa: E402` paying for the missing
 # packaging. The three leaf subtrees that do carry a pyproject
-# (connectors/_sdk, connectors/*, runners/medchron) prove the pattern works
+# (connectors/_sdk, connectors/*, runners/jobs) prove the pattern works
 # here; this file extends it to the root so CI installs the tree as packages
 # and pyright has a project to check.
 #
@@ -35,7 +35,7 @@
 # imports behind a shim); its modules and tests import each other and adapter
 # by package name. On the seat, bootstrap.sh and entrypoint.sh run the three
 # invariant invocations with PYTHONPATH=/app, which is where this tree and
-# adapter/ are copied. The two /opt/connectors/smokeball shims (medchron
+# adapter/ are copied. The two /opt/connectors/smokeball shims (jobs
 # seat.py's ssh script, drafting/corpus_measure.py) were inert: that path
 # holds only the connector's venv, and both already run under an interpreter
 # that has the connector installed. Proven by a reprovision (boot smoke step 8
@@ -49,10 +49,10 @@
 #     connectors/smokeball on the path for the real extractor: that is a
 #     separate distributable (connectors/smokeball/pyproject.toml), not this
 #     project, so those two go with the connector install story.
-#   * bin/medchron-backfill-covered.py puts runners/medchron on the path so
+#   * bin/medchron-backfill-covered.py puts runners/jobs on the path so
 #     the covered-set computation it writes back is the SHIPPED one, never a
 #     reimplementation. The runner is its own distributable
-#     (runners/medchron/pyproject.toml), so this goes with the runner's
+#     (runners/jobs/pyproject.toml), so this goes with the runner's
 #     install story, like the connector above.
 #   * bin/seed-staging-matter.py inserts /app/connectors/smokeball inside
 #     _client(), lazily: that path exists only on a Machine, where the

@@ -37,8 +37,8 @@ page allowance exactly as a seat run would.
 **Run it as root on the seat, dry run first:**
 
 ```bash
-/opt/medchron/.venv/bin/python -m medchron.deliver_by_smd <job_id> record.json --update --dry-run
-/opt/medchron/.venv/bin/python -m medchron.deliver_by_smd <job_id> record.json --update
+/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update --dry-run
+/opt/jobs/.venv/bin/python -m jobs.medchron.deliver_by_smd <job_id> record.json --update
 ```
 
 `--update` adds the wake's `Request: update into the delivered chronology.`
@@ -60,7 +60,7 @@ covered set. A refusal writes nothing.
 ([ops-close-by-smd](ops-close-by-smd.md)); left open, it lapses after seven days
 into a "lapsed unanswered" letter to the requester.
 
-Code: `operator/runners/medchron/medchron/deliver_by_smd.py` (tests:
-`operator/runners/medchron/tests/test_deliver_by_smd.py`). The reply binds when
+Code: `operator/runners/jobs/jobs/medchron/deliver_by_smd.py` (tests:
+`operator/runners/jobs/tests/test_deliver_by_smd.py`). The reply binds when
 the job's request reference is a mailbox Graph id as well as an RFC Message-ID
 (`operator/workspace_broker/reply_binding.py`, 2026-10-14).

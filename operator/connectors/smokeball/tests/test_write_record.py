@@ -171,18 +171,18 @@ def test_the_operators_mcp_server_is_recorded_with_no_smd_environment(monkeypatc
     assert broker.rows[0]["actor"] == "operator"
 
 
-def test_the_medchron_user_is_exempt_only_on_a_daemon_launched_job(monkeypatch):
-    """A person running as medchron by hand has no marker and is refused like
+def test_the_jobs_user_is_exempt_only_on_a_daemon_launched_job(monkeypatch):
+    """A person running as jobs by hand has no marker and is refused like
     anyone unnamed. Falsifier: exempt on the uid alone and the hand-run write
     goes out with no row."""
     broker = _Broker()
     monkeypatch.setenv(wr.SOCKET_ENV, broker.path)
-    monkeypatch.setattr(wr, "_user", lambda: "medchron")
+    monkeypatch.setattr(wr, "_user", lambda: "jobs")
     sent: list[httpx.Request] = []
     with pytest.raises(wr.WriteNotRecorded):
         _client(sent).request("POST", "/tasks", json={"subject": "x"})
     assert sent == []
-    monkeypatch.setenv(wr.MEDCHRON_JOB_MARKER_ENV, "01JOB")
+    monkeypatch.setenv(wr.JOBS_JOB_MARKER_ENV, "01JOB")
     _client(sent).request("POST", "/tasks", json={"subject": "x"})
     assert len(sent) == 1
     assert broker.rows == []

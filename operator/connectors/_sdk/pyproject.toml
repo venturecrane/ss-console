@@ -11,7 +11,7 @@ dependencies = [
     # connectors' tests are written against. <3 is load-bearing for the same
     # reason <2 was: the next major will rename again, and every venv that
     # resolves latest (CI conformance, the seat image's per-connector venvs and
-    # the medchron runner) would break at the import.
+    # the jobs runner) would break at the import.
     "mcp>=2,<3",
     "pydantic>=2.6",
 ]

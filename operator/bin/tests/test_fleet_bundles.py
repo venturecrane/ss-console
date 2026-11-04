@@ -235,6 +235,58 @@ def test_a_restart_that_fails_restores_the_pointer() -> None:
     assert out.state == "tooling_error" and w.pointer("lane-a") is None
 
 
+def test_a_seat_that_already_reports_the_version_gets_its_pointer_without_a_restart() -> None:
+    """ADR 0103: a new-layout image adopted layout-<n>/latest.json at boot, so the
+    seat already runs the release. FALSIFIER: restart anyway and every seat that
+    took a new layout restarts once more for nothing (behind the busy gate, so a
+    client's running job waits for it)."""
+    w = World(["lane-a"])
+    w.publish(V1)
+    w.publish(V2)
+    assert w.run("lane-a", V1).state == "done"
+    w.fly.restarts.clear()
+    w.store.status["lane-a"]["bundles_json"] = json.dumps({"jobs": V2})  # the boot adopted V2
+    out = w.run("lane-a", V2)
+    assert out.state == "done", out.detail
+    assert "no restart" in out.detail
+    assert w.fly.restarts == [], "nothing restarted"
+    assert w.pointer("lane-a") == V2
+    written = w.r2.get_json(bundle_pointer_key("lane-a", "jobs"))
+    assert written["manifest_key"] == bundle_manifest_key("jobs", V2) and len(written["manifest_sha256"]) == 64
+    # The dry run says the same and writes nothing.
+    w.r2.put_json(bundle_pointer_key("lane-a", "jobs"), {"version": V1})
+    rel = w.store.releases[f"bnd-{V2}"]
+    manifest, key, sha = w.roll.load_manifest("jobs", V2)
+    dry = w.roll.run("lane-a", 0, rel, manifest, key, sha, True)
+    assert dry.state == "pending" and "without a restart" in dry.detail and w.pointer("lane-a") == V1
+
+
+def test_a_seat_that_stops_reporting_the_version_gets_its_pointer_back_and_no_restart() -> None:
+    """The read-back is kept: a seat whose fresh beat no longer reports the version is not done."""
+    w = World(["lane-a"])
+    w.publish(V1)
+    w.publish(V2)
+    assert w.run("lane-a", V1).state == "done"
+    w.fly.restarts.clear()
+    row = w.store.status["lane-a"]
+    row["bundles_json"] = json.dumps({"jobs": V2})
+    real = w.store.seat_status
+    calls = {"n": 0}
+
+    def status(seat: str) -> Any:
+        calls["n"] += 1
+        got = real(seat)
+        if calls["n"] > 1:  # every read after the step's own: the seat runs the image copy now
+            return {**got, "bundles_json": json.dumps({"jobs": "image"})}
+        return got
+
+    w.store.seat_status = status  # type: ignore[method-assign]
+    out = w.run("lane-a", V2)
+    assert out.state == "rolled_back", out.detail
+    assert w.pointer("lane-a") == V1 and "pointer restored to " + V1 in out.detail
+    assert w.fly.restarts == []
+
+
 def test_a_manifest_without_its_tarball_is_refused() -> None:
     w = World(["lane-a"])
     w.publish(V1)
@@ -288,7 +340,7 @@ def _git_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dic
     commit("skills-only", "operator/skills/x/SKILL.md")
     commit("docs-only", "docs/readme.md")
     commit("ci-only", ".github/workflows/deploy.yml")
-    commit("runner", "operator/runners/medchron/x.py")
+    commit("runner", "operator/runners/jobs/x.py")
     commit("core", "operator/hermes-smd-overlay/x.py")
     commit("skills-after-core", "operator/skills/y/SKILL.md")
     git("update-ref", "refs/remotes/origin/main", shas["skills-after-core"])

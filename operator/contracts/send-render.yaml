@@ -302,7 +302,7 @@ skills:
     note: >-
       The cron's pre_run submits a negotiation job and wakes no turn; the job
       enters new offers on Negotiation Details and composes, IN CODE
-      (runners/medchron/medchron/negotiation/notice.py), one message per new
+      (runners/jobs/jobs/negotiation/notice.py), one message per new
       offer, held on the broker's notice row. Each notice's completion wake
       binds one new email (recipient and subject the broker's) and the turn
       sends the notice's message word for word. Declared compositional because

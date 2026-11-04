@@ -4,7 +4,7 @@
  *
  * On a seat the runner resolves its scanned-page controls and ICD tables under
  * install_root/controls/, which the entrypoint pulls from
- * vaults/<slug>/medchron-controls/ into a root-owned 0750 tree. The medchron uid
+ * vaults/<slug>/medchron-controls/ into a root-owned 0750 tree. The jobs uid
  * can read it and never write it, so the runner's own ICD fetch can NEVER run
  * on a seat: before this step, a seat worked only if someone uploaded icd/ to
  * the vault by hand. The provisioner now (a) refuses when a firm config is
@@ -56,9 +56,9 @@ describe('structural', () => {
   it("the console-side vendoring helper exists, is executable, and calls the runner's own vendor()", () => {
     expect(existsSync(HELPER)).toBe(true)
     const helper = readFileSync(HELPER, 'utf8')
-    expect(helper).toContain('from medchron.stages.icd_fetch import vendor')
+    expect(helper).toContain('from jobs.stages.icd_fetch import vendor')
     // The three-path install the tree already uses (CI and the seat image).
-    expect(helper).toMatch(/connectors\/_sdk.*connectors\/smokeball.*runners\/medchron/s)
+    expect(helper).toMatch(/connectors\/_sdk.*connectors\/smokeball.*runners\/jobs/s)
     expect(stageBlock()).toContain('"${BIN_DIR}/lib/medchron-vendor-icd.sh"')
   })
 
@@ -265,8 +265,8 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
   })
 
   it("uses the runner's own config module, from the invoking checkout", () => {
-    expect(block).toContain('operator/runners/medchron')
-    expect(block).toContain('from medchron import config')
+    expect(block).toContain('operator/runners/jobs')
+    expect(block).toContain('from jobs.medchron import config')
     expect(block).toContain('config.ConfigError')
   })
 

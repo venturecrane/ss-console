@@ -54,10 +54,10 @@ _BUNDLE_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,31}\Z")
 _BUNDLE_VALUE = re.compile(r"\A(?:image|[0-9]{12}-[0-9a-f]{8})\Z")
 MAX_BUNDLES = 8
 #: Same env var the lanes read, so a seat that moves its run dir moves both.
-LANE_RUN_DIR_ENV = "SMD_MEDCHRON_RUN_DIR"
+LANE_RUN_DIR_ENV = "SMD_JOBS_RUN_DIR"
 
-#: Every lane heartbeat file the medchron runners write (ss-console
-#: operator/runners/medchron/medchron/*_lane.py ``HEARTBEAT``), without ``.json``.
+#: Every lane heartbeat file the jobs runners write (ss-console
+#: operator/runners/jobs/jobs/*_lane.py ``HEARTBEAT``), without ``.json``.
 LANE_HEARTBEATS = (
     "heartbeat",
     "demand-heartbeat",

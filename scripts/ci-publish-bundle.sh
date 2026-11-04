@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI: build and publish a CANDIDATE `jobs` bundle to R2 (ADR 0100 W3). Never live on merge.
 #
-# The jobs bundle is what the seat image installs at /opt/medchron (the runner
+# The jobs bundle is what the seat image installs at /opt/jobs (the runner
 # venv and its pricing table) and /opt/connectors/smokeball (the connector venv),
 # built again on merge so a change to the job runtime reaches only the seats that
 # author a job lane, without a new image for every seat. The release controller
@@ -16,9 +16,21 @@
 # seat bind-mounts the bundle on, so no shebang or venv prefix moves. As root,
 # because the image build ran those steps as root (root:root a+rX).
 #
-#   fleet/bundles/jobs/<version>.tar.zst   root: medchron/ and connectors/smokeball/
-#   fleet/bundles/jobs/<version>.json      {"name","version","sha256","size",
+#   fleet/bundles/jobs/<version>.tar.zst   root: jobs/ and connectors/smokeball/
+#   fleet/bundles/jobs/<version>.json      {"name","version","sha256","size","layout",
 #                                           "ss_console_sha","base_image_ref","python"}
+#   fleet/bundles/jobs/layout-<n>/latest.json
+#                                          {"version","manifest_key","manifest_sha256"}
+#
+# THE LAYOUT (ADR 0103). A bundle's venvs carry absolute paths, so a bundle runs
+# only at the mount paths it was built for; LAYOUT names them (1: medchron/ at
+# /opt/medchron, every manifest before the key; 2: jobs/ at /opt/jobs). It must
+# equal the seat installer's BundleSpec.layout (bundle_installer/manifest.py;
+# operator/bin/tests/test_ci_publish_bundle.py pins the two). layout-<n>/latest.json
+# is written LAST, after the D1 record, so it only ever names a recorded release:
+# a seat whose pointer names another layout's bundle boots this one instead
+# (bundle_installer.decide), which is what lets an image and its bundle change
+# layout in one release.
 #
 # version = <utc yyyymmddHHMM>-<AFTER_SHA[:8]>, the skills shape; release id
 # bnd-<version>. The tarball goes up first and is read back (sha256 compared)
@@ -35,6 +47,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
 R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
 NAME="jobs"
+LAYOUT=2
 
 [[ "$AFTER" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::AFTER_SHA must be a 40-hex commit"; exit 1; }
 for tool in docker zstd sha256sum aws; do
@@ -44,11 +57,12 @@ done
 VERSION="$(date -u +%Y%m%d%H%M)-${AFTER:0:8}"
 TARBALL_KEY="fleet/bundles/${NAME}/${VERSION}.tar.zst"
 MANIFEST_KEY="fleet/bundles/${NAME}/${VERSION}.json"
+LATEST_KEY="fleet/bundles/${NAME}/layout-${LAYOUT}/latest.json"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
 assert_bundle_key() {
-  if [[ ! "$1" =~ ^fleet/bundles/[a-z][a-z0-9-]{0,31}/[0-9]{12}-[0-9a-f]{8}\.(tar\.zst|json)$ ]]; then
+  if [[ ! "$1" =~ ^fleet/bundles/[a-z][a-z0-9-]{0,31}/([0-9]{12}-[0-9a-f]{8}\.(tar\.zst|json)|layout-[1-9][0-9]*/latest\.json)$ ]]; then
     echo "::error::refusing to write R2 key outside the bundle release key space: $1"
     exit 1
   fi
@@ -72,12 +86,12 @@ docker run --rm --platform linux/amd64 --user 0 --entrypoint /bin/sh \
     set -eu
     mkdir -p /tmp/src
     cp -R /src/connectors /src/runners /src/requirements /src/templates /tmp/src/
-    rm -rf /opt/medchron /opt/connectors/smokeball
+    rm -rf /opt/jobs /opt/connectors/smokeball
     export SRC=/tmp/src
     sh /tmp/src/templates/jobs-runtime.sh connector smokeball
-    PRICING_JSON=/src/adapter/cost_telemetry/anthropic_pricing.json sh /tmp/src/templates/jobs-runtime.sh medchron
-    /opt/medchron/.venv/bin/python -c "import platform; print(platform.python_version())" > /out/python
-    tar --numeric-owner -C /opt -cf /out/bundle.tar medchron connectors/smokeball
+    PRICING_JSON=/src/adapter/cost_telemetry/anthropic_pricing.json sh /tmp/src/templates/jobs-runtime.sh jobs
+    /opt/jobs/.venv/bin/python -c "import platform; print(platform.python_version())" > /out/python
+    tar --numeric-owner -C /opt -cf /out/bundle.tar jobs connectors/smokeball
   '
 
 PYTHON_VERSION="$(tr -d '[:space:]' < "${work}/out/python")"
@@ -100,17 +114,25 @@ zstd -q -19 -T0 "${work}/out/bundle.tar" -o "${work}/bundle.tar.zst"
 SHA256="$(sha256sum "${work}/bundle.tar.zst" | awk '{print $1}')"
 SIZE="$(wc -c < "${work}/bundle.tar.zst" | tr -d ' ')"
 
-python3 - "$NAME" "$VERSION" "$SHA256" "$SIZE" "$AFTER" "$BASE_IMAGE" "$PYTHON_VERSION" > "${work}/manifest.json" <<'PY'
+python3 - "$NAME" "$VERSION" "$SHA256" "$SIZE" "$LAYOUT" "$AFTER" "$BASE_IMAGE" "$PYTHON_VERSION" > "${work}/manifest.json" <<'PY'
 import json, sys
-name, version, sha, size, src, base, python = sys.argv[1:]
-print(json.dumps({"name": name, "version": version, "sha256": sha, "size": int(size), "ss_console_sha": src,
-                  "base_image_ref": base, "python": python}, indent=1, sort_keys=True))
+name, version, sha, size, layout, src, base, python = sys.argv[1:]
+print(json.dumps({"name": name, "version": version, "sha256": sha, "size": int(size), "layout": int(layout),
+                  "ss_console_sha": src, "base_image_ref": base, "python": python}, indent=1, sort_keys=True))
 PY
-echo "built ${NAME} ${VERSION}: ${SIZE} bytes, sha256 ${SHA256}, python ${PYTHON_VERSION}"
+MANIFEST_SHA256="$(sha256sum "${work}/manifest.json" | awk '{print $1}')"
+python3 - "$VERSION" "$MANIFEST_KEY" "$MANIFEST_SHA256" > "${work}/latest.json" <<'PY'
+import json, sys
+version, key, sha = sys.argv[1:]
+print(json.dumps({"version": version, "manifest_key": key, "manifest_sha256": sha}, indent=1, sort_keys=True))
+PY
+echo "built ${NAME} ${VERSION} (layout ${LAYOUT}): ${SIZE} bytes, sha256 ${SHA256}, python ${PYTHON_VERSION}"
 
 if [[ "${BUNDLE_DRY_RUN:-}" = "1" ]]; then
   echo "BUNDLE_DRY_RUN=1: nothing uploaded, nothing recorded"
   cat "${work}/manifest.json"
+  echo "would write ${LATEST_KEY}:"
+  cat "${work}/latest.json"
   exit 0
 fi
 
@@ -138,4 +160,11 @@ echo "bundle ${NAME} ${VERSION} published: s3://${R2_BUCKET_CONFIG}/${MANIFEST_K
 # ---------- D1 record: the controller rolls only recorded releases ----------
 ( cd "$REPO_ROOT" && operator/bin/fleet bundle-record --version "$VERSION" --sha "$AFTER" --image-ref "$BASE_IMAGE" \
     --notes "merge ${AFTER:0:8} (CI)" )
+
+# ---------- layout-<n>/latest.json: last, so it names only a recorded release ----------
+assert_bundle_key "$LATEST_KEY"
+r2 s3 cp "${work}/latest.json" "s3://${R2_BUCKET_CONFIG}/${LATEST_KEY}" --only-show-errors --content-type application/json
+r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${LATEST_KEY}" "${work}/readback-latest.json" --only-show-errors
+cmp -s "${work}/latest.json" "${work}/readback-latest.json" || { echo "::error::${LATEST_KEY} read-back does not match"; exit 1; }
+echo "  ${LATEST_KEY} -> ${VERSION}: a seat whose pointer names another layout's bundle boots this one"
 echo "  candidate only. The release controller (release-tick.yml) rolls it to the seats that author a job lane."

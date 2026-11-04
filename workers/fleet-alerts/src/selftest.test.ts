@@ -87,7 +87,7 @@ describe('selftest_failing', () => {
   })
 
   it('a run with no failed check resolves, warnings or not', () => {
-    const s = state(verdict({ warned_count: 2, warned: ['medchron-daemon-idle'] }))
+    const s = state(verdict({ warned_count: 2, warned: ['jobs-daemon-idle'] }))
     expect(s?.active).toBe(false)
     expect(s?.detail).toContain('passed')
   })

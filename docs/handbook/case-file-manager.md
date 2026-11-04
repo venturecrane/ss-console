@@ -12,23 +12,23 @@ sources:
   - label: The schedule's cron step
     href: operator/skills/case-file-manager/pre_run.py
   - label: The job's stages
-    href: operator/runners/medchron/medchron/casefile/run.py
+    href: operator/runners/jobs/jobs/casefile/run.py
   - label: The re-check (only what changed)
-    href: operator/runners/medchron/medchron/casefile/recheck.py
+    href: operator/runners/jobs/jobs/casefile/recheck.py
   - label: The numbered changes
-    href: operator/runners/medchron/medchron/casefile/propose.py
+    href: operator/runners/jobs/jobs/casefile/propose.py
   - label: Applying approved changes
-    href: operator/runners/medchron/medchron/casefile/apply.py
+    href: operator/runners/jobs/jobs/casefile/apply.py
   - label: Low limits and new files
-    href: operator/runners/medchron/medchron/casefile/flags.py
+    href: operator/runners/jobs/jobs/casefile/flags.py
   - label: The monthly billing count
-    href: operator/runners/medchron/medchron/casefile/billing.py
+    href: operator/runners/jobs/jobs/casefile/billing.py
   - label: The File Status
-    href: operator/runners/medchron/medchron/casefile/book.py
+    href: operator/runners/jobs/jobs/casefile/book.py
   - label: The ranked list workbook
-    href: operator/runners/medchron/medchron/casefile/workbook.py
+    href: operator/runners/jobs/jobs/casefile/workbook.py
   - label: The firm inputs (casefile-firm.yaml schema)
-    href: operator/runners/medchron/medchron/casefile/firm.py
+    href: operator/runners/jobs/jobs/casefile/firm.py
   - label: The schedule (broker)
     href: operator/workspace_broker/casefile_schedule.py
   - label: The scheduled submit (broker)

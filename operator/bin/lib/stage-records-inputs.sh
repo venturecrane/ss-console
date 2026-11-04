@@ -8,10 +8,10 @@
 # shellcheck shell=bash
 
 # ---------- Step 2f'': the matter records lane's firm inputs ----------
-# The records job (runners/medchron/medchron/records/) reads the firm's
+# The records job (runners/jobs/jobs/records/) reads the firm's
 # records-firm.yaml (per_job_cap_usd, monthly_budget_usd, usd_per_page),
 # private, in engagements operator/customers/<slug>/records/. Validated against
-# THIS checkout's runner (python -m medchron.records.firm: exit 0 OK, 1
+# THIS checkout's runner (python -m jobs.records.firm: exit 0 OK, 1
 # problems, 2 usage), refused unless it is engagements origin/main, and SYNCED
 # with --delete to vaults/<slug>/records/ (gone means gone). Only the yaml goes:
 # notes beside it stay in engagements. A seat with no records inputs is skipped
@@ -25,10 +25,10 @@ if [ -f "${RECORDS_INPUTS_DIR}/records-firm.yaml" ]; then
     [ "$(git -C "${_eng}" show "origin/main:operator/customers/${SLUG}/records/records-firm.yaml" 2>/dev/null)" = "$(cat "${RECORDS_INPUTS_DIR}/records-firm.yaml")" ] \
       || die "the records firm input records-firm.yaml at ${RECORDS_INPUTS_DIR} is not engagements origin/main; merge it first (an unmerged file is an unreviewed one)"
   fi
-  [ -f "${REPO_ROOT}/operator/runners/medchron/medchron/records/firm.py" ] \
-    || die "this checkout's runner has no records firm validator (medchron/records/firm.py); not uploading unvalidated records inputs"
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
-    uv run --quiet --with pyyaml python3 -m medchron.records.firm "${RECORDS_INPUTS_DIR}" \
+  [ -f "${REPO_ROOT}/operator/runners/jobs/jobs/records/firm.py" ] \
+    || die "this checkout's runner has no records firm validator (jobs/records/firm.py); not uploading unvalidated records inputs"
+  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
+    uv run --quiet --with pyyaml python3 -m jobs.records.firm "${RECORDS_INPUTS_DIR}" \
     || die "the records firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"
   log "Syncing the records firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/records/"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \

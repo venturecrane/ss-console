@@ -1,0 +1,242 @@
+"""SMD can account for a file the composer read and wrote no line for.
+
+WHY (2026-10-22). The Curtis chronology held at the coverage gate on one
+emailed image the composer left without a disposition, while its seven
+siblings were each marked an email signature image. A person read it in the
+ops workspace; nothing could record what they decided.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+import test_upload_daemon as ud
+from jobs.medchron import config as config_mod, coverage_decide, job as job_mod
+from jobs.resume import MARKER_PREFIX
+from jobs.stages import coverage as coverage_stage, limitations
+from jobs.stages.base import StageRun
+from jobs_testkit import FakeSeat, seed_raw_manifest
+
+JOB = "01M5J9RGY9G9FFXYBZ3CH59XBY"
+IMG = "msgatt-f1dac8706a11"
+
+
+def _scene(data_root: Path) -> Path:
+    sd = data_root / "example-matter"
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True},
+        {"id": IMG, "name": "image001.jpg (2)", "ext": ".jpg", "ok": True},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units").mkdir(parents=True, exist_ok=True)
+    (sd / "units" / "alpha.json").write_text(json.dumps([{**r, "chars": 245} for r in rows]))
+    rd = sd / "runs" / "alpha"
+    rd.mkdir(parents=True, exist_ok=True)
+    (rd / "entries_scoped_final.md").write_text("Office visit for neck pain (Exhibit 1 - p. 1)\n")
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1}))
+    return sd
+
+
+def _gate(job_dir: Path, firm: Path, data_root: Path) -> tuple[int, list[str]]:
+    job = job_mod.load(job_dir)
+    log: list[str] = []
+    sr = StageRun(
+        job=job,
+        cfg=config_mod.load(str(firm)),
+        unit=job.units[0],
+        slug_dir=data_root / "example-matter",
+        decided={},
+        log=log.append,
+        seat_factory=lambda: FakeSeat(),
+    )
+    return coverage_stage.run(sr), log
+
+
+def _seat(
+    tmp_path: Path, job_dir: Path, *, reason: str = "coverage gate: a pulled file is neither cited nor explained"
+):
+    d, broker = ud._daemon(tmp_path)
+    broker.rows[JOB] = {"state": "held", "reason": reason}
+    jd = d.job_dir(JOB)
+    jd.mkdir(parents=True)
+    shutil.copy(job_dir / "job.yaml", jd / "job.yaml")
+    (jd / "daemon.json").write_text(json.dumps({"claimed": True, "state": "held"}))
+    return d
+
+
+def test_the_recorded_decision_explains_the_file_and_the_gate_passes(
+    tmp_path: Path, job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sd = _scene(data_root)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1 and any("UNEXPLAINED 1" in line for line in log)  # the control: it holds
+    d = _seat(tmp_path, job_dir)
+    p = coverage_decide.plan(
+        d, JOB, file_id=IMG, reason="email signature image, no clinical content", by="smd", source="ops-ap"
+    )
+    coverage_decide.apply(d, p)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 0, log
+    assert any("SMD: email signature image" in line for line in log)
+    body = json.loads((sd / coverage_decide.FILE).read_text())
+    assert body["decisions"][0]["by"] == "smd" and body["decisions"][0]["source"] == "ops-ap"
+    assert json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())["job_id"] == JOB
+
+
+@pytest.mark.parametrize(
+    ("kw", "file_id", "needle"),
+    [
+        ({"reason": "identity: x"}, IMG, "not a coverage hold"),
+        ({}, "f1", "not a file the coverage gate held"),
+    ],
+)
+def test_the_command_refuses_what_it_cannot_record(
+    tmp_path: Path, job_dir: Path, firm_config_path: Path, data_root: Path, kw: dict, file_id: str, needle: str
+) -> None:
+    _scene(data_root)
+    _gate(job_dir, firm_config_path, data_root)  # writes coverage_unexplained.json
+    d = _seat(tmp_path, job_dir, **kw)
+    with pytest.raises(coverage_decide.Refused, match=needle):
+        coverage_decide.plan(d, JOB, file_id=file_id, reason="r", by="smd", source="s")
+    assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+
+
+# ---- a "not read" account never explains a file the composer drew entries from --
+NOT_READ = (
+    "| nothing extractable: not read (declined by the reader on every attempt); named as unread in the limitations"
+)
+
+
+def test_a_not_read_account_of_some_pages_never_explains_a_file_with_entries(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-10-24 (#3464): compose splits a declined file to single pages and
+    writes `nothing extractable: not read (...)` for the pages no reader took.
+    A file whose OTHER pages gave entries is a source; if the document cites
+    none of it, that is loss, and the unread pages' account must not hide it.
+    A file every page of which was unread is still explained by that account."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f7", "name": "big record", "ext": ".pdf", "ok": True, "chars": 9000},
+        {"id": "f8", "name": "sane exam", "ext": ".pdf", "ok": True, "chars": 900},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "map-01-1.md").write_text(
+        "## FILES-SEEN\n=== FILE: clinic note.pdf (fileId f1) === entries: 1\n"
+        "=== FILE: big record.pdf [part 1/2] === entries: 3\n"
+    )
+    # the shape compose.record_unread writes, one line per unread piece
+    (rd / "map-01-2.md").write_text(f"## FILES-SEEN\n=== FILE: big record.pdf [part 2/2] === {NOT_READ}\n")
+    (rd / "map-02.md").write_text(f"## FILES-SEEN\n=== FILE: sane exam.pdf (fileId f8) === {NOT_READ}\n")
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1, log
+    assert json.loads((rd / "coverage_unexplained.json").read_text()) == ["big record.pdf"]
+    assert any("sane exam.pdf" in line and "not read" in line for line in log), log
+
+
+# ---- row 1 (2026-10-24): a file whose every entry a filter rule removed --------
+INTAKE_FORM = "joint intake form.pdf"
+
+
+def _omitted_scene(data_root: Path, kind: str, *, kept_elsewhere: bool = False) -> Path:
+    """The shape that holds legitimate joint matters: the composer drew one
+    entry from a shared intake form, filter removed that block (the
+    co-plaintiff's, or a pre-incident visit not itemized), and the final
+    document therefore cites nothing of the file."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f9", "name": "joint intake form", "ext": ".pdf", "ok": True, "chars": 900},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, INTAKE_FORM: 2}))
+    (rd / "map-001.md").write_text(
+        "=== FILE: clinic note.pdf (fileId f1) === entries: 1\n"
+        "=== FILE: joint intake form.pdf (fileId f9) === entries: 1\n"
+    )
+    # filter's count of every citation in the full assembly: Exhibit 2 once (the
+    # removed block), or twice when a kept block cites it too.
+    (rd / "full_cites.json").write_text(json.dumps({"1": 1, "2": 2 if kept_elsewhere else 1}))
+    row = {"date": "2026-01-08", "cites": [{"exhibit": 2, "file": INTAKE_FORM, "n": 1}]}
+    target = "omitted_coclient.json" if kind == "coclient" else "omitted_preincident.json"
+    (rd / target).write_text(json.dumps([{**row, "patient": "Beta Example", "reason": "unrelated", "head": "x"}]))
+    return sd
+
+
+@pytest.mark.parametrize(
+    ("kind", "needle"),
+    [("coclient", "another patient's care"), ("preincident", "pre-incident care that was reviewed and not itemized")],
+)
+def test_a_file_whose_every_entry_a_filter_rule_removed_is_explained_by_rule_not_held(
+    job_dir: Path, firm_config_path: Path, data_root: Path, kind: str, needle: str
+) -> None:
+    sd = _omitted_scene(data_root, kind)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 0, log
+    rows = {r["name"]: r for r in coverage_decide.rows(sd, "alpha")}
+    assert rows[INTAKE_FORM]["by"] == "rule" and needle in rows[INTAKE_FORM]["reason"]
+    # The same reader names it in the Records Reviewed and Limitations section.
+    rule = coverage_stage.rule_rows(sd, "alpha", config_mod.load(str(firm_config_path)))
+    assert [(r["name"], needle in r["reason"]) for r in rule] == [(INTAKE_FORM, True)]
+
+
+def test_a_file_with_a_kept_citation_that_is_not_cited_is_still_an_integrity_stop(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The falsifier for the rule above: one citation of the file sat in a block
+    nobody removed, so its absence from the document is loss, and it holds at
+    once (no rebuild, which could not change the answer)."""
+    _omitted_scene(data_root, "coclient", kept_elsewhere=True)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1 and any("COVERAGE GATE HOLD (integrity)" in line for line in log), log
+
+
+# ---- B3 (2026-10-24): a cited file is never named as one no entry is drawn from --
+def test_a_cited_file_whose_files_seen_reads_entries_0_is_not_named_unused(
+    firm_config_path: Path, data_root: Path
+) -> None:
+    """A composer miscount (or a citation assemble resolved onto another file)
+    left `entries: 0` on a file the document cites. Naming it to the firm as
+    "read in full and no entry in this chronology is drawn from" it would be a
+    false statement about the file. The uncited sibling with the same line is
+    still named (the falsifier)."""
+    sd = _scene(data_root)
+    rows = [
+        {"id": "f1", "name": "clinic note", "ext": ".pdf", "ok": True, "chars": 245},
+        {"id": "f2", "name": "spare intake page", "ext": ".pdf", "ok": True, "chars": 245},
+    ]
+    seed_raw_manifest(data_root, rows)
+    (sd / "units" / "alpha.json").write_text(json.dumps(rows))
+    rd = sd / "runs" / "alpha"
+    (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "spare intake page.pdf": 2}))
+    (rd / "map-001.md").write_text(
+        "=== FILE: clinic note.pdf (fileId f1) === entries: 0\n"
+        "=== FILE: spare intake page.pdf (fileId f2) === entries: 0\n"
+    )
+    cfg = config_mod.load(str(firm_config_path))
+    names = [r["name"] for r in coverage_stage.rule_rows(sd, "alpha", cfg)]
+    assert names == ["spare intake page.pdf"]
+    # A decision row recorded for it on an earlier run is not repeated either.
+    coverage_decide.record(
+        sd,
+        {
+            "unit": "alpha",
+            "id": "f1",
+            "name": "clinic note.pdf",
+            "reason": "stale",
+            "by": "rule",
+            "source": "x",
+            "at": "t",
+        },
+    )
+    text = "\n".join(limitations._not_used_lines(sd, {}, "alpha", cfg))
+    assert "spare intake page.pdf" in text and "clinic note.pdf" not in text

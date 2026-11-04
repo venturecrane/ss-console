@@ -18,7 +18,7 @@ Falsifiers carried, one per behaviour the plan requires:
   unauthored lane passes with a note    demand-firm-inputs-absent
   cleanly empty vault is not authored   demand-firm-inputs-absent (state absent)
   unreachable vault still fails         demand-firm-inputs-present (state unreachable)
-  busy lane warns hourly, fails at boot medchron-daemon-idle
+  busy lane warns hourly, fails at boot jobs-daemon-idle
   vendor probe failure warns hourly     agentmail-webhook-secret-matches-vendor
   schema, atomic 0644 write             results.json
   crash counter                         selftest-crashlooping
@@ -219,7 +219,7 @@ def test_unauthored_lane_passes_with_a_note_and_an_authored_one_is_checked(seat:
 
 
 LANE_RUNTIME_CHECKS = {
-    "medchron-daemon-ticking",
+    "jobs-daemon-ticking",
     "demand-lane-ticking",
     "drafting-lane-ticking",
     "litigation-lane-ticking",
@@ -243,14 +243,14 @@ def test_a_seat_that_authors_no_lane_runs_no_lane_runtime_check(seat: dict[str, 
 def test_a_seat_runs_the_runtime_checks_of_exactly_the_lanes_it_authors(seat: dict[str, Path]) -> None:
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter", "smd-note"]))
     ran = LANE_RUNTIME_CHECKS & _ran(_once(seat, "hourly"))
-    assert ran == {"medchron-daemon-ticking", "demand-lane-ticking", "note-lane-ticking"}
+    assert ran == {"jobs-daemon-ticking", "demand-lane-ticking", "note-lane-ticking"}
 
 
 # ADR 0100 W5 (2026-11-03): the image carries no runner, so a seat with no lane has
-# no medchron python. The memory-cap sum ran with it on every seat and failed the
+# no jobs python. The memory-cap sum ran with it on every seat and failed the
 # scott seat's boot smoke on rel-ab97b966; with no lane there is no cap to sum.
 def test_a_seat_with_no_lane_and_no_runner_passes_the_memory_cap_check_with_a_note(seat: dict[str, Path]) -> None:
-    assert not (seat["root"] / "opt/medchron").exists()
+    assert not (seat["root"] / "opt/jobs").exists()
     found = _check(_once(seat, "hourly"), "lane-memory-caps-leave-gateway-reserve")
     assert found["ok"] is True, found
 
@@ -334,12 +334,12 @@ def test_an_absent_verdict_root_did_not_write_is_not_trusted(seat: dict[str, Pat
 
 def test_enabled_lane_with_inputs_fetched_runs_the_presence_check(seat: dict[str, Path]) -> None:
     # The stat shim answers the real owner; the fixture's files belong to the
-    # test user, so a shim that names that owner root:medchron stands in for a
+    # test user, so a shim that names that owner root:jobs stands in for a
     # seat where the entrypoint chowned the inputs.
     shim = seat["shims"] / "stat"
     shim.write_text(
         shim.read_text().replace(
-            "print(out)", "print(out.replace(user(os.getuid()), 'root', 1).replace(group(os.getgid()), 'medchron', 1))"
+            "print(out)", "print(out.replace(user(os.getuid()), 'root', 1).replace(group(os.getgid()), 'jobs', 1))"
         )
     )
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
@@ -359,11 +359,11 @@ def test_unreadable_customer_yaml_reads_as_authored_never_as_absent(seat: dict[s
 
 def test_busy_lane_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
-    assert _check(_once(seat, "boot"), "medchron-daemon-idle")["ok"] is True
+    assert _check(_once(seat, "boot"), "jobs-daemon-idle")["ok"] is True
     _write(seat["root"] / "run/smd-medchron/child.pid", "4242\n")
-    boot = _check(_once(seat, "boot"), "medchron-daemon-idle")
+    boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
     assert boot["ok"] is False and boot["warn"] is False
-    hourly = _check(_once(seat, "hourly"), "medchron-daemon-idle")
+    hourly = _check(_once(seat, "hourly"), "jobs-daemon-idle")
     assert hourly["ok"] is False and hourly["warn"] is True
 
 

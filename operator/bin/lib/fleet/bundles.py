@@ -1,6 +1,6 @@
 """One seat's `jobs` bundle release, and which seats get one at all (ADR 0100 W3).
 
-WHAT A BUNDLE IS. The job runner venv (/opt/medchron, with its pricing table)
+WHAT A BUNDLE IS. The job runner venv (/opt/jobs, with its pricing table)
 and the Smokeball connector venv (/opt/connectors/smokeball), built by CI on
 merge inside the published core image at those exact paths
 (scripts/ci-publish-bundle.sh, operator/templates/jobs-runtime.sh), packed as
@@ -28,6 +28,13 @@ removes it when there was none), restarts again behind the busy gate so the
 seat runs what it ran, and records the seat rolled_back (a verdict) or
 tooling_error (no verdict). So the pointer is left at the new version only on
 done, and a retry always starts from what the seat really ran.
+
+ALREADY RUNNING IT (ADR 0103). A seat whose pointer names a bundle of another
+layout than its image mounts adopts the newest bundle of its own layout at boot
+(bundle_installer, ``layout-<n>/latest.json``), so it can report the target
+version before this step runs. Then the pointer is written WITHOUT a restart and
+the step is done once a fresh beat still reports the version; nothing on the
+seat changes, so no busy gate and no self-test.
 
 ORDER. A bundle published at S reaches a seat only once that seat's image
 descends from base(S) (ordering.py), as skills do.
@@ -197,12 +204,24 @@ class BundleRollout:
         name, version = manifest["name"], manifest["version"]
         pointer = bundle_pointer_key(seat, name)
         previous = self.r2.get_json(pointer)
+        row = self.store.seat_status(seat) or {}
+        if reported(row, name) == version:
+            # The seat already runs it: its boot adopted the newest bundle of
+            # its image's layout (layout-<n>/latest.json, ADR 0103) while the
+            # pointer still named another layout's. A restart would change
+            # nothing on the seat; writing the pointer makes the next boot agree.
+            if dry_run:
+                return SeatOutcome(
+                    seat,
+                    "pending",
+                    f"dry run: already reports {name} {version}; would point it there without a restart",
+                )
+            return self._point_without_restart(seat, name, version, pointer, previous, key, sha)
         if dry_run:
             verdict = self.gate.probe(seat)
             if verdict.busy:
                 return SeatOutcome(seat, "waiting_idle", "dry run: busy: " + "; ".join(verdict.reasons))
             return SeatOutcome(seat, "pending", f"dry run: idle; would point {name} at {version} and restart")
-        row = self.store.seat_status(seat) or {}
         caps, _where = image_capabilities(self.store, self.r2, seat)
         selftest = bool(caps and caps.get("selftest"))
         verdict = self.gate.wait_idle(seat, self.max_idle_wait, self.log)
@@ -229,6 +248,30 @@ class BundleRollout:
         return SeatOutcome(
             seat, state, f"{check.cls}: {check.detail}; {self._roll_back(seat, name, pointer, previous)}"
         )
+
+    def _point_without_restart(self, seat: str, name: str, version: str, pointer: str,
+                               previous: dict[str, Any] | None, key: str, sha: str) -> SeatOutcome:  # fmt: skip
+        """Write the pointer at what the seat already runs; done once a fresh beat still reports it.
+
+        No busy gate (nothing restarts) and no self-test (no new boot to judge).
+        A seat that stops reporting the version gets its previous pointer back,
+        still without a restart: what it runs was never this step's doing.
+        """
+        since = ids.utc_now()
+        self.r2.put_json(pointer, {"version": version, "manifest_key": key, "manifest_sha256": sha})
+        check = smoke.read_back(
+            self.store, seat, lambda r: judge_bundle_row(r, since, name, version),
+            BUNDLE_READBACK_WINDOW_S, self.sleep, self.clock,
+        )  # fmt: skip
+        if check.cls == "pass":
+            return SeatOutcome(
+                seat, "done", f"already ran {name} {version}; pointer written, no restart; {check.detail}"
+            )
+        self._repoint(pointer, previous)
+        back = (previous or {}).get("version")
+        said = f"pointer restored to {back}" if back else "pointer removed (there was none)"
+        state = "rolled_back" if check.cls in ("fail", "timeout") else "tooling_error"
+        return SeatOutcome(seat, state, f"{check.cls}: {check.detail}; {said}; the seat was not restarted")
 
     def _verify(self, seat: str, name: str, version: str, row: dict[str, Any], since: Any, selftest: bool) -> Check:
         got = smoke.read_back(

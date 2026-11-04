@@ -110,7 +110,7 @@ def test_write_token_file_is_0660_and_roundtrips(tmp_path):
 
 def test_write_token_file_is_0660_under_a_restrictive_umask(tmp_path):
     """Falsifier for the 2026-10-12 re-consent defect: the token is shared with
-    the medchron runner via group smokeball-token (ss-console entrypoint.sh
+    the jobs runner via group smokeball-token (ss-console entrypoint.sh
     converges it to 0660 at boot; boot-smoke asserts it). A re-consent that
     writes 0600 — or lets the process umask strip the group bits off O_CREAT —
     locks the drafting runner out until the next reboot."""

@@ -285,7 +285,7 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
       medchronAuthored: true,
     })
     expect(out).toContain('FAIL: medchron-controls-present')
-    expect(out).toContain('FAIL: medchron-uid-reads-controls-cannot-write')
+    expect(out).toContain('FAIL: jobs-uid-reads-controls-cannot-write')
     expect(out).toMatch(/(PASS|FAIL): medchron-icd-tables-present/)
     expect(out).toMatch(/(PASS|FAIL): medchron-gate-claim-audit-refuses/)
     expect(out).not.toContain('medchron-firm-config-absent')

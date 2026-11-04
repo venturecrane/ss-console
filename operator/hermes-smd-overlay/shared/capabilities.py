@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 #: Job lane -> the skill whose being enabled authors it. The runner's own constants
-#: (medchron/*_lane.py ``SKILL``) must agree; tests/test_capabilities.py pins them.
+#: (jobs/*_lane.py ``SKILL``) must agree; tests/test_capabilities.py pins them.
 JOB_LANES: dict[str, str] = {
     "medchron": "medical-chronology-maintainer",
     "demand": "demand-letter-drafter",

@@ -55,7 +55,7 @@ SCANNED_PAGE_CHARS_CEILING = 4_000
 
 #: This lane's OWN page cap: how many pages one bundle may send to
 #: transcription. A day's post runs past the shared 40-page cap
-#: (``vision.DEFAULT_PAGE_CAP``, which fences medchron and ``read_document``
+#: (``vision.DEFAULT_PAGE_CAP``, which fences the jobs runner and ``read_document``
 #: too), so the lane carries its own, and the shared one is left alone.
 DEFAULT_POST_PAGE_CAP = 80
 

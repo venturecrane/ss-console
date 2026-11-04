@@ -15,7 +15,7 @@ What this does, entirely within the customer's isolated Machine:
      the Machine's OWN ``SMOKEBALL_CLIENT_ID/SECRET`` (already Fly secrets here).
      No shared client secret, no call to any Worker.
   3. Write the refresh token to a hermes-owned 0660 file (group smokeball-token,
-     read by the medchron runner; see write_token_file) on the per-customer
+     read by the jobs runner; see write_token_file) on the per-customer
      volume, where the connector reads it (the Clio token-file pattern). The file
      is durable across restarts/deploys (it lives on the Fly volume).
 
@@ -201,7 +201,7 @@ def write_token_file(refresh_token: str, *, path: str | None = None) -> None:
     ss-console's operator entrypoint.sh converges the dir to
     ``hermes:smokeball-token 2770`` and this file to ``hermes:smokeball-token
     0660`` at boot, then bind-mounts it to ``/run/smd-smokeball-token`` where
-    the medchron/drafting runner (uid ``medchron``, a member of group
+    the jobs runner (uid ``jobs``, a member of group
     ``smokeball-token``) reads it; boot-smoke asserts ``smokeball-token:660``.
     A re-consent that wrote 0600 locked the runner out until the next reboot
     (``auth_mode='authorization_code' requires a refresh_token``; seat

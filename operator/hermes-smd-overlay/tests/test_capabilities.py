@@ -13,7 +13,7 @@ from shared import capabilities as cap
 
 OVERLAY = Path(__file__).resolve().parents[1]
 OPERATOR = OVERLAY.parent
-RUNNER = OPERATOR / "runners" / "medchron" / "medchron"
+RUNNER = OPERATOR / "runners" / "jobs" / "jobs"
 
 
 def _doc(*skills: str | dict, connectors: dict | None = None) -> dict:

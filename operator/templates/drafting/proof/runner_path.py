@@ -1,9 +1,9 @@
-"""Make the medchron runner importable from a laptop checkout.
+"""Make the jobs runner importable from a laptop checkout.
 
 The proof tools read the lane's own parsers (``howell.money``,
 ``howell.parse_date``, the page markers, ``evidence.lint``) so a score means
-what the lane means. In the medchron venv the runner is installed; from a bare
-checkout it is the tree's own ``operator/runners/medchron``.
+what the lane means. In the jobs venv the runner is installed; from a bare
+checkout it is the tree's own ``operator/runners/jobs``.
 """
 
 from __future__ import annotations
@@ -12,12 +12,12 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-RUNNER = Path(__file__).resolve().parents[3] / "runners" / "medchron"
+RUNNER = Path(__file__).resolve().parents[3] / "runners" / "jobs"
 
 
 def ensure() -> None:
     try:
-        import medchron  # noqa: F401 -- probing that the runner is installed
+        import jobs  # noqa: F401 -- probing that the runner is installed
     except ModuleNotFoundError:
         if str(RUNNER) not in sys.path:
             sys.path.insert(0, str(RUNNER))
@@ -25,14 +25,14 @@ def ensure() -> None:
 
 def howell() -> ModuleType:
     ensure()
-    from medchron.drafting import howell as m
+    from jobs.drafting import howell as m
 
     return m
 
 
 def page_text() -> ModuleType:
     ensure()
-    from medchron.audit import page_text as m
+    from jobs.medchron.audit import page_text as m
 
     return m
 
@@ -41,7 +41,7 @@ def lint() -> ModuleType | None:
     """``evidence.lint``, or None before it merged."""
     ensure()
     try:
-        from medchron.drafting.evidence import lint as m
+        from jobs.drafting.evidence import lint as m
     except ImportError:
         return None
     return m
@@ -50,7 +50,7 @@ def lint() -> ModuleType | None:
 def render() -> ModuleType | None:
     ensure()
     try:
-        from medchron.drafting.evidence import render as m
+        from jobs.drafting.evidence import render as m
     except ImportError:
         return None
     return m
@@ -58,6 +58,6 @@ def render() -> ModuleType | None:
 
 def shapes() -> ModuleType:
     ensure()
-    from medchron.drafting.evidence import shapes as m
+    from jobs.drafting.evidence import shapes as m
 
     return m

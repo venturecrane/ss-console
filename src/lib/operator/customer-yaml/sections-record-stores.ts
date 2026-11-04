@@ -49,6 +49,7 @@ const RESERVED_PREFIXES = [
   '/opt/data/smokeball-extract-cache',
   '/opt/data/.smd',
   '/opt/data/medchron',
+  '/opt/data/jobs',
 ] as const
 
 /**

@@ -8,7 +8,7 @@ enforced_by:
   - operator/hermes-smd-overlay/tests/test_capabilities.py
   - operator/hermes-smd-overlay/tests/test_capabilities_gateway_equivalence.py
   - operator/templates/tests/test_selftest.py
-  - operator/runners/medchron/tests/test_authored_lanes.py
+  - operator/runners/jobs/tests/test_authored_lanes.py
 ---
 
 # ADR 0100: One Operator - core plus the capabilities a seat authors
@@ -58,3 +58,7 @@ An artifact built at commit S (a skills release or a bundle) may go to a seat wh
 - **A `packs:` or `addons:` flag as the source of truth.** A flag can disagree with what the seat actually enables; deriving from enabled skills and bound connectors cannot.
 - **One image per vertical.** It multiplies images by verticals and still restarts every seat of that vertical on any change; bundles ship per capability runtime.
 - **Making the identifier floors per capability.** It would let a misconfigured seat lose them (ADR 0093).
+
+## Amendments
+
+- 2026-11-04: the runner package is `jobs` (ADR 0103). The seat path this ADR names as `/opt/medchron` is `/opt/jobs`, and the runner tests live under `operator/runners/jobs/tests/`.

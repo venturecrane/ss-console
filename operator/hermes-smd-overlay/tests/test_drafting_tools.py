@@ -1,4 +1,4 @@
-"""The drafting job's agent tools (hermes-smd-medchron/drafting.py).
+"""The drafting job's agent tools (hermes-smd-lanes/drafting.py).
 
 The demand job's rules for five litigation document classes. Who asked is never
 the model's to say: requested_by, request_ref and the request text come from the
@@ -61,9 +61,9 @@ def _clear() -> None:
 def drafting(monkeypatch):
     from tests.conftest import load_plugin
 
-    mod = load_plugin("hermes-smd-medchron").drafting
+    mod = load_plugin("hermes-smd-lanes").drafting
     client = _Client()
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: client)
     _clear()
     yield mod, client
     _clear()
@@ -214,7 +214,7 @@ def test_a_broker_refusal_is_relayed_with_the_existing_job(drafting, monkeypatch
         def drafting_submit(self, envelope):
             return {"ok": True, "accepted": False, "reason": "already underway", "job_id": JOB}
 
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Refuses())
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Refuses())
     _email()
     out = json.loads(mod.drafting_job_submit(MATTER))
     assert out == {"accepted": False, "reason": "already underway", "job_id": JOB}
@@ -227,10 +227,10 @@ def test_the_tools_are_classified() -> None:
 
 
 def test_the_client_speaks_the_broker_verbs(monkeypatch) -> None:
-    from shared.medchron_client import MedchronBrokerClient
+    from shared.jobs_client import JobsBrokerClient
 
     sent: list[dict] = []
-    client = MedchronBrokerClient.__new__(MedchronBrokerClient)
+    client = JobsBrokerClient.__new__(JobsBrokerClient)
     monkeypatch.setattr(client, "_request", lambda payload: sent.append(payload) or {"ok": True})
     client.drafting_submit({"x": 1})
     client.drafting_status()
@@ -272,7 +272,7 @@ def test_a_failed_job_status_is_a_shortfall_for_smd(drafting, monkeypatch) -> No
     from tests.conftest import load_plugin
 
     mod, _client = drafting
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("failed"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("failed"))
     result = mod.drafting_job_status({"job_id": JOB})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("shortfall", "drafting_job_failed")
@@ -282,7 +282,7 @@ def test_a_delivered_job_status_is_an_ordinary_read(drafting, monkeypatch) -> No
     from tests.conftest import load_plugin
 
     mod, _client = drafting
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("delivered"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("delivered"))
     result = mod.drafting_job_status({"job_id": JOB})
     emit = load_plugin("hermes-smd-audit").emit
     assert emit._outcome_from_result(result) == ("ok", None)
@@ -290,7 +290,7 @@ def test_a_delivered_job_status_is_an_ordinary_read(drafting, monkeypatch) -> No
 
 def test_the_allowance_projects_counts_and_classes_never_cents(drafting, monkeypatch) -> None:
     mod, _client = drafting
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: _Status("delivered"))
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Status("delivered"))
     out = json.loads(mod.drafting_allowance({}))
     assert out == {
         "unit": "drafts",

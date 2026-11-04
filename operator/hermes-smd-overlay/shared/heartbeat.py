@@ -785,7 +785,7 @@ REPLY_COULD_NOT_PREFIX = "reply_could_not:"
 
 #: The broker's delivery-proof vocabulary (ss-console
 #: ``workspace_broker/delivery_proof.py`` ``CODES``, mirroring
-#: ``medchron/proof/gate.py``). A CLOSED vocabulary for the reason
+#: ``jobs/proof/gate.py``). A CLOSED vocabulary for the reason
 #: ``REPLY_HOLD_REASONS`` is: a code not listed rides as ``proof:other``.
 DELIVERY_PROOF_CODES = frozenset(
     {

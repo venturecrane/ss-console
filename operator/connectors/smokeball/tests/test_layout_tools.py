@@ -420,7 +420,7 @@ def test_the_summary_write_is_not_a_tool() -> None:
 #
 # 2026-10-29: post intake enters offer letters from the scanned mail. A row
 # written into an EMPTY tab with no summary made the tab read as the firm's own
-# to the negotiation watch (medchron negotiation/rows.py operator_kept), which
+# to the negotiation watch (jobs negotiation/rows.py operator_kept), which
 # then emailed "not entered ... kept by the firm" about every later offer on
 # that matter and entered none. So the Operator's write keeps the tab its own.
 

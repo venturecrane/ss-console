@@ -388,7 +388,7 @@ probes:
       is about the client-visible effect, which no test can stand in for.
 
   # ---- routine 11 runner gates (ADR 0087, ss#2611; driver ss#2614) ----
-  # `medchron probe <gate>` on the seat (operator/runners/medchron/medchron/
+  # `jobs probe <gate>` on the seat (operator/runners/jobs/jobs/
   # probes.py): a throwaway synthetic matter, the planted violation, the gate
   # module, one REFUSED line. The registry rows stay `unprobed` until the
   # probe has run green on the reprovisioned seat and the verify id is on the row.
@@ -402,7 +402,7 @@ probes:
       the audit loop to mark it unsupported, fail repair, and refuse delivery
       while it stands.
     expect: refuse
-    seat_command: ['/opt/medchron/.venv/bin/medchron', 'probe', 'claim_audit']
+    seat_command: ['/opt/jobs/.venv/bin/jobs', 'probe', 'claim_audit']
     expect_pattern: '^REFUSED claim_audit'
     proves: >-
       On a provisioned seat: the installed runner package, the same one the
@@ -424,7 +424,7 @@ probes:
       vendor order form in an exhibit, and require the extractive sweep to
       refuse the sentences and the strip to remove the form before delivery.
     expect: refuse
-    seat_command: ['/opt/medchron/.venv/bin/medchron', 'probe', 'extractive']
+    seat_command: ['/opt/jobs/.venv/bin/jobs', 'probe', 'extractive']
     expect_pattern: '^REFUSED extractive'
     proves: >-
       On a provisioned seat: the installed runner package, the same one the
@@ -445,7 +445,7 @@ probes:
       unit's own, and require the identity check to move it out of the unit and
       disclose the move, and the billing chart to quarantine its charges.
     expect: refuse
-    seat_command: ['/opt/medchron/.venv/bin/medchron', 'probe', 'cross_client']
+    seat_command: ['/opt/jobs/.venv/bin/jobs', 'probe', 'cross_client']
     expect_pattern: '^REFUSED cross_client'
     proves: >-
       On a provisioned seat: the installed runner package, the same one the
@@ -466,7 +466,7 @@ probes:
       duplicate, not name-excluded, and not an explained orphan, and require
       the coverage gate to halt delivery and name the file.
     expect: flag
-    seat_command: ['/opt/medchron/.venv/bin/medchron', 'probe', 'provenance']
+    seat_command: ['/opt/jobs/.venv/bin/jobs', 'probe', 'provenance']
     expect_pattern: '^REFUSED provenance'
     proves: >-
       On a provisioned seat: the installed runner package, the same one the

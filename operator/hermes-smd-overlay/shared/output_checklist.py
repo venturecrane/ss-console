@@ -241,7 +241,7 @@ _FRAGMENT_LEN = 40
 #: firm asked for a brief and reads about the brief, the file and the record,
 #: never about our work as a job, a pipeline, a model or a lane. The drafting
 #: runner's review refuses the same class in the attorney notes
-#: (ss-console ``medchron/drafting/review.py`` check 9).
+#: (ss-console ``jobs/drafting/review.py`` check 9).
 #:
 #: NARROW BY DESIGN. "job" and "lane" are ordinary words in a personal injury
 #: file: "unable to return to the job", "the job site", "his job was full time",
@@ -473,7 +473,7 @@ def _quoted_spans(text: str) -> list[tuple[int, int]]:
 #: The chronology runner's delivery folder name, verbatim: "MEDICAL CHRONOLOGY -
 #: <client> <MM-DD-YY>" and whatever the firm's template appends ("by ...").
 #: The runner creates the folder with the firm's own capitals
-#: (medchron/stages/manifest.py), so a ledger entry or a note naming the folder
+#: (jobs/stages/manifest.py), so a ledger entry or a note naming the folder
 #: is quoting the firm's record, not shouting. On a joint matter, 2026-10-28, the
 #: unquoted name held a ledger write and an SMD note. Narrow on purpose: the
 #: span is the fixed heading, " - ", a client name (letters and name

@@ -5,7 +5,7 @@
 # `COPY operator/runners/ /app/runners/`, so it needs no Dockerfile line of its
 # own; its own file because entrypoint.sh sits at its shell size ratchet.
 # shellcheck shell=bash
-# shellcheck disable=SC2154 # log, MEDCHRON_RUN_DIR and the R2_* names are set by entrypoint.sh, which sources this file
+# shellcheck disable=SC2154 # log, JOBS_RUN_DIR and the R2_* names are set by entrypoint.sh, which sources this file
 #
 # WHY THE ENTRYPOINT NO LONGER EXECS INTO THE GATEWAY (fleet job-safe restarts).
 # It used to end in `exec setpriv ... /app/bootstrap.sh`, and bootstrap execs
@@ -16,7 +16,7 @@
 # runs the gateway as ITS child in a session of its own, and on SIGTERM:
 #   1. writes the quiesce file (until now+600 s, by "machine-stop") so no lane
 #      starts new work;
-#   2. signals the medchron daemon and waits up to 240 s for it to exit (it
+#   2. signals the jobs daemon and waits up to 240 s for it to exit (it
 #      asks each running job to checkpoint, waits up to 220 s, terminates what
 #      is left, and exits 130);
 #   3. sends SIGTERM to the gateway and waits up to 45 s (Hermes' own stop:
@@ -46,10 +46,10 @@ SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS="${SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS:-45}"
 SMD_SUPERVISOR_QUIESCE_SECONDS="${SMD_SUPERVISOR_QUIESCE_SECONDS:-600}"
 _SMD_RELEASE_SENTINEL="__SMD_GATEWAY_RELEASE__"
 
-# The quiesce file the daemon and every lane read (medchron/quiesce.py).
+# The quiesce file the daemon and every lane read (jobs/quiesce.py).
 smd_quiesce_write() { # by reason seconds
-  local _f="${MEDCHRON_RUN_DIR:-}/quiesce" _until
-  [ -d "${MEDCHRON_RUN_DIR:-}" ] || return 0
+  local _f="${JOBS_RUN_DIR:-}/quiesce" _until
+  [ -d "${JOBS_RUN_DIR:-}" ] || return 0
   _until=$(( $(date +%s) + $3 ))
   if printf '{"until": %s, "by": "%s", "reason": "%s"}\n' "${_until}" "$1" "$2" > "${_f}.tmp" \
      && chmod 0644 "${_f}.tmp" && mv -f "${_f}.tmp" "${_f}"; then
@@ -63,7 +63,7 @@ smd_quiesce_write() { # by reason seconds
 # Machine stop's own one ended with that Machine; any other writer's (the fleet
 # rollout) stands until it expires or its writer removes it.
 smd_quiesce_clear_stale() {
-  local _f="${MEDCHRON_RUN_DIR:-}/quiesce"
+  local _f="${JOBS_RUN_DIR:-}/quiesce"
   [ -f "${_f}" ] || return 0
   if grep -q '"by": "machine-stop"' "${_f}"; then
     rm -f "${_f}" && log "Cleared the previous Machine stop's quiesce (${_f})"
@@ -120,7 +120,7 @@ smd_supervisor_boot() {
 
 # A root respawn loop for an overlay poller (config_applier, spec_applier,
 # skills_applier). Exit 130 is the poller's own "stopped by the Machine stop":
-# final, like the medchron daemon's, so nothing respawns inside a dying Machine.
+# final, like the jobs daemon's, so nothing respawns inside a dying Machine.
 smd_root_poller() { # module label
   ( _smd_stop=""
     trap '_smd_stop=1' TERM INT
@@ -182,15 +182,15 @@ _smd_stop_broker() {
 _smd_supervisor_stop() {
   trap '' TERM INT
   local _rc=0
-  log "Supervisor: ${1} received; quiescing the lanes, draining the medchron daemon (<=${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}s), then the gateway (<=${SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS}s)"
+  log "Supervisor: ${1} received; quiescing the lanes, draining the jobs daemon (<=${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}s), then the gateway (<=${SMD_SUPERVISOR_GATEWAY_WAIT_SECONDS}s)"
   smd_quiesce_write machine-stop "Machine stop (${1})" "${SMD_SUPERVISOR_QUIESCE_SECONDS}"
-  if [ -n "${SMD_MEDCHRON_LOOP_PID:-}" ]; then
-    kill -TERM "${SMD_MEDCHRON_LOOP_PID}" 2>/dev/null || true
-    pkill -TERM -P "${SMD_MEDCHRON_LOOP_PID}" 2>/dev/null || true
-    if _smd_wait_for "${SMD_MEDCHRON_LOOP_PID}" "${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}"; then
-      log "Supervisor: medchron daemon drained"
+  if [ -n "${SMD_JOBS_LOOP_PID:-}" ]; then
+    kill -TERM "${SMD_JOBS_LOOP_PID}" 2>/dev/null || true
+    pkill -TERM -P "${SMD_JOBS_LOOP_PID}" 2>/dev/null || true
+    if _smd_wait_for "${SMD_JOBS_LOOP_PID}" "${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}"; then
+      log "Supervisor: jobs daemon drained"
     else
-      log "WARN: medchron daemon still running after ${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}s; stopping the gateway anyway (claimed jobs resume on the next boot)"
+      log "WARN: jobs daemon still running after ${SMD_SUPERVISOR_DAEMON_WAIT_SECONDS}s; stopping the gateway anyway (claimed jobs resume on the next boot)"
     fi
   fi
   kill -TERM "${SMD_GATEWAY_PID}" 2>/dev/null || true

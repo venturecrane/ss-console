@@ -23,7 +23,7 @@ one.
 A job submitted before this table existed has no row. Its clients still show
 (from ``client_keys``) with ``dob_on_record: false``, so the skill knows to read
 the date from the file instead; it is never guessed here. While its job dir is
-still on the seat, ``python -m medchron.units_backfill`` (root) keeps its units
+still on the seat, ``python -m jobs.medchron.units_backfill`` (root) keeps its units
 from the job's own envelope through :func:`backfill`.
 """
 
@@ -169,7 +169,7 @@ def backfill(ledger: Any, job_id: str, units: Any, *, dry_run: bool = False) -> 
     """Keep the units of a job submitted before this table existed.
 
     The units come from the job's own envelope in the runner's job directory
-    (``medchron.units_backfill``, root on the seat), which survives about 72
+    (``jobs.medchron.units_backfill``, root on the seat), which survives about 72
     hours after delivery. Returns one of ``BACKFILL_OUTCOMES``:
 
     * ``already_recorded``: a row exists (written at submit, or by an earlier

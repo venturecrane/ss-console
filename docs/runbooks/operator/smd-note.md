@@ -38,18 +38,18 @@ exact words on the seat, and the smd-note skill sends them, verbatim.
 ## Run it, as root on the seat
 
 In the runner daemon's environment (`SMD_WORKSPACE_BROKER_SOCKET`,
-`SMD_MEDCHRON_RUN_DIR`), with the medchron venv's python. Put the words in a file
+`SMD_JOBS_RUN_DIR`), with the jobs venv's python. Put the words in a file
 (`note.txt`) so line breaks survive.
 
 ```bash
 # 1. Find her request email's Graph id.
-/opt/medchron/.venv/bin/python -m medchron.note_by_smd --recent --match "<surname or matter number>"
+/opt/jobs/.venv/bin/python -m jobs.note_by_smd --recent --match "<surname or matter number>"
 
 # 2. Dry run: who it reaches, who is copied, the exact words, the digest. Writes nothing.
-/opt/medchron/.venv/bin/python -m medchron.note_by_smd <graph_id> --text-file note.txt --approved-by <who> --dry-run
+/opt/jobs/.venv/bin/python -m jobs.note_by_smd <graph_id> --text-file note.txt --approved-by <who> --dry-run
 
 # 3. Read the To, the Cc and the words. Then, with the Captain's approval of that output:
-/opt/medchron/.venv/bin/python -m medchron.note_by_smd <graph_id> --text-file note.txt --approved-by <who> --confirm <digest>
+/opt/jobs/.venv/bin/python -m jobs.note_by_smd <graph_id> --text-file note.txt --approved-by <who> --confirm <digest>
 ```
 
 The live run must repeat the dry run's digest, which covers the email, the words,
@@ -96,11 +96,11 @@ the exact printed text), plus a **subject** the Captain approves too. Then:
 ```bash
 # Dry run: To, Subject, each matter with the name Smokeball gives it, the plain
 # numbers, any dates or case numbers the words state, the words, the digest.
-/opt/medchron/.venv/bin/python -m medchron.note_by_smd --to <admin address> --subject "<subject>" \
+/opt/jobs/.venv/bin/python -m jobs.note_by_smd --to <admin address> --subject "<subject>" \
   --text-file note.txt --approved-by <who> [--plain-number 140 ...] --dry-run
 
 # Live, with the Captain's approval of that output:
-/opt/medchron/.venv/bin/python -m medchron.note_by_smd --to <admin address> --subject "<subject>" \
+/opt/jobs/.venv/bin/python -m jobs.note_by_smd --to <admin address> --subject "<subject>" \
   --text-file note.txt --approved-by <who> [--plain-number 140 ...] --confirm <digest>
 ```
 
@@ -141,9 +141,9 @@ the exact printed text), plus a **subject** the Captain approves too. Then:
 - A note is one message. A conversation is not a note: if she answers, her
   reply is an ordinary inbound turn.
 
-Code: `operator/runners/medchron/medchron/note_by_smd.py` and `note_lane.py`
+Code: `operator/runners/jobs/jobs/note_by_smd.py` and `note_lane.py`
 (job dir `/run/smd-medchron/note-jobs`, root-only; boot smoke `note-lane-ticking`);
 broker `operator/workspace_broker/note_verbs.py`, `note_ledger.py`,
 `note_identifiers.py`; skill `operator/skills/smd-note/SKILL.md`. Tests:
 `operator/workspace_broker/tests/test_note_verbs.py`,
-`operator/runners/medchron/tests/test_note_by_smd.py`.
+`operator/runners/jobs/tests/test_note_by_smd.py`.

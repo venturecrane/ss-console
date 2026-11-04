@@ -2,7 +2,7 @@
 
 A bundle is the runtime of one capability, published on its own so a change to
 it ships only to the seats that author that capability. v1 has one bundle,
-``jobs``: the job runner's venv at ``/opt/medchron`` and the Smokeball
+``jobs``: the job runner's venv at ``/opt/jobs`` and the Smokeball
 connector's venv at ``/opt/connectors/smokeball``, built inside the core seat
 image at those exact paths.
 

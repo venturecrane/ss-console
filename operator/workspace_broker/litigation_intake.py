@@ -7,7 +7,7 @@ Three sources, all authored, none from the model:
   settings), ``scope.admins``, the library matter number, and whether the
   weekday cron row is live (uncommented) for the skill.
 * the firm's ``litigation-firm.yaml`` (private, staged from the engagements
-  repo; the runner reads ``$MEDCHRON_LITIGATION_INPUTS``, root:medchron, which
+  repo; the runner reads ``$JOBS_LITIGATION_INPUTS``, root:jobs, which
   the broker's uid cannot open, so entrypoint-litigation.sh installs a copy
   for the broker at ``$SMD_LITIGATION_FIRM_CONFIG``, root:workspace-broker
   0640): the monthly budget the broker

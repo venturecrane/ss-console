@@ -25,19 +25,19 @@ LAPTOP_DIR="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/as
 
 fail() { echo "MUTATION CHECK FAILED: $*" >&2; exit 1; }
 
-[ -x "${PY}" ] || fail "no venv at ${PY} (create it: cd operator && uv venv .venv && uv pip install -e ./runners/medchron)"
+[ -x "${PY}" ] || fail "no venv at ${PY} (create it: cd operator && uv venv .venv && uv pip install -e ./runners/jobs)"
 
 # ---- 0. the instrument itself -------------------------------------------------
 # The 2026-09-10 trap: assert every module the suites import resolves INSIDE this
 # worktree before trusting a single result below.
-where="$("${PY}" -c 'import medchron; print(medchron.__file__)' 2>/dev/null)" \
-  || fail "cannot import medchron"
+where="$("${PY}" -c 'import jobs; print(jobs.__file__)' 2>/dev/null)" \
+  || fail "cannot import jobs"
 case "${where}" in
   "${REPO_ROOT}"/*) : ;;
-  *) fail "medchron resolves to ${where}, OUTSIDE this worktree — the suites would
-     pass against a stale snapshot. Reinstall editable: uv pip install -e ./runners/medchron" ;;
+  *) fail "jobs resolves to ${where}, OUTSIDE this worktree — the suites would
+     pass against a stale snapshot. Reinstall editable: uv pip install -e ./runners/jobs" ;;
 esac
-echo "ok  instrument: medchron imports from this worktree"
+echo "ok  instrument: jobs imports from this worktree"
 
 # Restore from a SNAPSHOT, not from git: these files may be uncommitted on the
 # branch under development, and `git checkout --` silently does nothing for an

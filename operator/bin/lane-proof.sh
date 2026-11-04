@@ -19,7 +19,7 @@
 # Runs as ROOT on the seat, on purpose and unlike seat-probe.sh: the proof
 # record lives in the root-owned medchron tree so that no other uid (the
 # agent's above all) can prove a lane. The command is the runner's own
-# `medchron lane-proof`, which writes only that record and the proof-run
+# `jobs lane-proof`, which writes only that record and the proof-run
 # marker; it starts from `env -i`, so no secret in the ssh session's
 # environment reaches it or its argv.
 #
@@ -40,7 +40,7 @@ if [[ ! "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
   exit 2
 fi
 APP="hermes-${SLUG}"
-MEDCHRON="/opt/medchron/.venv/bin/medchron"
+JOBS="/opt/jobs/.venv/bin/jobs"
 RUN_DIR="/run/smd-medchron"
 
 on_seat() {
@@ -51,7 +51,7 @@ on_seat() {
 
 case "${ACTION}" in
   status | dry-run | keep | accept | revoke)
-    on_seat "${MEDCHRON}" lane-proof "${ACTION}" "$@"
+    on_seat "${JOBS}" lane-proof "${ACTION}" "$@"
     ;;
   pull)
     JOB="${1:-}"

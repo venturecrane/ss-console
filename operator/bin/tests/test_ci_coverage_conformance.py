@@ -67,7 +67,7 @@ GUARD = "steps.changes.outputs.relevant == 'true'"
 # Directories whose tests are deliberately NOT part of the bare pytest step.
 # connectors/ runs in the workflow's per-connector uv-venv conformance step
 # (real installed artifact + live stdio MCP), never in the bare env.
-# runners/ (ss#2613, the medchron runner) runs in its own uv-venv step for the
+# runners/ (ss#2613, the jobs runner) runs in its own uv-venv step for the
 # same reason: it installs the connector client and needs its deps.
 # hermes-smd-overlay/ (the seat runtime, in-tree since the 2026-10-22 fold, ADR
 # 0095) runs as its own job, `overlay`: the seat interpreter, its own venv and
@@ -310,11 +310,11 @@ def test_runner_tests_are_covered_by_their_own_step_and_trigger() -> None:
     # runners/ is pytest-exempt above (own venv step, ss#2613); pin both the
     # trigger path and the step so a runner regression cannot merge green.
     wf = _load_workflow()
-    assert any(_matches(p, "operator/runners/medchron/medchron/driver.py") for p in _trigger_paths(wf))
+    assert any(_matches(p, "operator/runners/jobs/jobs/medchron/driver.py") for p in _trigger_paths(wf))
     steps = wf["jobs"]["substrate"]["steps"]
     runs = "\n".join(s.get("run") or "" for s in steps)
-    assert "./runners/medchron" in runs and "runners/medchron/tests" in runs, (
-        "the medchron runner venv step is missing from operator-substrate.yml"
+    assert "./runners/jobs" in runs and "runners/jobs/tests" in runs, (
+        "the jobs runner venv step is missing from operator-substrate.yml"
     )
 
 
@@ -763,26 +763,26 @@ def test_the_cut_runner_and_connector_changes_build_no_image() -> None:
     again; add the SDK and ga4/msgraph-mail stop getting rebuilt with it."""
     patterns = _detect.load_patterns(BUNDLE_PATHS_FILE)
     contract = [
-        "operator/runners/medchron/**",
+        "operator/runners/jobs/**",
         "operator/connectors/smokeball/**",
         "operator/connectors/_sdk/**",
-        "operator/requirements/medchron.txt",
+        "operator/requirements/jobs.txt",
         "operator/requirements/connector-smokeball.txt",
         "operator/adapter/cost_telemetry/anthropic_pricing.json",
     ]
     assert set(contract) <= set(patterns)
     samples = [
-        "operator/runners/medchron/medchron/daemon.py",
+        "operator/runners/jobs/jobs/daemon.py",
         "operator/connectors/smokeball/pyproject.toml",
         "operator/connectors/_sdk/pyproject.toml",
-        "operator/requirements/medchron.txt",
+        "operator/requirements/jobs.txt",
         "operator/requirements/connector-smokeball.txt",
         "operator/adapter/cost_telemetry/anthropic_pricing.json",
     ]
     bundle_only = {
-        "operator/runners/medchron/medchron/daemon.py",
+        "operator/runners/jobs/jobs/daemon.py",
         "operator/connectors/smokeball/pyproject.toml",
-        "operator/requirements/medchron.txt",
+        "operator/requirements/jobs.txt",
         "operator/requirements/connector-smokeball.txt",
     }
     for path in samples:
@@ -851,7 +851,7 @@ def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> No
     its own install steps and this fails."""
     text = (REPO_ROOT / "scripts" / "ci-publish-bundle.sh").read_text(encoding="utf-8")
     script = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
-    assert "jobs-runtime.sh connector smokeball" in script and "jobs-runtime.sh medchron" in script
+    assert "jobs-runtime.sh connector smokeball" in script and "jobs-runtime.sh jobs" in script
     assert "uv pip install" not in script and "uv venv" not in script
     assert "operator/bin/fleet bundle-base" in script and "operator/bin/fleet bundle-record" in script
     tarball_up = script.index('/${TARBALL_KEY}" --only-show-errors --content-type')
@@ -862,7 +862,7 @@ def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> No
     dockerfile = (OPERATOR_DIR / "templates" / "Dockerfile").read_text(encoding="utf-8")
     # ADR 0100 W5: the image builds only the connectors the bundle does not carry.
     assert "RUN sh /app/jobs-runtime.sh image-connectors" in dockerfile
-    assert "RUN sh /app/jobs-runtime.sh medchron" not in dockerfile
+    assert "RUN sh /app/jobs-runtime.sh jobs" not in dockerfile
 
 
 def test_the_tick_rolls_bundles_only_behind_the_switch_and_the_urgent_path_can_send_one() -> None:

@@ -132,7 +132,7 @@ class ConnectorServer:
         The decorator hands back the ORIGINAL function. The MCP boundary (result
         governance, exception translation) lives on the registered wrapper only;
         Python callers of the decorated name (the connector's own helpers, its
-        tests, the medchron runner) keep the plain Python contract: complete
+        tests, the jobs runner) keep the plain Python contract: complete
         results and the connector's own exception types, which their ``except``
         clauses are written against."""
         mcp_register = self._mcp.tool(*args, **kwargs)

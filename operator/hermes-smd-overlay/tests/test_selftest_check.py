@@ -43,7 +43,7 @@ def _results(**over: object) -> dict:
                 "warn": False,
                 "detail": "retired skill still on volume: x",
             },
-            {"id": "medchron-daemon-idle", "ok": False, "warn": True, "detail": ""},
+            {"id": "jobs-daemon-idle", "ok": False, "warn": True, "detail": ""},
         ],
         "failed": 1,
         "warned": 1,
@@ -78,7 +78,7 @@ def test_a_fresh_file_ships_ids_identity_and_counts(tmp_path: Path) -> None:
         "warned_count": 1,
         "failed_streak": 2,
         "failed": ["retired-skills-absent"],
-        "warned": ["medchron-daemon-idle"],
+        "warned": ["jobs-daemon-idle"],
     }
     # No detail travels: the ids are the verdict, the detail stays on the seat.
     assert "retired skill still" not in json.dumps(got)

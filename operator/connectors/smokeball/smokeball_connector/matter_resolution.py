@@ -108,7 +108,7 @@ MATTER_TEXT_FIELDS = ("number", "description", "title")
 
 #: The layout keys each fact is read from: the keys the form letters and the
 #: litigation pull already read (``form_letters._claim_number``,
-#: ``form_letter_facts.ACCIDENT_DATE_KEY``, medchron ``litigation/deadlines/pull``).
+#: ``form_letter_facts.ACCIDENT_DATE_KEY``, jobs ``litigation/deadlines/pull``).
 LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     FACT_CLAIM: (
         "Matter/Plaintiffs/InsurancePolicy/Claims/Number",

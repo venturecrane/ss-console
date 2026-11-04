@@ -16,7 +16,7 @@
 # OWNERSHIP. Root-owned, group hermes, files 0640 and dirs 0750. Both readers
 # run as the hermes uid: the gateway's outbound gate (a plugin in the gateway
 # process) and the WordPress connector, a stdio MCP server the gateway spawns.
-# Group medchron would be wrong here: no medchron process reads them, and the
+# Group jobs would be wrong here: no jobs process reads them, and the
 # hermes uid is not in that group. The agent can read the registers and can
 # never rewrite them (a gate that can edit its own registers checks nothing).
 #

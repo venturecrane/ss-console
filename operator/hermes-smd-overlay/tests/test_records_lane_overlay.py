@@ -1,6 +1,6 @@
 """The overlay's half of the matter-records lane (ADR 0102 amendment 4).
 
-* ``records_job_submit`` (hermes-smd-medchron/records.py) queues a job from the
+* ``records_job_submit`` (hermes-smd-lanes/records.py) queues a job from the
   email that opened the turn, and relays the broker's own sentence or nothing.
 * The in-turn stage tool is refused on every seat.
 * A review row the lane writes as root (``session_id`` ``records:<job_id>``,
@@ -67,9 +67,9 @@ def _clear() -> None:
 def records(monkeypatch):
     from tests.conftest import load_plugin
 
-    mod = load_plugin("hermes-smd-medchron").records
+    mod = load_plugin("hermes-smd-lanes").records
     client = _Client({"accepted": True, "job_id": "01JREC", "ack": ACK})
-    monkeypatch.setattr(mod, "MedchronBrokerClient", lambda: client)
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: client)
     _clear()
     yield mod, client
     _clear()
@@ -225,7 +225,7 @@ def test_the_schema_has_no_requester_field_and_only_a_matter(records) -> None:
 def test_the_lane_registry_and_action_class() -> None:
     from tests.conftest import load_plugin
 
-    plugin = load_plugin("hermes-smd-medchron")
+    plugin = load_plugin("hermes-smd-lanes")
     assert capabilities.JOB_LANES["records"] == "matter-records"
     assert set(plugin.LANE_TOOLS["records"]) == {"records_job_submit"}
     assert classify_tool("records_job_submit").action_class is ActionClass.INTERNAL_WRITE

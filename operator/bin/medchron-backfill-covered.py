@@ -42,7 +42,7 @@ directory" from a runbook that looks correct.
     PAYLOAD=$(base64 < payloads.json | tr -d '\n')
     fly ssh console -a hermes-<slug> -C "sh -lc \"echo $SCRIPT | base64 -d > /tmp/bf.py; \
         echo $PAYLOAD | base64 -d > /tmp/p.json\""
-    fly ssh console -a hermes-<slug> -C "/opt/medchron/.venv/bin/python \
+    fly ssh console -a hermes-<slug> -C "/opt/jobs/.venv/bin/python \
         /tmp/bf.py write --payloads /tmp/p.json"
 
 The seat's runner venv is the interpreter because `write` imports the Smokeball
@@ -85,7 +85,7 @@ from pathlib import Path
 from typing import Any
 
 # --- the covered-set computation is the SHIPPED one, never reimplemented ------
-_RUNNER = Path(__file__).resolve().parents[1] / "runners" / "medchron"
+_RUNNER = Path(__file__).resolve().parents[1] / "runners" / "jobs"
 if _RUNNER.is_dir():
     sys.path.insert(0, str(_RUNNER))
 
@@ -140,7 +140,7 @@ def _load_cfg(firm_config: Path, *, drop_after: str | None = None, rule_dates: d
     """
     import yaml
 
-    from medchron.config import FirmConfig
+    from jobs.medchron.config import FirmConfig
 
     data = yaml.safe_load(firm_config.read_text(encoding="utf-8")) or {}
     if drop_after and rule_dates:
@@ -215,7 +215,7 @@ def _manifest_ids(slug_dir: Path) -> set[str]:
 
 
 def compute(args: argparse.Namespace) -> int:
-    from medchron.covered import covered_payload
+    from jobs.medchron.covered import covered_payload
 
     matters = json.loads(Path(args.map).read_text(encoding="utf-8"))
     data_root = Path(args.data_root).expanduser()

@@ -30,7 +30,11 @@ operator/skills/**
 # uses it too: the connector SDK and jobs-runtime.sh build the image's other
 # connectors, and the overlay prices from anthropic_pricing.json. A change there
 # builds an image AND a bundle.
+operator/runners/jobs/**
+# The runner was operator/runners/medchron until ADR 0103 (2026-11-04). Kept so
+# the base-commit walk still matches the history it reads with this list.
 operator/runners/medchron/**
 operator/connectors/smokeball/**
+operator/requirements/jobs.txt
 operator/requirements/medchron.txt
 operator/requirements/connector-smokeball.txt

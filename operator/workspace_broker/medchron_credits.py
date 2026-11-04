@@ -27,7 +27,7 @@ ONE rule, shared with the console (`src/lib/admin/medchron-jobs-read.ts`):
   hold on pages the firm is not paying for.
 
 Written only through the root-only ``medchron_allowance_credit`` broker verb
-(`python -m medchron.allowance credit`), which also writes a
+(`python -m jobs.medchron.allowance credit`), which also writes a
 ``MEDCHRON_ALLOWANCE_CREDITED`` audit row: the record billing reads.
 """
 

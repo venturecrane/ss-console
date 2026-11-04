@@ -9,7 +9,7 @@
 # ---------- Step 2g: the kinds of job proven on this seat (2026-10-13) ----------
 # operator/customers/<slug>/lane-proofs.yaml in THIS repo (lane keys, dates and
 # evidence ids only; reviewed in a PR like any config) is validated against
-# this checkout's runner (python -m medchron.lane_proof) and copied to
+# this checkout's runner (python -m jobs.lane_proof) and copied to
 # vaults/<slug>/lane-proofs.yaml; entrypoint-lane-proofs.sh fetches it into the
 # root-owned medchron tree every boot. No file: the vault copy is REMOVED (gone
 # means gone); a seat keeps the copy it last fetched (fail-static), so a lane
@@ -17,8 +17,8 @@
 # >>> lane-proofs-stage
 LANE_PROOFS_FILE="${REPO_ROOT}/operator/customers/${SLUG}/lane-proofs.yaml"
 if [ -f "${LANE_PROOFS_FILE}" ]; then
-  PYTHONPATH="${REPO_ROOT}/operator/runners/medchron" \
-    uv run --quiet --with pyyaml python3 -m medchron.lane_proof "${LANE_PROOFS_FILE}" \
+  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
+    uv run --quiet --with pyyaml python3 -m jobs.lane_proof "${LANE_PROOFS_FILE}" \
     || die "${LANE_PROOFS_FILE} does not validate (see the line above); not uploading it"
   AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
     aws s3 cp "${LANE_PROOFS_FILE}" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/lane-proofs.yaml" \

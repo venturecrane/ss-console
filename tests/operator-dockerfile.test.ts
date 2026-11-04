@@ -37,7 +37,7 @@ const stripHashComments = (s: string): string =>
     .filter((l) => !/^\s*#/.test(l))
     .join('\n')
 const DOCKERFILE_CODE = stripHashComments(DOCKERFILE)
-// The job runtime's install steps (connector venvs, the medchron venv, the
+// The job runtime's install steps (connector venvs, the jobs venv, the
 // build-time import smoke) live in operator/templates/jobs-runtime.sh since ADR
 // 0100 W3, which the Dockerfile runs and CI's jobs bundle build runs too. The
 // image is built from both, so assertions about what the image installs read both.
@@ -503,7 +503,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // FALSIFIER: drop either module from the build-time import smoke and an
     // image whose note lane cannot import boots, and no note wake is ever sent.
     expect(IMAGE_BUILD_CODE).toContain(
-      'medchron.negotiation.run, medchron.note_lane, medchron.note_by_smd, medchron.litigation_lane'
+      'jobs.negotiation.run, jobs.note_lane, jobs.note_by_smd, jobs.litigation_lane'
     )
   })
 
@@ -513,13 +513,13 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // a .doc or .rtf court paper or never makes its queue.
     expect(DOCKERFILE_CODE).toMatch(/poppler-utils fonts-dejavu-core antiword/)
     expect(IMAGE_BUILD_CODE).toContain(
-      'medchron.litigation_lane, medchron.litigation.run, striprtf.striprtf'
+      'jobs.litigation_lane, jobs.litigation.run, striprtf.striprtf'
     )
     expect(IMAGE_BUILD_CODE).toContain('command -v antiword >/dev/null')
     expect(DOCKERFILE_CODE).toContain(
       'COPY operator/templates/entrypoint-litigation.sh /app/entrypoint-litigation.sh'
     )
-    expect(readFileSync(resolve('operator/requirements/medchron.txt'), 'utf8')).toMatch(
+    expect(readFileSync(resolve('operator/requirements/jobs.txt'), 'utf8')).toMatch(
       /^striprtf==[0-9.]+ \\$/m
     )
   })
@@ -528,9 +528,7 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // FALSIFIER: drop the casefile modules from the build-time import smoke or
     // the entrypoint COPY, and a seat boots a lane that cannot import, or whose
     // queue and inputs were never made.
-    expect(IMAGE_BUILD_CODE).toContain(
-      'medchron.casefile_lane, medchron.casefile.run, medchron.casefile.firm'
-    )
+    expect(IMAGE_BUILD_CODE).toContain('jobs.casefile_lane, jobs.casefile.run, jobs.casefile.firm')
     expect(DOCKERFILE_CODE).toContain(
       'COPY operator/templates/entrypoint-casefile.sh /app/entrypoint-casefile.sh'
     )
