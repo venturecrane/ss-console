@@ -64,30 +64,6 @@ def complete_indexes(matter_id: str) -> dict[str, dict[str, Any]]:
     return out
 
 
-def by_fit(rows: list[dict[str, Any]], indexes: list[dict[str, Any]], files: dict[str, Any]) -> list[dict[str, Any]]:
-    """The legacy scan's fetch order. Smallest first would never reach the
-    file: on the A&P matter the 35-page target is 6.6 MB among dozens of PDFs
-    under 1 MB (2026-11-03). So the bytes per page of the files this job has
-    already downloaded bound where an unmatched index's file can be: a PDF
-    whose size lies in ``[pages * min * 0.5, pages * max * 2]`` for one of
-    them is fetched first, closest to ``pages * median`` first; the rest after,
-    smallest first."""
-    bpp = sorted(int(m["size"]) / int(m["page_count"]) for m in files.values() if m.get("size") and m.get("page_count"))
-    pages = [int(i.get("page_count") or 0) for i in indexes if int(i.get("page_count") or 0) > 0]
-
-    def size(r: dict[str, Any]) -> int:
-        return int(r.get("sizeBytes") or 0)
-
-    def miss(r: dict[str, Any]) -> float | None:
-        fits = [abs(size(r) - n * bpp[len(bpp) // 2]) for n in pages if n * bpp[0] * 0.5 <= size(r) <= n * bpp[-1] * 2]
-        return min(fits) if fits else None
-
-    if not bpp or not pages:
-        return sorted(rows, key=size)
-    fit = sorted((r for r in rows if miss(r) is not None), key=lambda r: (miss(r), size(r)))
-    return fit + sorted((r for r in rows if miss(r) is None), key=size)
-
-
 def tag(score: int) -> str:
     """``--measure``'s mark on a free extra (the only candidate scored 0)."""
     return " free (complete index)" if score == 0 else ""
@@ -112,7 +88,7 @@ def extras(run: Any, mid: str, rows: list[dict[str, Any]], files: dict[str, Any]
         if meta.get("sha256") in want:
             found.setdefault(meta["sha256"], fid)
     missing = set(want) - set(found)
-    scan = by_fit([r for r in listed if str(r["id"]) not in files], [want[sha] for sha in missing], files)
+    scan = [r for r in sorted(listed, key=lambda r: int(r.get("sizeBytes") or 0)) if str(r["id"]) not in files]
     # Once a job: a later record must not download another LEGACY_SCAN files
     # for an index whose file is gone from the matter.
     if missing and not getattr(run, "_free_scanned", False):
@@ -131,4 +107,4 @@ def extras(run: Any, mid: str, rows: list[dict[str, Any]], files: dict[str, Any]
     return [(fid, 0) for fid in picked[:FREE_EXTRA]]
 
 
-__all__ = ["FREE_EXTRA", "LEGACY_SCAN", "by_fit", "complete_indexes", "extras", "note_file", "tag"]
+__all__ = ["FREE_EXTRA", "LEGACY_SCAN", "complete_indexes", "extras", "note_file", "tag"]

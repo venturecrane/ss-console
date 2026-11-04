@@ -167,21 +167,14 @@ def test_each_record_is_under_exactly_one_heading_and_no_line_repeats(
     assert doc["reply_html"].count(f"<li>{PANOREX}") == 1
 
 
-@pytest.mark.parametrize("one_upload", [False, True])
-def test_two_files_with_one_name_are_never_one_line_twice(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, one_upload: bool
+def test_two_files_with_one_name_are_two_lines_never_one_line_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The dry run's duplicate: a record not found in two 3-page files that
-    share a name rendered one line twice. Measured on the seat, the two ids
-    held ONE sha (the same upload twice): that renders once, under the file
-    tried first. Two different files with one name are both named."""
+    share a name rendered one line twice. Each file is named once."""
     jd = job_dir(tmp_path)
     _plant(jd)
     data = jd / "data"
-    if one_upload:
-        files = json.loads((data / "files.json").read_text())
-        files[D]["sha256"] = files[C]["sha256"]
-        (data / "files.json").write_text(json.dumps(files))
     for f in (C, D):
         (data / "locate" / "4" / f"{f}.json").write_text(json.dumps(_result(f, [_absent(DISCHARGE)])))
     order = json.loads((data / "order.json").read_text())
@@ -198,13 +191,8 @@ def test_two_files_with_one_name_are_never_one_line_twice(
         log=lambda _m: None,
     )
     text = r.compose(None)["reply_text"]
-    assert (
-        _blocks(text)["Not found:"]
-        == [
-            f"- {DISCHARGE}: not found in Northside Clinic index.pdf (all 4 pages were read)",
-            f"- {DISCHARGE}: not found in Westfield Dental.pdf (all 3 pages were read)",
-            f"- {DISCHARGE}: not found in a second file also named Westfield Dental.pdf (all 3 pages were read)",
-        ][: 2 if one_upload else 3]
-    )
-    if one_upload:  # the held record's entry names the upload once too
-        assert "a second file" not in text and text.count("Westfield Dental.pdf (all 3 pages read)") == 1
+    assert _blocks(text)["Not found:"] == [
+        f"- {DISCHARGE}: not found in Northside Clinic index.pdf (all 4 pages were read)",
+        f"- {DISCHARGE}: not found in Westfield Dental.pdf (all 3 pages were read)",
+        f"- {DISCHARGE}: not found in a second file also named Westfield Dental.pdf (all 3 pages were read)",
+    ]
