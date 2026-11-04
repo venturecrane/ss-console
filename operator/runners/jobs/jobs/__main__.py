@@ -502,6 +502,10 @@ def _dispatch(args: argparse.Namespace) -> int:
     writing no verdict, so the job stays claimed and the next boot resumes it."""
     if args.cmd in ("run", "draft") and not getattr(args, "dry_run", False):
         stop_request.arm(args.job_dir)
+    elif args.cmd in ("demand", "negotiate", "litigate"):
+        # No Machine-stop checkpoint in these runners (a seat restart drains
+        # them as before); SMD's job stop still lands at their next model call.
+        stop_request.arm_smd(args.job_dir)
     try:
         return int(args.fn(args))
     except stop_request.StopRequested as stop:
