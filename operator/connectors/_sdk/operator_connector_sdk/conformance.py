@@ -21,6 +21,7 @@ from collections.abc import Iterable
 
 from .manifest import ConnectorManifest
 from .naming import runtime_tool_name
+from .resolution import PARAM as RESOLUTION_PARAM
 from .server import ConnectorServer
 
 
@@ -39,6 +40,26 @@ def check_tool_schemas(server: ConnectorServer) -> list[str]:
         if "properties" not in schema:
             raise AssertionError(f"{server.name}.{t.name}: inputSchema has no 'properties'")
     return [t.name for t in tools]
+
+
+def check_resolution_schemas(server: ConnectorServer) -> set[str]:
+    """Every tool registered with ``requires_resolution`` is live and its
+    advertised inputSchema lists ``matter_resolution`` as a REQUIRED string, so
+    the model reads the rule in the contract it follows. A gated tool whose
+    schema lets the argument look optional is a gate the model is told it may
+    skip. Returns the gated tool names."""
+    gated = set(server.gated_tools())
+    surface = {t.name: t.input_schema for t in server.tool_surface()}
+    for name in sorted(gated):
+        schema = surface.get(name)
+        if schema is None:
+            raise AssertionError(f"{server.name}.{name}: declared requires_resolution but is not on the surface")
+        prop = (schema.get("properties") or {}).get(RESOLUTION_PARAM)
+        if not isinstance(prop, dict) or prop.get("type") != "string":
+            raise AssertionError(f"{server.name}.{name}: inputSchema has no string {RESOLUTION_PARAM!r}")
+        if RESOLUTION_PARAM not in (schema.get("required") or []):
+            raise AssertionError(f"{server.name}.{name}: {RESOLUTION_PARAM!r} is not in inputSchema.required")
+    return gated
 
 
 def check_no_banned_tools(server: ConnectorServer, banned: Iterable[str]) -> None:
@@ -109,5 +130,6 @@ def run_all(
     name -> ActionClass map (for the overlay's manifest<=map test to consume)."""
     check_manifest(manifest)
     check_tool_schemas(server)
+    check_resolution_schemas(server)
     check_no_banned_tools(server, banned)
     return check_tool_classes(server, manifest, expected_unclassified=expected_unclassified)

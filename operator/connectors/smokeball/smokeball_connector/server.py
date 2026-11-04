@@ -70,7 +70,7 @@ from .vendor_invoice import fetch_bytes
 # for why the split, and why the import runs one way only.
 from .attachment_tools import register as _register_attachment_tools
 
-server = ConnectorServer("smokeball")
+server = ConnectorServer("smokeball", resolvers=("resolve_matter_by_id", "resolve_invoice_matter"))
 
 _client: SmokeballClient | None = None
 

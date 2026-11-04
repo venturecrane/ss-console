@@ -1,4 +1,10 @@
-"""The resolution token: the only thing that opens ``stage_vendor_invoice``.
+"""The resolution token: the only thing that opens a write on a matter the model chose.
+
+It opened ``stage_vendor_invoice`` first (2026-09-18) and
+``file_attachment_pages_to_matter`` next, each checking it in its own body. Every
+other create or render tool now declares it once at registration and the SDK
+checks it on the MCP wrapper (``operator_connector_sdk.resolution``, wired here
+by ``resolution_gate``), through :func:`claim` and :func:`restore`.
 
 THE DEFECT THIS CLOSES (proven live 2026-09-18). An invoice naming a client and
 nothing else, on a tenant carrying TWO open matters for that client, was staged
@@ -71,9 +77,31 @@ TTL_SECONDS = 900.0
 MAX_LIVE = 64
 
 
+#: The machine-readable reason a token was refused, one per sentence below. An
+#: observe-mode row records the code, never the token or any argument's text.
+CODE_MISSING = "missing"
+CODE_MALFORMED = "malformed"
+CODE_UNKNOWN = "unknown"
+CODE_EXPIRED = "expired"
+CODE_BOUND_ELSEWHERE = "bound_elsewhere"
+CODES = frozenset({CODE_MISSING, CODE_MALFORMED, CODE_UNKNOWN, CODE_EXPIRED, CODE_BOUND_ELSEWHERE})
+
+#: The tools that mint a token. Named in the refusal sentences so a model that
+#: was refused knows what to call, and in every gated tool's description
+#: (``server.py`` passes the same names to ``ConnectorServer``; a conformance
+#: test holds the two equal).
+RESOLVER_TOOLS = ("resolve_matter_by_id", "resolve_invoice_matter")
+RESOLVERS = " or ".join(RESOLVER_TOOLS)
+
+
 class ResolutionRefused(Exception):
     """A token that does not open this matter. The message is the reason, in the
-    words the reply needs; callers surface it and create nothing."""
+    words the reply needs; callers surface it and create nothing. ``code`` is
+    the same reason as one of :data:`CODES`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -97,12 +125,15 @@ def _token_body(token: object) -> str:
     text = token.strip() if isinstance(token, str) else ""
     if not text.lower().startswith(TOKEN_PREFIX):
         raise ResolutionRefused(
-            "no matter resolution: call resolve_invoice_matter first and pass the "
-            "matter_resolution it returned (nothing was created)"
+            CODE_MISSING,
+            f"no matter resolution: call {RESOLVERS} first and pass the matter_resolution it "
+            "returned (nothing was created)",
         )
     body = text[len(TOKEN_PREFIX) :].strip()
     if not TOKEN_RE.match(body):
-        raise ResolutionRefused("that is not a resolution token; resolve the matter again (nothing was created)")
+        raise ResolutionRefused(
+            CODE_MALFORMED, "that is not a resolution token; resolve the matter again (nothing was created)"
+        )
     return body
 
 
@@ -115,8 +146,9 @@ def _prune(now: float) -> None:
 def mint(matter_id: str, matter_number: str | None, matched_on: tuple[str, ...]) -> str:
     """Issue a token for one uniquely resolved matter.
 
-    Called ONLY by ``matter_resolution.resolve_matter`` on a ``unique`` verdict.
-    There is no other caller and no argument by which one could be requested."""
+    Called ONLY on a ``unique`` verdict, by ``matter_resolution.resolve_matter``
+    and ``matter_by_id.resolve_matter_by_id``. There is no other caller and no
+    argument by which one could be requested."""
     now = time.monotonic()
     body = secrets.token_hex(16)
     with _LOCK:
@@ -133,41 +165,79 @@ def mint(matter_id: str, matter_number: str | None, matched_on: tuple[str, ...])
     return f"{TOKEN_PREFIX}{body}"
 
 
+def _check(body: str, matter_id: str, now: float) -> Resolution:
+    """The live record for ``body`` if it names THIS matter, or refuse. Called
+    under the lock; drops an expired record as it finds it."""
+    record = _LIVE.get(body)
+    if record is not None and now - record.minted_at > TTL_SECONDS:
+        _LIVE.pop(body, None)
+        raise ResolutionRefused(
+            CODE_EXPIRED,
+            "that matter resolution has expired; resolve the matter again and write once with the "
+            "new resolution (nothing was created)",
+        )
+    if record is None:
+        raise ResolutionRefused(
+            CODE_UNKNOWN,
+            "that matter resolution is unknown: it was already used, or it was never issued on "
+            "this seat; resolve the matter again (nothing was created)",
+        )
+    if record.matter_id != str(matter_id):
+        raise ResolutionRefused(
+            CODE_BOUND_ELSEWHERE,
+            "that matter resolution was issued for a different matter; write on the matter id "
+            f"the resolution returned, or call {RESOLVERS} again (nothing was created)",
+        )
+    return record
+
+
 def verify(token: object, matter_id: str) -> Resolution:
     """The resolution this token stands for, if it is live and names THIS matter.
 
     Does not consume. Every refusal names which of the four it is."""
     body = _token_body(token)
-    now = time.monotonic()
     with _LOCK:
-        record = _LIVE.get(body)
-        expired = record is not None and now - record.minted_at > TTL_SECONDS
-        if expired:
-            _LIVE.pop(body, None)
-            record = None
-    if record is None:
-        raise ResolutionRefused(
-            "that matter resolution has expired; resolve the matter again and stage once with the "
-            "new resolution (nothing was created)"
-            if expired
-            else "that matter resolution is unknown: it was already used, or it was never issued on "
-            "this seat; resolve the matter again (nothing was created)"
-        )
-    if record.matter_id != str(matter_id):
-        raise ResolutionRefused(
-            "that matter resolution was issued for a different matter; stage on the matter id "
-            "resolve_invoice_matter returned, or resolve again (nothing was created)"
-        )
-    return record
+        return _check(body, matter_id, time.monotonic())
 
 
 def consume(token: object, matter_id: str) -> Resolution:
     """Verify and spend, atomically. After this the token opens nothing."""
-    record = verify(token, matter_id)
     body = _token_body(token)
     with _LOCK:
+        record = _check(body, matter_id, time.monotonic())
         _LIVE.pop(body, None)
     return record
+
+
+@dataclass(frozen=True)
+class Claim:
+    """A token taken out of circulation by :func:`claim`, held until the write
+    it opened either returns (spent) or raises (:func:`restore` puts it back)."""
+
+    body: str
+    resolution: Resolution
+
+
+def claim(token: object, matter_id: str) -> Claim:
+    """Verify and take, in one locked step: the SDK gate's door.
+
+    The difference from ``verify`` then ``consume`` is the window between them.
+    The gated tools run on worker threads, and two calls holding one token could
+    both pass a ``verify`` before either consumed it. A claimed token is already
+    gone, so the second call is refused as ``unknown`` and one resolution can
+    never open two writes."""
+    body = _token_body(token)
+    with _LOCK:
+        record = _check(body, matter_id, time.monotonic())
+        _LIVE.pop(body, None)
+    return Claim(body=body, resolution=record)
+
+
+def restore(held: Claim) -> None:
+    """Put a claimed token back: the write it opened raised. Its age is kept, so
+    a restore never extends a resolution past its TTL."""
+    with _LOCK:
+        _LIVE.setdefault(held.body, held.resolution)
 
 
 def _reset_for_tests() -> None:
@@ -178,13 +248,24 @@ def _reset_for_tests() -> None:
 
 
 __all__ = [
+    "CODES",
+    "CODE_BOUND_ELSEWHERE",
+    "CODE_EXPIRED",
+    "CODE_MALFORMED",
+    "CODE_MISSING",
+    "CODE_UNKNOWN",
     "MAX_LIVE",
+    "RESOLVERS",
+    "RESOLVER_TOOLS",
     "TOKEN_PREFIX",
     "TOKEN_RE",
     "TTL_SECONDS",
+    "Claim",
     "Resolution",
     "ResolutionRefused",
+    "claim",
     "consume",
     "mint",
+    "restore",
     "verify",
 ]

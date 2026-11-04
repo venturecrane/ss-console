@@ -660,6 +660,11 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # staging write refuses without the resolution this mints, so leaving it
     # unclassified fails the whole intake path closed rather than open.
     "mcp_smokeball_resolve_invoice_matter": ActionClass.READ,
+    # 2026-11-04: the same closed verdict for a matter the Operator already
+    # holds by id. Mints the resolution a gated matter write requires only when
+    # the live matter at that id carries the number the model read with it. A
+    # firm-record read; nothing is written.
+    "mcp_smokeball_resolve_matter_by_id": ActionClass.READ,
     # Combined post intake (ss-console, 2026-09-22): a firm scans the day's post
     # as ONE PDF holding several letters for different matters. This reads it
     # PAGE BY PAGE, transcribing when a page is paper, and returns page-marked

@@ -230,6 +230,9 @@ TENANT_SOURCE_READ_TOOLS: frozenset[str] = frozenset(
         # invoice's matter, and the reply quotes the matter numbers it returned
         # (including both candidates when the answer is ambiguous).
         "mcp_smokeball_resolve_invoice_matter",
+        # The same verdict for a matter already held by id: the live matter's
+        # own id and number, read back; a mismatch returns neither.
+        "mcp_smokeball_resolve_matter_by_id",
         "mcp_smokeball_get_webhook_subscriptions",
         "mcp_smokeball_get_event_types",
         "mcp_smokeball_list_events",

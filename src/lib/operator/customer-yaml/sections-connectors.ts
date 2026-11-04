@@ -106,8 +106,8 @@ function checkOneConnector(
   const msgraph = checkMsgraph(key, adapter, value, errors)
   if (msgraph === null) return null
   if (!checkMarketingConnectorFields(key, backend, value, errors)) return null
-  const sealedReader = checkSealedReader(key, value['sealed_reader'], errors)
-  if (sealedReader === undefined) return null
+  const optional = checkOptionalConnectorFields(key, backend, value, errors)
+  if (optional === null) return null
   const enabled = typeof value['enabled'] === 'boolean' ? value['enabled'] : true
   const tokenRef = typeof value['token_ref'] === 'string' ? value['token_ref'] : null
   // ADR 0042: optional per-connector custody; null ⇒ inherit the client-level
@@ -132,8 +132,67 @@ function checkOneConnector(
     msgraph_auth: msgraph.msgraph_auth,
     poll_seconds: msgraph.poll_seconds,
     ...marketingConnectorFields(backend, value),
-    ...(sealedReader === true ? { sealed_reader: true } : {}),
+    ...optional,
   }
+}
+
+/**
+ * The per-connector optional fields that are valid on one connector only:
+ * `sealed_reader` (WebSearch) and `matter_resolution_mode` (`mcp:smokeball`).
+ * Returns the fields to carry on the value (absent ones omitted), or null when
+ * the connector must be dropped.
+ */
+function checkOptionalConnectorFields(
+  key: string,
+  backend: string,
+  value: Record<string, unknown>,
+  errors: ValidationError[]
+): Pick<Connector, 'sealed_reader' | 'matter_resolution_mode'> | null {
+  const sealedReader = checkSealedReader(key, value['sealed_reader'], errors)
+  const mode = checkMatterResolutionMode(key, backend, value['matter_resolution_mode'], errors)
+  if (sealedReader === undefined || mode === undefined) return null
+  return {
+    ...(sealedReader === true ? { sealed_reader: true } : {}),
+    ...(mode !== null ? { matter_resolution_mode: mode } : {}),
+  }
+}
+
+/** The Smokeball connector's matter-resolution gate switch. */
+export const MATTER_RESOLUTION_MODES = ['observe', 'enforce'] as const
+export type MatterResolutionMode = (typeof MATTER_RESOLUTION_MODES)[number]
+
+/**
+ * `matter_resolution_mode`: optional, only on the `mcp:smokeball` connector,
+ * `observe` or `enforce`. Mirrors the overlay's `bootstrap/validate.py`
+ * `_validate_matter_resolution_mode`. The connector reads it on every gated
+ * write (`resolution_mode.py`); absent means observe. Returns the value (null
+ * when absent), or undefined when the connector must be dropped.
+ */
+function checkMatterResolutionMode(
+  key: string,
+  backend: string,
+  raw: unknown,
+  errors: ValidationError[]
+): MatterResolutionMode | null | undefined {
+  if (raw === undefined || raw === null) return null
+  const path = `connectors.${key}.matter_resolution_mode`
+  if (backend !== 'mcp:smokeball') {
+    errors.push({
+      code: 'InvalidFormat',
+      path,
+      message: `matter_resolution_mode is only valid when backend is "mcp:smokeball" (backend is "${backend}")`,
+    })
+    return undefined
+  }
+  if (typeof raw !== 'string' || !(MATTER_RESOLUTION_MODES as readonly string[]).includes(raw)) {
+    errors.push({
+      code: 'EnumViolation',
+      path,
+      message: `${path} must be one of ${MATTER_RESOLUTION_MODES.join(', ')}`,
+    })
+    return undefined
+  }
+  return raw as MatterResolutionMode
 }
 
 /**

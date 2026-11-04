@@ -711,6 +711,14 @@ export interface Connector {
    * the turn is marked web_derived. Boolean, WebSearch only, absent means false.
    */
   sealed_reader?: boolean
+  /**
+   * `connectors.<cap>.matter_resolution_mode` (2026-11-04), on the
+   * `mcp:smokeball` connector only. `observe` records every gated matter write
+   * the resolution gate would refuse and lets it through; `enforce` refuses it.
+   * Absent means observe for the release that introduces the gate. Read by
+   * the connector on every gated write (`resolution_mode.py`).
+   */
+  matter_resolution_mode?: 'observe' | 'enforce'
 }
 
 /**

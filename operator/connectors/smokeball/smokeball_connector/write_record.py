@@ -14,7 +14,9 @@ WHO is writing, the method and path, the matter, and a digest of the body. If
 that row cannot be written, the request is refused and nothing reaches
 Smokeball. After the response, a second row records the status and the id the
 vendor returned. A result row that fails to write cannot undo the write, so it
-is reported on stderr instead of raised.
+is reported on stderr instead of raised. A third kind of row, ``would_refuse``,
+records a gated write the matter-resolution gate would have refused while it
+runs in observe mode (``record_resolution_observation``).
 
 WHO IS WRITING. Decided from the process, never from anything the model sends:
 
@@ -242,4 +244,45 @@ class WriteRecord:
             )
 
 
-__all__ = ["ACTION_TYPE", "VERB", "WriteNotRecorded", "WriteRecord", "body_digest", "resolve_actor"]
+#: The third phase of a SMOKEBALL_WRITE row: a gated write the matter-resolution
+#: gate would have refused, recorded in observe mode and dispatched anyway
+#: (``resolution_gate``). It names the tool, the matter and the reason code; never
+#: the token or any argument's text.
+PHASE_WOULD_REFUSE = "would_refuse"
+
+
+def record_resolution_observation(tool: str, matter_id: str | None, reason: str) -> None:
+    """Append one ``would_refuse`` row. Off a seat (no broker socket) nothing is
+    recorded, exactly as for a write. Raises ``WriteNotRecorded`` when the row
+    could not land; the gate logs that and lets the observed call proceed."""
+    path = socket_path()
+    if not path or _exempt():
+        return
+    actor = resolve_actor()
+    if actor is None:
+        raise WriteNotRecorded(f"refused: {ACTOR_ENV} does not name who is writing; the observation was not recorded")
+    row = {
+        "action_type": ACTION_TYPE,
+        "phase": PHASE_WOULD_REFUSE,
+        "write_id": uuid.uuid4().hex,
+        "actor": actor,
+        "tool": tool[:80],
+        "reason": reason[:40],
+        "matter_id": matter_id,
+    }
+    try:
+        _send(path, row)
+    except (OSError, ValueError) as exc:
+        raise WriteNotRecorded(f"audit broker unreachable ({type(exc).__name__})") from exc
+
+
+__all__ = [
+    "ACTION_TYPE",
+    "PHASE_WOULD_REFUSE",
+    "VERB",
+    "WriteNotRecorded",
+    "WriteRecord",
+    "body_digest",
+    "record_resolution_observation",
+    "resolve_actor",
+]

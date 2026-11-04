@@ -186,6 +186,68 @@ def test_validate_returns_empty_for_valid_file(tmp_path):
     assert errors == []
 
 
+# ---- connectors.<cap>.matter_resolution_mode (2026-11-04) -------------------
+#
+# The Smokeball connector's matter-resolution gate switch. The connector reads
+# it on every gated write and ENFORCES on any value it does not recognise, so
+# the validator must refuse such a value at boot rather than let a typo shut
+# every gated write.
+
+_SMOKEBALL_CONNECTOR = (
+    "  PracticeManagement:\n    adapter: smokeball\n    backend: mcp:smokeball\n    enabled: true\n"
+)
+
+
+def _with_smokeball(extra: str = "") -> str:
+    anchor = "\nconnectors:\n"
+    assert anchor in VALID_YAML
+    return VALID_YAML.replace(anchor, anchor + _SMOKEBALL_CONNECTOR + extra, 1)
+
+
+@pytest.mark.parametrize("mode", ["observe", "enforce"])
+def test_validate_accepts_each_matter_resolution_mode_on_smokeball(tmp_path, mode):
+    body = _with_smokeball(f"    matter_resolution_mode: {mode}\n")
+    assert validate_customer_yaml(_write(tmp_path, body)) == []
+
+
+def test_validate_accepts_smokeball_without_the_mode(tmp_path):
+    assert validate_customer_yaml(_write(tmp_path, _with_smokeball())) == []
+
+
+@pytest.mark.parametrize("mode", ["off", "Observe", "true", "1", "''"])
+def test_validate_rejects_any_other_matter_resolution_mode(tmp_path, mode):
+    body = _with_smokeball(f"    matter_resolution_mode: {mode}\n")
+    errors = validate_customer_yaml(_write(tmp_path, body))
+    assert any(
+        "connectors.PracticeManagement.matter_resolution_mode" in e and "one of" in e
+        for e in errors
+    )
+
+
+def test_validate_rejects_matter_resolution_mode_on_another_backend(tmp_path):
+    body = VALID_YAML.replace(
+        "  backend: mcp:gmail\n", "  backend: mcp:gmail\n    matter_resolution_mode: observe\n", 1
+    )
+    assert "matter_resolution_mode" in body
+    errors = validate_customer_yaml(_write(tmp_path, body))
+    assert any(
+        "connectors.Email.matter_resolution_mode" in e and "mcp:smokeball" in e for e in errors
+    )
+
+
+def test_validator_modes_match_the_connectors_own(tmp_path):
+    """The validator and the connector name the same two modes; the connector
+    imports them from the SDK, and the SDK is the source both read."""
+    from bootstrap.validate import MATTER_RESOLUTION_MODES
+
+    sdk = (
+        Path(__file__).resolve().parents[2] / "connectors/_sdk/operator_connector_sdk/resolution.py"
+    )
+    text = sdk.read_text(encoding="utf-8")
+    assert 'MODE_OBSERVE = "observe"' in text and 'MODE_ENFORCE = "enforce"' in text
+    assert MATTER_RESOLUTION_MODES == ("observe", "enforce")
+
+
 # ---------------------------------------------------------------------------
 # validate_customer_yaml — failure modes
 # ---------------------------------------------------------------------------

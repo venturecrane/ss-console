@@ -153,3 +153,92 @@ def test_fields_the_caller_invents_are_not_stored(tmp_path: Path) -> None:
     ceiling, skill = conn.execute("SELECT trust_ceiling, skill_name FROM audit_log").fetchone()
     conn.close()
     assert ceiling is None and skill is None
+
+
+# ---- would_refuse: the matter-resolution gate in observe mode (2026-11-04) ----
+#
+# The connector records a gated write the gate would have refused, and lets it
+# through, while the gate runs in observe mode. The row is the one
+# write_record.record_resolution_observation sends: no method or path (no
+# request is made at the door), a tool name and a reason code from a closed set.
+
+
+def _observation(**overrides) -> dict:
+    row = {
+        "action_type": "SMOKEBALL_WRITE",
+        "phase": "would_refuse",
+        "write_id": "w" * 32,
+        "actor": "operator",
+        "tool": "render_firm_form_letter",
+        "reason": "bound_elsewhere",
+        "matter_id": MATTER,
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.fixture
+def _from_the_gateway(monkeypatch) -> None:
+    from workspace_broker import audit_verbs
+
+    monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: GATEWAY_PID)
+
+
+def _observe(broker: Broker, row: dict) -> dict:
+    return broker.handle({"action": "smokeball_write_append", "row": row}, peer_pid=9999, peer_uid=AGENT_UID)
+
+
+@pytest.mark.usefixtures("_from_the_gateway")
+def test_an_observed_refusal_is_recorded_as_the_agent_with_its_tool_and_reason(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    assert _observe(broker, _observation())["ok"] is True
+    action, actor, role, matter, digest, metadata = _stored(tmp_path)
+    assert (action, actor, role, matter, digest) == ("SMOKEBALL_WRITE", "operator", "agent", MATTER, None)
+    meta = json.loads(metadata)
+    assert meta["phase"] == "would_refuse"
+    assert (meta["tool"], meta["reason"]) == ("render_firm_form_letter", "bound_elsewhere")
+    assert "method" not in meta and "path" not in meta
+
+
+@pytest.mark.usefixtures("_from_the_gateway")
+def test_an_observation_with_no_matter_is_still_recorded(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    assert _observe(broker, _observation(reason="no_matter", matter_id=None))["ok"] is True
+    assert _stored(tmp_path)[3] is None
+
+
+def test_an_observation_claiming_the_operator_from_outside_the_gateway_is_refused(tmp_path: Path, monkeypatch) -> None:
+    from workspace_broker import audit_verbs
+
+    monkeypatch.setattr(audit_verbs, "peer_parent_pid", lambda pid: 31337)
+    broker = _broker(tmp_path)
+    with pytest.raises(ValueError, match="only accepted from a child of the gateway"):
+        _observe(broker, _observation())
+    assert broker.ledger.count() == 0
+
+
+@pytest.mark.usefixtures("_from_the_gateway")
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"reason": "because"},
+        {"reason": None},
+        {"tool": ""},
+        {"tool": "Render Letter; DROP"},
+        {"write_id": None},
+        {"actor": ""},
+    ],
+)
+def test_a_malformed_observation_is_refused(tmp_path: Path, bad: dict) -> None:
+    broker = _broker(tmp_path)
+    with pytest.raises(ValueError):
+        _observe(broker, _observation(**bad))
+    assert broker.ledger.count() == 0
+
+
+@pytest.mark.usefixtures("_from_the_gateway")
+def test_an_observation_never_stores_text_the_caller_adds(tmp_path: Path) -> None:
+    broker = _broker(tmp_path)
+    _observe(broker, _observation(matter_resolution="resolution:" + "a" * 32, body="the letter's words"))
+    metadata = _stored(tmp_path)[5]
+    assert "resolution:" not in metadata and "words" not in metadata

@@ -179,6 +179,12 @@ get_expenses = "read"
 # on the wrong one of two matters open for the same client.
 read_attachment_text = "read"
 resolve_invoice_matter = "read"
+# The same verdict for a matter already held by id (matter_by_id.py,
+# 2026-11-04): mints the resolution the gated create and render tools require
+# only when the live matter at that id carries the number the model read with
+# it. COORDINATED CHANGE: mcp_smokeball_resolve_matter_by_id = ActionClass.READ
+# in hermes-smd-overlay shared/action_classes.py, same PR.
+resolve_matter_by_id = "read"
 stage_vendor_invoice = "internal_write"
 # Combined-post intake. A firm scans the day's post as ONE PDF holding several
 # letters for different matters; these two read it with page numbers that can be

@@ -1406,6 +1406,36 @@ def _validate_connectors(cfg: dict[str, Any], errors: list[str]) -> None:
         _validate_msgraph_connector(key, conn, errors)
         _validate_marketing_connector(key, backend, conn, errors)
         _validate_sealed_reader(key, conn, errors)
+        _validate_matter_resolution_mode(key, backend, conn, errors)
+
+
+#: The Smokeball connector's matter-resolution gate switch (2026-11-04). Read by
+#: the connector off the live yaml on every gated write
+#: (operator/connectors/smokeball/smokeball_connector/resolution_mode.py);
+#: absent means observe for the release that introduces the gate.
+MATTER_RESOLUTION_MODES = ("observe", "enforce")
+_SMOKEBALL_BACKEND = "mcp:smokeball"
+
+
+def _validate_matter_resolution_mode(
+    key: str, backend: str, conn: dict[str, Any], errors: list[str]
+) -> None:
+    """``matter_resolution_mode``: optional, only on the ``mcp:smokeball``
+    connector, one of ``observe`` / ``enforce``. Mirrors ss-console
+    ``checkMatterResolutionMode``. A value outside the two is refused here
+    rather than read as either, because the connector would enforce on it."""
+    raw = conn.get("matter_resolution_mode")
+    if raw is None:
+        return
+    prefix = f"connectors.{key}.matter_resolution_mode"
+    if backend != _SMOKEBALL_BACKEND:
+        _err(
+            f"{prefix}: only valid when backend is {_SMOKEBALL_BACKEND!r} (backend is {backend!r})",
+            errors,
+        )
+        return
+    if raw not in MATTER_RESOLUTION_MODES:
+        _err(f"{prefix}: must be one of {list(MATTER_RESOLUTION_MODES)}; got {raw!r}", errors)
 
 
 def _validate_sealed_reader(key: str, conn: dict[str, Any], errors: list[str]) -> None:
