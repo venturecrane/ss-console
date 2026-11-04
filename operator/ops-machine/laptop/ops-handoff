@@ -48,7 +48,7 @@ if [ "$task" = "--results" ]; then
   if [ -n "$only" ] && [ -z "$got" ]; then
     # Not an error: that session has not written its outcome yet. Said plainly and
     # with its own exit code, so "nothing yet" can never read as "done".
-    echo "no outcome yet from the session ending -$only on $app"
+    echo "no outcome yet from the session ending -$only on $app (a workspace image built before 2026-11-04 names outcomes by pid only: check plain --results too)"
     exit 3
   fi
   printf '%s\n' "$got"
