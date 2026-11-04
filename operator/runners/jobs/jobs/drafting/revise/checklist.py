@@ -102,41 +102,62 @@ def _layout_problems(layout: Any) -> list[str]:
     return out
 
 
-def _param_problems(kind: str, p: dict[str, Any]) -> list[str]:
+def _cites(p: dict[str, Any]) -> list[str]:
+    if p.get("cite_kind") not in CITE_KINDS:
+        return [f"remove_citations names params.cite_kind, one of {list(CITE_KINDS)}"]
+    return []
+
+
+def _shorten(p: dict[str, Any]) -> list[str]:
     out: list[str] = []
-    for key in ("must_include", "must_exclude"):
-        if key in p and not _strs(p[key]):
-            out.append(f"params.{key} is a list of phrases")
-    if kind == "remove_citations" and p.get("cite_kind") not in CITE_KINDS:
-        out.append(f"remove_citations names params.cite_kind, one of {list(CITE_KINDS)}")
-    elif kind == "shorten_section":
-        lims = {k: p.get(k) for k in ("max_paragraphs", "max_sentences", "max_words") if k in p}
-        ratio = p.get("max_ratio")
-        if not lims and ratio is None:
-            out.append("shorten_section names a limit: max_paragraphs, max_sentences, max_words or max_ratio")
-        for k, v in lims.items():
-            if not _int(v, 1, 5000):
-                out.append(f"params.{k} is a whole number")
-        if ratio is not None and not (isinstance(ratio, (int, float)) and 0.05 <= float(ratio) < 1.0):
-            out.append("params.max_ratio is a fraction under 1")
-    elif kind == "restructure_section":
-        if not any(k in p for k in ("subheadings", "into_list", "move_before", "move_after")):
-            out.append("restructure_section names subheadings, into_list, move_before or move_after")
-        if "subheadings" in p and not _strs(p["subheadings"]):
-            out.append("params.subheadings is a list of heading titles")
-        if "into_list" in p and not isinstance(p["into_list"], bool):
-            out.append("params.into_list is true or false")
-        for k in ("move_before", "move_after"):
-            if k in p and not (isinstance(p[k], str) and p[k].strip()):
-                out.append(f"params.{k} names a section")
-    elif kind == "formatting":
-        out += _layout_problems(p.get("layout"))
-    elif kind == "replace_text":
-        if not (isinstance(p.get("old"), str) and p["old"].strip()):
-            out.append("replace_text names params.old, the words to replace")
-        if not isinstance(p.get("new"), str):
-            out.append("replace_text names params.new (may be empty to delete)")
+    lims = {k: p.get(k) for k in ("max_paragraphs", "max_sentences", "max_words") if k in p}
+    ratio = p.get("max_ratio")
+    if not lims and ratio is None:
+        out.append("shorten_section names a limit: max_paragraphs, max_sentences, max_words or max_ratio")
+    out += [f"params.{k} is a whole number" for k, v in lims.items() if not _int(v, 1, 5000)]
+    if ratio is not None and not (isinstance(ratio, (int, float)) and 0.05 <= float(ratio) < 1.0):
+        out.append("params.max_ratio is a fraction under 1")
     return out
+
+
+def _restructure(p: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    if not any(k in p for k in ("subheadings", "into_list", "move_before", "move_after")):
+        out.append("restructure_section names subheadings, into_list, move_before or move_after")
+    if "subheadings" in p and not _strs(p["subheadings"]):
+        out.append("params.subheadings is a list of heading titles")
+    if "into_list" in p and not isinstance(p["into_list"], bool):
+        out.append("params.into_list is true or false")
+    out += [
+        f"params.{k} names a section"
+        for k in ("move_before", "move_after")
+        if k in p and not (isinstance(p[k], str) and p[k].strip())
+    ]
+    return out
+
+
+def _replace(p: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    if not (isinstance(p.get("old"), str) and p["old"].strip()):
+        out.append("replace_text names params.old, the words to replace")
+    if not isinstance(p.get("new"), str):
+        out.append("replace_text names params.new (may be empty to delete)")
+    return out
+
+
+_BY_KIND = {
+    "remove_citations": _cites,
+    "shorten_section": _shorten,
+    "restructure_section": _restructure,
+    "formatting": lambda p: _layout_problems(p.get("layout")),
+    "replace_text": _replace,
+}
+
+
+def _param_problems(kind: str, p: dict[str, Any]) -> list[str]:
+    out = [f"params.{k} is a list of phrases" for k in ("must_include", "must_exclude") if k in p and not _strs(p[k])]
+    check = _BY_KIND.get(kind)
+    return out + (check(p) if check else [])
 
 
 def validate(raw: Any, request_text: str, brief: list[sec.Section]) -> list[Item]:

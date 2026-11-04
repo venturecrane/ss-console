@@ -384,7 +384,14 @@ class DraftingVerbs:
             )
         except SubmitRefused as exc:
             return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
-        mode = "revise" if revise else "draft"
+        return self._accepted(job_id, envelope, state["remaining"], revise)
+
+    def _accepted(
+        self, job_id: str, envelope: dict[str, Any], remaining: int, revise: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """The submitted row's audit and the answer the agent relays."""
+        klass = envelope["document_class"]
+        mode = {"mode": "revise" if revise else "draft", **({"revise_of": revise["prior_job_id"]} if revise else {})}
         self._audit(
             AUDIT_TYPES["submitted"],
             {
@@ -392,11 +399,10 @@ class DraftingVerbs:
                 "matter_number": envelope["matter"]["number"],
                 "file_to_other_matter": envelope["file_to"] is not None,
                 "document_class": klass,
-                "allowance_remaining": state["remaining"],
+                "allowance_remaining": remaining,
                 "requested_by": envelope["requested_by"],
                 "request_ref": envelope["request_ref"],
-                "mode": mode,
-                **({"revise_of": revise["prior_job_id"]} if revise else {}),
+                **mode,
             },
             envelope["matter"]["id"],
         )
@@ -406,9 +412,8 @@ class DraftingVerbs:
             "job_id": job_id,
             "state": "submitted",
             "document_class": klass,
-            "allowance_remaining": state["remaining"],
-            "mode": mode,
-            **({"revise_of": revise["prior_job_id"]} if revise else {}),
+            "allowance_remaining": remaining,
+            **mode,
         }
 
     # -- the runner's report and a person's resume ---------------------------------
