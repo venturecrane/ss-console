@@ -83,8 +83,12 @@ def test_span_units():
     assert got == ["760 days", "108 weeks", "25 months", "2 years"]
 
 
+def _cell(v: str) -> dict:
+    return {"value": v, "sources": [{"id": "b1", "name": "Bill"}]}
+
+
 def test_the_charges_table_comes_from_howell():
-    cell = lambda v: {"value": v, "sources": [{"id": "b1", "name": "Bill"}]}  # noqa: E731
+    cell = _cell
     table = [
         {
             "provider": "Exampletown Surgical",
