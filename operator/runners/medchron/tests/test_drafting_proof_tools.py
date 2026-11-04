@@ -167,11 +167,37 @@ def test_score_draft_with_a_key(tmp_path: Path) -> None:
     assert r["key"]["counts"]["fixed"] == 1
 
 
-def test_assert_spans_glue_needs_evidence_render() -> None:
+def test_assert_spans_glue_passes_a_rendered_brief_and_fails_an_edited_span(tmp_path: Path) -> None:
     glue = _load(PROOF / "assert_spans.py", "assert_spans_glue")
-    if glue.runner_path.render() is None:
+    render = glue.runner_path.render()
+    if render is None:
         pytest.skip("evidence.render not in this tree yet")
-    assert callable(glue.run)
+    from medchron.drafting.evidence.shapes import Fact, Ledger
+
+    led = Ledger(
+        (
+            Fact(
+                "F0001",
+                "Hospital Bill.pdf",
+                1,
+                "figure",
+                "Total charges billed: $8,300.00",
+                "c",
+                role="billed",
+                value="8300.00",
+                unit="usd",
+            ),
+        )
+    )
+    r = render.render("The hospital billed {{N:F0001}} {{F:F0001}}.", led)
+    (tmp_path / "ledger.jsonl").write_text(led.to_jsonl())
+    (tmp_path / "spans.jsonl").write_text("".join(json.dumps(x.to_json()) + "\n" for x in r.spans))
+    (tmp_path / "brief.md").write_text(r.text)
+    args = [tmp_path / "ledger.jsonl", tmp_path / "spans.jsonl", tmp_path / "brief.md"]
+    assert glue.run(*args)["ok"] is True
+    (tmp_path / "brief.md").write_text(r.text.replace("8,300.00", "8,800.00"))
+    bad = glue.run(*args)
+    assert bad["ok"] is False and bad["problems"]
 
 
 def test_authority_fetch_writes_what_the_store_reads(tmp_path: Path) -> None:
