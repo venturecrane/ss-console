@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     # The driver invokes the not-yet-ported pipeline scripts as subprocesses;
     # each port adds that stage's own dependencies here, with the stage.
-    "pyyaml>=6",
+    "pyyaml>=6.0.3",
     # PR 2: seat access (httpx streams the presigned pulls), the three $0
     # stages in-process: pypdf + python-docx for extract, extract-msg +
     # pymupdf for the Outlook containers and image shape.
