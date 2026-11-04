@@ -17,7 +17,16 @@
    or recorded none (an image from before fleet build), for a lane the seat
    authors, the staged inputs were validated against another schema: refused,
    naming `operator/bin/reprovision.sh <slug>` (which re-validates and
-   re-stages), unless --accept-lane-inputs. The stage-*-inputs.sh files are
+   re-stages), unless --accept-lane-inputs, or unless a person DECLARED it on
+   the release: `fleet accept-lane-inputs <release-id> --why "..."` writes
+   lane-inputs-accepted.json beside the image's lane-inputs.json (who, when,
+   why, which lanes), and the refusal becomes a note. That is the tick's path
+   (it never passes --accept-lane-inputs, ADR 0096): a person's call, recorded
+   once on the release and read by every seat's preflight, instead of a hand
+   release per seat. Added 2026-11-04 when ADR 0103 renamed the runner's
+   package and every lane's digest changed with its env names and import
+   lines while the schemas accepted exactly what they did; the tick halted at
+   staging. The stage-*-inputs.sh files are
    NOT called from here: they are sourced fragments of provision-customer.sh
    that require its whole shell context and the engagements checkout, so
    driving them from a rollout would be a second provisioner.
@@ -43,6 +52,22 @@ LANE_VAULT_MARKERS: dict[str, str] = {
     "casefile": "casefile/",
     "records": "records/",
 }
+
+
+ACCEPTED_LANE_INPUTS = "lane-inputs-accepted.json"
+
+
+def accepted_lanes(declaration: dict[str, Any] | None) -> set[str]:
+    """The lanes a release's declaration covers: a set of lane keys, ``{"*"}`` for every
+    lane, or an empty set when there is no usable declaration."""
+    if not isinstance(declaration, dict):
+        return set()
+    lanes = declaration.get("lanes")
+    if lanes == "*":
+        return {"*"}
+    if isinstance(lanes, list):
+        return {str(x) for x in lanes}
+    return set()
 
 
 @dataclass
@@ -76,13 +101,25 @@ def check_staged(staged: set[str], declared: list[str]) -> list[str]:
 
 
 def check_lanes(
-    seat: str, target: dict[str, Any] | None, current: dict[str, Any] | None, authored: list[str], accept: bool
+    seat: str,
+    target: dict[str, Any] | None,
+    current: dict[str, Any] | None,
+    authored: list[str],
+    accept: bool,
+    declaration: dict[str, Any] | None = None,
 ) -> tuple[list[str], list[str]]:
     problems, notes = [], []
+    declared = accepted_lanes(declaration)
     for lane in authored:
         want = (target or {}).get(lane)
         have = (current or {}).get(lane)
         if want and have and want == have:
+            continue
+        if want and (lane in declared or "*" in declared) and isinstance(declaration, dict):
+            notes.append(
+                f"lane {lane}: its firm-input digest differs from the seat's image; accepted on the release by "
+                f"{declaration.get('by', '?')} at {declaration.get('at', '?')}: {declaration.get('why', '')}"
+            )
             continue
         if want and not have and isinstance(current, dict) and current:
             # A lane the current image recorded other lanes' digests beside but
@@ -128,6 +165,9 @@ class PreflightChecker:
         problems += check_staged(staged, decode_json_list(release.get("declared_secrets")))
         target_lanes = self.r2.get_json(image_key(str(digest), "lane-inputs.json"))
         current_lanes = self.r2.get_json(image_key(current_digest, "lane-inputs.json")) if current_digest else None
-        lane_problems, notes = check_lanes(seat, target_lanes, current_lanes, self.authored_lanes(seat), accept_lanes)
+        declaration = self.r2.get_json(image_key(str(digest), ACCEPTED_LANE_INPUTS))
+        lane_problems, notes = check_lanes(
+            seat, target_lanes, current_lanes, self.authored_lanes(seat), accept_lanes, declaration
+        )
         problems += lane_problems
         return Preflight(not problems, problems, notes)

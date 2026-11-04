@@ -25,6 +25,12 @@
   fleet status [--json]
   fleet releases [--json] [--limit N]
   fleet hold SLUG --reason TEXT --until TEXT          records the session that set it (owner.py)
+  fleet accept-lane-inputs <release-id> --why TEXT [--lane L ...]
+                                                      a person's call that the firm inputs staged
+                                                      on the seats are valid for this release's
+                                                      schema (recorded on the release; every seat's
+                                                      preflight then passes the digest change with
+                                                      a note, so the tick rolls it)
   fleet unhold SLUG
   fleet busy SLUG [--wait] [--max-wait SECONDS]     exit 0 idle, 1 busy, 3 could not tell
   fleet unquiesce SLUG                                remove a quiesce marker a fleet run left
@@ -84,7 +90,9 @@ from .busy import BusyGate
 from .d1 import D1, FleetStore
 from .fly import Fly, FlyTokens
 from .ledger import VerifyLedger
-from .preflight import PreflightChecker
+from .preflight import ACCEPTED_LANE_INPUTS, PreflightChecker
+from datetime import datetime, timezone
+
 from .r2 import R2, image_key
 from .rings import load_rings
 from .rollout import ImagePlan, ImageRollout
@@ -210,6 +218,12 @@ def _add_seat_parsers(sub: Any) -> None:
     h.add_argument("--until", required=True, help="the condition that ends the hold, in words (recorded with it)")
     u = sub.add_parser("unhold")
     u.add_argument("slug")
+    al = sub.add_parser(
+        "accept-lane-inputs", help="declare on a release that the seats' staged firm inputs fit its schema"
+    )
+    al.add_argument("release_id")
+    al.add_argument("--why", required=True, help="what changed in the schema modules and why no re-staging is needed")
+    al.add_argument("--lane", action="append", default=[], help="a lane the declaration covers (default: every lane)")
     bz = sub.add_parser("busy")
     bz.add_argument("slug")
     bz.add_argument("--wait", action="store_true")
@@ -606,6 +620,25 @@ def cmd_hold(ctx: Ctx, a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_accept_lane_inputs(ctx: Ctx, a: argparse.Namespace) -> int:
+    release = _image_release(ctx, a.release_id)
+    digest = release.get("image_digest")
+    if not digest:
+        raise Refusal(f"{a.release_id} has no image digest recorded; nothing to declare against")
+    by = owner.held_by()
+    lanes: Any = sorted({str(x) for x in a.lane}) if a.lane else "*"
+    declaration = {
+        "release_id": release["release_id"],
+        "lanes": lanes,
+        "why": a.why.strip(),
+        "by": by,
+        "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    ctx.r2.put_json(image_key(str(digest), ACCEPTED_LANE_INPUTS), declaration)
+    ctx.log(f"{release['release_id']}: lane inputs accepted for {lanes} by {by}: {declaration['why']}")
+    return 0
+
+
 def cmd_unhold(ctx: Ctx, a: argparse.Namespace) -> int:
     ctx.store.unhold(ids.slug(a.slug))
     ctx.log(f"{a.slug}: hold removed")
@@ -624,6 +657,7 @@ COMMANDS: dict[str, Callable[[Ctx, argparse.Namespace], int]] = {
     "status": cmd_status,
     "releases": cmd_releases,
     "hold": cmd_hold,
+    "accept-lane-inputs": cmd_accept_lane_inputs,
     "unhold": cmd_unhold,
     "busy": cmd_busy,
     "selftest": cmd_selftest,

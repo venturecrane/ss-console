@@ -166,7 +166,13 @@ ADR 0007 exists to prevent.
    person re-stages. `operator/bin/tests/test_ci_coverage_conformance.py` pins
    both. A required approval would put a person back on every release, which is
    the cost this record removes, and would be satisfied by whoever was awake
-   rather than by evidence.
+   rather than by evidence. _Amended 2026-11-04:_ the person's call can also be
+   recorded once on the release (`fleet accept-lane-inputs <release-id> --why
+...`, who/when/why/lanes in R2 beside the image's digests); every seat's
+   preflight then passes that digest change with a note. Added when ADR 0103
+   renamed the runner's package and every lane's digest changed in name only;
+   the tick still passes no flag, and a schema that accepts different inputs is
+   still re-staged.
 
 7. **Every judged seat writes a verify-ledger row.** After a seat ends `done`,
    `rolled_back`, `failed` or `tooling_error`, the controller POSTs a
