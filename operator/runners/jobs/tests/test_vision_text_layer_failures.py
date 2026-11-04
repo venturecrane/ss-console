@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from jobs.stages import limitations
 from jobs.stages import transcript as T
 from jobs.stages import vision as V
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 
 def _sr(d: Path) -> SimpleNamespace:

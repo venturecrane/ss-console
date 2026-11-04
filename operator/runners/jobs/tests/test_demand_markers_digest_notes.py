@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from demand_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import draft, finalpass, review as rv
 from jobs.demand.run import DemandRun
 from jobs.proof import review as R

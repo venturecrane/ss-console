@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 from jobs.litigation import vocab
-from medchron_testkit import FakeSeat, doc_row, make_pdf
+from jobs_testkit import FakeSeat, doc_row, make_pdf
 
 JOB = "01KTJ0BX0000000000000000AA"
 LIBRARY = "99999999-9999-4999-8999-999999999999"

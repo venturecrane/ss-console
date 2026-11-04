@@ -15,7 +15,7 @@ import pytest
 
 import demand_testkit
 from demand_testkit import GAP, ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import gapaudit, vendor
 from jobs.demand.run import DemandRun
 

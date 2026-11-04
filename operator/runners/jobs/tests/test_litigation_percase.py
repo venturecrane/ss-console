@@ -19,7 +19,7 @@ from openpyxl import load_workbook
 from litigation_testkit import JOB, M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
 from jobs.litigation import book, gates, percase, printout, review, vocab
 from jobs.litigation.run import PER_CASE_ROLE, PRINTOUT_ROLE, LitigationRun
-from medchron_testkit import doc_row
+from jobs_testkit import doc_row
 from test_litigation_gates import good
 
 TODAY = dt.date(2026, 10, 7)

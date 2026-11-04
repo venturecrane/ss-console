@@ -21,7 +21,7 @@ from jobs.medchron import config as config_mod, covered, decisions, job as job_m
 from jobs import unopened
 from jobs.resume import MARKER_PREFIX
 from jobs.stages import limitations
-from medchron_testkit import seed_raw_manifest
+from jobs_testkit import seed_raw_manifest
 
 LOCKED = "msgatt-4de4280ad21d"
 JOB = "01M5J9RGY9G9FFXYBZ3CH59XBY"

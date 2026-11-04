@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 from demand_testkit import DRAFT, ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import draft, finalpass, format_check, premise, review as rv
 from jobs.demand.run import DemandRun
 

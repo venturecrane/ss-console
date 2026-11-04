@@ -21,7 +21,7 @@ import yaml
 
 from jobs import llm
 from jobs.stages import compose as compose_stage
-from medchron_testkit import FIRM_CONFIG
+from jobs_testkit import FIRM_CONFIG
 from test_compose_stages import MAP_OUT, Scripted, _msg, _sr, _unit_files
 
 BODY = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 30))

@@ -16,9 +16,9 @@ from jobs import __main__ as cli
 from jobs.medchron import config as config_mod, dag, dos_check, job as job_mod
 from jobs.stages import dos_check as stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat
+from jobs_testkit import FIRM_CONFIG, FakeSeat
 
-INCIDENT = "2026-01-15"  # medchron_testkit.job_yaml
+INCIDENT = "2026-01-15"  # jobs_testkit.job_yaml
 
 
 def _slug(data_root: Path) -> Path:

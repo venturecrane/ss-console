@@ -19,7 +19,7 @@ from jobs.medchron.audit.run import AuditPaths, Round
 from jobs.stages import audit_loop, review_policy
 from jobs.stages.base import StageRun
 from jobs.medchron.update import proofs as P
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 from test_audit import PROSE, SUPPORTED, Scripted, _exhibit_set, _sr, _write_doc, tool_msg
 
 CLAIM = "Seen 01/02/2026 with blood pressure 120/80 and ibuprofen 400 mg."

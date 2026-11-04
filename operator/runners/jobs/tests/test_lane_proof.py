@@ -417,7 +417,7 @@ def test_demand_and_drafting_stop_before_filing(module, tmp_path, monkeypatch):
 def test_the_chronology_stops_at_upload_with_its_package_staged(
     proof, tmp_path, data_root, firm_config_path, pricing_path, monkeypatch
 ):
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
     from test_decisions_driver import _NoNetwork, _driver
 
     monkeypatch.delenv("MEDCHRON_PIPELINE_DIR", raising=False)

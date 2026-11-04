@@ -1,5 +1,5 @@
 """pytest fixtures for the jobs runner tests. Data and helpers live in
-medchron_testkit.py (see its docstring for why they are not here)."""
+jobs_testkit.py (see its docstring for why they are not here)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from medchron_testkit import FIRM_CONFIG, PRICING, job_yaml
+from jobs_testkit import FIRM_CONFIG, PRICING, job_yaml
 
 
 @pytest.fixture(autouse=True)

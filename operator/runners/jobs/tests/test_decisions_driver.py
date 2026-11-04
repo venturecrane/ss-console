@@ -10,7 +10,7 @@ import yaml
 from jobs import budget as budget_mod, llm as llm_mod
 from jobs.medchron import config as config_mod, dag, decisions, driver as driver_mod, job as job_mod
 from jobs.medchron.state import RunState, state_path
-from medchron_testkit import (
+from jobs_testkit import (
     FIRM_CONFIG,
     FakeSeat,
     calls,

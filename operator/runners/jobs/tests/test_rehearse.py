@@ -18,7 +18,7 @@ import pytest
 from jobs import __main__ as cli
 from jobs.medchron import dag, job as job_mod, rehearsal
 from jobs.medchron.state import RunState
-from medchron_testkit import job_yaml, seed_folders
+from jobs_testkit import job_yaml, seed_folders
 from test_decisions_driver import REAL_MAP, _NoNetwork, _controls, _driver
 
 pytestmark = pytest.mark.usefixtures("fake_pipeline")

@@ -23,7 +23,7 @@ import pytest
 import yaml
 
 from jobs.medchron import dag, driver as driver_mod, job as job_mod
-from medchron_testkit import FakeSeat, job_yaml
+from jobs_testkit import FakeSeat, job_yaml
 
 
 class _NoNetwork:

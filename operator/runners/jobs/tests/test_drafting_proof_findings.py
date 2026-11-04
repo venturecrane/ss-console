@@ -41,7 +41,7 @@ def _checker(monkeypatch):
 
 @pytest.fixture
 def pricing(tmp_path):
-    from medchron_testkit import PRICING
+    from jobs_testkit import PRICING
 
     p = tmp_path / "pricing.json"
     p.write_text(json.dumps(PRICING), encoding="utf-8")

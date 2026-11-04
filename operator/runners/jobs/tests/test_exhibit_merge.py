@@ -25,7 +25,7 @@ from jobs.medchron.audit.run import AuditPaths
 from jobs.medchron.state import RunState, state_path
 from jobs.stages import audit_loop, coverage, exhibit_merge as EM, exhibit_merge_io as IO, manifest
 from jobs.stages.base import StageRefusal, StageRun
-from medchron_testkit import FakeSeat, seed_folders
+from jobs_testkit import FakeSeat, seed_folders
 
 TITLES = {
     1: "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)",

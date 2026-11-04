@@ -16,7 +16,7 @@ import pytest
 from jobs import arrivals
 from jobs.negotiation import extract as X, notice as N, offer_check, rows as R, run as run_mod
 from jobs.negotiation.select import select
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 
 JOB = "01KTJ0BX0000000000000000NG"
 M1 = "11111111-1111-4111-8111-111111111111"

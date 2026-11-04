@@ -18,7 +18,7 @@ import yaml
 import update_testkit as K
 from jobs.medchron import driver as driver_mod
 from jobs.medchron.update import body as B, docx_md, review_list
-from medchron_testkit import FakeSeat, doc_row, job_yaml, make_pdf
+from jobs_testkit import FakeSeat, doc_row, job_yaml, make_pdf
 
 CHRON_FOLDER, MEDICAL, PHOTOS = "fold-chron", "fold-med", "fold-photo"
 OLD_DOCX = "Alpha Example - Medical Chronology 09-01-26.docx"

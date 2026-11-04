@@ -25,7 +25,7 @@ from drafting_testkit import (
     seat_with,
     standard_docs,
 )
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.drafting import caption, caption_fix, caption_read, caption_rules as rules
 from jobs.drafting.run import DraftingRun
 

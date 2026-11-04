@@ -9,7 +9,7 @@ from email.message import EmailMessage
 import pytest
 
 from jobs.negotiation import text as T
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 
 def test_a_pdf_with_a_text_layer_is_read_page_by_page(tmp_path):

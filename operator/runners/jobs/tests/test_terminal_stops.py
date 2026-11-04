@@ -28,7 +28,7 @@ from jobs.medchron import dag
 from jobs import requeue, verdict
 from jobs.stages import download as download_stage, exhibits as exhibits_stage, group as group_stage
 from jobs.stages import limitations, review, review_policy, upload
-from medchron_testkit import FakeSeat, make_pdf
+from jobs_testkit import FakeSeat, make_pdf
 from test_finish_stages import _sr as _finish_sr, firm  # noqa: F401 - `firm` is a pytest fixture used by name
 from test_network_retry import _daemon, _submit
 from test_review_proof import CLEAN, _package, _review
@@ -85,7 +85,7 @@ def test_targets_left_unpulled_are_infrastructure_and_the_resume_pulls_only_the_
     seat,
 ):
     from jobs.medchron import decisions
-    from medchron_testkit import seed_seat_files
+    from jobs_testkit import seed_seat_files
 
     seat.fail_mint.add("f2")
     seed_seat_files(data_root, seat)

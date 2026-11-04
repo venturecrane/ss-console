@@ -15,7 +15,7 @@ from litigation_testkit import M1, LitSeat, ScriptedLit, good_result, make_input
 from jobs.litigation import read, vocab
 from jobs.litigation.run import LitigationRun
 from jobs.litigation.tools import MatterContext, ReadIncomplete, run_loop
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 TODAY = dt.date(2026, 10, 7)
 

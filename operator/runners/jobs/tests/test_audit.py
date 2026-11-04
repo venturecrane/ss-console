@@ -17,7 +17,7 @@ from jobs.medchron.audit import anchors as AN, claims as CL, coverage, diag, pag
 from jobs.medchron.audit.run import AuditPaths, Round
 from jobs.stages import audit_loop
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, make_pdf
+from jobs_testkit import FakeSeat, make_pdf
 
 PROSE = (
     "Patient seen on 01/02/2026 for neck pain after the collision. Blood pressure 120/80. "

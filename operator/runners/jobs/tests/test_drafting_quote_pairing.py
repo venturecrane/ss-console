@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from drafting_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.__main__ import _argv_without_redo
 from jobs.drafting import nestquote
 from jobs.drafting.run import DraftingRun

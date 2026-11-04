@@ -19,7 +19,7 @@ from jobs.medchron import config as config_mod, coverage_decide, job as job_mod
 from jobs.resume import MARKER_PREFIX
 from jobs.stages import coverage as coverage_stage, limitations
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, seed_raw_manifest
+from jobs_testkit import FakeSeat, seed_raw_manifest
 
 JOB = "01M5J9RGY9G9FFXYBZ3CH59XBY"
 IMG = "msgatt-f1dac8706a11"

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from drafting_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.drafting import attorneys, firm as firm_mod, gate
 from jobs.drafting.run import DraftingRun
 

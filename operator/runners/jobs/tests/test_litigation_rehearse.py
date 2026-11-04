@@ -209,7 +209,7 @@ def test_read_limit_zero_counts_ocr_pages_pays_nothing_and_writes_no_cache_or_st
     misses only), at $0, and leaves the text cache and the lane state as it
     found them."""
     from jobs.litigation import textcache
-    from medchron_testkit import make_pdf
+    from jobs_testkit import make_pdf
 
     cache = tmp_path / "volume-cache"
     monkeypatch.setenv(textcache.ENV, str(cache))

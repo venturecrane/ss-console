@@ -15,7 +15,7 @@ import pytest
 from litigation_testkit import M1, LitSeat, ScriptedLit, first_text, make_inputs, matter_docs
 from jobs.litigation import extract, manifest, rehearse, vocab
 from jobs.litigation.firm import load
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 TODAY = dt.date(2026, 10, 7)
 

@@ -20,7 +20,7 @@ from jobs.stages import build_doc as build_doc_stage, compose as compose_stage, 
 from jobs.stages import exhibits as exhibits_stage, group as group_stage, limitations, msg as msg_stage
 from jobs.stages import repair as repair_stage, summarize as summarize_stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat, make_pdf
+from jobs_testkit import FIRM_CONFIG, FakeSeat, make_pdf
 
 COMPOSITION, JUDGMENT = "claude-sonnet-5", "claude-opus-5-5"
 

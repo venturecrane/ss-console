@@ -24,7 +24,7 @@ from workspace_broker.medchron_ledger import MedchronLedger
 from workspace_broker.medchron_verbs import MedchronVerbs, medchron_dispatch
 
 from jobs.medchron import config as config_mod, covered_backfill
-from medchron_testkit import job_yaml
+from jobs_testkit import job_yaml
 
 GATEWAY_PID = 4242
 ROOT = 0

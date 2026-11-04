@@ -15,7 +15,7 @@ from jobs.medchron import config as config_mod, job as job_mod, prompts
 from jobs.stages import assemble as assemble_stage, chunking, compose as compose_stage, merge as merge_stage
 from jobs.stages import merge_falsify as mf, repair as repair_stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat
+from jobs_testkit import FIRM_CONFIG, FakeSeat
 
 HEADINGS = [
     "Patient Complaints & Limitations",

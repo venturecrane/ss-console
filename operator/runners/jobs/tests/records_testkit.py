@@ -16,7 +16,7 @@ import httpx
 import yaml
 from pypdf import PdfWriter
 
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 
 MATTER = "11111111-2222-3333-4444-555555555555"
 JOB = "01JRECXRDS0000000000000000"

@@ -25,7 +25,7 @@ import pytest
 import test_decisions_driver as driver_t
 from jobs import child as child_mod, daemon as daemon_mod, quiesce, stop_request
 from jobs.medchron.state import RunState, state_path
-from medchron_testkit import seed_folders
+from jobs_testkit import seed_folders
 from test_stop_cut_short import LANES, _chronology, _demand, _drafting, _states
 
 #: The test child: one script, its behaviour read from a file beside it.

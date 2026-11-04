@@ -19,7 +19,7 @@ from jobs.daemon import BrokerError, memory_cap_mode, sticky_level
 from jobs.medchron.lane import MedchronLane
 from jobs.stages import upload
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat
+from jobs_testkit import FIRM_CONFIG, FakeSeat
 
 
 # ---- upload ------------------------------------------------------------------

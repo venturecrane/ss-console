@@ -12,7 +12,7 @@ import pytest
 from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
 from jobs.litigation.progress import Progress
 from jobs.litigation.run import LitigationRun
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 LINE = re.compile(r"^\[(inventory|extract|read1|read2|read3)\] \d+/\d+ [a-z ]+(, \d+ [a-z ]+)*$")
 

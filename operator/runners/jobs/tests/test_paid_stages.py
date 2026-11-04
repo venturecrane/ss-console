@@ -14,7 +14,7 @@ from jobs import llm, unopened
 from jobs.stages import billing as billing_stage, units as units_stage, vision as vision_stage
 from jobs.stages import transcript
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, make_locked_pdf, make_pdf
+from jobs_testkit import FakeSeat, make_locked_pdf, make_pdf
 
 PROSE = "Patient seen in clinic today for follow up of neck pain after the collision. " * 8
 
@@ -166,7 +166,7 @@ def test_vision_exits_1_when_a_batch_is_still_processing(
 
     b = Batches()
     client = NS(messages=NS(create=None, batches=b))
-    cfg = json.loads(json.dumps(__import__("medchron_testkit").FIRM_CONFIG))
+    cfg = json.loads(json.dumps(__import__("jobs_testkit").FIRM_CONFIG))
     cfg["levers"]["batch_stages"] = ["vision"]
     fc = tmp_path / "firm-batch.yaml"
     import yaml
@@ -267,7 +267,7 @@ def test_a_joint_matter_names_the_unread_billing_page_for_every_unit(
 ) -> None:
     """billing_extract runs once for the job; a page nobody could read cannot
     be attributed to either plaintiff, so each unit's file names it."""
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     jd = tmp_path / "joint-job"
     jd.mkdir()
@@ -389,7 +389,7 @@ def test_a_joint_matter_names_the_locked_bill_once_in_each_units_limitations(
     """The extract stage already lists a password-protected file among the
     documents that could not be read. The billing gap for the same file must
     not name it a second time, in either unit's section."""
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     from jobs.stages import limitations
 
@@ -432,7 +432,7 @@ def _extracted(sr: StageRun, rows: list[dict]) -> None:
 def test_build_units_routes_by_folder_then_token_and_excludes_by_config(
     tmp_path: Path, firm_config_path: Path, data_root: Path
 ) -> None:
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     jd = tmp_path / "job"
     jd.mkdir()
@@ -484,7 +484,7 @@ def test_build_units_gives_two_files_with_one_name_two_names(
 ) -> None:
     """Four email attachments named image001.jpg (live 2026-09-15): every later
     stage keys on the name, so the later file becomes `image001 (2)`; ids stay."""
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     jd = tmp_path / "job"
     jd.mkdir()

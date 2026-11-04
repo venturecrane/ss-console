@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from demand_testkit import DRAFT, ScriptedClient, make_inputs, make_job, make_pdf, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import deliver, review as rv
 from jobs.demand.run import DemandRun
 

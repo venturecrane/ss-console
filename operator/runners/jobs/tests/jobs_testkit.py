@@ -7,7 +7,7 @@ SSN-like strings beyond the schema's own MM/DD/YYYY).
 This is a plain module, not conftest.py, because the CI step runs pytest from
 `operator/`, where the name `tests` resolves to `operator/tests/` (a package)
 and `from tests.conftest import ...` shadows. pytest puts this directory on
-sys.path (no __init__.py, prepend import mode), so `import medchron_testkit`
+sys.path (no __init__.py, prepend import mode), so `import jobs_testkit`
 resolves the same way in CI and on a laptop.
 """
 

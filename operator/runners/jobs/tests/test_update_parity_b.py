@@ -42,7 +42,7 @@ def _template_pages() -> list[str]:
 
 # ---- fix 17: a re-filed extract of another new document is not an exhibit ----------
 def _seed(tmp: Path, docs: dict[str, list[str]]) -> SimpleNamespace:
-    from medchron_testkit import make_pdf
+    from jobs_testkit import make_pdf
 
     ud = tmp / "runs" / "alpha" / "update"
     ud.mkdir(parents=True)

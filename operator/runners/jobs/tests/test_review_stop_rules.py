@@ -22,7 +22,7 @@ from datetime import date
 from jobs.proof import review as proof_review
 from jobs.stages import manifest, review, review_evidence, review_policy
 from jobs.stages.base import StageRun
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 from test_final_stages import DOC
 from test_review_proof import (
     CLEAN,

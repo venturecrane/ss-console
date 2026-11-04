@@ -19,7 +19,7 @@ import pytest
 from litigation_testkit import M1, M2, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
 from jobs.litigation import textcache
 from jobs.litigation.run import LitigationRun
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 TODAY = dt.date(2026, 10, 7)
 SCAN = make_pdf(["", ""])  # two pages, no text layer: both go to vision

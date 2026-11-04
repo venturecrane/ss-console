@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 JOB = "01KTJ0BX0000000000000000CF"
 LIBRARY = "99999999-9999-4999-8999-999999999999"

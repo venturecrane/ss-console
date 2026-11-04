@@ -23,7 +23,7 @@ from demand_testkit import (
     seat_with,
     standard_docs,
 )
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import firm as firm_mod, format_check, preflight, pull
 from jobs.demand.run import DemandRun
 

@@ -21,7 +21,7 @@ from jobs import wording as W
 from jobs.proof import review as proof_review
 from jobs.stages import manifest, render, review, upload
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, make_pdf
+from jobs_testkit import FakeSeat, make_pdf
 from test_decisions_driver import _NoNetwork, _driver, _seat, _Stream, _text_msg
 from test_final_stages import DOC
 from test_upload_daemon import _upload_sr
@@ -449,7 +449,7 @@ def test_upload_with_other_bytes_at_the_same_size_fails_readback_mismatch(job_di
 
 @pytest.fixture
 def _whole(tmp_path, data_root):
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     job_dir = tmp_path / "job"
     job_dir.mkdir()

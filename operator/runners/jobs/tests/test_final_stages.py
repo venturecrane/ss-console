@@ -12,7 +12,7 @@ from jobs.medchron import config as config_mod, job as job_mod
 from jobs.medchron.gates import claim_audit, cross_client, extractive, provenance
 from jobs.stages import icd_fetch, identity, manifest, render
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, job_yaml, make_pdf
+from jobs_testkit import FakeSeat, job_yaml, make_pdf
 
 DOC = """Alpha Example - Medical Chronology
 

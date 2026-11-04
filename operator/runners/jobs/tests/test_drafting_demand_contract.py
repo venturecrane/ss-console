@@ -135,7 +135,7 @@ def test_the_shapes_drafting_reads_back():
 
 
 def test_the_upload_record_carries_what_drafting_reads(tmp_path):
-    from medchron_testkit import FakeSeat
+    from jobs_testkit import FakeSeat
 
     out = deliver.out_dir(tmp_path)
     p = out / "Doc.docx"

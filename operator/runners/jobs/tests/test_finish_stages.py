@@ -14,7 +14,7 @@ from jobs.medchron import config as config_mod, job as job_mod
 from jobs.stages import condense as condense_stage, exhibits as exhibits_stage, group as group_stage
 from jobs.stages import scope as scope_stage, summarize as summarize_stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat, job_yaml, make_pdf
+from jobs_testkit import FIRM_CONFIG, FakeSeat, job_yaml, make_pdf
 
 
 class Usage:
@@ -151,7 +151,7 @@ def test_group_never_names_a_lane_after_the_clients_renamed_folder(tmp_path: Pat
     units.json carries the real name. group compared folder segments against
     the job's original prefix, so a file filed straight under the client folder
     got a lane, and an exhibit title, named after the client's folder."""
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     jd = tmp_path / "job"
     jd.mkdir()

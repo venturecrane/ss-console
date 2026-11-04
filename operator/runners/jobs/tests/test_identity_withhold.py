@@ -29,7 +29,7 @@ from jobs.resume import MARKER_PREFIX
 from jobs.stages import identity as identity_stage, units as units_stage
 from jobs.stages.base import StageRun
 from jobs.medchron.update import coverage as update_coverage
-from medchron_testkit import FakeSeat, seed_raw_manifest
+from jobs_testkit import FakeSeat, seed_raw_manifest
 from test_update_guards import _fold_scene
 
 HELD_ID = "msgatt-92add4c914d8"

@@ -17,7 +17,7 @@ from jobs.medchron import config as config_mod, job as job_mod
 from jobs.medchron.gates import foreign_identity as FI
 from jobs.stages import content_dupes as CD, extract, limitations
 from jobs.stages.base import StageRun
-from medchron_testkit import FIRM_CONFIG, FakeSeat, job_yaml
+from jobs_testkit import FIRM_CONFIG, FakeSeat, job_yaml
 from test_exhibit_merge import PAGES, T, pdf
 
 DOCS = {

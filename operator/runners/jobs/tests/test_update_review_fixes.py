@@ -244,7 +244,7 @@ def test_the_vision_stage_reads_only_the_image_pages_of_a_text_layer_pdf(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
     from jobs.stages import vision
-    from medchron_testkit import make_pdf
+    from jobs_testkit import make_pdf
     from test_paid_stages import Scripted, _msg, _seed_scan, _sr
 
     client = Scripted(lambda p: _msg("HANDWRITING: no\nImage page text read by vision."))
@@ -362,7 +362,7 @@ def test_the_vision_reply_carries_a_required_handwriting_field(
 ) -> None:
     from jobs.stages import vision
     from jobs.stages.transcript import split_pages
-    from medchron_testkit import make_pdf
+    from jobs_testkit import make_pdf
     from test_paid_stages import Scripted, _msg, _seed_scan, _sr
 
     replies = iter(

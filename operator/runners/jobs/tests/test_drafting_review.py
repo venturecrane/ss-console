@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from drafting_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING, make_pdf
+from jobs_testkit import PRICING, make_pdf
 from jobs.drafting import firm as firm_mod, pleading, render, review, sets
 from jobs.drafting.run import DraftingRun
 

@@ -13,7 +13,7 @@ import pytest
 from jobs.medchron import config as config_mod, job as job_mod
 from jobs.stages import update_upload, upload
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, doc_row
+from jobs_testkit import FakeSeat, doc_row
 
 FOLDER = "fold-chron"
 OLD = "Alpha Example - Medical Chronology 09-01-26.docx"

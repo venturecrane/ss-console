@@ -25,7 +25,7 @@ from jobs import lane_proof
 from jobs.medchron.audit import repair as R
 from jobs.stages import download as download_stage, identity as identity_stage, msg as msg_stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
+from jobs_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
 
 PROSE = "Patient seen in clinic for neck pain after the collision; plan to continue therapy. " * 8
 MEDICAL, PHOTOS = "fold-med", "fold-photo"

@@ -122,7 +122,7 @@ def test_a_discovery_paper_a_court_only_list_skipped_is_read_by_the_next_full_li
     file list to the manifest, so a discovery paper that arrived before it was
     no longer new to the next list and was never read for discovery."""
     from jobs.litigation import inventory
-    from medchron_testkit import make_pdf
+    from jobs_testkit import make_pdf
 
     assert _run(tmp_path, "Send me a fresh litigation status list.").run().verdict == "delivered"
     state = tmp_path / "state"

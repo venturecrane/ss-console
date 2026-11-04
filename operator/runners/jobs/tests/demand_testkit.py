@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-from medchron_testkit import FakeSeat, doc_row, make_pdf
+from jobs_testkit import FakeSeat, doc_row, make_pdf
 
 PARA_KINDS = (
     "date",

@@ -25,7 +25,7 @@ from demand_numbered_testkit import (
     variant,
 )
 from demand_testkit import DRAFT, SIGNATURE, ScriptedClient, make_inputs, make_job, make_pdf, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import firm as firm_mod, format_check, house, house_numbered
 from jobs.demand.run import DemandRun
 

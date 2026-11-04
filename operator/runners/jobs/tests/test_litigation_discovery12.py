@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from litigation_testkit import JOB, M1, LitSeat, first_text, make_inputs, make_job, matter_docs
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 from jobs import lane_proof
 from jobs.litigation import job as job_mod, manifest, printout

@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from jobs.medchron import config as config_mod
-from medchron_testkit import FIRM_CONFIG
+from jobs_testkit import FIRM_CONFIG
 
 INCIDENT = "2026-01-15"
 

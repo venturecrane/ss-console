@@ -30,7 +30,7 @@ from jobs.medchron import coverage_decide, dag, decisions
 from jobs.medchron.gates import foreign_identity as FI
 from jobs.proof import holds
 from jobs.medchron.state import RunState, state_path
-from medchron_testkit import FakeSeat, doc_row, make_pdf
+from jobs_testkit import FakeSeat, doc_row, make_pdf
 from test_decisions_driver import PROSE, _driver, _NoNetwork, _text_msg
 
 INTAKE = "intake scan.pdf"
@@ -320,7 +320,7 @@ def test_a_joint_matters_file_no_client_owns_is_left_out_by_rule_and_the_job_del
     # whose it was. It is now withheld by rule (it could not be placed with
     # one client), and every unit delivers, naming it.
     # FALSIFIER: restore build_units' IDENTITY_HELD exit and this stops there.
-    from medchron_testkit import job_yaml
+    from jobs_testkit import job_yaml
 
     jd = tmp_path / "joint-job"
     jd.mkdir()

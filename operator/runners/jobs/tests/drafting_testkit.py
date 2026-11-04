@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 from demand_testkit import LIBRARY, MATTER, DemandSeat, ScriptedClient as _DemandClient, _Stream
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 CLASSES = ("mediation_brief", "discovery_set", "discovery_response", "memo", "depo_outline")
 SECTIONS = [
@@ -204,7 +204,7 @@ class DraftingSeat(DemandSeat):
 
 
 def seat_with(docs: list[tuple[str, str, bytes, str]], **kw: Any) -> DraftingSeat:
-    from medchron_testkit import doc_row
+    from jobs_testkit import doc_row
 
     folders = [
         {"id": "f-med", "name": "Medical", "parentId": None, "path": "/Medical"},

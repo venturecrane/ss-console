@@ -20,7 +20,7 @@ import pytest
 
 import demand_testkit
 from demand_testkit import DRAFT, ScriptedClient, job_doc, make_inputs, make_job, seat_with, standard_docs
-from medchron_testkit import PRICING
+from jobs_testkit import PRICING
 from jobs.demand import draft, gate, seed
 from jobs.demand.run import DemandRun
 from test_demand_lane import FakeClient, _lane

@@ -25,7 +25,7 @@ from jobs.drafting import caption_read
 from jobs.litigation import extract as lit
 from jobs.negotiation import text as neg
 from jobs.stages import vision as V
-from medchron_testkit import make_locked_pdf, make_pdf
+from jobs_testkit import make_locked_pdf, make_pdf
 
 
 def _eml_with(attachment: bytes) -> bytes:

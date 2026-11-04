@@ -21,7 +21,7 @@ import yaml
 from jobs.medchron import config as config_mod, decisions, job as job_mod
 from jobs.stages import download as download_stage, extract as extract_stage
 from jobs.stages.base import StageRun
-from medchron_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
+from jobs_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
 
 PROSE = "Patient seen in clinic for neck pain after the collision; plan to continue therapy. " * 8
 MEDICAL, CHRON = "fold-med", "fold-chron"

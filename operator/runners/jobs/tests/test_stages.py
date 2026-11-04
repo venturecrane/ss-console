@@ -13,7 +13,7 @@ from jobs.medchron import config as config_mod, decisions, job as job_mod
 from jobs import seat as seat_mod
 from jobs.stages import download as download_stage, extract as extract_stage, listing, msg as msg_stage
 from jobs.stages.base import StageRefusal, StageRun
-from medchron_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
+from jobs_testkit import FakeSeat, doc_row, make_pdf, seed_seat_files
 
 PROSE = (
     "Patient seen in clinic today for follow up of neck pain after the collision. "

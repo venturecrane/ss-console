@@ -12,7 +12,7 @@ import pytest
 from jobs.deadline import CallDeadlineError
 from jobs.limits import LimitHold
 from jobs.litigation import extract
-from medchron_testkit import make_pdf
+from jobs_testkit import make_pdf
 
 
 def _x(tmp_path: Path, name: str, data: bytes, ocr=None) -> dict:

@@ -8,7 +8,7 @@ import pytest
 from jobs import budget as budget_mod
 from jobs.medchron import dag
 from jobs.medchron.state import RunState, state_path
-from medchron_testkit import PRICING, write_ledger
+from jobs_testkit import PRICING, write_ledger
 
 
 # ---- state -------------------------------------------------------------------
