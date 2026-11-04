@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from ...audit.page_text import parse_segments
+from ...medchron.audit.page_text import parse_segments
 from . import prompts
 from .shapes import Candidate, DocPages
 
