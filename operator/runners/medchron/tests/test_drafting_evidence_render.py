@@ -6,14 +6,19 @@ Synthetic record only (``evidence_testkit``)."""
 from __future__ import annotations
 
 import pytest
-from evidence_testkit import BILL, CHART, DEPO, candidates, corpus
+from evidence_testkit import CHECKER, BILL, CHART, DEPO, candidates, corpus
 
 from medchron.drafting import howell
 from medchron.drafting.evidence import lint, render, verify
 from medchron.drafting.evidence.shapes import Fact, Ledger
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(autouse=True)
+def _gate_checker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(CHECKER))
+
+
+@pytest.fixture
 def led() -> Ledger:
     return verify.verify(candidates(), corpus())
 

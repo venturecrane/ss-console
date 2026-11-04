@@ -4,13 +4,20 @@ Synthetic record only (``evidence_testkit``)."""
 
 from __future__ import annotations
 
+import pytest
+
 import random
 from pathlib import Path
 
-from evidence_testkit import BILL, CHART, DEPO, candidates, corpus
+from evidence_testkit import CHECKER, BILL, CHART, DEPO, candidates, corpus
 
 from medchron.drafting.evidence import verify
 from medchron.drafting.evidence.shapes import Candidate, DocPages, Ledger
+
+
+@pytest.fixture(autouse=True)
+def _gate_checker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(CHECKER))
 
 
 def _by_claim(ledger: Ledger) -> dict[str, object]:

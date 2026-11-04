@@ -8,13 +8,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from evidence_testkit import CHART, candidates, corpus
+from evidence_testkit import CHECKER, CHART, candidates, corpus
 
 from medchron.drafting.evidence import lint, markup, verify
 from medchron.drafting.evidence.shapes import Ledger
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(autouse=True)
+def _gate_checker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(CHECKER))
+
+
+@pytest.fixture
 def led() -> Ledger:
     return verify.verify(candidates(), corpus())
 

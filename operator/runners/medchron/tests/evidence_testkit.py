@@ -6,10 +6,15 @@ here is a firm's, a client's, or a matter's.
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from medchron.drafting.evidence.shapes import Candidate, DocPages
+
+#: The repo's gate checker; the runner is installed into its own venv in CI,
+#: so the checker is named the way the seat names it (record_check's env).
+CHECKER = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
 
 BILL = "Exampletown Surgical bill.pdf"
 CHART = "Exampletown Clinic chart.pdf"

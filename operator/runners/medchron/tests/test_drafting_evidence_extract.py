@@ -10,10 +10,15 @@ import json
 from pathlib import Path
 
 import pytest
-from evidence_testkit import BILL, CHART, FORM, ScriptedDoorway, candidates, corpus
+from evidence_testkit import CHECKER, BILL, CHART, FORM, ScriptedDoorway, candidates, corpus
 
 from medchron.drafting.evidence import extract, images, index, verify
 from medchron.drafting.evidence.shapes import DocPages, Ledger
+
+
+@pytest.fixture(autouse=True)
+def _gate_checker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(CHECKER))
 
 
 def _data(tmp_path: Path, docs: dict[str, str], machine: list[str] | None = None) -> Path:
