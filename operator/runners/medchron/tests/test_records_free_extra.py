@@ -126,3 +126,16 @@ def test_order_is_free_scored_then_free_extra_then_partly_indexed_then_priced() 
         assert got == ["scored", "whole", "scrap", "part", "none"]
     finally:
         mp.undo()
+
+
+def test_the_legacy_scan_fetches_the_file_that_fits_an_unmatched_index_first() -> None:
+    """The A&P shape: a 35-page complete index whose file is 6.6 MB, among
+    forty 100 KB PDFs; this job's downloads ran 17 KB to 190 KB a page.
+    Smallest first would reach it last (and past the 25-file bound)."""
+    rows = [{"id": f"small-{i:02d}", "sizeBytes": 100_000} for i in range(40)]
+    rows.insert(7, {"id": "target", "sizeBytes": 6_600_000})
+    seen = {"a": {"size": 17_000 * 10, "page_count": 10}, "b": {"size": 190_000 * 5, "page_count": 5}}
+    order = [r["id"] for r in free.by_fit(rows, [{"page_count": 35}], seen)]
+    assert "target" in order[:5] and order.index("target") < free.LEGACY_SCAN
+    assert [r["id"] for r in sorted(rows, key=lambda r: r["sizeBytes"])].index("target") >= free.LEGACY_SCAN
+    assert [r["id"] for r in free.by_fit(rows, [{"page_count": 35}], {})][-1] == "target"  # nothing observed: by size
