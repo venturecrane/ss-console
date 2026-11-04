@@ -172,6 +172,17 @@ def judge(raw: list[Any]) -> tuple[bool, list[dict[str, Any]]]:
     return passed, items
 
 
+def why(passed: bool, items: list[dict[str, Any]]) -> str:
+    """The result's ``why``: every verdict's reason, a records proof that would
+    end held saying so ("would be held: per_job_cap_usd: ...")."""
+    reasons = [
+        ((f"would be {i['would_be']}: " if i.get("would_be") else "") + str(i.get("reason") or "")).rstrip(": ")
+        for i in items
+        if i.get("reason") or i.get("would_be")
+    ]
+    return "; ".join(reasons)[:500] or ("" if passed else "the runner wrote no dry_run verdict")
+
+
 def _artifacts(jd: Path) -> list[dict[str, Any]]:
     """What the run PRODUCED (its staged ``out/`` tree, plus a negotiation dry
     run's report), by path under the twin and size. Never the matter's own
@@ -313,14 +324,13 @@ def _run(d: Any, marker: Path, root: Path, job_id: str) -> bool:
         logger.info("%s proof run of %s: %s; the marker stays for the next tick", d.LANE, job_id, result)
         return True
     passed, items = judge(read_verdicts(root / job_id))
-    reasons = [str(i.get("reason")) for i in items if i.get("reason")]
     _finish(
         root,
         job_id,
         d,
         {
             "status": "passed" if passed else "failed",
-            "why": "; ".join(reasons)[:500] or ("" if passed else "the runner wrote no dry_run verdict"),
+            "why": why(passed, items),
             "stages": sorted({str(i.get("stage") or "") for i in items}),
             "cents": _spend_cents(items),
             "artifacts": _artifacts(root / job_id),
@@ -370,4 +380,5 @@ __all__ = [
     "run_pending",
     "seed_state",
     "twin",
+    "why",
 ]

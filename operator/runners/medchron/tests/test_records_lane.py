@@ -32,7 +32,9 @@ env = {k: os.environ.get(k, "") for k in ("MEDCHRON_RECORDS_INPUTS_DIR", "MEDCHR
 verdict = os.environ.get("FAKE_VERDICT", "delivered")
 # held_some: one record held at the cap, the found one cut (records/search.py).
 held_some = verdict == "held_some"
-verdict = "held" if held_some else verdict
+# dry_run_held: a capped proof run (records/run.py): dry_run, would be held.
+would_hold = verdict == "dry_run_held"
+verdict = "held" if held_some else ("dry_run" if would_hold else verdict)
 data = jd / "data"
 (data / "cuts").mkdir(parents=True, exist_ok=True)
 blob = b"%PDF-1.4 fake cut " + b"x" * 5000
@@ -48,7 +50,9 @@ held = verdict == "held"
     "reply_html": "<p>x</p>"}))
 v = {"verdict": verdict, "stage": "verdict", "cents": 42, "items": [{"n": 1, "outcome": "attached", "files": 1}],
      "cuts": [{k: cuts[0][k] for k in ("n", "k", "file_id", "pages", "page_count", "sha256", "size")}]}
-if held_some:
+if would_hold:
+    v.update(would_be="held", reason="per_job_cap_usd: 00000002 2000 pages")
+elif held_some:
     v.update(reason="per_job_cap_usd: 00000002 2000 pages", items=[*v["items"], {"n": 2, "outcome": "held", "files": 0}])
 elif held:
     v.update(reason="per_job_cap_usd: the run's spend reached the job's cost cap during locate; the run stopped", cuts=[])
@@ -291,6 +295,17 @@ def test_a_proof_run_leaves_the_review_dir_and_the_spool_untouched(
     assert not seat["decisions"].exists() and chowns == []
     (row,) = rr.read_rows(lane.job_dir(JOB) / "proof-review")
     assert row["batches"][0][0]["handle"] == ""
+
+
+def test_a_capped_proof_run_writes_its_row_as_held_with_the_reason(
+    tmp_path: Path, seat: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lane, client, _ = _lane(tmp_path, seat)
+    lane.child_env = {proof_mode.PROOF_ENV: "1", "FAKE_VERDICT": "dry_run_held"}
+    _submit(lane, client)
+    assert lane.tick() == "dry_run"
+    (row,) = rr.read_rows(lane.job_dir(JOB) / "proof-review")
+    assert row["reason"].startswith("per_job_cap_usd") and row["batches"]  # the found record's cut rides it
 
 
 def test_a_second_job_on_the_same_matter_waits_for_the_first(tmp_path: Path, seat: dict[str, Path]) -> None:

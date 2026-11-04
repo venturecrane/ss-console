@@ -585,8 +585,11 @@ def test_a_count_written_with_a_thousands_separator_matches_the_facts() -> None:
     )
     _searched(result)
     block = facts.build("s1", "m1", None)
-    assert "(all 2313 pages were read)" in block.text
+    # Every count is written with its separator (records dry run 3, 2026-11-03),
+    # and the guard reads either form as the same number.
+    assert "(all 2,313 pages were read)" in block.text
     assert facts.unstated(block, "We read all 2,313 pages of it, and the Exhibit 4 file.") == ""
+    assert facts.unstated(block, "We read all 2313 pages of it.") == ""
 
 
 NAMES = ("8E_Records_Smith_MD .pdf", "8A Records Dr ANNE SMITH MD.pdf")

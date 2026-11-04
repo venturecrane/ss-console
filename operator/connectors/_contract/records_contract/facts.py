@@ -159,7 +159,7 @@ def without_names(facts: Facts | None, text: str) -> str:
 
 
 def _plural(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+    return f"{n:,} {noun}" if n == 1 else f"{n:,} {noun}s"
 
 
 def _f(row: dict[str, Any], key: str) -> str:

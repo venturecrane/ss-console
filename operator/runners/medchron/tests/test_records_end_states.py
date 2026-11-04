@@ -145,7 +145,9 @@ def test_B_read_and_established_absent_says_not_found_and_tries_the_next_file(
     assert json.loads((r.data / search.ORDER).read_text())["1"] == [first, second]
     assert v["verdict"] == "delivered" and v["items"] == [{"n": 1, "outcome": "attached", "files": 1}]
     assert [(c["file_id"], c["pages"]) for c in v["cuts"]] == [(second, "5-10")]
-    assert "not found in Northside Clinic discharge summary index.pdf (all 4 pages were read)" in _facts(r)
+    # The record is attached, so it is under that ONE heading: the file it was
+    # not in is not named under "Not found" too.
+    assert "Not found" not in _facts(r) and "discharge summary index.pdf" not in _facts(r)
 
 
 def test_C_found_on_the_read_pages_is_cut_says_the_gap_and_never_rereads(
@@ -217,7 +219,8 @@ def test_E_not_found_with_pages_never_reached_holds_that_record(
     f = sb.add(1, "Northside Clinic records.pdf", pdf(10))
     r, v = _job(tmp_path, monkeypatch, model, sb, [_rec(XRAY)], f"Please send {XRAY}.")
     assert v["verdict"] == "held" and v["reason"] == f"match_unsettled: {f[:8]} 1 pages not reached", v
-    assert "not established yet; 1 page of the file it is in is not read yet" in _facts(r)
+    assert "not established yet; looked for in Northside Clinic records.pdf (9 of 10 pages read; closest:" in _facts(r)
+    assert "1 page of Northside Clinic records.pdf is not read yet, and SMD is finishing it" in _facts(r)
 
 
 def test_F_a_first_read_over_the_cap_holds_that_record_before_any_read(
@@ -392,7 +395,7 @@ def test_F_an_over_cap_file_is_matched_on_its_read_pages_first(
     assert model.index_calls() == 0 and model.match_calls() == 1
     if found:
         assert v["verdict"] == "delivered" and [c["pages"] for c in v["cuts"]] == ["5-14"]
-        assert "- 2013 pages of Northside Clinic set.pdf were not read" in _facts(r)
+        assert "- 2,013 pages of Northside Clinic set.pdf were not read" in _facts(r)
     else:
         assert v["verdict"] == "held" and v["reason"] == f"per_job_cap_usd: {f[:8]} 2013 pages"
 

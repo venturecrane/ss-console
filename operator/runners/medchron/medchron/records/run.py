@@ -49,8 +49,8 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, measure, parse as parse_mod, rank, search
-from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
+from . import assemble, firm as firm_mod, free as free_mod, job as job_mod, measure, parse as parse_mod, rank, search
+from .outcome import REASON, RecordsFailed, RecordsHold, Verdict, proof_ending
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
 #: The statuses a matter named by its number is resolved among.
@@ -211,8 +211,6 @@ class RecordsRun(RunBase):
         return parse_mod.answer_json(r.text)
 
     def _parse(self) -> None:
-        from smokeball_connector import page_finder as pf
-
         try:
             rows = parse_mod.parse(self.job.request_text, pf.model(), self._ask_parse, cache=self.state / "parse")
         except parse_mod.ParseRefused as exc:
@@ -283,6 +281,7 @@ class RecordsRun(RunBase):
             "page_count": int(total),
             "size": dest.stat().st_size,
         }
+        free_mod.note_file(files[file_id]["sha256"], file_id)
         return True
 
     def _ranked(self, mid: str, rec: dict[str, Any], files: dict[str, Any]) -> list[tuple[str, int]]:
@@ -302,7 +301,8 @@ class RecordsRun(RunBase):
         free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
         priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
         priced.sort(key=lambda fs: (-fs[1], search.read_none(files[fs[0]]), int(files[fs[0]]["page_count"]), fs[0]))
-        return free + priced[:MAX_CANDIDATES]
+        # Then the matter PDFs already read whole (free.py), before any priced one.
+        return free + free_mod.extras(self, mid, rows, files, dict(got)) + priced[:MAX_CANDIDATES]
 
     def _resolve(self) -> None:
         mid = self._matter_id()
@@ -328,8 +328,6 @@ class RecordsRun(RunBase):
         """``--measure``: $0. Per record, the ranked candidates and what the
         pre-flight would price; no model call, no page read, no stage written.
         Records come from the job's own parse, or the parse cache."""
-        from smokeball_connector import page_finder as pf
-
         if (self.data / "records.json").is_file():
             records = self._records()
         else:
@@ -352,7 +350,7 @@ class RecordsRun(RunBase):
                 left = search.unread(meta)
                 total += left * price if fid == ranked[0][0] else 0.0
                 lines.append(
-                    f"  {fid[: search.ID_PREFIX]} score {sc} pages {meta['page_count']} read {len(index['pages'])} "
+                    f"  {fid[: search.ID_PREFIX]}{free_mod.tag(sc)} score {sc} pages {meta['page_count']} read {len(index['pages'])} "
                     f"unreadable {len(index['unreadable'])} unread {left} first-read {left * price:.2f} USD"
                 )
         lines.append(f"pre-flight for the top candidates: {total:.2f} USD")
@@ -432,9 +430,9 @@ class RecordsRun(RunBase):
         the reply is words only (rendered with no file attached)."""
         records = self._records() if (self.data / "records.json").is_file() else []
         mid = self._matter() if (self.data / "matter.json").is_file() else (self.job.matter_id or "")
-        located = self.located() if records else []
-        results, owners = assemble.merge(located)
-        held_items = search.item_holds(self.data)
+        held_items, meta = search.item_holds(self.data), search._read(self.data / "files.json", {})
+        located, looked = assemble.one_heading(self.located() if records else [], held_items, meta)
+        self._held_facts, (results, owners) = (looked, meta), assemble.merge(located)
         if held_items and hold is None:
             # Some records wait for SMD (a file that would pass the cap); the
             # others are attached as they were found, and the reply says which.
@@ -490,7 +488,7 @@ class RecordsRun(RunBase):
         outcomes = assemble.outcomes(
             records, rendered.items if ok and rendered is not None else [], owners, unresolved, {}, held=set(held_items)
         )
-        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items, *self._held_facts)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,
@@ -530,8 +528,8 @@ class RecordsRun(RunBase):
         if any(o["outcome"] in ("unplaced", "unresolved") for o in outcomes):
             return self.compose_held(hold, results, mid, records, owners, unresolved)
         block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
+        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items, *self._held_facts)
         block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
-        block_t, block_h = assemble.with_held(block_t, block_h, records, held_items)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,
@@ -601,13 +599,14 @@ class RecordsRun(RunBase):
         if failed is not None or doc is None:
             return Verdict("failed", stage=stage, reason=failed or "unexpected: no reply was composed")
         items, cuts = doc["items"], doc["cuts"]
+        would_be = proof_ending(hold, items) if proof_mode.active() else None
+        if would_be:  # a proof run's reply and row are its product, held or not
+            self._proof_out(doc)
+            return Verdict(proof_mode.OUTCOME, stage="verdict", reason=hold, items=items, cuts=cuts, would_be=would_be)
         if hold is not None:
             # A record-level hold still carries the cuts of the records found:
             # SMD's review sends them with the rest once it is finished.
             return Verdict("held", stage=stage, reason=hold, items=items, cuts=cuts)
-        if proof_mode.active():
-            self._proof_out(doc)
-            return Verdict(proof_mode.OUTCOME, stage="verdict", items=items, cuts=cuts)
         proof = {
             "readback": "confirmed",
             "files": [

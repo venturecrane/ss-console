@@ -463,7 +463,9 @@ class RecordsLane(DraftingLane):
         row = st.get("row")
         if not isinstance(row, dict):
             env = self._envelope(job_id)
-            delivered = str(v.get("verdict")) in ("delivered", "dry_run")
+            delivered = str(v.get("verdict")) == "delivered" or (
+                str(v.get("verdict")) == "dry_run" and v.get("would_be") != "held"
+            )
             row = rr.hold_row(
                 message_id=str(env.get("message_ref") or ""),
                 to=str(env.get("requester") or ""),
