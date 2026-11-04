@@ -178,6 +178,23 @@ def test_the_doorway_refuses_the_next_paid_call_once_smd_stops_the_job(tmp_path)
         d.call("audit", model="m", max_tokens=1, messages=msg)
 
 
+def test_no_batch_is_submitted_once_smd_stops_the_job(tmp_path):
+    import test_llm_ledger as t
+
+    batches = t.Batches(lambda bid, created: [])
+    d = llm.Doorway(
+        ledger_mod.Ledger(tmp_path / "usage-ledger.jsonl"),
+        batch_stages=frozenset({"vision"}),
+        client=t.client_for(batches=batches),
+        log=lambda *_: None,
+    )
+    stop_request.arm_smd(tmp_path)
+    smd_stop.request(tmp_path, by="scott", why="dup", at=0)
+    with pytest.raises(stop_request.SmdStopRequested):
+        d.batch_call("vision", t._items(), lambda *_: None, model="m", max_tokens=5, batch_dir=tmp_path / "b")
+    assert batches.created == [], "a batch is one commitment: none may be submitted after the stop"
+
+
 def test_the_doorway_ignores_a_machine_stop(tmp_path):
     """A Machine stop keeps its own checkpoints (stage boundaries): a seat
     restart drains a job as it did before, it is not cut mid-stage."""

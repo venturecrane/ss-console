@@ -36,7 +36,7 @@ from .firm_levers import FirmLevers
 from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
-from .stop_request import before_paid_call as _before_paid_call, check_smd as _check_smd, sleep as _stop_aware_sleep
+from .stop_request import before_paid_call as _before_paid_call, sleep as _stop_aware_sleep
 
 # Only rows a call site actually leaves to the table. Every other stage passes
 # effort itself: every effort reading on 2026-08-27 failed its content bar
@@ -563,8 +563,8 @@ class Doorway:
         n = _next_index(existing, stage)
         for group in _split_requests(fresh):
             path = batch_dir / f"batch-{stage}-{n}{'-retry' if retry else ''}.json"
-            _check_smd(stage)  # a batch is one commitment: SMD's stop lands before it
-            b = client.messages.batches.create(requests=group)
+            # A batch is one commitment: SMD's stop lands before it (the gate returns None).
+            b = _before_paid_call(stage, None) or client.messages.batches.create(requests=group)
             batch_dir.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 json.dumps(
