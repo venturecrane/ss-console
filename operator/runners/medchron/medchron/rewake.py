@@ -74,6 +74,15 @@ def stamp(st: dict[str, Any], wake: dict[str, Any]) -> bool:
     return True
 
 
+def post_id(d: Any, job_id: str, wake: dict[str, Any]) -> str:
+    """The id ``Daemon._dispatch_wakes`` posts ``wake`` under. A newly numbered
+    wake is written to the job's state BEFORE the post, so a crash after the
+    gateway admitted it re-posts under the same id and is deduped."""
+    if stamp(d._daemon_state(job_id), wake):
+        d._write_state(job_id, wake=wake, wake_seq=wake["seq"])
+    return handoff_id(d.LANE, job_id, wake)
+
+
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

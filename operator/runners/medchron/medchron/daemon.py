@@ -513,11 +513,8 @@ class Daemon:
             # Each distinct wake gets its own id and every re-post of one wake the
             # same id (`rewake.handoff_id`): the gateway drops a reused id with the
             # same text and refuses one with different text (admission_conflict).
-            # The number is persisted BEFORE the post, so a crash after the
-            # gateway admitted it re-posts under the same id.
-            if rewake.stamp(self._daemon_state(job_id), wake):
-                self._write_state(job_id, wake=wake, wake_seq=wake["seq"])
-            body = json.dumps({"handoff_id": rewake.handoff_id(self.LANE, job_id, wake), "task": wake["task"]})
+            # The number is persisted BEFORE the post (`rewake.post_id`).
+            body = json.dumps({"handoff_id": rewake.post_id(self, job_id, wake), "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
             outcome = "error"
