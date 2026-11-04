@@ -52,7 +52,15 @@ if [ -z "$task" ]; then
   task=$(ls -tr "$HOME"/inbox/pending*.md 2>/dev/null | head -1)
 fi
 if [ -n "$task" ] && [ -s "$task" ]; then
-  taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S)-$$.md"
+  # The id ops-handoff put in the file name (pending-<stamp>-<id>.md) names this
+  # session, which is the address ops-handoff printed on the laptop. It goes in
+  # the outcome file's name too, so `ops-handoff <client> --results <session>`
+  # finds this task's outcome by that address. Until 2026-11-04 the outcome was
+  # named by this script's pid alone, the laptop could not tell which file was
+  # its own, and a finished read was reported to the Captain as still running.
+  # The pid stays last: ops-reap-tasks matches task-*-<pane pid>.md.
+  id=$(basename "$task" .md | sed -n 's/^pending-[0-9T]*-\([0-9A-Za-z]*\)$/\1/p')
+  taken="$HOME/inbox/task-$(date -u +%Y%m%dT%H%M%S)-${id:+$id-}$$.md"
   # mv is the claim: if another window took this file first, there is no task.
   mv "$task" "$taken" 2>/dev/null || { echo "that task was already taken"; exec bash -l; }
   # The laptop that handed the task over reads the outcome back with
@@ -60,9 +68,6 @@ if [ -n "$task" ] && [ -s "$task" ]; then
   # document content: that stays here under ~/work.
   out="$HOME/outbox/$(basename "$taken")"
   mkdir -p "$HOME/outbox"
-  # The id ops-handoff put in the file name (pending-<stamp>-<id>.md) names this
-  # session, which is the address ops-handoff printed on the laptop.
-  id=$(basename "$task" .md | sed -n 's/^pending-[0-9T]*-\([0-9A-Za-z]*\)$/\1/p')
   name="ops-$slug-${id:-$$}"
   contact=" Your session name is $name; the laptop session that handed this over can type messages into this session. When you finish (or stop), the outbox file is how it hears back."
   /opt/ops/bin/claude --name "$name" --remote-control "$name" "A task was handed to this workspace from a laptop session; it is in $taken. Read it, then do it here. Client documents for this work stay on this workspace (under ~/work); only finished deliverables leave, through the seat. When you finish (or stop), write the outcome to $out for the laptop session that handed it over: what you did, what you found (the verdict, not the documents: no quoted record text, no medical detail), and anything still open. A laptop reads that file.$contact $channel"

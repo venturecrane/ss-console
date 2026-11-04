@@ -21,9 +21,15 @@
 # (~/outbox, newest last), so a laptop session sees what happened without the
 # Captain copying it across. Outcomes only; documents never leave ~/work.
 set -uo pipefail
-usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results | ops-handoff <client> --say <session> "<message>"'
-say_to='' say_text=''
-if [ "${2:-}" = "--say" ]; then
+usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results [<session>] | ops-handoff <client> --say <session> "<message>"'
+say_to='' say_text='' only=''
+if [ "${2:-}" = "--results" ] && [ $# -eq 3 ]; then
+  # --results <session>: only the outcome of the task that session took. ops-start
+  # names it ~/outbox/task-<stamp>-<id>-<pid>.md, <id> being the session's suffix.
+  [[ "$3" =~ ^ops-[a-z0-9-]+-([0-9A-Za-z]+)$ ]] || { echo "$usage"; exit 2; }
+  only="${BASH_REMATCH[1]}"
+  set -- "$1" "$2"
+elif [ "${2:-}" = "--say" ]; then
   [ $# -eq 4 ] && [ -n "$4" ] && [[ "$3" =~ ^ops-[a-z0-9-]+$ ]] || { echo "$usage"; exit 2; }
   say_to="$3" say_text="$4"
 else
@@ -35,8 +41,17 @@ app=$(jq -r --arg a "$client" '.workspaces | to_entries[] | select(.key==$a or (
 [ -n "$app" ] || { echo "no workspace called $client"; exit 1; }
 if [ "$task" = "--results" ]; then
   OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" >/dev/null || exit 1
-  fly ssh console -a "$app" -u ops --pty=false \
-    -C "sh -c 'ls -tr ~/outbox/*.md 2>/dev/null | while read f; do echo \"== \$(basename \$f)\"; cat \"\$f\"; echo; done'" </dev/null 2>/dev/null
+  glob='*.md'
+  [ -n "$only" ] && glob="task-*-$only-*.md"
+  got=$(fly ssh console -a "$app" -u ops --pty=false \
+    -C "sh -c 'ls -tr ~/outbox/$glob 2>/dev/null | while read f; do echo \"== \$(basename \$f)\"; cat \"\$f\"; echo; done'" </dev/null 2>/dev/null)
+  if [ -n "$only" ] && [ -z "$got" ]; then
+    # Not an error: that session has not written its outcome yet. Said plainly and
+    # with its own exit code, so "nothing yet" can never read as "done".
+    echo "no outcome yet from the session ending -$only on $app"
+    exit 3
+  fi
+  printf '%s\n' "$got"
   exit 0
 fi
 if [ "$task" = "--say" ]; then
@@ -65,7 +80,7 @@ if [ "$task" = "--say" ]; then
   case "$got" in
     none) echo "no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
     ''|0) echo "typed into $say_to but could not read the message back on its screen; treat it as not delivered" >&2; exit 1 ;;
-    *) echo "delivered to $say_to (read back on its screen). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
+    *) echo "delivered to $say_to (read back on its screen). Its outcome lands in its outbox: ops-handoff $client --results $say_to"; exit 0 ;;
   esac
 fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
@@ -94,5 +109,5 @@ if [ "$opened" = "opened" ]; then
 else
   echo "Handed over to $app. Tell the Captain: type \`ops $client\` to continue there."
 fi
-echo "Its session is $session. Talk to it yourself, never through the Captain: ops-handoff $client --say $session \"<message>\". Its outcome lands in its outbox: ops-handoff $client --results."
+echo "Its session is $session. Talk to it yourself, never through the Captain: ops-handoff $client --say $session \"<message>\". Its outcome lands in its outbox: ops-handoff $client --results $session (exit 3: not written yet)."
 exit 0

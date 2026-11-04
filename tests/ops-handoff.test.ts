@@ -46,6 +46,7 @@ case "$*" in
   *"wc -c"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); wc -c < "${inbox}/$f" ;;
   *"tmux has-session"*) [ "\${TMUX_RUNNING:-0}" = 1 ] && echo opened ;;
   *"sh -s"*) cat > "${home}/say.sh"; echo "\${SAY_RESULT:-1}" ;;
+  *"~/outbox/"*) [ -n "\${RESULTS_OUT:-}" ] && echo "\${RESULTS_OUT}" ;;
   *) : ;;
 esac
 exit 0
@@ -127,6 +128,69 @@ describe('ops-handoff', () => {
       { encoding: 'utf8' }
     ).trim()
     expect(named).toBe(printed)
+  })
+
+  it('names the outcome file after the session it printed, pid last for the reaper', () => {
+    // 2026-11-04: the outcome was named by ops-start's pid alone (task-<stamp>-26443.md
+    // for session ops-ashton-price-62351), so the laptop could not find its own
+    // outcome and told the Captain a finished read was still running.
+    const out = handoff(['ap', 'check the facilities'])
+    const id = out.match(/Its session is ops-ashton-price-(\d+)\./)?.[1]
+    expect(out).toContain(`--results ops-ashton-price-${id} `)
+    const [file] = fs.readdirSync(inbox)
+    const start = fs.readFileSync(
+      path.join(process.cwd(), 'operator', 'ops-machine', 'bin', 'ops-start'),
+      'utf8'
+    )
+    const lines = start.split('\n').filter((l) => /^\s*(id=|taken=)/.test(l))
+    expect(lines).toHaveLength(2)
+    const taken = execFileSync(
+      'bash',
+      [
+        '-c',
+        `task="$1"; ${lines.join('; ')}; echo "$(basename "$taken") $$"`,
+        '_',
+        `/x/inbox/${file}`,
+      ],
+      { encoding: 'utf8' }
+    ).trim()
+    const [name, pid] = taken.split(' ')
+    expect(name).toBe(`task-${name.slice(5, 20)}-${id}-${pid}.md`)
+    // ops-reap-tasks finds a window's outcome by task-*-<pane pid>.md; --results by -<id>-.
+    expect(name.endsWith(`-${pid}.md`)).toBe(true)
+  })
+
+  describe('--results <session>', () => {
+    it("asks only for that session's outcome file", () => {
+      const out = handoff(['ap', '--results', 'ops-ashton-price-62351'], {
+        RESULTS_OUT: '== task-20261104T165808-62351-26443.md',
+      })
+      expect(out).toContain('62351-26443')
+      expect(fs.readFileSync(calls, 'utf8')).toContain('~/outbox/task-*-62351-*.md')
+    })
+
+    it('says "no outcome yet" and exits 3 when that session has not written one', () => {
+      let code = 0
+      let stdout = ''
+      try {
+        handoff(['ap', '--results', 'ops-ashton-price-62351'])
+      } catch (e) {
+        const err = e as { status: number; stdout: string }
+        code = err.status
+        stdout = err.stdout
+      }
+      expect(code).toBe(3)
+      expect(stdout).toContain('no outcome yet')
+    })
+
+    it('refuses a session name that is not an ops session', () => {
+      expect(() => handoff(['ap', '--results', 'bogus'])).toThrow()
+    })
+
+    it('with no session still lists every outcome', () => {
+      handoff(['ap', '--results'])
+      expect(fs.readFileSync(calls, 'utf8')).toContain('~/outbox/*.md')
+    })
   })
 
   it('refuses the retired --reply-to flag rather than sending it as the task', () => {
