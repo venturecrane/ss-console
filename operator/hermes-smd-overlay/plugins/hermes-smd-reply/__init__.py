@@ -590,8 +590,20 @@ def _send_failed(
         logger.warning("hermes-smd-reply: send failure not surfaced (%s)", exc)
 
 
+#: The bound kinds whose reply delivers a job's work to the firm, and so meets
+#: ``system_vocabulary`` (output_checklist): every job kind but an SMD note,
+#: whose words SMD approved and the broker recorded verbatim.
+_JOB_REPLY_KINDS = binding.JOB_KINDS - {"note_job"}
+
+
+def _is_job_reply(bound: binding.Binding | None) -> bool:
+    """A bound reply on a job's completion wake (2026-11-03: a delivered brief's
+    reply told the attorney "The job searched his reports")."""
+    return bound is not None and bound.as_request().get("kind") in _JOB_REPLY_KINDS
+
+
 def _checklist_violations(
-    text: str, *, internal: bool, tool_name: str, session_id: str
+    text: str, *, internal: bool, tool_name: str, session_id: str, job_reply: bool = False
 ) -> tuple[str, str] | None:
     """``(rule names, model-facing detail)`` when the checklist holds the reply.
 
@@ -603,7 +615,7 @@ def _checklist_violations(
     try:
         # The seat role's profile (shared/policy_profile); paralegal by default.
         profile = policy_profile.current().checklist_profile
-        found = output_checklist.check(text or "", surface, profile)
+        found = output_checklist.check(text or "", surface, profile, job_reply=job_reply)
     except Exception:  # noqa: BLE001 - see docstring
         logger.exception("hermes-smd-reply: output checklist raised; relaying unchecked")
         return None
@@ -1595,6 +1607,7 @@ def _relay_draft(**kwargs: Any) -> None:
             internal=internal,
             tool_name=str(kwargs.get("tool_name") or ""),
             session_id=session_id,
+            job_reply=_is_job_reply(bound),
         )
         if (
             checklist_hold is not None
@@ -1608,6 +1621,7 @@ def _relay_draft(**kwargs: Any) -> None:
                         internal=internal,
                         tool_name=str(kwargs.get("tool_name") or ""),
                         session_id=session_id,
+                        job_reply=_is_job_reply(bound),
                     )
                     is None
                 )

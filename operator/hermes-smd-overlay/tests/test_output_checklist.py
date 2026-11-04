@@ -429,3 +429,66 @@ def test_a_matter_guid_after_the_word_matter_is_one_hit_with_the_matter_remedy()
     violations = oc.check(f"Matter {_G} is late.", oc.STAFF_SEND)
     assert [v.rule for v in violations] == ["internal_id"]
     assert "firm's own matter number" in violations[0].detail
+
+
+# ---------------------------------------------------------------------------
+# system_vocabulary: a job's delivery reply (2026-11-03)
+# ---------------------------------------------------------------------------
+
+
+def _vocab(body: str, surface: str = oc.STAFF_SEND) -> bool:
+    return "system_vocabulary" in [v.rule for v in oc.check(body, surface, job_reply=True)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # The two sentences the attorney read.
+        "The job searched his reports.",
+        "The job's source for this is the complaint.",
+        "This job could not find a DME report in the file.",
+        "The drafting job filed both documents.",
+        "The chronology job is still running.",
+        "Our job held the brief because no complaint was found.",
+        "The job also flagged two caption discrepancies.",
+        "The job’s own notes list three items.",
+        "Job ID 01J0000000000000000000000Z.",
+        "The pipeline read the matter.",
+        "The language model drafted the summary.",
+        "The model drafted section four.",
+        "The drafting lane is not enabled.",
+    ],
+)
+def test_a_job_reply_naming_our_work_is_refused(body: str) -> None:
+    assert _vocab(body)
+    assert _vocab(body, oc.EXTERNAL_REPLY)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # The employment and traffic senses a personal injury file is full of.
+        "He was unable to return to the job until March.",
+        "His job was full time, and the job site was in Mesa.",
+        "She lost the job after the collision.",
+        "The job held by the plaintiff paid hourly.",
+        "The job's physical demands are not in the record.",
+        "He was injured on the job.",
+        "The defendant entered the lane without signaling.",
+        "The runner was struck in the crosswalk.",
+        "The model year of the vehicle is 2019.",
+        "The railing was not required by code.",
+        "In the long run the lien may be reduced.",
+        # The firm's own name for the seat, as a held job's fixed wording uses it.
+        "Nothing new has been put in the firm's Operator Library.",
+        "The mediation brief is filed. His reports were searched, and the source for this is the complaint.",
+    ],
+)
+def test_ordinary_words_in_a_job_reply_pass(body: str) -> None:
+    assert not _vocab(body)
+
+
+def test_the_rule_runs_only_on_a_job_reply() -> None:
+    """FALSIFIER: put system_vocabulary on STAFF_SEND and every staff send on
+    every seat (SMD's own included, where a job is a job) meets it."""
+    assert "system_vocabulary" not in _rules("The job searched his reports.")
