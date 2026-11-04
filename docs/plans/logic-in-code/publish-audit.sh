@@ -4,8 +4,20 @@
 # 3) Pushes the paused agents' branches from their worktrees so another machine can resume them (the classifier refuses these pushes from an agent session).
 set -euo pipefail
 WT=/Users/scottdurgan/dev/ss-console/.claude/worktrees
-git -C "$WT/agent-a9b8cc8cca1af4e88" push -u origin logic-in-code/connector-values || echo "connector-values push refused by its pre-push hook: see RESUME.md"
-git -C "$WT/agent-ad9ad7b51ae95a6d1" push -u origin logic-in-code/writes-and-conflict || echo "writes-and-conflict push refused by its pre-push hook: see RESUME.md"
+if git -C "$WT/agent-a9b8cc8cca1af4e88" push -u origin logic-in-code/connector-values; then
+  gh pr create --draft --base logic-in-code/token-sdk --head logic-in-code/connector-values \
+    --title "feat(connector): the post record is derived from each act's own outcome, and every figure and date is taken as printed and confirmed in its source" \
+    --body-file "$(dirname "$0")/pr-body-connector-values.md" || echo "connector-values PR not created (already open?)"
+else
+  echo "connector-values push refused by its pre-push hook: see RESUME.md"
+fi
+if git -C "$WT/agent-ad9ad7b51ae95a6d1" push -u origin logic-in-code/writes-and-conflict; then
+  gh pr create --draft --base logic-in-code/token-sdk --head logic-in-code/writes-and-conflict \
+    --title "feat(operator): a write on a matter the Operator chose opens only with that matter's resolution, and an outside sender's email moves nothing until the conflict check clears it" \
+    --body-file "$(dirname "$0")/pr-body-writes-and-conflict.md" || echo "writes-and-conflict PR not created (already open?)"
+else
+  echo "writes-and-conflict push refused by its pre-push hook: see RESUME.md"
+fi
 git -C "$WT/agent-af4d46e2ae25807ae" push origin logic-in-code/fixed-wording || echo "fixed-wording push refused: see RESUME.md"
 gh pr merge 3741 --squash
 echo "merge of #3741 (token-sdk) queued"
