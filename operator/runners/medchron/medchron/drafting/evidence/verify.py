@@ -336,6 +336,24 @@ class Verifier:
             )
         return self._clean[key]
 
+    def find(self, c: Candidate, name: str) -> tuple[tuple[int, int] | None, int, str]:
+        """(hit in the page's clean text, page, status): the cited page
+        first, then (for an excerpt long enough not to be ambiguous) every
+        other page of the same file."""
+        doc = self.corpus[name]
+        if c.page in doc.pages:
+            hit = locate(c.excerpt, self.clean(name, c.page))
+            if hit is not None:
+                return hit, c.page, "ok"
+        if len(_words(c.excerpt)) >= RELOCATE_MIN_WORDS:
+            for p in sorted(doc.pages):
+                if p == c.page:
+                    continue
+                got = locate(c.excerpt, self.clean(name, p))
+                if got is not None:
+                    return got, p, "relocated"
+        return None, c.page, "rejected"
+
     def one(self, c: Candidate) -> tuple[dict[str, Any], tuple[str, int, int]]:
         """The fact's fields (without its id), and its sort key."""
         kind = c.kind if c.kind in KINDS else "fact"
@@ -351,27 +369,13 @@ class Verifier:
         name = resolve(c.file, self.corpus)
         if name is None:
             return {**base, "status": "rejected", "note": "no such file in the record"}, (c.file, c.page, 0)
-        doc = self.corpus[name]
         base["file"] = name
-        nwords = len(_words(c.excerpt))
-        hit = None
-        status = "ok"
-        page = c.page
-        if page in doc.pages:
-            hit = locate(c.excerpt, self.clean(name, page))
-        if hit is None and nwords >= RELOCATE_MIN_WORDS:
-            for p in sorted(doc.pages):
-                if p == c.page:
-                    continue
-                got = locate(c.excerpt, self.clean(name, p))
-                if got is not None:
-                    hit, page, status = got, p, "relocated"
-                    break
+        hit, page, status = self.find(c, name)
         if hit is None:
-            why = "excerpt not found on the cited page" + (
-                " or elsewhere in the file" if nwords >= RELOCATE_MIN_WORDS else ""
-            )
+            long = len(_words(c.excerpt)) >= RELOCATE_MIN_WORDS
+            why = "excerpt not found on the cited page" + (" or elsewhere in the file" if long else "")
             return {**base, "status": "rejected", "note": why}, (name, c.page, 0)
+        doc = self.corpus[name]
         clean = self.clean(name, page)
         a, b = widen(clean, *hit)
         excerpt = " ".join(clean[a:b].split())
@@ -389,6 +393,14 @@ class Verifier:
             "machine": page in doc.machine,
             "page_sha": page_sha(doc.pages.get(page, "")),
         }
+        note += self.values(c, name, kind, excerpt, out)
+        out["note"] = "; ".join(note)
+        return out, (name, page, a)
+
+    def values(self, c: Candidate, name: str, kind: str, excerpt: str, out: dict[str, Any]) -> list[str]:
+        """A figure's or date's value, testimony's page and line, set on
+        ``out`` from the verified excerpt; the notes it adds."""
+        note: list[str] = []
         if kind == "figure":
             got = figure_value(c, excerpt)
             if got is None:
@@ -417,8 +429,7 @@ class Verifier:
                     out["tags"] = tuple(t for t in c.tags if not t.startswith("tpage_end:")) + (f"tpage_end:{pb}",)
                 if c.tpage is not None and (c.tpage, c.lines) != (pa, (la, lb)):
                     note.append(f"page and line located at {pa}:{la}")
-        out["note"] = "; ".join(note)
-        return out, (name, page, a)
+        return note
 
 
 def verify(candidates: Iterable[Candidate], corpus: Mapping[str, DocPages], chk: ModuleType | None = None) -> Ledger:

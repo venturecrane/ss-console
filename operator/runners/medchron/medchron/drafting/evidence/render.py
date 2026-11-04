@@ -183,6 +183,36 @@ def quote_text(f: Fact, fragment: str | None) -> str | None:
 NO_PRIMARY = "{{ATTORNEY: no primary text of this authority is on file; confirm the citation and what it holds}}"
 
 
+def _marker_piece(
+    t: Token,
+    fs: list[Fact],
+    charges: list[dict[str, Any]] | None,
+    deponents: Mapping[str, str] | None,
+    authorities: Any,
+) -> str:
+    """The charges table, an authority, or an attorney marker."""
+    if t.kind == "T":
+        if charges is None:
+            raise RenderError([Finding("no_table", "no charges table was built for this job", t.start, t.end, t.raw)])
+        return howell.markdown(charges)
+    if t.kind == "L":
+        if not t.ids:
+            return f"{t.text} {NO_PRIMARY}"
+        cite = markup.citation_of(authorities, t.ids[0])
+        if cite is None:
+            raise RenderError(
+                [Finding("unknown_authority", f"{t.ids[0]} is not in the authority store", t.start, t.end, t.raw)]
+            )
+        return cite
+    if t.kind == "A":
+        if not fs:
+            return "{{ATTORNEY: " + str(t.text) + "}}"
+        f = fs[0]
+        why = f"; {f.image_reading}" if f.image_reading else ""
+        return "{{ATTORNEY: confirm before relying on it: " + f.claim + f" ({cite_parts([f], deponents)}){why}" + "}}"
+    raise RenderError([Finding("malformed_token", f"unknown token kind {t.kind}", t.start, t.end, t.raw)])
+
+
 def piece(
     t: Token,
     ledger: Ledger,
@@ -215,25 +245,8 @@ def piece(
         return str(len(fs))
     if t.kind == "SPAN":
         return span_text(fs[0], fs[1], t.text)
-    if t.kind == "T":
-        if charges is None:
-            raise RenderError([Finding("no_table", "no charges table was built for this job", t.start, t.end, t.raw)])
-        return howell.markdown(charges)
-    if t.kind == "L":
-        if not t.ids:
-            return f"{t.text} {NO_PRIMARY}"
-        cite = markup.citation_of(authorities, t.ids[0])
-        if cite is None:
-            raise RenderError(
-                [Finding("unknown_authority", f"{t.ids[0]} is not in the authority store", t.start, t.end, t.raw)]
-            )
-        return cite
-    if t.kind == "A":
-        if not fs:
-            return "{{ATTORNEY: " + str(t.text) + "}}"
-        f = fs[0]
-        why = f"; {f.image_reading}" if f.image_reading else ""
-        return "{{ATTORNEY: confirm before relying on it: " + f.claim + f" ({cite_parts([f], deponents)}){why}" + "}}"
+    if t.kind in ("T", "L", "A"):
+        return _marker_piece(t, fs, charges, deponents, authorities)
     raise RenderError([Finding("malformed_token", f"unknown token kind {t.kind}", t.start, t.end, t.raw)])
 
 

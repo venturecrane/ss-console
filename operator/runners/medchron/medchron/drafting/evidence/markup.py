@@ -82,35 +82,13 @@ def parse(text: str) -> tuple[list[Token], list[Finding]]:
 def _token(kind: str, args: str, start: int, end: int, raw: str) -> tuple[Token | None, str | None]:
     head, sep, rest = args.partition("|")
     free = rest.strip() if sep else None
-    if kind == "T":
-        name = head.strip().lower()
-        if name not in TABLES:
-            return None, f"unknown table {head.strip()!r}"
-        return Token(kind, (), start, end, raw, name=name), None
-    if kind == "L":
-        if head.strip() == "?":
-            if not free:
-                return None, "an authority with no primary text needs its citation after |"
-            return Token(kind, (), start, end, raw, text=free), None
-        slug = head.strip()
-        if not _SLUG.match(slug) or free is not None:
-            return None, f"not an authority slug: {head.strip()!r}"
-        return Token(kind, (slug,), start, end, raw), None
-    if kind == "A" and head.strip() == "?":
-        if not free:
-            return None, "an attorney question needs its text after |"
-        return Token(kind, (), start, end, raw, text=free), None
+    if kind in ("T", "L") or (kind == "A" and head.strip() == "?"):
+        return _free_token(kind, head.strip(), free, start, end, raw)
     ids = tuple(i.strip() for i in head.split(",") if i.strip())
-    if not ids:
-        return None, "no fact id"
-    bad = [i for i in ids if not _ID.match(i)]
-    if bad:
-        return None, f"not a fact id: {', '.join(bad)}"
-    if kind in ("Q", "N", "D") and len(ids) != 1:
-        return None, f"{kind} takes exactly one fact id"
+    err = _ids_error(kind, ids)
+    if err:
+        return None, err
     if kind == "SPAN":
-        if len(ids) != 2:
-            return None, "SPAN takes exactly two date ids"
         if free is not None and free.lower() not in SPAN_UNITS:
             return None, f"SPAN unit must be one of {', '.join(SPAN_UNITS)}"
         free = free.lower() if free else None
@@ -119,6 +97,43 @@ def _token(kind: str, args: str, start: int, end: int, raw: str) -> tuple[Token 
     if kind == "Q" and free is not None and not free:
         return None, "an empty quote fragment"
     return Token(kind, ids, start, end, raw, text=free), None
+
+
+def _ids_error(kind: str, ids: tuple[str, ...]) -> str | None:
+    if not ids:
+        return "no fact id"
+    bad = [i for i in ids if not _ID.match(i)]
+    if bad:
+        return f"not a fact id: {', '.join(bad)}"
+    if kind in ("Q", "N", "D") and len(ids) != 1:
+        return f"{kind} takes exactly one fact id"
+    if kind == "SPAN" and len(ids) != 2:
+        return "SPAN takes exactly two date ids"
+    return None
+
+
+def _free_token(
+    kind: str, head: str, free: str | None, start: int, end: int, raw: str
+) -> tuple[Token | None, str | None]:
+    """T (a table name), L (an authority slug or ``?`` with its citation),
+    and A:? (the drafter's question): tokens that name no fact."""
+    if kind == "T":
+        name = head.lower()
+        if name not in TABLES:
+            return None, f"unknown table {head!r}"
+        return Token(kind, (), start, end, raw, name=name), None
+    if head == "?":
+        if not free:
+            what = (
+                "an authority with no primary text needs its citation"
+                if kind == "L"
+                else "an attorney question needs its text"
+            )
+            return None, f"{what} after |"
+        return Token(kind, (), start, end, raw, text=free), None
+    if not _SLUG.match(head) or free is not None:
+        return None, f"not an authority slug: {head!r}"
+    return Token(kind, (head,), start, end, raw), None
 
 
 def validate(tokens: list[Token], ledger: Ledger, authorities: Any = None) -> list[Finding]:
