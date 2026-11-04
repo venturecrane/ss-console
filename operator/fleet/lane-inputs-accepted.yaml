@@ -1,0 +1,26 @@
+# Lane firm-input schema changes a person has declared need no re-staging.
+#
+# `fleet build` records a digest of each lane's schema module in the image's
+# lane-inputs.json; a seat's preflight refuses a release whose digest for an
+# authored lane differs from the seat's current image, because the staged
+# inputs were validated against another schema (operator/bin/lib/fleet/preflight.py).
+# An entry here is the person's call that, for the change landing at `since`,
+# the inputs already staged on the seats still fit: a release built at or after
+# `since` passes a seat whose image is from before it, with a note naming this
+# entry. The tick reads this file from its checkout of main (ADR 0096 amendment,
+# 2026-11-04). A schema that accepts different inputs gets no entry; its seats
+# are re-staged (operator/bin/reprovision.sh <slug>).
+#
+# since: the full commit the schema modules changed at
+# date: quoted, so YAML keeps it a string
+# lanes: "*" or a list of lane keys (medchron, demand, drafting, litigation, casefile, records)
+- since: a137f20f46cbcf0b557dff879de73e7004a69beb
+  lanes: '*'
+  date: '2026-11-04'
+  by: session records-lane-fixes-2 (scottdurgan)
+  why: >-
+    ADR 0103 R1 renamed the runner package medchron to jobs. Every lane's
+    firm.py changed only its ENV_DIR constant (MEDCHRON_* to JOBS_*), its
+    docstrings and its import lines; the chronology lane's config.py body is
+    byte-equal. What each schema accepts is unchanged, so the inputs staged
+    under the old image fit; nothing to re-stage.

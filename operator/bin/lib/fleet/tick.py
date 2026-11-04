@@ -43,7 +43,9 @@ the release incomplete, and a ring with no seat that may take it waits.
 
 What a tick never does: ``--force-mid-job`` (a running client job always wins),
 ``--accept-lane-inputs`` (a lane schema change is a person's call: the seat's
-preflight refuses, the tick halts, and someone re-stages), and the ssh boot
+preflight refuses, the tick halts, and someone re-stages, or merges that call
+once in ``operator/fleet/lane-inputs-accepted.yaml``, which every seat's
+preflight then reads from the checkout), and the ssh boot
 smoke (the seat's own self-test decides; no verdict is a tooling_error).
 """
 

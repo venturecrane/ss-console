@@ -84,7 +84,7 @@ from .busy import BusyGate
 from .d1 import D1, FleetStore
 from .fly import Fly, FlyTokens
 from .ledger import VerifyLedger
-from .preflight import PreflightChecker
+from .preflight import LaneInputDeclarations, PreflightChecker
 from .r2 import R2, image_key
 from .rings import load_rings
 from .rollout import ImagePlan, ImageRollout
@@ -310,7 +310,7 @@ def _image_release(ctx: Ctx, release_id: str) -> dict[str, Any]:
 
 def _image_rollout(ctx: Ctx, holder: str) -> ImageRollout:
     return ImageRollout(
-        ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker(ctx.fly, ctx.r2),
+        ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker(ctx.fly, ctx.r2, LaneInputDeclarations(ctx.runner, ctx.repo)),
         SmokeRunner(ctx.runner, str(ctx.repo)), ctx.render, ctx.log, ctx.sleep, ctx.clock,
         FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger,
     )  # fmt: skip

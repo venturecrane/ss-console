@@ -23,8 +23,10 @@
 #
 # WHAT IT NEVER DOES. --force-mid-job (a running client job always wins) and
 # --accept-lane-inputs (a lane schema change is a person's call: the seat is
-# refused at preflight, the run halts, and someone re-stages). The conformance
-# test pins both (operator/bin/tests/test_ci_coverage_conformance.py).
+# refused at preflight, the run halts, and someone re-stages, or merges the
+# call once in operator/fleet/lane-inputs-accepted.yaml, which the preflight
+# reads from this checkout). The conformance test pins both
+# (operator/bin/tests/test_ci_coverage_conformance.py).
 #
 # CREDENTIALS. Only from the protected `fleet-release` environment, readable by
 # this workflow on main: one Fly deploy token per seat app
