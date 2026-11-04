@@ -220,9 +220,8 @@ def parse_xml(raw: bytes) -> Any:
     granule carries none) so no entity is ever expanded."""
     if re.search(rb"<!(?:DOCTYPE|ENTITY)", raw, re.I):
         raise LookupError("govinfo's XML carries a DTD or entity declaration; refused")
-    return ET.fromstring(
-        raw
-    )  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml - DTD and entity declarations refused above
+    # DTD and entity declarations are refused above, so expat expands nothing.
+    return ET.fromstring(raw)
 
 
 def _block_text(el: Any) -> str:
