@@ -191,7 +191,11 @@ def apply_for(path: Path, fmt: dict[str, Any], cls: str) -> list[str]:
     spec = spec_for(fmt)
     if spec is None:
         raise ValueError("pleading paper: the firm has none authored")
-    return apply(path, spec, authored_title(fmt, cls))
+    from . import briefpage
+
+    notes = apply(path, spec, authored_title(fmt, cls))
+    briefpage.apply(path, fmt, cls, spec.pitch_pt, signature=False)  # the first page, at half the pitch
+    return notes
 
 
 def authored_title(fmt: dict[str, Any], cls: str) -> str | None:
@@ -300,8 +304,10 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     return notes
 
 
-def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
-    """What is wrong with ``doc`` as pleading paper under ``spec``; empty is a pass."""
+def check(doc: Any, blob: bytes, spec: Spec, front_single: bool = False) -> list[str]:
+    """What is wrong with ``doc`` as pleading paper under ``spec``; empty is a
+    pass. ``front_single``: the lines above the body are at half the pitch
+    (``briefpage``, which checks them), so this pitch rule skips them."""
     import zipfile
 
     from docx.enum.text import WD_LINE_SPACING
@@ -329,10 +335,15 @@ def check(doc: Any, blob: bytes, spec: Spec) -> list[str]:
         fails.append("pleading: the margin rules are missing")
     if not re.search(rf'name="{BOX_NAME}"', headers):
         fails.append("pleading: no line-number box")
+    from . import briefpage
+
+    front = briefpage.front_paragraphs(doc) if front_single else []
+    skip = {id(p._p) for p in front}
     off = [
         p
         for p in _all_paragraphs(doc)
         if p.text.strip()
+        and id(p._p) not in skip
         and (
             p.paragraph_format.line_spacing != Pt(spec.pitch_pt)
             or p.paragraph_format.line_spacing_rule != WD_LINE_SPACING.EXACTLY

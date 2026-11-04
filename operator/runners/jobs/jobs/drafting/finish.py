@@ -28,8 +28,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citations, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
-from . import pleading, render
+from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
+from . import pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
@@ -378,7 +378,7 @@ class Finish:
             doc, self.cls, self.firm, digest, self.corpus(), render.declarant_name(lines), address
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
-        doc, cited, cites = citations.for_class(doc, self.firm.data, self.cls, self.corpus())
+        doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
         path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
         laid = pleading.apply_for(path, fmt, self.cls) if paper == "pleading" else []
