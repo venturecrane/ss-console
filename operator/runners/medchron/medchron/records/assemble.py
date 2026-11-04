@@ -132,20 +132,24 @@ def one_heading(
     attached; held ("still to be read"); not established on a partly read
     file; not found (every page read). A held record's results all leave the
     block and come back as where it was looked for, folded into its one held
-    entry (``looked``, by record n). The same (record, file) is kept once."""
+    entry (``looked``, by record n). A record's results are grouped by the
+    file's sha256: two file ids with one sha are one upload twice (dry run 3:
+    a9a240c1 and fc1e2f7b, one 3-page file uploaded twice, rendered as one
+    line twice under the first name), kept once, under the first file tried."""
     best: dict[int, int] = {}
     for n, _fid, result in located:
         for item in result.get("items") or []:
             best[n] = min(best.get(n, _NOT_FOUND), _klass(item))
     kept: list[tuple[int, str, dict[str, Any]]] = []
     looked: dict[int, list[str]] = {}
-    seen: set[tuple[int, str]] = set()
+    seen: set[tuple[int, str]] = set()  # (record, sha256, else the file id)
     named: dict[str, str] = {}
     cut = {fid for _n, fid, r in located for i in r.get("items") or [] if _klass(i) == _ATTACHED}
     for n, fid, result in located:
-        if (n, fid) in seen:
+        key = (n, str((files.get(fid) or {}).get("sha256") or fid))
+        if key in seen:
             continue
-        seen.add((n, fid))
+        seen.add(key)
         if n in holds:
             looked.setdefault(n, []).extend(_looked(fid, result, files, named))
             continue
