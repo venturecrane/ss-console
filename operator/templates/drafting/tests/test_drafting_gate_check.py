@@ -382,6 +382,69 @@ class TestQuestionPairing(GateTestCase):
         self.assertEqual(code, 0)
 
 
+    # A reporter's text layer prints single-digit lines with a LEADING spacer
+    # ("·9· ·Q."); lines 10+ print without it (2026-11-04, A&P ops workspace).
+    LEADING_DOT = (
+        "Page 49\n"
+        "24· ·Q.· · ·Uniform victor whiskey xray?\n"
+        "25· ·A.· · ·Yankee.\n"
+        "Page 50\n"
+        "·1· ·Q.· · ·Alpha bravo?\n"
+        "·2· ·A.· · ·Charlie.\n"
+        "·3· ·Q.· · ·Delta echo?\n"
+        "·4· ·A.· · ·Foxtrot.\n"
+        "·5· ·Q.· · ·Golf hotel?\n"
+        "·6· ·A.· · ·India.\n"
+        "·7· ·Q.· · ·Juliet kilo?\n"
+        "·8· ·A.· · ·Lima.\n"
+        "·9· ·Q.· · ·And when you reached the corner of mike and\n"
+        "10· ·november, which way did the oscar papa turn\n"
+        "11· ·before the quebec romeo?\n"
+        "12· ·A.· · ·Sierra tango uniform victor, toward the whiskey.\n"
+        "13· ·Q.· · ·Xray?\n"
+    )
+    LEADING_DOT_ANSWER = "Sierra tango uniform victor, toward the whiskey."
+
+    def test_a_question_on_a_leading_dot_line_pairs_with_its_answer(self) -> None:
+        """Question at "·9· ·Q.", answer at line 12, both inside the cite:
+        no refusal. Before the fix lines 1-9 did not parse, so the answer was
+        paired with page 49's last question and falsely refused."""
+        alt = self.root / "alt-sources"
+        alt.mkdir()
+        (alt / "depo-leading-dot.txt").write_text(self.LEADING_DOT, encoding="utf-8")
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{self.LEADING_DOT_ANSWER}" (Xxxx 50:9 to 50:12).\n')
+        code, payload = self.run_gate(draft, sources=str(alt))
+        self.assertEqual(self.failures(payload), [])
+        self.assertEqual(self.findings(payload, "2b", "INFO"), [])
+        self.assertEqual(code, 0)
+
+    def test_a_cite_excluding_a_leading_dot_question_still_fails(self) -> None:
+        """The check can still fail on lines 1-9: a range that leaves out the
+        "·9· ·Q." question is refused, and the refusal names 50:9."""
+        alt = self.root / "alt-sources"
+        alt.mkdir()
+        (alt / "depo-leading-dot.txt").write_text(self.LEADING_DOT, encoding="utf-8")
+        draft = self.write_draft(f'# DRAFT\n\nHe answered, "{self.LEADING_DOT_ANSWER}" (Xxxx 50:10 to 50:12).\n')
+        code, payload = self.run_gate(draft, sources=str(alt))
+        self.assertEqual(code, 1)
+        pairing = self.findings(payload, "2b", "FAIL")
+        self.assertEqual(len(pairing), 1)
+        self.assertIn("excludes the question", pairing[0]["message"])
+        self.assertIn("50:9", pairing[0]["message"])
+
+    def test_a_quote_across_leading_dot_lines_reads_without_line_numbers(self) -> None:
+        alt = self.root / "alt-sources"
+        alt.mkdir()
+        (alt / "depo-leading-dot.txt").write_text(self.LEADING_DOT, encoding="utf-8")
+        draft = self.write_draft(
+            '# DRAFT\n\nHe testified: "Q. Juliet kilo? A. Lima. Q. And when you reached the corner of '
+            'mike and november" (Xxxx 50:7 to 50:10).\n'
+        )
+        code, payload = self.run_gate(draft, sources=str(alt))
+        self.assertEqual(self.failures(payload), [])
+        self.assertEqual(code, 0)
+
+
 class TestHeldOutAndWall(GateTestCase):
     def test_held_out_overlap_fails(self) -> None:
         held = self.write_file(

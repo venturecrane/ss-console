@@ -132,7 +132,10 @@ _MD_BLOCKQUOTE_RE = re.compile(r"(?:^|(?<=\s))>+(?=\s|$)", re.MULTILINE)
 # number keeps ordered lists ("1. First item") out of the match. A reporter's
 # text layer often sets the gutter and the label tabs with middle-dot spacers
 # instead ("17· ·A.· · ·A little behind."); those are typesetting, read as spaces.
-_GUTTER_RE = re.compile(r"^[ \t]{0,10}(\d{1,3})(?:[ \t]{2,}|[ \t]*·[ \t·]*)(.*)$")
+# Single-digit lines carry a LEADING spacer too ("·9· ·Q.· · ·Where ..."), so a
+# spacer may stand before the number; without it lines 1-9 of every page went
+# unread and a question there was paired with the previous page's (2026-11-04).
+_GUTTER_RE = re.compile(r"^[ \t·]{0,10}(\d{1,3})(?:[ \t]{2,}|[ \t]*·[ \t·]*)(.*)$")
 # What typesetting leaves in a text layer and a quotation never carries: a spacer,
 # or a line number standing before a Q./A. label. A quote holding either is a
 # garble that the raw view would otherwise find verbatim, so it is never located.
