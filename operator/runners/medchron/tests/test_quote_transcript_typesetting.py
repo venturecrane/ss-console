@@ -198,3 +198,56 @@ def test_a_region_that_would_carry_typesetting_is_left_for_the_gate():
     assert out == _md(quote, "50:16-17")
     assert log and log[-1].startswith("quote not repaired, the record's region carries transcript typesetting")
     assert not _gate(out, src).passed
+
+
+#: Single-digit lines carry a LEADING spacer ("·9· ·Q."); lines 10+ do not
+#: (2026-11-04). Before the gutter read it, lines 1-9 kept their numbers in the
+#: view and the question on them was paired with the previous page's.
+LEADING_DOT = "\n".join(
+    [
+        "Page 49",
+        "24· ·Q.· · ·Uniform victor whiskey xray?",
+        "25· ·A.· · ·Yankee.",
+        "Page 50",
+        "·7· ·Q.· · ·Juliet kilo?",
+        "·8· ·A.· · ·Lima.",
+        "·9· ·Q.· · ·And when you reached the corner of mike and",
+        "10· ·november, which way did the oscar papa turn",
+        "11· ·before the quebec romeo?",
+        "12· ·A.· · ·Sierra tango uniform victor, toward the whiskey.",
+        "13· ·Q.· · ·Xray?",
+    ]
+)
+LD_QA = (
+    "Q. And when you reached the corner of mike and november, which way did the oscar papa turn "
+    "before the quebec romeo? A. Sierra tango uniform victor, toward the whiskey."
+)
+
+
+@pytest.mark.parametrize(
+    "quote, cite",
+    [
+        ("Sierra tango uniform victor, toward the whiskey.", "50:9-12"),  # answer, question in range
+        (LD_QA, "50:9-12"),
+        ("Q. Juliet kilo? A. Lima. Q. And when you reached the corner of mike and november", "50:7-10"),
+    ],
+)
+def test_a_question_on_a_leading_dot_line_is_read_and_paired(quote, cite):
+    v = _gate(_md(quote, cite), LEADING_DOT)
+    assert v.passed, v.refusals
+
+
+def test_a_cite_leaving_out_a_leading_dot_question_still_refuses():
+    """The pairing check can still fail on lines 1-9: the question at 50:9 is
+    outside 50:10-12, and the refusal names it, not page 49's question."""
+    v = _gate(_md("Sierra tango uniform victor, toward the whiskey.", "50:10-12"), LEADING_DOT)
+    assert not v.passed
+    assert any("50:9" in r for r in v.refusals), v.refusals
+    assert not any("49:24" in r for r in v.refusals), v.refusals
+
+
+def test_a_leading_dot_near_quote_repairs_without_line_numbers():
+    out, _ = _repair(LD_QA.replace("quebec", "kebec"), LEADING_DOT, cite="50:9-12")
+    assert _quoted(out) == LD_QA
+    assert not any(t in _quoted(out) for t in ("·", " 9 ", " 10 ", " 11 ", " 12 "))
+    assert _gate(out, LEADING_DOT).passed
