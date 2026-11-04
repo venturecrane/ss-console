@@ -49,7 +49,7 @@ from ..ledger import Ledger
 from ..litigation.runbase import RunBase
 from ..litigation.tools import dump
 from ..llm import Doorway
-from . import assemble, firm as firm_mod, job as job_mod, measure, parse as parse_mod, rank, search
+from . import assemble, firm as firm_mod, free as free_mod, job as job_mod, measure, parse as parse_mod, rank, search
 from .outcome import REASON, RecordsFailed, RecordsHold, Verdict
 
 STAGES = ("parse", "resolve", "preflight", "locate", "cut", "facts")
@@ -211,8 +211,6 @@ class RecordsRun(RunBase):
         return parse_mod.answer_json(r.text)
 
     def _parse(self) -> None:
-        from smokeball_connector import page_finder as pf
-
         try:
             rows = parse_mod.parse(self.job.request_text, pf.model(), self._ask_parse, cache=self.state / "parse")
         except parse_mod.ParseRefused as exc:
@@ -283,6 +281,7 @@ class RecordsRun(RunBase):
             "page_count": int(total),
             "size": dest.stat().st_size,
         }
+        free_mod.note_file(files[file_id]["sha256"], file_id)
         return True
 
     def _ranked(self, mid: str, rec: dict[str, Any], files: dict[str, Any]) -> list[tuple[str, int]]:
@@ -302,7 +301,8 @@ class RecordsRun(RunBase):
         free = [fs for fs in got if search.unread(files[fs[0]]) == 0]
         priced = [fs for fs in got if search.unread(files[fs[0]]) > 0]
         priced.sort(key=lambda fs: (-fs[1], search.read_none(files[fs[0]]), int(files[fs[0]]["page_count"]), fs[0]))
-        return free + priced[:MAX_CANDIDATES]
+        # Then the matter PDFs already read whole (free.py), before any priced one.
+        return free + free_mod.extras(self, mid, rows, files, dict(got)) + priced[:MAX_CANDIDATES]
 
     def _resolve(self) -> None:
         mid = self._matter_id()
@@ -328,8 +328,6 @@ class RecordsRun(RunBase):
         """``--measure``: $0. Per record, the ranked candidates and what the
         pre-flight would price; no model call, no page read, no stage written.
         Records come from the job's own parse, or the parse cache."""
-        from smokeball_connector import page_finder as pf
-
         if (self.data / "records.json").is_file():
             records = self._records()
         else:
@@ -352,7 +350,7 @@ class RecordsRun(RunBase):
                 left = search.unread(meta)
                 total += left * price if fid == ranked[0][0] else 0.0
                 lines.append(
-                    f"  {fid[: search.ID_PREFIX]} score {sc} pages {meta['page_count']} read {len(index['pages'])} "
+                    f"  {fid[: search.ID_PREFIX]}{free_mod.tag(sc)} score {sc} pages {meta['page_count']} read {len(index['pages'])} "
                     f"unreadable {len(index['unreadable'])} unread {left} first-read {left * price:.2f} USD"
                 )
         lines.append(f"pre-flight for the top candidates: {total:.2f} USD")

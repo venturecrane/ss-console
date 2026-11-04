@@ -103,18 +103,16 @@ def order(ids: list[str], files: dict[str, Any], scores: dict[str, int] | None =
     a partly indexed file before an unindexed one of the same score (its read
     pages may answer for a match alone), then fewer pages; the id breaks a tie. On the real A&P request a record's
     top-scored file was a 2,313-page set while a 35-page file with a complete
-    index, scoring one less, was never tried (2026-11-03)."""
+    index, scoring one less, was never tried (2026-11-03). A free file scored 0
+    is a free extra (``free.py``): after the scored free files, most pages
+    first, so a whole document is tried before a 2-page scrap."""
     sc = scores or {}
-    return sorted(
-        ids,
-        key=lambda fid: (
-            unread(files[fid]) > 0,
-            -int(sc.get(fid, 0)),
-            read_none(files[fid]),
-            int(files[fid]["page_count"]),
-            fid,
-        ),
-    )
+
+    def key(fid: str) -> tuple[Any, ...]:
+        priced, score, pages = unread(files[fid]) > 0, int(sc.get(fid, 0)), int(files[fid]["page_count"])
+        return (priced, -score, read_none(files[fid]), pages if priced or score else -pages, fid)
+
+    return sorted(ids, key=key)
 
 
 def _read(path: Path, default: Any) -> Any:
@@ -183,10 +181,14 @@ def locate_path(run: Any, n: int, file_id: str) -> Path:
     return run.data / "locate" / str(n) / f"{file_id}.json"
 
 
-def locate_one(run: Any, n: int, fid: str, what: str, mid: str, meta: dict[str, Any], hook: Any) -> dict[str, Any]:
+def locate_one(
+    run: Any, n: int, fid: str, what: str, mid: str, meta: dict[str, Any], hook: Any, extra: bool = False
+) -> dict[str, Any]:
     """The (record, file) finder result: read back when saved, else the loop
     and ONE match. Saved (never overwritten) unless the match failed, so a
-    re-run reads it back and pays nothing, and a failed match can be asked again."""
+    re-run reads it back and pays nothing, and a failed match can be asked again.
+    A free ``extra`` (no word of the record in its name) is saved only when
+    found: a not-found one is never named in the reply."""
     path = locate_path(run, n, fid)
     if path.is_file():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -195,7 +197,7 @@ def locate_one(run: Any, n: int, fid: str, what: str, mid: str, meta: dict[str, 
         out = pf.locate_index(meta["sha256"], what, hook=hook)
     except pf.FinderRefused as exc:
         raise RecordsHold(f"finder_failed: {exc}") from exc
-    return _keep(run, n, fid, mid, meta, out, save=True)
+    return _keep(run, n, fid, mid, meta, out, save=not extra or assemble.found(out))
 
 
 def _keep(
@@ -248,18 +250,26 @@ def _priced(run: Any, fid: str, meta: dict[str, Any]) -> str | None:
 
 
 def _try(
-    run: Any, n: int, fid: str, rec: dict[str, Any], meta: dict[str, Any], hook: Any, stop_cls: Any
+    run: Any, n: int, fid: str, rec: dict[str, Any], meta: dict[str, Any], hook: Any, stop_cls: Any, extra: bool = False
 ) -> tuple[str, str]:
     """One (record, file) pair: ``(state, reason)``. ``found`` ends the record
-    (A, C, E found); ``next`` tries the next file (B, D); ``unsettled`` tries
-    the next file and, with none left, holds the record (E not found, H);
-    ``held`` holds it now (F, G)."""
+    (A, C, E found); ``next`` tries the next file (B, D, and any free extra
+    that does not answer: it was never named for the record, so it holds
+    nothing); ``unsettled`` tries the next file and, with none left, holds the
+    record (E not found, H); ``held`` holds it now (F, G)."""
+    state, reason = _try_one(run, n, fid, rec, meta, hook, stop_cls, extra)
+    return ("next", "") if extra and state != "found" else (state, reason)
+
+
+def _try_one(
+    run: Any, n: int, fid: str, rec: dict[str, Any], meta: dict[str, Any], hook: Any, stop_cls: Any, extra: bool
+) -> tuple[str, str]:
     try:
         if not locate_path(run, n, fid).is_file():
             why = _priced(run, fid, meta)
             if why:
                 return ("found", "") if _read_part(run, n, fid, rec, meta, hook) else ("held", why)
-        out = locate_one(run, n, fid, rec["asked"], run._matter(), meta, hook)
+        out = locate_one(run, n, fid, rec["asked"], run._matter(), meta, hook, extra)
     except stop_cls as stop:
         reason = str(getattr(stop, "hold").reason)
         if not reason.startswith(limits_mod.CAP_SETTING):
@@ -283,21 +293,26 @@ def locate(run: Any, hook: Any, stop_cls: type[BaseException]) -> None:
     """Every record through its candidates, best first, until it is found."""
     files = run._json("files.json")
     holds = item_holds(run.data)
+    scores = _read(run.data / SCORES, {}) or {}
     for rec in run._records():
         n = int(rec["n"])
         if n in holds:
             continue
-        pending = ""
+        pending, named, found = "", False, False
         for fid in orders(run).get(str(n)) or []:
             stop_request.check("records")
-            state, reason = _try(run, n, fid, rec, files[fid], hook, stop_cls)
+            extra = int((scores.get(str(n)) or {}).get(fid, 1)) == 0
+            named = named or not extra
+            state, reason = _try(run, n, fid, rec, files[fid], hook, stop_cls, extra)
             if state == "found":
-                pending = ""
+                pending, found = "", True
                 break
             # A hold on one file (its first read would pass the cap) never ends
             # the search: a later file may answer the record. Its reason stands
             # only if none does.
             pending = reason or pending
+        # Only free extras tried, none answered: still no file named for it.
+        pending = pending or ("" if found or named else NO_FILE)
         if pending:
             holds[n] = pending
         dump(run.data / HOLDS, {str(k): v for k, v in holds.items()})
