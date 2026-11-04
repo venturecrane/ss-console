@@ -67,6 +67,31 @@ export function isMeasuredRow(row) {
 const MEASURE_TEACH =
   'Law 16 corollary (docs/doctrine/agent-operating-doctrine.md): a client-work plan needs at least one Premises row MEASURED read-only on the real request and real inputs, with the number and its probe in the row (e.g. "| request names 5 records | measured via `seat-probe ...`: 5 records, 9 files, 4,775 pages unindexed |"); a plan whose premises are all mechanics is not approvable.'
 
+/**
+ * Law 18 (2026-11-04, the records job and the jobs-runner rename): nothing
+ * runs first on a client seat. A client-work plan whose effect lands on a seat
+ * (SEAT_RE) must carry a premise row naming its off-seat rehearsal (the ops
+ * workspace, an answer key, smd-staging or the pilot, a lane-proof dry-run), or
+ * state the opt-out line with its reason. The 2026-11-02 records job was built
+ * and tested on the live client seat for twenty hours (about $58, two wrong
+ * emails to the attorney); a $0 rehearsal on copies of the seat's own indexes
+ * found four defects in minutes once it was finally run.
+ */
+const SEAT_RE = /(\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|smd-staging|customer\.yaml)/i
+const REHEARSAL_RE = /(rehears|ops workspace|ops-handoff|answer key|smd-staging|pilot-smokeball|lane-proof|dry-run|\$\s?0\b)/i
+const REHEARSAL_OPTOUT_RE = /off-seat rehearsal:\s*none\s*\(/i
+
+const REHEARSAL_TEACH =
+  'Law 18 (docs/doctrine/agent-operating-doctrine.md): a client-work plan that lands on a seat needs one Premises row naming its off-seat rehearsal, the proof that runs BEFORE the client seat (e.g. "| the lane replays at $0 on copies of the seat indexes in the ops workspace against the answer key | rehearsal via `ops-handoff <client>` |", or staging / pilot-smokeball / a lane-proof dry-run), or the explicit line "Off-seat rehearsal: none (<why>)". Nothing runs first on a client seat.'
+
+export function landsOnSeat(planText) {
+  return SEAT_RE.test(planText)
+}
+
+export function isRehearsalRow(row) {
+  return REHEARSAL_RE.test(row)
+}
+
 function log(entry) {
   try {
     const dir = process.env.SS_BOARD_DIR || join(homedir(), '.claude', 'ss-board')
@@ -122,7 +147,11 @@ export function premisesOk(planText) {
     if (measured === 0) {
       return { ok: false, mode: 'client', why: 'client-work premises that are all mechanics: no row carries a number measured on the real request or inputs', teach: MEASURE_TEACH }
     }
-    return { ok: true, mode: 'table', client: true, measured, rows: rows.length }
+    const rehearsed = rows.filter(isRehearsalRow).length
+    if (landsOnSeat(planText) && rehearsed === 0 && !REHEARSAL_OPTOUT_RE.test(planText)) {
+      return { ok: false, mode: 'rehearsal', why: 'a client plan that lands on a seat with no premise row naming its off-seat rehearsal', teach: REHEARSAL_TEACH }
+    }
+    return { ok: true, mode: 'table', client: true, measured, rehearsed, rows: rows.length }
   }
   return { ok: true, mode: 'table', rows: rows.length }
 }
