@@ -51,6 +51,8 @@ REASON_CODES = (
     "markup_lint",
     # The source check's planted controls said the checker did not discriminate (verify/controls_adapter.py).
     "check_invalid",
+    # A section over the firm's page limit after its one shortening pass, or pages not measurable (page_limits.py).
+    "length_limit",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

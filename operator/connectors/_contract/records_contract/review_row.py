@@ -46,6 +46,9 @@ STATUS_FAILED = "failed"
 STATUS_EXPIRED = "expired"
 #: How much of ``reason`` a row keeps.
 REASON_CHARS = 500
+#: ``author`` of a row SMD wrote by hand (a reply SMD composed and sent through
+#: this review path). Absent, the row is the Operator's (a turn or a lane).
+AUTHOR_SMD = "smd"
 
 
 class ReviewError(ValueError):
@@ -87,12 +90,17 @@ def hold_row(
     reason: str = "",
     redirect: bool = False,
     now: float | None = None,
+    author: str = "",
 ) -> dict[str, Any]:
     """One held reply for review, with a fresh ``id`` and its ``digest``. Writes nothing.
 
     ``batches`` may be empty (a records reply that attaches nothing is still
     held). ``reason`` is shown, not digested. ``redirect`` means ``to`` is a
-    device's authored person, not the email's sender."""
+    device's authored person, not the email's sender. ``author`` is
+    :data:`AUTHOR_SMD` for a reply SMD wrote by hand (never digested: it says
+    who wrote the words, not what is sent), else empty: the Operator's."""
+    if author not in ("", AUTHOR_SMD):
+        raise ReviewError(f"a review row's author is {AUTHOR_SMD!r} or none")
     row: dict[str, Any] = {
         "id": os.urandom(12).hex(),
         "created_at": now if now is not None else time.time(),
@@ -106,6 +114,7 @@ def hold_row(
         "session_id": session_id,
         "reason": str(reason or "")[:REASON_CHARS],
         **({"redirect": True} if redirect else {}),
+        **({"author": AUTHOR_SMD} if author else {}),
     }
     row["digest"] = digest(row)
     return row
@@ -143,12 +152,19 @@ def read_rows(directory: Path | None = None) -> list[dict[str, Any]]:
     return out
 
 
+def smd_authored(row: dict[str, Any]) -> bool:
+    """True when SMD wrote this row's words by hand (``author: smd``)."""
+    return row.get("author") == AUTHOR_SMD
+
+
 def released_count(directory: Path | None = None) -> int:
-    """Held files replies SMD approved and the seat then SENT: the countdown
-    ``matter_file_delivery.review_first`` reads. A rejected, expired, failed or
-    still-waiting row spends none of it (2026-11-02: counting every held row
-    would have sent the next A&P reply unreviewed)."""
-    return sum(1 for row in read_rows(directory) if row.get("status") == STATUS_SENT)
+    """Held files replies of the OPERATOR's that SMD approved and the seat then
+    SENT: the countdown ``matter_file_delivery.review_first`` reads. A
+    rejected, expired, failed or still-waiting row spends none of it
+    (2026-11-02: counting every held row would have sent the next A&P reply
+    unreviewed), and neither does a reply SMD wrote itself (2026-11-04: SMD's
+    hand reply to A&P took one of the ten slots meant for the Operator's)."""
+    return sum(1 for row in read_rows(directory) if row.get("status") == STATUS_SENT and not smd_authored(row))
 
 
 def decision_for(directory: Path | None, row: dict[str, Any]) -> str | None:
@@ -191,6 +207,7 @@ def expired(row: dict[str, Any], now: float | None = None) -> bool:
 
 
 __all__ = [
+    "AUTHOR_SMD",
     "DECISIONS",
     "DECISIONS_DIR_ENV",
     "DEFAULT_DECISIONS_DIR",
@@ -216,5 +233,6 @@ __all__ = [
     "read_rows",
     "released_count",
     "review_dir",
+    "smd_authored",
     "write_row",
 ]

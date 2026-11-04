@@ -367,11 +367,12 @@ def add_page_field(para):
     return run
 
 
-def set_table_borders(table, *, inside_vertical_only: bool) -> None:
+def set_table_borders(table, *, inside_vertical_only: bool, width_pt: float | None = None) -> None:
     """Explicit ``w:tblBorders`` via lxml: a firm template rarely defines
     ``Table Grid``, so never rely on a table style existing. A caption table
     gets the classic look (a vertical rule between the columns, nothing else);
-    every other table gets a thin grid."""
+    every other table gets a thin grid, or a box and grid ``width_pt`` wide when
+    the firm authors one (``w:sz`` is in eighths of a point)."""
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
@@ -381,10 +382,30 @@ def set_table_borders(table, *, inside_vertical_only: bool) -> None:
     for edge in edges:
         el = OxmlElement(f"w:{edge}")
         el.set(qn("w:val"), "single")
-        el.set(qn("w:sz"), "4")
+        el.set(qn("w:sz"), str(border_eighths(width_pt)) if width_pt and not inside_vertical_only else "4")
         el.set(qn("w:space"), "0")
         el.set(qn("w:color"), "auto")
         borders.append(el)
     for old in tbl_pr.findall(qn("w:tblBorders")):
         tbl_pr.remove(old)
     tbl_pr.append(borders)
+
+
+def border_eighths(width_pt: float | None) -> int:
+    """A border width in points as Word's ``w:sz`` (eighths of a point, 2..96)."""
+    return max(2, min(96, round(float(width_pt or 0.5) * 8)))
+
+
+def set_cell_fill(cell, hex_rgb: str) -> None:
+    """Shade one table cell (``w:shd`` solid fill, ``RRGGBB``)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    tc_pr = cell._tc.get_or_add_tcPr()
+    for old in tc_pr.findall(qn("w:shd")):
+        tc_pr.remove(old)
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), hex_rgb.upper())
+    tc_pr.append(shd)

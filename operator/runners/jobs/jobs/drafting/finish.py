@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citefix, compose, format_check, gate, nestquote, pincheck, pleading, render
+from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck, pleading, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
@@ -391,6 +391,7 @@ class Finish:
                     + ", ".join(undefined[:12])
                     + " (define each, or write it in lower case)"
                 )
+        page_limits.step(self, u, path, fmt, res)
         if res.content and not res.ours and not self._is_done(u.stage("format_repair")):
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)

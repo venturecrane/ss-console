@@ -53,11 +53,12 @@ from .docx_base import (
     has_style,
     open_as_base,
     plain_letter_paper,
+    set_cell_fill,
     set_run_font,
     set_table_borders,
     usable_paragraph_style,
 )
-from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, ClassRules, HouseStyle, apply_house
+from .docx_classes import _LABEL_MAX_CHARS, CLASS_RULES, ClassRules, HouseStyle, apply_house, is_total_row
 from .docx_format_types import (
     DEFAULT_FONT,
     DEFAULT_SIZE_PT,
@@ -167,6 +168,7 @@ class _Writer:
         self.report = report
         self.in_item = False
         self.tables_seen = 0
+        self._size_pt: float | None = None  # a table's authored size, while it is written
 
     # -- style application ------------------------------------------------------
 
@@ -218,7 +220,7 @@ class _Writer:
 
     def _font(self, run) -> None:
         if self.rules.font:
-            set_run_font(run, self.rules.font, self.rules.font_size_pt)
+            set_run_font(run, self.rules.font, self._size_pt or self.rules.font_size_pt)
 
     def _runs(
         self,
@@ -290,13 +292,15 @@ class _Writer:
         para.alignment = {"center": WD_ALIGN_PARAGRAPH.CENTER, "left": WD_ALIGN_PARAGRAPH.LEFT}[align]
         para.paragraph_format.left_indent = Inches(self.rules.heading_indent_in[level - 1])
         para.paragraph_format.keep_with_next = True
+        if enforce:
+            self._heading_spacing(para)
         if delegated and not enforce:
             # Emphasis is the firm style's business; forcing bold/underline over
             # it would defeat the edit we just made possible. A house-style
             # class enforces it instead (enforce_layout).
             self._runs(para, block.runs)
             return
-        if not styled:
+        if not styled and self.rules.heading_space_before_pt is None:
             para.paragraph_format.space_before = Pt(12 if level == 1 else 6)
         self._runs(
             para,
@@ -305,6 +309,21 @@ class _Writer:
             underline=self.rules.heading_underline[level - 1],
             explicit=enforce,
         )
+
+    def _heading_spacing(self, para) -> None:
+        """The firm's authored heading spacing (a multiple, and points before
+        and after), when it authored any."""
+        from docx.shared import Pt
+
+        r, pf = self.rules, para.paragraph_format
+        if r.heading_line_spacing_pt is not None:
+            pf.line_spacing = Pt(r.heading_line_spacing_pt)
+        elif r.heading_line_spacing is not None:
+            pf.line_spacing = r.heading_line_spacing
+        if r.heading_space_before_pt is not None:
+            pf.space_before = Pt(r.heading_space_before_pt)
+        if r.heading_space_after_pt is not None:
+            pf.space_after = Pt(r.heading_space_after_pt)
 
     def _is_label(self, text: str) -> bool:
         # A label is a SHORT line that starts with a label phrase ("SPECIAL
@@ -417,8 +436,14 @@ class _Writer:
         ncols = max(len(row) for row in block.rows)
         table = self.doc.add_table(rows=len(block.rows), cols=ncols)
         caption = self.rules.caption_table_first and self.tables_seen == 1
-        set_table_borders(table, inside_vertical_only=caption)
+        r = self.rules
+        set_table_borders(table, inside_vertical_only=caption, width_pt=None if caption else r.table_border_pt)
+        self._size_pt = None if caption else r.table_font_pt
         for r_idx, row in enumerate(block.rows):
+            header = block.header and r_idx == 0
+            fill = None if caption else (r.table_header_fill if header else None)
+            if not caption and not header and r.table_total_fill and is_total_row(row):
+                fill = r.table_total_fill
             for c_idx in range(ncols):
                 cell = table.cell(r_idx, c_idx)
                 runs = row[c_idx] if c_idx < len(row) else ()
@@ -429,7 +454,10 @@ class _Writer:
                         self.report.styles_honored.append("SMD Caption")
                     except (KeyError, ValueError):
                         self.report.fallbacks.append("SMD Caption")
-                self._runs(para, runs, bold=(block.header and r_idx == 0))
+                if fill:
+                    set_cell_fill(cell, fill)
+                self._runs(para, runs, bold=header)
+        self._size_pt = None
         # Breathing room after a table: an empty body paragraph.
         self.doc.add_paragraph()
 

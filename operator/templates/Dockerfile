@@ -160,6 +160,7 @@ RUN apt-get update \
       docker-cli tini ca-certificates util-linux \
       postgresql-17 postgresql-client-17 redis-server awscli \
       poppler-utils fonts-dejavu-core antiword \
+      libreoffice-writer-nogui fonts-liberation2 \
       libssl3t64 libsqlite3-0 libffi8 libbz2-1.0 liblzma5 libzstd1 zlib1g \
       libreadline8t64 libncursesw6 libtinfo6 libuuid1 libgdbm6t64 libdb5.3t64 \
  && rm -rf /var/lib/apt/lists/*
@@ -169,6 +170,10 @@ RUN apt-get update \
 # Most arrive anyway as dependencies of the packages above; naming them makes
 # the interpreter's needs explicit, and the ldd check after its COPY fails the
 # build on any that does not resolve.
+# libreoffice-writer-nogui + fonts-liberation2 (2026-11-04): the drafting job
+# measures a section's page limit on the rendered pages (drafting/page_limits.py,
+# a headless docx -> PDF conversion); Liberation Serif is metric-compatible with
+# Times New Roman, so the page breaks are the ones Word lays out (asserted after jobs-runtime below).
 # antiword (2026-10-09): the negotiation watch reads offer letters saved as
 # legacy Word .doc with it (the build asserts it).
 # poppler-utils + fonts-dejavu-core (ss#2614): the chronology runner's exhibit
@@ -679,6 +684,11 @@ COPY operator/connectors/ /app/connectors/
 # operator/bin/tests/test_jobs_runtime.py pins it to the steps it replaced here.
 COPY operator/templates/jobs-runtime.sh /app/jobs-runtime.sh
 RUN sh /app/jobs-runtime.sh image-connectors
+# The drafting job's page-limit measure converts with soffice (drafting/page_limits.py).
+# Asserted here, not in jobs-runtime.sh import-check: a jobs bundle can reach a seat
+# still on an older image, and there a missing soffice stops only a job whose firm
+# authored page limits (length_limit), never the bundle.
+RUN command -v soffice >/dev/null || { echo "FATAL: soffice is missing (drafting page limits)"; exit 1; }
 
 # ---------- The jobs runner (routine 11, ss#2614; ADR 0103) ----------
 # operator/runners/jobs is installed into its OWN root-owned venv from the

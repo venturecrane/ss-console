@@ -258,3 +258,46 @@ def test_lane_review_first_a_waiting_reply_spends_nothing(lane, monkeypatch) -> 
     _files_reply(mod, spool, 3)
     assert [s["message_id"] for s in sent] == ["m1", "m3"]
     assert len(rev.rows()) == 2  # m3 was never held
+
+
+def test_a_reply_smd_wrote_by_hand_never_spends_review_first() -> None:
+    """2026-11-04: SMD's own reply to A&P, held and approved through this path,
+    took one of the ten review_first releases meant for the Operator's replies
+    (released 1 -> 2). Only the Operator's released replies count."""
+    first = {"matter_file_delivery": {"review_first": 1}}
+    smd = _row(author=rev.AUTHOR_SMD)
+    assert smd["digest"] == rev.digest(
+        {k: v for k, v in smd.items() if k != "author"}
+    )  # never digested
+    rev.finish(smd, rev.STATUS_SENT)
+    assert rev.released_count() == 0 and mfr.review_by_smd(first, rev.released_count())
+    rev.finish(_row(), rev.STATUS_SENT)
+    assert rev.released_count() == 1 and not mfr.review_by_smd(first, rev.released_count())
+
+
+def test_an_unknown_author_is_refused() -> None:
+    with pytest.raises(rev.ReviewError):
+        _row(author="operator")
+
+
+def test_mark_smd_corrects_a_hand_reply_held_before_rows_carried_an_author(capsys) -> None:
+    """Root's correction for the 2026-11-04 row: the count drops back, the row
+    keeps its digest, its mode, and every other field."""
+    hand = _row()
+    rev.finish(hand, rev.STATUS_SENT)
+    rev.finish(_row(), rev.STATUS_SENT)
+    assert rev.released_count() == 2
+    path = rev.review_dir() / f"{hand['id']}.json"
+    mode = path.stat().st_mode & 0o777
+    marked = rev.mark_smd(hand["id"])
+    assert rev.released_count() == 1 and marked["digest"] == hand["digest"]
+    on_disk = json.loads(path.read_text())
+    assert on_disk["author"] == rev.AUTHOR_SMD and on_disk["status"] == rev.STATUS_SENT
+    assert path.stat().st_mode & 0o777 == mode
+    with pytest.raises(rev.ReviewError):
+        rev.mark_smd("0" * 24)
+    assert rev.main(["history"]) == 0
+    out = capsys.readouterr().out
+    assert (
+        f"{hand['id']}  sent" in out and "by SMD" in out and "1 counted toward review_first." in out
+    )
