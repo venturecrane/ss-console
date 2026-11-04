@@ -293,7 +293,7 @@ def test_propose_IS_refused_on_a_tainted_turn(establishment):
         },
     )
     assert verdict is not None and verdict["action"] == "block"
-    assert "outside the firm" in verdict["message"]
+    assert "quote" in verdict["message"] and "Never ask them to resend" in verdict["message"]
     # Reading what is outstanding is not authoring, so it is not gated.
     assert (
         plugin.on_pre_tool_call(

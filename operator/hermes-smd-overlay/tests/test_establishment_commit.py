@@ -420,7 +420,9 @@ def test_a_reply_that_names_no_rule_is_not_gated(plugin):
 def test_a_reply_that_claims_nothing_goes_out(plugin):
     mod, state = plugin
     _confirm(mod, state)
-    assert _send(mod, f"Understood on [rule {RULE}]. I am working on it now.") is None
+    assert (
+        _send(mod, f"Understood on [rule {RULE}]. I will write again once it is recorded.") is None
+    )
 
 
 def test_the_claim_survives_being_split_across_the_body(plugin):
