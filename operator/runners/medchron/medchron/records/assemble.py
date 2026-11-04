@@ -147,14 +147,17 @@ def one_heading(
     cut = {fid for _n, fid, r in located for i in r.get("items") or [] if _klass(i) == _ATTACHED}
     for n, fid, result in located:
         key = (n, str((files.get(fid) or {}).get("sha256") or fid))
-        if key in seen:
-            continue
-        seen.add(key)
         if n in holds:
-            looked.setdefault(n, []).extend(_looked(fid, result, files, named))
+            if key not in seen:
+                seen.add(key)
+                looked.setdefault(n, []).extend(_looked(fid, result, files, named))
             continue
+        # The sha is taken only by a result that carries the record's best
+        # class: the first same-sha result may be a not-found with a page not
+        # reached while the second copy found it (review of #3725).
         items = [i for i in result.get("items") or [] if _klass(i) == best.get(n)]
-        if items:
+        if items and key not in seen:
+            seen.add(key)
             # Two files with one name (dry run 3: two 3-page files read as one
             # line twice): the second is said to be one. A cut file keeps its name.
             name = str(result.get("name") or "")
