@@ -379,6 +379,84 @@ def strip_quoted(body: Any) -> str:
     return "\n".join(kept).strip()
 
 
+#: Outlook's block header lines that follow its ``From:`` line. Skipped inside
+#: a quoted block: they are metadata, never anybody's words.
+_QUOTE_META = re.compile(r"\A\s*(?:Sent|To|Cc|Bcc|Subject|Date):\s", re.IGNORECASE)
+
+
+def requester_text(body: Any, sender: Any) -> str:
+    """Everything in this message that the SENDER wrote, and nothing else.
+
+    The sender's own words above the quoted history (:func:`strip_quoted`'s
+    cut), PLUS any quoted block whose header names the sender's own address:
+    an attorney who writes "the permanent changes in this email and the prior
+    one" has quoted his own earlier email below his reply, and those rules are
+    his too (A&P, 2026-11-04). A quoted block attributed to anyone else, a
+    block whose header names no address (a wrapped "On ... wrote:" line), and
+    anything nested two quotes deep are dropped: fail closed, because this text
+    is what lets a rule be recorded on a turn that also read outside mail.
+    """
+    if not isinstance(body, str) or not body:
+        return ""
+    address = str(sender or "").strip().lower()
+    kept: list[str] = []
+    owner_is_sender = True
+    in_header = False
+    seen_header = False
+    for raw_line in email_body(body).splitlines():
+        line = raw_line.rstrip()
+        # Inside a header block first: Outlook's "Sent:" line also opens a
+        # header by _QUOTE_HEADER's reading, and must not reset its owner.
+        if in_header and _QUOTE_META.match(line):
+            continue
+        if _QUOTE_HEADER.match(line):
+            # A new quoted block opens. Outlook prints a rule, then From:; the
+            # From: line (or Gmail's "On ... wrote:") carries the address.
+            in_header = True
+            seen_header = True
+            if re.match(r"\A\s*(?:On\b.*\bwrote:|From:\s)", line, re.IGNORECASE):
+                owner_is_sender = bool(address) and address in line.lower()
+            else:
+                owner_is_sender = False
+            continue
+        in_header = False
+        if _SIGNATURE.match(line):
+            owner_is_sender = False
+            continue
+        stripped = line.lstrip()
+        if stripped.startswith(">"):
+            depth = len(stripped) - len(stripped.lstrip(">"))
+            # Above the first header a ">" line is text pasted into the
+            # sender's reply from somewhere else, not a block they authored.
+            if depth == 1 and owner_is_sender and seen_header:
+                kept.append(stripped[1:].lstrip())
+            continue
+        if owner_is_sender:
+            kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def quote_is_in(quote: Any, text: Any) -> bool:
+    """Is ``quote`` a verbatim run of ``text``, modulo case, quotes, dashes
+    and whitespace? At least three words: a fragment of one or two words
+    proves nothing about where a rule came from."""
+    if not isinstance(quote, str) or not isinstance(text, str):
+        return False
+    q = _fold_for_quote(quote)
+    if len(q.split()) < 3:
+        return False
+    return q in _fold_for_quote(text)
+
+
+def _fold_for_quote(text: str) -> str:
+    # List markers differ between an email and a quote of it without changing
+    # a single word, so they come off each line before the lines are joined.
+    text = re.sub(r"(?m)^\s*(?:[-*\u2022]|\d+[.)])\s+", "", text)
+    folded = _normalize(text).replace("\u201c", '"').replace("\u201d", '"')
+    folded = re.sub(r"[\u2010-\u2015]", "-", folded)
+    return re.sub(r"\s+", " ", folded).strip(" .;:,")
+
+
 def find_tags(message: Any, kinds: tuple[str, ...] = CONFIRMABLE_TAG_KINDS) -> tuple[str, ...]:
     """Every ``[rule XXXXXXXX]`` / ``[act XXXXXXXX]`` id, in order, de-duplicated.
 
