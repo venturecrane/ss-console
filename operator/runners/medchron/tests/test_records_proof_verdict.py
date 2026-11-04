@@ -64,6 +64,39 @@ def test_a_proof_run_that_never_reached_a_reviewable_reply_judges_failed(
     assert proof_run.judge([v])[0] is False
 
 
+def test_a_proof_run_whose_every_match_fails_judges_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The reviewer's probe on #3725: the match model never answers, both
+    records hold, nothing is cut; that proof was judged passed."""
+    monkeypatch.setenv(proof_mode.PROOF_ENV, "1")
+    model = FakeFinderModel(match_fn=lambda _what, _secs: None)
+    sb = FakeSmokeball()
+    sb.add(1, "Northside Clinic records.pdf", pdf(10))
+    xray = "the Northside Clinic x-ray"
+    _r, v = _job(tmp_path, monkeypatch, model, sb, [_rec(VISIT), _rec(xray)], f"Please send {VISIT} and {xray}.")
+    assert v["verdict"] == "held" and "would_be" not in v and v["cuts"] == []
+    assert proof_run.judge([v])[0] is False
+
+
+@pytest.mark.parametrize(
+    ("hold", "outcomes", "ending"),
+    [
+        ("cut_refused: a record was found and no cut carries it", ["attached", "held"], None),
+        ("match_unsettled: 00000001 the match did not answer", ["attached", "held"], None),
+        ("monthly_budget_usd: the month's budget is reached", ["held", "held"], None),
+        ("per_job_cap_usd: 00000002 2313 pages", ["held"], None),
+        ("per_job_cap_usd: 00000002 2313 pages", ["not_found", "held"], "held"),
+        ("per_job_cap_usd: 00000002 2313 pages", ["not_established", "held"], "held"),
+        (None, ["attached"], "delivered"),
+    ],
+)
+def test_a_proof_is_reviewable_only_when_it_settled_a_record(
+    hold: str | None, outcomes: list[str], ending: str | None
+) -> None:
+    from medchron.records.outcome import proof_ending
+
+    assert proof_ending(hold, [{"n": n, "outcome": o} for n, o in enumerate(outcomes, 1)]) == ending
+
+
 def test_outside_proof_mode_a_capped_run_is_held_as_before(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(proof_mode.PROOF_ENV, raising=False)
     r, v, small, _big = _capped(tmp_path, monkeypatch)

@@ -92,14 +92,21 @@ class Verdict:
         return EXIT.get(self.verdict, 2)
 
 
+#: The outcomes that show the run searched and settled a record.
+SETTLED = ("attached", "not_found", "not_established")
+
+
 def proof_ending(hold: str | None, items: list[dict[str, Any]]) -> str | None:
     """A proof run's ``would_be`` (``held`` or ``delivered``), or None when it
-    never reached a reply worth reviewing (the finder failed, or no record was
-    tied to any file): that run stays ``held`` and judges failed."""
+    never reached a reply worth reviewing: that run stays ``held`` and judges
+    failed. A reviewable run settled at least one record (attached, not found,
+    not established). Never reviewable: the finder failed, a cut was refused,
+    or the match did not answer (review of #3725: with the match model down on
+    every call, both records held and the proof was accepted)."""
     h = hold or ""
-    if h.startswith("finder_failed") or (
-        h.startswith("scope_unresolved") and not any(i["outcome"] == "attached" for i in items)
-    ):
+    if h.startswith(("finder_failed", "cut_refused")) or "the match did not answer" in h:
+        return None
+    if not any(i.get("outcome") in SETTLED for i in items):
         return None
     return "delivered" if hold is None else "held"
 
