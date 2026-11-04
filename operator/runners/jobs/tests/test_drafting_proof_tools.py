@@ -43,7 +43,7 @@ FIG = {
     "source_file": "Hospital Bill.pdf",
     "source_page": 1,
     "wrong_as_stated": "$83,000.00",
-    "wrong_pattern": "",
+    "wrong_pattern": r"83,000",
     "correct_pattern": "",
 }
 QUOTE = {
@@ -54,7 +54,7 @@ QUOTE = {
     "source_file": "Ortho Notes.pdf",
     "source_page": 3,
     "wrong_as_stated": "the patient denied any prior neck injury whatsoever",
-    "wrong_pattern": "",
+    "wrong_pattern": r"denied (having )?any prior neck injury",
     "correct_pattern": "",
 }
 PIN = {
@@ -246,6 +246,75 @@ def test_the_old_lanes_cite_forms_are_scored() -> None:
     assert got["K3"] == "missed" and got["K1"] == "missed", got
     assert ("dep jones", 44) in scorer.cites("He conceded it (Jones Dep. 44:15-17).")
     assert scorer.cites("(FILE: Ortho Notes.pdf, p. 3)") == [("ortho notes", 3)]
+
+
+def test_a_corrected_sentence_is_not_read_as_the_wrong_one() -> None:
+    """A row with no wrong_pattern: the corrected sentence shares most of the
+    wrong wording's words, and must not be scored as the wrong statement."""
+    row = {**QUOTE, "wrong_pattern": ""}
+    corrected = (
+        "It is not the case that the patient denied any prior neck injury whatsoever: the patient reports a "
+        "prior neck strain in 2015, resolved (FILE: Ortho Notes.pdf, p. 3)."
+    )
+    [r] = scorer.score([row], corrected).rows
+    assert r.outcome == "fixed", (r.outcome, r.why)
+
+
+def _span_job(tmp: Path) -> Path:
+    """A new-lane job: a ledger, a render span map and a check report."""
+    from medchron.drafting.evidence import render as ev_render
+    from medchron.drafting.evidence.shapes import Fact, Ledger
+
+    job = _job(tmp)
+    led = Ledger(
+        (
+            Fact(
+                "F0001",
+                "Hospital Bill.pdf",
+                1,
+                "figure",
+                "Total charges billed: $8,300.00 for emergency services.",
+                "billed",
+                role="billed",
+                value="8300.00",
+                unit="usd",
+            ),
+            Fact("F0002", "Ortho Notes.pdf", 2, "fact", "Patient underwent epidural steroid injection.", "esi"),
+        )
+    )
+    r = ev_render.render("The hospital billed {{N:F0001}} {{F:F0001}}. He had an injection {{F:F0002}}.", led)
+    (job / "evidence").mkdir()
+    (job / "evidence" / "ledger.jsonl").write_text(led.to_jsonl())
+    (job / "evidence-spans.json").write_text(json.dumps([s.to_json() for s in r.spans]))
+    check = {"items": [{"grade": "framing", "sentence": "the clinic noted a gap in treatment", "control": ""}]}
+    (job / "check.json").write_text(json.dumps(check))
+    (job / "draft.md").write_text(r.text)
+    return job
+
+
+def test_a_new_lane_draft_is_scored_from_its_render_span_map(tmp_path: Path) -> None:
+    job = _span_job(tmp_path)
+    pin = {**PIN, "source_file": "Ortho Notes", "source_page": 2, "correct_value": "p. 2", "wrong_as_stated": "p. 1"}
+    wrong_fig = {**FIG, "id": "K9", "source_file": "Hospital Bill", "correct_value": "$9,100.00"}
+    rows = [{**FIG, "source_file": "Hospital Bill"}, wrong_fig, pin, OMIT, {**QUOTE, "id": "K8"}]
+    (tmp_path / "key.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (tmp_path / "notes.md").write_text("## Attorney notes\n\nNothing further.\n")
+    r = score_draft.report(job, job / "draft.md", tmp_path / "key.jsonl", tmp_path / "notes.md")
+    got = {x["id"]: x["outcome"] for x in r["key"]["rows"]}
+    assert r["key_method"] == "spans"
+    assert got == {"K1": "fixed", "K9": "missed", "K3": "fixed", "K4": "caught", "K8": "absent"}, got
+
+
+def test_score_draft_keeps_every_row_when_names_repeat(tmp_path: Path) -> None:
+    job = _job(tmp_path)
+    (job / "text" / "ortho2.txt").write_text("[p.1]\nA second filing under the same name.\n")
+    rows = [json.loads(ln) for ln in (job / "extracted.jsonl").read_text().splitlines()]
+    rows.append({"name": "Ortho Notes.pdf", "folder": "Pleadings", "text_path": "/seat/data/job/text/ortho2.txt"})
+    rows[1]["folder"] = "Medical"
+    (job / "extracted.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
+    corpus = score_draft.Corpus.from_job(job)
+    assert len(corpus.docs) == 3, sorted(corpus.docs)
+    assert corpus.doc("ortho notes") is not None
 
 
 def test_score_draft_reads_docx_tables_and_a_name_in_text_and_email(tmp_path: Path) -> None:

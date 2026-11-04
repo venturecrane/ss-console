@@ -528,10 +528,9 @@ class DraftingRun(EvidenceLane, Placing):
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()
         order = [s for s in head if s not in skip]
         for u in self.units() if "units" in st else []:
-            checked = ("check",) if self.evidence.ledger else ()
-            per_unit = (
-                ("placed",) if self.placing() else ("compose", "audit", *checked, "finalpass", "gate", "rendered")
-            )
+            # The ledger path's audit is the source check (evidence_lane.py).
+            audited = ("check",) if self.evidence.ledger else ("audit",)
+            per_unit = ("placed",) if self.placing() else ("compose", *audited, "finalpass", "gate", "rendered")
             order += [u.stage(s) for s in per_unit]
         order += ["review", "manifest"]
         return next((s for s in order if st.get(s, {}).get("status") != "done"), "file")

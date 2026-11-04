@@ -233,6 +233,9 @@ def test_the_ledger_path_files_a_brief_whose_every_span_traces_to_a_verified_fac
     assert [w["reason"] for w in wanted] == ["not_on_file"]
     # the digest path's summarizer never ran; the estimate is the ledger projection
     assert not any("DIGEST-PROMPT" in _text(c.get("system") or "") for c in client.calls)
+    # nor the digest audit and its repair rounds: the source check is this path's audit
+    assert not any("AUDIT-PROMPT" in _text(c.get("system") or "") for c in client.calls)
+    assert not (r.data / "audit-v1.md").exists()
     est = json.loads((r.data / "preflight.json").read_text())["estimate"]
     assert set(est["tail"]["parts"]) >= {"extract", "images", "compose", "check"}
     assert seat.created, "filed"
@@ -370,3 +373,54 @@ def test_the_cost_projection_reads_real_pages_and_its_cli_prices_a_job_dir(tmp_p
     assert evidence_cost.main(argv) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["pages"] == 4 and out["windows"] == 4 and out["total_usd"] >= out["usd"] > 0
+
+
+OPERATOR = Path(__file__).resolve().parents[3]
+
+
+def test_the_estimator_reads_every_rate_card_the_tree_keeps():
+    from medchron import budget
+    from medchron.drafting import evidence_cost
+
+    cards = [
+        OPERATOR / "templates" / "drafting" / "rate-card.json",
+        OPERATOR / "hermes-smd-overlay" / "shared" / "anthropic_pricing.json",
+        OPERATOR / "adapter" / "cost_telemetry" / "anthropic_pricing.json",
+    ]
+    for card in cards[:2]:
+        with pytest.raises(budget.BudgetError):
+            budget.Pricing.load(card)  # the lane's own loader refuses these two shapes
+    for card in cards:
+        p = evidence_cost.load_pricing(card)
+        assert p.rate_for("claude-opus-5-5").input_per_million_cents > 0, card
+    assert evidence_cost.TREE_PRICING == cards[2] and evidence_cost.pricing_path(None).is_file()
+
+
+def test_the_estimate_is_a_range_with_notes_and_flags_the_cap():
+    from medchron.drafting import evidence_cost
+
+    rows = [{"pages": 3600, "chars": 9_000_000, "transcribe": [], "text_path": "x"}]
+    card = evidence_cost.load_pricing(OPERATOR / "adapter" / "cost_telemetry" / "anthropic_pricing.json")
+    data = firm_data(evidence=LEDGER)
+    est = evidence_cost.project(rows, data, card, "mediation_brief")
+    assert est["chars_per_token"] == 2.0 and "notes" in est["parts"] and "audit" not in est["parts"]
+    assert 0 < est["low_usd"] < est["high_usd"] == est["usd"]
+    assert est["over_cap"] is (est["high_usd"] > 100.0)
+    tight = {**data, "budget": {**data["budget"], "per_job_cap_usd": 1.0}}
+    assert evidence_cost.project(rows, tight, card, "mediation_brief")["over_cap"] is True
+    measured = evidence_cost.project(rows, data, card, "mediation_brief", chars_per_token=4.0)
+    assert measured["parts"]["extract"] < est["parts"]["extract"]
+
+
+def test_the_cost_cli_runs_without_the_firms_pinned_files(tmp_path, pricing, capsys):
+    from medchron.drafting import evidence_cost
+
+    r, v, _log, _seat = _run(tmp_path, pricing, LedgerClient())
+    assert v.outcome == "delivered"
+    (tmp_path / "inputs" / "pos.md").unlink()  # a pinned file absent off the seat, as the exemplars are
+    with pytest.raises(firm_mod.DraftingConfigError):
+        firm_mod.load(tmp_path / "inputs")
+    capsys.readouterr()
+    assert evidence_cost.main([str(r.job.job_dir), "--inputs", str(tmp_path / "inputs")]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["total_usd"] >= out["total_low_usd"] > 0 and out["rate_card"].endswith("anthropic_pricing.json")

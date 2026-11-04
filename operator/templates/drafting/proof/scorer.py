@@ -15,7 +15,8 @@ carrying the row's correct or wrong value (money read by ``howell.money``,
 dates by ``howell.parse_date``, quotes by word overlap of at least 0.8), or one
 about the row's ``fact`` (overlap 0.5). Then:
 
-* ``missed``: the wrong statement stands, unflagged (reworded or not);
+* ``missed``: the wrong statement stands, unflagged: its ``wrong_pattern``
+  matches (a pin: its wrong page is cited); never word overlap;
 * ``caught``: it stands, but the attorney notes or an attorney marker flag it;
 * ``fixed``: the right value stands where the row is about, the wrong one not;
 * ``disclosed``: neither stands in the body, and the notes name it;
@@ -267,10 +268,14 @@ def locate(row: KeyRow, sents: Iterable[str]) -> list[str]:
 
 
 def _wrong(row: KeyRow, s: str) -> bool:
+    """The wrong statement stands: a pin by its wrong page, anything else ONLY
+    by the row's ``wrong_pattern``. Word overlap with the wrong wording is not
+    a test: a corrected sentence shares most of its words (2026-11-04: it
+    flagged a corrected control exactly as it flagged the draft)."""
     if row.type == "pin":
         bad = _pin(row.wrong_as_stated)
         return bad is not None and any(same_file(st, stem(row.source_file)) and p == bad for st, p in cites(s))
-    return _pattern(row.wrong_pattern, s) or has_value(row.type, row.wrong_as_stated, s)
+    return _pattern(row.wrong_pattern, s)
 
 
 def _right(row: KeyRow, s: str) -> bool:
@@ -312,3 +317,81 @@ def score(rows: Iterable[KeyRow | Mapping[str, Any]], draft: str) -> Score:
     body, notes = sentences(body_text), sentences(notes_text)
     keyed = [r if isinstance(r, KeyRow) else KeyRow.from_json(r) for r in rows]
     return Score([score_row(r, body, notes) for r in keyed])
+
+
+# ---- the evidence lane's drafts: scored from the render span map ---------------------------
+
+
+def _relevant(row: KeyRow, spans: Iterable[Any], ledger: Any, page: int | None) -> list[Any]:
+    """Spans with a fact in the row's file, on ``page`` (any page when None)."""
+    file = stem(row.source_file)
+    out = []
+    for sp in spans:
+        for fid in sp.ids:
+            f = ledger.get(fid)
+            if f is not None and stem(f.file) == file and (page is None or f.page == page):
+                out.append(sp)
+                break
+    return out
+
+
+def _record_from_spans(row: KeyRow, spans: list[Any], ledger: Any) -> RowScore:
+    if row.type == "pin":
+        good = _pin(row.correct_value) or row.source_page
+        bad = _pin(row.wrong_as_stated)
+        if good is not None and _relevant(row, spans, ledger, good):
+            return RowScore(row, "fixed", "a code-rendered cite of the file is on the right page")
+        if bad is not None and _relevant(row, spans, ledger, bad):
+            return RowScore(row, "missed", "a code-rendered cite of the file is on the wrong page")
+        return RowScore(row, "absent", "no rendered span cites the file there")
+    here = _relevant(row, spans, ledger, row.source_page)
+    if not here:
+        return RowScore(row, "absent", "no rendered span traces to the row's file and page")
+    texts = [sp.text for sp in here]
+    if row.type == "figure" and money_values(row.correct_value):
+        ok = any(money_values(row.correct_value) & money_values(t) for t in texts)
+    elif row.type == "date" and date_values(row.correct_value):
+        ok = any(date_values(row.correct_value) & date_values(t) for t in texts)
+    elif row.type == "quote" and row.correct_value:
+        ok = any(overlap(row.correct_value, t) >= QUOTE_OVERLAP for t in texts)
+    else:
+        ok = True  # a fact traced to its file and page
+    if ok:
+        return RowScore(row, "fixed", "the rendered value is the right one", texts[:3])
+    return RowScore(row, "missed", "a rendered span at the row's file and page carries another value", texts[:3])
+
+
+def _judged(row: KeyRow, check: Mapping[str, Any] | None, notes: list[str]) -> RowScore:
+    items = [i for i in (check or {}).get("items") or [] if not i.get("control")]
+    for i in items:
+        if i.get("grade") not in ("wrong", "framing"):
+            continue
+        text = " ".join(str(i.get(k) or "") for k in ("sentence", "preview", "note"))
+        if _pattern(row.wrong_pattern, text) or (row.fact and overlap(row.fact, text) >= FACT_OVERLAP):
+            return RowScore(row, "caught", f"the source check graded it {i.get('grade')}", [text[:300]])
+    if _noted(row, notes):
+        return RowScore(row, "disclosed", "the attorney notes name it")
+    return RowScore(row, "missed", "neither the source check nor the notes name it")
+
+
+def score_spans(
+    rows: Iterable[KeyRow | Mapping[str, Any]],
+    spans: Iterable[Any],
+    ledger: Any,
+    check: Mapping[str, Any] | None = None,
+    notes: str = "",
+) -> Score:
+    """A new-lane draft scored from what code rendered: each record row by the
+    spans whose facts sit at the row's file and page (fixed, missed or
+    absent); each judgment row by the source check's report (caught) and the
+    attorney notes (disclosed)."""
+    sp = list(spans)
+    note_sents = sentences(notes)
+    out = []
+    for r in rows:
+        row = r if isinstance(r, KeyRow) else KeyRow.from_json(r)
+        if row.type in RECORD_TYPES:
+            out.append(_record_from_spans(row, sp, ledger))
+        else:
+            out.append(_judged(row, check, note_sents))
+    return Score(out)

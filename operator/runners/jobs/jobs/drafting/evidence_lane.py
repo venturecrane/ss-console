@@ -8,9 +8,13 @@ head (facts, pull, preflight, transcription)::
     evidence-extract -> evidence-verify -> evidence-images -> index
       -> [howell] -> per document:
          compose (markup) -> lint (one scoped repair, else markup_lint)
-         -> audit / repair rounds over the MARKUP -> settle (on the markup)
-         -> lint -> source check (verify.check; two-of-two, planted controls;
+         -> source check (verify.check; two-of-two, planted controls;
             <= max_loops scoped repairs on the markup, each linted)
+
+No digest audit, repair rounds or final pass on this path: they read the
+brief against the digest, which is not evidence (and they were the largest
+cost line: $37.30 measured on the job this was designed on). The source
+check, against the cited pages, and its scoped repairs are this path's audit.
          -> render LAST -> gate (read-only) + span proof -> the shared tail
 
 **Fixers off.** On this path the gate's quotation, cite and pin repairs and
@@ -31,11 +35,10 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from ..demand import draft as d_mod, finalpass
+from ..demand import draft as d_mod
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
 from . import caption_stage, compose, evidence_config, gate, render
-from . import settle as settle_mod
 from .evidence import extract, images, index, lint as lint_mod, prompts as ev_prompts, render as ev_render, verify
 from .evidence.shapes import Candidate, DocPages, Ledger, Span
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold
@@ -148,7 +151,7 @@ def heads_for(doc: str, sentences: list[str]) -> list[str]:
 class EvidenceLane:
     """Mixin: ``DraftingRun`` supplies data, job, firm, cls, doorway, log,
     _stage/_done/_is_done/_json/_atomic/_write, _context, _corpus_text, and
-    Finish's _drafter/_shared/_repair_rounds/units."""
+    Finish's _drafter/_shared/units."""
 
     if TYPE_CHECKING:
         data: Path
@@ -166,7 +169,7 @@ class EvidenceLane:
         def _context(self) -> list[str]: ...
         def _corpus_text(self) -> str: ...
         def _shared(self, u: Unit) -> list[str]: ...
-        def _repair_rounds(self, d: compose.Drafter, digest: str, corpus: str) -> int: ...
+
         def units(self) -> list[Unit]: ...
 
     # ---- settings and job-wide state ------------------------------------------------------
@@ -340,23 +343,16 @@ class EvidenceLane:
         if refused:
             raise DraftingHold(f"request_incomplete: the request is missing what the draft needs: {refused}")
         self._done(u.stage("compose"))
-        linted = self.lint_fix(u, d, first, "compose")
-        if linted != first:
+        md = self.lint_fix(u, d, first, "compose")
+        if md != first:
             (u.data / "draft-v1.md").replace(u.data / "draft-v1.unlinted.md")
-            (u.data / "draft-v1.md").write_text(linted, encoding="utf-8")
-        version = self._repair_rounds(d, digest, self._corpus_text())
-        audit_md = (u.data / f"audit-v{version}.md").read_text(encoding="utf-8")
-        md = (u.data / f"draft-v{version}.md").read_text(encoding="utf-8")
-        self._done(u.stage("audit"))
-        try:
-            md, settled = settle_mod.settle(md, audit_md)
-        except finalpass.Unlocated as exc:
-            raise DraftingFailed(f"audit_unsettled: the final audit pass could not settle a finding: {exc}") from None
-        md = self.lint_fix(u, d, md, "settled")
+            (u.data / "draft-v1.md").write_text(md, encoding="utf-8")
+        # No digest audit on this path: it reads the brief against the digest,
+        # which is not evidence. The source check (against the cited pages)
+        # and its scoped repairs are this path's audit.
         md = self._source_check(u, d, md)
         rendered = self._render(u, md)
-        drifts = compose.finding_lines(audit_md, ("DRIFTS", *compose.EXTRA_VERDICTS))
-        body = {"version": version, "settled": settled, "drifts": drifts, "path": "ledger"}
+        body = {"version": 1, "settled": [], "drifts": [], "path": "ledger"}
         (u.data / "final-pass.json").write_text(json.dumps(body, indent=1), encoding="utf-8")
         self._done(u.stage("finalpass"))
         return rendered
