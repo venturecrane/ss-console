@@ -6,7 +6,7 @@ set -euo pipefail
 WT=/Users/scottdurgan/dev/ss-console/.claude/worktrees
 if git -C "$WT/agent-a9b8cc8cca1af4e88" push -u origin logic-in-code/connector-values; then
   gh pr create --draft --base logic-in-code/token-sdk --head logic-in-code/connector-values \
-    --title "feat(connector): the post record is derived from each act's own outcome, and every figure and date is taken as printed and confirmed in its source" \
+    --title "feat(connectors): the post list says what the tools actually did, and every figure keyed from the post is read as printed and confirmed on its page" \
     --body-file "$(dirname "$0")/pr-body-connector-values.md" || echo "connector-values PR not created (already open?)"
 else
   echo "connector-values push refused by its pre-push hook: see RESUME.md"
