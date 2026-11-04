@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import stop_request
+from . import smd_stop, stop_request
 
 logger = logging.getLogger("jobs.daemon")
 
@@ -88,7 +88,16 @@ def run_child(
     pidfile: Path,
     preexec: Callable[[], None] | None,
 ) -> tuple[int, str]:
-    """Run one job child to its end (or the drain's) and return (returncode, stdout)."""
+    """Run one job child to its end (or the drain's) and return (returncode, stdout).
+
+    SMD's job stop (``smd_stop.py``) is watched here too, apart from the
+    Machine's: a job whose dir carries it is never started (a seat restart
+    before the lane recorded the stop must not run it again), and a child
+    still running ``smd_stop.grace_seconds()`` after it appeared is
+    terminated. Either way the lane's ``resume.cut_short_by_stop`` records it."""
+    if smd_stop.read(cwd) is not None:
+        logger.warning("%s job %s: stopped by SMD; not started", lane.LANE, job_id)
+        return stop_request.STOP_EXIT, ""
     proc = subprocess.Popen(  # noqa: S603 - argv is the lane's configured runner command plus the job dir, no shell; env filtered
         argv,
         cwd=str(cwd),
@@ -104,6 +113,7 @@ def run_child(
     beat = threading.Thread(target=lane._beat, args=(job_id, beat_stop), name=f"{lane.LANE}-heartbeat", daemon=True)
     beat.start()
     requested_at: float | None = None
+    smd_at: float | None = None
     out = ""
     try:
         while True:
@@ -112,6 +122,18 @@ def run_child(
                 break
             except subprocess.TimeoutExpired:
                 pass
+            if smd_at is None and smd_stop.read(cwd) is not None:
+                smd_at = time.monotonic()
+                logger.warning("%s job %s: stopped by SMD; the child stops at its next model call", lane.LANE, job_id)
+            if smd_at is not None and time.monotonic() - smd_at >= smd_stop.grace_seconds():
+                logger.error(
+                    "%s job %s still running %.0fs after SMD's stop; terminating it",
+                    lane.LANE,
+                    job_id,
+                    time.monotonic() - smd_at,
+                )
+                _terminate(proc, TERM_GRACE_SECONDS)
+                continue
             if not lane.stopping():
                 continue
             now = time.monotonic()

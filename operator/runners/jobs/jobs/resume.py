@@ -22,7 +22,7 @@ import signal
 import time
 from typing import Any
 
-from . import stop_request, verdict as verdict_mod
+from . import smd_stop, stop_request, verdict as verdict_mod
 from .proof import review as _review
 
 #: The job-dir markers ``proof/review.gate`` reads: review.py's own constants,
@@ -91,6 +91,8 @@ def take_requests(d: Any) -> list[str]:
             marker.unlink(missing_ok=True)
             continue
         st = d._daemon_state(job_id)
+        # SMD chose to run a job it once stopped: the old stop is spent.
+        smd_stop.clear(d.job_dir(job_id))
         (d.queue / f"{job_id}.json").write_text(env.read_text(encoding="utf-8"), encoding="utf-8")
         d._write_state(
             job_id,
@@ -219,7 +221,13 @@ def cut_short_by_stop(d: Any, job_id: str, code: int, out: str) -> bool:
 
     A child that exited :data:`CHECKPOINT_EXIT` stopped at a checkpoint on the
     daemon's own request and wrote no verdict: kept claimed whatever the flag
-    reads, because only a stop writes that request."""
+    reads, because only a stop writes that request.
+
+    SMD's job stop (``smd_stop.py``) is asked first and wins over all of this:
+    a job SMD stopped is recorded ``stopped_by_smd`` and never resumed, Machine
+    stop or not."""
+    if smd_stop.finish(d, job_id, code, out):
+        return True
     if code == CHECKPOINT_EXIT:
         logger.warning("%s job %s checkpointed on the stop request (exit %s); left claimed", d.LANE, job_id, code)
         return True

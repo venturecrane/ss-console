@@ -395,7 +395,8 @@ class DraftingRun(EvidenceLane, Placing):
         )
 
     def _file(self) -> Verdict:
-        manifest = json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
+        stop_request.check_smd("file")  # SMD stopped it: nothing reaches the matter
+        manifest =json.loads((deliver.out_dir(self.data) / "upload_manifest.json").read_text(encoding="utf-8"))
         if proof_mode.active():  # a proof run stops here: the rendered files stay under out/ (proof_mode.py)
             return Verdict(
                 proof_mode.OUTCOME,

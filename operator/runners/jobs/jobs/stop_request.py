@@ -25,6 +25,21 @@ The file is armed once per process by the CLI (:func:`arm`); a process that
 never armed (a test, a laptop run, a rehearsal) never stops. The daemon clears
 the file before every attempt (``resume.start_run``), so a resumed job does not
 stop on the request that cut its predecessor.
+
+SMD'S JOB STOP IS A SECOND FILE, NOT THIS ONE (2026-11-04). ``.stop-request``
+means "the Machine is stopping, resume me": the daemon keeps the job claimed
+and the next boot runs it again. ``.smd-stop.json`` (``smd_stop.py``, written
+by ``python -m jobs.stop``) means "SMD decided this job ends, for good". It is
+checked everywhere this file is AND before every paid model call
+(``llm.Doorway``, :func:`check_smd`), because the drafting finish (compose,
+audit, repair, gate, render, review) runs for many minutes with no stage
+boundary: a duplicate A&P drafting job spent $56.64 at about $1 a minute while
+its stop request sat unread. :class:`SmdStopRequested` subclasses
+:class:`StopRequested`, so every handler that already lets a stop through lets
+this one through too; which file was present, not the exception, decides
+whether the daemon resumes the job or ends it ``stopped_by_smd``. The model
+call checks only SMD's file: a Machine stop keeps its own checkpoints, so a
+seat restart drains a job exactly as it did before.
 """
 
 from __future__ import annotations
@@ -33,6 +48,8 @@ import time
 from pathlib import Path
 
 NAME = ".stop-request"
+#: SMD's job stop (``smd_stop.py``): final, never resumed by the daemon.
+SMD_NAME = ".smd-stop.json"
 STOP_EXIT = 76
 
 
@@ -40,23 +57,50 @@ class StopRequested(BaseException):
     """The Machine is stopping and this job reached a checkpoint."""
 
 
+class SmdStopRequested(StopRequested):
+    """SMD stopped this job (``python -m jobs.stop``): it ends here, for good."""
+
+
 class _Armed:
     path: Path | None = None
+    smd: Path | None = None
 
 
 def arm(job_dir: Path | str | None) -> None:
-    """Watch ``<job_dir>/.stop-request`` for the rest of this process."""
+    """Watch ``<job_dir>/.stop-request`` (and SMD's stop) for the rest of this process."""
     _Armed.path = Path(job_dir) / NAME if job_dir else None
+    arm_smd(job_dir)
+
+
+def arm_smd(job_dir: Path | str | None) -> None:
+    """Watch only SMD's stop: for a lane whose runner keeps no Machine-stop
+    checkpoint (demand, negotiation, litigation), so arming it changes nothing
+    about how a seat restart drains that lane."""
+    _Armed.smd = Path(job_dir) / SMD_NAME if job_dir else None
+
+
+def smd_requested() -> bool:
+    p = _Armed.smd
+    return p is not None and p.exists()
 
 
 def requested() -> bool:
     p = _Armed.path
-    return p is not None and p.exists()
+    return (p is not None and p.exists()) or smd_requested()
+
+
+def check_smd(where: str = "") -> None:
+    """Raise :class:`SmdStopRequested` when SMD has stopped this job. Called
+    before every paid model call, so a stop costs at most the call in flight."""
+    if smd_requested():
+        raise SmdStopRequested(f"stopped by SMD{f' at {where}' if where else ''}")
 
 
 def check(where: str = "") -> None:
     """Raise :class:`StopRequested` when the daemon has asked this job to stop."""
-    if requested():
+    check_smd(where)
+    p = _Armed.path
+    if p is not None and p.exists():
         raise StopRequested(f"stop requested{f' at {where}' if where else ''}")
 
 
@@ -75,4 +119,17 @@ def sleep(seconds: float) -> None:
         left -= step
 
 
-__all__ = ["NAME", "STOP_EXIT", "StopRequested", "arm", "check", "requested", "sleep"]
+__all__ = [
+    "NAME",
+    "SMD_NAME",
+    "STOP_EXIT",
+    "SmdStopRequested",
+    "StopRequested",
+    "arm",
+    "arm_smd",
+    "check",
+    "check_smd",
+    "requested",
+    "sleep",
+    "smd_requested",
+]

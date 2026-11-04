@@ -36,7 +36,7 @@ from .firm_levers import FirmLevers
 from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
-from .stop_request import sleep as _stop_aware_sleep
+from .stop_request import check_smd as _check_smd, sleep as _stop_aware_sleep
 
 # Only rows a call site actually leaves to the table. Every other stage passes
 # effort itself: every effort reading on 2026-08-27 failed its content bar
@@ -381,6 +381,10 @@ class Doorway:
         deadline.py). Every attempt is ALSO held to `self.deadline(max_tokens)`
         of wall clock, and a stream to `self.stall_s` of no content; past its
         attempts the stage fails with the reason."""
+        # SMD's job stop, before any money moves: a long stage (the drafting
+        # finish has none inside it) stops at its next call, never its next
+        # boundary (stop_request.py, 2026-11-04).
+        _check_smd(stage)
         if self.before_request is not None:
             self.before_request(stage)
         params, markers = build_params_marked(
@@ -563,6 +567,7 @@ class Doorway:
         n = _next_index(existing, stage)
         for group in _split_requests(fresh):
             path = batch_dir / f"batch-{stage}-{n}{'-retry' if retry else ''}.json"
+            _check_smd(stage)  # a batch is one commitment: SMD's stop lands before it
             b = client.messages.batches.create(requests=group)
             batch_dir.mkdir(parents=True, exist_ok=True)
             path.write_text(

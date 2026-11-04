@@ -84,7 +84,9 @@ CHILD_ENV_PASS = (
     "JOBS_PRICING_JSON",
     "CUSTOMER_SLUG",
 )
-TERMINAL = frozenset({"delivered", "failed"})
+#: ``stopped_by_smd`` is SMD's job stop (``smd_stop.py``): final, so a stopped
+#: job is never resumed, requeued or claimed again by any lane.
+TERMINAL = frozenset({"delivered", "failed", "stopped_by_smd"})
 
 
 @dataclass
