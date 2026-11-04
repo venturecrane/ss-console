@@ -46,34 +46,83 @@ class Window:
     sha: str
 
 
+def row_names(rows: list[dict[str, Any]]) -> list[str]:
+    """One unique name per extracted row: the row's own name, or, when rows
+    share it (an email and its attachment, two filings of one form), the name
+    with its folder, then a number if the folder repeats too. The gate
+    (``drafting/gate.py``) names its sources the same way, so a cite to
+    either copy resolves to the copy it means. Keyed by row, never by name: a
+    later row never overwrites an earlier one (2026-11-04: on a real job 22
+    names covered 114 rows; 69 distinct texts would never have been read)."""
+    base = [str(r.get("name") or r.get("id") or "") for r in rows]
+    count: dict[str, int] = {}
+    for b in base:
+        count[b] = count.get(b, 0) + 1
+    out: list[str] = []
+    seen: set[str] = set()
+    for r, b in zip(rows, base):
+        folder = str(r.get("folder") or "").strip().strip("/")
+        name = f"{b} ({folder})" if count[b] > 1 and folder else b
+        k, cand = 1, name
+        while cand in seen:
+            k += 1
+            cand = f"{name} #{k}"
+        seen.add(cand)
+        out.append(cand)
+    return out
+
+
+def text_file(data: Path, stored: str | None) -> Path | None:
+    """A row's text file: under this job's own data directory first (a copied
+    job keeps its files under ``text/`` while its rows still name the paths
+    they were written at), then the stored path as written."""
+    if not stored:
+        return None
+    sp = Path(stored)
+    for cand in (data / sp.parent.name / sp.name, data / sp.name, sp):
+        if cand.is_file():
+            return cand
+    return None
+
+
 def load_corpus(data: Path) -> dict[str, DocPages]:
     """Every extracted document as page text, from ``extracted.jsonl``: the
-    same files the digest and the gate read. A page marked
-    ``(machine transcription)`` (or a document named in ``transcribed.json``)
-    is a machine page. A file with no ``[p.N]`` markers is one page."""
+    same files the digest and the gate read, one entry per ROW
+    (``row_names``). A page marked ``(machine transcription)`` (or a document
+    named in ``transcribed.json``) is a machine page. A file with no ``[p.N]``
+    markers is one page. A row whose text file cannot be found raises
+    ``ExtractError``: "could not read it" never looks like "nothing to read"."""
     rows = [json.loads(ln) for ln in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     machine_names: set[str] = set()
     tp = data / "transcribed.json"
     if tp.is_file():
         machine_names = {str(x) for x in json.loads(tp.read_text(encoding="utf-8"))}
     out: dict[str, DocPages] = {}
-    for r in rows:
-        p = r.get("text_path")
-        if not p or not Path(p).is_file():
+    missing: list[str] = []
+    for r, key in zip(rows, row_names(rows)):
+        if not r.get("text_path"):
             continue
-        text = Path(p).read_text(encoding="utf-8", errors="replace")
+        p = text_file(data, r.get("text_path"))
+        if p is None:
+            missing.append(key)
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
         if not text.strip():
             continue
-        name = str(r.get("name"))
         if "[p." in text:
             segs = parse_segments(text)
             pages = {n: t for n, (t, _m) in segs.items()}
             mach = {n for n, (_t, m) in segs.items() if m}
         else:
             pages, mach = {1: text}, set()
-        if name in machine_names:
+        if str(r.get("name")) in machine_names:
             mach = set(pages)
-        out[name] = DocPages(name, pages, frozenset(mach), r.get("source_path"))
+        out[key] = DocPages(key, pages, frozenset(mach), r.get("source_path"))
+    if missing:
+        raise ExtractError(
+            f"{len(missing)} extracted document(s) have no text file under {data} or at their stored path "
+            f"(first: {missing[0]!r}); nothing was read"
+        )
     return out
 
 

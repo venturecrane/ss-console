@@ -56,6 +56,14 @@ def render() -> ModuleType | None:
     return m
 
 
+def row_names(rows: list[dict]) -> list[str]:
+    """The lane's own document names, one per extracted row (``evidence.extract.row_names``)."""
+    ensure()
+    from jobs.drafting.evidence.extract import row_names as names
+
+    return names(rows)
+
+
 def shapes() -> ModuleType:
     ensure()
     from jobs.drafting.evidence import shapes as m

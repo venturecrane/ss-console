@@ -17,8 +17,11 @@ job dir by file name) and the draft, and reports, with no network and no model:
 * **lint**: what the evidence lane's lint would refuse in the draft, by type
   (``hand_quote``, ``hand_money`` ...): how much of a prose draft is hand-typed
   record (when ``evidence.lint`` is in the tree);
-* **key**: with ``--key``, the scorer's fixed / caught / disclosed / missed /
-  absent per row (``scorer.py``).
+* **key**: with ``--key`` (JSON or JSONL), the scorer's fixed / caught /
+  disclosed / missed / absent per row (``scorer.py``). A new-lane job (its
+  ``evidence-spans.json`` and ``evidence/ledger.jsonl`` present) is scored
+  from the render span map, the source check's ``check.json`` and ``--notes``;
+  an old-lane draft by the key's ``wrong_pattern`` and its cites.
 
 Deposition cites (``Surname Dep. 45:3``) are counted, not checked: they name
 transcript pages, not file pages.
@@ -50,7 +53,10 @@ def norm(s: str) -> str:
 class Corpus:
     def __init__(self, docs: dict[str, dict[int, str]]) -> None:
         self.docs = docs
-        self.by_stem = {scorer.stem(n): n for n in docs}
+        self.by_stem: dict[str, str] = {}
+        for n in docs:  # a shared name's copies answer to the bare name too (first copy)
+            self.by_stem.setdefault(scorer.stem(n), n)
+            self.by_stem.setdefault(scorer.stem(re.sub(r" \([^()]*\)(?: #\d+)?$", "", n)), n)
         self.normed = {n: {p: norm(t) for p, t in pages.items()} for n, pages in docs.items()}
 
     @classmethod
@@ -59,13 +65,15 @@ class Corpus:
         docs: dict[str, dict[int, str]] = {}
         rows_file = job / "extracted.jsonl"
         rows = [json.loads(ln) for ln in rows_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        for r in rows:
+        # One document per ROW, named as the lane names it (two rows sharing a
+        # name are two documents, never one overwriting the other).
+        for r, key in zip(rows, runner_path.row_names(rows)):
             p = _resolve(job, str(r.get("text_path") or ""))
             if p is None:
                 continue
             text = p.read_text(encoding="utf-8", errors="replace")
             segs = pt.parse_segments(text) if "[p." in text else {1: (text, False)}
-            docs[str(r["name"])] = {n: t for n, (t, _m) in segs.items()}
+            docs[key] = {n: t for n, (t, _m) in segs.items()}
         return cls(docs)
 
     def doc(self, file_stem: str) -> str | None:
@@ -77,12 +85,17 @@ class Corpus:
 
 
 def _resolve(job: Path, text_path: str) -> Path | None:
+    """The row's text file: as stored, else under the job dir by name. One
+    name under two directories (``text/`` and ``email/`` both hold a
+    ``d1.txt``) is settled by the stored path's own directory, never dropped."""
     if text_path and Path(text_path).is_file():
         return Path(text_path)
-    name = Path(text_path).name
-    if not name:
+    sp = Path(text_path)
+    if not sp.name:
         return None
-    hits = [p for p in job.rglob(name) if p.is_file()]
+    hits = [p for p in job.rglob(sp.name) if p.is_file()]
+    if len(hits) > 1:
+        hits = [p for p in hits if p.parent.name == sp.parent.name] or hits
     return hits[0] if len(hits) == 1 else None
 
 
@@ -90,7 +103,12 @@ def read_draft(path: Path) -> str:
     if path.suffix.lower() == ".docx":
         import docx  # python-docx, in the jobs venv
 
-        return "\n\n".join(p.text for p in docx.Document(str(path)).paragraphs)
+        doc = docx.Document(str(path))
+        parts = [p.text for p in doc.paragraphs]
+        # A brief's charges and damages live in tables: their cells are the brief's text too.
+        for t in doc.tables:
+            parts += [" | ".join(c.text for c in row.cells) for row in t.rows]
+        return "\n\n".join(parts)
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -130,6 +148,9 @@ def check(draft: str, corpus: Corpus) -> dict[str, Any]:
         if not cs:
             continue
         by: dict[str | None, list[int]] = {}
+        cs = [(st, p) for st, p in cs if not st.startswith("dep ")]  # transcript pages: counted above
+        if not cs:
+            continue
         for st, p in cs:
             doc = corpus.doc(st)
             if doc is None:
@@ -170,14 +191,34 @@ def lint_counts(draft: str) -> dict[str, int] | None:
     return lint.counts(lint.lint(body, sh.Ledger(())))
 
 
-def report(job: Path, draft_path: Path, key: Path | None = None) -> dict[str, Any]:
+def spans_key(job: Path, rows: list[dict[str, Any]], notes: Path | None) -> dict[str, Any] | None:
+    """A new-lane job's key score from its render span map, or None when the
+    job has none (an old-lane draft)."""
+    sp, lp = job / "evidence-spans.json", job / "evidence" / "ledger.jsonl"
+    if not (sp.is_file() and lp.is_file()):
+        return None
+    sh = runner_path.shapes()
+    spans = [sh.Span.from_json(x) for x in json.loads(sp.read_text(encoding="utf-8"))]
+    ledger = sh.Ledger.from_jsonl(lp.read_text(encoding="utf-8"))
+    cp = job / "check.json"
+    chk = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
+    text = ""
+    if notes is not None:
+        text = read_draft(notes) if notes.suffix.lower() == ".docx" else notes.read_text(encoding="utf-8")
+    extracted = [json.loads(ln) for ln in (job / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln]
+    names = {str(r.get("id")): n for r, n in zip(extracted, runner_path.row_names(extracted)) if r.get("id")}
+    return scorer.score_spans(rows, spans, ledger, chk, text, names).to_json()
+
+
+def report(job: Path, draft_path: Path, key: Path | None = None, notes: Path | None = None) -> dict[str, Any]:
     corpus = Corpus.from_job(job)
     draft = read_draft(draft_path)
     out: dict[str, Any] = {"documents": len(corpus.docs), **check(draft, corpus), "lint": lint_counts(draft)}
     if key is not None:
-        body = json.loads(key.read_text(encoding="utf-8"))
-        rows = body["rows"] if isinstance(body, dict) else body
-        out["key"] = scorer.score(rows, draft).to_json()
+        rows = scorer.load_key(key.read_text(encoding="utf-8"))
+        by_spans = spans_key(job, rows, notes)
+        out["key_method"] = "spans" if by_spans is not None else "text"
+        out["key"] = by_spans if by_spans is not None else scorer.score(rows, draft).to_json()
     return out
 
 
@@ -186,9 +227,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("job", type=Path)
     ap.add_argument("--draft", required=True, type=Path)
     ap.add_argument("--key", type=Path)
+    ap.add_argument("--notes", type=Path, help="the attorney notes (.md or .docx), for a new-lane draft's key")
     ap.add_argument("--json", type=Path, help="write the full report here")
     a = ap.parse_args(argv)
-    r = report(a.job, a.draft, a.key)
+    r = report(a.job, a.draft, a.key, a.notes)
     if a.json:
         a.json.write_text(json.dumps(r, indent=2, default=str) + "\n", encoding="utf-8")
     print(f"documents {r['documents']}  pins {r['pins']}")

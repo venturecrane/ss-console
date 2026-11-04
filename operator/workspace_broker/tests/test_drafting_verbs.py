@@ -355,6 +355,31 @@ def test_resume_writes_the_marker_for_a_failed_job_only(seat) -> None:
         call(broker, "drafting_job_resume", uid=0, job_id=held, reason="try again")
 
 
+def test_release_held_resumes_only_a_job_held_for_smd_and_names_who(seat) -> None:
+    """A ledger brief stopped before it filed (``held_for_smd``) is released by
+    a root resume carrying ``release_held`` and who released it; nothing else
+    takes that release, and an unnamed one is refused."""
+    broker, db, _y, queue = seat
+    job = submit(broker)["job_id"]
+    call(broker, "drafting_job_record", uid=0, job_id=job, state="failed", fields={"reason": "render"})
+    with pytest.raises(ValueError, match="not held for SMD"):
+        call(broker, "drafting_job_resume", uid=0, job_id=job, reason="read", release_held=True, by="scott")
+    call(broker, "drafting_job_record", uid=0, job_id=job, state="failed", fields={"reason": "held_for_smd: x"})
+    with pytest.raises(ValueError, match="requires by"):
+        call(broker, "drafting_job_resume", uid=0, job_id=job, reason="read", release_held=True)
+    with pytest.raises(ValueError, match="its own decision"):
+        call(
+            broker, "drafting_job_resume", uid=0, job_id=job, reason="r", release_held=True, by="s", release_review=True
+        )
+    call(broker, "drafting_job_resume", uid=0, job_id=job, reason="read every cite", release_held=True, by="scott")
+    marker = json.loads((queue / f".resume-{job}.json").read_text())
+    assert marker == {"job_id": job, "reason": "read every cite", "release_held": True, "by": "scott"}
+    conn = sqlite3.connect(db)
+    meta = json.loads(conn.execute("SELECT metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()[0])
+    conn.close()
+    assert meta["release_held"] is True and meta["by"] == "scott"
+
+
 def test_a_new_request_after_a_held_job_is_accepted(seat) -> None:
     broker, *_ = seat
     job = submit(broker)["job_id"]

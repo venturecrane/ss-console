@@ -29,6 +29,9 @@ from .proof import review as _review
 #: so the daemon that writes them and the child that reads them cannot drift.
 RELEASE_MARKER: str = _review.RELEASE_MARKER
 REDO_MARKER: str = _review.REDO_MARKER
+#: The drafting lane's pre-filing hold release (``drafting/review_first.py``
+#: reads it from here: a core module imports no lane).
+HELD_RELEASE_MARKER = "release-held.json"
 
 logger = logging.getLogger("jobs.daemon")
 
@@ -99,6 +102,10 @@ def take_requests(d: Any) -> list[str]:
             # SMD's release of a review hold (proof/review.py): carried to the
             # attempt it is for, consumed there like ``resume_redo``.
             resume_release=bool(req.get("release_review")),
+            # SMD's release of a ledger brief held before it filed
+            # (drafting/review_first.py): files the held bytes, writes no notes.
+            resume_release_held=bool(req.get("release_held")),
+            resume_release_by=str(req.get("by") or "")[:120],
         )
         marker.unlink(missing_ok=True)
         logger.info("resume %s: re-queued, redo=%s", job_id, req.get("redo") or [])
@@ -135,6 +142,16 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
         logger.info("resuming %s with its review hold RELEASED by SMD", job_id)
     else:
         marker.unlink(missing_ok=True)
+    held = d.job_dir(job_id) / HELD_RELEASE_MARKER
+    if st.get("resume_release_held"):
+        held.write_text(
+            json.dumps({"by": st.get("resume_release_by") or "SMD", "why": st.get("resume_reason") or ""}),
+            encoding="utf-8",
+        )
+        d._chown_child(held)
+        logger.info("resuming %s with its pre-filing hold RELEASED by SMD", job_id)
+    else:
+        held.unlink(missing_ok=True)
     redo_marker = d.job_dir(job_id) / REDO_MARKER
     if "review" in redo:
         redo_marker.write_text("{}", encoding="utf-8")
@@ -148,6 +165,7 @@ def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:
         held_paused=False,
         resume_redo=[],
         resume_release=False,
+        resume_release_held=False,
     )
     # ``review`` travels as the marker above, never as argv: it is no DAG stage
     # (the driver refuses an unknown --redo name) and the demand and

@@ -159,13 +159,30 @@ def reconcile(medicals: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dic
 
 
 # ---- the estimate ----------------------------------------------------------------
-def estimate(extracted: list[dict[str, Any]], firm: DemandFirm) -> dict[str, Any]:
+#: A caller's own projection of everything after transcription (the drafting
+#: lane's ledger path, ``drafting/evidence_cost.py``): ``{"usd": ...}``. It
+#: replaces the summary, condense and fixed drafting tail.
+Tail = Callable[[list[dict[str, Any]]], dict[str, Any]]
+
+
+def estimate(extracted: list[dict[str, Any]], firm: DemandFirm, tail: Tail | None = None) -> dict[str, Any]:
     chars = sum(int(r.get("chars") or 0) for r in extracted)
     pages = sum(
         (int(r.get("pages") or 1) if r.get("transcribe") == "all" else len(r.get("transcribe") or []))
         for r in extracted
     )
     b = firm.data["budget"]
+    total_pages = sum(int(r.get("pages") or 0) for r in extracted)
+    if tail is not None:
+        t = tail(extracted)
+        usd = pages * b["usd_per_scanned_page"] + float(t["usd"])
+        return {
+            "pages": total_pages,
+            "characters": chars,
+            "transcription_pages": pages,
+            "usd": round(usd, 2),
+            "tail": t,
+        }
     # Transcribed pages enter the summary too: about 2,500 characters a page.
     summarized = chars + pages * 2500
     usd = summarized / 1e6 * b["usd_per_million_chars"] + pages * b["usd_per_scanned_page"]
@@ -174,7 +191,6 @@ def estimate(extracted: list[dict[str, Any]], firm: DemandFirm) -> dict[str, Any
     # record digests to near its own length, so the summarized size stands in.
     if summarized > int(firm.get("levers", "digest_budget_chars")):
         usd += summarized / 1e6 * b["usd_per_million_condense_chars"]
-    total_pages = sum(int(r.get("pages") or 0) for r in extracted)
     return {"pages": total_pages, "characters": chars, "transcription_pages": pages, "usd": round(usd, 2)}
 
 
@@ -211,7 +227,9 @@ def wall_printed_emails(
     return keep
 
 
-def run(data: Path, firm: DemandFirm, facts: dict[str, Any], log: Callable[[str], None]) -> dict[str, Any]:
+def run(
+    data: Path, firm: DemandFirm, facts: dict[str, Any], log: Callable[[str], None], *, tail: Tail | None = None
+) -> dict[str, Any]:
     corpus = json.loads((data / "corpus.json").read_text(encoding="utf-8"))
     text_dir = data / "text"
     text_dir.mkdir(parents=True, exist_ok=True)
@@ -223,7 +241,7 @@ def run(data: Path, firm: DemandFirm, facts: dict[str, Any], log: Callable[[str]
         "unextractable": [{"name": r["name"], "why": r["unextractable"]} for r in extracted if r.get("unextractable")],
         "premise_hits": premise_scan(extracted, firm),
         "bills": reconcile(facts.get("medicals") or [], extracted),
-        "estimate": estimate(extracted, firm),
+        "estimate": estimate(extracted, firm, tail),
     }
     (data / "preflight.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     e = report["estimate"]

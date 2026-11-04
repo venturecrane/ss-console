@@ -43,6 +43,14 @@ REASON_CODES = (
     "review_held",
     # The read-back downloaded a filed file and its bytes are not ours (2026-10-13).
     "readback_mismatch",
+    # A ledger-path brief stopped before it filed, for SMD to read first (evidence.review_first):
+    # nothing filed, no reply; SMD releases it (the held bytes, unchanged) or discards it.
+    "held_for_smd",
+    # The ledger path (evidence_lane.py): the drafter's markup still hand-types a cite, quote,
+    # figure or date after its one scoped repair, or names a fact render cannot fill.
+    "markup_lint",
+    # The source check's planted controls said the checker did not discriminate (verify/controls_adapter.py).
+    "check_invalid",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
@@ -124,6 +132,9 @@ class Verdict:
     markers: list[dict[str, str]] = field(default_factory=list)
     #: The daemon's proof block (``proof.gate``), on a delivered verdict only.
     proof: dict[str, Any] | None = None
+    #: This filing is a held ledger brief SMD released (``evidence_lane``):
+    #: the lane counts it toward ``evidence.review_first``.
+    smd_released: bool = False
 
     def to_list(self) -> list[dict[str, Any]]:
         d = {k: v for k, v in self.__dict__.items() if not (k == "proof" and v is None)}

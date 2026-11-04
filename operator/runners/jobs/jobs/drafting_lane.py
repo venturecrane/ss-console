@@ -64,6 +64,26 @@ SKILL = "document-drafter"
 CGROUP = "demand"
 DEMAND_CHILD_PID = "demand-child.pid"
 DEMAND_BUSY_RETRY_SECONDS = 30.0
+#: The record of ledger-path briefs SMD released (``drafting/review_first.py``),
+#: one JSON line per filed release, under the run dir (never wiped with a job):
+#: the count ``evidence.review_first`` is read against, stamped into job.json.
+RELEASES = "drafting-ledger-releases.jsonl"
+
+
+def releases(run_dir: Path) -> list[str]:
+    """The job ids of every released ledger brief that filed, once each."""
+    p = Path(run_dir) / RELEASES
+    if not p.is_file():
+        return []
+    out: list[str] = []
+    for ln in p.read_text(encoding="utf-8").splitlines():
+        try:
+            jid = str(json.loads(ln).get("job_id") or "")
+        except ValueError:
+            continue
+        if jid and jid not in out:
+            out.append(jid)
+    return out
 
 
 class DraftingBroker:
@@ -125,6 +145,7 @@ class DraftingLane(Daemon):
             "slug": self.customer_slug,
             "month_cents_used": cents,
             "allowance_remaining": remaining,
+            "ledger_releases": len(releases(self.run_dir)),
         }
         (jd / "data").mkdir(exist_ok=True)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
@@ -239,6 +260,10 @@ class DraftingLane(Daemon):
             logger.error("drafting job %s left a caption correction not fully put back", job_id)
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
+        if state == "delivered" and v.get("smd_released") and job_id not in releases(self.run_dir):
+            # A held ledger brief SMD released has filed: it counts toward review_first.
+            with (Path(self.run_dir) / RELEASES).open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"job_id": job_id, "at": self.clock()}) + "\n")
         if state == "delivered":
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}

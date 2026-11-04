@@ -56,6 +56,10 @@ class DraftingJob:
     #: broker carried them (sha256-checked here again): an attorney's own sets
     #: to place in the caption (place.py).
     attachments: tuple[tuple[str, bytes], ...] = ()
+    #: Ledger-path briefs SMD has released for this firm, counted by the lane
+    #: from its release record (``drafting_lane.RELEASES``); None when the lane
+    #: did not stamp it, which counts as none released.
+    ledger_releases: int | None = None
 
     @property
     def data(self) -> Path:
@@ -112,7 +116,12 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         month_cents_used=cents,
         allowance_remaining=remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None,
         attachments=_attachments(data.get("attachments")),
+        ledger_releases=_count(data.get("ledger_releases")),
     )
+
+
+def _count(v: Any) -> int | None:
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
 
 
 MAX_ATTACHMENTS = 6

@@ -339,19 +339,28 @@ class Verifier:
     def find(self, c: Candidate, name: str) -> tuple[tuple[int, int] | None, int, str]:
         """(hit in the page's clean text, page, status): the cited page
         first, then (for an excerpt long enough not to be ambiguous) every
-        other page of the same file."""
+        other page of the same file. Moved only to the ONE other page that
+        carries the words: words on several pages are ambiguous and rejected,
+        never pinned to the lowest (2026-11-04: of 187 page-moved quotes in a
+        control set, 21 landed on a wrong page that way; ``pincheck`` keeps
+        the same rule)."""
         doc = self.corpus[name]
         if c.page in doc.pages:
             hit = locate(c.excerpt, self.clean(name, c.page))
             if hit is not None:
                 return hit, c.page, "ok"
         if len(_words(c.excerpt)) >= RELOCATE_MIN_WORDS:
+            found = []
             for p in sorted(doc.pages):
                 if p == c.page:
                     continue
                 got = locate(c.excerpt, self.clean(name, p))
                 if got is not None:
-                    return got, p, "relocated"
+                    found.append((got, p))
+            if len(found) == 1:
+                return found[0][0], found[0][1], "relocated"
+            if found:
+                return None, c.page, "ambiguous"
         return None, c.page, "rejected"
 
     def one(self, c: Candidate) -> tuple[dict[str, Any], tuple[str, int, int]]:
@@ -374,6 +383,8 @@ class Verifier:
         if hit is None:
             long = len(_words(c.excerpt)) >= RELOCATE_MIN_WORDS
             why = "excerpt not found on the cited page" + (" or elsewhere in the file" if long else "")
+            if status == "ambiguous":
+                why = "excerpt not on the cited page, and on more than one other page of the file: ambiguous"
             return {**base, "status": "rejected", "note": why}, (name, c.page, 0)
         doc = self.corpus[name]
         clean = self.clean(name, page)
