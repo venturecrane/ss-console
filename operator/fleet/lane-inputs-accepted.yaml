@@ -43,3 +43,14 @@
     changed. Every drafting input staged before it still validates, and no
     seat's staged input uses the new keys yet (A&P's are held in
     engagements#323 until the seat runs this image); nothing to re-stage.
+- since: de6e2cb947d563f794c4f7529d9fbe6668dd98d9
+  lanes: [drafting]
+  date: '2026-11-04'
+  by: session drafting-firm-style (scottdurgan), for #3759
+  why: >-
+    #3759 adds optional keys only to the drafting firm schema: the citations
+    and opening_demand sections, format.pleading_classes, and format.layout
+    first-page and signature options. No other lane's schema module changed.
+    Every drafting input staged before it still validates, and no seat's
+    staged input uses the new keys yet (A&P's are held in engagements#323
+    until the seat runs this image); nothing to re-stage.
