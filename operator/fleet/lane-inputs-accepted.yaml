@@ -24,3 +24,12 @@
     docstrings and its import lines; the chronology lane's config.py body is
     byte-equal. What each schema accepts is unchanged, so the inputs staged
     under the old image fit; nothing to re-stage.
+- since: 31d111a9700ff2edd6d42bc5b2d5bc7a7908a6b1
+  lanes: [drafting]
+  date: '2026-11-04'
+  by: session records-lane-fixes-2 (scottdurgan), for the drafting session's #3739
+  why: >-
+    #3739 adds two optional sections, evidence: and verify:, to the drafting
+    firm schema. No other lane's schema module changed. Every drafting input
+    staged before it still validates, and no seat's staged input uses the new
+    sections yet; nothing to re-stage.
