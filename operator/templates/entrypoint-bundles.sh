@@ -70,10 +70,15 @@ else
   _smd_bundle_jobs="image"
   _smd_bundle_out="$("${SMD_BUNDLE_PYTHON}" -I -m bundle_installer jobs)" || _smd_bundle_out=""
   if [ -n "${_smd_bundle_out}" ]; then
+    # <version> TAB <version dir> [TAB <layout N, via WHAT>] (bundle_installer.__main__).
     _smd_bundle_version="${_smd_bundle_out%%$'\t'*}"
-    if _smd_bundle_mount_jobs "${_smd_bundle_out#*$'\t'}"; then
+    _smd_bundle_rest="${_smd_bundle_out#*$'\t'}"
+    _smd_bundle_dir="${_smd_bundle_rest%%$'\t'*}"
+    _smd_bundle_how=""
+    [ "${_smd_bundle_rest}" = "${_smd_bundle_dir}" ] || _smd_bundle_how=" (${_smd_bundle_rest#*$'\t'})"
+    if _smd_bundle_mount_jobs "${_smd_bundle_dir}"; then
       _smd_bundle_jobs="${_smd_bundle_version}"
-      log "jobs bundle ${_smd_bundle_version} mounted over /opt/jobs and /opt/connectors/smokeball"
+      log "jobs bundle ${_smd_bundle_version}${_smd_bundle_how} mounted over /opt/jobs and /opt/connectors/smokeball"
     fi
   fi
   if [ "${_smd_bundle_jobs}" = "image" ]; then

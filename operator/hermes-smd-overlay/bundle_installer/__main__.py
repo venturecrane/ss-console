@@ -4,9 +4,10 @@ Run by ``entrypoint-bundles.sh`` only on a seat that authors a job lane
 (``shared/capabilities.py``). Prints ONE line on stdout when a verified bundle
 should be mounted::
 
-    <version>\\t<version dir>
+    <version>\\t<version dir>\\tlayout <n>, via <seat pointer|layout-latest|on-disk current>
 
-and nothing when the image copy should run. Every reason goes to stderr, where
+and nothing when the image copy should run. The third field is for the boot
+log only (entrypoint-bundles.sh); the heartbeat reports the version alone. Every reason goes to stderr, where
 the boot log keeps it. Exit 0 in both cases: a bundle that cannot be adopted
 must never stop a boot, because the image's copy is a working job runner. Exit
 2 is a usage fault (unknown bundle, not root).
@@ -48,10 +49,11 @@ def _report(name: str, decision: Decision) -> None:
         logger.error("bundle_installer: %s bundle NOT mounted, the image copy runs (%s)", name, why)
     else:
         logger.info(
-            "bundle_installer: %s bundle %s %s%s",
+            "bundle_installer: %s bundle %s %s (%s)%s",
             name,
             decision.version,
             decision.source,
+            decision.describe(),
             f" ({why})" if why else "",
         )
 
@@ -94,7 +96,7 @@ def main(
         decision = Decision("image", reasons=(f"installer crashed: {exc!r}",))
     _report(spec.name, decision)
     if decision.path is not None:
-        print(f"{decision.version}\t{decision.path}")
+        print(f"{decision.version}\t{decision.path}\t{decision.describe()}")
     return 0
 
 

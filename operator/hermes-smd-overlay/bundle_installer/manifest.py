@@ -12,11 +12,26 @@ R2 LAYOUT (written by ss-console CI ``publish-bundle`` and the release tick):
 * ``fleet/bundles/<name>/<v>.json`` — the manifest::
 
       {"name": "<name>", "version": "<v>", "sha256": "<tarball hex>",
-       "size": <bytes>, "ss_console_sha": "...", "base_image_ref": "...",
-       "python": "..."}
+       "size": <bytes>, "layout": <n>, "ss_console_sha": "...",
+       "base_image_ref": "...", "python": "..."}
 
 * ``fleet/bundles/<name>/<v>.tar.zst`` — the tarball. Its root holds the spec's
   members (for ``jobs``: ``jobs/`` and ``connectors/smokeball/``).
+
+* ``fleet/bundles/<name>/layout-<n>/latest.json`` — the newest published bundle
+  of layout ``n``, in the pointer's shape. CI rewrites it on every publish.
+
+THE LAYOUT RULE (ADR 0103): a seat never runs an image with a bundle of another
+layout. A bundle's venvs carry absolute paths, so a bundle runs only at the
+mount paths it was built for, and the layout number names those paths: layout 1
+is the ``medchron/`` root at ``/opt/medchron`` (every manifest published before
+the key existed), layout 2 the ``jobs/`` root at ``/opt/jobs``. The image's
+:class:`BundleSpec` says which layout it mounts; when the seat pointer names a
+bundle of another layout, the installer adopts ``layout-<n>/latest.json`` for
+the image's own layout instead (installer.decide). Without this an image and a
+bundle could never change layout together: the release tick rolls the image
+first and holds the bundle until the image is in place, and a new image on an
+old-layout pointer boots with no runner, fails its self-test and is rolled back.
 
 The pointer parser is :func:`skills_applier.manifest.parse_pointer` with the
 bundle prefix: one parser, one set of refusal rules, for every artifact a seat
@@ -38,6 +53,10 @@ from skills_applier.manifest import (
 
 POINTER_KEY_TEMPLATE = "vaults/{slug}/bundles/{name}-pointer.json"
 PREFIX_TEMPLATE = "fleet/bundles/{name}/"
+LAYOUT_LATEST_TEMPLATE = "fleet/bundles/{name}/layout-{layout}/latest.json"
+#: What a manifest without a ``layout`` key is: every bundle published before
+#: the key existed had the ``medchron/`` root.
+UNKEYED_LAYOUT = 1
 
 MAX_MANIFEST_BYTES = 64 * 1024
 #: The jobs bundle is two venvs (a few hundred MB); past this is a mistake or an
@@ -56,13 +75,17 @@ class BundleSpec:
     over; ``required`` are paths that must exist (links count) after extraction;
     ``import_check`` is the venv python (relative to the version dir) handed to
     the image's own import check, ``/app/jobs-runtime.sh import-check``, the
-    same script the image build and the CI bundle build run.
+    same script the image build and the CI bundle build run. ``layout`` is the
+    tarball layout these mounts expect (the layout rule, module docstring); CI
+    writes the same number into every manifest (scripts/ci-publish-bundle.sh
+    ``LAYOUT``, pinned equal by operator/bin/tests/test_ci_publish_bundle.py).
     """
 
     name: str
     mounts: tuple[tuple[str, str], ...]
     required: tuple[str, ...]
     import_check: str
+    layout: int = 2
 
     @property
     def members(self) -> tuple[str, ...]:
@@ -96,6 +119,7 @@ class BundleManifest:
     size: int
     ss_console_sha: str | None = None
     base_image_ref: str | None = None
+    layout: int = UNKEYED_LAYOUT
 
 
 def pointer_key(slug: str, name: str) -> str:
@@ -110,6 +134,28 @@ def prefix(name: str) -> str:
 
 def tarball_key(name: str, version: str) -> str:
     return f"{prefix(name)}{version}.tar.zst"
+
+
+def layout_latest_key(name: str, layout: int) -> str:
+    return LAYOUT_LATEST_TEMPLATE.format(name=name, layout=layout)
+
+
+def _layout(doc: dict, reasons: list[str]) -> int:
+    raw = doc.get("layout", UNKEYED_LAYOUT)
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1:
+        reasons.append(f"manifest.layout {raw!r} must be a positive integer")
+        return UNKEYED_LAYOUT
+    return raw
+
+
+def manifest_layout(data: bytes, name: str) -> int:
+    """The layout named by manifest bytes (an installed version dir's verified copy)."""
+    doc = _load_object(data, f"{name} bundle manifest", MAX_MANIFEST_BYTES)
+    reasons: list[str] = []
+    layout = _layout(doc, reasons)
+    if reasons:
+        raise ManifestError(reasons)
+    return layout
 
 
 def parse_bundle_pointer(data: bytes, name: str) -> Pointer:
@@ -135,6 +181,7 @@ def parse_bundle_manifest(data: bytes, *, name: str, expected_version: str) -> B
         reasons.append("manifest.size must be a positive integer")
     elif size > MAX_TARBALL_BYTES:
         reasons.append(f"manifest.size {size} is over the {MAX_TARBALL_BYTES}-byte cap")
+    layout = _layout(doc, reasons)
     if reasons:
         raise ManifestError(reasons)
     assert isinstance(sha, str) and isinstance(size, int)
@@ -146,6 +193,7 @@ def parse_bundle_manifest(data: bytes, *, name: str, expected_version: str) -> B
         size=size,
         ss_console_sha=sc_sha if isinstance(sc_sha, str) else None,
         base_image_ref=base if isinstance(base, str) else None,
+        layout=layout,
     )
 
 
@@ -154,8 +202,11 @@ __all__ = [
     "MAX_MANIFEST_BYTES",
     "MAX_TARBALL_BYTES",
     "SPECS",
+    "UNKEYED_LAYOUT",
     "BundleManifest",
     "BundleSpec",
+    "layout_latest_key",
+    "manifest_layout",
     "parse_bundle_manifest",
     "parse_bundle_pointer",
     "pointer_key",

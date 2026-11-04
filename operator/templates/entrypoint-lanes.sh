@@ -84,15 +84,68 @@ fi
 # mount, exactly like the audit ledger. The Smokeball refresh token becomes
 # group-shared (setgid dir, 0660 file) so the jobs uid can mint and rotate
 # it alongside the connector; the connector preserves that mode on rotation.
-JOBS_RUN_DIR="/run/smd-medchron"
+#
+# >>> jobs-volume (tests/operator-entrypoint.test.ts runs this block as written)
+# ADR 0103: the volume tree's NAME, behind one constant. Epoch 1 (R1, today):
+# /opt/data/medchron bound at /run/smd-medchron, nothing moves. Epoch 2 (R2
+# flips the constant): once, /opt/data/medchron is RENAMED to /opt/data/jobs
+# (same filesystem: one rename, no copy), then bound at /run/smd-jobs AND at
+# /run/smd-medchron, the second for the jobs held across the release, whose
+# envelopes store that path. Idempotent: a later boot finds only the new name.
+# Never merged: when both names exist the lanes do not boot at all (one loud
+# line; a root hand decides which tree is the seat's). Never a symlink under
+# /opt/data, which the agent uid owns: it could re-point one at anything. The
+# chown sweep in entrypoint.sh runs BEFORE this file and prunes BOTH names, so
+# neither tree is ever handed to the agent, whatever the epoch.
+# SMD_JOBS_VOLUME_ROOT is a test seam only (like entrypoint-bundles.sh's
+# SMD_BUNDLE_TARGET_ROOT): empty on a seat.
+JOBS_VOLUME_EPOCH=1
+_SMD_JV="${SMD_JOBS_VOLUME_ROOT:-}"
+JOBS_RUN_DIR="${_SMD_JV}/run/smd-medchron"
+_smd_jobs_run_dirs=("${JOBS_RUN_DIR}")
+if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
+  _jv_old="${_SMD_JV}/opt/data/medchron" _jv_new="${_SMD_JV}/opt/data/jobs" _jv_refused=""
+  _jv_count() { find "$1" 2>/dev/null | wc -l | tr -d ' '; }
+  if [ -L "${_jv_old}" ] || [ -L "${_jv_new}" ]; then
+    _jv_refused="a symlink stands at ${_jv_old} or ${_jv_new}"
+  elif [ -e "${_jv_old}" ] && [ ! -d "${_jv_old}" ]; then
+    _jv_refused="${_jv_old} is not a directory"
+  elif [ -e "${_jv_new}" ] && [ ! -d "${_jv_new}" ]; then
+    _jv_refused="${_jv_new} is not a directory"
+  elif [ -d "${_jv_old}" ] && [ -e "${_jv_new}" ]; then
+    _jv_refused="both ${_jv_old} and ${_jv_new} exist; the two trees are never merged"
+  elif [ -d "${_jv_old}" ]; then
+    _jv_before="$(_jv_count "${_jv_old}")"
+    if mv "${_jv_old}" "${_jv_new}"; then
+      log "jobs volume: moved ${_jv_old} to ${_jv_new} (${_jv_before} entries before, $(_jv_count "${_jv_new}") after)"
+    else
+      _jv_refused="mv ${_jv_old} ${_jv_new} failed"
+    fi
+  fi
+  if [ -n "${_jv_refused}" ]; then
+    log "JOBS VOLUME REFUSED: ${_jv_refused}. NO job lane boots on this seat (authored: ${SMD_AUTHORED_LANES:-none}); a root hand must leave exactly one of the two trees"
+    SMD_AUTHORED_LANES=""
+    export SMD_AUTHORED_LANES
+  else
+    JOBS_DATA_DIR="${_jv_new}"
+    JOBS_RUN_DIR="${_SMD_JV}/run/smd-jobs"
+    _smd_jobs_run_dirs=("${JOBS_RUN_DIR}" "${_SMD_JV}/run/smd-medchron")
+  fi
+  unset -f _jv_count
+  unset _jv_old _jv_new _jv_refused _jv_before
+fi
 # ADR 0100: the lane tree exists only on a seat that authors a lane.
 if [ -n "${SMD_AUTHORED_LANES//,/}" ]; then
 install -d -o root -g root -m 0755 "${JOBS_DATA_DIR}"
-mkdir -p "${JOBS_RUN_DIR}"
-mountpoint -q "${JOBS_RUN_DIR}" \
-  || mount --bind "${JOBS_DATA_DIR}" "${JOBS_RUN_DIR}" \
-  || { log "FATAL: could not bind-mount ${JOBS_DATA_DIR} -> ${JOBS_RUN_DIR}"; exit 1; }
+for _rd in "${_smd_jobs_run_dirs[@]}"; do
+  mkdir -p "${_rd}"
+  mountpoint -q "${_rd}" \
+    || mount --bind "${JOBS_DATA_DIR}" "${_rd}" \
+    || { log "FATAL: could not bind-mount ${JOBS_DATA_DIR} -> ${_rd}"; exit 1; }
+done
 fi
+unset _rd _smd_jobs_run_dirs _SMD_JV
+# <<< jobs-volume
 if lane_on medchron; then
 install -d -o root -g workspace-broker -m 0770 "${JOBS_DATA_DIR}/queue"
 # jobs/: root-owned, group jobs EXECUTE-ONLY (0710) — the driver child

@@ -18,7 +18,15 @@
 
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -184,7 +192,8 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
       // cannot list or open siblings (live-caught 2026-08-31 at 0700).
       /install -d -o root -g jobs -m 0710 "\$\{JOBS_DATA_DIR\}\/jobs"/
     )
-    expect(BOOT_CODE).toMatch(/mount --bind "\$\{JOBS_DATA_DIR\}" "\$\{JOBS_RUN_DIR\}"/)
+    // Every run dir of the epoch (the jobs-volume block, driven below).
+    expect(BOOT_CODE).toMatch(/mount --bind "\$\{JOBS_DATA_DIR\}" "\$\{_rd\}"/)
     // Pruned from the hermes chown sweep like the audit subtree.
     expect(BOOT_CODE).toMatch(/-o -path "\$\{JOBS_DATA_DIR\}" (-o -path [^ ]+ )?\\\) -prune/)
   })
@@ -697,5 +706,178 @@ SMD_BUNDLE_TARGET_ROOT="${dir}/root"
 
   it('never fails the boot', () => {
     expect(BUNDLES_CODE).not.toMatch(/FATAL|exit /)
+  })
+
+  it('logs how the installer chose the version beside it', () => {
+    // The installer's third field ("layout 2, via layout-latest") reaches the boot log.
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-how-'))
+    const calls = join(dir, 'calls')
+    const py = join(dir, 'python')
+    writeFileSync(
+      py,
+      `#!/bin/bash\nprintf '%s\\t%s\\t%s' 202611040101-aaaaaaaa "${dir}/v1" 'layout 2, via layout-latest'\n`,
+      { mode: 0o755 }
+    )
+    const driver = join(dir, 'driver.sh')
+    writeFileSync(
+      driver,
+      `
+log() { echo "log $*" >> "${calls}"; }
+install() { mkdir -p "\${@: -1}"; }
+mountpoint() { return 1; }
+mount() { echo "mount $*" >> "${calls}"; }
+umount() { :; }
+setpriv() { return 0; }
+mkdir -p "${dir}/root/opt/jobs" "${dir}/root/opt/connectors/smokeball" "${dir}/v1/jobs" "${dir}/v1/connectors/smokeball"
+SMD_AUTHORED_LANES=records SMD_BUNDLE_STATE_DIR="${dir}/state" SMD_BUNDLE_PYTHON="${py}" SMD_BUNDLE_TARGET_ROOT="${dir}/root"
+. "${BUNDLES_PATH}"
+`
+    )
+    const r = spawnSync('bash', [driver], { encoding: 'utf8', timeout: 10000 })
+    expect(r.status, r.stderr).toBe(0)
+    const log = readFileSync(calls, 'utf8')
+    expect(log).toMatch(/mount --bind \S+\/v1\/jobs /)
+    expect(log).toContain(
+      'jobs bundle 202611040101-aaaaaaaa (layout 2, via layout-latest) mounted over /opt/jobs'
+    )
+    expect(readFileSync(join(dir, 'state', 'jobs'), 'utf8')).toBe('202611040101-aaaaaaaa\n')
+  })
+})
+
+/**
+ * ADR 0103 R2: the jobs volume tree's rename, behind JOBS_VOLUME_EPOCH in
+ * entrypoint-lanes.sh. The block between its markers is run as written, with
+ * mount/install stubbed and a fake root for /opt/data and /run, across two boots
+ * of the same volume (a fresh /run each time). The falsifiers: a move that
+ * merges into an existing tree (`mv a b` with b a directory nests a inside b),
+ * a second boot that moves again, a link planted under /opt/data, and a held
+ * job's /run/smd-medchron path left unbound.
+ */
+describe('entrypoint-lanes: the jobs volume epoch (ADR 0103)', () => {
+  const LANES_RAW = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+  const start = LANES_RAW.indexOf('# >>> jobs-volume')
+  const end = LANES_RAW.indexOf('# <<< jobs-volume')
+  const BLOCK = LANES_RAW.slice(start, end)
+
+  it('ships at epoch 1 (R2 flips it)', () => {
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(BLOCK.match(/^JOBS_VOLUME_EPOCH=\d+$/gm)).toEqual(['JOBS_VOLUME_EPOCH=1'])
+  })
+
+  const boot = (root: string, epoch: number, lanes = 'medchron,records') => {
+    const run = mkdtempSync(join(tmpdir(), 'jobs-volume-run-'))
+    const calls = join(run, 'calls')
+    const block = BLOCK.replace(/^JOBS_VOLUME_EPOCH=1$/m, `JOBS_VOLUME_EPOCH=${epoch}`)
+    const driver = join(run, 'driver.sh')
+    writeFileSync(
+      driver,
+      `set -e
+log() { echo "log $*" >> "${calls}"; }
+install() { mkdir -p "\${@: -1}"; }
+mountpoint() { [ -f "${run}/m\${2//\\//_}" ]; }
+mount() { echo "mount $*" >> "${calls}"; touch "${run}/m\${3//\\//_}"; }
+SMD_AUTHORED_LANES="${lanes}"
+JOBS_DATA_DIR="${root}/opt/data/medchron"
+SMD_JOBS_VOLUME_ROOT="${root}"
+${block}
+echo "DATA=\${JOBS_DATA_DIR}" >> "${calls}"
+echo "RUN=\${JOBS_RUN_DIR}" >> "${calls}"
+echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
+`
+    )
+    const r = spawnSync('bash', [driver], { encoding: 'utf8', timeout: 10000 })
+    expect(r.status, r.stderr).toBe(0)
+    return readFileSync(calls, 'utf8')
+  }
+  const volume = (files: string[]) => {
+    const root = mkdtempSync(join(tmpdir(), 'jobs-volume-'))
+    for (const f of files) {
+      mkdirSync(join(root, f, '..'), { recursive: true })
+      writeFileSync(join(root, f), 'x')
+    }
+    return root
+  }
+  const links = (dir: string): string[] =>
+    readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((p) =>
+      lstatSync(join(dir, p)).isSymbolicLink()
+    )
+  const HELD = ['opt/data/medchron/queue/q1.json', 'opt/data/medchron/jobs/j1/job.yaml']
+
+  it('epoch 1 changes nothing: the old name, bound at /run/smd-medchron', () => {
+    const root = volume(HELD)
+    const log = boot(root, 1)
+    expect(log).toContain(`DATA=${root}/opt/data/medchron\n`)
+    expect(log).toContain(`RUN=${root}/run/smd-medchron\n`)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/medchron ${root}/run/smd-medchron`,
+    ])
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
+    expect(log).not.toMatch(/jobs volume|REFUSED/)
+  })
+
+  it('epoch 2, first boot: one rename, then both run dirs bound to the new tree', () => {
+    const root = volume(HELD)
+    const log = boot(root, 2)
+    expect(log).toContain(
+      `jobs volume: moved ${root}/opt/data/medchron to ${root}/opt/data/jobs (6 entries before, 6 after)`
+    )
+    expect(existsSync(join(root, 'opt/data/medchron'))).toBe(false)
+    expect(readFileSync(join(root, 'opt/data/jobs/jobs/j1/job.yaml'), 'utf8')).toBe('x')
+    expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
+    expect(log).toContain(`RUN=${root}/run/smd-jobs\n`)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
+    ])
+    expect(links(join(root, 'opt/data'))).toEqual([])
+  })
+
+  it('epoch 2, second boot: nothing moves, the same binds', () => {
+    const root = volume(HELD)
+    boot(root, 2)
+    const log = boot(root, 2)
+    expect(log).not.toMatch(/jobs volume: moved|REFUSED/)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
+    ])
+    expect(readdirSync(join(root, 'opt/data/jobs')).sort()).toEqual(['jobs', 'queue'])
+    expect(links(join(root, 'opt/data'))).toEqual([])
+  })
+
+  it('epoch 2 with both trees refuses the lanes and merges nothing', () => {
+    const root = volume([...HELD, 'opt/data/jobs/queue/other.json'])
+    const log = boot(root, 2)
+    expect(log).toMatch(
+      /JOBS VOLUME REFUSED: both \S+ and \S+ exist; the two trees are never merged/
+    )
+    expect(log).toContain('LANES=\n')
+    expect(log).not.toMatch(/^mount /m)
+    expect(readFileSync(join(root, HELD[1]), 'utf8')).toBe('x')
+    expect(readdirSync(join(root, 'opt/data/jobs/queue'))).toEqual(['other.json'])
+    expect(existsSync(join(root, 'opt/data/jobs/medchron'))).toBe(false)
+  })
+
+  it('epoch 2 refuses a link at either name', () => {
+    const root = volume(['opt/data/elsewhere/x'])
+    const r = spawnSync('ln', [
+      '-s',
+      join(root, 'opt/data/elsewhere'),
+      join(root, 'opt/data/medchron'),
+    ])
+    expect(r.status).toBe(0)
+    const log = boot(root, 2)
+    expect(log).toMatch(/JOBS VOLUME REFUSED: a symlink stands at/)
+    expect(log).not.toMatch(/^mount /m)
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
+  })
+
+  it('epoch 2 on a seat with neither tree binds the new name', () => {
+    const root = volume([])
+    const log = boot(root, 2)
+    expect(log).not.toMatch(/moved|REFUSED/)
+    expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(true)
   })
 })
