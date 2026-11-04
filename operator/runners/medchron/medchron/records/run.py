@@ -431,14 +431,14 @@ class RecordsRun(RunBase):
         records = self._records() if (self.data / "records.json").is_file() else []
         mid = self._matter() if (self.data / "matter.json").is_file() else (self.job.matter_id or "")
         held_items, meta = search.item_holds(self.data), search._read(self.data / "files.json", {})
-        located, looked = assemble.one_heading(self.located() if records else [], held_items, meta)
+        located, looked, self._folds = assemble.one_heading(self.located() if records else [], held_items, meta)
         self._held_facts, (results, owners) = (looked, meta), assemble.merge(located)
         if held_items and hold is None:
             # Some records wait for SMD (a file that would pass the cap); the
             # others are attached as they were found, and the reply says which.
             return self.compose_items_held(records, results, owners, mid, held_items)
         cuts = self._json("cuts.json") if (hold is None and (self.data / "cuts.json").is_file()) else []
-        files = [{k: c[k] for k in ("file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
+        files = [{k: c[k] for k in ("n", "file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
         rendered = assemble.render(results, files, mid) if results or files else None
         why = rendered.hold_reason if rendered is not None else None
         if why and hold is None:
@@ -459,7 +459,7 @@ class RecordsRun(RunBase):
             hold = "cut_refused: a record was found and no cut carries it"
         if hold is not None:
             return self.compose_held(hold, results, mid, records, owners, unresolved)
-        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files, self._folds)
         text, html = assemble.compose(block_t, block_h, held=False)
         doc = {
             "text": block_t,
@@ -514,7 +514,7 @@ class RecordsRun(RunBase):
         for SMD. The job's reason is the first held record's."""
         hold = held_items[min(held_items)]
         cuts = self._json("cuts.json") if (self.data / "cuts.json").is_file() else []
-        files = [{k: c[k] for k in ("file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
+        files = [{k: c[k] for k in ("n", "file_id", "name", "pages", "page_count", "sha256", "size")} for c in cuts]
         rendered = assemble.render(results, files, mid) if results or files else None
         if rendered is not None and rendered.hold_reason:
             return self.compose_held(f"finder_failed: {rendered.hold_reason}", results, mid, records, owners, set())
@@ -529,7 +529,7 @@ class RecordsRun(RunBase):
             return self.compose_held(hold, results, mid, records, owners, unresolved)
         block_t, block_h = (rendered.text, rendered.html) if rendered is not None else ("", "")
         block_t, block_h = assemble.with_held(block_t, block_h, records, held_items, *self._held_facts)
-        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files)
+        block_t, block_h = assemble.with_gaps(block_t, block_h, results, files, self._folds)
         text, html = assemble.compose(block_t, block_h, held=True)
         doc = {
             "text": block_t,

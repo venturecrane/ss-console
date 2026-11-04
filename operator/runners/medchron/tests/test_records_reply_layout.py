@@ -159,7 +159,7 @@ def test_each_record_is_under_exactly_one_heading_and_no_line_repeats(
     assert blocks["Not found:"] == [f"- {DISCHARGE}: not found in Northside Clinic index.pdf (all 4 pages were read)"]
     assert blocks["Not established, 53 pages of Northside Clinic imaging.pdf could not be read:"] == [
         f"- {XRAY}: not found on the 7 pages of Northside Clinic imaging.pdf that were read. "
-        "Closest: pages 6-9, Imaging, 4/4/2021"
+        "Closest: pages 6-9, Imaging, 4/4/2021. Also looked for in Northside Clinic index.pdf (all 4 pages read)."
     ]
     # "Could not be read" names the ATTACHED file's gap only.
     assert blocks["Could not be read:"] == ["- 3 pages of Northside Clinic chart.pdf could not be read"]
@@ -208,3 +208,47 @@ def test_two_files_with_one_name_are_never_one_line_twice(
     )
     if one_upload:  # the held record's entry names the upload once too
         assert "a second file" not in text and text.count("Westfield Dental.pdf (all 3 pages read)") == 1
+
+
+def test_an_attached_record_says_the_item_it_asked_for_that_was_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dry run 4 (2026-11-04): a record asked for two visits; the first was
+    attached and the reply said nothing of the second, looked for and not
+    found. It is said once, on the record's attached line, with the closest pages."""
+    jd = job_dir(tmp_path)
+    _plant(jd)
+    data = jd / "data"
+    second = "the 5/11/2026 Northside Clinic visit"
+    a = json.loads((data / "locate" / "1" / f"{A}.json").read_text())
+    a["items"].append(
+        {
+            "asked": second,
+            "found": False,
+            "established": False,
+            "closest": [{"pages": "8-9", "heading": "Progress Note", "date": "5/1/2026"}],
+        }
+    )
+    (data / "locate" / "1" / f"{A}.json").write_text(json.dumps(a))
+    b = json.loads((data / "locate" / "1" / f"{B}.json").read_text())
+    b["items"].append(_absent(second))
+    (data / "locate" / "1" / f"{B}.json").write_text(json.dumps(b))
+    env = setup_env(tmp_path, monkeypatch, FakeFinderModel())
+    r = RecordsRun(
+        jd,
+        inputs_dir=str(env["inputs"]),
+        pricing=str(env["pricing"]),
+        state_dir=env["state"],
+        client=FakeSmokeball(),
+        model_client=FakeParseClient(),
+        log=lambda _m: None,
+    )
+    doc = r.compose(None)
+    text = doc["reply_text"]
+    assert _blocks(text)["Attached:"] == [
+        "- Northside Clinic chart pp. 1-4.pdf, pages 1-4 (4 pages): Progress Note, 3/3/2021. The 5/11/2026 "
+        "Northside Clinic visit was not found on the 7 pages read of Northside Clinic chart.pdf (closest: pages "
+        "8-9, Progress Note, 5/1/2026) or in Northside Clinic index.pdf (all 4 pages read)."
+    ]
+    assert text.count("5/11/2026") == 1 and [i["outcome"] for i in doc["items"]][0] == "attached"
+    assert doc["reply_html"].count("5/11/2026") == 1
