@@ -119,6 +119,57 @@ def test_a_figure_the_document_does_not_print_is_dropped():
     assert notes and "450.00" in notes[0]
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        # Dollars and cents in separate boxes (CMS-1500 box 28, UB-04 totals): the
+        # 2026-11-03 defect read these at 100 times their printed amount.
+        ("$ 8300 00", "8300.00"),
+        ("8300 00", "8300.00"),
+        ("91275 00", "91275.00"),
+        ("0 00", "0.00"),
+        ("8,300 00", "8300.00"),
+        ("$8300  45", "8300.45"),
+        ("(8300 00)", "-8300.00"),
+        # The ordinary shapes stay as they were.
+        ("8,300.00", "8300.00"),
+        ("$8,300.00", "8300.00"),
+        ("$ 8,300.00", "8300.00"),
+        ("8300.00", "8300.00"),
+        ("8300", "8300"),
+        ("8300.5", "8300.5"),
+        ("-$45.10", "-45.10"),
+        ("$-45.10", "-45.10"),
+        ("(45.10)", "-45.10"),
+        (1250.5, "1250.5"),
+    ],
+)
+def test_a_printed_amount_reads_at_its_printed_value(raw, expected):
+    from decimal import Decimal
+
+    assert howell.money(raw) == Decimal(expected)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    # Ambiguous or not one figure: never guessed, so never inflated.
+    ["1 234 56", "8 300", "8300 0", "8300 000", "8300.00 00", "8300 00.00", "$", "", None, "n/a", "8300 l 00"],
+)
+def test_an_ambiguous_amount_reads_as_none(raw):
+    assert howell.money(raw) is None
+
+
+def test_a_split_cents_bill_figure_is_kept_and_totals_at_its_printed_value():
+    rows, notes = howell.verify(
+        [{"provider": "Northfield PT", "kind": "bill", "row_type": "stated_total", "billed": "8300 00"}],
+        "CMS-1500  28. TOTAL CHARGE  $ 8300 00  29. AMOUNT PAID $ 0 00",
+        BILL,
+    )
+    assert not notes and rows[0]["billed"] == "8300 00"
+    [t] = howell.build(rows, [])
+    assert t["billed"]["value"] == "$8,300.00"
+
+
 def _row(doc, kind, dos, row_type="line_item", payer=None, **f):
     return {
         "provider": "Northfield PT",
