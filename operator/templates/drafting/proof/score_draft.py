@@ -202,10 +202,12 @@ def spans_key(job: Path, rows: list[dict[str, Any]], notes: Path | None) -> dict
     ledger = sh.Ledger.from_jsonl(lp.read_text(encoding="utf-8"))
     cp = job / "check.json"
     chk = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
-    text = notes.read_text(encoding="utf-8") if notes is not None else ""
-    if notes is not None and notes.suffix.lower() == ".docx":
-        text = read_draft(notes)
-    return scorer.score_spans(rows, spans, ledger, chk, text).to_json()
+    text = ""
+    if notes is not None:
+        text = read_draft(notes) if notes.suffix.lower() == ".docx" else notes.read_text(encoding="utf-8")
+    extracted = [json.loads(ln) for ln in (job / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if ln]
+    names = {str(r.get("id")): n for r, n in zip(extracted, runner_path.row_names(extracted)) if r.get("id")}
+    return scorer.score_spans(rows, spans, ledger, chk, text, names).to_json()
 
 
 def report(job: Path, draft_path: Path, key: Path | None = None, notes: Path | None = None) -> dict[str, Any]:

@@ -7,6 +7,10 @@
       image_pages: int 0..5000       default 400 (page images read, at most)
       prompts:     {extract?, compose?}   paths pinned in inputs; the MARKUP
                                      block is appended by code either way
+      review_first: int 0..100       default 1 on the ledger path: until SMD has
+                                     released this many ledger briefs for the
+                                     firm, a brief stops BEFORE it files
+                                     (``held_for_smd``) for SMD to read
 
 The section is OPTIONAL and every key in it is optional: absent, every class
 drafts on the digest path it always has. ``ledger`` (the evidence-first path,
@@ -32,8 +36,16 @@ MODES = ("digest", "ledger")
 LEDGER_CLASSES = ("mediation_brief",)
 DEFAULT_WINDOW = 10
 DEFAULT_IMAGE_PAGES = 400
-KEYS = {"mode": "str", "classes": "list[str]", "page_window": "int", "image_pages": "int", "prompts": "map"}
-RANGES = {"page_window": (1, 50), "image_pages": (0, 5000)}
+KEYS = {
+    "mode": "str",
+    "classes": "list[str]",
+    "page_window": "int",
+    "image_pages": "int",
+    "prompts": "map",
+    "review_first": "int",
+}
+RANGES = {"page_window": (1, 50), "image_pages": (0, 5000), "review_first": (0, 100)}
+DEFAULT_REVIEW_FIRST = 1
 PROMPT_KEYS = ("extract", "compose")
 
 
@@ -44,6 +56,8 @@ class Settings:
     ledger: bool
     page_window: int = DEFAULT_WINDOW
     image_pages: int = DEFAULT_IMAGE_PAGES
+    #: Ledger briefs SMD must release before one files on its own (0: none).
+    review_first: int = 0
     extract_prompt: str | None = None
     compose_prompt: str | None = None
 
@@ -109,6 +123,7 @@ def settings(firm_data: dict[str, Any], cls: str, read: Any = None) -> Settings:
         ledger=ledger,
         page_window=int(body.get("page_window", DEFAULT_WINDOW)),
         image_pages=int(body.get("image_pages", DEFAULT_IMAGE_PAGES)),
+        review_first=int(body.get("review_first", DEFAULT_REVIEW_FIRST)) if ledger else 0,
         extract_prompt=read(p["extract"]) if read and p.get("extract") else None,
         compose_prompt=read(p["compose"]) if read and p.get("compose") else None,
     )

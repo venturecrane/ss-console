@@ -377,16 +377,38 @@ class DraftingVerbs:
             raise ValueError(
                 f"job {again} was submitted since for the same request email; resuming {job_id} would answer it twice"
             )
+        held = _release_held(request, row)
+        extras = {k: v for k, v in request.items() if k != "release_held"}
         self._db.queue_dir.mkdir(parents=True, exist_ok=True)
         marker = self._db.queue_dir / f".resume-{job_id}.json"
         marker.write_text(
             json.dumps(
-                {"job_id": job_id, "reason": reason[:500], **delivery_proof.resume_extras(request)}, sort_keys=True
+                {"job_id": job_id, "reason": reason[:500], **delivery_proof.resume_extras(extras), **held},
+                sort_keys=True,
             ),
             encoding="utf-8",
         )
-        self._audit(RESUME_AUDIT_TYPE, {"job_id": job_id, "reason": reason[:500]}, row["matter_id"])
+        self._audit(RESUME_AUDIT_TYPE, {"job_id": job_id, "reason": reason[:500], **held}, row["matter_id"])
         return {"ok": True, "job_id": job_id, "queued": True}
+
+
+def _release_held(request: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    """``release_held``: SMD read a ledger brief held before it filed
+    (``held_for_smd``) and files it as it stands. Root only, like every resume,
+    so no email can talk a turn into it; who released it is named."""
+    v = request.get("release_held", False)
+    if not isinstance(v, bool):
+        raise ValueError("release_held must be true or false")
+    if not v:
+        return {}
+    if not str(row.get("reason") or "").startswith("held_for_smd:"):
+        raise ValueError(f"job {row.get('id')} is not held for SMD before filing; release_held does not apply")
+    by = str(request.get("by") or "").strip()
+    if not by:
+        raise ValueError("release_held requires by: who read the brief and released it")
+    if request.get("release_review") or request.get("redo_review"):
+        raise ValueError("release_held is its own decision; do not combine it with a review release or redo")
+    return {"release_held": True, "by": by[:120]}
 
 
 def drafting_dispatch(

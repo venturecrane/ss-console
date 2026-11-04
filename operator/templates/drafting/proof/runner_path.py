@@ -59,7 +59,7 @@ def render() -> ModuleType | None:
 def row_names(rows: list[dict]) -> list[str]:
     """The lane's own document names, one per extracted row (``evidence.extract.row_names``)."""
     ensure()
-    from medchron.drafting.evidence.extract import row_names as names
+    from jobs.drafting.evidence.extract import row_names as names
 
     return names(rows)
 

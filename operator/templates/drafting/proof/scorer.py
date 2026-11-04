@@ -71,6 +71,27 @@ class KeyRow:
     wrong_as_stated: str
     wrong_pattern: str
     correct_pattern: str
+    #: Key v2 (2026-11-04): the extracted row's id (a name can be shared by
+    #: rows), the wrong file page of a pin, and for a transcript row its
+    #: transcript pages (they differ from file pages).
+    source_id: str = ""
+    wrong_page: int | None = None
+    source_tpage: int | None = None
+    wrong_tpage: int | None = None
+
+    @property
+    def transcript(self) -> bool:
+        return self.source_tpage is not None
+
+    @property
+    def right_page(self) -> int | None:
+        return self.source_tpage if self.transcript else (_pin(self.correct_value) or self.source_page)
+
+    @property
+    def bad_page(self) -> int | None:
+        if self.transcript:
+            return self.wrong_tpage
+        return self.wrong_page if self.wrong_page is not None else _pin(self.wrong_as_stated)
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> "KeyRow":
@@ -85,7 +106,19 @@ class KeyRow:
             wrong_as_stated=str(d.get("wrong_as_stated") or ""),
             wrong_pattern=str(d.get("wrong_pattern") or ""),
             correct_pattern=str(d.get("correct_pattern") or ""),
+            source_id=str(d.get("source_id") or ""),
+            wrong_page=_int(d.get("wrong_page")),
+            source_tpage=_int(d.get("source_tpage")),
+            wrong_tpage=_int(d.get("wrong_tpage")),
         )
+
+
+def _int(v: Any) -> int | None:
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    return int(v) if isinstance(v, str) and v.strip().isdigit() else None
 
 
 def key_type(raw: Any) -> str:
@@ -273,14 +306,14 @@ def _wrong(row: KeyRow, s: str) -> bool:
     a test: a corrected sentence shares most of its words (2026-11-04: it
     flagged a corrected control exactly as it flagged the draft)."""
     if row.type == "pin":
-        bad = _pin(row.wrong_as_stated)
+        bad = row.bad_page
         return bad is not None and any(same_file(st, stem(row.source_file)) and p == bad for st, p in cites(s))
     return _pattern(row.wrong_pattern, s)
 
 
 def _right(row: KeyRow, s: str) -> bool:
     if row.type == "pin":
-        good = _pin(row.correct_value) or row.source_page
+        good = row.right_page
         return good is not None and any(same_file(st, stem(row.source_file)) and p == good for st, p in cites(s))
     if row.type == "omission":
         return _pattern(row.correct_pattern, s) or overlap(row.correct_value, s) >= FACT_OVERLAP
@@ -322,31 +355,62 @@ def score(rows: Iterable[KeyRow | Mapping[str, Any]], draft: str) -> Score:
 # ---- the evidence lane's drafts: scored from the render span map ---------------------------
 
 
-def _relevant(row: KeyRow, spans: Iterable[Any], ledger: Any, page: int | None) -> list[Any]:
-    """Spans with a fact in the row's file, on ``page`` (any page when None)."""
-    file = stem(row.source_file)
+def _same_doc(row: KeyRow, f: Any, names: Mapping[str, str] | None) -> bool:
+    if row.source_id and names and row.source_id in names:
+        return f.file == names[row.source_id]
+    return stem(f.file) == stem(row.source_file)
+
+
+def _relevant(
+    row: KeyRow, spans: Iterable[Any], ledger: Any, page: int | None, names: Mapping[str, str] | None = None
+) -> list[Any]:
+    """Spans with a fact in the row's document on ``page`` (a transcript row:
+    its transcript page; any page when None)."""
     out = []
     for sp in spans:
         for fid in sp.ids:
             f = ledger.get(fid)
-            if f is not None and stem(f.file) == file and (page is None or f.page == page):
+            if f is None or not _same_doc(row, f, names):
+                continue
+            at = f.tpage if row.transcript else f.page
+            if page is None or at == page:
                 out.append(sp)
                 break
     return out
 
 
-def _record_from_spans(row: KeyRow, spans: list[Any], ledger: Any) -> RowScore:
+def _count(text: str) -> int | None:
+    m = re.fullmatch(r"\s*(\d+)(?:\.0+)?\s*", text or "")
+    return int(m.group(1)) if m else None
+
+
+def _aggregate(row: KeyRow, spans: list[Any], ledger: Any, names: Mapping[str, str] | None) -> RowScore:
+    """A figure row that is a count (visits, providers): the COUNT or SUM spans
+    compared by integer value."""
+    want, bad = _count(row.correct_value), _count(row.wrong_as_stated)
+    agg = [sp for sp in spans if sp.kind in ("COUNT", "SUM")]
+    mine = _relevant(row, agg, ledger, None, names) or agg
+    vals = [_count(sp.text) for sp in mine]
+    if want in vals:
+        return RowScore(row, "fixed", "a code-computed count carries the right number", [sp.text for sp in mine][:3])
+    if bad is not None and bad in vals:
+        return RowScore(row, "missed", "a code-computed count carries the wrong number", [sp.text for sp in mine][:3])
+    return RowScore(row, "absent", "no code-computed count carries either number")
+
+
+def _record_from_spans(row: KeyRow, spans: list[Any], ledger: Any, names: Mapping[str, str] | None = None) -> RowScore:
     if row.type == "pin":
-        good = _pin(row.correct_value) or row.source_page
-        bad = _pin(row.wrong_as_stated)
-        if good is not None and _relevant(row, spans, ledger, good):
-            return RowScore(row, "fixed", "a code-rendered cite of the file is on the right page")
-        if bad is not None and _relevant(row, spans, ledger, bad):
-            return RowScore(row, "missed", "a code-rendered cite of the file is on the wrong page")
-        return RowScore(row, "absent", "no rendered span cites the file there")
-    here = _relevant(row, spans, ledger, row.source_page)
+        good, bad = row.right_page, row.bad_page
+        if good is not None and _relevant(row, spans, ledger, good, names):
+            return RowScore(row, "fixed", "a code-rendered cite of the document is on the right page")
+        if bad is not None and _relevant(row, spans, ledger, bad, names):
+            return RowScore(row, "missed", "a code-rendered cite of the document is on the wrong page")
+        return RowScore(row, "absent", "no rendered span cites the document there")
+    if row.type == "figure" and not money_values(row.correct_value) and _count(row.correct_value) is not None:
+        return _aggregate(row, spans, ledger, names)
+    here = _relevant(row, spans, ledger, row.right_page if row.transcript else row.source_page, names)
     if not here:
-        return RowScore(row, "absent", "no rendered span traces to the row's file and page")
+        return RowScore(row, "absent", "no rendered span traces to the row's document and page")
     texts = [sp.text for sp in here]
     if row.type == "figure" and money_values(row.correct_value):
         ok = any(money_values(row.correct_value) & money_values(t) for t in texts)
@@ -355,10 +419,10 @@ def _record_from_spans(row: KeyRow, spans: list[Any], ledger: Any) -> RowScore:
     elif row.type == "quote" and row.correct_value:
         ok = any(overlap(row.correct_value, t) >= QUOTE_OVERLAP for t in texts)
     else:
-        ok = True  # a fact traced to its file and page
+        ok = True  # a fact traced to its document and page
     if ok:
         return RowScore(row, "fixed", "the rendered value is the right one", texts[:3])
-    return RowScore(row, "missed", "a rendered span at the row's file and page carries another value", texts[:3])
+    return RowScore(row, "missed", "a rendered span at the row's document and page carries another value", texts[:3])
 
 
 def _judged(row: KeyRow, check: Mapping[str, Any] | None, notes: list[str]) -> RowScore:
@@ -380,18 +444,21 @@ def score_spans(
     ledger: Any,
     check: Mapping[str, Any] | None = None,
     notes: str = "",
+    names: Mapping[str, str] | None = None,
 ) -> Score:
     """A new-lane draft scored from what code rendered: each record row by the
     spans whose facts sit at the row's file and page (fixed, missed or
     absent); each judgment row by the source check's report (caught) and the
-    attorney notes (disclosed)."""
+    attorney notes (disclosed). ``names`` maps an extracted row's id to the
+    lane's name for it (``evidence.extract.row_names``), so a key row's
+    ``source_id`` finds its own copy of a shared name."""
     sp = list(spans)
     note_sents = sentences(notes)
     out = []
     for r in rows:
         row = r if isinstance(r, KeyRow) else KeyRow.from_json(r)
         if row.type in RECORD_TYPES:
-            out.append(_record_from_spans(row, sp, ledger))
+            out.append(_record_from_spans(row, sp, ledger, names))
         else:
             out.append(_judged(row, check, note_sents))
     return Score(out)

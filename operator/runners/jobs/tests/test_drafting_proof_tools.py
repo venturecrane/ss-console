@@ -262,8 +262,8 @@ def test_a_corrected_sentence_is_not_read_as_the_wrong_one() -> None:
 
 def _span_job(tmp: Path) -> Path:
     """A new-lane job: a ledger, a render span map and a check report."""
-    from medchron.drafting.evidence import render as ev_render
-    from medchron.drafting.evidence.shapes import Fact, Ledger
+    from jobs.drafting.evidence import render as ev_render
+    from jobs.drafting.evidence.shapes import Fact, Ledger
 
     job = _job(tmp)
     led = Ledger(
@@ -303,6 +303,78 @@ def test_a_new_lane_draft_is_scored_from_its_render_span_map(tmp_path: Path) -> 
     got = {x["id"]: x["outcome"] for x in r["key"]["rows"]}
     assert r["key_method"] == "spans"
     assert got == {"K1": "fixed", "K9": "missed", "K3": "fixed", "K4": "caught", "K8": "absent"}, got
+
+
+def test_key_v2_rows_match_by_source_id_transcript_page_and_count() -> None:
+    from jobs.drafting.evidence import render as ev_render
+    from jobs.drafting.evidence.shapes import Fact, Ledger
+
+    led = Ledger(
+        (
+            Fact("F0001", "Letter (Correspondence)", 4, "fact", "Thank you for your letter.", "c"),
+            Fact("F0002", "Letter (Medical)", 2, "fact", "Patient seen for neck pain.", "m"),
+            Fact("F0003", "Smith Depo", 40, "testimony", "I had no neck pain before.", "t", tpage=38, lines=(4, 6)),
+            Fact("F0004", "ER record", 1, "fact", "Visit one.", "v1"),
+            Fact("F0005", "Ortho notes", 1, "fact", "Visit two.", "v2"),
+        )
+    )
+    r = ev_render.render(
+        "A {{F:F0001}}. B {{F:F0002}}. C {{F:F0003}}. He made {{COUNT:F0004,F0005}} visits {{F:F0004,F0005}}.", led
+    )
+    names = {"d1": "Letter (Correspondence)", "d2": "Letter (Medical)"}
+    rows = [
+        # a pin to the shared name: only the medical copy's page counts
+        {
+            "id": "V1",
+            "type": "wrong_pin_cite",
+            "source_file": "Letter",
+            "source_id": "d2",
+            "source_page": 2,
+            "wrong_page": 4,
+        },
+        {
+            "id": "V2",
+            "type": "wrong_pin_cite",
+            "source_file": "Letter",
+            "source_id": "d2",
+            "source_page": 4,
+            "wrong_page": 9,
+        },
+        # a transcript pin: compared on the transcript page, never the file page
+        {
+            "id": "V3",
+            "type": "wrong_pin_cite",
+            "source_file": "Smith Depo",
+            "source_page": 40,
+            "source_tpage": 38,
+            "wrong_tpage": 40,
+        },
+        {
+            "id": "V4",
+            "type": "wrong_pin_cite",
+            "source_file": "Smith Depo",
+            "source_page": 40,
+            "source_tpage": 41,
+            "wrong_tpage": 38,
+        },
+        # a visit count: compared by integer value
+        {
+            "id": "V5",
+            "type": "wrong_number_or_count",
+            "source_file": "ER record",
+            "correct_value": "2",
+            "wrong_as_stated": "5",
+        },
+        {
+            "id": "V6",
+            "type": "wrong_number_or_count",
+            "source_file": "ER record",
+            "correct_value": "3",
+            "wrong_as_stated": "2",
+        },
+    ]
+    got = {x.row.id: x.outcome for x in scorer.score_spans(rows, r.spans, led, None, "", names).rows}
+    assert got == {"V1": "fixed", "V2": "absent", "V3": "fixed", "V4": "missed", "V5": "fixed", "V6": "missed"}, got
 
 
 def test_score_draft_keeps_every_row_when_names_repeat(tmp_path: Path) -> None:

@@ -37,7 +37,9 @@ from jobs.drafting.run import DraftingRun
 from test_drafting_verify_check import Model
 
 CHECKER = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
-LEDGER = {"mode": "ledger"}
+#: The ledger path with no SMD pre-filing read (review_first 0 behaves as before it existed).
+LEDGER = {"mode": "ledger", "review_first": 0}
+HELD = {"mode": "ledger"}  # review_first defaults to 1
 
 #: Corpus names: the seat's file names without their extension.
 ER = "ER record 1-15-26"
@@ -379,8 +381,8 @@ OPERATOR = Path(__file__).resolve().parents[3]
 
 
 def test_the_estimator_reads_every_rate_card_the_tree_keeps():
-    from medchron import budget
-    from medchron.drafting import evidence_cost
+    from jobs import budget
+    from jobs.drafting import evidence_cost
 
     cards = [
         OPERATOR / "templates" / "drafting" / "rate-card.json",
@@ -393,11 +395,28 @@ def test_the_estimator_reads_every_rate_card_the_tree_keeps():
     for card in cards:
         p = evidence_cost.load_pricing(card)
         assert p.rate_for("claude-opus-5-5").input_per_million_cents > 0, card
-    assert evidence_cost.TREE_PRICING == cards[2] and evidence_cost.pricing_path(None).is_file()
+    assert evidence_cost.tree_pricing() == cards[2] and evidence_cost.pricing_path(None).is_file()
+
+
+def test_an_installed_runner_with_no_card_asks_for_one(tmp_path, monkeypatch, capsys):
+    """A venv install holds no adapter/: the default must not land inside it."""
+    from jobs import budget
+    from jobs.drafting import evidence_cost
+
+    installed = tmp_path / "venv" / "lib" / "python3.13" / "site-packages" / "jobs" / "drafting" / "evidence_cost.py"
+    assert evidence_cost.tree_pricing(installed) is None
+    monkeypatch.setattr(budget, "PRICING_DEFAULT", str(tmp_path / "absent.json"))
+    monkeypatch.delenv(budget.PRICING_ENV, raising=False)
+    monkeypatch.setattr(evidence_cost, "tree_pricing", lambda start=None: None)
+    with pytest.raises(evidence_cost.PricingNotFound) as e:
+        evidence_cost.pricing_path(None)
+    assert "--pricing" in str(e.value)
+    with pytest.raises(evidence_cost.PricingNotFound):
+        evidence_cost.pricing_path(str(tmp_path / "nope.json"))
 
 
 def test_the_estimate_is_a_range_with_notes_and_flags_the_cap():
-    from medchron.drafting import evidence_cost
+    from jobs.drafting import evidence_cost
 
     rows = [{"pages": 3600, "chars": 9_000_000, "transcribe": [], "text_path": "x"}]
     card = evidence_cost.load_pricing(OPERATOR / "adapter" / "cost_telemetry" / "anthropic_pricing.json")
@@ -413,7 +432,7 @@ def test_the_estimate_is_a_range_with_notes_and_flags_the_cap():
 
 
 def test_the_cost_cli_runs_without_the_firms_pinned_files(tmp_path, pricing, capsys):
-    from medchron.drafting import evidence_cost
+    from jobs.drafting import evidence_cost
 
     r, v, _log, _seat = _run(tmp_path, pricing, LedgerClient())
     assert v.outcome == "delivered"

@@ -396,7 +396,11 @@ def test_demand_and_drafting_stop_before_filing(module, tmp_path, monkeypatch):
     r = cls.__new__(cls)
     monkeypatch.setattr(cls, "seat", None, raising=False)
     r.data, r.readback_pause, r.log = tmp_path, 0, print
-    r.job = argparse.Namespace(file_to_id="m1")
+    r.job = argparse.Namespace(file_to_id="m1", ledger_releases=None, job_dir=tmp_path)
+    if module == "drafting":  # the digest path: no pre-filing hold (drafting/review_first.py)
+        from jobs.drafting import evidence_config
+
+        r._ev_settings = evidence_config.Settings(ledger=False)
     _staged(tmp_path)
     if hasattr(run_mod, "review_stage"):  # the demand's pre-delivery review is its own suite's concern
         monkeypatch.setattr(run_mod.review_stage, "run_stage", lambda _run: None)

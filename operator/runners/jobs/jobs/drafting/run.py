@@ -69,6 +69,7 @@ from . import (
     howell,
     job as job_mod,
     review as review_mod,
+    review_first,
 )
 from .evidence_lane import CHARGES_LINE, EvidenceLane
 from .placing import Placing
@@ -401,6 +402,10 @@ class DraftingRun(EvidenceLane, Placing):
                 stage="file",
                 files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             )
+        # The ledger path's first briefs stop here for SMD (review_first.py).
+        released = review_first.gate(
+            self.evidence.review_first, self.job.ledger_releases, self.job.job_dir, self.data, manifest
+        )
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1 and str(rec.get("said") or "").startswith("readback_mismatch:"):
@@ -425,6 +430,7 @@ class DraftingRun(EvidenceLane, Placing):
             folder_id=str(rec.get("folder_id")),
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             proof=proof,
+            smd_released=released,
         )
 
     def _walk(self) -> Verdict:

@@ -58,7 +58,23 @@ REPAIR_OUT, REVIEW_OUT, NOTES_OUT = 20_000, 10_000, 8_000
 LINT_REPAIRS = 2
 INDEX_BUDGET_CHARS = 1_600_000  # run.DIGEST_BUDGET_CHARS
 #: The rate card off a seat: the tree's copy of the file the seat bills from.
-TREE_PRICING = Path(__file__).resolve().parents[4] / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
+TREE_CARD = ("adapter", "cost_telemetry", "anthropic_pricing.json")
+
+
+class PricingNotFound(FileNotFoundError):
+    """No rate card to price with: the caller names one (``--pricing``)."""
+
+
+def tree_pricing(start: Path | None = None) -> Path | None:
+    """The tree's copy of the card the seat bills from, found by walking up
+    from this file to the ``operator/`` directory that holds it; None from an
+    installed runner (a venv holds no ``adapter/``)."""
+    here = (start or Path(__file__)).resolve()
+    for d in here.parents:
+        cand = d.joinpath(*TREE_CARD)
+        if cand.is_file():
+            return cand
+    return None
 
 
 def _usd(pricing: Any, model: str, tin: float, tout: float) -> float:
@@ -170,10 +186,20 @@ def pricing_path(explicit: str | None) -> Path:
     """The card the lane bills from: given, the seat's env or default, else the tree's copy."""
     from .. import budget as budget_mod
 
-    for p in (explicit, os.environ.get(budget_mod.PRICING_ENV), budget_mod.PRICING_DEFAULT):
+    if explicit:
+        if not Path(explicit).is_file():
+            raise PricingNotFound(f"--pricing {explicit}: no such file")
+        return Path(explicit)
+    for p in (os.environ.get(budget_mod.PRICING_ENV), budget_mod.PRICING_DEFAULT):
         if p and Path(p).is_file():
             return Path(p)
-    return TREE_PRICING
+    got = tree_pricing()
+    if got is None:
+        raise PricingNotFound(
+            f"no rate card: not at ${budget_mod.PRICING_ENV}, {budget_mod.PRICING_DEFAULT}, or in a checkout's "
+            "operator/adapter/cost_telemetry/; pass --pricing <the anthropic_pricing.json the lane bills from>"
+        )
+    return got
 
 
 def firm_config(inputs: str | None) -> dict[str, Any]:
@@ -201,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--chars-per-token", type=float, default=CHARS_PER_TOKEN, help="a measured ratio, if any")
     a = ap.parse_args(argv)
     data = firm_config(a.inputs)
-    card = pricing_path(a.pricing)
+    try:
+        card = pricing_path(a.pricing)
+    except PricingNotFound as exc:
+        print(f"evidence_cost: {exc}", file=sys.stderr)
+        return 2
     rows_path = Path(a.job_dir) / "data" / "extracted.jsonl"
     rows = [json.loads(ln) for ln in rows_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     out = project(rows, data, load_pricing(card), a.cls, a.chars_per_token)
