@@ -33,7 +33,7 @@ def run(
     store = None
     if authorities is not None:
         runner_path.ensure()
-        from medchron.drafting.verify import authorities as auth
+        from jobs.drafting.verify import authorities as auth
 
         store = auth.Store.from_dir(authorities)
     table = json.loads(charges.read_text(encoding="utf-8")) if charges else None

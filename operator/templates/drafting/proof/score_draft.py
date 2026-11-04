@@ -88,7 +88,7 @@ def _resolve(job: Path, text_path: str) -> Path | None:
 
 def read_draft(path: Path) -> str:
     if path.suffix.lower() == ".docx":
-        import docx  # python-docx, in the medchron venv
+        import docx  # python-docx, in the jobs venv
 
         return "\n\n".join(p.text for p in docx.Document(str(path)).paragraphs)
     return path.read_text(encoding="utf-8", errors="replace")
