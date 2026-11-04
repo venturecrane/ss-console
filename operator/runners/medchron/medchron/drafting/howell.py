@@ -105,14 +105,42 @@ def is_billing(row: dict[str, Any], head: str) -> bool:
     return amounts >= 1 and short and bool(_LIEN.search(h))
 
 
+#: Dollars and cents printed in separate boxes (CMS-1500 box 28, UB-04 lines and
+#: totals) extract as "8300 00": the trailing two digits after whitespace are the
+#: CENTS. Only that exact shape, with no decimal point already present; the
+#: chronology's billing chart reads the same boxes the same way
+#: (``stages/billing_chart.SPLIT_COLUMN``).
+_SPLIT_CENTS = re.compile(r"(\d{1,3}(?:,\d{3})+|\d+)\s+(\d{2})")
+
+
 def money(raw: Any) -> Decimal | None:
-    s = re.sub(r"[,$\s]", "", str(raw or ""))
+    """The amount a bill prints, or None when the string is not one figure.
+
+    Whitespace is allowed only around the sign, the parentheses and the ``$``,
+    and between dollars and a two-digit cents box. Any other whitespace inside
+    the digits ("8 300", "1 234 56") is ambiguous and reads as None: a dropped
+    figure is noted, an inflated one is a misstated charge (2026-11-03: "8300
+    00" read as 830000 when the space was simply removed)."""
+    s = str(raw or "").strip()
+    neg = False
     if s.startswith("(") and s.endswith(")"):
-        s = "-" + s[1:-1]
+        neg, s = True, s[1:-1].strip()
+    if s.startswith("-"):
+        neg, s = True, s[1:].strip()
+    s = s.removeprefix("$").strip()
+    if s.startswith("-"):  # "$-8300.00"
+        neg, s = True, s[1:].strip()
+    m = _SPLIT_CENTS.fullmatch(s)
+    if m:
+        s = f"{m.group(1)}.{m.group(2)}"
+    s = s.replace(",", "")
+    if not re.fullmatch(r"\d+(\.\d{1,2})?", s):
+        return None
     try:
-        return Decimal(s) if re.fullmatch(r"-?\d+(\.\d{1,2})?", s) else None
+        v = Decimal(s)
     except InvalidOperation:
         return None
+    return -v if neg else v
 
 
 def fmt(v: Decimal) -> str:
