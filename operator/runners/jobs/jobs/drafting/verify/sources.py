@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from ...audit.page_text import parse_segments
+from ...medchron.audit.page_text import parse_segments
 from .. import render
 from ..evidence.shapes import DocPages
 
