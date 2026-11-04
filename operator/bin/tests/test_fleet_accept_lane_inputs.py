@@ -118,3 +118,13 @@ def test_the_repo_declaration_for_adr_0103_is_well_formed() -> None:
     entries = LaneInputDeclarations(CommandRunner(), repo).load()
     r1 = [d for d in entries if str(d["since"]).startswith("a137f20f")]
     assert len(r1) == 1 and r1[0]["lanes"] == "*" and r1[0]["why"] and r1[0]["by"]
+
+
+def test_the_repo_declaration_for_3739_covers_the_drafting_lane_only() -> None:
+    repo = Path(__file__).resolve().parents[3]
+    entries = LaneInputDeclarations(CommandRunner(), repo).load()
+    d = [e for e in entries if str(e["since"]).startswith("31d111a9")]
+    assert len(d) == 1 and d[0]["lanes"] == ["drafting"] and d[0]["why"] and d[0]["by"]
+    assert covers(d, "drafting") is d[0] and covers(d, "records") is None
+    problems, notes = check_lanes("s", {"drafting": "new"}, {"drafting": "old"}, ["drafting"], False, d)
+    assert problems == [] and "declared unchanged since 31d111a9" in notes[0]
