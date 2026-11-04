@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Callable
 
 NAME = ".stop-request"
 #: SMD's job stop (``smd_stop.py``): final, never resumed by the daemon.
@@ -96,6 +97,14 @@ def check_smd(where: str = "") -> None:
         raise SmdStopRequested(f"stopped by SMD{f' at {where}' if where else ''}")
 
 
+def before_paid_call(stage: str, hook: Callable[[str], None] | None) -> None:
+    """The doorway's gate before an interactive call: SMD's stop first, then
+    the cost limits the driver bound (``llm.Doorway.before_request``)."""
+    check_smd(stage)
+    if hook is not None:
+        hook(stage)
+
+
 def check(where: str = "") -> None:
     """Raise :class:`StopRequested` when the daemon has asked this job to stop."""
     check_smd(where)
@@ -127,6 +136,7 @@ __all__ = [
     "StopRequested",
     "arm",
     "arm_smd",
+    "before_paid_call",
     "check",
     "check_smd",
     "requested",
