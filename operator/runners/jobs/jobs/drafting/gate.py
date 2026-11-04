@@ -22,6 +22,7 @@ from typing import Any
 
 from ..demand.gate import strip_names
 from . import pincheck
+from .evidence.extract import row_names, text_file
 
 #: The leakage gate's window: a run this long that a held-out email shares
 #: with the draft is a refusal (record_check's consecutive-word test).
@@ -62,12 +63,14 @@ def collect(
     tp = data / "transcribed.json"
     machine = set(json.loads(tp.read_text(encoding="utf-8"))) if tp.is_file() else set()
     sources, vision = [], []
-    for r in rows:
-        p = r.get("text_path")
-        if not p or not Path(p).is_file():
+    # One source per row, named as the evidence path names it: two rows that
+    # share a name are two sources (evidence/extract.row_names), never one.
+    for r, key in zip(rows, row_names(rows)):
+        p = text_file(data, r.get("text_path"))
+        if p is None:
             continue
-        text = Path(p).read_text(encoding="utf-8", errors="replace")
-        (vision if str(r.get("name")) in machine else sources).append((str(r.get("name")), text))
+        text = p.read_text(encoding="utf-8", errors="replace")
+        (vision if str(r.get("name")) in machine else sources).append((key, text))
     sources += [
         ("firm house style", firm.style),
         (f"firm {cls} skeleton", firm.skeleton(cls)),

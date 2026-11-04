@@ -214,3 +214,53 @@ def test_authority_fetch_writes_what_the_store_reads(tmp_path: Path) -> None:
     af.write_entry(tmp_path, "Civ. Code, § 3333.4", "https://leginfo.legislature.ca.gov/x", "Section text.", now="t")
     st = authorities.Store.from_dir(tmp_path)
     assert st.citation(authorities.slug("Civ. Code, § 3333.4")) == "Civ. Code, § 3333.4"
+
+
+# ---- defects the $0 proof run found (2026-11-04) --------------------------------------------
+
+
+def test_the_hand_verification_key_reads_as_jsonl_with_its_own_type_names(tmp_path: Path) -> None:
+    rows = [
+        {**FIG, "id": "J1", "type": "wrong_number_or_count"},
+        {**QUOTE, "id": "J2", "type": "misquote"},
+        {**PIN, "id": "J3", "type": "wrong_pin_cite"},
+        {**OMIT, "id": "J4", "type": "overstated_causation"},
+    ]
+    key = "\n".join(json.dumps(r) for r in rows) + "\n"
+    got = [scorer.KeyRow.from_json(r).type for r in scorer.load_key(key)]
+    assert got == ["figure", "quote", "pin", "characterization"]
+    job = _job(tmp_path)
+    draft = tmp_path / "draft.md"
+    draft.write_text("The hospital billed $8,300.00 (FILE: Hospital Bill.pdf, p. 1).\n")
+    (tmp_path / "key.jsonl").write_text(key)
+    r = score_draft.report(job, draft, tmp_path / "key.jsonl")
+    assert r["key"]["by_type"]["figure"]["fixed"] == 1
+
+
+def test_the_old_lanes_cite_forms_are_scored() -> None:
+    old = (
+        "The epidural steroid injection gave partial relief of radicular symptoms (Ortho Notes, p. 12). "
+        "The hospital billed $83,000.00 for emergency services (Hospital Bill, p. 1)."
+    )
+    got = _outcomes(old)
+    assert got["K3"] == "missed" and got["K1"] == "missed", got
+    assert ("dep jones", 44) in scorer.cites("He conceded it (Jones Dep. 44:15-17).")
+    assert scorer.cites("(FILE: Ortho Notes.pdf, p. 3)") == [("ortho notes", 3)]
+
+
+def test_score_draft_reads_docx_tables_and_a_name_in_text_and_email(tmp_path: Path) -> None:
+    import docx
+
+    job = _job(tmp_path)
+    (job / "email").mkdir()
+    (job / "email" / "bill.txt").write_text("[p.1]\nAn email about the bill, no figures.\n")
+    d = docx.Document()
+    d.add_paragraph("Charges follow.")
+    t = d.add_table(rows=1, cols=2)
+    t.rows[0].cells[0].text = "Exampletown Hospital"
+    t.rows[0].cells[1].text = "$8,300.00 (FILE: Hospital Bill.pdf, p. 1)"
+    path = tmp_path / "draft.docx"
+    d.save(str(path))
+    r = score_draft.report(job, path)
+    assert r["documents"] == 2, "the bill's text resolves through its stored directory, not dropped as ambiguous"
+    assert r["figures"] == {"ok": 1}, r

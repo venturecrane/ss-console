@@ -77,12 +77,17 @@ class Corpus:
 
 
 def _resolve(job: Path, text_path: str) -> Path | None:
+    """The row's text file: as stored, else under the job dir by name. One
+    name under two directories (``text/`` and ``email/`` both hold a
+    ``d1.txt``) is settled by the stored path's own directory, never dropped."""
     if text_path and Path(text_path).is_file():
         return Path(text_path)
-    name = Path(text_path).name
-    if not name:
+    sp = Path(text_path)
+    if not sp.name:
         return None
-    hits = [p for p in job.rglob(name) if p.is_file()]
+    hits = [p for p in job.rglob(sp.name) if p.is_file()]
+    if len(hits) > 1:
+        hits = [p for p in hits if p.parent.name == sp.parent.name] or hits
     return hits[0] if len(hits) == 1 else None
 
 
@@ -90,7 +95,12 @@ def read_draft(path: Path) -> str:
     if path.suffix.lower() == ".docx":
         import docx  # python-docx, in the jobs venv
 
-        return "\n\n".join(p.text for p in docx.Document(str(path)).paragraphs)
+        doc = docx.Document(str(path))
+        parts = [p.text for p in doc.paragraphs]
+        # A brief's charges and damages live in tables: their cells are the brief's text too.
+        for t in doc.tables:
+            parts += [" | ".join(c.text for c in row.cells) for row in t.rows]
+        return "\n\n".join(parts)
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -130,6 +140,9 @@ def check(draft: str, corpus: Corpus) -> dict[str, Any]:
         if not cs:
             continue
         by: dict[str | None, list[int]] = {}
+        cs = [(st, p) for st, p in cs if not st.startswith("dep ")]  # transcript pages: counted above
+        if not cs:
+            continue
         for st, p in cs:
             doc = corpus.doc(st)
             if doc is None:
@@ -175,9 +188,7 @@ def report(job: Path, draft_path: Path, key: Path | None = None) -> dict[str, An
     draft = read_draft(draft_path)
     out: dict[str, Any] = {"documents": len(corpus.docs), **check(draft, corpus), "lint": lint_counts(draft)}
     if key is not None:
-        body = json.loads(key.read_text(encoding="utf-8"))
-        rows = body["rows"] if isinstance(body, dict) else body
-        out["key"] = scorer.score(rows, draft).to_json()
+        out["key"] = scorer.score(scorer.load_key(key.read_text(encoding="utf-8")), draft).to_json()
     return out
 
 

@@ -172,6 +172,17 @@ def _resolve(name: str, corpus: dict[str, str]) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+_COPY = re.compile(r"^(?P<base>.*?)(?: \([^()]*\))?(?: #\d+)?$")
+
+
+def _copy(name: str, corpus: dict[str, str], ck: Any, q: Any, seen: dict[str, Any]) -> str | None:
+    """A cite by a name two rows share (``evidence/extract.row_names`` names
+    the copies ``name (folder)``): the first copy whose text carries the words."""
+    copies = [n for n in corpus if n != name and _COPY.match(n).group("base") == name]  # type: ignore[union-attr]
+    carrying = [n for n in copies if _on(ck, q, corpus[n], seen)]
+    return carrying[0] if carrying else None
+
+
 def _checker() -> Any:
     from ..demand import quotefix
 
@@ -201,7 +212,7 @@ def check(md: str, named: list[tuple[str, str]]) -> tuple[list[Pin], dict[str, i
                 "2a refuses this quotation; its pin is tested once it is the record's words",
             )
             continue
-        got = _resolve(name, corpus)
+        got = _resolve(name, corpus) or _copy(name, corpus, ck, q, seen)
         if got is None:
             pin.status, pin.why = "unresolved", "the cited name matches no document in the file, or more than one"
             continue

@@ -37,6 +37,9 @@ import runner_path
 OUTCOMES = ("fixed", "caught", "disclosed", "missed", "absent")
 RECORD_TYPES = ("figure", "date", "quote", "pin", "fact")
 JUDGMENT_TYPES = ("characterization", "omission", "authority")
+#: The hand-verification key's own type names (2026-11-04), read as the
+#: scorer's; any other type the key carries is a judgment row.
+TYPE_ALIASES = {"wrong_pin_cite": "pin", "misquote": "quote", "wrong_number_or_count": "figure"}
 QUOTE_OVERLAP = 0.8
 FACT_OVERLAP = 0.5
 _WORD = re.compile(r"[a-z0-9]+")
@@ -45,7 +48,12 @@ _DATE = re.compile(
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b|"
     r"\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b"
 )
-_CITE = re.compile(r"FILE:\s*(?P<name>[^,;()]+?)\s*,\s*pp?\.\s*(?P<pages>\d+(?:\s*[-–,]\s*\d+)*)", re.I)
+#: A document cite, ``(FILE: name, p. N)`` or the older lane's ``(name, p. N)``.
+_CITE = re.compile(
+    r"(?:FILE:\s*|(?<=[(;])\s*(?!FILE:))(?P<name>[^,;()]+?)\s*,\s*pp?\.\s*(?P<pages>\d+(?:\s*[-–,]\s*\d+)*)", re.I
+)
+#: A deposition cite, ``(Surname Dep. 44:15-17)``: the transcript page.
+_DEP_CITE = re.compile(r"\b(?P<who>[A-Z][A-Za-z'-]+)\s+Dep\.\s*(?P<page>\d+):\d+")
 _NOTES = re.compile(r"(?im)^#{1,6}\s*(?:attorney\s+notes|notes\s+to\s+the\s+attorney|source\s+check)\b.*$")
 _MARKER = re.compile(r"\{\{\s*ATTORNEY\s*:", re.I)
 _STOP = frozenset("the a an of to and or in on at for by with was is were be that this from as it its".split())
@@ -68,7 +76,7 @@ class KeyRow:
         page = d.get("source_page")
         return cls(
             id=str(d["id"]),
-            type=str(d.get("type") or "fact").strip().lower(),
+            type=key_type(d.get("type")),
             fact=str(d.get("fact") or ""),
             correct_value=str(d.get("correct_value") or ""),
             source_file=str(d.get("source_file") or ""),
@@ -77,6 +85,24 @@ class KeyRow:
             wrong_pattern=str(d.get("wrong_pattern") or ""),
             correct_pattern=str(d.get("correct_pattern") or ""),
         )
+
+
+def key_type(raw: Any) -> str:
+    t = str(raw or "fact").strip().lower()
+    t = TYPE_ALIASES.get(t, t)
+    return t if t in RECORD_TYPES or t in JUDGMENT_TYPES else "characterization"
+
+
+def load_key(text: str) -> list[dict[str, Any]]:
+    """The key's rows: a JSON list, ``{"rows": [...]}``, or JSONL (one row a line)."""
+    import json
+
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return [json.loads(ln) for ln in text.splitlines() if ln.strip()]
+    rows = body["rows"] if isinstance(body, dict) and "rows" in body else body
+    return rows if isinstance(rows, list) else [rows]
 
 
 @dataclass
@@ -143,8 +169,19 @@ def pages_of(spec: str) -> list[int]:
 
 
 def cites(sentence: str) -> list[tuple[str, int]]:
-    """(file stem, page) for each ``FILE: name, p. N`` in the sentence."""
-    return [(stem(m.group("name")), p) for m in _CITE.finditer(sentence) for p in pages_of(m.group("pages"))]
+    """(file stem, page) for each ``FILE: name, p. N`` (or ``(name, p. N)``)
+    in the sentence, and ("dep surname", transcript page) for each deposition
+    cite."""
+    out = [(stem(m.group("name")), p) for m in _CITE.finditer(sentence) for p in pages_of(m.group("pages"))]
+    return out + [(f"dep {m.group('who').casefold()}", int(m.group("page"))) for m in _DEP_CITE.finditer(sentence)]
+
+
+def same_file(cited: str, file: str) -> bool:
+    """A cite names the key row's file: by stem, or a deposition by the
+    deponent's surname in the transcript's file name."""
+    if cited == file:
+        return True
+    return cited.startswith("dep ") and cited[4:] in file.split()
 
 
 def tokens(s: str) -> set[str]:
@@ -220,7 +257,7 @@ def locate(row: KeyRow, sents: Iterable[str]) -> list[str]:
     out = []
     for s in sents:
         about = overlap(row.fact, s) >= FACT_OVERLAP if row.fact else False
-        cited = any(st == file and _page_ok(row.source_page, p, 1) for st, p in cites(s)) if file else False
+        cited = any(same_file(st, file) and _page_ok(row.source_page, p, 1) for st, p in cites(s)) if file else False
         valued = row.type != "pin" and (
             has_value(row.type, row.correct_value, s) or has_value(row.type, row.wrong_as_stated, s)
         )
@@ -232,14 +269,14 @@ def locate(row: KeyRow, sents: Iterable[str]) -> list[str]:
 def _wrong(row: KeyRow, s: str) -> bool:
     if row.type == "pin":
         bad = _pin(row.wrong_as_stated)
-        return bad is not None and (stem(row.source_file), bad) in cites(s)
+        return bad is not None and any(same_file(st, stem(row.source_file)) and p == bad for st, p in cites(s))
     return _pattern(row.wrong_pattern, s) or has_value(row.type, row.wrong_as_stated, s)
 
 
 def _right(row: KeyRow, s: str) -> bool:
     if row.type == "pin":
         good = _pin(row.correct_value) or row.source_page
-        return good is not None and (stem(row.source_file), good) in cites(s)
+        return good is not None and any(same_file(st, stem(row.source_file)) and p == good for st, p in cites(s))
     if row.type == "omission":
         return _pattern(row.correct_pattern, s) or overlap(row.correct_value, s) >= FACT_OVERLAP
     return _pattern(row.correct_pattern, s) or has_value(row.type, row.correct_value, s)
