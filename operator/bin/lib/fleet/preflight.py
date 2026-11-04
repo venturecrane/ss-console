@@ -17,16 +17,18 @@
    or recorded none (an image from before fleet build), for a lane the seat
    authors, the staged inputs were validated against another schema: refused,
    naming `operator/bin/reprovision.sh <slug>` (which re-validates and
-   re-stages), unless --accept-lane-inputs, or unless a person DECLARED it on
-   the release: `fleet accept-lane-inputs <release-id> --why "..."` writes
-   lane-inputs-accepted.json beside the image's lane-inputs.json (who, when,
-   why, which lanes), and the refusal becomes a note. That is the tick's path
-   (it never passes --accept-lane-inputs, ADR 0096): a person's call, recorded
-   once on the release and read by every seat's preflight, instead of a hand
-   release per seat. Added 2026-11-04 when ADR 0103 renamed the runner's
-   package and every lane's digest changed with its env names and import
-   lines while the schemas accepted exactly what they did; the tick halted at
-   staging. The stage-*-inputs.sh files are
+   re-stages), unless --accept-lane-inputs, or unless a person DECLARED the
+   change in the repo: operator/fleet/lane-inputs-accepted.yaml lists, per
+   commit the schema modules changed at (`since`), the lanes whose staged
+   inputs still fit, with who and why. A declaration applies when the release
+   was built at or after `since` and the seat's current image before it; the
+   refusal becomes a note naming the call. That is the tick's path (it never
+   passes --accept-lane-inputs, ADR 0096): a person's call, merged once and
+   read from the checkout by every seat's preflight, instead of a hand release
+   per seat or a laptop command. Added 2026-11-04 when ADR 0103 renamed the
+   runner's package and every lane's digest changed with its env names and
+   import lines while the schemas accepted exactly what they did; the tick
+   halted at staging. The stage-*-inputs.sh files are
    NOT called from here: they are sourced fragments of provision-customer.sh
    that require its whole shell context and the engagements checkout, so
    driving them from a rollout would be a second provisioner.
@@ -36,7 +38,10 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from . import ids
 from .d1 import decode_json_list
@@ -54,12 +59,12 @@ LANE_VAULT_MARKERS: dict[str, str] = {
 }
 
 
-ACCEPTED_LANE_INPUTS = "lane-inputs-accepted.json"
+ACCEPTED_LANE_INPUTS_PATH = "operator/fleet/lane-inputs-accepted.yaml"
 
 
 def accepted_lanes(declaration: dict[str, Any] | None) -> set[str]:
-    """The lanes a release's declaration covers: a set of lane keys, ``{"*"}`` for every
-    lane, or an empty set when there is no usable declaration."""
+    """The lanes a declaration covers: a set of lane keys, ``{"*"}`` for every lane, or an
+    empty set when there is no usable declaration."""
     if not isinstance(declaration, dict):
         return set()
     lanes = declaration.get("lanes")
@@ -68,6 +73,57 @@ def accepted_lanes(declaration: dict[str, Any] | None) -> set[str]:
     if isinstance(lanes, list):
         return {str(x) for x in lanes}
     return set()
+
+
+def covers(declarations: list[dict[str, Any]], lane: str) -> dict[str, Any] | None:
+    for d in declarations:
+        lanes = accepted_lanes(d)
+        if lane in lanes or "*" in lanes:
+            return d
+    return None
+
+
+class LaneInputDeclarations:
+    """operator/fleet/lane-inputs-accepted.yaml, read from the checkout the release runs in.
+
+    Each entry: ``since`` (the full commit the schema modules changed at), ``lanes``
+    (``"*"`` or a list), ``why``, ``by``, ``date``. An entry applies to a seat when the
+    release was built at or after ``since`` and the seat's current image before it
+    (ancestry asked of git; a commit this clone has never seen is "not after").
+    """
+
+    def __init__(self, runner: Any, repo: Path) -> None:
+        self.runner = runner
+        self.repo = repo
+
+    def load(self) -> list[dict[str, Any]]:
+        path = self.repo / ACCEPTED_LANE_INPUTS_PATH
+        if not path.is_file():
+            return []
+        doc = yaml.safe_load(path.read_text()) or []
+        return [d for d in doc if isinstance(d, dict) and ids.SHA_RE.match(str(d.get("since", "")))]
+
+    def _at_or_after(self, older: str, newer: str) -> bool | None:
+        """Whether ``older`` is ``newer`` or one of its ancestors; None when either commit is
+        one this clone has never seen (then nothing is declared: unknown is not "before")."""
+        if older == newer:
+            return True
+        for sha in (older, newer):
+            present = self.runner.run(["git", "-C", str(self.repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
+            if present.rc != 0:
+                return None
+        res = self.runner.run(["git", "-C", str(self.repo), "merge-base", "--is-ancestor", older, newer], timeout=60)
+        return res.rc == 0
+
+    def applying(self, target_sha: str | None, current_sha: str | None) -> list[dict[str, Any]]:
+        if not target_sha or not current_sha or not ids.SHA_RE.match(target_sha) or not ids.SHA_RE.match(current_sha):
+            return []
+        out = []
+        for d in self.load():
+            since = str(d["since"])
+            if self._at_or_after(since, target_sha) is True and self._at_or_after(since, current_sha) is False:
+                out.append(d)
+        return out
 
 
 @dataclass
@@ -106,19 +162,20 @@ def check_lanes(
     current: dict[str, Any] | None,
     authored: list[str],
     accept: bool,
-    declaration: dict[str, Any] | None = None,
+    declarations: list[dict[str, Any]] | None = None,
 ) -> tuple[list[str], list[str]]:
     problems, notes = [], []
-    declared = accepted_lanes(declaration)
     for lane in authored:
         want = (target or {}).get(lane)
         have = (current or {}).get(lane)
         if want and have and want == have:
             continue
-        if want and (lane in declared or "*" in declared) and isinstance(declaration, dict):
+        declaration = covers(declarations or [], lane) if want else None
+        if declaration is not None:
             notes.append(
-                f"lane {lane}: its firm-input digest differs from the seat's image; accepted on the release by "
-                f"{declaration.get('by', '?')} at {declaration.get('at', '?')}: {declaration.get('why', '')}"
+                f"lane {lane}: its firm-input digest differs from the seat's image; declared unchanged since "
+                f"{str(declaration['since'])[:8]} by {declaration.get('by', '?')} ({declaration.get('date', '?')}): "
+                f"{declaration.get('why', '')}"
             )
             continue
         if want and not have and isinstance(current, dict) and current:
@@ -138,9 +195,10 @@ def check_lanes(
 
 
 class PreflightChecker:
-    def __init__(self, fly: Fly, r2: R2) -> None:
+    def __init__(self, fly: Fly, r2: R2, declarations: LaneInputDeclarations | None = None) -> None:
         self.fly = fly
         self.r2 = r2
+        self.declarations = declarations
 
     def authored_lanes(self, seat: str) -> list[str]:
         out = []
@@ -152,7 +210,13 @@ class PreflightChecker:
         return out
 
     def run(
-        self, seat: str, release: dict[str, Any], rendered_toml: str, current_digest: str | None, accept_lanes: bool
+        self,
+        seat: str,
+        release: dict[str, Any],
+        rendered_toml: str,
+        current_digest: str | None,
+        accept_lanes: bool,
+        current_sha: str | None = None,
     ) -> Preflight:
         digest = release.get("image_digest")
         required = (self.r2.get_json(image_key(digest, "required-env.json")) or {}).get("required") if digest else None
@@ -165,9 +229,14 @@ class PreflightChecker:
         problems += check_staged(staged, decode_json_list(release.get("declared_secrets")))
         target_lanes = self.r2.get_json(image_key(str(digest), "lane-inputs.json"))
         current_lanes = self.r2.get_json(image_key(current_digest, "lane-inputs.json")) if current_digest else None
-        declaration = self.r2.get_json(image_key(str(digest), ACCEPTED_LANE_INPUTS))
+        target_sha = release.get("ss_console_sha")
+        declared = (
+            self.declarations.applying(str(target_sha) if target_sha else None, current_sha)
+            if self.declarations is not None
+            else []
+        )
         lane_problems, notes = check_lanes(
-            seat, target_lanes, current_lanes, self.authored_lanes(seat), accept_lanes, declaration
+            seat, target_lanes, current_lanes, self.authored_lanes(seat), accept_lanes, declared
         )
         problems += lane_problems
         return Preflight(not problems, problems, notes)

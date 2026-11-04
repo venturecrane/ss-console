@@ -329,13 +329,13 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   refused (`fly deploy` would apply it); a lane whose firm-input schema changed
   since the seat's current image, for a lane the seat authors, is refused until
   its inputs are re-staged (`operator/bin/reprovision.sh <slug>`, then rerun
-  with `--accept-lane-inputs`), or until a person declares on the release that
-  the staged inputs still fit (`operator/bin/fleet accept-lane-inputs
-  <release-id> --why "..."`, recorded with who and when; every seat's preflight
-  then passes with a note and the tick rolls it). The declaration is for a
-  schema module that changed in name only, as on 2026-11-04 when ADR 0103
-  renamed the runner's package; a schema that accepts different inputs is
-  re-staged.
+  with `--accept-lane-inputs`), or until a person declares in the repo that the
+  staged inputs still fit: an entry in `operator/fleet/lane-inputs-accepted.yaml`
+  naming the commit the schema modules changed at, the lanes, who and why. A
+  release built at or after that commit then passes a seat whose image is from
+  before it with a note, and the tick rolls it. The declaration is for a schema
+  module that changed in name only, as on 2026-11-04 when ADR 0103 renamed the
+  runner's package; a schema that accepts different inputs is re-staged.
 - **Busy gate, read live on the seat.** The probe runs as root through `fly
   machine exec`, an HTTPS call with no WireGuard tunnel; until 2026-10-26 it
   used ssh, and a fresh tunnel per GitHub run lost two of three probes. A running job (a live job child, or a lane
@@ -452,8 +452,8 @@ Two workflows run the release (ADR 0096).
     probes the seat, waiting up to 10 minutes; a seat still busy is left
     `waiting_idle` and a later tick picks it up. A tick never passes
     `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
-    the tick at preflight until a person re-stages the seat or records the
-    call on the release (`fleet accept-lane-inputs`). A lane that is
+    the tick at preflight until a person re-stages the seat or merges the
+    call in `operator/fleet/lane-inputs-accepted.yaml`. A lane that is
     new on the release (the seat's current image recorded other lanes'
     digests but not this one) passes with a note: no old-schema input exists.
   - every judged seat writes a `live_state` row to the verify ledger and its id

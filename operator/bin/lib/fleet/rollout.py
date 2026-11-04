@@ -116,6 +116,13 @@ class ImageRollout:
         rel = self.store.release_for_image(ref)
         return rel.get("image_digest") if rel else None
 
+    def _current_sha(self, seat: str) -> str | None:
+        """The ss-console commit the seat's running image was built from (its release row)."""
+        ref = (self.store.seat_status(seat) or {}).get("image_ref")
+        rel = self.store.release_for_image(ref) if ref else None
+        sha = rel.get("ss_console_sha") if rel else None
+        return str(sha) if sha else None
+
     def _deploy(self, seat: str, image: str, toml_text: str) -> str:
         return self._deploy_saying(seat, image, toml_text)[0]
 
@@ -252,7 +259,9 @@ class ImageRollout:
 
     def _run(self, seat: str, rid: str, plan: ImagePlan) -> SeatOutcome:
         toml_text = self.render(seat)
-        pre = self.preflight.run(seat, plan.release, toml_text, self._current_digest(seat), plan.accept_lane_inputs)
+        pre = self.preflight.run(
+            seat, plan.release, toml_text, self._current_digest(seat), plan.accept_lane_inputs, self._current_sha(seat)
+        )
         for note in pre.notes:
             self.log(f"{seat}: note: {note}")
         if not pre.ok:
