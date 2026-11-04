@@ -303,6 +303,9 @@ class DraftingLane(Daemon):
             f"Caption discrepancies: {len(fields.get('caption_discrepancies') or [])}.",
             f"Caption corrections: {len(fields.get('caption_corrections') or [])}.",
         ]
+        if isinstance(env.get("revise"), dict):
+            # Code-authored: the broker decided this job revises a filed draft.
+            lines.append("Mode: revision (new versions of the filed files, in place).")
         if state != "delivered":
             lines.append(f"Reason: stopped at {stage or 'the runner (no verdict)'}.")
         return "\n".join(lines)

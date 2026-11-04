@@ -53,6 +53,10 @@ REASON_CODES = (
     "check_invalid",
     # A section over the firm's page limit after its one shortening pass, or pages not measurable (page_limits.py).
     "length_limit",
+    # Revise mode (revise/prior.py): no markdown the seat's renderer prints back as the filed brief.
+    "revise_base_unproven",
+    # Revise mode (revise/core.py): a checklist, an item or an invariant code refused after its one retry.
+    "revise_unchecked",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

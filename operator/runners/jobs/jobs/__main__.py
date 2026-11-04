@@ -109,10 +109,14 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     import json
 
     from .drafting import firm as drafting_firm, job as drafting_job
+    from .drafting.revise.run import ReviseRun
     from .drafting.run import DraftingRun
 
     try:
-        r = DraftingRun(
+        # A revision of a filed brief (the broker put ``revise`` on the
+        # envelope from its job store) never reads the matter file.
+        runner = ReviseRun if drafting_job.load(Path(args.job_dir)).revise else DraftingRun
+        r = runner(
             Path(args.job_dir),
             inputs_dir=args.inputs,
             pricing=args.pricing,

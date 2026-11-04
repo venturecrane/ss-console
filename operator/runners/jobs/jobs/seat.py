@@ -62,6 +62,20 @@ class Seat(Protocol):
     # after the updated one is proven on the matter by hash
     # (stages/update_upload.py). Nothing else is ever deleted.
     def delete_file(self, matter_id: str, file_id: str) -> Any: ...
+    # 2026-11-04, revise mode (drafting/revise/versions.py): one file's
+    # metadata (its ``versionId``), and a new version of an existing file by
+    # id, refused when the file is no longer at ``expected_version``.
+    def file_meta(self, matter_id: str, file_id: str) -> dict[str, Any]: ...
+    def add_file_version(
+        self,
+        matter_id: str,
+        file_id: str,
+        data: bytes,
+        *,
+        expected_version: str,
+        expected_folder: str | None = None,
+        expected_name: str | None = None,
+    ) -> dict[str, Any]: ...
 
 
 # ---- shapes shared by both backends -----------------------------------------
@@ -193,6 +207,32 @@ class ClientSeat:
         client: Any = self.client
         return client.delete_file(matter_id, file_id)
 
+    def file_meta(self, matter_id: str, file_id: str) -> dict[str, Any]:
+        client: Any = self.client
+        r = client.get(f"/matters/{matter_id}/documents/files/{file_id}")
+        return r if isinstance(r, dict) else {}
+
+    def add_file_version(
+        self,
+        matter_id: str,
+        file_id: str,
+        data: bytes,
+        *,
+        expected_version: str,
+        expected_folder: str | None = None,
+        expected_name: str | None = None,
+    ) -> dict[str, Any]:
+        client: Any = self.client
+        r = client.add_file_version(
+            matter_id,
+            file_id,
+            data,
+            expected_version=expected_version,
+            expected_folder=expected_folder,
+            expected_name=expected_name,
+        )
+        return r if isinstance(r, dict) else {}
+
 
 # ---- backend 2: the seat over ssh (the laptop, during the port) ---------------
 # The script that runs on the seat. It is the frozen pipeline's seat_list_mint
@@ -294,6 +334,12 @@ class SshSeat:
         raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
 
     def delete_file(self, matter_id: str, file_id: str) -> Any:
+        raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
+
+    def file_meta(self, matter_id: str, file_id: str) -> dict[str, Any]:
+        raise SeatError("the ssh seat reads no file metadata; revise mode files on the Machine")
+
+    def add_file_version(self, matter_id: str, file_id: str, data: bytes, **_: Any) -> dict[str, Any]:
         raise SeatError("the ssh seat is read-only; the upload stage runs on the Machine (ss#2614)")
 
 

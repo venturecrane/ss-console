@@ -144,21 +144,29 @@ def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
         if resp.get("job_id"):
             out["job_id"] = resp["job_id"]
         return json.dumps(out, ensure_ascii=False)
-    logger.info("drafting_job_submit: queued %s", resp.get("job_id"))
-    return json.dumps(
-        {
-            "accepted": True,
-            "job_id": resp.get("job_id"),
-            "state": resp.get("state"),
-            "document_class": resp.get("document_class") or klass,
-            # A factual ticket, no timing (the no-fabricated-content rule).
-            "message": (
-                f"Drafting job {resp.get('job_id')} is queued on this Machine. The draft is filed "
-                "in the matter when it finishes, and the reply goes to this thread."
-            ),
-        },
-        ensure_ascii=False,
+    logger.info(
+        "drafting_job_submit: queued %s (%s)", resp.get("job_id"), resp.get("mode") or "draft"
     )
+    revising = resp.get("mode") == "revise"
+    out = {
+        "accepted": True,
+        "job_id": resp.get("job_id"),
+        "state": resp.get("state"),
+        "document_class": resp.get("document_class") or klass,
+        "mode": "revise" if revising else "draft",
+        # A factual ticket, no timing (the no-fabricated-content rule).
+        "message": (
+            f"Drafting job {resp.get('job_id')} is queued on this Machine. It makes the requested changes "
+            "to the draft already filed in the matter and files them as new versions of the same files; "
+            "the reply goes to this thread."
+            if revising
+            else f"Drafting job {resp.get('job_id')} is queued on this Machine. The draft is filed "
+            "in the matter when it finishes, and the reply goes to this thread."
+        ),
+    }
+    if revising and resp.get("revise_of"):
+        out["revise_of"] = resp["revise_of"]
+    return json.dumps(out, ensure_ascii=False)
 
 
 def drafting_job_status(args: dict[str, Any], **_: Any) -> str:
@@ -202,8 +210,10 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         "responses, a memo, or a deposition outline) for the Named Administrator whose email opened "
         "this turn. Never draft in the turn: this queues a job that drafts on the Machine's runner "
         "and files the document in the matter. Resolve the matter first. Who asked, the email's id "
-        "and the request's words are taken from the email itself, never from you. It answers with "
-        "a job id, or a reason to relay as it comes back.",
+        "and the request's words are taken from the email itself, never from you. A reply asking "
+        "for changes to a draft already filed is submitted the SAME way, with the same class: the "
+        "broker sees the filed draft in that email thread and revises it in place (mode revise), "
+        "never a fresh draft. It answers with a job id, or a reason to relay as it comes back.",
         _schema(
             {
                 "matter_id": {
