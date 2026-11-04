@@ -510,8 +510,11 @@ class Daemon:
             if not self.wake_secret:
                 logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
                 return
-            # A re-send (`medchron rewake`) carries its number: the gateway drops a reused id.
-            body = json.dumps({"handoff_id": rewake.handoff_id(self.LANE, job_id, wake), "task": wake["task"]})
+            # Each distinct wake gets its own id and every re-post of one wake the
+            # same id (`rewake.handoff_id`): the gateway drops a reused id with the
+            # same text and refuses one with different text (admission_conflict).
+            # The number is persisted BEFORE the post (`rewake.post_id`).
+            body = json.dumps({"handoff_id": rewake.post_id(self, job_id, wake), "task": wake["task"]})
             url = urlparse(self.gate_url)
             sent = False
             outcome = "error"

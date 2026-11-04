@@ -9,7 +9,8 @@ pending did nothing: ``dispatch_wakes`` posted the same ``handoff_id``
 delivery. The re-send that worked was a hand POST under a new id.
 
 This makes that the supported path. It re-arms the stored, code-authored task
-under a re-send number, and the daemon posts it as ``<lane>-<job>-r<n>`` on
+under a re-send number, and the daemon posts it as ``<lane>-<job>-r<n>``
+(``<lane>-<job>-w<seq>-r<n>`` for a job's later wake; see ``handoff_id``) on
 its next tick, then watches for the reply exactly as it did the first time
 (``proof/watch.py``): a re-send that also goes unsent pages again.
 
@@ -36,9 +37,50 @@ _RESET_ALERTS = ("reply_unproven:", "wake_lost:")
 
 
 def handoff_id(lane: str, job_id: str, wake: dict[str, Any]) -> str:
-    """The gateway dedupes on this id, so a re-send carries its number."""
+    """The id the gateway admits this wake under.
+
+    The gateway's durable admission keys on this id: the same id with the
+    same text is a duplicate (dropped), the same id with DIFFERENT text is an
+    ``admission_conflict`` (503, on every retry). So every distinct wake a job
+    writes needs its own id, and every re-post of one wake the same id.
+
+    ``seq`` numbers the job's wakes (``stamp``): a resumed job's next attempt,
+    or SMD's delivered record over a failed run, writes a new wake with new
+    text, and reusing the first wake's id is what lost a drafting reply on
+    2026-11-03 (five 503s, then ``wake_lost``, until a hand ``rewake``).
+    ``resend`` numbers a ``rewake`` of the SAME wake, whose text is unchanged.
+    A job's first wake keeps the bare ``<lane>-<job>`` id it always had."""
+    seq = int(wake.get("seq") or 1)
     n = int(wake.get("resend") or 0)
-    return f"{lane}-{job_id}" + (f"-r{n}" if n > 0 else "")
+    return f"{lane}-{job_id}" + (f"-w{seq}" if seq > 1 else "") + (f"-r{n}" if n > 0 else "")
+
+
+def stamp(st: dict[str, Any], wake: dict[str, Any]) -> bool:
+    """Number a wake the first time it is posted or re-armed; True when it was
+    unnumbered (the caller persists ``wake`` and ``wake_seq``).
+
+    The running count lives in the job's ``wake_seq``, outside the wake,
+    because a resume clears the wake itself. A job whose earlier wakes predate
+    the count (no ``wake_seq``) is seeded from what it has done: each resume,
+    and SMD's delivered record over a job that ran, followed a wake already
+    posted under the bare id. Over-counting only skips a number; under-counting
+    is the conflict."""
+    if wake.get("seq"):
+        return False
+    prev = st.get("wake_seq")
+    if prev is None:
+        prev = int(st.get("resumes") or 0) + (1 if st.get("delivered_by") == "smd" and st.get("attempts") else 0)
+    wake["seq"] = int(prev) + 1
+    return True
+
+
+def post_id(d: Any, job_id: str, wake: dict[str, Any]) -> str:
+    """The id ``Daemon._dispatch_wakes`` posts ``wake`` under. A newly numbered
+    wake is written to the job's state BEFORE the post, so a crash after the
+    gateway admitted it re-posts under the same id and is deduped."""
+    if stamp(d._daemon_state(job_id), wake):
+        d._write_state(job_id, wake=wake, wake_seq=wake["seq"])
+    return handoff_id(d.LANE, job_id, wake)
 
 
 def _iso(epoch: float) -> str:
@@ -71,6 +113,10 @@ def rewake(
         return 1
     n = int(wake.get("resend") or 0) + 1
     now = clock()
+    # An unnumbered (pre-count) wake keeps the number it was posted under, so
+    # the re-send differs from it only by -r<n>.
+    stamp(st, wake)
+    st["wake_seq"] = max(int(st.get("wake_seq") or 0), int(wake["seq"]))
     wake.update(pending=True, attempts=0, resend=n, sent_at=None, outcome=None)
     st["wake"] = wake
     st.pop("reply_watch", None)
