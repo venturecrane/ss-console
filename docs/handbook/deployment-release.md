@@ -335,8 +335,13 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   login, so nobody could say whose it was.
 - **Preflight.** The release's required env must all be on the seat (secret
   names or rendered `[env]`); a staged secret the release does not declare is
-  refused (`fly deploy` would apply it); a lane whose firm-input schema changed
-  since the seat's current image, for a lane the seat authors, is refused until
+  refused (`fly deploy` would apply it); a lane whose schema module changed
+  since the seat's current image, for a lane the seat authors, is put to the
+  release's own validator: the seat's staged marker file is read from the
+  vault and run through `validate()` from the runner at the release's commit
+  (`operator/bin/lib/fleet/lane_validate.py`, 2026-11-05). It passes: the lane
+  passes with a note. It finds problems, or it cannot be asked: the lane is
+  refused until
   its inputs are re-staged (`operator/bin/reprovision.sh <slug>`, then rerun
   with `--accept-lane-inputs`), or until a person declares in the repo that the
   staged inputs still fit: an entry in `operator/fleet/lane-inputs-accepted.yaml`
@@ -480,7 +485,8 @@ Two workflows run the release (ADR 0096).
     verdict is a tooling error that stalls that seat. The busy gate still
     probes the seat, waiting up to 10 minutes; a seat still busy is left
     `waiting_idle` and a later tick picks it up. A tick never passes
-    `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change halts
+    `--force-mid-job` or `--accept-lane-inputs`, so a lane schema change the
+    seat's staged inputs do not pass halts
     the tick at preflight until a person re-stages the seat or merges the
     call in `operator/fleet/lane-inputs-accepted.yaml`. A lane that is
     new on the release (the seat's current image recorded other lanes'

@@ -33,6 +33,15 @@
    that require its whole shell context and the engagements checkout, so
    driving them from a rollout would be a second provisioner.
 
+   Since 2026-11-05 the digest only says WHEN to look. For a lane whose digest
+   differs and no declaration covers, the release's own validator is asked
+   about the seat's staged marker (lane_validate.LaneValidator: the marker from
+   the vault, ``validate()`` from the runner tree at the release's commit). It
+   passes: the lane passes with a note and nobody declares anything. It finds
+   problems: refused, by count. It could not be asked: the refusal above
+   stands. Two harmless edits in two days (the rename; #3774's import line)
+   each refused every seat on the bytes alone.
+
    A refusal that halted the release clears itself (2026-11-05): a rollout row
    `failed` whose detail is nothing but lane refusals deployed nothing, so the
    tick keeps asking, on every run, whether the declarations now on main cover
@@ -52,13 +61,14 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
 from . import ids
 from .d1 import decode_json_list
 from .fly import Fly
+from .lane_validate import LaneValidator
 from .r2 import R2, image_key
 
 # lane -> what in vaults/<slug>/ shows the seat authors it.
@@ -75,10 +85,12 @@ LANE_VAULT_MARKERS: dict[str, str] = {
 ACCEPTED_LANE_INPUTS_PATH = "operator/fleet/lane-inputs-accepted.yaml"
 
 REFUSED_PREFIX = "preflight refused: "
-# One lane refusal as check_lanes words it (either `why`); the seat slug ends it.
+# One lane refusal as check_lanes words it (any of its three reasons); the seat slug ends it.
 LANE_REFUSAL_RE = re.compile(
     r"lane (?P<lane>[a-z]+): (?:the lane's firm-input schema changed|"
-    r"the seat's current image recorded no lane-input digests); re-stage with operator/bin/reprovision\.sh \S+"
+    r"the seat's current image recorded no lane-input digests|"
+    r"the seat's staged inputs do not pass this release's validator"
+    r"); re-stage with operator/bin/reprovision\.sh \S+"
 )
 
 
@@ -159,14 +171,6 @@ class LaneInputDeclarations:
                 out.append(d)
         return out
 
-    def now_cover(self, lanes: set[str], target_sha: str | None, current_sha: str | None) -> bool:
-        """Whether the declarations on disk now cover EVERY lane in ``lanes`` for a release built at
-        ``target_sha`` reaching a seat whose image is from ``current_sha``."""
-        if not lanes:
-            return False
-        declared = self.applying(target_sha, current_sha)
-        return all(covers(declared, lane) is not None for lane in lanes)
-
 
 @dataclass
 class Preflight:
@@ -205,7 +209,11 @@ def check_lanes(
     authored: list[str],
     accept: bool,
     declarations: list[dict[str, Any]] | None = None,
+    validated: Callable[[str], bool | None] | None = None,
 ) -> tuple[list[str], list[str]]:
+    """``validated(lane)`` is the release's own validator asked about the seat's staged marker
+    (lane_validate.LaneValidator): True passes the lane with a note, False refuses it, None (it
+    could not be asked) leaves the refusal this gate always gave."""
     problems, notes = [], []
     for lane in authored:
         want = (target or {}).get(lane)
@@ -226,8 +234,17 @@ def check_lanes(
             # by the new image, and its inputs were validated when staged.
             notes.append(f"lane {lane}: new on this release; staged inputs taken as they are")
             continue
+        verdict = validated(lane) if (validated is not None and want and not accept) else None
+        if verdict is True:
+            notes.append(
+                f"lane {lane}: its schema module differs from the seat's image; the seat's staged marker passes "
+                "this release's own validator (the marker only: pinned files are checked when the lane boots)"
+            )
+            continue
         why = (
-            "the seat's current image recorded no lane-input digests"
+            "the seat's staged inputs do not pass this release's validator"
+            if verdict is False
+            else "the seat's current image recorded no lane-input digests"
             if not have
             else "the lane's firm-input schema changed"
         )
@@ -237,10 +254,24 @@ def check_lanes(
 
 
 class PreflightChecker:
-    def __init__(self, fly: Fly, r2: R2, declarations: LaneInputDeclarations | None = None) -> None:
+    def __init__(
+        self,
+        fly: Fly,
+        r2: R2,
+        declarations: LaneInputDeclarations | None = None,
+        lane_validator: LaneValidator | None = None,
+    ) -> None:
         self.fly = fly
         self.r2 = r2
         self.declarations = declarations
+        self.lane_validator = lane_validator
+
+    @classmethod
+    def for_ctx(cls, ctx: Any) -> "PreflightChecker":
+        """The checker a real run uses: the repo's declarations and the release's own validator."""
+        return cls(
+            ctx.fly, ctx.r2, LaneInputDeclarations(ctx.runner, ctx.repo), LaneValidator(ctx.runner, ctx.repo, ctx.r2)
+        )
 
     def authored_lanes(self, seat: str) -> list[str]:
         out = []
@@ -254,14 +285,24 @@ class PreflightChecker:
     def refusal_now_declared(
         self, seat: str, release: dict[str, Any], detail: str | None, current_sha: str | None
     ) -> bool:
-        """A `failed` rollout row of ``release`` on ``seat`` was a pure lane-input refusal, and the
-        declarations now on disk cover every refused lane: the tick may retry the seat instead of
-        standing halted. False for any other failure, or with no declarations to read."""
+        """A `failed` rollout row of ``release`` on ``seat`` was a pure lane-input refusal, and every
+        refused lane is answered now: a declaration on disk covers it, or the seat's staged marker
+        passes the release's validator (the firm's inputs were corrected and republished, or the
+        validator could not be asked the first time). The tick may then retry the seat instead of
+        standing halted. False for any other failure, or while one lane is still unanswered."""
         lanes = refused_lanes(detail)
-        if lanes is None or self.declarations is None:
+        if not lanes:
             return False
-        target_sha = release.get("ss_console_sha")
-        return self.declarations.now_cover(lanes, str(target_sha) if target_sha else None, current_sha)
+        sha = release.get("ss_console_sha")
+        target_sha = str(sha) if sha else None
+        declared = self.declarations.applying(target_sha, current_sha) if self.declarations is not None else []
+        for lane in sorted(lanes):
+            if covers(declared, lane) is not None:
+                continue
+            if self.lane_validator is not None and self.lane_validator.validates(seat, lane, target_sha) is True:
+                continue
+            return False
+        return True
 
     def run(
         self,
@@ -289,8 +330,16 @@ class PreflightChecker:
             if self.declarations is not None
             else []
         )
+        validator = self.lane_validator
+        sha = str(target_sha) if target_sha else None
         lane_problems, notes = check_lanes(
-            seat, target_lanes, current_lanes, self.authored_lanes(seat), accept_lanes, declared
+            seat,
+            target_lanes,
+            current_lanes,
+            self.authored_lanes(seat),
+            accept_lanes,
+            declared,
+            (lambda lane: validator.validates(seat, lane, sha)) if validator is not None else None,
         )
         problems += lane_problems
         return Preflight(not problems, problems, notes)
