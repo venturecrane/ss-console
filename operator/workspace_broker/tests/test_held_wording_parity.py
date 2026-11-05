@@ -1,4 +1,5 @@
-"""The broker's held wording and the skills' held wording are the same words.
+"""The broker's held wording and the skills' held wording are the same words,
+and every DELIVER section works with the switch on or off.
 
 The broker refuses any held reply that is not ``fixed_wording``'s text, and the
 model drafts from the skill. If the two drifted, the model would draft the
@@ -14,6 +15,7 @@ already requires).
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -95,3 +97,80 @@ def test_a_held_casefile_reply_in_other_words_is_refused() -> None:
     with pytest.raises(fixed_wording.HeldWordingRefused):
         fixed_wording.check("casefile_job", row, "Your review stopped, want me to run it again?", "")
     fixed_wording.check("casefile_job", row, fixed_wording.allowed("casefile_job", row)[0], "")
+
+
+# -- every DELIVER section works in both modes (ADR 0104) --------------------------
+#
+# The skills artifact and a seat's switch move apart, so a section must read right
+# with the switch either way. When the broker words the reply, the model sends those
+# words (the first branch). When it does not, the model composes by the rules it has
+# always had (the second), so a seat in observe behaves as it does today. The block
+# names no rendered sentence, on purpose: the model reads the skill, and a sentence
+# printed here could change what it writes on a seat that was handed none.
+
+BROKER_WORDED_BLOCK = (
+    "**When the broker words this reply.** If `reply_bind` returned `fixed_wording`, or the status read "
+    "returned `reply_text` or `reply_texts`, the reply's whole body is that text, word for word (one of "
+    "them, when there are several): no greeting, no sign-off, no sentence of your own, no changed word. "
+    "The broker enforces this: the send refuses any other words, sends nothing, keeps the one reply "
+    "unspent and quotes the text to send. Who hears, when to send nothing and when to stop stay as this "
+    "section says; only its composing rules give way. If none of those keys came back, the broker has not "
+    "worded this reply: compose it exactly as the rest of this section says."
+    "\n\n"
+)
+DELIVER_SKILLS = {
+    "litigation": SKILLS / "litigation-status",
+    "casefile": SKILLS / "case-file-manager",
+    "medchron": SKILLS / "medical-chronology-maintainer",
+    "demand": SKILLS / "demand-letter-drafter",
+    "drafting": SKILLS / "document-drafter",
+    "negotiation": SKILLS / "negotiation-watch",
+    "note": SKILLS / "smd-note",
+}
+#: sha256 of each DELIVER section with the block taken out: main's composing rules
+#: as they stood when the block went in. A failure here means a composing rule
+#: changed. That is a deliberate edit to main's rules: if it is one, re-pin the hash
+#: in the same PR and say so; if it is not, put the words back.
+COMPOSE_BRANCH_SHA256 = {
+    "litigation": "0b94f98c3c697bf294e09ae0887d367eb7e140f8de0f4dd6c50687f585a8faaa",
+    "casefile": "394180288917b54a773207e6bcec49ccc08de22ec3cac6d80f35eb8713f62712",
+    "medchron": "5053b03126c68bed9d1fddb50a7107d5e057ad3817c353b92fb8fe000f02306c",
+    "demand": "68c870a680c419728613453be68aca11f27fe1382dd92932d8162790c84b2f0c",
+    "drafting": "24536fab5a7400299cbbec57af12f39b0d83b9ce20abbcdc3256b78d4d5b9167",
+    "negotiation": "fcd27092664680450b0e6a76b3ac4ee238a88d8153194050a2eab98c0e64c72f",
+    "note": "32dfa6398ec8b9711726699d8fba69e8c47e34dd61cb33f13dc05622e916f764",
+}
+
+
+def _deliver_raw(lane: str) -> str:
+    body = (DELIVER_SKILLS[lane] / "SKILL.md").read_text(encoding="utf-8")
+    start = body.index("## DELIVER")
+    end = body.find("\n## ", start + 1)
+    return body[start : end if end != -1 else len(body)]
+
+
+def test_every_rendered_lane_has_a_skill() -> None:
+    assert set(fixed_wording.KIND_LANE.values()) == set(DELIVER_SKILLS) == set(COMPOSE_BRANCH_SHA256)
+
+
+@pytest.mark.parametrize("lane", sorted(DELIVER_SKILLS))
+def test_the_worded_branch_comes_first_in_every_deliver_section(lane: str) -> None:
+    """Before any composing rule, once, and naming every key the broker sends."""
+    section = _deliver_raw(lane)
+    heading, _, rest = section.partition("\n\n")
+    assert heading.startswith("## DELIVER")
+    assert rest.startswith(BROKER_WORDED_BLOCK) and section.count(BROKER_WORDED_BLOCK) == 1
+    for key in ("`fixed_wording`", "`reply_text`", "`reply_texts`"):
+        assert key in BROKER_WORDED_BLOCK
+
+
+@pytest.mark.parametrize("lane", sorted(DELIVER_SKILLS))
+def test_the_compose_branch_is_mains_text_unchanged(lane: str) -> None:
+    compose = _deliver_raw(lane).replace(BROKER_WORDED_BLOCK, "", 1)
+    assert hashlib.sha256(compose.encode()).hexdigest() == COMPOSE_BRANCH_SHA256[lane], lane
+
+
+def test_no_delivered_sentence_carries_a_slot_the_model_could_fill() -> None:
+    """A delivered sentence has fields code fills, never a ``<slot>``."""
+    for lane, key, sentence in fixed_wording.delivered_templates():
+        assert "<" not in sentence and "\u2014" not in sentence, f"{lane}/{key}"
