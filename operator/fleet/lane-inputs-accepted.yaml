@@ -81,3 +81,13 @@
     staged on every seat still fit; nothing to re-stage. (Second non-semantic
     firm.py edit to move the digest; the digest should hash the schema, not
     the module.)
+- since: 0581333441cf6196256afaad13f2c931830b08b3
+  lanes: [drafting]
+  date: '2026-11-05'
+  by: session evidence-first-drafting-lane (scottdurgan), for #3780
+  why: >-
+    #3780 adds one optional key to the drafting firm schema,
+    format.firm_bases.<class> {path, source}, naming the firm's own Word file a
+    first draft is made in. Unset means the existing render path, so every
+    drafting input staged before it still validates; no seat sets it yet;
+    nothing to re-stage.
