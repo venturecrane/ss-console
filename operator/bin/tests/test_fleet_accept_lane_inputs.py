@@ -18,6 +18,7 @@ from bin.lib.fleet.preflight import (
     accepted_lanes,
     check_lanes,
     covers,
+    refused_lanes,
 )
 from bin.lib.fleet.r2 import image_key
 from bin.lib.fleet.runner import CommandRunner
@@ -45,6 +46,29 @@ def test_check_lanes_takes_a_declared_lane_as_a_note_and_the_rest_as_before() ->
     assert "schema changed" in problems[0]
     problems, _ = check_lanes("s", {"records": "new"}, None, ["records"], False, [DECL])
     assert problems == []  # the declaration covers "recorded no digests" too: the inputs still fit
+
+
+REFUSED = (
+    "preflight refused: lane records: the lane's firm-input schema changed; re-stage with "
+    "operator/bin/reprovision.sh ashton-price; lane drafting: the seat's current image recorded no "
+    "lane-input digests; re-stage with operator/bin/reprovision.sh ashton-price"
+)
+
+
+def test_refused_lanes_reads_a_pure_lane_refusal_and_nothing_else() -> None:
+    """FALSIFIER: a detail mixing an env problem with a lane refusal, or a rollback, returning lanes
+    would let the tick retry a seat whose failure a declaration cannot answer."""
+    assert refused_lanes(REFUSED) == {"records", "drafting"}
+    assert refused_lanes(REFUSED + " | verify ledger vfy_01ABC") == {"records", "drafting"}
+    assert (
+        refused_lanes(
+            "preflight refused: required env missing on the seat: X; " + REFUSED[len("preflight refused: ") :]
+        )
+        is None
+    )
+    assert refused_lanes("preflight refused: required env missing on the seat: X") is None
+    assert refused_lanes("self-test failed: x") is None
+    assert refused_lanes(None) is None and refused_lanes("") is None
 
 
 def _repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str, str, str]:
@@ -128,3 +152,28 @@ def test_the_repo_declaration_for_3739_covers_the_drafting_lane_only() -> None:
     assert covers(d, "drafting") is d[0] and covers(d, "records") is None
     problems, notes = check_lanes("s", {"drafting": "new"}, {"drafting": "old"}, ["drafting"], False, d)
     assert problems == [] and "declared unchanged since 31d111a9" in notes[0]
+
+
+def test_a_declaration_merged_after_the_refusal_makes_the_halted_row_retriable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """2026-11-05: #3774 moved every lane's digest by one import line; a hand release marked A&P failed;
+    #3775 declared it minutes later and the tick still said "a person must act". The tick now asks this.
+    FALSIFIER: dropping the ancestry test would retry a seat already past the declaration (current == T)."""
+    repo, a, s, t = _repo(tmp_path, monkeypatch)
+    checker = PreflightChecker(FakeFly(), FakeR2(), LaneInputDeclarations(CommandRunner(), repo))  # type: ignore[arg-type]
+    rel = {**release(), "ss_console_sha": t}
+    refused = "preflight refused: lane records: the lane's firm-input schema changed; re-stage with operator/bin/reprovision.sh s"
+    assert checker.refusal_now_declared("s", rel, refused, a) is True
+    # a lane the declaration does not name stays a person's halt (the fixture's entry says '*'; narrow it)
+    (repo / ACCEPTED_LANE_INPUTS_PATH).write_text(
+        f"- since: {s}\n  lanes: [records]\n  by: scott\n  date: '2026-11-05'\n  why: x\n"
+    )
+    assert checker.refusal_now_declared("s", rel, refused.replace("lane records", "lane demand"), a) is False
+    assert checker.refusal_now_declared("s", rel, refused, a) is True
+    # a seat already at or past the declaration, or a release from before it, gets no retry from it
+    assert checker.refusal_now_declared("s", rel, refused, t) is False
+    assert checker.refusal_now_declared("s", {**rel, "ss_console_sha": a}, refused, a) is False
+    # any other failure, or no declarations at all, stays a person's halt
+    assert checker.refusal_now_declared("s", rel, "preflight refused: required env missing on the seat: X", a) is False
+    assert PreflightChecker(FakeFly(), FakeR2()).refusal_now_declared("s", rel, refused, a) is False  # type: ignore[arg-type]

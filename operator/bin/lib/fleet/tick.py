@@ -14,7 +14,13 @@ ONE TICK.
   3. A seat whose latest rollout is rolled_back or failed showed the release is
      bad: a STANDING HALT, nothing moves until a person acts (``fleet release
      <id> --only <seat>`` from a laptop, or a hold). The pager already went out
-     (fleet-alerts rollout_failed reads the same rows).
+     (fleet-alerts rollout_failed reads the same rows). ONE exception
+     (2026-11-05): a `failed` row that was nothing but a lane-input refusal
+     deployed nothing, so each tick asks whether the declarations now on main
+     (operator/fleet/lane-inputs-accepted.yaml) cover every refused lane for
+     this release and that seat's image; when they do, the seat is pending
+     again and its ring rolls it (``retriable``). A declaration merged after
+     the refusal is then enough; no laptop command.
   4. Find the first ring with a seat that is neither done nor held. Before it
      may start, the ring before it must have BAKED: every done seat there done
      for at least that ring's ``bake_minutes``, at least one seat done, and no
@@ -177,16 +183,24 @@ def plan_tick(
     alarms: Callable[[list[str]], list[dict[str, Any]]],
     now: datetime,
     deferred: dict[str, str] | None = None,
+    retriable: Callable[[str, dict[str, Any]], bool] | None = None,
 ) -> TickPlan:
     """The one step this tick may take. Pure: every input was read before the call.
 
     ``deferred`` names seats that may not take this release yet, with why (a
     skills release waiting for the seat's image). Like a hold, a deferred seat
     is not pending; unlike a hold, it is named as waiting, not as held.
+
+    ``retriable(seat, row)`` says a halting row may be tried again (a lane-input
+    refusal the declarations now cover); such a seat is pending, not halted.
     """
     deferred = deferred or {}
     ringed = [s for ring in rings for s in ring.seats]
-    halted = sorted(s for s in ringed if (latest.get(s) or {}).get("state") in HALTING)
+    halted = sorted(
+        s
+        for s in ringed
+        if (latest.get(s) or {}).get("state") in HALTING and not (retriable is not None and retriable(s, latest[s]))
+    )
     if halted:
         states = ", ".join(f"{s}={latest[s]['state']}" for s in halted)
         return TickPlan(
@@ -302,21 +316,46 @@ class Ticker:
         log: Callable[[str], None],
         clock: Callable[[], float],
         defer: Callable[[dict[str, Any]], dict[str, str]] | None = None,
+        retriable: Callable[[dict[str, Any], str, dict[str, Any]], bool] | None = None,
     ) -> None:
-        """``defer(release)``: the seats that may not take ``release`` this tick, with why (skills only)."""
+        """``defer(release)``: the seats that may not take ``release`` this tick, with why (skills only).
+        ``retriable(release, seat, row)``: a halting row of ``release`` on ``seat`` that may be tried
+        again (images: a lane-input refusal the declarations on main now cover)."""
         self.store, self.log, self.clock = store, log, clock
         self.defer: Callable[[dict[str, Any]], dict[str, str]] = defer or (lambda release: {})
+        self.retriable = retriable
 
     def plan(self, rings: list[Ring], release: dict[str, Any]) -> TickPlan:
         now = datetime.fromtimestamp(self.clock(), timezone.utc)
+        latest = self.store.release_latest(release["release_id"])
         return plan_tick(
             rings,
-            self.store.release_latest(release["release_id"]),
+            latest,
             self.store.holds(),
             lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
             now,
             self.defer(release),
+            self._retriable_for(release, latest),
         )
+
+    def _retriable_for(
+        self, release: dict[str, Any], latest: dict[str, dict[str, Any]]
+    ) -> Callable[[str, dict[str, Any]], bool] | None:
+        """The per-seat retry question for this release, logging each halting row it clears."""
+        if self.retriable is None:
+            return None
+        ask = self.retriable
+
+        def retriable(seat: str, row: dict[str, Any]) -> bool:
+            ok = ask(release, seat, row)
+            if ok:
+                self.log(
+                    f"tick {release['release_id']}: {seat}'s {row.get('state')} row was a lane-input refusal the "
+                    "declarations on main now cover; retrying it instead of standing halted"
+                )
+            return ok
+
+        return retriable
 
     def run(
         self,

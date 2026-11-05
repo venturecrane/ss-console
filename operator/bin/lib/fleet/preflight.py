@@ -32,10 +32,23 @@
    NOT called from here: they are sourced fragments of provision-customer.sh
    that require its whole shell context and the engagements checkout, so
    driving them from a rollout would be a second provisioner.
+
+   A refusal that halted the release clears itself (2026-11-05): a rollout row
+   `failed` whose detail is nothing but lane refusals deployed nothing, so the
+   tick keeps asking, on every run, whether the declarations now on main cover
+   every refused lane for that release and that seat's current image
+   (``refused_lanes``, ``PreflightChecker.refusal_now_declared``). When they do,
+   the seat is pending again and its ring rolls it, preflight passing with the
+   declaration's note; until then, and for any other failure, the halt stands
+   for a person. Added when #3774 moved every lane's digest by one import line,
+   a hand release marked the client seat failed, and the declaration merged
+   minutes later (#3775) could not move the halted release without a person
+   running `fleet release <id> --only <seat>` from a laptop.
 """
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -60,6 +73,27 @@ LANE_VAULT_MARKERS: dict[str, str] = {
 
 
 ACCEPTED_LANE_INPUTS_PATH = "operator/fleet/lane-inputs-accepted.yaml"
+
+REFUSED_PREFIX = "preflight refused: "
+# One lane refusal as check_lanes words it (either `why`); the seat slug ends it.
+LANE_REFUSAL_RE = re.compile(
+    r"lane (?P<lane>[a-z]+): (?:the lane's firm-input schema changed|"
+    r"the seat's current image recorded no lane-input digests); re-stage with operator/bin/reprovision\.sh \S+"
+)
+
+
+def refused_lanes(detail: str | None) -> set[str] | None:
+    """The lanes a rollout's ``preflight refused: ...`` detail names, when EVERY problem in it is a
+    lane-input refusal; None for anything else (an env or secret problem, a deploy or self-test
+    failure, a rollback), which stays a person's halt. The ledger note after `` | `` is ignored."""
+    if not detail or not detail.startswith(REFUSED_PREFIX):
+        return None
+    body = detail[len(REFUSED_PREFIX) :].split(" | ", 1)[0]
+    lanes = {m.group("lane") for m in LANE_REFUSAL_RE.finditer(body)}
+    if not lanes:
+        return None
+    rest = LANE_REFUSAL_RE.sub("", body).replace(";", "").strip()
+    return lanes if not rest else None
 
 
 def accepted_lanes(declaration: dict[str, Any] | None) -> set[str]:
@@ -124,6 +158,14 @@ class LaneInputDeclarations:
             if self._at_or_after(since, target_sha) is True and self._at_or_after(since, current_sha) is False:
                 out.append(d)
         return out
+
+    def now_cover(self, lanes: set[str], target_sha: str | None, current_sha: str | None) -> bool:
+        """Whether the declarations on disk now cover EVERY lane in ``lanes`` for a release built at
+        ``target_sha`` reaching a seat whose image is from ``current_sha``."""
+        if not lanes:
+            return False
+        declared = self.applying(target_sha, current_sha)
+        return all(covers(declared, lane) is not None for lane in lanes)
 
 
 @dataclass
@@ -208,6 +250,18 @@ class PreflightChecker:
             if present:
                 out.append(lane)
         return out
+
+    def refusal_now_declared(
+        self, seat: str, release: dict[str, Any], detail: str | None, current_sha: str | None
+    ) -> bool:
+        """A `failed` rollout row of ``release`` on ``seat`` was a pure lane-input refusal, and the
+        declarations now on disk cover every refused lane: the tick may retry the seat instead of
+        standing halted. False for any other failure, or with no declarations to read."""
+        lanes = refused_lanes(detail)
+        if lanes is None or self.declarations is None:
+            return False
+        target_sha = release.get("ss_console_sha")
+        return self.declarations.now_cover(lanes, str(target_sha) if target_sha else None, current_sha)
 
     def run(
         self,

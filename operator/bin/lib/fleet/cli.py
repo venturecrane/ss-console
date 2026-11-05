@@ -395,7 +395,15 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
                          verify="selftest", selftest_capable=True, ssh_fallback=False)  # fmt: skip
         return lambda seat, ring: roll.run(seat, ring, plan)
 
-    ticker = Ticker(ctx.store, ctx.log, ctx.clock)
+    ticker = Ticker(
+        ctx.store,
+        ctx.log,
+        ctx.clock,
+        # A halt that was only a lane-input refusal clears once main declares the lanes (tick.py step 3).
+        retriable=lambda rel, seat, row: roll.preflight.refusal_now_declared(
+            seat, rel, row.get("detail"), roll.current_sha(seat)
+        ),
+    )
     if a.release_id == "latest":
         return ticker.run_promoting(
             ctx.rings(),

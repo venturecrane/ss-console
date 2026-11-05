@@ -89,6 +89,22 @@ release-tick.yml`) the moment its candidate is published, and
    before every seat, in every mode, so a hold set mid-release stops the next
    seat it covers.
 
+   **Amended 2026-11-05: a halt that was only a lane-input refusal clears
+   itself.** A `failed` row whose detail is nothing but lane refusals (the
+   preflight's "the lane's firm-input schema changed; re-stage") deployed
+   nothing, so on every tick the controller asks whether the declarations now
+   on main (`operator/fleet/lane-inputs-accepted.yaml`) cover every refused
+   lane for that release and that seat's current image
+   (`preflight.refused_lanes`, `PreflightChecker.refusal_now_declared`, the
+   `retriable` hook of `plan_tick`). When they do, the seat is pending again
+   and its ring rolls it, the preflight passing with the declaration's note.
+   Any other failure, and a rollback, stand for a person exactly as before.
+   Why: on 2026-11-05 #3774 moved every lane's digest by one import line, a
+   hand `--only` release marked the client seat `failed`, and the declaration
+   merged eleven minutes later (#3775) could not move the halted release;
+   the tick said "a person must act" for a call a person had already made
+   and merged. The `--accept-lane-inputs` flag is still never passed by a tick.
+
    **Amended 2026-10-26: promotion across releases in flight.** As first built,
    `latest` meant only the newest release, so every merge restarted the
    controller at ring 0; five merges in four hours left the pilot three hours
