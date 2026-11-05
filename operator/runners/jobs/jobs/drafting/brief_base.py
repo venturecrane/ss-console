@@ -423,19 +423,20 @@ def fill(base: FirmBase, md: str) -> tuple[bytes, firmbase.Proof]:
     return blob, proof
 
 
-def load_base(path: Path, source: dict[str, str]) -> FirmBase:
-    return FirmBase.load(CLS, firmbase.Source(**source), path.read_bytes())
+def load_base(path: Path, source: dict[str, str], cls: str = CLS) -> FirmBase:
+    return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
 
 
-def render_into(md: str, out: Path, base: FirmBase, paper: str) -> tuple[Path, dict[str, Any]]:
+def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None) -> tuple[Path, dict[str, Any]]:
     """The file at ``out``, proven against its base; nothing is written when the proof
-    refuses. ``paper``: what the job was asked for, which the base must already be."""
+    refuses. ``paper``: what the job was asked for, which the base must already be.
+    ``make``: the class's own fill, the brief's when none is named."""
     from .revise.layout import paper_of
 
     if paper_of(base.bytes) != paper:
         raise unfit(f"the request is for {paper} paper and the base is {paper_of(base.bytes)}")
     try:
-        blob, proof = fill(base, md)
+        blob, proof = (make or fill)(base, md)
         proof.require()
     except FirmBaseLost as exc:
         raise DraftingFailed(str(exc)) from exc
@@ -466,35 +467,3 @@ def checked_format(fmt: dict[str, Any], cls: str, base: FirmBase) -> dict[str, A
     if size:
         layout["table_font_pt"] = size
     return {**fmt, "layout": {**(fmt.get("layout") or {}), cls: layout}}
-
-
-def lay_out(
-    doc: str,
-    dest: Path,
-    cls: str,
-    fmt: dict[str, Any],
-    paper: str,
-    held: tuple[Path, dict[str, str]] | None,
-    rules: dict[str, Any] | None = None,
-) -> tuple[Path, dict[str, Any], list[str], dict[str, Any]]:
-    """The Word file: in the firm's own file when it has a base (``held``), else on
-    ours with the config's layout. Returns (path, report, what was laid, the
-    format the check reads). ``rules``: the firm's installed layout rules
-    (``firm_rules``), already in ``fmt``; on a base they are edited into the
-    rendered file in place, proven to touch only their own leaves."""
-    if held is not None:
-        from . import firm_rules
-
-        base = load_base(*held)
-        path, report = render_into(doc, dest, base, paper)
-        lost = firm_rules.onto_base(path, dict(rules or {}))
-        if lost:
-            path.unlink(missing_ok=True)
-            raise unfit("a firm layout rule could not be laid onto the base: " + "; ".join(lost[:3]))
-        if rules:
-            report["notes"].append("the firm's layout rules laid onto the base: " + ", ".join(sorted(rules)))
-        return path, report, [], checked_format(fmt, cls, base)
-    from . import pleading, render
-
-    path, report = render.render(doc, cls, dest, fmt)
-    return path, report, pleading.apply_for(path, fmt, cls) if paper == "pleading" else [], fmt

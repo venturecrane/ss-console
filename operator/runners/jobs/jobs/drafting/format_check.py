@@ -446,7 +446,10 @@ def check(
     doc = docx.Document(io.BytesIO(blob))
     rules = rules_for(fmt, cls)
     res = Result()
-    check_font(doc, fmt, res, rules)
+    if "font_from_base" in fmt:  # a firm's memo owns its larger headings (memo_base.py)
+        res.fails += fmt["font_from_base"](doc)
+    else:
+        check_font(doc, fmt, res, rules)
     check_tables(doc, rules, res)
     if fmt.get("plain_letter_paper"):
         check_paper(doc, res)

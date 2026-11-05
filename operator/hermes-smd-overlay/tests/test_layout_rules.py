@@ -41,7 +41,7 @@ COMPILES = [
     ("The first page single spaced.", {"front_single_spaced": True}),
     ("The signature block single spaced.", {"signature_single_spaced": True}),
     ("Put the date beside the By line.", {"signature_date_beside": True}),
-    ("Charts in 12 point in memos.", {"table_font_pt": 12.0}),
+    ("Charts in 12 point in depo outlines.", {"table_font_pt": 12.0}),
 ]
 
 PROSE = [
@@ -56,6 +56,7 @@ PROSE = [
     ),
     ("Charts in 12 point.", "firm's own Word file"),  # reaches the base-rendered brief
     ("Charts in 12 point in mediation briefs.", "firm's own Word file"),
+    ("Charts in 12 point in memos.", "firm's own Word file"),
 ]
 
 

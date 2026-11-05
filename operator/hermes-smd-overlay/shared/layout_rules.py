@@ -80,7 +80,7 @@ _HEX = re.compile(r"^[0-9A-Fa-f]{6}$")
 #: the lane's in-place editor cannot move on it (``brief_base.BASE_OWNS``). A
 #: rule setting one of these keys for such a class is not compiled: the lane
 #: could not apply it there, so the firm must not be told it is in effect.
-BASE_CLASSES = ("mediation_brief",)
+BASE_CLASSES = ("mediation_brief", "memo")
 BASE_OWNS = ("table_font_pt", "table_header_fill", "table_total_fill", "table_border_pt")
 
 
@@ -322,7 +322,7 @@ def compile_rule(text: str) -> tuple[dict[str, Any] | None, list[str], str]:
             None,
             [],
             (
-                f"{', '.join(owned)} is set by the firm's own Word file for a mediation brief, "
+                f"{', '.join(owned)} is set by the firm's own Word file for this document, "
                 "which the Operator cannot change in place"
             ),
         )

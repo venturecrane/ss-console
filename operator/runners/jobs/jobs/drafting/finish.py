@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
-from . import brief_base, pleading, prerender, render
+from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
@@ -382,7 +382,7 @@ class Finish:
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
         fmt, paper, held = self.firm.data["format"], self.paper(), self.firm.firm_base(self.cls)
         dest = deliver.out_dir(self.data) / self._names(u)["draft"]
-        path, report, laid, checked = brief_base.lay_out(doc, dest, self.cls, fmt, paper, held, self.rule_layout)
+        path, report, laid, checked = base_lay.lay_out(doc, dest, self.cls, fmt, paper, held, self.rule_layout)
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
