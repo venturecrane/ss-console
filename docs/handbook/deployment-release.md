@@ -446,7 +446,9 @@ Two workflows run the release (ADR 0096).
   An older release gives way, for at most one bake, to a newer one already done
   on the ring before, so a ring is not restarted twice in a few minutes. One
   tick moves every ring that has a release ready, so staging taking each new
-  merge never keeps the client ring waiting.
+  merge never keeps the client ring waiting. Every step of a run (image,
+  skills, jobs bundle) ends early when a newer image is published mid-step,
+  so the run it starts can take that image from staging (2026-11-05).
   A seat already on a newer release is never moved back to an older one:
   - a seat whose latest rollout is `rolled_back` or `failed` is a **standing
     halt**: nothing moves until a person acts, and the `rollout_failed` pager

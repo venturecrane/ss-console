@@ -391,6 +391,7 @@ class Ticker:
         *,
         dry_run: bool = False,
         refresh: Callable[[], list[dict[str, Any]]] | None = None,
+        yield_when: Callable[[], bool] | None = None,
     ) -> int:
         """`latest`: one step across every release still in flight, newest first.
 
@@ -417,6 +418,12 @@ class Ticker:
         the newest release, always ready for ring 0 while merges flow, would
         otherwise take every tick: on 2026-10-26 the client ring sat ready for
         its release while three ticks in a row went to staging.
+
+        ``yield_when`` is the same hand-off for a step that is not the image step
+        (skills, bundles): asked between waves and after each ring, True means
+        a newer IMAGE was published, and this run ends with progress so the run
+        it starts can take that image from ring 0 (2026-11-05: a bundle step
+        held the lane 25 minutes through every ring while an image waited).
 
         ``refresh`` re-reads the releases in flight after each ring moves. When
         it returns a NEWER release than the one this run started on, the run
@@ -452,7 +459,7 @@ class Ticker:
                 rel, plan = self._choose(rings, candidates, tag, taken)
                 if plan.code == TICK_PROGRESS and plan.ring is not None:
                     taken.add(plan.ring.number)
-                    newer_landed = (lambda: self._newer_than(refresh, newest)) if refresh is not None else None
+                    newer_landed = (lambda: self._newer_than(refresh, newest)) if refresh is not None else yield_when
                     if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease, stop=newer_landed) == TICK_HALT:
                         return TICK_HALT
                     if refresh is not None:
@@ -463,6 +470,12 @@ class Ticker:
                                 f"ring {plan.ring.number}; this run ends here and the next run takes it"
                             )
                             return TICK_PROGRESS
+                    elif yield_when is not None and yield_when():
+                        self.log(
+                            f"tick {newest}: a newer image was published while this run moved ring "
+                            f"{plan.ring.number}; this run ends here so the next run takes it"
+                        )
+                        return TICK_PROGRESS
                     continue
                 if taken:
                     return TICK_PROGRESS

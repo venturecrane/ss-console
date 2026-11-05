@@ -441,6 +441,45 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     assert _done_releases(w2, "brokery") == [w2.rel["release_id"]]
 
 
+def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_path) -> None:
+    """The image step hands off through ``refresh``; the skills and bundle steps hand off through
+    ``yield_when``, asked between waves and after each ring. 2026-11-05: run 41982023842's bundle step
+    carried its release through every ring (06:57 to 07:22Z) while 6db0f014's image waited.
+    FALSIFIER: ignore ``yield_when`` and all four client seats deploy on the old release."""
+    from types import SimpleNamespace
+
+    from bin.lib.fleet.artifact_tick import newer_image_since
+
+    w = _tick_world(tmp_path)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price", "pilot-smokeball", "scott", "brokery"], 2, 0),
+    ]
+    newer = {**w.rel, "release_id": "img-202610190100-22222222"}
+    signal = newer_image_since(SimpleNamespace(store=w.store))
+    assert signal() is False  # nothing newer yet
+
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+
+        def seat(s: str, r: int):
+            out = w.roll.run(s, r, plan)
+            # A newer image lands while the first client wave rolls.
+            if s != "smd-staging" and newer["release_id"] not in w.store.releases:
+                w.store.insert_release(newer)
+            return out
+
+        return seat
+
+    w.clock.t = T0
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", yield_when=signal) == TICK_PROGRESS
+    apps = [app for app, _, _ in w.fly.deploys]
+    assert apps[0] == "hermes-smd-staging" and len(apps) == 3, apps
+    assert any("a newer image was published while this run moved ring 1" in line for line in w.logs)
+    assert signal() is True
+
+
 def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:
     w = _tick_world(tmp_path)
     older, newer = _two_releases(w)
