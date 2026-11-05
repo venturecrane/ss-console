@@ -194,7 +194,7 @@ def apply_for(path: Path, fmt: dict[str, Any], cls: str) -> list[str]:
     from . import briefpage
 
     notes = apply(path, spec, authored_title(fmt, cls))
-    briefpage.apply(path, fmt, cls, spec.pitch_pt, signature=False)  # the first page, at half the pitch
+    briefpage.apply(path, fmt, cls, spec.pitch_pt, move=False)  # the first page and signature, single spaced again
     return notes
 
 
@@ -304,10 +304,11 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     return notes
 
 
-def check(doc: Any, blob: bytes, spec: Spec, front_single: bool = False) -> list[str]:
+def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None) -> list[str]:
     """What is wrong with ``doc`` as pleading paper under ``spec``; empty is a
-    pass. ``front_single``: the lines above the body are at half the pitch
-    (``briefpage``, which checks them), so this pitch rule skips them."""
+    pass. ``off_pitch``: the lines the firm sets single spaced (``briefpage``,
+    which checks them: the first page, the signature lines), which this pitch
+    rule skips."""
     import zipfile
 
     from docx.enum.text import WD_LINE_SPACING
@@ -335,10 +336,8 @@ def check(doc: Any, blob: bytes, spec: Spec, front_single: bool = False) -> list
         fails.append("pleading: the margin rules are missing")
     if not re.search(rf'name="{BOX_NAME}"', headers):
         fails.append("pleading: no line-number box")
-    from . import briefpage
-
-    front = briefpage.front_paragraphs(doc) if front_single else []
-    skip = {id(p._p) for p in front}
+    held = list(off_pitch or [])
+    skip = {id(p._p) for p in held}
     off = [
         p
         for p in _all_paragraphs(doc)

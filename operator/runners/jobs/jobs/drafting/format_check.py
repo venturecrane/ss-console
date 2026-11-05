@@ -244,7 +244,11 @@ def check_headings(doc: Any, rules: Any, res: Result, pitch: bool = False) -> No
                 res.fails.append(f"heading: level {lv} {attr.replace('_', ' ')} not {want} point: {p.text[:40]}")
 
 
-def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False, front_single: bool = False) -> None:
+def check_body(
+    doc: Any, rules: Any, res: Result, pitch: bool = False, front_single: bool = False, held: list[Any] | None = None
+) -> None:
+    """``held``: lines briefpage sets single spaced (the signature lines), which
+    the body's spacing rules skip; briefpage checks them."""
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
     from docx.shared import Inches, Pt
 
@@ -280,7 +284,8 @@ def check_body(doc: Any, rules: Any, res: Result, pitch: bool = False, front_sin
                 res.fails.append(
                     f"heading: a provider line not bold italic at {rules.bold_italic_heading_indent_in} inch"
                 )
-    prose = [p for p in body if p not in providers]
+    skip = {id(p._p) for p in held or []}
+    prose = [p for p in body if p not in providers and id(p._p) not in skip]
     if pitch:
         pass  # pleading paper: every line at the paper's pitch (pleading.check)
     elif rules.body_exact_pt:
@@ -452,8 +457,10 @@ def check(
         if spec is None:
             res.fails.append("pleading: the request asks for pleading paper and the firm has none authored")
         else:
-            res.fails += pleading.check(doc, blob, spec, briefpage.opts(fmt, cls)["front_single_spaced"])
-    check_body(doc, rules, res, pitch, briefpage.opts(fmt, cls)["front_single_spaced"])
+            res.fails += pleading.check(doc, blob, spec, briefpage.off_pitch(doc, fmt, cls))
+    o = briefpage.opts(fmt, cls)
+    held = briefpage.signature_lines(doc) if o["signature_single_spaced"] else []
+    check_body(doc, rules, res, pitch, bool(o["front_single_spaced"]), held)
     check_footer(doc, blob, rules, res)
     res.fails += frontpage.check(doc, fmt, cls)
     spec_pt = pleading.spec_for(fmt).pitch_pt if pitch and pleading.spec_for(fmt) else None  # type: ignore[union-attr]

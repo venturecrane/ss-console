@@ -113,8 +113,14 @@ LAYOUT_KEYS = {
     # The first page single spaced, a rule under the caption, the date beside
     # the "By:" line (briefpage.py; A&P, 2026-11-04 3:28 PM).
     "front_single_spaced": "bool",
-    "caption_rule_below": "bool",
+    "caption_rule_below": "rule",  # true (full width) or "left" (to the caption's vertical line)
     "signature_date_beside": "bool",
+    # Chris, 2026-11-04 5:03 PM: the Dated/By and name lines single spaced, the
+    # blank signature lines above them, two blank lines from "Attorneys for"
+    # to the court (frontpage.py).
+    "signature_single_spaced": "bool",
+    "signature_gap_lines": "lines",
+    "front_court_gap_lines": "lines",
 }
 
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
@@ -263,6 +269,8 @@ def _layout_value_ok(value: object, kind: str) -> bool:
         return num(value) and 8 <= float(value) <= 20  # type: ignore[arg-type]
     if kind == "border":
         return num(value) and 0.25 <= float(value) <= 6  # type: ignore[arg-type]
+    if kind == "rule":
+        return isinstance(value, bool) or value == "left"
     if kind == "lines":
         return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 6
     if kind == "hex":
