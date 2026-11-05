@@ -68,6 +68,7 @@ class Finish:
         doorway: Any
         log: Callable[[str], None]
         date_stamp: str
+        rule_layout: dict[str, Any]
         _units: list[Unit] | None
         _corpus: dict[str, str] | None
 
@@ -379,9 +380,8 @@ class Finish:
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
-        fmt, paper = self.firm.data["format"], self.paper()
+        fmt, paper, held = self.firm.data["format"], self.paper(), self.firm.firm_base(self.cls)
         dest = deliver.out_dir(self.data) / self._names(u)["draft"]
-        held = self.firm.firm_base(self.cls)
         path, report, laid, checked = brief_base.lay_out(doc, dest, self.cls, fmt, paper, held, self.rule_layout)
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
