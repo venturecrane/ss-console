@@ -1,0 +1,28 @@
+-- 0149: which version of each lane's firm inputs a seat runs reaches fleet_status
+--
+-- A firm's lane configuration (the demand, drafting, litigation, case file and
+-- records inputs, and the chronology lane's medchron-firm.yaml) now reaches a
+-- RUNNING seat within a poll of being published to R2: the root firm-inputs
+-- applier (overlay firm_inputs_applier) stages it, validates it with the
+-- runner's own validator, and swaps a symlink, with no restart. The seat ships
+-- what each lane runs on every heartbeat as `firm_inputs` (overlay
+-- shared/fleet_facts.py read_firm_inputs):
+--
+--   firm_inputs_json  {"<lane>": {"etag8", "verdict", "applied_at"[,
+--                     "rejected_etag8"]}}, lanes from a fixed set, etag8 the
+--                     first 8 hex of the marker object's ETag, verdict
+--                     fetched | rejected (a published version the validator
+--                     refused; the live copy stands). Validated whole by
+--                     parseFirmInputs, else NULL. Plain overwrite at ingest,
+--                     INCLUDING back to NULL, like bundles_json: `fleet status`
+--                     must never show a version the seat no longer reports.
+--
+-- Read back by `fleet status` (operator/bin/lib/fleet/status.py) so a publish
+-- can be confirmed on the seat by comparing the column to the vault's ETag.
+--
+-- Deploy ordering is safe by construction: deploy.yml applies migrations
+-- before the Workers deploy, and only the new code names the column.
+--
+-- Manual-only rollback at migrations/rollbacks/0149_fleet_status_firm_inputs_down.sql.
+
+ALTER TABLE fleet_status ADD COLUMN firm_inputs_json TEXT;

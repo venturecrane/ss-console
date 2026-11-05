@@ -591,8 +591,9 @@ else
   log "Authored-spec boot fetch NOT run (R2 config creds absent, or spec_applier not in this overlay)"
 fi
 # Skills as a release artifact (fleet waves): installed before the drop so
-# bootstrap seeds from it; its poller re-installs a promoted version live.
-smd_skills_applier
+# bootstrap seeds from it; its poller re-installs a promoted version live. The
+# firm-inputs boot tick then records what the lane fragments adopted.
+smd_skills_applier; smd_firm_inputs_applier
 
 # Re-assert ownership after the fetch. The applier hardens each file it writes,
 # but asserting here too means a tree left behind by an OLDER overlay build — one
@@ -633,11 +634,11 @@ log "Workspace broker started as uid $(id -u workspace-broker); dropping gateway
 # on its own after 5 s, on its own thread, and the respawn loop restarts the
 # process if it dies; a Machine stop ends all four (exit 130).
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import root_pollers, config_applier, spec_applier, skills_applier, establish_intake" 2>/dev/null; then
+   && /opt/hermes/.venv/bin/python -c "import root_pollers, config_applier, spec_applier, skills_applier, firm_inputs_applier, establish_intake" 2>/dev/null; then
   smd_root_poller root_pollers "root pollers"
   log "Root config applier launched (uid 0; polls R2 for live customer.yaml changes)"
   log "Root authored-spec applier launched (uid 0; polls R2 for live spec changes)"
-  log "Root skills applier launched (uid 0; polls this seat's skills pointer)"
+  log "Root skills and firm-inputs appliers launched (uid 0; poll the skills pointer and each authored lane's firm inputs)"
   log "Root establishment intake launched (uid 0; polls ${ESTABLISH_SPOOL_DIR}/runs for admin-instructed voice/shape submissions)"
 else
   log "Root config applier NOT launched (R2 config creds absent, or an applier is not in this overlay)"

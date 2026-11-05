@@ -54,28 +54,8 @@ MEDCHRON_FIRM_CONFIG="${CONFIG_DIR}/medchron-firm.yaml"
 . /app/entrypoint-fetch-inputs.sh
 _vault="s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/"
 _r2() { AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" aws "$@" --endpoint-url "${_seed_endpoint}"; }
-rm -f "${SMD_LANE_INPUTS_STATE_DIR:-/run/smd-lanes}/medchron.inputs"
-if ! lane_on medchron; then
-  log "medchron lane not authored; medchron-firm.yaml not fetched"
-elif _r2 s3 cp --only-show-errors "${_vault}medchron-firm.yaml" "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
-  mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"
-  _record_lane_inputs_state medchron fetched || true
-  log "medchron-firm.yaml refreshed from R2 into ${CONFIG_DIR}"
-elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  _record_lane_inputs_state medchron kept || true
-  log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
-elif ! _r2 s3 ls "${_vault}medchron-firm.yaml" >/dev/null 2>&1 && _r2 s3 ls "${_vault}" >/dev/null 2>&1; then
-  _record_lane_inputs_state medchron absent || true
-  log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
-else
-  _record_lane_inputs_state medchron unreachable || true
-  log "WARN: medchron-firm.yaml could not be fetched and the vault could not be read cleanly; the chronology runner will refuse jobs"
-fi
-rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
-if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
-  chown root:jobs "${MEDCHRON_FIRM_CONFIG}"
-  chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
-fi
+# The fetch itself runs at the END of this file, after the jobs bundle is
+# mounted: the copy is validated by the runner's own loader before it is used.
 
 # ss#2614: the chronology runner's tree, converged on every boot with explicit
 # owners and modes (never mkdir -p defaults; the establish-spool note below
@@ -206,3 +186,33 @@ fi
 # runs before the lane fragments, the jobs daemon and the gateway use either.
 # shellcheck source=/dev/null
 . /app/entrypoint-bundles.sh
+
+# The chronology's firm config (declared above), fetched here so the bundle's
+# validator judges it before the swap. Every name it uses is defined above.
+rm -f "${SMD_LANE_INPUTS_STATE_DIR:-/run/smd-lanes}/medchron.inputs"
+if lane_on medchron; then
+  _lane_inputs_legacy "${MEDCHRON_FIRM_CONFIG}" || log "WARN: could not convert ${MEDCHRON_FIRM_CONFIG} to a versioned copy"
+  _lane_inputs_label "vaults/${CUSTOMER_SLUG}/medchron-firm.yaml"
+fi
+if ! lane_on medchron; then
+  log "medchron lane not authored; medchron-firm.yaml not fetched"
+elif _r2 s3 cp --only-show-errors "${_vault}medchron-firm.yaml" "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null; then
+  # Versioned (medchron-firm.v<etag8>.yaml) and validated by jobs.medchron.config
+  # before the symlink swap; a refused copy keeps the live one and says so.
+  _record_lane_inputs_state medchron fetched || true
+  _adopt_lane_inputs medchron "${MEDCHRON_FIRM_CONFIG}" "${MEDCHRON_FIRM_CONFIG}.r2.tmp" || true
+elif [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
+  _record_lane_inputs_state medchron kept || true
+  log "WARN: R2 fetch of medchron-firm.yaml failed; keeping the existing root-owned copy"
+elif ! _r2 s3 ls "${_vault}medchron-firm.yaml" >/dev/null 2>&1 && _r2 s3 ls "${_vault}" >/dev/null 2>&1; then
+  _record_lane_inputs_state medchron absent || true
+  log "No medchron-firm.yaml in the vault for ${CUSTOMER_SLUG}; the chronology runner will refuse jobs"
+else
+  _record_lane_inputs_state medchron unreachable || true
+  log "WARN: medchron-firm.yaml could not be fetched and the vault could not be read cleanly; the chronology runner will refuse jobs"
+fi
+rm -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" 2>/dev/null || true
+if [ -f "${MEDCHRON_FIRM_CONFIG}" ]; then
+  chown root:jobs "${MEDCHRON_FIRM_CONFIG}"
+  chmod 0640 "${MEDCHRON_FIRM_CONFIG}"
+fi

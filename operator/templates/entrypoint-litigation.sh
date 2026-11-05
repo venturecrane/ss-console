@@ -45,10 +45,10 @@ export JOBS_LITIGATION_TEXTCACHE_DIR="${JOBS_RUN_DIR}/litigation/textcache"
 # like the drafting inputs: refreshed from the vault every boot, the existing
 # copy kept on a failed fetch, deferred litigation jobs when there is none.
 export JOBS_LITIGATION_INPUTS="${CONFIG_DIR}/litigation"
+# Versioned and validated before the swap (entrypoint-fetch-inputs.sh says how).
+_lane_inputs_begin litigation "${JOBS_LITIGATION_INPUTS}"
 if _fetch_lane_inputs litigation "${JOBS_LITIGATION_INPUTS}" litigation-firm.yaml; then
-  rm -rf "${JOBS_LITIGATION_INPUTS}"
-  mv "${JOBS_LITIGATION_INPUTS}.r2.tmp" "${JOBS_LITIGATION_INPUTS}"
-  log "litigation firm inputs refreshed from R2 into ${JOBS_LITIGATION_INPUTS}"
+  _adopt_lane_inputs litigation "${JOBS_LITIGATION_INPUTS}" "${JOBS_LITIGATION_INPUTS}.r2.tmp" || true
 elif [ -f "${JOBS_LITIGATION_INPUTS}/litigation-firm.yaml" ]; then
   log "WARN: R2 fetch of the litigation firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
 elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
@@ -57,9 +57,7 @@ else
   log "ERROR: the litigation firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the litigation lane will defer litigation jobs until a restart fetches them"
 fi
 if [ -d "${JOBS_LITIGATION_INPUTS}" ]; then
-  chown -R root:jobs "${JOBS_LITIGATION_INPUTS}"
-  find "${JOBS_LITIGATION_INPUTS}" -type d -exec chmod 0750 {} +
-  find "${JOBS_LITIGATION_INPUTS}" -type f -exec chmod 0640 {} +
+  _own_lane_inputs "${JOBS_LITIGATION_INPUTS}/"
 fi
 
 # The broker's copy of the firm config: the same bytes, group workspace-broker,

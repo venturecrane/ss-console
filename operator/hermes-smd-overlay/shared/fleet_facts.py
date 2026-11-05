@@ -1,6 +1,6 @@
 """What a seat is running and how busy it is, for the fleet table (ss seat fleet scaling).
 
-Seven heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
+Eight heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
 
 * ``image_ref`` — the Fly image the Machine booted (``FLY_IMAGE_REF``, which Fly
   sets on every Machine). A rollout's read-back compares this to the release it
@@ -17,6 +17,13 @@ Seven heartbeat fields, read fresh on every beat by :func:`read_fleet_facts`:
   this boot). The release controller reads it back after a bundle restart.
   ``build_payload`` puts it on the wire together with the ingest column that
   stores it (ss-console#3661), so the field and its reader land in one change.
+* ``firm_inputs`` — which version of each lane's firm inputs the seat runs:
+  ``{"records": {"etag8": "1a2b3c4d", "verdict": "fetched", "applied_at":
+  "<ISO>"}}``, with ``"verdict": "rejected"`` and ``rejected_etag8`` when the
+  vault holds a version the validator refused (the live copy stays). Read from
+  the root firm-inputs applier's ``/run/smd-firm-inputs/state.json``; absent on
+  a seat that authors no lane with firm inputs. The validator's detail line
+  stays on the seat (it can name a firm's own values).
 * ``jobs_running`` / ``jobs_queued`` / ``wakes_pending`` — sums over every lane's
   heartbeat file. The rollout's busy gate reads these before it restarts a seat.
 
@@ -49,6 +56,12 @@ DEFAULT_CONFIG_PATH = "/var/lib/smd-config/customer.yaml"
 DEFAULT_SKILLS_VERSION_PATH = "/var/lib/smd-skills/current/VERSION"
 DEFAULT_LANE_RUN_DIR = "/run/smd-medchron"
 DEFAULT_BUNDLE_STATE_DIR = "/run/smd-bundles"
+DEFAULT_FIRM_INPUTS_STATE = "/run/smd-firm-inputs/state.json"
+#: What the ingest accepts for ``firm_inputs`` (src/lib/operator/heartbeat-parsers.ts).
+FIRM_INPUT_LANES = ("demand", "drafting", "litigation", "casefile", "records", "medchron")
+FIRM_INPUT_VERDICTS = ("fetched", "rejected")
+_ETAG8 = re.compile(r"\A[0-9a-f]{8}\Z")
+_ISO_Z = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 #: Bundle names and values the ingest accepts (src/pages/api/internal/heartbeat.ts).
 _BUNDLE_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,31}\Z")
 _BUNDLE_VALUE = re.compile(r"\A(?:image|[0-9]{12}-[0-9a-f]{8})\Z")
@@ -85,6 +98,7 @@ class FleetFacts(NamedTuple):
     jobs_queued: int | None
     wakes_pending: int | None
     bundles: dict[str, str] | None = None
+    firm_inputs: dict[str, dict[str, str | None]] | None = None
 
 
 class LaneCounts(NamedTuple):
@@ -140,6 +154,39 @@ def read_bundles(path: str | Path = DEFAULT_BUNDLE_STATE_DIR) -> dict[str, str] 
         if _BUNDLE_VALUE.match(value):
             bundles[entry.name] = value
     return bundles or None
+
+
+def read_firm_inputs(
+    path: str | Path = DEFAULT_FIRM_INPUTS_STATE,
+) -> dict[str, dict[str, str | None]] | None:
+    """Each lane's firm-inputs version from the applier's state file; None when absent.
+
+    Only the fields the ingest stores, each checked against its shape: an entry
+    the ingest would refuse is left out rather than sent.
+    """
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(doc, dict):
+        return None
+    out: dict[str, dict[str, str | None]] = {}
+    for lane in FIRM_INPUT_LANES:
+        entry = doc.get(lane)
+        if not isinstance(entry, dict) or entry.get("verdict") not in FIRM_INPUT_VERDICTS:
+            continue
+        etag = entry.get("etag8")
+        applied = entry.get("applied_at")
+        row: dict[str, str | None] = {
+            "etag8": etag if isinstance(etag, str) and _ETAG8.match(etag) else None,
+            "verdict": entry["verdict"],
+            "applied_at": applied if isinstance(applied, str) and _ISO_Z.match(applied) else None,
+        }
+        rejected = entry.get("rejected_etag8")
+        if entry["verdict"] == "rejected" and isinstance(rejected, str) and _ETAG8.match(rejected):
+            row["rejected_etag8"] = rejected
+        out[lane] = row
+    return out or None
 
 
 def _count(value: object) -> int | None:
@@ -220,6 +267,7 @@ def read_fleet_facts(
     config_path: str | Path = DEFAULT_CONFIG_PATH,
     skills_version_path: str | Path = DEFAULT_SKILLS_VERSION_PATH,
     bundle_state_dir: str | Path = DEFAULT_BUNDLE_STATE_DIR,
+    firm_inputs_state: str | Path = DEFAULT_FIRM_INPUTS_STATE,
     run_dir: str | Path | None = None,
     clock: Callable[[], float] = time.time,
 ) -> FleetFacts:
@@ -232,12 +280,14 @@ def read_fleet_facts(
         jobs_queued=lanes.queued,
         wakes_pending=lanes.wakes_pending,
         bundles=read_bundles(bundle_state_dir),
+        firm_inputs=read_firm_inputs(firm_inputs_state),
     )
 
 
 __all__ = [
     "DEFAULT_BUNDLE_STATE_DIR",
     "DEFAULT_CONFIG_PATH",
+    "DEFAULT_FIRM_INPUTS_STATE",
     "DEFAULT_LANE_RUN_DIR",
     "DEFAULT_SKILLS_VERSION_PATH",
     "LANE_HEARTBEATS",
@@ -246,6 +296,7 @@ __all__ = [
     "LaneCounts",
     "read_bundles",
     "read_config_digest",
+    "read_firm_inputs",
     "read_fleet_facts",
     "read_image_ref",
     "read_lane_counts",

@@ -27,6 +27,8 @@ from typing import Any
 
 import yaml
 
+from ..firm_inputs import pin
+
 ENV_DIR = "JOBS_RECORDS_INPUTS_DIR"
 DEFAULT_DIR = "/var/lib/smd-config/records"
 CONFIG_NAME = "records-firm.yaml"
@@ -75,7 +77,8 @@ class RecordsFirm:
 
 
 def resolve_dir(explicit: str | Path | None = None) -> Path:
-    return Path(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
+    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
+    return pin(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
 
 
 def load(explicit: str | Path | None = None) -> RecordsFirm:

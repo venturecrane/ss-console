@@ -38,6 +38,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
+from .firm_inputs import pin_env
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
@@ -163,7 +164,7 @@ class DemandLane(Daemon):
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in VENDOR_ENV_PASS}
         env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
         if self.inputs_dir:
-            env[INPUTS_ENV] = str(self.inputs_dir)
+            env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         env.setdefault("JOBS_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))

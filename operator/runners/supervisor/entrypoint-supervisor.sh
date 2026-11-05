@@ -151,6 +151,20 @@ smd_skills_applier() {
   # The poll loop runs in the one root poller process (entrypoint.sh, root_pollers).
 }
 
+# A firm's lane configuration adopted live (firm_inputs_applier): one tick at
+# boot, AFTER the lane fragments adopted what the vault held, so the state file
+# the heartbeat reads exists from the first beat and a publish that landed during
+# the boot is taken now. Never fatal; the poll loop runs in root_pollers.
+smd_firm_inputs_applier() {
+  if [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_BUCKET_CONFIG:-}" ] \
+     || ! /opt/hermes/.venv/bin/python -c "import firm_inputs_applier" 2>/dev/null; then
+    log "Root firm-inputs applier NOT launched (R2 config creds absent, or firm_inputs_applier not in this overlay)"
+    return 0
+  fi
+  /opt/hermes/.venv/bin/python -m firm_inputs_applier --once \
+    || log "WARN: firm-inputs boot tick exited non-zero; the lanes keep what the boot adopted"
+}
+
 _smd_alive() {
   kill -0 "$1" 2>/dev/null || return 1
   case "$(ps -o stat= -p "$1" 2>/dev/null)" in Z*) return 1 ;; esac

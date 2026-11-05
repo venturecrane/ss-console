@@ -85,3 +85,151 @@ _fetch_lane_inputs() {
   _record_lane_inputs_state "${prefix}" "${state}" || log "WARN: could not record the ${prefix} inputs state"
   return 1
 }
+
+# ---------- versioned inputs, validated before an atomic swap (2026-11-04) ----------
+# A lane's live path is a SYMLINK to a version named for the first 8 hex of its
+# marker object's ETag: ${CONFIG_DIR}/records -> records.v1a2b3c4d/, and the
+# chronology's ${CONFIG_DIR}/medchron-firm.yaml -> medchron-firm.v1a2b3c4d.yaml.
+# The boot fetches into <live>.r2.tmp as before, then _adopt_lane_inputs owns the
+# copy root:jobs, VALIDATES it with the runner's own validator from the jobs
+# bundle venv, and only then renames it to its version and swaps the symlink with
+# one rename. A refused copy is removed, the live symlink stays, and the verdict
+# word is `rejected`. The root firm-inputs applier (overlay firm_inputs_applier)
+# does the same live, every 15 s, so a published change reaches a running seat
+# with no restart; a running job resolved the symlink once and keeps its version.
+# Before this the swap was `rm -rf; mv` and validation ran after it, only logging.
+_FIRM_VALIDATOR_PY="${SMD_FIRM_VALIDATOR_PYTHON:-/opt/jobs/.venv/bin/python}"
+_FIRM_LINK_PY="${SMD_FIRM_LINK_PYTHON:-/opt/hermes/.venv/bin/python}"
+
+# _lane_version_path <live> <label>
+_lane_version_path() { case "$1" in *.yaml) printf '%s' "${1%.yaml}.v$2.yaml" ;; *) printf '%s' "$1.v$2" ;; esac; }
+
+# _swap_lane_link <live> <version-path>: point <live> at the version in ONE rename.
+_swap_lane_link() {
+  local tmp
+  tmp="$(dirname "$1")/.$(basename "$1").link-$$"
+  rm -f "${tmp}"
+  if ln -s "$(basename "$2")" "${tmp}" \
+     && "${_FIRM_LINK_PY}" -I -c 'import os, sys; os.replace(sys.argv[1], sys.argv[2])' "${tmp}" "$1"; then
+    return 0
+  fi
+  rm -f "${tmp}"
+  return 1
+}
+
+# _lane_inputs_legacy <live>: a copy from a boot before versioning (a real dir or
+# file) becomes version 00000000, so a failed fetch still keeps it and the
+# applier replaces it on its first tick.
+_lane_inputs_legacy() {
+  local v
+  if [ ! -e "$1" ] || [ -L "$1" ]; then return 0; fi
+  v="$(_lane_version_path "$1" 00000000)"
+  rm -rf "${v}"
+  mv "$1" "${v}" && _swap_lane_link "$1" "${v}"
+}
+
+# _lane_inputs_label <r2 key>: _LANE_LABEL = the key's ETag, first 8 hex, or "".
+# Read BEFORE the copy: a publish landing mid-copy then labels the copy with the
+# older ETag, and the applier's next tick sees the newer one and re-adopts.
+_lane_inputs_label() {
+  _LANE_LABEL="$(AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
+    aws s3api head-object --endpoint-url "${_seed_endpoint}" --bucket "${R2_BUCKET_CONFIG}" --key "$1" \
+      --query ETag --output text 2>/dev/null | tr -d '"' | cut -c1-8 | tr 'A-F' 'a-f')" || _LANE_LABEL=""
+  case "${_LANE_LABEL}" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+    *) _LANE_LABEL="" ;;
+  esac
+}
+
+# _lane_inputs_begin <lane> <live>: before a lane's fetch, convert a legacy copy
+# and read the version label of what is about to be fetched.
+_lane_inputs_begin() {
+  _lane_inputs_legacy "$2" || log "WARN: could not convert the $1 inputs at $2 to a versioned copy"
+  _lane_inputs_label "vaults/${CUSTOMER_SLUG}/$1/$1-firm.yaml"
+}
+
+# _own_lane_inputs <path>: root:jobs, dirs 0750, files 0640 (a trailing / follows the link).
+_own_lane_inputs() {
+  chown -R root:jobs "$1"
+  if [ -d "$1" ]; then
+    find "$1" -type d -exec chmod 0750 {} +
+    find "$1" -type f -exec chmod 0640 {} +
+  else
+    chmod 0640 "$1"
+  fi
+}
+
+# _validate_lane_inputs <lane> <path>: 0 valid, 1 refused, 2 the validator could
+# not run. Its last words go to _VALIDATE_OUT.
+_validate_lane_inputs() {
+  local rc=0
+  _VALIDATE_OUT=""
+  if [ ! -x "${_FIRM_VALIDATOR_PY}" ]; then
+    _VALIDATE_OUT="${_FIRM_VALIDATOR_PY} is not executable"
+    return 2
+  fi
+  if [ "$1" = medchron ]; then
+    _VALIDATE_OUT="$("${_FIRM_VALIDATOR_PY}" -c 'import sys
+from jobs.medchron.config import load
+load(sys.argv[1])' "$2" 2>&1)" || rc=$?
+  else
+    _VALIDATE_OUT="$("${_FIRM_VALIDATOR_PY}" -m "jobs.$1.firm" "$2" 2>&1)" || rc=$?
+  fi
+  _VALIDATE_OUT="$(printf '%s\n' "${_VALIDATE_OUT}" | grep -v '^[[:space:]]*$' | tail -n 1 | cut -c1-300)" || true
+  case "${rc}" in 0) return 0 ;; 1) return 1 ;; *) return 2 ;; esac
+}
+
+# _prune_lane_versions <live>: keep the newest three versions and the live one.
+_prune_lane_versions() {
+  local cur v n=0 pat
+  cur="$(readlink "$1" 2>/dev/null)" || cur=""
+  case "$1" in *.yaml) pat="${1%.yaml}.v*.yaml" ;; *) pat="$1.v*" ;; esac
+  # shellcheck disable=SC2086,SC2012,SC2045 # the pattern is ours; version names are hex labels, sorted by mtime
+  for v in $(ls -1dt $pat 2>/dev/null); do
+    n=$((n + 1))
+    if [ "${n}" -le 3 ] || [ "$(basename "${v}")" = "${cur}" ]; then continue; fi
+    rm -rf "${v}"
+  done
+}
+
+# _adopt_lane_inputs <lane> <live> <staged>: own, validate, rename to its version
+# (_LANE_LABEL, else the marker's sha256), swap. 0 = the live path now names the
+# staged copy; 1 = the live copy stands (refused, or the validator could not run
+# while a copy was in place: a broken validator never replaces a working copy;
+# with NO copy the lane could not run anyway, so it adopts with a loud line and
+# the runner's own gate still checks every job).
+_adopt_lane_inputs() {
+  local lane="$1" live="$2" staged="$3" label="${_LANE_LABEL:-}" ver marker rc=0
+  if [ -z "${label}" ]; then
+    marker="${staged}"
+    if [ -d "${staged}" ]; then marker="${staged}/${lane}-firm.yaml"; fi
+    label="$({ sha256sum "${marker}" 2>/dev/null || shasum -a 256 "${marker}"; } | cut -c1-8)" || label=""
+  fi
+  _own_lane_inputs "${staged}"
+  _validate_lane_inputs "${lane}" "${staged}" || rc=$?
+  if [ "${rc}" = 1 ]; then
+    rm -rf "${staged}"
+    _record_lane_inputs_state "${lane}" rejected || log "WARN: could not record the ${lane} inputs state"
+    log "ERROR: the ${lane} firm inputs in the vault (version ${label}) do not validate, so they were NOT adopted; keeping $(readlink "${live}" 2>/dev/null || echo 'no copy'): ${_VALIDATE_OUT}"
+    return 1
+  fi
+  if [ "${rc}" = 2 ] && [ -e "${live}" ]; then
+    rm -rf "${staged}"
+    _record_lane_inputs_state "${lane}" kept || log "WARN: could not record the ${lane} inputs state"
+    log "WARN: the ${lane} firm validator could not run (${_VALIDATE_OUT}); keeping the existing copy, version ${label} not adopted"
+    return 1
+  fi
+  if [ "${rc}" = 2 ]; then
+    log "WARN: the ${lane} firm validator could not run (${_VALIDATE_OUT}) and this seat has no copy; adopting version ${label} UNCHECKED"
+  fi
+  ver="$(_lane_version_path "${live}" "${label}")"
+  rm -rf "${ver}"
+  if ! { mv "${staged}" "${ver}" && touch "${ver}" && _swap_lane_link "${live}" "${ver}"; }; then
+    rm -rf "${staged}"
+    log "ERROR: could not commit the ${lane} firm inputs version ${label} at ${live}"
+    return 1
+  fi
+  _prune_lane_versions "${live}"
+  log "${lane} firm inputs refreshed from R2 into ${live} (version ${label})"
+  return 0
+}

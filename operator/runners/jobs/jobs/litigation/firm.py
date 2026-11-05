@@ -53,6 +53,8 @@ from typing import Any
 
 import yaml
 
+from ..firm_inputs import pin
+
 from . import vocab
 
 ENV_DIR = "JOBS_LITIGATION_INPUTS"
@@ -251,7 +253,8 @@ class LitigationFirm:
 
 
 def resolve_dir(explicit: str | Path | None = None) -> Path:
-    return Path(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
+    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
+    return pin(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
 
 
 def load(explicit: str | Path | None = None) -> LitigationFirm:

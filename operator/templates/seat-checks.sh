@@ -700,6 +700,14 @@ check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/jobs/.venv
 else
 check_note "lane-memory-caps-leave-gateway-reserve" "this seat runs no job lane, so no lane cgroup takes memory from the gateway"
 fi
+# Firm inputs adopted live (2026-11-04, overlay firm_inputs_applier): each lane's
+# live path is a symlink to a versioned copy, and the applier's state file (the
+# heartbeat's firm_inputs) names that version. The two must agree and the version
+# must exist, or the fleet table says one thing while the lane runs another.
+# FALSIFIER: re-point a lane's symlink, delete its version, or delete the state.
+if any_lane_runs; then
+check_file "jobs-firm-inputs-current" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "firm-inputs-current-probe.py"
+fi
 # The negotiation watch (2026-10-09): its own daemon thread, the same checks,
 # and its state dir (file cursors: the child's alone, 0700).
 if lane_runs negotiation; then
@@ -740,7 +748,8 @@ fi
 MEDCHRON_AUTHORED=0
 lane_authored medchron && MEDCHRON_AUTHORED=1
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
-  check "medchron-firm-config-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml)\" = root:jobs:640 ]"
+  # stat -L: the live path is a symlink to its version (firm_inputs_applier).
+  check "medchron-firm-config-present" "[ \"\$(stat -L -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml)\" = root:jobs:640 ]"
   check "jobs-uid-cannot-write-config" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml\""
   check "jobs-token-shared" "[ \"\$(stat -c %G:%a ${SEAT_ROOT}/run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
   # A seat that authors a firm config must also carry the

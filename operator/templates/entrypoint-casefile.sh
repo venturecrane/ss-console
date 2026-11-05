@@ -39,10 +39,10 @@ export JOBS_CASEFILE_STATE_DIR="${JOBS_RUN_DIR}/casefile/state"
 # refreshed from the vault every boot, the existing copy kept on a failed
 # fetch, deferred casefile jobs when there is none.
 export JOBS_CASEFILE_INPUTS_DIR="${CONFIG_DIR}/casefile"
+# Versioned and validated before the swap (entrypoint-fetch-inputs.sh says how).
+_lane_inputs_begin casefile "${JOBS_CASEFILE_INPUTS_DIR}"
 if _fetch_lane_inputs casefile "${JOBS_CASEFILE_INPUTS_DIR}" casefile-firm.yaml; then
-  rm -rf "${JOBS_CASEFILE_INPUTS_DIR}"
-  mv "${JOBS_CASEFILE_INPUTS_DIR}.r2.tmp" "${JOBS_CASEFILE_INPUTS_DIR}"
-  log "casefile firm inputs refreshed from R2 into ${JOBS_CASEFILE_INPUTS_DIR}"
+  _adopt_lane_inputs casefile "${JOBS_CASEFILE_INPUTS_DIR}" "${JOBS_CASEFILE_INPUTS_DIR}.r2.tmp" || true
 elif [ -f "${JOBS_CASEFILE_INPUTS_DIR}/casefile-firm.yaml" ]; then
   log "WARN: R2 fetch of the casefile firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
 elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
@@ -51,9 +51,7 @@ else
   log "ERROR: the casefile firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the casefile lane will defer casefile jobs until a restart fetches them"
 fi
 if [ -d "${JOBS_CASEFILE_INPUTS_DIR}" ]; then
-  chown -R root:jobs "${JOBS_CASEFILE_INPUTS_DIR}"
-  find "${JOBS_CASEFILE_INPUTS_DIR}" -type d -exec chmod 0750 {} +
-  find "${JOBS_CASEFILE_INPUTS_DIR}" -type f -exec chmod 0640 {} +
+  _own_lane_inputs "${JOBS_CASEFILE_INPUTS_DIR}/"
   # The runner's own validator, the one staging ran: a copy that does not pass
   # it is said here at boot, not first discovered by a job at config_missing.
   # Exit 1 is a problem with the inputs (logged, the copy kept: the lane holds

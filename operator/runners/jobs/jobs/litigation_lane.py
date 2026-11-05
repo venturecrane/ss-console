@@ -42,6 +42,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
+from .firm_inputs import pin_env
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .proof import holds as proof_holds, watch as proof_watch
 from .skill_load import load_line
@@ -207,7 +208,7 @@ class LitigationLane(DraftingLane):
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
         env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
         if self.inputs_dir:
-            env[INPUTS_ENV] = str(self.inputs_dir)
+            env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         if self.state_dir:
             env[STATE_ENV] = str(self.state_dir)
         if self.textcache_dir:

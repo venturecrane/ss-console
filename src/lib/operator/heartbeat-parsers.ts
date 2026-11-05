@@ -13,6 +13,8 @@
  * `tests/heartbeat-field-parity.test.ts`.
  */
 
+import { parseFirmInputs } from './heartbeat-firm-inputs'
+
 export interface HeartbeatBody {
   heartbeat_ts: string
   last_audit_ts?: unknown
@@ -57,6 +59,7 @@ export interface HeartbeatBody {
   selftest?: unknown
   spec?: unknown
   bundles?: unknown
+  firm_inputs?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -721,6 +724,8 @@ export interface ParsedFleetRelease {
   wakesPending: number | null
   /** Migration 0144. `{name: version}` as JSON text, or NULL. Plain overwrite. */
   bundlesJson: string | null
+  /** Migration 0149. `{lane: {etag8, verdict, applied_at}}` as JSON text, or NULL. Plain overwrite. */
+  firmInputsJson: string | null
 }
 
 // The receiver's own bound on the three identity strings, for the same reason
@@ -753,6 +758,7 @@ export function parseFleetRelease(body: HeartbeatBody): ParsedFleetRelease {
     jobsQueued: parseNonNegInt(body.jobs_queued),
     wakesPending: parseNonNegInt(body.wakes_pending),
     bundlesJson: parseBundles(body.bundles),
+    firmInputsJson: parseFirmInputs(body.firm_inputs),
   }
 }
 

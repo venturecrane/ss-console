@@ -45,6 +45,12 @@ def _skills(stop: Stop) -> None:
     build_loop(with_audit=True).run_forever(stop=stop)
 
 
+def _firm_inputs(stop: Stop) -> None:
+    from firm_inputs_applier.__main__ import build_loop
+
+    build_loop(with_audit=True).run_forever(stop=stop)
+
+
 def _intake(stop: Stop) -> None:
     from establish_intake.__main__ import serve
 
@@ -56,6 +62,7 @@ POLLERS: dict[str, tuple[Callable[[Stop], None], str]] = {
     "config_applier": (_config, "SMD_APPLIER_LOG_LEVEL"),
     "spec_applier": (_spec, "SMD_SPEC_LOG_LEVEL"),
     "skills_applier": (_skills, "SMD_SKILLS_LOG_LEVEL"),
+    "firm_inputs_applier": (_firm_inputs, "SMD_FIRM_INPUTS_LOG_LEVEL"),
     "establish_intake": (_intake, "SMD_ESTABLISH_LOG_LEVEL"),
 }
 
@@ -67,7 +74,7 @@ def supervise(name: str, run: Callable[[Stop], None], stopping: threading.Event)
             run(stopping.is_set)
         except SystemExit as exc:  # a builder's "required env var unset"
             logger.error("%s: startup failed: %s", name, exc)
-        except Exception:  # noqa: BLE001 - one loop's crash must not end the other three
+        except Exception:  # noqa: BLE001 - one loop's crash must not end the others
             logger.exception("%s: exited with an error", name)
         if stopping.is_set():
             break

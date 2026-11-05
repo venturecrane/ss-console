@@ -24,10 +24,10 @@ export SMD_DRAFTING_QUEUE_DIR="${JOBS_RUN_DIR}/drafting-queue"
 # failed fetch, deferred drafting jobs when there is none. Root-owned, group
 # jobs read-only.
 export JOBS_DRAFTING_INPUTS="${CONFIG_DIR}/drafting"
+# Versioned and validated before the swap (entrypoint-fetch-inputs.sh says how).
+_lane_inputs_begin drafting "${JOBS_DRAFTING_INPUTS}"
 if _fetch_lane_inputs drafting "${JOBS_DRAFTING_INPUTS}" drafting-firm.yaml; then
-  rm -rf "${JOBS_DRAFTING_INPUTS}"
-  mv "${JOBS_DRAFTING_INPUTS}.r2.tmp" "${JOBS_DRAFTING_INPUTS}"
-  log "drafting firm inputs refreshed from R2 into ${JOBS_DRAFTING_INPUTS}"
+  _adopt_lane_inputs drafting "${JOBS_DRAFTING_INPUTS}" "${JOBS_DRAFTING_INPUTS}.r2.tmp" || true
 elif [ -f "${JOBS_DRAFTING_INPUTS}/drafting-firm.yaml" ]; then
   log "WARN: R2 fetch of the drafting firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
 elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
@@ -36,7 +36,5 @@ else
   log "ERROR: the drafting firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the drafting lane will defer drafting jobs until a restart fetches them"
 fi
 if [ -d "${JOBS_DRAFTING_INPUTS}" ]; then
-  chown -R root:jobs "${JOBS_DRAFTING_INPUTS}"
-  find "${JOBS_DRAFTING_INPUTS}" -type d -exec chmod 0750 {} +
-  find "${JOBS_DRAFTING_INPUTS}" -type f -exec chmod 0640 {} +
+  _own_lane_inputs "${JOBS_DRAFTING_INPUTS}/"
 fi
