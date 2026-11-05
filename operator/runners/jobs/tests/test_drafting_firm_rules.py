@@ -423,7 +423,7 @@ def _fake_probe(monkeypatch, fails_when):
         found = fails_when(checked["layout"])
         return SimpleNamespace(fails=[found] if found else [])
 
-    monkeypatch.setattr(brief_base, "lay_out", lay_out)
+    monkeypatch.setattr(base_lay, "lay_out", lay_out)
     monkeypatch.setattr(format_check, "check", check)
 
 
@@ -445,7 +445,7 @@ def test_a_probe_that_cannot_run_refuses_every_rule(tmp_path, spec_store, monkey
     def boom(*_a, **_k):
         raise brief_base.DraftingFailed("firm_base_unfit: x")
 
-    monkeypatch.setattr(brief_base, "lay_out", boom)
+    monkeypatch.setattr(base_lay, "lay_out", boom)
     run = _Run(tmp_path)
     assert firm_rules.start(run) == {}
     (row,) = [json.loads(x) for x in (run.data / firm_rules.LEDGER).read_text().splitlines()]
