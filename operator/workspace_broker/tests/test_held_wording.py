@@ -7,7 +7,7 @@ class. The model bound the reply and sent its own words instead ("The
 litigation status list was not produced ... tell me if you want the run
 requested again. SMD will also need to look at why it stopped."), and the
 broker transmitted them: the wording was an instruction in a skill, and
-nothing checked it. Now the broker holds the wording (``held_wording``) and
+nothing checked it. Now the broker holds the wording (``fixed_wording``) and
 refuses any other body for a held litigation job, naming the exact text so the
 retry succeeds in one step.
 
@@ -146,7 +146,7 @@ def test_the_refusal_reaches_the_overlay_under_its_own_code(tmp_path: Path) -> N
     with pytest.raises(BindingRefused) as refused:
         _send_body(tmp_path, box, "litigation_job", job, IMPROVISED)
     reply = error_response_for(refused.value)  # what the socket writes back
-    assert reply["ok"] is False and reply["error"] == "HeldWordingRefused"
+    assert reply["ok"] is False and reply["error"] == "FixedWordingRefused"
     assert STATUS_SMD in reply["message"]
 
 
@@ -186,7 +186,8 @@ def test_a_correct_text_part_cannot_carry_a_different_html_part(tmp_path: Path) 
 def test_the_bind_names_the_wording_before_the_draft(tmp_path: Path) -> None:
     job = _lit(tmp_path, "held", "gate_refused: x")
     out = _call(_broker(tmp_path, _box(), LIT_YAML), "msgraph_reply_bind", {"kind": "litigation_job", "job_id": job})
-    assert out["bound"] is True and out["held_wording"] == [STATUS_SMD]
+    # The key the deployed skills read, as it has been since 2026-10-24.
+    assert out["bound"] is True and out["held_wording"] == [STATUS_SMD] and "fixed_wording" not in out
 
 
 # -- every class, every lane ------------------------------------------------------
@@ -319,7 +320,7 @@ def test_a_held_chronology_sends_nothing_even_in_its_old_fixed_wording(tmp_path:
     job = _chron(tmp_path, "held", reason)
     box = _box()
     bound = _call(_broker(tmp_path, box, LIT_YAML), "msgraph_reply_bind", {"kind": "medchron_job", "job_id": job})
-    assert bound["bound"] is False and "Send nothing to anyone" in bound["reason"] and "held_wording" not in bound
+    assert bound["bound"] is False and "Send nothing to anyone" in bound["reason"] and "fixed_wording" not in bound
     for body in (text, IMPROVISED):
         with pytest.raises(BindingRefused) as refused:
             _send_body(tmp_path, box, "medchron_job", job, body)
@@ -328,22 +329,44 @@ def test_a_held_chronology_sends_nothing_even_in_its_old_fixed_wording(tmp_path:
 
 
 def test_the_chronology_has_no_held_wording() -> None:
-    from workspace_broker import held_wording
+    """Its delivered reply is worded (KIND_LANE); a held one never is."""
+    from workspace_broker import fixed_wording
 
-    assert "medchron_job" not in held_wording.KIND_LANE and "medchron" not in held_wording.WORDING
+    assert "medchron" not in fixed_wording.WORDING and "medchron" not in fixed_wording.HELD_CLASS_LANES
+    held = {"state": "held", "reason": "review_held: 2 must-fix findings", "matter_number": "900201"}
+    assert fixed_wording.render("medchron_job", held) == []
 
 
 # -- what is unaffected -------------------------------------------------------------
 
 
 @pytest.mark.parametrize("kind", ["litigation_job", "medchron_job"])
-def test_a_delivered_reply_is_not_held_to_fixed_wording(tmp_path: Path, kind: str) -> None:
+def test_a_delivered_reply_goes_in_the_models_words_with_the_switch_off(tmp_path: Path, kind: str) -> None:
+    """A seat in ``observe``, which is every seat until the proofs need it."""
     job = _lit(tmp_path, "delivered") if kind == "litigation_job" else _chron(tmp_path, "delivered")
     box = _box()
     out = _send_body(tmp_path, box, kind, job, "Filed: 64 matters, 3 new flags.")
     assert out["recipients"] == [ADMIN] and len(box.replies()) == 1
-    bound = _call(_broker(tmp_path, FakeMailbox(), LIT_YAML), "msgraph_reply_bind", {"kind": kind, "job_id": job})
-    assert "held_wording" not in bound
+
+
+@pytest.mark.parametrize("kind", ["litigation_job", "medchron_job"])
+def test_a_delivered_reply_is_held_to_its_fixed_wording_when_enforced(tmp_path: Path, kind: str) -> None:
+    """FLIPPED 2026-11-04 (mechanism 4), for a seat in ``enforce``. The model's
+    own words are refused with nothing spent, and the exact text then sends, once."""
+    job = _lit(tmp_path, "delivered") if kind == "litigation_job" else _chron(tmp_path, "delivered")
+    box = _box()
+    yaml_text = LIT_YAML + "logic_in_code:\n  fixed_wording: enforce\n"
+    binding = {"kind": kind, "job_id": job}
+    bound = _call(_broker(tmp_path, FakeMailbox(), yaml_text), "msgraph_reply_bind", binding)
+    texts = bound["fixed_wording"]
+    assert len(texts) == 1 and "<" not in texts[0]
+    send = {"payload": {"comment": "Filed: 64 matters, 3 new flags."}, "session_id": "sess-1"}
+    with pytest.raises(BindingRefused) as refused:
+        _call(_broker(tmp_path, box, yaml_text), "msgraph_reply_bound", binding, **send)
+    assert box.replies() == [] and texts[0] in str(refused.value)
+    send["payload"] = {"comment": texts[0]}
+    out = _call(_broker(tmp_path, box, yaml_text), "msgraph_reply_bound", binding, **send)
+    assert out["recipients"] == [ADMIN] and len(box.replies()) == 1
 
 
 @pytest.mark.parametrize("kind", ["litigation_job", "medchron_job"])
@@ -362,9 +385,9 @@ def test_a_failed_job_reaches_no_firm_send_at_all(tmp_path: Path, kind: str) -> 
 
 
 def test_the_refusal_message_is_json_safe_and_bounded() -> None:
-    from workspace_broker import held_wording
+    from workspace_broker import fixed_wording
 
     row = {"state": "held", "reason": "gate_refused: x", "report": None}
-    texts = held_wording.allowed("litigation_job", row)
+    texts = fixed_wording.allowed("litigation_job", row)
     assert texts == [STATUS_SMD]
     json.dumps(texts)

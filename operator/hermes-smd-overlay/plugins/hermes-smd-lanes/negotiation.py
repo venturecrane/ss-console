@@ -26,7 +26,16 @@ from .demand import STRING, _schema
 
 #: What the status read projects. A notice's message is the email; a job's
 #: counts are never matter facts.
-_NOTICE_KEYS = ("job_id", "kind", "state", "matter_number", "status", "message", "subject")
+_NOTICE_KEYS = (
+    "job_id",
+    "kind",
+    "state",
+    "matter_number",
+    "status",
+    "message",
+    "subject",
+    "reply_text",
+)
 _JOB_KEYS = (
     "job_id",
     "kind",

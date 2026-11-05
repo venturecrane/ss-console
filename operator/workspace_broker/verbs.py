@@ -59,6 +59,7 @@ from . import (
     records_verbs,
 )
 from .medchron_verbs import medchron_dispatch
+from .reply_text import with_reply_text
 from .send_witness import append_escalation_event
 
 Handler = Callable[[BrokerContext, str, dict[str, Any], int, "int | None"], dict[str, Any]]
@@ -95,6 +96,17 @@ GATEWAY_OR_AGENT = frozenset({GATEWAY, AGENT})
 
 def _medchron(broker: BrokerContext, action: str, request: dict[str, Any], pid: int, uid: int | None) -> dict[str, Any]:
     return medchron_dispatch(broker.medchron, action, request, pid, uid)
+
+
+# Each lane's single-job status read, with the reply the bind will enforce
+# (reply_text.with_reply_text, mechanism 4): the lane's own dispatch underneath.
+_medchron_status = with_reply_text("medchron_job", _medchron)
+_demand_status = with_reply_text("demand_job", demand_verbs.demand_dispatch)
+_drafting_status = with_reply_text("drafting_job", drafting_verbs.drafting_dispatch)
+_litigation_status = with_reply_text("litigation_job", litigation_verbs.litigation_dispatch)
+_negotiation_status = with_reply_text("negotiation_job", negotiation_verbs.negotiation_dispatch)
+_casefile_status = with_reply_text("casefile_job", casefile_verbs.casefile_dispatch)
+_note_status = with_reply_text("note_job", note_verbs.status_verb)
 
 
 def _escalation(
@@ -165,7 +177,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
     # ss#2614 routine 11; compound gates per medchron_verbs.py.
     Verb("medchron_job_submit", GATEWAY_OR_ROOT, _medchron),
-    Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron),
+    Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron_status),
     Verb("medchron_allowance", GATEWAY_ROOT_OR_AGENT, _medchron),
     Verb("medchron_job_list", ROOT_OR_AGENT, _medchron),
     # The help review's job outcomes (ss-console#3423 increment 3): lane, state,
@@ -188,7 +200,7 @@ VERBS: tuple[Verb, ...] = (
     # the chronology. Submit's requester and message ref come from the turn's
     # verified inbound (the overlay), never the model. Resume has no agent tool.
     Verb("demand_job_submit", GATEWAY_OR_ROOT, demand_verbs.demand_dispatch),
-    Verb("demand_job_status", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
+    Verb("demand_job_status", GATEWAY_ROOT_OR_AGENT, _demand_status),
     Verb("demand_allowance", GATEWAY_ROOT_OR_AGENT, demand_verbs.demand_dispatch),
     Verb("demand_job_record", _only(ROOT), demand_verbs.demand_dispatch),
     Verb("demand_job_resume", _only(ROOT), demand_verbs.demand_dispatch),
@@ -197,7 +209,7 @@ VERBS: tuple[Verb, ...] = (
     # The drafting job's request edge (drafting_verbs.py): the demand lane's
     # gates exactly, minus the re-run. Resume has no agent tool.
     Verb("drafting_job_submit", GATEWAY_OR_ROOT, drafting_verbs.drafting_dispatch),
-    Verb("drafting_job_status", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
+    Verb("drafting_job_status", GATEWAY_ROOT_OR_AGENT, _drafting_status),
     Verb("drafting_allowance", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
@@ -208,7 +220,7 @@ VERBS: tuple[Verb, ...] = (
     # gateway). No allowance verb: the lane is metered by the firm's monthly
     # budget, read on root's status. Resume and close have no agent tool.
     Verb("litigation_job_submit", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
-    Verb("litigation_job_status", GATEWAY_ROOT_OR_AGENT, litigation_verbs.litigation_dispatch),
+    Verb("litigation_job_status", GATEWAY_ROOT_OR_AGENT, _litigation_status),
     Verb("litigation_job_record", _only(ROOT), litigation_verbs.litigation_dispatch),
     Verb("litigation_job_resume", _only(ROOT), litigation_verbs.litigation_dispatch),
     # SMD's close of a held job it finished by hand: root only, no agent tool.
@@ -217,7 +229,7 @@ VERBS: tuple[Verb, ...] = (
     # only, so submit is the cron pre_run's agent uid or root, never a turn.
     # Status serves the completion turn a notice's message. Resume has no tool.
     Verb("negotiation_job_submit", ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
-    Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, negotiation_verbs.negotiation_dispatch),
+    Verb("negotiation_job_status", GATEWAY_ROOT_OR_AGENT, _negotiation_status),
     Verb("negotiation_job_record", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     Verb("negotiation_job_resume", _only(ROOT), negotiation_verbs.negotiation_dispatch),
     # The Case File Manager (casefile_verbs.py): a caseload read on request,
@@ -226,7 +238,7 @@ VERBS: tuple[Verb, ...] = (
     # table gate admits the agent uid for the scheduled run the lane will add;
     # the handler pins today's request form to the gateway or root.
     Verb("casefile_job_submit", GATEWAY_ROOT_OR_AGENT, casefile_verbs.casefile_dispatch),
-    Verb("casefile_job_status", GATEWAY_ROOT_OR_AGENT, casefile_verbs.casefile_dispatch),
+    Verb("casefile_job_status", GATEWAY_ROOT_OR_AGENT, _casefile_status),
     Verb("casefile_job_record", _only(ROOT), casefile_verbs.casefile_dispatch),
     Verb("casefile_job_resume", _only(ROOT), casefile_verbs.casefile_dispatch),
     Verb("casefile_job_close", _only(ROOT), casefile_verbs.casefile_dispatch),
@@ -247,7 +259,7 @@ VERBS: tuple[Verb, ...] = (
     # the recorded words through the status verb, gateway or root.
     Verb("note_preview", _only(ROOT), note_verbs.preview_verb),
     Verb("note_record", _only(ROOT), note_verbs.record_verb),
-    Verb("note_job_status", GATEWAY_OR_ROOT, note_verbs.status_verb),
+    Verb("note_job_status", GATEWAY_OR_ROOT, _note_status),
     # Proven delivery (2026-10-13): the runner daemon's alert row and its read
     # of a job's bound replies. Root only: no turn raises or reads them.
     Verb("delivery_proof_alert", _only(ROOT), delivery_proof.alert_verb),
@@ -301,29 +313,39 @@ VERBS: tuple[Verb, ...] = (
     Verb("execute", _only(GATEWAY), workspace_verbs.execute),
 )
 
+
+def _base(handler: Handler) -> Handler:
+    """The lane dispatch under a status read's reply-text wrapper
+    (``reply_text.with_reply_text`` keeps it as ``__wrapped__``), so the
+    parity checks below still see which lane each row belongs to."""
+    return getattr(handler, "__wrapped__", handler)
+
+
 TABLE: dict[str, Verb] = {verb.name: verb for verb in VERBS}
 if len(TABLE) != len(VERBS):
     raise RuntimeError("duplicate verb name in the broker verb table")
-if set(establish_verbs.VERBS) != {v.name for v in VERBS if v.handler is establish_verbs.establish}:
+if set(establish_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is establish_verbs.establish}:
     raise RuntimeError("the establishment rows above and establish_verbs.VERBS disagree")
 # The same parity the establishment rows have had since they were added. It was
 # missing here, so a medchron verb could be named in one list and not the other:
 # present in medchron_verbs.VERBS but absent from this table is a verb the
 # dispatcher will never route, and the reverse is a verb the module's own
 # inventory does not know it owns. Either way the failure is silent.
-if set(medchron_verbs.VERBS) != {v.name for v in VERBS if v.handler is _medchron}:
+if set(medchron_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is _medchron}:
     raise RuntimeError("the medchron rows above and medchron_verbs.VERBS disagree")
-if set(demand_verbs.VERBS) != {v.name for v in VERBS if v.handler is demand_verbs.demand_dispatch}:
+if set(demand_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is demand_verbs.demand_dispatch}:
     raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
-if set(drafting_verbs.VERBS) != {v.name for v in VERBS if v.handler is drafting_verbs.drafting_dispatch}:
+if set(drafting_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is drafting_verbs.drafting_dispatch}:
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
-if set(litigation_verbs.VERBS) != {v.name for v in VERBS if v.handler is litigation_verbs.litigation_dispatch}:
+if set(litigation_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is litigation_verbs.litigation_dispatch}:
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
-if set(negotiation_verbs.VERBS) != {v.name for v in VERBS if v.handler is negotiation_verbs.negotiation_dispatch}:
+if set(negotiation_verbs.VERBS) != {
+    v.name for v in VERBS if _base(v.handler) is negotiation_verbs.negotiation_dispatch
+}:
     raise RuntimeError("the negotiation rows above and negotiation_verbs.VERBS disagree")
-if set(casefile_verbs.VERBS) != {v.name for v in VERBS if v.handler is casefile_verbs.casefile_dispatch}:
+if set(casefile_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is casefile_verbs.casefile_dispatch}:
     raise RuntimeError("the casefile rows above and casefile_verbs.VERBS disagree")
-if set(records_verbs.VERBS) != {v.name for v in VERBS if v.handler is records_verbs.records_dispatch}:
+if set(records_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is records_verbs.records_dispatch}:
     raise RuntimeError("the records rows above and records_verbs.VERBS disagree")
 if set(note_verbs.VERBS) != {v.name for v in VERBS if v.name.startswith("note_")}:
     raise RuntimeError("the note rows above and note_verbs.VERBS disagree")

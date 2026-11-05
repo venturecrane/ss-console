@@ -27,7 +27,7 @@ from shared.jobs_client import JobsBrokerClient
 from .demand import STRING, _schema
 
 #: What the status read projects: the text is the email; nothing else is.
-_KEYS = ("job_id", "state", "text")
+_KEYS = ("job_id", "state", "text", "reply_text")
 
 
 def _project(job: Any) -> dict[str, Any] | None:

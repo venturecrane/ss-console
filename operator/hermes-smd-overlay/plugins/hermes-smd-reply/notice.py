@@ -126,19 +126,19 @@ _REASON_HINTS: dict[str, str] = {
         "Escalate so a person sends the files."
     ),
     "no_inbox_id": "No inbox was recorded for the original message, so there is nothing to thread into.",
-    "held_wording": (
-        "This job is held, and a held job's reply is its fixed wording and nothing "
-        "else. Nothing was sent and the one reply is still yours. Draft the reply "
-        "again with exactly the text below as the whole body: no greeting, no "
-        "sign-off, no other sentence."
+    "fixed_wording": (
+        "This reply is its job's fixed wording and nothing else. Nothing was sent "
+        "and the one reply is still yours. Draft the reply again with exactly the "
+        "text below as the whole body: no greeting, no sign-off, no other sentence."
     ),
 }
 
 #: Holds whose guidance stands on every attempt: the redraft that clears them is
 #: named exactly, so "do not redraft" on a second hold would be the wrong advice.
-_EXACT_REDRAFT_REASONS = frozenset({"held_wording"})
-#: The broker's quoted wording can list two or three sentences.
-_MAX_EXACT_DETAIL_LEN = 2000
+_EXACT_REDRAFT_REASONS = frozenset({"fixed_wording"})
+#: The broker's quoted wording: a held job's two or three sentences, or a
+#: delivered job's whole reply (a drafted document's marker and caption lines).
+_MAX_EXACT_DETAIL_LEN = 6000
 
 _GENERIC_HINT = (
     "The draft was not transmitted, and no automatic release is queued for it. "
