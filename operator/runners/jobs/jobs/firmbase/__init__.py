@@ -17,7 +17,8 @@ it stays by its bytes, and only named slots change.
 Slots are marked in the adopted file (``base.py``), made by ``adopt.py`` plus the
 document class's own reading of where its parts are. The base is the attorney's most
 recent accepted save of the class, else a firm-authored past file; an Operator render
-he did not accept is never adopted (``adopt.py``).
+he did not accept is never adopted (``adopt.py``). ``hunt.py`` finds that file on the
+firm's matters and ranks what it finds; it reads and adopts nothing itself.
 """
 
 from __future__ import annotations

@@ -30,7 +30,7 @@ import test_drafting_brief_base as bb
 import test_drafting_briefpage_v7 as v7
 from drafting_testkit import firm_data
 from jobs import firmbase
-from jobs.drafting import brief_base, firm, firm_rules, format_check, pleading, render
+from jobs.drafting import base_lay, brief_base, firm, firm_rules, format_check, pleading, render
 from jobs.drafting.revise import checklist, inplace
 
 _OVERLAY = Path(__file__).resolve().parents[3] / "hermes-smd-overlay" / "shared" / "layout_rules.py"
@@ -177,7 +177,7 @@ def test_a_compiled_rule_moves_a_base_rendered_brief_and_the_check_passes(tmp_pa
     fmt = bb._fmt()
     fmt["layout"][bb.CLS].update(rule)
     monkeypatch.setattr(brief_base, "load_base", lambda *_a: tmpl)
-    path, report, _laid, checked = brief_base.lay_out(
+    path, report, _laid, checked = base_lay.lay_out(
         bb.MD, tmp_path / "out.docx", bb.CLS, fmt, "pleading", (tmp_path / "x", {}), rule
     )
     assert _court_gap(path) == 3
@@ -207,7 +207,7 @@ def test_a_tamper_outside_the_rules_leaves_is_refused(tmp_path, tmpl, monkeypatc
     assert path.read_bytes() == before  # nothing written
     monkeypatch.setattr(brief_base, "load_base", lambda *_a: tmpl)
     with pytest.raises(brief_base.DraftingFailed, match="firm_base_unfit: a firm layout rule"):
-        brief_base.lay_out(
+        base_lay.lay_out(
             bb.MD,
             tmp_path / "o2.docx",
             bb.CLS,

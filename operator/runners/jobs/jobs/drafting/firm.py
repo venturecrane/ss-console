@@ -24,7 +24,7 @@ The schema (the engagements author writes to exactly this)::
                   plain_letter_paper?: bool,
                   pleading?: {lines, line_pitch_pt, margins_in: [4]},
                   limits?: {<class>: {<section title>: max pages}},
-                  firm_bases?: {mediation_brief: {path, source: {matter_id, file_id, name, sha256,
+                  firm_bases?: {mediation_brief|memo: {path, source: {matter_id, file_id, name, sha256,
                   version?, accepted?}}},
                   layout?: {<class>: {line_spacing, line_spacing_pt, justify,
                             first_line_indent_in, heading_indent_in: [3],
@@ -86,8 +86,8 @@ OPTIONAL_MODEL_KEYS = ("review",)
 PROMPT_KEYS = ("digest", "compose", "audit", "repair")
 LABEL_STYLES = ("caps_bold_underline", "all caps, bold, underlined")
 MEDIATION_SECTIONS = 11
-#: The classes whose first draft can be made in a firm's Word file (brief_base.py).
-FIRM_BASE_CLASSES = ("mediation_brief",)
+#: The classes whose first draft can be made in a firm's Word file (brief_base.py, memo_base.py).
+FIRM_BASE_CLASSES = ("mediation_brief", "memo")
 SOURCE_KEYS = ("matter_id", "file_id", "name", "sha256")
 ACCEPTANCE_KEYS = ("version", "accepted")
 #: format.layout.<class> keys and their types (closed).
@@ -172,7 +172,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         "pleading_classes": ("list[str]", False),
         # Optional: {<class>: {path, source: {matter_id, file_id, name, sha256, version?,
         # accepted?}}}, the attorney's accepted save or a firm's past file, blanked: the
-        # Word file a first draft is made in (firmbase, brief_base.py); its
+        # Word file a first draft is made in (firmbase, brief_base.py, memo_base.py); its
         # layout outranks layout.<class>.
         "firm_bases": ("map", False),
     },
