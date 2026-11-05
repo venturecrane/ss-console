@@ -24,8 +24,10 @@ WHAT IT NEVER DOES.
 
 * It never swaps in a copy the validator refused. A refused version is removed,
   the live symlink stays where it was, the lane's verdict reads ``rejected``
-  with the validator's first line in ``/run/smd-firm-inputs/state.json``, and
-  that ETag is not retried until the vault's ETag changes again.
+  in ``/run/smd-firm-inputs/state.json`` (world-readable: the hermes-run
+  heartbeat ships it) with the validator's first line root-only beside it in
+  ``<lane>.rejected``, and that ETag is not retried until the vault's ETag
+  changes again.
 * It never touches a lane this seat does not author. The authored set is the
   boot's ``SMD_AUTHORED_LANES`` (entrypoint-lanes.sh). A lane newly authored in
   customer.yaml still needs a boot, which builds the lane's dirs and threads.
