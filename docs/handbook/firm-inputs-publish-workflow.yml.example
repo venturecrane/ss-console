@@ -22,13 +22,13 @@
 # another. Each lane prints one summary line: published <etag8> | refused |
 # unreachable | could-not-validate | runner-unknown.
 #
-# THE ONE SECRET. CLOUDFLARE_R2_PUBLISH_TOKEN: a Cloudflare API token limited to
-# R2 object read and write on the smd-customer-config bucket and nothing else.
-# It is the first secret this repo holds. The R2 S3 key pair is derived from it
-# inside the job (ss-console scripts/lib/r2-creds.sh: key id = the token's id,
-# secret = sha256 of the token), never stored. CLOUDFLARE_ACCOUNT_ID is read as
-# a repository variable (not a secret: it is an identifier, not a credential),
-# or a secret of that name if one is set.
+# THE STORAGE KEY. R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_ENDPOINT_URL
+# are the EXISTING storage key: the three values Infisical /ss already holds,
+# the same ones provisioning and every session publish with. No key was created
+# for this workflow (2026-11-05: keys are reused from Infisical, never minted
+# per use). They were placed in this repo's Actions secrets from Infisical; when
+# the key is rotated there, place it here again (ss-console
+# docs/handbook/secrets-access.md).
 #
 # NO CLIENT CONTENT IN LOGS. A validator's messages may quote config, so its
 # output goes to a file inside the runner and the log carries only the exit
@@ -110,13 +110,19 @@ jobs:
       SLUG: ${{ matrix.seat.slug }}
       LANES: ${{ matrix.seat.lanes }}
       R2_BUCKET_CONFIG: smd-customer-config
+      # The existing storage key (see THE STORAGE KEY above). GitHub masks these in logs.
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      AWS_REGION: auto
+      AWS_DEFAULT_REGION: auto
     steps:
       - name: Check out the firm inputs (this repo, at the pushed commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The publisher and the credential helper come from ss-console main: the
-      # newest key guard and read-back. The RUNNER they validate against is the
-      # seat's, checked out below.
+      # The publisher comes from ss-console main: the newest key guard and
+      # read-back. The RUNNER it validates against is the seat's, checked out
+      # below.
       - name: Check out ss-console main (the publisher)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -128,23 +134,11 @@ jobs:
 
       - name: Find the runner this seat runs
         id: runner
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_PUBLISH_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          # shellcheck source=/dev/null
-          source .ss-console/scripts/lib/r2-creds.sh
-          derive_r2_creds
-          echo "::add-mask::${R2_SECRET_ACCESS_KEY}"
-          echo "::add-mask::${R2_ACCESS_KEY_ID}"
-          {
-            echo "R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}"
-            echo "R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}"
-            echo "R2_ENDPOINT_URL=${R2_ENDPOINT_URL}"
-            echo "AWS_REGION=auto"
-            echo "AWS_DEFAULT_REGION=auto"
-          } >> "$GITHUB_ENV"
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL; do
+            [ -n "${!name:-}" ] || { echo "::error::the storage key is not in this repo's Actions secrets (${name}); place it from Infisical /ss"; exit 1; }
+          done
           r2() { AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"; }
           w="$(mktemp -d)"
           sha="" from=""
@@ -212,25 +206,30 @@ jobs:
           exit "$failed"
 
 # ---------------------------------------------------------------------------
-# THE engagements README PARAGRAPH (add under the repo's workflows section):
+# THE engagements README SECTION (as applied there, above "## Verification"):
 #
-#   ### Publishing a firm's configuration (publish-firm-inputs.yml)
+#   ## Publishing a firm's configuration
 #
 #   A merge to main that changes anything under
 #   `operator/customers/<slug>/{demand,drafting,litigation,casefile,records,medchron}/`
-#   publishes that firm's lane inputs to its seat. The workflow checks each
+#   publishes that firm's lane inputs to its seat
+#   (`.github/workflows/publish-firm-inputs.yml`). The workflow checks each
 #   changed lane against the exact version of the Operator the seat runs (the
 #   ss-console commit of the seat's jobs bundle, else of its image) with
 #   ss-console's `operator/bin/lib/publish-firm-inputs.sh`, the same writer
-#   provisioning uses, and only then writes `vaults/<slug>/<lane>/` in R2; the
-#   seat adopts it live. Each seat publishes in its own job, so one firm's
-#   refusal never blocks another, and the run summary says, per lane,
-#   `published <tag>`, `refused`, `unreachable`, `could-not-validate` or
-#   `runner-unknown`. A refused or failed lane leaves the seat on the settings
-#   it had. Logs carry no client content: validator output stays in a file on
-#   the runner and only its first line is printed. This is the one workflow in
-#   this repo that holds a secret, `CLOUDFLARE_R2_PUBLISH_TOKEN` (R2 object
-#   read and write on `smd-customer-config` only), plus the repository variable
-#   `CLOUDFLARE_ACCOUNT_ID`. Re-publish a seat by hand with Actions > Publish
-#   firm inputs > Run workflow, naming the slug. The chronology `controls/`
-#   files are still staged only by provisioning.
+#   provisioning uses, and only then writes the seat's vault; the seat adopts
+#   the change live, within about a minute, with no restart. Each seat
+#   publishes in its own job, so one firm's refusal never blocks another, and
+#   the run summary says, per lane, `published <tag>`, `refused`,
+#   `unreachable`, `could-not-validate` or `runner-unknown`. A refused or
+#   failed lane leaves the seat on the settings it had. Logs carry no client
+#   content: validator output stays in a file on the runner and only its first
+#   line is printed.
+#
+#   The workflow uses the existing storage key: `R2_ACCESS_KEY_ID`,
+#   `R2_SECRET_ACCESS_KEY` and `R2_ENDPOINT_URL` in this repo's Actions secrets
+#   are the same three values Infisical `/ss` holds and provisioning publishes
+#   with. No key was created for it; when that key is rotated in Infisical,
+#   place it here again. Re-publish a seat by hand with Actions > Publish firm
+#   inputs > Run workflow, naming the slug. The chronology `controls/` files
+#   are still staged only by provisioning.
