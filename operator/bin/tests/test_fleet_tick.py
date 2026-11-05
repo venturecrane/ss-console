@@ -320,6 +320,51 @@ def test_an_older_release_gives_way_to_a_newer_one_about_to_reach_the_ring(tmp_p
     assert _done_releases(w, "pilot-smokeball") == [newer["release_id"]]
 
 
+def test_a_release_published_mid_run_ends_the_run_so_the_next_one_takes_it(tmp_path) -> None:
+    """2026-11-05: run 41958879617 rolled a76ce77a through all six seats while 6e384840's
+    image waited 33 minutes for the lane. With a refresh after each ring, the run ends
+    once a newer release shows up, and the next run starts from ring 0 on it.
+    FALSIFIER: drop the refresh and the older release takes the client seat and every
+    later seat in this run; the newer one waits for all of them."""
+    w = _tick_world(tmp_path)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price"], None, 0),
+        Ring(2, ["pilot-smokeball", "scott", "brokery"], 1, 0),
+    ]
+    older = w.rel
+    newer = {**older, "release_id": "img-202610190100-22222222"}
+    seen = {"calls": 0}
+
+    def refresh() -> list[dict]:
+        # The newer image lands while ring 0 is rolling.
+        seen["calls"] += 1
+        if newer["release_id"] not in w.store.releases:
+            w.store.insert_release(newer)
+        return [newer, older]
+
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w.roll.run(s, r, plan)
+
+    w.clock.t = T0
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    assert ticker.run_promoting(rings, [older], do_seat_for, "h", refresh=refresh) == TICK_PROGRESS
+    assert seen["calls"] == 1
+    assert _deployed(w) == ["hermes-smd-staging"]  # the older release stopped after ring 0
+    assert any("was published while this run moved ring 0" in line for line in w.logs)
+    # The next run: the newer release takes staging, then the client seat, then the rest; the
+    # older release is never carried into a ring the newer one is about to reach.
+    w.clock.t = T0 + 60
+    w.store.now_iso = datetime.fromtimestamp(w.clock.t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert (
+        ticker.run_promoting(rings, [newer, older], do_seat_for, "h", refresh=lambda: [newer, older]) == TICK_PROGRESS
+    )
+    assert _done_releases(w, "ashton-price") == [newer["release_id"]]
+    assert _done_releases(w, "pilot-smokeball") == [newer["release_id"]]
+    # test_with_no_bake_one_tick_takes_staging_then_the_client_seat covers a run with no newer release.
+
+
 def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:
     w = _tick_world(tmp_path)
     older, newer = _two_releases(w)

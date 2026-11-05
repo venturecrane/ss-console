@@ -124,14 +124,18 @@ release-tick.yml`) the moment its candidate is published, and
    error after it. A tick for a named image release steps that image only.
 
    **Amended 2026-11-04: a run that advanced a ring starts the next run.** A
-   tick still advances at most one ring per release per run, so with the rings
-   chained only by the cron, the client ring waited a cron slot behind staging
-   even with no bake on either. Now a `--tick` run that exits 0 (progress)
-   dispatches the next run itself (`release-tick.yml`, step `Start the next
-ring`), with the same queued-or-pending guard as Deploy's dispatches; a run
-   that waited (5), halted, was a dry run or was an urgent one-seat run starts
-   nothing. So rings follow each other in minutes: ashton-price is stepped in
-   the run straight after staging's, about 2 minutes after it ends.
+   `--tick` run that exits 0 (progress) dispatches the next run itself
+   (`release-tick.yml`, step `Start the next ring`), with the same
+   queued-or-pending guard as Deploy's dispatches; a run that waited (5),
+   halted, was a dry run or was an urgent one-seat run starts nothing. Corrected
+   2026-11-05 after the first measured run: one run already advances EVERY ring
+   that is ready (with no bake, staging then ashton-price then the rest, one
+   release per ring), so the chain matters when a run ENDS with a release still
+   in flight, which is now the designed case: a `latest` run re-reads the
+   releases after each ring and, when a newer image has been published, ends
+   there with progress so the run it starts takes the newer release from ring 0. Before this, run 41958879617 carried a76ce77a through all six seats
+   (03:02 to 03:35Z) while 6e384840's image, published at 03:08:58Z, waited for
+   the lane; staging took it at 03:42Z.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`

@@ -29,9 +29,12 @@ ONE TICK.
      failed without a reason froze every later seat, the client's included.
   6. Record, renew, release the lease, exit.
 
-So a tick advances at most one ring per RUN, never re-deploys a done seat, and never
-starts the client ring until the ring before it has proved the release on real
-seats for the bake. A busy seat ends waiting_idle and the next tick retries it;
+So a tick advances every ring that is ready in one run (with no bake, staging
+then the client seat then the rest, one release per ring), never re-deploys a
+done seat, and never starts the client ring until the ring before it has proved
+the release on real seats for the bake. A run that advanced a ring also starts
+the next run (release-tick.yml), and a `latest` run ends early when a newer
+release is published mid-run so that run can take it. A busy seat ends waiting_idle and the next tick retries it;
 a held seat is left alone and keeps the release incomplete. A run that advanced a
 ring (exit 0) dispatches the next run (release-tick.yml, Start the next ring), so
 rings follow each other in minutes rather than one cron slot apart.
@@ -348,6 +351,7 @@ class Ticker:
         holder: str,
         *,
         dry_run: bool = False,
+        refresh: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> int:
         """`latest`: one step across every release still in flight, newest first.
 
@@ -374,6 +378,17 @@ class Ticker:
         the newest release, always ready for ring 0 while merges flow, would
         otherwise take every tick: on 2026-10-26 the client ring sat ready for
         its release while three ticks in a row went to staging.
+
+        ``refresh`` re-reads the releases in flight after each ring moves. When
+        it returns a NEWER release than the one this run started on, the run
+        ends there with progress: the next run (which a progressing run starts
+        itself, release-tick.yml) takes the newer release from ring 0, and the
+        older one is never carried through rings a newer release is about to
+        reach. 2026-11-05: run 41958879617 read its releases once, rolled
+        a76ce77a through all six seats (03:02 to 03:35Z) and held the lane
+        while 6e384840's image, published at 03:08:58Z, waited; staging took
+        it at 03:42Z. With no bake anywhere, finishing an old release's last
+        ring is the one thing that delays the client ring on the new one.
         """
         newest = candidates[0]["release_id"]
         tag = " (dry run, nothing deployed or recorded)" if dry_run else ""
@@ -400,6 +415,14 @@ class Ticker:
                     taken.add(plan.ring.number)
                     if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease) == TICK_HALT:
                         return TICK_HALT
+                    if refresh is not None:
+                        fresh = refresh()
+                        if fresh and fresh[0]["release_id"] != newest:
+                            self.log(
+                                f"tick {newest}: {fresh[0]['release_id']} was published while this run moved "
+                                f"ring {plan.ring.number}; this run ends here and the next run takes it"
+                            )
+                            return TICK_PROGRESS
                     continue
                 if taken:
                     return TICK_PROGRESS
