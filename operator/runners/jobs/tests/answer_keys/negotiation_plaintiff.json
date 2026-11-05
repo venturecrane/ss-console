@@ -185,14 +185,29 @@
     {
       "name": "the firm's own demand, two plaintiffs, the document does not say: no row, kept for SMD, no email",
       "tabs": "two_tabs",
-      "event": { "kind": "demand", "by": "Example Law", "author_side": "our_firm", "addressed_to": "paying_side" },
+      "event": {
+        "kind": "demand",
+        "by": "Example Law",
+        "author_side": "our_firm",
+        "addressed_to": "paying_side"
+      },
       "plaintiff": { "kind": "unstated", "index": null },
-      "expect": { "tab": null, "status": null, "notice": null, "held": "the document does not say which plaintiff it is for" }
+      "expect": {
+        "tab": null,
+        "status": null,
+        "notice": null,
+        "held": "the document does not say which plaintiff it is for"
+      }
     },
     {
       "name": "the firm's own demand, two plaintiffs, the document names the first",
       "tabs": "two_tabs",
-      "event": { "kind": "demand", "by": "Example Law", "author_side": "our_firm", "addressed_to": "paying_side" },
+      "event": {
+        "kind": "demand",
+        "by": "Example Law",
+        "author_side": "our_firm",
+        "addressed_to": "paying_side"
+      },
       "plaintiff": { "kind": "index", "index": 0 },
       "expect": { "tab": 0, "note_opens": "Our demand", "status": null, "notice": null }
     }

@@ -28,6 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .facts import CASE_DETAILS, SOURCE_WORDS
 from .outcome import CasefileFailed
 from .rank import LABEL
 
@@ -306,6 +307,13 @@ def _lists(rec: dict[str, Any], verdicts: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _sourced(rec: dict[str, Any], field: str, source: str) -> str:
+    """A header date as the firm reads it; one not from the case details says so."""
+    word = SOURCE_WORDS.get(str(rec.get(source) or ""))
+    tail = f" (from {word})" if word and rec.get(source) != CASE_DETAILS else ""
+    return f"{e(long_date(rec.get(field)))}{e(tail)}"
+
+
 def render_html(
     rec: dict[str, Any], asof: str, meta: dict[str, Any], rank: dict[str, Any], plan: dict[str, Any]
 ) -> str:
@@ -320,8 +328,8 @@ def render_html(
     sub = " | ".join(
         [
             e(rec.get("matter_type") or "matter type not given"),
-            f"date of loss {e(long_date(rec.get('date_of_loss')))}",
-            f"statute {e(long_date(rec.get('statute_date')))}",
+            f"date of loss {_sourced(rec, 'date_of_loss', 'date_of_loss_source')}",
+            f"statute {_sourced(rec, 'statute_date', 'statute_source')}",
             e(rec.get("status") or "status not given"),
         ]
     )

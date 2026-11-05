@@ -323,8 +323,10 @@ class CasefileRun(DeliverMixin, RunBase):
         re-ranked in code with no call (``reranked_in_code``), a bulk upload read
         whole (``bulk_full_read``), and per read how its record came (``patch``,
         ``full``) and how many patches were refused for the whole record
-        (``patch_refused``)."""
-        out = {k: 0 for k in ("current", "reranked_in_code", "bulk_full_read", "patch", "full", "patch_refused")}
+        (``patch_refused``), and the header fields the reader typed differently
+        from the matter's record (``header_differences``)."""
+        keys = ("current", "reranked_in_code", "bulk_full_read", "patch", "full", "patch_refused", "header_differences")
+        out = {k: 0 for k in keys}
         for mid, p in plan.items():
             out["current"] += p["mode"] == "current"
             out["reranked_in_code"] += p["mode"] == "rerank"
@@ -334,6 +336,7 @@ class CasefileRun(DeliverMixin, RunBase):
                 stats = got.get("pack") or {}
                 out["patch" if stats.get("answer") == "patch" else "full"] += 1
                 out["patch_refused"] += int(stats.get("patch_refused") or 0)
+                out["header_differences"] += len(got.get("header_differences") or [])
         return out
 
 

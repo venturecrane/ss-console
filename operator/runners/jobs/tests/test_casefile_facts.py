@@ -9,13 +9,16 @@ is the reader's only when a document it read prints it.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 
 import pytest
 
-from jobs.casefile import facts, firm as firm_mod, pack, rank as rank_mod, validate
+from jobs.casefile import facts, firm as firm_mod, pack, rank as rank_mod, read, recheck, state as state_mod, validate
 from jobs.casefile.book import render_html
+from jobs.casefile.rehearse import RehearsalRun
+from jobs.casefile.run import CasefileRun
 
 import casefile_testkit as kit
 
@@ -152,8 +155,6 @@ def test_the_statute_window_is_ranks_alone(firm: firm_mod.CasefileFirm) -> None:
 def test_rank_reads_the_settled_date(firm: firm_mod.CasefileFirm) -> None:
     """The window is ``rank``'s and the date is code's: a typed date far off
     does not move the file out of "Pull today"."""
-    import datetime as dt
-
     today = dt.date(2027, 7, 1)
     inv = _inv({"layout": {"sol": "2027-08-12"}})
     out, _ = facts.settle({"statute_date": "2029-01-01", "posture": "pre_demand"}, inv, firm)
@@ -190,7 +191,9 @@ def _problems(firm: firm_mod.CasefileFirm, inv: dict, typed: dict, text: str = "
     return validate.check(settled, "100001", inv, _meta(), firm, lambda _d: text)
 
 
-@pytest.mark.parametrize("field,cite", [("statute_date", "statute_source_doc_id"), ("date_of_loss", "date_of_loss_source_doc_id")])
+@pytest.mark.parametrize(
+    "field,cite", [("statute_date", "statute_source_doc_id"), ("date_of_loss", "date_of_loss_source_doc_id")]
+)
 def test_a_date_code_lacks_stands_only_on_a_document_printing_it(
     firm: firm_mod.CasefileFirm, field: str, cite: str
 ) -> None:
@@ -223,9 +226,15 @@ def test_the_validator_compares_the_header_to_the_record(firm: firm_mod.Casefile
     settled, _ = facts.settle(_record(), inv, firm)
     assert validate.check(settled, "100001", inv, _meta(), firm, lambda _d: "") == []
     typed = {**settled, "statute_date": "2029-01-01"}
-    assert any(p.startswith("header:") and "statute_date" in p for p in validate.check(typed, "100001", inv, _meta(), firm, lambda _d: ""))
+    assert any(
+        p.startswith("header:") and "statute_date" in p
+        for p in validate.check(typed, "100001", inv, _meta(), firm, lambda _d: "")
+    )
     typed = {**settled, "clients": ["Someone Else"]}
-    assert any(p.startswith("header:") and "clients" in p for p in validate.check(typed, "100001", inv, _meta(), firm, lambda _d: ""))
+    assert any(
+        p.startswith("header:") and "clients" in p
+        for p in validate.check(typed, "100001", inv, _meta(), firm, lambda _d: "")
+    )
 
 
 # ---- state already on the seat ----------------------------------------------------------------
@@ -236,7 +245,12 @@ def test_a_stored_record_with_an_uncited_date_reads_as_it_stood_when_code_has_no
     source. Re-ranking must not lose a statute date it holds: a deadline that
     silently leaves the ranking is worse than one with no source, so it stays,
     source empty, until a re-read must cite it or clear it."""
-    stored = {"statute_date": "2027-08-12", "date_of_loss": "2025-08-12", "clients": ["Typed Name"], "posture": "pre_demand"}
+    stored = {
+        "statute_date": "2027-08-12",
+        "date_of_loss": "2025-08-12",
+        "clients": ["Typed Name"],
+        "posture": "pre_demand",
+    }
     out, _ = facts.settle(stored, _inv(), firm)
     assert out["statute_date"] == "2027-08-12" and out["statute_source"] == ""
     assert out["clients"] == ["Gamma Example"]
@@ -250,7 +264,10 @@ def test_code_wins_over_a_stored_typed_date(firm: firm_mod.CasefileFirm) -> None
 
 # ---- what the reader and the firm see ----------------------------------------------------------
 def test_the_pack_gives_the_reader_the_header_and_says_who_owns_it(firm: firm_mod.CasefileFirm) -> None:
-    case = {"layout": {"dol": "2025-08-12"}, "tasks_open": [{"subject": "1 week before statute runs", "dueDate": "2027-08-05"}]}
+    case = {
+        "layout": {"dol": "2025-08-12"},
+        "tasks_open": [{"subject": "1 week before statute runs", "dueDate": "2027-08-05"}],
+    }
     lines = "\n".join(pack._header(_inv(case), None, firm=firm))
     assert "- date of loss: 2025-08-12 (the case details)" in lines
     assert "- statute: 2027-08-12 (a statute reminder task)" in lines
@@ -273,3 +290,166 @@ def test_the_file_status_says_when_a_statute_date_is_not_from_the_case_details(f
     rec, _ = facts.settle(_record(), _inv({"layout": {"sol": "2027-08-12"}}), firm)
     page = render_html(rec, "2026-11-05", {}, {"priority": 4, "reason": "x"}, {})
     assert "statute August 12, 2027 |" in page
+
+
+def test_the_read_tool_no_longer_requires_what_code_owns() -> None:
+    required = set(read.REVIEW_TOOL["input_schema"]["required"])
+    assert not required & {*facts.CODE_OWNED, "date_of_loss", "statute_date", *facts.CITE_KEYS}
+    assert {"headline", "posture", "open_tasks"} <= required
+    assert set(facts.CITE_KEYS) <= set(read.REVIEW_TOOL["input_schema"]["properties"])
+    # A patch may set them: a re-check can cite or clear a date.
+    assert (
+        recheck.merge({"statute_date": "2027-08-12"}, {"set": {"statute_source_doc_id": "x"}})["statute_source_doc_id"]
+        == "x"
+    )
+
+
+# ---- through the job --------------------------------------------------------------------------
+@pytest.fixture
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pricing_path: Path) -> dict:
+    for k, v in kit.environ(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    return {
+        "inputs": kit.make_inputs(tmp_path / "job-inputs"),
+        "state": tmp_path / "state",
+        "pricing": str(pricing_path),
+        "tmp": tmp_path,
+    }
+
+
+def _run(env: dict, seat: kit.CfSeat, model: kit.Scripted, job: str = kit.JOB) -> tuple[CasefileRun, dict]:
+    jd = kit.make_job(env["tmp"] / f"job-{job[-4:]}", job_id=job)
+    r = CasefileRun(
+        jd,
+        inputs_dir=str(env["inputs"]),
+        pricing=env["pricing"],
+        state_dir=env["state"],
+        seat_factory=lambda: seat,
+        client=model,
+        log=lambda m: None,
+        today=lambda: dt.date(2026, 10, 26),
+        readback_pause=0,
+    )
+    return r, json.loads(r.run().to_json())
+
+
+def _typed_wrong(number: str, pack_text: str) -> dict:
+    rec = kit.review_for(number, pack_text)
+    return {**rec, "clients": ["Typed Wrong"], "statute_date": "2031-01-01"} if number == "100001" else rec
+
+
+def test_a_job_prints_the_matters_record_whatever_the_reader_typed(env: dict) -> None:
+    seat = kit.CfSeat()
+    r, v = _run(env, seat, kit.Scripted(review_fn=_typed_wrong))
+    assert v["verdict"] == "delivered", v
+    counted = sum(
+        len(json.loads(r._mfile(m, "review.json").read_text())["header_differences"]) for m in (kit.M1, kit.M2)
+    )
+    assert v["metrics"]["recheck"]["header_differences"] == counted >= 2
+    stored = state_mod.load_prior(env["state"], kit.M1)["review"]
+    assert stored["clients"] == ["Gamma Example"] and stored["statute_date"] == "2028-01-12"
+    assert stored["statute_source"] == "case_details"
+    page = next((r.data / "out" / kit.M1).glob("*.html")).read_text()
+    assert "Gamma Example" in page and "Typed Wrong" not in page
+    assert "statute January 12, 2028" in page and "2031" not in page
+    review = json.loads(r._mfile(kit.M1, "review.json").read_text())
+    assert {"field": "statute_date", "typed": "2031-01-01", "code": "2028-01-12"} in review["header_differences"]
+
+
+def test_a_date_with_no_source_goes_back_to_the_reader_then_holds_only_that_matter(env: dict) -> None:
+    def typed_no_cite(number: str, pack_text: str) -> dict:
+        rec = kit.review_for(number, pack_text)
+        return {**rec, "statute_date": "2031-01-01"} if number == "100002" else rec
+
+    model = kit.Scripted(review_fn=typed_no_cite)
+    r, v = _run(env, kit.CfSeat(), model)
+    assert v["verdict"] == "delivered" and v["matters_held"] == 1, v
+    held = json.loads(r._mfile(kit.M2, "held.json").read_text())
+    assert held["why"] == "validate" and "header_date" in held["detail"]
+
+
+def test_a_stored_record_from_before_this_rule_is_reranked_on_todays_header_for_nothing(env: dict) -> None:
+    """What a record on a seat holds today: typed header, no source. It reads,
+    the header is code's, a typed statute with nothing behind it still ranks,
+    and no model is paid."""
+    seat = kit.CfSeat()
+    _run(env, seat, kit.Scripted())
+    for mid, old in (
+        (kit.M1, {"clients": ["Typed Long Ago"], "statute_date": "2031-01-01"}),
+        (kit.M2, {"clients": ["Typed Long Ago"], "statute_date": "2026-11-20", "posture": "pre_demand"}),
+    ):
+        path = env["state"] / "records" / f"{mid}.json"
+        stored = json.loads(path.read_text())
+        review = {k: v for k, v in stored["review"].items() if not k.endswith("_source")}
+        stored["review"] = {**review, **old}
+        path.write_text(json.dumps(stored))
+    model = kit.Scripted()
+    r, v = _run(env, seat, model, job="01KTJ0BX0000000000000000CK")
+    assert v["verdict"] == "delivered" and model.calls == [] and v["cents"] == 0, v
+    rows = {x["matter_id"]: x for x in json.loads((r.data / "rows.json").read_text())}
+    assert rows[kit.M1]["review"]["clients"] == ["Gamma Example"]
+    assert rows[kit.M1]["review"]["statute_date"] == "2028-01-12"  # the case details, not the old copy
+    assert rows[kit.M2]["review"]["statute_date"] == "2026-11-20" and rows[kit.M2]["review"]["statute_source"] == ""
+    assert rows[kit.M2]["rank"]["priority"] == 1  # a date the record held did not silently leave the ranking
+
+
+# ---- the rehearsal ----------------------------------------------------------------------------
+def _rehearse(env: dict, seat: kit.CfSeat, key: dict | None) -> tuple[dict, dict]:
+    report = env["tmp"] / "report.json"
+    key_path = None
+    if key is not None:
+        key_path = env["tmp"] / "key.json"
+        key_path.write_text(json.dumps(key))
+    r = RehearsalRun(
+        kit.make_job(env["tmp"] / "rehearsal"),
+        report_path=report,
+        answer_key=key_path,
+        inputs_dir=str(env["inputs"]),
+        pricing=env["pricing"],
+        state_dir=env["state"],
+        seat_factory=lambda: seat,
+        log=lambda m: None,
+        today=lambda: dt.date(2026, 10, 26),
+    )
+    return json.loads(r.run().to_json()), json.loads(report.read_text())["rehearsal"]
+
+
+def test_a_rehearsal_reports_the_header_facts_at_no_cost(env: dict) -> None:
+    v, got = _rehearse(env, kit.CfSeat(), None)
+    assert v["cents"] == 0 and "answer_key" not in got
+    one = got["matters"]["100001"]["facts"]
+    assert (one["date_of_loss"], one["statute_date"], one["statute_source"]) == (
+        "2026-01-12",
+        "2028-01-12",
+        "case_details",
+    )
+    assert got["matters"]["100002"]["facts"]["statute_source"] == ""
+
+
+def test_a_rehearsal_grades_the_facts_against_an_answer_key(env: dict) -> None:
+    key = {
+        "100001": {"statute_date": "2028-01-12", "statute_source": "case_details", "clients": ["Gamma Example"]},
+        "100002": {"statute_date": "2029-09-09"},
+        "999999": {"statute_date": "2027-01-01"},
+    }
+    v, got = _rehearse(env, kit.CfSeat(), key)
+    assert got["answer_key"]["checked"] == 4
+    assert got["answer_key"]["differs"] == [
+        {"number": "100002", "field": "statute_date", "expected": "2029-09-09", "got": ""},
+        {"number": "999999", "why": "not read in this job's scope"},
+    ]
+    assert "answer key: 4 checked, 2 differ" in v["reason"]
+
+
+def test_a_rehearsal_says_what_a_stored_record_would_change(env: dict) -> None:
+    seat = kit.CfSeat()
+    _run(env, seat, kit.Scripted())
+    path = env["state"] / "records" / f"{kit.M1}.json"
+    stored = json.loads(path.read_text())
+    stored["review"]["statute_date"] = "2031-01-01"
+    path.write_text(json.dumps(stored))
+    _v, got = _rehearse(env, seat, None)
+    assert got["matters"]["100001"]["prior_differences"] == [
+        {"field": "statute_date", "typed": "2031-01-01", "code": "2028-01-12"}
+    ]
+    assert got["matters"]["100002"]["prior_differences"] == []

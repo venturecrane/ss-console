@@ -45,7 +45,7 @@ def _offer(**over):
         "amount": 15000,
         "amount_confirmed": True,
         "date": "2026-10-07",
-        "plaintiff_index": None,
+        "plaintiff": {"kind": "unstated", "index": None},
         "note": "",
         # The document's sides, stamped by extract.parse: the carrier wrote to the firm.
         "author_side": "paying_side",
@@ -143,7 +143,7 @@ def test_an_unconfirmed_amount_enters_the_date_only_and_says_check_the_letter():
 
 def test_a_joint_offer_goes_once_on_the_first_plaintiff_marked_joint():
     tabs = [_tab(pidx=1, name="Bo Example"), _tab(pidx=0, name="Ann Example")]
-    plan = R.plan_document([_offer(plaintiff_index=None)], DOC, tabs, set())
+    plan = R.plan_document([_offer(plaintiff={"kind": "joint", "index": None})], DOC, tabs, set())
     assert list(plan["tabs"]) == [0]
     assert plan["tabs"][0].args[0]["note"].startswith("Joint, all plaintiffs. ")
 
@@ -316,7 +316,7 @@ def _job(tmp_path, **over):
 def _run(tmp_path, seat, layout, monkeypatch, events=None, fail_read=False, **job):
     jd, pricing = _job(tmp_path, **job)
 
-    def read(doorway, doc, text, rows, tabs):
+    def read(doorway, doc, text, plaintiffs):
         if fail_read:
             raise RuntimeError("model down")
         return events if events is not None else [_offer()]
@@ -513,11 +513,11 @@ def test_the_real_read_renders_the_runs_own_tabs_and_parses_the_answer(tmp_path,
         log=lambda m: None,
     )
     tabs = r._tabs(M1)
-    events = X.read_document(Doorway(), DOC, "We offer $15,000.", [x for t in tabs for x in t["rows"]], tabs)
+    events = X.read_document(Doorway(), DOC, "We offer $15,000.", tabs)
     assert events[0]["amount"] == 15000
     prompt = seen["messages"][0]["content"]
     assert "- plaintiff_index 0: Dana Example" in prompt
-    assert "- row 0: demand 50000 on 2026-09-01" in prompt and "We offer $15,000." in prompt
+    assert "We offer $15,000." in prompt
     assert seen["model"] == X.MODEL
 
 
@@ -534,7 +534,7 @@ def test_the_read_asks_for_structured_output_never_a_forced_tool():
             seen.update(kw)
             return SimpleNamespace(text=json.dumps({"events": []}), stop_reason="end_turn")
 
-    X.read_document(Doorway(), DOC, "text", [], [{"plaintiff_index": 0, "name": "A"}])
+    X.read_document(Doorway(), DOC, "text", [{"plaintiff_index": 0, "name": "A"}])
     assert "tool_choice" not in seen and "tools" not in seen
     params = build_params(
         X.STAGE, model=X.MODEL, messages=[{"role": "user", "content": "x"}], max_tokens=10, effort=seen["effort"]
@@ -549,7 +549,7 @@ def test_a_cut_off_answer_is_a_failed_read_not_an_empty_one():
             return SimpleNamespace(text='{"events": [', stop_reason="max_tokens")
 
     with pytest.raises(ValueError, match="max_tokens"):
-        X.read_document(Doorway(), DOC, "text", [], [{"plaintiff_index": 0, "name": "A"}])
+        X.read_document(Doorway(), DOC, "text", [{"plaintiff_index": 0, "name": "A"}])
 
 
 # ---- the firm's-data dry run, 2026-10-10: each defect it found -----------------------------------

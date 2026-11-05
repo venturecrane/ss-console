@@ -26,7 +26,7 @@ from ..limits import LimitHold
 from ..litigation import extract as extract_mod, fetch as fetch_mod
 from ..litigation.tools import ReadIncomplete, dump
 from ..stop_request import StopRequested
-from . import audit, pack, read, validate
+from . import audit, facts, pack, read, validate
 from .inventory import inv_of
 
 YIELD_ENV = "JOBS_CASEFILE_YIELD_PIDS"
@@ -147,8 +147,14 @@ def _review(run: Any, m: dict[str, Any], plan: dict[str, Any]) -> None:
         refresh(run, mid, built["meta"])  # a document the reader opened since the pack was built is read now
         return validate.check(rec, str(m["number"]), inv, built["meta"], run.firm, text_of)
 
+    differences: list[dict[str, Any]] = []
+
+    def settle(rec: dict[str, Any]) -> dict[str, Any]:
+        settled, differences[:] = facts.settle(rec, inv, run.firm)
+        return settled
+
     result = read.read_matter(
-        run.doorway, run.firm, ctx, built["text"], check, prior.get("review") if prior is not None else None
+        run.doorway, run.firm, ctx, built["text"], check, prior.get("review") if prior is not None else None, settle
     )
     if result.problems:
         raise _MatterHeld("validate", "; ".join(result.problems)[:300])
@@ -168,7 +174,14 @@ def _review(run: Any, m: dict[str, Any], plan: dict[str, Any]) -> None:
     dump(run._mfile(mid, "meta.json"), built["meta"])
     dump(
         run._mfile(mid, REVIEW),
-        {"review": result.record, "verdicts": verdicts, "pack": stats, "scanned_bills": scans, "mode": plan["mode"]},
+        {
+            "review": result.record,
+            "verdicts": verdicts,
+            "pack": stats,
+            "scanned_bills": scans,
+            "mode": plan["mode"],
+            "header_differences": differences,
+        },
     )
 
 

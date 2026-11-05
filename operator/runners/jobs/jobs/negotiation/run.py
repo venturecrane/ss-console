@@ -224,6 +224,26 @@ class NegotiationRun:
             )
         return tabs
 
+    def _plaintiffs(self, mid: str, tabs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Every plaintiff on the matter, keyed as a tab is. A shared matter may
+        have a Negotiation Details tab for only one of them (the connector's own
+        ``_negotiation_item`` refuses to guess on such a matter). A failed read
+        raises, like ``_tabs``: "could not look" must not read as "one plaintiff"."""
+        got = self.layout.get_matter_layouts(mid)
+        if not isinstance(got, dict) or got.get("status") != "ok":
+            raise RuntimeError("the matter's tabs could not be read")
+        out = list(tabs)
+        seen = {t["plaintiff_index"] for t in tabs}
+        for item in got.get("items") or []:
+            try:
+                pidx = int(item.get("parent_index"))
+            except (TypeError, ValueError):
+                continue
+            if item.get("parent") == "Plaintiff" and pidx not in seen:
+                seen.add(pidx)
+                out.append({"plaintiff_index": pidx, "name": str(item.get("description") or "")})
+        return out
+
     def _fetch(self, mid: str, f: dict[str, Any]) -> Path | None:
         """The document's bytes on the job's disk; a content duplicate resolves
         to its original."""
@@ -342,9 +362,7 @@ class NegotiationRun:
             # can act. An offer the same document shows was already accepted
             # (Peschke's 9/23 tender, accepted and paid) is entered, not sent.
             return
-        multi = len(tabs) > 1
-        name = next((t["name"] for t in tabs if t["plaintiff_index"] == rec.get("plaintiff_index")), "")
-        plaintiff = "all plaintiffs" if multi and rec.get("joint") else (name if multi else "")
+        plaintiff = notice_mod.plaintiff_label(rec, tabs)
         self.notices.append(
             {
                 "matter_id": matter["id"],
@@ -354,6 +372,32 @@ class NegotiationRun:
             }
         )
         _dump(self.data / "notices.json", self.notices)
+
+    def _quiet_unplaced(
+        self, matter: dict[str, Any], f: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any]
+    ) -> None:
+        """A seeded matter's earlier offer the document does not place on a
+        plaintiff: no email (it is not new) and no row, so it is kept in the
+        verdict's holds rather than dropped without a record."""
+        if rec.get("status") != "not_entered" or rec.get("plaintiff_index") is not None:
+            return
+        self.held.append(self._held_row(matter, f, doc, rec["event"], str(rec.get("reason") or "")))
+        self.counts["offers_held"] += 1
+
+    @staticmethod
+    def _held_row(
+        matter: dict[str, Any], f: dict[str, Any], doc: dict[str, Any], e: dict[str, Any], reason: str
+    ) -> dict[str, Any]:
+        return {
+            "matter_number": matter.get("number") or "",
+            "file_id": str(f.get("id")),
+            "file": doc["name"],
+            "by": str(e.get("by") or ""),
+            "kind": str(e.get("kind") or ""),
+            "amount": e.get("amount"),
+            "date": e.get("date"),
+            "reason": reason,
+        }
 
     def _gave_up(self, matter: dict[str, Any], doc: dict[str, Any]) -> None:
         rec = {"unread": True, "status": "not_entered", "reason": "the Operator could not read it after three tries"}
@@ -422,14 +466,15 @@ class NegotiationRun:
         failed: set[str] = set()
         if new and not self.stopped:
             tabs = self._tabs(mid)
+            plaintiffs = self._plaintiffs(mid, tabs)
             attempts = self._attempts()
             for f in new:
                 fid = str(f["id"])
                 doc = {"name": full_name(f), "ext": extension(f), "saved": str(f.get("modified") or "")[:10]}
                 try:
                     text = self._text(mid, f)
-                    events = read_mod.read_document(self.doorway, doc, text, [r for t in tabs for r in t["rows"]], tabs)
-                    checked = offer_check.screen(self.doorway, doc, text, events, self._tokens(tabs), fid)
+                    events = read_mod.read_document(self.doorway, doc, text, plaintiffs)
+                    checked = offer_check.screen(self.doorway, doc, text, events, self._tokens(plaintiffs), fid)
                 except limits_mod.LimitHold as exc:
                     self.stopped = exc.reason
                     failed.update(str(x["id"]) for x in new[new.index(f) :])
@@ -447,7 +492,8 @@ class NegotiationRun:
                 self.counts["docs_read"] += 1
                 attempts.pop(fid, None)
                 self.counts["offers_reviewed"] += checked["reviewed"]
-                plan = rows_mod.plan_document(checked["events"], doc, tabs, self._tokens(tabs))
+                on_matter = [p["plaintiff_index"] for p in plaintiffs]
+                plan = rows_mod.plan_document(checked["events"], doc, tabs, self._tokens(plaintiffs), on_matter)
                 plan["held"] = list(plan.get("held") or []) + checked["held"]
                 self._planned(matter, f, events, plan, tabs)
                 self._write(mid, plan, tabs)
@@ -458,6 +504,7 @@ class NegotiationRun:
                         # A seeded matter's earlier offer, entered so the tab is
                         # true; the firm has had it, so it is not "new".
                         self.counts["seed_offers_entered"] += rec.get("status") == "written"
+                        self._quiet_unplaced(matter, f, doc, rec)
                         continue
                     self._notice(matter, doc, rec, tabs)
                 if any(tp.args for tp in plan["tabs"].values()):
@@ -483,17 +530,7 @@ class NegotiationRun:
         self.counts["events_excluded"] += len(plan.get("excluded") or [])
         reviewed: list[dict[str, Any]] = []
         for h in plan.get("held") or []:
-            e = h["event"]
-            rec = {
-                "matter_number": matter.get("number") or "",
-                "file_id": str(f.get("id")),
-                "file": doc["name"],
-                "by": str(e.get("by") or ""),
-                "kind": str(e.get("kind") or ""),
-                "amount": e.get("amount"),
-                "date": e.get("date"),
-                "reason": h["reason"],
-            }
+            rec = self._held_row(matter, f, doc, h["event"], h["reason"])
             if h.get("by") in ("code", "review"):
                 self.counts["offers_held_review"] += 1
                 rec["held_by"] = h["by"]
@@ -501,7 +538,7 @@ class NegotiationRun:
                 self.log(f"negotiation: a row was held by the pre-write {h['by']} check")
             else:
                 self.counts["offers_held"] += 1
-                self.log("negotiation: an offer with no date was held from the notice")
+                self.log(f"negotiation: an event was held from the notice ({h['reason']})")
             self.held.append(rec)
         if not reviewed:
             return False

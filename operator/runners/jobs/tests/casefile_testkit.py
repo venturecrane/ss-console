@@ -215,7 +215,11 @@ class CfSeat:
             self._task(TASK2, M2, "Call client"),
         ]
         self.events: list[dict[str, Any]] = []
-        self.layout: dict[str, Any] = {"Providers[0]/Provider/DisplayName": "Example Imaging"}
+        self.layout: dict[str, Any] = {
+            "Providers[0]/Provider/DisplayName": "Example Imaging",
+            "Matter/CaseDetails/AccidentDetails/AccidentDate": "2026-01-12T00:00:00",
+            "Matter/CaseDetails/StandardCaseDetails/StatuteOfLimitationDate": "2028-01-12T00:00:00",
+        }
         self.client = Client(self)
         self.uploads = 0
 
@@ -320,8 +324,11 @@ def review_for(number: str, pack: str) -> dict[str, Any]:
         "matter_id": M1 if number == "100001" else M2,
         "clients": ["Gamma Example"] if number == "100001" else ["Delta Example"],
         "matter_type": "Motor Vehicle Accident",
-        "date_of_loss": "2026-01-12",
-        "statute_date": "2028-01-12",
+        # What the contract's sample still asks the reader to copy. M1 carries
+        # both on its case details; M2 has no layout, so a typed date would need
+        # a document that prints it (facts.settle, validate).
+        "date_of_loss": "2026-01-12" if number == "100001" else "",
+        "statute_date": "2028-01-12" if number == "100001" else "",
         "opened": "2026-01-15",
         "status": "Open",
         "responsible": "Riley Example",

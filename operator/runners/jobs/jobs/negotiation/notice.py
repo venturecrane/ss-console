@@ -77,6 +77,15 @@ def status_line(rec: dict[str, Any], plaintiff: str) -> str:
     return f"Not entered in Negotiation Details, please check the letter: {reason}."
 
 
+def plaintiff_label(rec: dict[str, Any], tabs: list[dict[str, Any]]) -> str:
+    """Whose row the status line names: nobody's on a file with one plaintiff."""
+    if not rec.get("several"):
+        return ""
+    if rec.get("joint"):
+        return "all plaintiffs"
+    return next((str(t["name"]) for t in tabs if t["plaintiff_index"] == rec.get("plaintiff_index")), "")
+
+
 def compose(matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], plaintiff: str = "") -> str:
     number = str(matter.get("number") or "")
     head = f"New offer on matter {number or 'without a number'}"
@@ -94,4 +103,4 @@ def compose(matter: dict[str, Any], doc: dict[str, Any], rec: dict[str, Any], pl
     return text if len(text) <= MAX else text[: MAX - 3] + "..."
 
 
-__all__ = ["compose", "offer_line", "status_line"]
+__all__ = ["compose", "offer_line", "plaintiff_label", "status_line"]

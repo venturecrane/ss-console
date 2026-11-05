@@ -16,8 +16,18 @@ What a rehearsal guarantees:
 The report (``report.json``) carries, per matter: the plan (``whole``,
 ``delta``, ``current`` or held), the pack's characters, documents readable and
 packed, and the projected input tokens of one read (pack plus the fixed system
-prompt, at four characters a token); and the totals. The verdict is always
-``held`` with a ``rehearsal:`` reason.
+prompt, at four characters a token); ``facts``, the header code reads from the
+matter's own record; and, for a matter with a delivered record,
+``prior_differences``, what that record says that code's header replaces (what
+the firm would see differ); and the totals. The verdict is always ``held`` with
+a ``rehearsal:`` reason.
+
+``--answer-key KEY_JSON`` compares ``facts`` to what a person read in the matter:
+``{"<matter number>": {"date_of_loss": "YYYY-MM-DD", "date_of_loss_source":
+"case_details", "statute_date": "YYYY-MM-DD", "statute_source":
+"statute_reminder", "clients": ["..."]}}``, any keys of ``facts``. An empty string
+expects no date. The report's ``answer_key`` holds ``checked`` and every
+``differs``; a matter the key names that is not in the job's scope differs.
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ from typing import Any
 from ..litigation.rehearse import ReadOnlySeat
 from ..litigation.tools import dump
 from ..litigation.workers import in_parallel
-from . import matter as matter_mod, pack, read
+from . import facts, matter as matter_mod, pack, read
 from .inventory import inv_of
 from .outcome import CasefileHold, Verdict
 from .run import CasefileRun
@@ -45,9 +55,11 @@ class NoModel:
 
 
 class RehearsalRun(CasefileRun):
-    def __init__(self, job_dir: Path, *, report_path: Path, **kw: Any) -> None:
+    def __init__(self, job_dir: Path, *, report_path: Path, answer_key: Path | None = None, **kw: Any) -> None:
         super().__init__(job_dir, client=NoModel(), **kw)
         self.report_path = report_path
+        # Read now: a key that cannot be read is a setup failure, not a lost walk.
+        self.answer_key = json.loads(answer_key.read_text(encoding="utf-8")) if answer_key is not None else None
         self.cache.read_only = True
 
     @property
@@ -90,10 +102,13 @@ class RehearsalRun(CasefileRun):
         plan, per = self._plan(), {}
         for m in self._matters():
             got = self._json_m(m["id"], "rehearsal.json") or {"mode": plan.get(m["id"], {}).get("mode", "held")}
+            if self._mfile(m["id"], "inv.json").is_file():
+                got = {**got, **self._header_report(m["id"])}
             per[m["number"]] = got
         measured = [p for p in per.values() if "pack_chars" in p]
         return {
             "matters": per,
+            **self._answer_key_report(per),
             "totals": {
                 "matters": len(per),
                 "to_read": len(measured),
@@ -104,6 +119,29 @@ class RehearsalRun(CasefileRun):
             },
         }
 
+    def _header_report(self, mid: str) -> dict[str, Any]:
+        inv = inv_of(self.data, mid)
+        out: dict[str, Any] = {"facts": facts.header(inv, self.firm)}
+        prior = self.prior(mid)
+        if prior is not None:
+            out["prior_differences"] = facts.settle(prior["review"], inv, self.firm)[1]
+        return out
+
+    def _answer_key_report(self, per: dict[str, Any]) -> dict[str, Any]:
+        if self.answer_key is None:
+            return {}
+        checked, differs = 0, []
+        for number, want in self.answer_key.items():
+            got = (per.get(number) or {}).get("facts")
+            if got is None:
+                differs.append({"number": number, "why": "not read in this job's scope"})
+                continue
+            for field, value in want.items():
+                checked += 1
+                if got.get(field) != value:
+                    differs.append({"number": number, "field": field, "expected": value, "got": got.get(field)})
+        return {"answer_key": {"checked": checked, "differs": differs}}
+
     def run(self) -> Verdict:
         try:
             for name, fn in (("inventory", self._inventory), ("screen", self._screen), ("matters", self._paid)):
@@ -112,6 +150,9 @@ class RehearsalRun(CasefileRun):
                     raise CasefileHold("scope_empty: no open matter is in this job's scope")
             report = self._rehearsal_report()
             reason = f"rehearsal: {report['totals']['to_read']} matters measured; nothing was read by a model or filed"
+            if "answer_key" in report:
+                k = report["answer_key"]
+                reason += f"; answer key: {k['checked']} checked, {len(k['differs'])} differ"
         except CasefileHold as h:
             report, reason = {"held": str(h)}, f"rehearsal: {h}"
         self.report_path.write_text(json.dumps({"rehearsal": report}, indent=1), encoding="utf-8")

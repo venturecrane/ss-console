@@ -11,8 +11,8 @@ Details, each one the extraction's own claim taken as fact:
   and announced as a new undated offer (ss#3139: ``rows.admissible`` now
   refuses a document not written by the paying side to the firm, from the
   reader's own ``author_side``, which is again the model's claim);
-* amounts entered on ``amount_confirmed``, which is the reader saying it saw
-  the figure printed.
+* amounts entered on the reader saying it saw the figure printed
+  (``amount_confirmed`` is now code's reading of the text, ``extract.printed``).
 
 So two checks the reader cannot grade itself:
 

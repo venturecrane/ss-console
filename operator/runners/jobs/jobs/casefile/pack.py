@@ -50,6 +50,7 @@ from typing import Any
 
 from ..litigation import fetch as fetch_mod
 from ..litigation.manifest import file_date, full_name
+from . import facts
 from .recheck import UUID, to_refs
 
 #: What extract writes for a page with no text layer (``run.no_ocr``). Never
@@ -60,6 +61,8 @@ DUMP_MIN, DUMP_SHARE = 60, 0.7
 FOLDER_LINES_CAP = 40_000
 HARD_CAP_RATIO = 1.25
 SCAN_FLOOR = 200
+#: Fewer completed tasks than this: the reader checks them all. Code counts, so the prompt need not.
+CHECK_ALL_DONE_BELOW = 15
 _PAGE = re.compile(r"===== page \d+ =====")
 
 
@@ -184,7 +187,26 @@ def _extracted(data: Any, mid: str) -> dict[str, Any]:
     return {str(r.get("file_id")): r for r in read_jsonl(fetch_mod.matter_dir(data, mid) / "extracted.jsonl")}
 
 
-def _header(inv: dict[str, Any], prior: dict[str, Any] | None, by_id: dict[str, int] | None = None) -> list[str]:
+def _dates_on_record(inv: dict[str, Any], firm: Any) -> list[str]:
+    code = facts.header(inv, firm)
+    loss = code["date_of_loss"]
+    statute = code["statute_date"]
+    return [
+        f"- date of loss: {loss} ({facts.SOURCE_WORDS[code['date_of_loss_source']]})"
+        if loss
+        else "- date of loss: not in the case details",
+        f"- statute: {statute} ({facts.SOURCE_WORDS[code['statute_source']]})"
+        if statute
+        else "- statute: not in the case details or a reminder task",
+        "These header facts are recorded by code from the matter itself; what you send for them is replaced. Only "
+        "a date shown here as not on the record may come from a document: send it with the document that prints it "
+        "(date_of_loss_source_doc_id, statute_source_doc_id), or leave it empty. Never compute a date.",
+    ]
+
+
+def _header(
+    inv: dict[str, Any], prior: dict[str, Any] | None, by_id: dict[str, int] | None = None, *, firm: Any
+) -> list[str]:
     m, d = inv.get("matter") or {}, inv.get("detail") or {}
     mt = (d.get("matterType") or {}).get("name") if isinstance(d.get("matterType"), dict) else d.get("matterType")
     lines = [
@@ -196,6 +218,7 @@ def _header(inv: dict[str, Any], prior: dict[str, Any] | None, by_id: dict[str, 
         f"- matter type: {mt} | status: {m.get('status')} | opened: {str(d.get('openedDate') or '')[:10]}",
         f"- description field: {d.get('description')!r}",
         f"- responsible: {m.get('responsible')} | assisting: {m.get('assisting')}",
+        *_dates_on_record(inv, firm),
         "",
     ]
     if prior is not None:
@@ -265,7 +288,11 @@ def _activity(inv: dict[str, Any], since: str | None = None) -> list[str]:
 
     lines = [f"## OPEN TASKS ({len(inv.get('tasks_open') or [])})"]
     lines += [_task_line(t, False) for t in inv.get("tasks_open") or []]
-    lines += ["", head("COMPLETED TASKS", len(done), len(inv.get("tasks_done") or []))]
+    total_done = len(inv.get("tasks_done") or [])
+    lines += ["", head("COMPLETED TASKS", len(done), total_done)]
+    if total_done:
+        which = "every completed task" if total_done < CHECK_ALL_DONE_BELOW else "the opening-workflow ones"
+        lines.append(f"(done_tasks_checked: check {which})")
     lines += [_task_line(t, True) for t in done]
     lines += ["", head("EVENTS", len(events), len(inv.get("events") or []))]
     for e in events:
@@ -303,7 +330,7 @@ def build(ctx: Any, inv: dict[str, Any], firm: Any, prior: dict[str, Any] | None
     for r in rows:
         meta[r["id"]] = {**r, "n": ctx.by_id.get(r["id"]), "state": doc_state(r["id"], pulled, extracted, texts)}
     since = (str(prior.get("delivered_at") or "")[:10] or "0000-00-00") if prior is not None else None
-    lines = [*_header(inv, prior, ctx.by_id), *_layouts(inv, firm), "", *_activity(inv, since)]
+    lines = [*_header(inv, prior, ctx.by_id, firm=firm), *_layouts(inv, firm), "", *_activity(inv, since)]
     if prior is None:
         lines += _listing(rows, meta, dumps, int(firm.pack("listing_rows_cap")))
     else:

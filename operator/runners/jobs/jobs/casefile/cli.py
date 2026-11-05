@@ -36,6 +36,7 @@ def _build(args: argparse.Namespace) -> Any:
         return RehearsalRun(
             jd,
             report_path=Path(args.rehearse),
+            answer_key=Path(args.answer_key) if args.answer_key else None,
             inputs_dir=args.inputs,
             pricing=args.pricing,
             state_dir=args.state_dir,
@@ -87,6 +88,9 @@ def add_parser(sub: Any) -> None:
     cf.add_argument("--state-dir", default=None, help="the lane's persistent state dir (default: on the volume)")
     cf.add_argument(
         "--rehearse", default=None, metavar="REPORT_JSON", help="$0: measure the packs, read nothing, file nothing"
+    )
+    cf.add_argument(
+        "--answer-key", default=None, metavar="KEY_JSON", help="with --rehearse: compare the header facts to a key"
     )
     cf.set_defaults(fn=cmd)
 

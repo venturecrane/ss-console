@@ -34,7 +34,7 @@ from ..litigation.tools import (
     _tool_results,
     _uses,
 )
-from . import recheck
+from . import facts, recheck
 
 STAGE = "casefile_read"
 MAX_TOKENS = 32000
@@ -70,7 +70,11 @@ RECORD_KEYS = (
     "questions",
     "unreadable_docs",
     "specialty_appointments",
+    *facts.CITE_KEYS,
 )
+#: What code writes whatever the reader sends (``facts.settle``), and the two
+#: citations a reader gives only for a date code does not have.
+NOT_REQUIRED = {*facts.CODE_OWNED, *(field for field, _, _ in facts.DATED), *facts.CITE_KEYS}
 REVIEW_TOOL: dict[str, Any] = {
     "name": "record_review",
     "description": (
@@ -79,13 +83,18 @@ REVIEW_TOOL: dict[str, Any] = {
         'proof_doc_ids or source_doc_id, write "[doc N]"); the record is stored with each '
         "document's id. Call it once the whole pack is read; a record the validator refuses comes "
         "back with the violations to fix. When the pack carries a PRIOR REVIEW RECORD, prefer "
-        "record_review_patch."
+        "record_review_patch. The matter's number, id, clients, type, status, opened date, staff, date of "
+        "loss and statute date are recorded by code from the matter itself; what you send for them is "
+        "replaced. A date the pack's header says is not on the record may come from a document only: "
+        "send it with statute_source_doc_id or date_of_loss_source_doc_id naming a document you read that "
+        "prints it, or leave it empty. Never compute a date."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             **{k: _STR for k in ("number", "matter_id", "matter_type", "date_of_loss", "statute_date", "opened")},
             **{k: _STR for k in ("status", "responsible", "assisting", "headline", "posture", "posture_why")},
+            **{k: _STR for k in facts.CITE_KEYS},
             "clients": {"type": "array", "items": _STR},
             "questions": {"type": "array", "items": _STR},
             "insurance": {"type": "object"},
@@ -105,7 +114,7 @@ REVIEW_TOOL: dict[str, Any] = {
                 )
             },
         },
-        "required": list(RECORD_KEYS),
+        "required": [k for k in RECORD_KEYS if k not in NOT_REQUIRED],
     },
 }
 _KEYS_TEXT = "; ".join(f"{k} by {' + '.join(v) if v else 'the string itself'}" for k, v in recheck.LIST_KEYS.items())
@@ -225,11 +234,14 @@ def read_matter(
     pack_text: str,
     check: Callable[[dict[str, Any]], list[str]],
     prior: dict[str, Any] | None = None,
+    settle: Callable[[dict[str, Any]], dict[str, Any]] = lambda rec: rec,
 ) -> ReadResult:
     """Drive one review to an accepted record, or return the last refused one
     with its problems. Raises ``ReadIncomplete`` when no record came at all.
     ``prior`` is the prior delivered record (the review itself) a patch
-    applies to; a whole read passes None and a patch there is refused."""
+    applies to; a whole read passes None and a patch there is refused.
+    ``settle`` turns what the reader sent into the record that is checked and
+    kept (``facts.settle``: the header is code's)."""
     handlers = {"list_files": ctx.list_files, "fetch_doc": ctx.fetch_doc, "search_text": ctx.search_text}
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": [{"type": "text", "text": pack_text, "cache_control": {"type": "ephemeral"}}]}
@@ -253,6 +265,7 @@ def read_matter(
                 results.append({"type": "tool_result", "tool_use_id": rec.get("id"), "content": _patch_back(why)})
                 messages.append({"role": "user", "content": results})
                 continue
+            record = settle(record)
             problems = problems + check(record)
             last = ReadResult(record, problems, turn, "patch" if patched else "full", patch_refused)
             if patched:

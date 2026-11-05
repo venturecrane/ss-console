@@ -20,7 +20,10 @@ toolset had them inline (``at_stake_terms``, ``statute_reminder_patterns``):
   matter (a mistyped proof id once passed the shape checks);
 * a specialty appointment names its provider and specialty, a real date (or
   none), a 24-hour time (or none), an IANA time zone (or none: only a zone the
-  document states), and the documents it was read from, each READ in this run.
+  document states), and the documents it was read from, each READ in this run;
+* the header is the matter's own record (``facts``): the record's copy equals
+  code's, and a date code does not have stands only on a document READ in this
+  run that prints it.
 
 A matter whose record fails here, after the reader's retries, is held alone.
 """
@@ -32,6 +35,8 @@ import json
 import re
 from typing import Any, Callable
 
+from ..proof import checks as proof_checks
+from . import facts
 from .pack import SCAN_MARK, body_chars
 
 DASHES = ("—", "–")
@@ -130,6 +135,36 @@ class _Checker:
                 self.bad("dash", f"em or en dash at {path}")
             if PLACEHOLDER.search(s):
                 self.bad("placeholder", f"'REVIEW' marker at {path}")
+
+    def header(self, rec: dict[str, Any]) -> None:
+        """The record against the matter's own record."""
+        code = facts.header(self.inv, self.firm)
+        for field in facts.CODE_OWNED:
+            if rec.get(field) != code[field]:
+                self.bad("header", f"{field} {rec.get(field)!r} is not the matter's {code[field]!r}")
+        for field, _source, cite in facts.DATED:
+            typed = rec.get(field)
+            if code[field]:
+                if typed != code[field]:
+                    self.bad("header", f"{field} {typed!r} is not the matter's {code[field]!r}")
+            elif typed:
+                self._dated(field, typed, rec.get(cite), cite)
+
+    def _dated(self, field: str, typed: Any, doc: Any, cite: str) -> None:
+        """A date code does not have: on a document read in this run that prints it, or not at all."""
+        why = "it names no document"
+        if doc:
+            read_it = unreadable(self.meta, doc)
+            printed = _iso_date(typed) and dt.date.fromisoformat(typed) in proof_checks.dates(
+                self.text_of(str(doc)) or ""
+            )
+            why = read_it or ("" if printed else "that document does not print it")
+        if why or not _iso_date(typed):
+            self.bad(
+                "header_date",
+                f"{field} {typed!r}: the matter's record does not carry this date, and {why or 'it is not a YYYY-MM-DD date'}. "
+                f"Name a document you read that prints it in {cite}, or leave {field} empty; never compute it.",
+            )
 
     def open_task(self, i: int, t: Any, seen: set[str]) -> None:
         where = f"open_tasks[{i}]"
@@ -269,6 +304,7 @@ def check(
         return ["shape: the record is not an object"]
     c = _Checker(number, inv, meta, firm, text_of)
     c.shape(rec)
+    c.header(rec)
     seen: set[str] = set()
     for i, t in enumerate(_rows(rec, "open_tasks")):
         c.open_task(i, t, seen)

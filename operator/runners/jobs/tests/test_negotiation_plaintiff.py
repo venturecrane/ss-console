@@ -16,7 +16,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from jobs.negotiation import extract as X, notice as N, rows as R
+from jobs import arrivals
+from jobs.negotiation import census, dryrun, extract as X, notice as N, rows as R, run as run_mod
+
+from test_negotiation import FILES, JOB, M1, NEW, PRICING, SEEDED, Layout, Seat, _offer, _review_passes, _run  # noqa: F401 - _review_passes is an autouse fixture; importing it applies it here
 
 KEY = json.loads((Path(__file__).parent / "answer_keys" / "negotiation_plaintiff.json").read_text(encoding="utf-8"))
 DOC = {"name": "Offer 10-07.pdf", "ext": ".pdf"}
@@ -151,3 +154,118 @@ def test_the_plaintiffs_the_reader_is_given_include_one_with_no_tab() -> None:
     who = [{"plaintiff_index": 0, "name": "Ann Example"}, {"plaintiff_index": 1, "name": "Bo Example"}]
     prompt = X.render(DOC, "text", who)
     assert "- plaintiff_index 0: Ann Example" in prompt and "- plaintiff_index 1: Bo Example" in prompt
+
+
+# ---- through the run ------------------------------------------------------------------------
+class SharedMatter(Layout):
+    """Two plaintiffs on the matter; a Negotiation Details tab for the first only."""
+
+    def get_matter_layouts(self, mid, section=""):
+        if section:
+            return super().get_matter_layouts(mid, section)
+        return {
+            "status": "ok",
+            "items": [
+                {"parent": "Plaintiff", "parent_index": 0, "description": "Dana Example"},
+                {"parent": "Plaintiff", "parent_index": 1, "description": "Bo Example"},
+                {"parent": "Defendant", "parent_index": 3, "description": "Not a plaintiff"},
+            ],
+        }
+
+
+def _unstated(**over):
+    return _offer(plaintiff={"kind": "unstated", "index": None}, **over)
+
+
+def test_an_unstated_offer_on_a_shared_matter_is_told_never_entered_and_its_document_moves_on(tmp_path, monkeypatch):
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    layout = SharedMatter()
+    v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=[_unstated()]).run()
+    assert layout.calls == []
+    assert [n["status"] for n in v["notices"]] == ["not_entered"]
+    assert v["notices"][0]["text"].endswith(
+        "Not entered in Negotiation Details, please check the letter: "
+        "the document does not say which plaintiff it is for."
+    )
+    # Told once: its document is handled, so it is not read and told again.
+    assert arrivals.cursor("negotiation", M1, data=tmp_path / "state")["f2"] == "1"
+
+
+def test_the_reader_is_given_the_plaintiff_with_no_tab(tmp_path, monkeypatch):
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    seen = []
+    r = _run(tmp_path, Seat(NEW), SharedMatter(), monkeypatch, events=[])
+    monkeypatch.setattr(run_mod.read_mod, "read_document", lambda d, doc, t, who: seen.extend(who) or [])
+    r.run()
+    assert [(p["plaintiff_index"], p["name"]) for p in seen] == [(0, "Dana Example"), (1, "Bo Example")]
+
+
+def test_a_failed_read_of_the_matters_plaintiffs_leaves_the_document_new(tmp_path, monkeypatch):
+    """Could not look must not read as one plaintiff, which would enter the row."""
+    arrivals.commit("negotiation", M1, FILES, data=tmp_path / "state")
+    layout = SharedMatter()
+    real = layout.get_matter_layouts
+    layout.get_matter_layouts = lambda mid, section="": real(mid, section) if section else {"status": "error"}
+    v = _run(tmp_path, Seat(NEW), layout, monkeypatch, events=[_unstated()]).run()
+    assert layout.calls == [] and v["notices"] == []
+    assert "f2" not in arrivals.cursor("negotiation", M1, data=tmp_path / "state")
+
+
+def test_a_quiet_seed_offer_with_no_plaintiff_is_kept_in_the_holds_not_lost(tmp_path, monkeypatch):
+    layout = SharedMatter()
+    v = _run(
+        tmp_path, Seat(SEEDED[:1]), layout, monkeypatch, events=[_unstated()], seed_saved_before="2026-10-09T14:00:00Z"
+    ).run()
+    assert layout.calls == [] and v["notices"] == [] and v["seed_offers_entered"] == 0
+    assert [h["reason"] for h in v["held"]] == [R.UNSTATED]
+
+
+def test_state_already_on_the_seat_reads_as_it_did(tmp_path, monkeypatch):
+    """The lane stores cursors, read attempts, quiet seeds and final holds; none
+    carries a plaintiff or a reader's amount_confirmed. A row an earlier run
+    wrote as joint is still read for what it is."""
+    state = tmp_path / "state"
+    arrivals.commit("negotiation", M1, FILES, data=state)
+    (state / "attempts.json").write_text(json.dumps({"held:old": 1}))
+    (state / "held.json").write_text(json.dumps([{"file_id": "old", "amount": 1, "date": None, "kind": "demand"}]))
+    joint = {
+        "row": 0,
+        "demand_amount": "9000",
+        "demand_date": "2026-09-01",
+        "note": "Joint, all plaintiffs. Our demand, per 'x' letter",
+    }
+    layout = Layout(rows=[joint], details="Entered 9/2/26.")
+    v = _run(tmp_path, Seat(NEW), layout, monkeypatch).run()
+    assert [n["status"] for n in v["notices"]] == ["entered"]
+    assert layout.calls[0][1][0]["note"].startswith("Example Mutual offer; answers our demand of 9/1/26")
+    assert json.loads((state / "attempts.json").read_text()) == {"held:old": 1}
+
+
+def test_the_census_counts_files_with_more_than_one_plaintiff_and_pays_nothing(tmp_path):
+    jd = dryrun.write_job(
+        tmp_path / "w",
+        slug="example",
+        seed_saved_before="",
+        design="",
+        firm_words=[],
+        statuses=["Open"],
+        cap_usd=1.0,
+        job_id=census.JOB_ID,
+    )
+    (tmp_path / "pricing.json").write_text(json.dumps(PRICING))
+    run = dryrun.NegotiationDryRun(
+        jd,
+        state_dir=tmp_path / "throwaway",
+        pricing=str(tmp_path / "pricing.json"),
+        seat_factory=lambda: Seat(FILES),
+        layout=SharedMatter(),
+        log=lambda m: None,
+    )
+    got = census.census(run)
+    assert got == {
+        "matters": 1,
+        "one_plaintiff": 0,
+        "no_tab": 0,
+        "unreadable": 0,
+        "several": [{"number": "200123", "plaintiffs": 2, "tabs": 1}],
+    }

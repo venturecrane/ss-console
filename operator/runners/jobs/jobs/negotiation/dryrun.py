@@ -218,7 +218,7 @@ def render_text(summary: dict[str, Any], entries: list[dict[str, Any]]) -> str:
         for ev in e["events"]:
             lines.append(
                 "   event: {kind} by={by!r} amount={amount} confirmed={amount_confirmed} date={date} "
-                "plaintiff={plaintiff_index} note={note!r}".format(**{k: ev.get(k) for k in rows_mod_keys()})
+                "plaintiff={plaintiff} note={note!r}".format(**{k: ev.get(k) for k in rows_mod_keys()})
             )
         for r in e["rows_planned"]:
             lines.append(f"   would write: {r}")
@@ -238,7 +238,7 @@ def render_text(summary: dict[str, Any], entries: list[dict[str, Any]]) -> str:
 
 
 def rows_mod_keys() -> tuple[str, ...]:
-    return ("kind", "by", "amount", "amount_confirmed", "date", "plaintiff_index", "note")
+    return ("kind", "by", "amount", "amount_confirmed", "date", "plaintiff", "note")
 
 
 def write_job(

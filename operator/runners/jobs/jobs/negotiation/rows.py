@@ -16,8 +16,11 @@ THE APPROVED SHAPE (the backfill's ``rows.py``, carried over):
   be checked against the letter;
 * a joint offer to every plaintiff is entered once, on the first plaintiff's
   tab, its note opening "Joint, all plaintiffs.";
-* a carrier repeating an offer, acceptances, rejections and mediator's
-  proposals add no row.
+* on a file with more than one plaintiff, an event the document does not place
+  (``plaintiff`` unstated) is NOT entered: silence is never joint, and a row on
+  the wrong plaintiff's tab is a false record. An offer is reported to the firm
+  as not entered; the firm's own figure is kept for SMD (``held``);
+* acceptances, rejections and mediator's proposals add no row.
 
 WHAT IS NEVER WRITTEN. A tab the firm keeps itself: one that already has rows
 and whose summary is not the Operator's ("Entered <date> ..."). Every row the
@@ -26,9 +29,10 @@ by the firm, and its figures are the firm's to keep. The connector's own
 add-only rule (nothing already entered is changed) holds underneath this.
 
 Duplicates are decided HERE, with the connector's own ``match_existing``, before
-anything is sent: ``already_present`` adds nothing and tells nobody;
-``possible_duplicate`` (the same amount on another date) is not written and the
-firm is asked to check the letter.
+anything is sent, and only here (the reader is not shown the rows):
+``already_present`` adds nothing and tells nobody, on any tab, the firm's own
+included; ``possible_duplicate`` (the same amount on another date) is not written
+and the firm is asked to check the letter.
 """
 
 from __future__ import annotations
@@ -58,6 +62,8 @@ PAYING_SIDE = "paying_side"
 OUR_SIDE = frozenset({"our_firm", "our_client"})
 OPERATOR_MARK = "Entered "
 NOTE_MAX = 250
+UNSTATED = "the document does not say which plaintiff it is for"
+NO_TAB = "that plaintiff has no Negotiation Details tab"
 
 
 def mdy(d: str | None) -> str:
@@ -258,16 +264,18 @@ def _fields(prefix: str, e: dict[str, Any], confirmed: bool) -> dict[str, Any]:
 
 
 def _refusal(plan: TabPlan, fields: dict[str, Any]) -> tuple[str, str, int | None] | None:
-    """(status, reason, row) when the event is not to be written, else None."""
+    """(status, reason, row) when the event is not to be written, else None. A
+    figure already on the row comes first: the same offer on a tab the firm
+    keeps is no more news than on one the Operator keeps."""
+    seen = match_existing(fields, plan.rows) if fields else None
+    if seen and seen[0] == "already_present":
+        return seen[0], "", seen[1]
     if not plan.kept:
         return "not_entered", "this file's Negotiation Details are kept by the firm", None
     if not fields:
         return "not_entered", "the letter's amount and date could not be read", None
-    seen = match_existing(fields, plan.rows)
     if seen and seen[0] == "possible_duplicate":
         return seen[0], f"the same amount is already on row {seen[1] + 1} with a different date", seen[1]
-    if seen:
-        return seen[0], "", seen[1]
     return None
 
 
@@ -319,24 +327,50 @@ def _dated(e: dict[str, Any]) -> str:
     return real_date(e.get("date")) or "9999-99-99"
 
 
-def plan_document(
-    events: list[dict[str, Any]],
-    doc: dict[str, Any],
-    tabs: list[dict[str, Any]],
-    tokens: set[str],
-) -> dict[str, Any]:
-    """``{"tabs": {pidx: TabPlan}, "offers": [...]}``. Each offer is one notice
-    candidate: ``status`` is ``to_write`` (``entry`` indexes its TabPlan's
-    args; ``date_only`` when the amount was not confirmed), ``already_present``
-    (no notice), or ``not_entered`` / ``possible_duplicate`` with the
-    ``reason`` the firm is told.
+def plaintiff_of(e: dict[str, Any]) -> tuple[str, int | None]:
+    """The reader's answer as ("joint", None), ("index", n) or ("unstated", None).
+    Anything else is unstated: a shape nobody asked for places nothing."""
+    got = e.get("plaintiff")
+    got = got if isinstance(got, dict) else {}
+    kind, index = got.get("kind"), got.get("index")
+    if kind == "joint":
+        return "joint", None
+    if kind == "index" and isinstance(index, int) and not isinstance(index, bool):
+        return "index", index
+    return "unstated", None
 
-    ``excluded``: events from a document the paying side did not write to the
-    firm (``admissible``); nothing is entered or announced. ``held``: an offer
-    with an amount but no date the document shows (``extract.parse`` has
-    already tried the document's own date); neither entered nor announced,
-    because "(date not stated)" on a notice sent the firm looking for an offer
-    that was not new."""
+
+def _tab_for(e: dict[str, Any], tabs: set[int], plaintiffs: set[int]) -> tuple[int | None, bool, str]:
+    """(the tab an event goes on or None, whether it is joint, why not). One
+    plaintiff on the matter: their tab, whatever the reader said. More than one:
+    only a tab the document places it on; the first tab only when it says joint."""
+    if len(plaintiffs) <= 1:
+        return min(tabs), False, ""
+    kind, index = plaintiff_of(e)
+    if kind == "joint":
+        return min(tabs), True, ""
+    if index in tabs:
+        return index, False, ""
+    return None, False, NO_TAB if index in plaintiffs else UNSTATED
+
+
+def _on_any_tab(e: dict[str, Any], ours: bool, tabs: list[dict[str, Any]]) -> bool:
+    """Whether this very figure and date are already entered on some tab: an
+    event the document does not place, repeated, is no news to anyone."""
+    fields = _fields("demand" if ours else "offer", e, e.get("amount_confirmed") is True)
+    if not fields:
+        return False
+    for tab in tabs:
+        seen = match_existing(fields, _row_dict(tab.get("rows") or []))
+        if seen and seen[0] == "already_present":
+            return True
+    return False
+
+
+def _admit(
+    events: list[dict[str, Any]], tokens: set[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """(the events to place, the undated offers held, the events excluded)."""
     held: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     kept: list[dict[str, Any]] = []
@@ -352,31 +386,60 @@ def plan_document(
                 held.append({"event": e, "status": "held", "reason": "the offer's date is not shown in the document"})
         else:
             kept.append(e)
-    shown, events = events, kept  # acceptances are SKIP_KINDS but still mark an offer accepted
+    return kept, held, excluded
+
+
+def plan_document(
+    events: list[dict[str, Any]],
+    doc: dict[str, Any],
+    tabs: list[dict[str, Any]],
+    tokens: set[str],
+    plaintiffs: list[int] | None = None,
+) -> dict[str, Any]:
+    """``{"tabs": {pidx: TabPlan}, "offers": [...]}``. Each offer is one notice
+    candidate: ``status`` is ``to_write`` (``entry`` indexes its TabPlan's
+    args; ``date_only`` when the amount was not confirmed), ``already_present``
+    (no notice), or ``not_entered`` / ``possible_duplicate`` with the
+    ``reason`` the firm is told.
+
+    ``plaintiffs``: every plaintiff index on the matter, tab or no tab (a shared
+    matter may have a tab for only one of them, and that tab is not a place for
+    the other's figures); None means the tabs are all of them.
+
+    ``excluded``: events from a document the paying side did not write to the
+    firm (``admissible``); nothing is entered or announced. ``held``: an offer
+    with an amount but no date the document shows (``extract.parse`` has
+    already tried the document's own date), because "(date not stated)" on a
+    notice sent the firm looking for an offer that was not new; or the firm's
+    own figure the document does not place on a plaintiff. Neither is entered
+    or announced."""
+    kept, held, excluded = _admit(events, tokens)
     by_idx = {int(t["plaintiff_index"]): t for t in tabs}
     plans: dict[int, TabPlan] = {}
     if not by_idx:
         reason = "this file has no Negotiation Details tab"
-        offers = [
-            {"event": e, "status": "not_entered", "reason": reason} for e in events if e.get("kind") in OFFER_KINDS
-        ]
+        offers = [{"event": e, "status": "not_entered", "reason": reason} for e in kept if e.get("kind") in OFFER_KINDS]
         return {"tabs": plans, "offers": offers, "held": held, "excluded": excluded}
+    on_matter = {*by_idx, *(plaintiffs or [])}
     offers = []
-    host, multi = min(by_idx), len(by_idx) > 1
-    for e in sorted(events, key=_dated):
+    for e in sorted(kept, key=_dated):
         kind = str(e.get("kind"))
-        if kind in SKIP_KINDS:
-            continue
         ours = is_ours(e, tokens)
-        pidx = e.get("plaintiff_index")
-        target: int = pidx if isinstance(pidx, int) and pidx in by_idx else host
-        own = target == pidx
-        rec: dict[str, Any] = {"event": e, "plaintiff_index": target, "joint": multi and not own}
+        target, joint, why = _tab_for(e, set(by_idx), on_matter)
+        rec: dict[str, Any] = {"event": e, "plaintiff_index": target, "joint": joint, "several": len(on_matter) > 1}
         if e.get("amount") is None and not real_date(e.get("date")):
             continue  # a bare mention of an offer: nothing to enter, nothing new to tell
-        _place(plans.setdefault(target, TabPlan(by_idx[target])), e, ours, doc, rec)
+        if target is None:
+            if _on_any_tab(e, ours, tabs):
+                continue
+            if ours or kind not in NOTICE_KINDS:
+                held.append({"event": e, "status": "held", "reason": why})
+                continue
+            rec.update(status="not_entered", reason=why)
+        else:
+            _place(plans.setdefault(target, TabPlan(by_idx[target])), e, ours, doc, rec)
         if not ours and kind in NOTICE_KINDS and rec["status"] != "already_present":
-            rec["accepted"] = _accepted_in(shown, e)
+            rec["accepted"] = _accepted_in(events, e)  # acceptances are SKIP_KINDS but still mark an offer accepted
             offers.append(rec)
     return {"tabs": plans, "offers": offers, "held": held, "excluded": excluded}
 
@@ -390,8 +453,10 @@ def details_for(tab: dict[str, Any], today: str) -> str:
 
 __all__ = [
     "OFFER_KINDS",
+    "NO_TAB",
     "OPERATOR_MARK",
     "TabPlan",
+    "UNSTATED",
     "admissible",
     "amount_text",
     "details_for",
@@ -400,6 +465,7 @@ __all__ = [
     "money",
     "operator_kept",
     "party",
+    "plaintiff_of",
     "plan_document",
     "source_phrase",
 ]

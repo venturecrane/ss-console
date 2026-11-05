@@ -26,6 +26,7 @@ from ..litigation.outcome import LitigationFailed, LitigationHold
 from ..litigation.tools import dump
 from . import (
     book,
+    facts,
     flags as flags_mod,
     matter as matter_mod,
     own_writes,
@@ -117,6 +118,9 @@ class DeliverMixin:
         for r in self._rows_live():
             mid = r["matter_id"]
             inv = inv_of(self.data, mid)
+            # Today's header, on a stored record too: one written before the
+            # header was code's, or before the firm corrected a date.
+            r["review"], _ = facts.settle(r["review"], inv, self.firm)
             lines: list[dict[str, Any]] = []
             if r["fresh"]:
                 meta = self._json_m(mid, "meta.json")
