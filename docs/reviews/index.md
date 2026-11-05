@@ -8,6 +8,8 @@ Code review records and platform audit reports for the SMD Services codebase.
 
 ## Files
 
+- [model-as-logic-audit-2026-11-04.md](./model-as-logic-audit-2026-11-04.md) - Where the model still carries logic code should own (2026-11-04): every job lane, the Smokeball connector and the live in-turn skills; 8 Tier A findings on the live A&P path, six general mechanisms, an order
+- [model-as-logic-audit-2026-11-04-agent-reports.md](./model-as-logic-audit-2026-11-04-agent-reports.md) - The five agent reports behind the 2026-11-04 model-as-logic audit, verbatim
 - [operator-strategic-review-2026-07-04-evidence.md](./operator-strategic-review-2026-07-04-evidence.md) - Evidence audit: every wave claim re-observed cold from live state; one red finding (#1681 reopened by the AC gate)
 - [operator-strategic-review-2026-07-04.md](./operator-strategic-review-2026-07-04.md) - Operator strategic & architectural review: grades, competitive landscape, recommendation set (2026-07-04)
 - [code-review-2026-09-25.md](./code-review-2026-09-25.md) - Full codebase code review (2026-09-25): Overall B-, up from C+; every 09-10 carried finding closed or moved; six new mediums, mostly where the gates do not look
