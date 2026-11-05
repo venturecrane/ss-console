@@ -101,11 +101,20 @@ against a fake environ holding a canary secret.
 | **Infisical** (`/ss` path, `prod` env) | The canonical source for SMD secrets - Clerk, Anthropic, ElevenLabs, AgentMail, Google, billing, and the rest | Rotate here first, then push to the runtime store |
 | **Cloudflare Workers secrets** | The web app's runtime secrets, bound to the `ss-web` Worker | On Workers, secrets persist across `wrangler deploy` runs (unlike the old Pages `[vars]` trap). The expected names are listed in the secrets comment block of `wrangler.toml`. Set one key at a time; never bulk-export the `/ss` path into `wrangler secret bulk` (see [Deployment & Release](/admin/playbook/deployment-release)) |
 | **Fly.io Machine secrets / volume** | Per-customer Operator secrets (staged by `operator/bin/provision-customer.sh`, plus the per-seat `MACHINE_HEARTBEAT_KEY`) and OAuth tokens (ADR 0010) | Per-customer isolation. Tokens stored on the Fly volume; a stale volume copy is a known failure mode (see [Disaster Recovery & Runbooks](/admin/playbook/disaster-recovery)) |
+| **GitHub Actions secrets, `venturecrane/engagements`** | The storage key (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT_URL`) that repo's publish-on-merge workflow writes the seats' vaults with | The same three values Infisical holds, placed there on 2026-11-05; not a separate key. Place them again after a rotation |
 | **`.dev.vars`** (gitignored) | Local dev values, pulled from Infisical | Never committed |
 
 The build-time public keys (anything `PUBLIC_*`, the `*_BASE_URL` vars) are configuration,
 not secrets, and are set in the build/deploy environment - see
 [Deployment & Release](/admin/playbook/deployment-release).
+
+**Keys are reused, never minted per use.** Before a design asks for a credential, list what
+`/ss` already holds (`crane_secret_check`, names only) and build on a key that exists. A
+new key for a job an existing key already does is a duplicate to rotate, audit and lose
+track of; the Captain refuses those requests (2026-11-05, when a publish workflow asked
+for its own storage token and the storage key was already in the vault). When an existing
+key has to be readable somewhere new, that is one yes from the Captain and one row in the
+table above.
 
 ## Rotation procedure (shape, not commands)
 
@@ -125,6 +134,10 @@ not secrets, and are set in the build/deploy environment - see
      script runs no busy gate, so the agent first checks the seat has no job running or
      held, then reads the heartbeat back. Running it is agent work (Captain, 2026-09-11);
      a Captain "not now" on that seat stands until lifted.
+   - **The storage key:** after rotating the `R2_*` values in Infisical, place the three
+     again in `venturecrane/engagements` Actions secrets, each piped from Infisical into
+     `gh secret set` and never typed or printed; that repo's publish-on-merge workflow
+     reads them, and its next run failing `unreachable` is how a missed step shows.
    - **Other Fly-side secrets:** reprovision the seat (`operator/bin/reprovision.sh <slug>`),
      which stages them and deploys behind the busy gate.
    - **A client's OAuth token:** the client re-consents in their own browser; SMD does not
