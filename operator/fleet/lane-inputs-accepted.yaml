@@ -65,3 +65,16 @@
     changed. Every drafting input staged before it still validates; A&P's new
     values are held in engagements#323 until the seat runs this image; nothing
     to re-stage.
+- since: 1991f54cd0e5b1c9c56b12eb6fbe048bef2b519b
+  lanes: '*'
+  date: '2026-11-05'
+  by: session records-lane-fixes-2 (scottdurgan), for #3774
+  why: >-
+    #3774 (firm inputs adopt live) changed every lane's firm.py, and the
+    chronology lane's config.py, in one place: resolve_dir returns the inputs
+    path through realpath (jobs/firm_inputs.py), so a running job keeps one
+    version while the applier swaps the symlink. No validator, key or type
+    changed; what each schema accepts is byte-for-byte the same, so the inputs
+    staged on every seat still fit; nothing to re-stage. (Second non-semantic
+    firm.py edit to move the digest; the digest should hash the schema, not
+    the module.)
