@@ -358,9 +358,10 @@ def add_negotiation_rows(
     Classified INTERNAL_WRITE: the firm's own record; nothing is sent.
 
     Each entry in ``rows`` carries any of ``demand_amount``, ``demand_date``,
-    ``offer_amount``, ``offer_date`` and ``note``: amounts as written
-    ("25000" or "25000.00"), dates YYYY-MM-DD. Pass only figures the sender
-    wrote or a document states, never one you worked out. A new entry goes in
+    ``offer_amount``, ``offer_date`` and ``note``: amounts and dates exactly
+    as printed or written ("$25,000.00", "10/01/2026", "October 1, 2026"),
+    read in code, never converted by you. Pass only figures the sender wrote
+    or a document states, never one you worked out. A new entry goes in
     the next row after the last filled one. To add the offer that answered a
     demand to that demand's row, pass ``row`` (0 to 9): only that row's EMPTY
     fields are filled. ``details`` and ``minimum_settlement`` are filled only
@@ -376,7 +377,12 @@ def add_negotiation_rows(
     tab gets that summary with the row, so it stays the Operator's. Without
     the summary the negotiation watch reads the tab as the firm's own, emails
     "not entered" about every later offer on that matter and enters none.
-    ``details`` is ignored with it.
+    ``details`` is ignored with it. With it, ``source_file_id`` is REQUIRED:
+    the ``fileId`` of the document the offer was read from (the filing's
+    own, for the day's post), on this matter. Every amount must be printed on
+    that document beside an offer, settlement, amount or total label, and
+    every date printed on it, or nothing is written; and the outcome is
+    recorded against the document's bundle and email (``outcome_ledger``).
 
     Returns ``status``: ``written`` (every value read back as written; each
     entry's ``row``); ``readback_mismatch`` (``mismatch`` names what did not
@@ -493,7 +499,7 @@ def _read_rows(rows: list[Any], minimum_settlement: str) -> tuple[list[dict[str,
         return parsed, ""
     read, _ = parse_row({"demand_amount": minimum_settlement})
     if read is None:
-        return _refused('minimum_settlement must be the figure as written, e.g. "50000"')
+        return _refused(f"minimum_settlement {minimum_settlement!r} does not read as one figure as written")
     return parsed, read["demand_amount"]
 
 

@@ -372,6 +372,8 @@ SMOKEBALL_FIRM_RECORD_READS: frozenset[str] = frozenset(
         "mcp_smokeball_get_matter_billing_config",
         "mcp_smokeball_get_fees",
         "mcp_smokeball_get_expenses",
+        # The same ledger totalled in code (money_reads.py): figures, no text.
+        "mcp_smokeball_get_expense_totals",
         "mcp_smokeball_resolve_invoice_matter",
         "mcp_smokeball_resolve_matter_by_id",
         # Seat-owned webhook configuration.

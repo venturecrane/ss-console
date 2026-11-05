@@ -114,7 +114,21 @@ def resolve_invoice_matter(
     in ``date_of_loss_as_printed`` instead of leaving it out, and never correct
     it yourself. The tool reads it into at most four real dates and reports them
     as ``date_of_loss_read_as``; a date it cannot read is listed in
-    ``ignored``.
+    ``ignored``. A date of birth is passed the same way, exactly as printed,
+    in ``date_of_birth_as_printed`` ("04/12/1988"); it is read in code into
+    one date or none (a two-digit birth year is never guessed), and one it
+    cannot read is listed in ``ignored``. ``date_of_loss`` and
+    ``date_of_birth`` stay for a caller that already holds ISO dates.
+
+    WHICH PAGES THIS IS FOR. When the facts come from a letter in a scanned
+    bundle (combined post intake), or from one emailed invoice, pass the
+    bundle group too: ``sha256`` as the read returned it, ``first_page`` and
+    ``last_page`` (the letter's ``[p.N]`` bounds; ``1`` and the page count
+    for an invoice PDF of its own) and ``message_id`` (the email it came in
+    on). All four or none. The verdict is then recorded for those pages
+    (``outcome_ledger``), so the post's record says what the resolve found
+    without anyone restating it. A partial group is ``refused`` and nothing is
+    searched.
 
     ``verdict`` is one of four:
 
@@ -258,11 +272,15 @@ def stage_vendor_invoice(
     Pass the SAME ``download_url`` you gave ``read_attachment_text`` (normally
     a ``spool:<token>`` from ``mail_spool_attachment``; a ``https://`` vendor URL
     also works), and the facts extracted from that read: ``vendor``,
-    ``invoice_number``, ``invoice_date`` (YYYY-MM-DD), ``amount`` (THIS
-    invoice's charges as a string with at most two decimals, e.g. "1250.00"),
-    and the ``sha256`` that read returned. The bytes are read again and the
-    entry is refused if they differ. The subject and description are composed by
-    the connector; there is no argument for either.
+    ``invoice_number``, ``invoice_date`` and ``amount`` (THIS invoice's total),
+    each exactly as printed ("$1,250.00", "10/01/2026"): they are read in
+    code, never converted by you. The amount must be printed on the invoice's
+    own pages beside a total, amount, balance or due label, or the entry is
+    refused and nothing is created. Pass the ``sha256`` that read returned: the
+    bytes are read again and the entry is refused if they differ. The subject
+    and description are composed by the connector; there is no argument for
+    either. ``message_id`` is the email the invoice came in on: the stage
+    records its outcome under it and the bundle (``outcome_ledger``).
 
     It NEVER finalizes: ``finalized`` is always false and no argument reaches
     it. Cost type, billable flag, activity code and staff come only from the

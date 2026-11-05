@@ -89,6 +89,12 @@ def read_whole_ledger(client: Any, matter_id: str) -> list[dict[str, Any]]:
     ``MAX_PAGES`` or when a page repeats rows already seen (a vendor ignoring
     ``Offset`` would otherwise loop forever or read one page as the ledger).
     Transport and API errors propagate; the caller refuses on them."""
+    return read_whole_ledger_counted(client, matter_id)[0]
+
+
+def read_whole_ledger_counted(client: Any, matter_id: str) -> tuple[list[dict[str, Any]], int]:
+    """``read_whole_ledger`` plus how many soft-deleted rows it left out, for a
+    read that reports ``deletedExcluded`` (``money_reads.get_expense_totals``)."""
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     offset = 0
@@ -100,7 +106,8 @@ def read_whole_ledger(client: Any, matter_id: str) -> list[dict[str, Any]]:
         seen |= ids
         rows.extend(page)
         if len(page) < PAGE_SIZE:
-            return [r for r in rows if not is_deleted(r)]
+            live = [r for r in rows if not is_deleted(r)]
+            return live, len(rows) - len(live)
         offset += len(page)
     raise ExpenseListingIncomplete(f"the expense listing ran past {MAX_PAGES * PAGE_SIZE} entries")
 

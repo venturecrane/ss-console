@@ -870,3 +870,37 @@ def test_validate_still_rejects_confirm_on_destructive_in_exposure_ceiling(tmp_p
     assert "exposure_ceiling:" in bad  # guard: replace landed
     errors = validate_customer_yaml(_write(tmp_path, bad))
     assert any("exposure_ceiling.destructive" in e and "confirm" in e for e in errors)
+
+
+# ---- settings.trust_floor_usd (money_reads.py, 2026-11-04) -------------------
+#
+# The Smokeball connector decides low_trust from this floor in code; a floor
+# that is not a positive number, or one on a skill that never reads it, would
+# author a decision nobody makes, so the validator refuses both.
+
+
+@pytest.mark.parametrize(
+    "name, floor, ok",
+    [
+        ("trust-balance-nudge", 2500, True),
+        ("trust-balance-nudge", 2500.5, True),
+        ("trust-balance-nudge", 0, False),
+        ("trust-balance-nudge", -10, False),
+        ("trust-balance-nudge", True, False),
+        ("trust-balance-nudge", "2500", False),
+        ("matter-status-responder", 2500, False),
+    ],
+)
+def test_the_trust_floor_is_a_positive_number_on_the_nudge_only(
+    name: str, floor: object, ok: bool
+) -> None:
+    from bootstrap.validate import _validate_skill
+
+    errors: list[str] = []
+    skill = {
+        "name": name,
+        "initiation": {"manual": True, "scheduled": False, "webhook": False},
+        "settings": {"trust_floor_usd": floor},
+    }
+    _validate_skill(skill, "personas[0].skills[0]", errors)
+    assert (errors == []) is ok, errors

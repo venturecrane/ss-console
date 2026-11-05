@@ -58,6 +58,7 @@ EXPECTED_TOOLS = {
     "get_matter_billing_config",
     "get_fees",
     "get_expenses",
+    "get_expense_totals",
     "read_attachment_text",
     "resolve_invoice_matter",
     "resolve_matter_by_id",

@@ -10,7 +10,7 @@ description: >-
   sender, one line per invoice: staged, or flagged with the reason. It never
   finalizes an expense, never touches trust funds, never pays anyone, and never
   guesses a matter, a figure, or a date.
-version: 0.2.0
+version: 0.3.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -131,12 +131,18 @@ From the text, extract:
 
 - **vendor** (the business that issued the invoice),
 - **invoice number**,
-- **invoice date** (as `YYYY-MM-DD`),
-- **amount**: THIS invoice's own charges, as a string with at most two
-  decimals ("1250.00"). Not a balance forward, not an account total, not a
-  "total due" that folds in earlier invoices,
+- **invoice date**, exactly as the invoice prints it ("09/01/2026"),
+- **amount**: THIS invoice's own charges, exactly as the invoice prints them
+  ("$1,250.00"). Not a balance forward, not an account total, not a "total
+  due" that folds in earlier invoices,
 - the **client or claimant name**, the **matter number**, and, when present,
   the **claim number**, **date of birth**, and **date of loss**.
+
+Pass every figure and date exactly as printed: the connector reads them in
+code, and you never convert, round or reformat one. The stage refuses an
+amount the invoice's own pages do not print beside a total, amount, balance or
+due label, so a figure you worked out, or one from the wrong line, is never
+staged.
 
 Flag instead of staging, and say which, when the document is:
 
@@ -151,10 +157,14 @@ Flag instead of staging, and say which, when the document is:
 ### 3. Ask which matter it is; never decide
 
 Call `resolve_invoice_matter(client_name, matter_number, claim_number,
-date_of_loss, date_of_birth, case_number)` with exactly the facts the invoice
-states, in the shapes it states them, and nothing else. Omit what it does not
-say. A date of loss that does not read cleanly goes, exactly as read, in
-`date_of_loss_as_printed`; never correct it yourself. A claim number or a
+date_of_loss_as_printed, date_of_birth_as_printed, case_number, sha256,
+first_page, last_page, message_id)` with exactly the facts the invoice states,
+in the shapes it states them, and nothing else. Omit what it does not say. The
+date of loss and the date of birth go exactly as printed, in
+`date_of_loss_as_printed` and `date_of_birth_as_printed`; never convert or
+correct either yourself. Pass the group too: `sha256` as the read returned it,
+`first_page` 1 and `last_page` the read's page count, and `message_id` the
+email's id, so the verdict is recorded against this invoice. A claim number or a
 court's case number the invoice prints goes in its own
 argument, never in `matter_number`, which is the firm's own file number only. Do
 not supply a fact from an earlier invoice, from the forwarded email's
@@ -184,8 +194,10 @@ let the firm say which.
 ### 4. Stage it
 
 Call `stage_vendor_invoice(matter_id, matter_resolution, download_url,
-file_name, sha256, vendor, invoice_number, invoice_date, amount)` with the
-`matter_id` and `matter_resolution` from step 3 and the facts from step 2. Pass
+file_name, sha256, vendor, invoice_number, invoice_date, amount, message_id)` with the
+`matter_id` and `matter_resolution` from step 3, the facts from step 2 as
+printed, and the email's id as `message_id` (the stage records its outcome
+under it). Pass
 the SAME `"spool:<token>"` reference you read from as `download_url`; the
 connector reads those bytes again and refuses if they differ, and it files the
 PDF itself. Read its `status`:

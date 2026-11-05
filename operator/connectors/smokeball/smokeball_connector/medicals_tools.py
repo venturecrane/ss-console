@@ -175,13 +175,18 @@ def add_medicals_row(
     file id is refused and nothing is written: a row is tied to the bill that
     was filed, where it was filed. There is no argument that asserts a matter.
 
-    Pass what the bill prints and nothing else: ``provider_name`` (the
-    facility as the bill names it), ``charge`` (this bill's total charges as
-    a string with at most two decimals, e.g. "4345.16"; never a figure you
-    added up, rounded or converted), ``service_start`` and ``service_end``
-    (YYYY-MM-DD; the same date for one visit), and ``account_number`` when the
-    bill prints one. A bill that prints no total, or no dates of service, has
-    no row: say so in the reply and put nothing here.
+    Pass what the bill prints and nothing else, exactly as printed:
+    ``provider_name`` (the facility as the bill names it), ``charge`` (this
+    bill's total charges as the bill prints them, "$4,345.16" or a split cents
+    box "4345 16"; never a figure you added up, rounded or converted),
+    ``service_start`` and ``service_end`` (the dates of service as the bill
+    prints them, "10/01/2026"; the same date twice for one visit), and ``account_number`` when the bill prints one. The figure and
+    the dates are read in code, never by you, and a date that could be two
+    dates is refused with the string named. The charge must be printed on the
+    bill's own pages beside a total, amount, balance or due label, and both
+    dates printed on them, or nothing is written. A bill that prints no total,
+    or no dates of service, has no row: say so in the reply and put nothing
+    here.
 
     ``patient_name`` is the patient as the bill prints them ("QUILL, ROSA").
     Always pass it: on a matter with several Medicals tabs (one per claimant)

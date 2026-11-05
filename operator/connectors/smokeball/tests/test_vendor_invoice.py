@@ -343,7 +343,7 @@ def test_readback_amount_mismatch_is_reported() -> None:
 def test_amount_must_read_as_one_positive_figure(amount: str) -> None:
     tenant = Tenant()
     out = _stage(tenant, amount=amount)
-    assert out["status"] == "refused" and "amount must be a positive figure" in out["reason"], amount
+    assert out["status"] == "refused" and "does not read as one positive figure" in out["reason"], amount
     assert tenant.posts("/expenses") == []
 
 

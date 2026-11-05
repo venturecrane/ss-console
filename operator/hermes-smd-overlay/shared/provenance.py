@@ -226,6 +226,8 @@ TENANT_SOURCE_READ_TOOLS: frozenset[str] = frozenset(
         "mcp_smokeball_get_matter_billing_config",
         "mcp_smokeball_get_fees",
         "mcp_smokeball_get_expenses",
+        # The same ledger, totalled in code over every page (money_reads.py).
+        "mcp_smokeball_get_expense_totals",
         # ss#2842: reads the tenant's own matters and contacts to resolve an
         # invoice's matter, and the reply quotes the matter numbers it returned
         # (including both candidates when the answer is ambiguous).
@@ -564,7 +566,11 @@ def record_read(session_id: str, text: str) -> None:
 # is NOT derived here. A reply stating one over-reports; the vendor stage
 # always writes quantity 1, so its price is the entry's amount.
 
-_MONEY_KEY_SUFFIXES: tuple[str, ...] = ("amount", "price", "charge", "balance")
+# ``_usd`` (2026-11-04): the connector's own computed money reads name a dollar
+# figure that way (``get_matter_balances``' ``floor_usd`` and
+# ``shortfall_usd``, money_reads.py), a figure code computed from the firm's
+# record and its authored settings.
+_MONEY_KEY_SUFFIXES: tuple[str, ...] = ("amount", "price", "charge", "balance", "_usd")
 _BARE_AMOUNT_RE = re.compile(r"\d{1,12}(?:\.\d{1,2})?")
 _MAX_MONEY_WALK_DEPTH = 8
 _MAX_MONEY_WALK_NODES = 20_000

@@ -374,7 +374,12 @@ def file_attachment_pages_to_matter(
     as its ``source_file_id`` and refuses any file this run did not file on
     that matter. A VENDOR'S BILL is not filed here at all: ``stage_vendor_invoice``
     with ``first_page`` and ``last_page`` files the range and stages the
-    expense in one write."""
+    expense in one write.
+
+    ``message_id`` is the email the bundle came in on, from the event. Pass it
+    always: the filing records its own outcome under the bundle and that
+    message (``outcome_ledger``), and the post journal's record of this letter
+    is derived from that row, never typed."""
     row = outcome_ledger.Outcome(
         outcome_ledger.FILE,
         (sha256 or "").strip().lower(),

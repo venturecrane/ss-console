@@ -497,7 +497,7 @@ describe('matter-inbox-router: the combined post class', () => {
       '`add_medicals_row(matter_id, source_file_id, provider_name, charge, service_start, service_end, account_number, claimant_index, patient_name, provider_address)`'
     )
     expect(skill).toContain(
-      '`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page)`'
+      '`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page, message_id)`'
     )
     expect(skill).toContain('**Never writes a figure the page does not print.**')
     expect(skill).toContain('**Never finalizes, never pays, never changes a row.**')

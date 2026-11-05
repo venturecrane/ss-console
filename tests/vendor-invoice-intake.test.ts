@@ -75,8 +75,10 @@ describe('vendor-invoice-intake: the skill body', () => {
     expect(b).toContain('### 3. Ask which matter it is; never decide')
     expect(b).toContain('**The verdict decides, not you**')
     expect(b).toContain(
-      '`resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss, date_of_birth, case_number)`'
+      '`resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss_as_printed, date_of_birth_as_printed, case_number, sha256, first_page, last_page, message_id)`'
     )
+    // Dates and the amount go as printed and are read in code (2026-11-04).
+    expect(b).toContain('Pass every figure and date exactly as printed')
     // Each of the four verdicts has a row saying what to do, and the two that
     // are easiest to blur are pinned by name.
     for (const verdict of ['`unique`', '`ambiguous`', '`none`', '`search_failed`']) {
@@ -104,7 +106,12 @@ describe('vendor-invoice-intake: the skill body', () => {
       'invoice_date',
       'amount',
     ])
-    expect(body()).toContain(`\`stage_vendor_invoice(${params.join(', ')})\``)
+    // ``message_id`` is optional on the tool (the outcome row's key), so the
+    // required-``str`` scan above does not list it; the skill always passes it.
+    expect(readFileSync(SERVER, 'utf8')).toContain(
+      '    message_id: str = "",\n) -> Any:\n    """Stage ONE'
+    )
+    expect(body()).toContain(`\`stage_vendor_invoice(${[...params, 'message_id'].join(', ')})\``)
   })
 
   it('names an attachment source the seat can actually supply', () => {

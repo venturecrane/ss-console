@@ -400,16 +400,18 @@ def record_post_batch(
     ``message_id`` is the email the bundle came in on, ``file_name`` and
     ``sha256`` the attachment as the read returned them, ``page_count`` its
     pages, ``received_at`` when the email arrived (ISO 8601, from the event).
-    ``letters`` has one entry per letter, covering every page exactly once:
-    ``first_page``, ``last_page``, ``sender`` (as the letter prints it),
-    ``kind`` (``letter``, ``court_paper``, ``medical_bill``, ``vendor_bill``
-    or ``settlement_offer``), ``placed_on`` (the matter number it was filed
-    on, from that letter's own resolve), ``issue`` (empty when it simply
-    filed and everything after it landed; otherwise one of the words the
-    skill lists), ``candidates`` (the matter numbers the resolve named, for
-    ``one_candidate`` and ``ambiguous`` only) and ``detail`` (the plain
-    reason, one short line, when the issue needs one; never what the letter
-    says).
+    ``letters`` has one entry per letter, covering every page exactly once,
+    each with ONLY ``first_page``, ``last_page``, ``sender`` (as the letter
+    prints it), ``kind`` (``letter``, ``court_paper``, ``medical_bill``,
+    ``vendor_bill`` or ``settlement_offer``) and, when there is something the
+    tools could not know, ``detail`` (one short plain line; never what the
+    letter says). Where each letter was filed, what kept it from landing and
+    the candidate matters are DERIVED here from what the resolve, filing and
+    keying tools recorded for this bundle and message, so pass the same
+    ``message_id`` and ``sha256`` you gave them. A letter passed with
+    ``placed_on``, ``issue`` or ``candidates`` is refused and the refusal
+    names what they derive to. The result's ``letters_recorded`` lists each
+    letter as recorded.
 
     When nothing in the bundle was filed at all (it could not be read, its
     letters could not be told apart, or it is a second PDF that was not

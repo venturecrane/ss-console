@@ -16,7 +16,7 @@ description: >-
   the whole bundle is never filed as one document, no figure is written that
   the page does not print, nothing is ever finalized, and nothing is ever
   sent outside the firm.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -252,8 +252,14 @@ client's file, and nobody will find it.
 
 For each letter, read ONLY that letter's own pages and call
 `resolve_invoice_matter(client_name, matter_number, claim_number, date_of_loss,
-date_of_birth, case_number, date_of_loss_as_printed)` with exactly the facts
-**that letter** prints, and nothing else.
+date_of_birth, case_number, date_of_loss_as_printed, date_of_birth_as_printed,
+sha256, first_page, last_page, message_id)` with exactly the facts **that
+letter** prints, and nothing else, plus the bundle group: `sha256` as the read
+returned it, `first_page` and `last_page` the letter's `[p.N]` bounds from step
+2, and `message_id` the email's id from the event. Always pass all four: the
+verdict is then recorded for those pages, and the bundle's record (step 5) is
+built from what the tools recorded, so a letter resolved without them is
+recorded as `not_attempted`.
 
 The tool is named for the first thing that used it; its arithmetic is not
 specific to invoices, and it is the same resolver here.
@@ -266,8 +272,9 @@ specific to invoices, and it is the same resolver here.
   there empties the search and destroys a resolution that would otherwise have
   worked. When in doubt, leave it out.
 - Pass every other identifying fact the letter prints: its `claim_number`, its
-  `date_of_loss` (ISO), and on a court paper the court's case number as
-  `case_number`. The tool checks each against the matter's own record,
+  date of loss, and on a court paper the court's case number as
+  `case_number`. A date of birth goes in `date_of_birth_as_printed` exactly as
+  printed ("04/12/1988"); the tool reads it, you never convert it. The tool checks each against the matter's own record,
   including the fields where the firm keeps them, so a printed claim or case
   number is often the second fact that files a letter instead of asking. Leaving
   one out turns a letter that would have filed into a question.
@@ -309,7 +316,8 @@ not a failure. Naming it and asking is the whole point.
 
 For each `unique` letter, call `file_attachment_pages_to_matter(matter_id,
 matter_resolution, download_url, file_name, sha256, first_page, last_page,
-document_kind)`:
+document_kind, message_id)`, with `message_id` the email's id from the event,
+the same one the resolve took:
 
 - `matter_id` and `matter_resolution` from that letter's own resolve, unchanged
   and never borrowed from another letter's.
@@ -343,12 +351,18 @@ After a medical bill's pages are `filed` (step 4), and only then, call
   `fileId`, unchanged. The tool refuses a file this run did not file on that
   matter; there is no other way to open it.
 - `provider_name` is the facility exactly as the bill names it.
-- `charge` is THIS bill's total charges as the page prints them, as a string
-  with at most two decimals ("4345.16"). If the bill prints no total, there is
-  no row: say so on the letter's line. Never add lines up to make one.
-- `service_start` and `service_end` are the dates of service as printed, as
-  YYYY-MM-DD; one visit is the same date twice. No dates of service printed,
-  no row.
+- `charge` is THIS bill's total charges exactly as the page prints them
+  ("$4,345.16", or "4345 16" where the bill prints dollars and cents in
+  separate boxes). The tool reads the figure; never convert, round or reformat
+  it. If the bill prints no total, there is no row: say so on the letter's
+  line. Never add lines up to make one.
+- `service_start` and `service_end` are the dates of
+  service exactly as printed ("07/16/2026"); one visit is the same date twice.
+  No dates of service printed, no row.
+- The tool checks the bill's own pages: the charge must be printed beside a
+  total, amount, balance or due label, and both dates printed on them. A
+  refusal that a figure "is not printed" means the figure passed is not the
+  bill's: read the page again and pass what it prints, or record no row.
 - `account_number` is the account or patient number when the bill prints one;
   leave it empty otherwise.
 - `patient_name` is the patient exactly as the bill prints them ("QUILL,
@@ -405,15 +419,18 @@ was transcribed from paper.
 ### 4b. A vendor's bill: stage the expense
 
 A vendor's bill with a `unique` verdict is not filed in step 4. Instead call
-`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page)`:
+`stage_vendor_invoice(matter_id, matter_resolution, download_url, file_name, sha256, vendor, invoice_number, invoice_date, amount, first_page, last_page, message_id)`:
 
 - `matter_id` and `matter_resolution` from that letter's own resolve, as in
   step 4; `download_url` and `sha256` are the bundle's, as the read returned
-  them; `first_page` and `last_page` are the bill's `[p.N]` bounds.
-- `vendor`, `invoice_number`, `invoice_date` (YYYY-MM-DD) and `amount` (this
-  invoice's charges as a string with at most two decimals) are what the bill
-  prints. A bill missing any of them is held on its line with the missing
-  fact named, and its pages are filed as a letter in step 4 instead.
+  them; `first_page` and `last_page` are the bill's `[p.N]` bounds;
+  `message_id` the email's id, as in step 4.
+- `vendor`, `invoice_number`, `invoice_date` and `amount` (this invoice's
+  total) exactly as the bill prints them ("10/01/2026", "$96.25"); the tool
+  reads them, and refuses an amount the bill's pages do not print beside a
+  total, amount, balance or due label. A bill missing any of them is held on
+  its line with the missing fact named, and its pages are filed as a letter in
+  step 4 instead.
 - `file_name` as in step 4.
 
 The one write files the bill's pages as their own document and stages one
@@ -459,16 +476,19 @@ re-read is not needed; what the list carries comes from the record.
 
 Do this with the other keying, before step 4c. After a settlement offer's
 pages are `filed` (step 4), and only then, call
-`add_negotiation_rows(matter_id, rows, plaintiff_index, operator_tab)` with the filing's own
-`matter_id` and ONE entry in `rows`:
+`add_negotiation_rows(matter_id, rows, plaintiff_index, operator_tab, source_file_id)` with the filing's own
+`matter_id`, `source_file_id` the filing's own `fileId`, and ONE entry in
+`rows`:
 
-- `offer_amount` is the offer as the letter prints it, with only the dollar
-  sign and the thousands commas taken out ("$25,000.00" is "25000.00"): never
-  a figure you added up, rounded, converted, or read from another letter. A
-  letter that states a range, a "policy limits" offer with no figure, or no
-  amount at all has no row.
+- `offer_amount` is the offer exactly as the letter prints it ("$25,000.00"):
+  never a figure you added up, rounded, converted, or read from another
+  letter. The tool reads it, and refuses a figure the letter does not print
+  beside an offer, settlement, amount or total label. A letter that states a
+  range, a "policy limits" offer with no figure, or no amount at all has no
+  row.
 - `offer_date` is the date the letter gives for the offer, else the letter's
-  own date, as YYYY-MM-DD. A letter with neither has no row.
+  own date, exactly as printed ("October 27, 2026"); the tool refuses a date
+  the letter does not print. A letter with neither has no row.
 - `note` is `From <file name>, pages <first>-<last>, a letter from <sender as
 printed>`, plus `, read from a scan, check the figure` when the filing said
   `fromScan`. Nothing else: never what the letter argues or asks.
@@ -476,16 +496,14 @@ printed>`, plus `, read from a scan, check the figure` when the filing said
   the tool refuses and lists them; the offer is then not written, and its line
   asks which plaintiff (never pick one, even when the letter names one).
 
-Read the result: `written` or `nothing_to_write` (every entry
-`already_present`) is placed and keyed. An entry `possible_duplicate` (the
-same amount on another date is already on that row) is placed with the issue
-`possible_duplicate`, the existing row's figure and date as its detail; a
-`readback_mismatch` is `figure_not_saved`; a `refused` is `offer_not_written`
-with its reason in plain words. A letter that is an offer but has no amount or
-no date files as a letter and records `offer_not_written` ("the letter states
-no amount"). A refusal that the tab is kept by the firm is `offer_not_written`
-too: the firm keeps that matter's Negotiation Details itself, and the Operator
-never writes there.
+Read the result for the reply: `written` or `nothing_to_write` (every entry
+`already_present`) is placed and keyed; an entry `possible_duplicate` (the
+same amount on another date is already on that row) was not entered; a
+`readback_mismatch` did not save as written; a `refused` says why. A letter
+that is an offer but has no amount or no date files as a letter and gets no
+call here. A refusal that the tab is kept by the firm means the firm keeps that
+matter's Negotiation Details itself, and the Operator never writes there. The
+tool records its own outcome; the bundle's record (step 5) is derived from it.
 
 `operator_tab` is always `true` here. It keeps a tab the Operator starts
 under its own summary line, which is what lets a firm's negotiation watch (if
@@ -498,40 +516,44 @@ every later offer on that matter.
 
 When every letter is filed, held or keyed, call `record_post_batch(message_id,
 file_name, sha256, page_count, letters, received_at)` once for the bundle:
-`message_id` the email's id from the event, `file_name` and `sha256` as the
-read returned them, `received_at` when the email arrived, and `letters` one
-entry per letter in your partition, covering every page once:
-`first_page`, `last_page`, `sender` (as the letter prints it), `kind`
-(`letter`, `court_paper`, `medical_bill`, `vendor_bill`, `settlement_offer`),
-`placed_on` (the matter number its own resolve returned, when it filed),
-`candidates` (only for `one_candidate` and `ambiguous`: the matter numbers the
-resolve named), `issue` and, when the issue needs a reason, `detail` (one short
-plain line, never what the letter says).
+`message_id` the email's id from the event (the same one every tool above
+took), `file_name` and `sha256` as the read returned them, `received_at` when
+the email arrived, and `letters` one entry per letter in your partition,
+covering every page once, each with ONLY: `first_page`, `last_page`, `sender`
+(as the letter prints it), `kind` (`letter`, `court_paper`, `medical_bill`,
+`vendor_bill`, `settlement_offer`) and, only when there is something no tool
+could know (the bill prints no total, the offer states no amount), `detail`
+(one short plain line, never what the letter says).
 
-`issue` is empty when the letter filed and every keying step after it landed.
-Otherwise exactly one of:
+**Never pass `placed_on`, `issue` or `candidates`.** Where each letter was
+filed, what kept it from landing and the candidate matters are derived by the
+connector from what the resolve, filing and keying tools recorded for this
+bundle and message. A letter passed with any of them is refused, and the
+refusal names what they derive to. `kind` is yours, because it decides which
+keying act the letter needed:
 
-| issue                | when                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `no_match`           | resolve `none`, no candidates                                                                                          |
-| `one_candidate`      | resolve `none` with one candidate                                                                                      |
-| `ambiguous`          | resolve `ambiguous`                                                                                                    |
-| `search_failed`      | resolve `search_failed`                                                                                                |
-| `filing_refused`     | the filing returned `refused` (the reason is the detail)                                                               |
-| `tab_not_written`    | a medical bill filed but no Medicals row: no total or no dates printed, `needs_contact`, `link_not_visible`, `refused` |
-| `figure_not_saved`   | any `readback_mismatch`, or a stage whose `stage_status` is `staged_unverified` or `staged_file_failed`                |
-| `possible_duplicate` | an offer entry or a vendor stage answered `possible_duplicate` or `duplicate`                                          |
-| `offer_not_written`  | a settlement offer filed but not on Negotiation Details (no amount, no date, several plaintiffs, `refused`)            |
-| `expense_not_staged` | a vendor's bill missing a fact, filed as a letter, or a stage `refused`                                                |
+| kind               | the act it needs                                         | when that act is missing or did not land |
+| ------------------ | -------------------------------------------------------- | ---------------------------------------- |
+| `medical_bill`     | `add_medicals_row` written                               | `tab_not_written`                        |
+| `vendor_bill`      | `stage_vendor_invoice` staged                            | `expense_not_staged`                     |
+| `settlement_offer` | `add_negotiation_rows` written                           | `offer_not_written`                      |
+| `letter`           | nothing beyond the filing                                |                                          |
+| `court_paper`      | nothing beyond the filing (it is listed for calendaring) |                                          |
+
+A letter with no recorded act gets that issue with "no attempt recorded"; a
+letter nothing was recorded for at all (no resolve, no filing) is
+`not_attempted`, and the daily list asks a person about it. The result's
+`letters_recorded` shows each letter as recorded; your reply's lines follow it.
 
 When nothing in the bundle was filed (an unreadable read, a partition you
 could not make, or a second PDF you did not process), call it with `letters`
 empty and `bundle_issue` `unreadable`, `partition_failed` or `not_processed`,
 the reason as `bundle_detail`, and `page_count` when known.
 
-A `refused` record says why (a page left out, pages recorded as filed that
-were not): correct the entries to match what happened, and call again. Never
-change what happened to fit the record.
+A `refused` record says why (a page left out, a letter whose pages differ from
+the pages filed as one document, a derived field passed): correct the entries
+to match what happened, and call again. Never change what happened to fit the
+record.
 
 Then read `daily_list` on the result:
 
@@ -598,10 +620,14 @@ request, and it is the firm's act of deciding. Then, and only then:
    expires after a few hours, so do not reuse the old one. The `sha256` must
    be the same; if it is not, read the bundle again.
 3. Call `resolve_invoice_matter` again with the client name from that letter
-   **and the matter number the sender gave in her reply**. Two facts, both
+   **and the matter number the sender gave in her reply**, and the group:
+   the bundle's `sha256`, the letter's `first_page` and `last_page`, and as
+   `message_id` HER reply's id (this is a new run, recorded under her
+   message, never merged into the bundle's first run). Two facts, both
    checked against Smokeball, so a `unique` verdict mints a token.
 4. File that letter's page range as in step 4, key it as in steps 4a, 4b or
-   4d when it is a bill or an offer, and reply once to her reply confirming
+   4d when it is a bill or an offer (each with her reply's id as
+   `message_id`), and reply once to her reply confirming
    which pages went where (this is a reply to HER message, so it goes even
    when the firm has a daily list; do not record the bundle again). An
    item that only needed a check (a duplicate, a figure) is answered by what
@@ -643,10 +669,10 @@ reply does not name a matter number, do not file; ask again for the number.
   letter did not file on, never pick a plaintiff, and never change a row
   already on Negotiation Details (`add_negotiation_rows` fills only empty
   fields).
-- Never end a bundle's turn without `record_post_batch`, and never record a
-  letter as filed that `file_attachment_pages_to_matter` or
-  `stage_vendor_invoice` did not file. Where the firm has a daily post list,
-  never reply to the bundle as well.
+- Never end a bundle's turn without `record_post_batch`, and never pass it
+  where a letter was filed, its issue or its candidates: those are derived
+  from what the tools recorded. Where the firm has a daily post list, never
+  reply to the bundle as well.
 - Never summarize a letter's contents, state what it means for a case, or say
   what anyone should do about it.
 - Never reply to anyone but the rostered sender, and never to a party named in a

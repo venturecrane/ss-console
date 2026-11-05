@@ -119,10 +119,10 @@ def _problem(
     if not _clean(provider_name) or len(_clean(provider_name)) > _MAX_NAME:
         return f"provider_name must be the facility named on the bill, up to {_MAX_NAME} characters"
     if parse_charge(charge) is None:
-        return 'charge must be the bill\'s figure as a string with at most two decimals, e.g. "1250.00"'
+        return f"charge {charge!r} does not read as one positive figure; pass it exactly as the bill prints it"
     for label, value in (("service_start", service_start), ("service_end", service_end)):
         if not isinstance(value, str) or not _DATE_RE.match(value.strip()):
-            return f"{label} must be a date as YYYY-MM-DD"
+            return f"{label} {value!r} does not read as one date; pass it exactly as the bill prints it"
     if service_end.strip() < service_start.strip():
         return "service_end is before service_start"
     return None

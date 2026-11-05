@@ -8,17 +8,20 @@ If the matter is on CONFLICT-HOLD → route to a human, stop.
 
 ## Read (read-only)
 
-`get_matter_balances(bank_account_id, matterId)` for the matter/client - Smokeball's **native** trust read. It returns `balance`, `protectedBalance`, `availableBalance` (= balance − protected), `unpresentedChequesBalance`, and `lastUpdated`. The low-trust flag compares **`availableBalance`** against the floor. `get_bank_accounts()` resolves the trust account when the `bank_account_id` is not authored. There is no transfer/refund/ledger tool the skill may call - fund movement is hard-banned. Load the firm's floor and authored replenishment terms for the practice area from `customer.yaml`.
+`get_matter_balances(bank_account_id, matter_id)` for the matter/client - Smokeball's **native** trust read. It returns `balance`, `protectedBalance`, `availableBalance` (= balance minus protected), `unpresentedChequesBalance`, and `lastUpdated`, and the connector adds the decision: `low_trust` (`availableBalance` below the firm's floor), `floor_usd` (the firm's `trust_floor_usd` on this skill's settings) and, when low, `shortfall_usd`. `get_bank_accounts()` resolves the trust account when the `bank_account_id` is not authored. There is no transfer/refund/ledger tool the skill may call - fund movement is hard-banned. Load the firm's authored replenishment terms from `customer.yaml`; the floor is the connector's to read.
 
 Trust is **separate from AR.** AR lives in `get_matter_billing_config` / `get_fees` / `get_expenses`; this skill never reads those for the trust decision and never treats an outstanding AR balance as a low trust balance.
 
 ## Decide
 
-| availableBalance vs. floor | Action                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Below floor                | Draft a replenishment request for the shortfall (floor − availableBalance), using only authored terms. |
-| At or above floor          | No nudge; note "balance OK" internally.                                                                |
-| Read failed / unavailable  | **Surface to a human.** Never guess a balance, never nudge on an assumption.                           |
+The decision is the read's `low_trust`, never a comparison made here.
+
+| `low_trust` from the read                    | Action                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `true`                                       | Draft a replenishment request for the read's `shortfall_usd`, using only authored terms. |
+| `false`                                      | No nudge; note "balance OK" internally.                                                  |
+| `null`, `reason: "no floor authored"`        | **Do nothing.** The firm set no floor, so there is nothing to nudge about.               |
+| `null`, any other reason, or the read failed | **Surface to a human.** Never guess a balance, never nudge on an assumption.             |
 
 ## Draft (below-floor only)
 

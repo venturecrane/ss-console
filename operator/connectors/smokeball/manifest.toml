@@ -159,6 +159,8 @@ get_matter_balances = "read"
 get_matter_billing_config = "read"
 get_fees = "read"
 get_expenses = "read"
+# The ledger totalled in code over every page (money_reads.py, 2026-11-04).
+get_expense_totals = "read"
 # Vendor invoice intake (rehearsal on pilot-smokeball first). The read fetches
 # an emailed attachment's text through the allowlisted AgentMail fetch; the
 # stage writes ONE unfinalized expense (no argument can finalize it or set its

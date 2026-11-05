@@ -6,7 +6,8 @@ that authors nothing:
 * the model sees the tools it saw before: same required arguments, same words, and
   the only new arguments are optional (``test_the_listed_surface``). What a model
   reads can change its behaviour with no skill changing. A skills PR that changes
-  a listing updates ``_LISTED``, so that change is one a reviewer sees;
+  a listing updates ``_LISTED``, so that change is one a reviewer sees (this is the
+  PR that did, with the skills that use the words);
 * an old-style call does what it did: a figure not on its source is still written,
   a typed post record is still recorded as typed, and a row says what would have
   been refused;
@@ -30,7 +31,6 @@ from smokeball_connector import outcome_ledger as ol
 from smokeball_connector import post_journal as pj
 from smokeball_connector import vendor_invoice as vi
 from smokeball_connector import vendor_invoice_tools as vit
-from smokeball_connector import server as smokeball_server
 from smokeball_connector.server import server
 from test_layout_tools import DESIGN, _empty_tab_tenant, _use
 from test_layout_tools import lt as layout_tools
@@ -38,18 +38,18 @@ from test_medicals_tools import MATTER, _add, _filed, _Tenant, tenant  # noqa: F
 
 SHA = "a" * 64
 
-#: The listing on main at 3ec7764d7, from ``tool_surface()``: required arguments
+#: The listing as the skills read it, from ``tool_surface()``: required arguments
 #: and the sha256 of the description the model reads. Each tool's arguments may
 #: grow only by the optional names in ``added``.
 _LISTED: dict[str, dict[str, Any]] = {
     "add_medicals_row": {
         "required": ["charge", "matter_id", "provider_name", "service_end", "service_start", "source_file_id"],
-        "description_sha256": "67f9faf2f5dbe90906020f30437fc861c53a03ea7097df002aa8cfd7811cf654",
+        "description_sha256": "01b462e6af8a24a5bf5c305fcb27560a0319c7b033e609c67b5a50ee734bbd02",
         "added": [],
     },
     "add_negotiation_rows": {
         "required": ["matter_id", "rows"],
-        "description_sha256": "2149e254e93b34ed344f63a23fe6f20791084c42133ab1fd563d9e951214c142",
+        "description_sha256": "2aae756a95937810c6dc128bf25a5ff395ff28b9a9fde654b28e909b3950b63d",
         "added": ["source_file_id"],
     },
     "file_attachment_pages_to_matter": {
@@ -62,28 +62,27 @@ _LISTED: dict[str, dict[str, Any]] = {
             "matter_resolution",
             "sha256",
         ],
-        "description_sha256": "22f40129d059b5ae8913bef617829e6e88199f955e35e0dbb0152b057ec029e8",
+        "description_sha256": "f2ec49d1d948a6a8be120e2bc9cea07fb2ff9ba29a5c6ffdf8dd64202fd39fa6",
         "added": ["message_id"],
     },
-    # Unchanged here, and pinned: its docstring once named a tool that was not listed.
     "get_expenses": {
         "required": ["matter_id"],
-        "description_sha256": "4e584629dcc60f2aaf70cf91a409fa5e39cab06516de4453ec633d1ac7cdf89c",
+        "description_sha256": "54bb6805c3574e8c8ed4e1b4f5b6c22a93e518e43bbe45e931a0838c892b3cbb",
         "added": [],
     },
     "get_matter_balances": {
         "required": ["bank_account_id"],
-        "description_sha256": "269bb70f615aa58f86e974e1df0ad8d21097ec3cbbe5a007a0b73757e6f9ec41",
+        "description_sha256": "ae84c6c8936d834f6c55133438255fc332ed0dd3e6560585d963c1beca2dba69",
         "added": [],
     },
     "record_post_batch": {
         "required": ["file_name", "letters", "message_id", "page_count", "sha256"],
-        "description_sha256": "5fce300fa9f40c70f1c109fbb049ec8490c96b19ec74289330e0d4d30f91e2bd",
+        "description_sha256": "3448858f5f0ac11d4b5ee01b5feb8c1973bda953f2e72e68faaaf4011acb1a48",
         "added": [],
     },
     "resolve_invoice_matter": {
         "required": [],
-        "description_sha256": "ad3f4c2b42d77354581754cf5f20e50c96bd93f073ca37800575ef5a31f16ece",
+        "description_sha256": "4e7f17550f5039219e6b00abb78dad13267782b8ceeebf700efb439b13d847fc",
         "added": ["date_of_birth_as_printed", "first_page", "last_page", "message_id", "sha256"],
     },
     "stage_vendor_invoice": {
@@ -98,7 +97,7 @@ _LISTED: dict[str, dict[str, Any]] = {
             "sha256",
             "vendor",
         ],
-        "description_sha256": "6bab522b72d960d2352503e94dc6a50653b83d22fc9eb8e8692b108c10310086",
+        "description_sha256": "e8805a0f175a63b3b1d8adb522352598fc53d9a9703058682eb6918fb13a9fc3",
         "added": ["message_id"],
     },
 }
@@ -133,7 +132,7 @@ def _surface() -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("name", sorted(_LISTED))
-def test_the_listed_surface_is_mains_until_the_skills_change(name: str) -> None:
+def test_the_listed_surface_is_what_the_skills_were_written_against(name: str) -> None:
     tool, listed = _surface()[name], _LISTED[name]
     schema = tool.input_schema
     assert sorted(schema.get("required") or []) == listed["required"], "a new argument stays optional"
@@ -142,38 +141,6 @@ def test_the_listed_surface_is_mains_until_the_skills_change(name: str) -> None:
     )
     assert not set(listed["added"]) & set(schema.get("required") or [])
     assert set(listed["added"]) <= set(schema.get("properties") or {})
-
-
-def test_no_new_tool_is_listed_until_the_skills_that_name_it() -> None:
-    assert "get_expense_totals" not in _surface()
-
-
-def test_a_balance_read_returns_exactly_what_smokeball_returned(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """A read's result is something a model reads too. Fields no skill explains,
-    or a sentence like "no floor authored", are words it could repeat to a firm, so
-    the low-trust decision ships with the skill that acts on it. A floor in the
-    seat's file changes nothing here."""
-    path = tmp_path / "customer.yaml"
-    path.write_text(
-        "personas:\n  - skills:\n      - name: trust-balance-nudge\n        enabled: true\n"
-        "        settings:\n          trust_floor_usd: 2500\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
-    vendor = {"value": [{"matterId": "m-7", "balance": 3000, "protectedBalance": 1000, "availableBalance": 2000}]}
-    asked: list[tuple[str, dict[str, Any]]] = []
-
-    class _Client:
-        def get(self, url: str, **params: Any) -> Any:
-            asked.append((url, params))
-            return vendor
-
-    monkeypatch.setattr(smokeball_server, "_get_client", _Client)
-    out = smokeball_server.get_matter_balances("bank-1", matter_id="m-7")
-    assert out == {"value": [{"matterId": "m-7", "balance": 3000, "protectedBalance": 1000, "availableBalance": 2000}]}
-    assert asked == [("/bankaccounts/bank-1/matter-balances", {"MatterId": "m-7", "Limit": 500, "Offset": 0})]
 
 
 # ---- the value forms: nothing accepted today reads differently --------------
@@ -188,14 +155,9 @@ def test_a_figure_in_todays_form_reads_as_it_did(raw: str) -> None:
     assert problem is None and row == {"demand_amount": raw.strip()}
 
 
-def test_todays_refusal_sentences_are_kept_so_they_tell_the_model_nothing_new() -> None:
-    assert layout_sections.parse_row({"demand_amount": "abc"})[1] == (
-        'demand_amount must be the figure as written, e.g. "25000" or "25000.00"'
-    )
-    assert layout_sections.parse_row({"demand_date": "abc"})[1] == "demand_date must be a real date, YYYY-MM-DD"
-    _, why = vi.parse_invoice(vendor="V", invoice_number="1", invoice_date="abc", amount="abc", sha256=SHA)
-    assert "invoice_date must be an ISO date (YYYY-MM-DD)" in str(why)
-    assert "amount must be a positive figure with at most two decimals, e.g. 1250.00" in str(why)
+def test_a_value_that_cannot_be_read_is_named_in_the_refusal() -> None:
+    assert "'abc' does not read as one positive figure" in str(layout_sections.parse_row({"demand_amount": "abc"})[1])
+    assert "'abc' does not read as one date" in str(layout_sections.parse_row({"demand_date": "abc"})[1])
 
 
 # ---- printed_source_check ----------------------------------------------------

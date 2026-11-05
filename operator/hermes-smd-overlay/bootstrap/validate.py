@@ -568,6 +568,22 @@ def _validate_skill(skill: Any, sk_prefix: str, errors: list[str]) -> None:
         # The scheduled-turn roster lane (shared.send_anchor.routine_turn_lane):
         # one value is meaningful, and any other would author a lane nobody gets.
         _err(f"{sk_prefix}.settings.recipients: must be 'roster' when present", errors)
+    if isinstance(settings, dict) and "trust_floor_usd" in settings:
+        _validate_trust_floor(
+            skill.get("name"), settings["trust_floor_usd"], f"{sk_prefix}.settings", errors
+        )
+
+
+def _validate_trust_floor(name: Any, floor: Any, path: str, errors: list[str]) -> None:
+    """``trust_floor_usd``: the firm's trust floor in dollars, read by the
+    Smokeball connector's ``get_matter_balances`` to decide ``low_trust`` in
+    code (money_reads.py). Meaningful only on ``trust-balance-nudge``; a
+    positive number. Absent is no floor, and the nudge does nothing. Mirrors
+    ss-console ``checkTrustFloor``."""
+    if name != "trust-balance-nudge":
+        _err(f"{path}.trust_floor_usd: only trust-balance-nudge reads a trust floor", errors)
+    elif isinstance(floor, bool) or not isinstance(floor, (int, float)) or not floor > 0:
+        _err(f"{path}.trust_floor_usd: must be a positive number (dollars) when present", errors)
 
 
 def _validate_initiation(raw: Any, path: str, errors: list[str]) -> None:

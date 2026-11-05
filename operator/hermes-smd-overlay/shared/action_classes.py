@@ -654,6 +654,9 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "mcp_smokeball_get_matter_billing_config": ActionClass.READ,
     "mcp_smokeball_get_fees": ActionClass.READ,
     "mcp_smokeball_get_expenses": ActionClass.READ,
+    # The whole ledger totalled in code (money_reads.py, 2026-11-04): a
+    # firm-record read, so its figures are tenant-sourced.
+    "mcp_smokeball_get_expense_totals": ActionClass.READ,
     # ss#2842: resolves an invoice's matter and returns a CLOSED verdict --
     # unique / ambiguous / none / search_failed. A firm-record read: it reads
     # the tenant's own matters and contacts, so it is not inbound-fenced. The

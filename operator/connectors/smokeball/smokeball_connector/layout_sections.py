@@ -182,7 +182,7 @@ def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
             continue
         amount = positive_money(value)
         if amount is None:
-            return None, f'{field} must be the figure as written, e.g. "25000" or "25000.00"'
+            return None, f"{field} {value!r} does not read as one positive figure; pass it exactly as printed"
         out[field] = str(amount)
     for field in DATE_FIELDS:
         value = raw.get(field)
@@ -190,7 +190,7 @@ def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
             continue
         read = date_from_printed(value)
         if read is None:
-            return None, f"{field} must be a real date, YYYY-MM-DD"
+            return None, f"{field} {value!r} does not read as one date; pass it exactly as printed"
         out[field] = read.isoformat()
     note = raw.get("note")
     if note not in (None, ""):

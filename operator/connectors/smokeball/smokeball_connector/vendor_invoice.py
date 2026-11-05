@@ -280,8 +280,12 @@ def parse_invoice(
         "vendor is empty" if not vendor_s else "",
         "invoice_number is empty or has no letters or digits" if not re.search(r"[A-Za-z0-9]", number_s) else "",
         "vendor or invoice_number is too long" if max(len(vendor_s), len(number_s)) > _MAX_NAME else "",
-        "invoice_date must be an ISO date (YYYY-MM-DD)" if not date_s else "",
-        "amount must be a positive figure with at most two decimals, e.g. 1250.00" if parsed_amount is None else "",
+        f"invoice_date {_clean(invoice_date)!r} does not read as one date; pass it exactly as the invoice prints it"
+        if not date_s
+        else "",
+        f"amount {_clean(amount)!r} does not read as one positive figure; pass it exactly as the invoice prints it"
+        if parsed_amount is None
+        else "",
         "sha256 must be the 64-character hash read_attachment_text returned"
         if not _SHA_RE.match(_clean(sha256))
         else "",
