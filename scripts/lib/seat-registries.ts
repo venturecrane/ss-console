@@ -147,9 +147,30 @@ ${rolled.map((s) => `  ['${s.slug}', '${s.client}'],`).join('\n')}
 `
 }
 
+export function renderSeatRings(seats: Seat[]): string {
+  // Same membership as rings.yaml: a seat with no Fly app is in no ring.
+  const ringed = seats.filter((s) => s.flyApp !== null).sort((a, b) => a.slug.localeCompare(b.slug))
+  return `/**
+ * GENERATED from operator/customers/<slug>/seat.yaml (\`ring:\`) by
+ * scripts/gen-seat-registries.ts. Do not edit. ${REGEN};
+ * tests/seat-inventory.test.ts fails while this file is stale.
+ *
+ * Data only: the release ring of every provisioned seat, the same membership
+ * as operator/fleet/rings.yaml. Ring 0 is staging, the last ring is SMD's own
+ * seats, and every ring between is a client ring (src/lib/admin/merge-to-seat.ts).
+ */
+
+/** Seat slug -> its release ring. */
+export const SEAT_RINGS: Readonly<Record<string, number>> = Object.freeze({
+${ringed.map((s) => `  ${key(s.slug)}: ${s.ring},`).join('\n')}
+})
+`
+}
+
 export const GENERATED_PATHS = {
   flyApps: 'src/lib/operator/fly-app-registry.generated.ts',
   rings: 'operator/fleet/rings.yaml',
+  seatRings: 'src/lib/operator/seat-rings.generated.ts',
   seatClients: 'scripts/lib/seat-clients.generated.mjs',
 } as const
 
@@ -167,6 +188,7 @@ export async function renderSeatRegistries(
   const raw: GeneratedFile[] = [
     { path: GENERATED_PATHS.flyApps, text: renderFlyAppRegistry(seats) },
     { path: GENERATED_PATHS.rings, text: renderRingsYaml(seats) },
+    { path: GENERATED_PATHS.seatRings, text: renderSeatRings(seats) },
     { path: GENERATED_PATHS.seatClients, text: renderSeatClients(seats) },
   ]
   return Promise.all(

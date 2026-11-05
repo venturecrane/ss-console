@@ -15,6 +15,13 @@ import {
   relativeTimestamp,
   type FleetStatusRow,
 } from '../../../lib/admin/fleet-status'
+import {
+  clientSeats,
+  fetchMergeToSeatRows,
+  phoenixTime,
+  summarizeMergeToSeat,
+  weekLabel,
+} from '../../../lib/admin/merge-to-seat'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -123,6 +130,12 @@ views.sort((a, b) => {
 })
 
 const totalOperators = roster.length
+
+// Merge to seat: enough releases to cover the 8-week medians; the table shows 10.
+const mergeToSeatSeats = clientSeats()
+const mergeToSeatRead = await fetchMergeToSeatRows(env.DB, 200)
+const mergeToSeat = summarizeMergeToSeat(mergeToSeatRead.rows, mergeToSeatSeats)
+const recentReleases = mergeToSeat.releases.slice(0, 10)
 ---
 
 <AdminLayout
@@ -281,6 +294,114 @@ const totalOperators = roster.length
             href="/admin/operator/intake"
             class="text-[color:var(--ss-color-action)] hover:underline">self-serve intake queue</a
           > until their seat is authored and activated.
+        </p>
+      </div>
+    </div>
+
+    <div
+      class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card"
+    >
+      <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)]">
+        Merge to seat
+      </h3>
+      <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
+        Minutes from a merged change to the last client seat running it, per image release.
+      </p>
+      {
+        mergeToSeatRead.error ? (
+          <p class="mt-4 text-sm text-[color:var(--ss-color-error)]">
+            Could not read the release history, so no merge to seat times are shown.{' '}
+            {mergeToSeatRead.error}
+          </p>
+        ) : recentReleases.length === 0 ? (
+          <p class="mt-4 text-sm text-[color:var(--ss-color-text-secondary)]">
+            No image releases recorded yet.
+          </p>
+        ) : (
+          <>
+            <div class="overflow-x-auto mt-4">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs text-[color:var(--ss-color-text-secondary)] border-b border-[color:var(--ss-color-border)]">
+                    <th class="pb-2 font-medium">Release</th>
+                    <th class="pb-2 font-medium">Merged</th>
+                    <th class="pb-2 font-medium">Image built</th>
+                    <th class="pb-2 font-medium">All client seats done</th>
+                    <th class="pb-2 font-medium text-right">Merge to clients</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[color:var(--ss-color-border-subtle)]">
+                  {recentReleases.map((r) => (
+                    <tr>
+                      <td class="py-2 pr-4 font-mono text-xs text-[color:var(--ss-color-text-primary)]">
+                        {r.shortSha}
+                      </td>
+                      <td class="py-2 pr-4 text-[color:var(--ss-color-text-secondary)]">
+                        {r.mergedAt ? (
+                          phoenixTime(r.mergedAt)
+                        ) : (
+                          <span class="text-[color:var(--ss-color-text-muted)]">—</span>
+                        )}
+                      </td>
+                      <td class="py-2 pr-4 text-[color:var(--ss-color-text-secondary)]">
+                        {phoenixTime(r.imageBuiltAt)}
+                      </td>
+                      <td class="py-2 pr-4 text-[color:var(--ss-color-text-secondary)]">
+                        {r.allClientsDoneAt ? (
+                          phoenixTime(r.allClientsDoneAt)
+                        ) : (
+                          <span class="text-[color:var(--ss-color-text-muted)]">—</span>
+                        )}
+                      </td>
+                      <td class="py-2 text-right text-[color:var(--ss-color-text-primary)]">
+                        {r.minutesMergeToClients === null ? (
+                          <span class="text-[color:var(--ss-color-text-muted)]">—</span>
+                        ) : (
+                          `${r.minutesMergeToClients} min`
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {mergeToSeat.weeks.length === 0 ? (
+              <p class="mt-4 text-sm text-[color:var(--ss-color-text-secondary)]">
+                No release has reached every client seat with a recorded merge time in the last 8
+                weeks, so there is no weekly median yet.
+              </p>
+            ) : (
+              <ul class="mt-4 space-y-1 text-sm text-[color:var(--ss-color-text-secondary)]">
+                {mergeToSeat.weeks.map((w) => (
+                  <li>
+                    Week of {weekLabel(w.weekStart)}: median{' '}
+                    <span class="font-semibold text-[color:var(--ss-color-text-primary)]">
+                      {w.medianMinutes} min
+                    </span>{' '}
+                    over {w.releases} {w.releases === 1 ? 'release' : 'releases'}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )
+      }
+
+      <div
+        class="mt-4 pt-4 border-t border-[color:var(--ss-color-border-subtle)] space-y-2 text-xs text-[color:var(--ss-color-text-muted)]"
+      >
+        <p>
+          <strong>Measured</strong> from the merge commit's time to the latest finished rollout over the
+          client rings' seats ({
+            mergeToSeatSeats.length === 0 ? 'none in any client ring' : mergeToSeatSeats.join(', ')
+          }), counting only rollouts that finished done. The client rings are every release ring
+          after staging and before SMD's own seats. A release shows no time until every client seat
+          has it. Weekly medians group releases by the week the last client seat finished, Monday to
+          Sunday, over the last 8 weeks. Times are Phoenix time.
+        </p>
+        <p>
+          Releases built before 2026-11-05 carry no merge time; they show the image build and seat
+          times only.
         </p>
       </div>
     </div>

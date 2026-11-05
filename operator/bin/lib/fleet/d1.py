@@ -74,7 +74,7 @@ class FleetStore:
         cols = (
             "release_id", "kind", "image_ref", "image_digest", "skills_version", "ss_console_sha",
             "overlay_ref", "volume_forward_compatible", "declared_secrets", "notes",
-            "artifact_name", "artifact_version",
+            "artifact_name", "artifact_version", "merged_at",
         )  # fmt: skip
         ids.release_id(rec["release_id"])
         values = [

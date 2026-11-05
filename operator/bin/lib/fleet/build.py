@@ -331,6 +331,22 @@ class Builder:
             raise Refusal(f"could not read 40-hex pins (ss-console {ss_sha!r}, hermes {hermes!r})")
         return {"ss_console_sha": ss_sha, "overlay_ref": ss_sha, "hermes_sha": hermes}
 
+    def merged_at(self) -> str | None:
+        """When the change this image is built from merged: HEAD's committer time.
+
+        In CI HEAD is the merge commit, so its committer date is the moment the
+        merge landed on main; the admin Fleet page measures merge to the last
+        client seat done from it. Normalized to the D1 ``...Z`` form. A metric
+        never blocks a release: an unreadable date is logged and recorded NULL,
+        which the page renders as a missing value.
+        """
+        res = self.runner.run(["git", "-C", str(self.repo), "show", "-s", "--format=%cI", "HEAD"])
+        moment = ids.parse_iso(res.stdout.strip()) if res.ok else None
+        if moment is None:
+            self.log("could not read HEAD's commit time; this release records no merge time")
+            return None
+        return ids.iso(moment)
+
     def ensure_registry_app(self) -> None:
         if not self.fly.app_exists(ids.FLEET_REGISTRY_APP):
             self.log(f"creating the registry app {ids.FLEET_REGISTRY_APP} (no Machines)")
@@ -341,6 +357,7 @@ class Builder:
             ids.secret_name(name)
         self.guard()
         pins = self.pins()
+        merged_at = self.merged_at()
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
         label = f"rel-{pins['ss_console_sha'][:8]}-{stamp}"
         self.ensure_registry_app()
@@ -364,6 +381,7 @@ class Builder:
             "ss_console_sha": pins["ss_console_sha"], "overlay_ref": pins["overlay_ref"],
             "volume_forward_compatible": 1 if opts.volume_forward_compatible else 0,
             "declared_secrets": json.dumps(sorted(opts.declared_secrets)), "notes": opts.notes or None,
+            "merged_at": merged_at,
         }  # fmt: skip
         self.upload_artifacts(release, pins)
         self.store.insert_release(release)
