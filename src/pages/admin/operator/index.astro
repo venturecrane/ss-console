@@ -391,12 +391,13 @@ const recentReleases = mergeToSeat.releases.slice(0, 10)
         class="mt-4 pt-4 border-t border-[color:var(--ss-color-border-subtle)] space-y-2 text-xs text-[color:var(--ss-color-text-muted)]"
       >
         <p>
-          <strong>Measured</strong> from the merge commit's time to the latest finished rollout over every
-          client seat ({
-            mergeToSeatSeats.length === 0 ? 'none provisioned' : mergeToSeatSeats.join(', ')
-          }), counting only rollouts that finished done. A release shows no time until every client
-          seat has it. Weekly medians group releases by the week the last client seat finished,
-          Monday to Sunday, over the last 8 weeks. Times are Phoenix time.
+          <strong>Measured</strong> from the merge commit's time to the latest finished rollout over the
+          client rings' seats ({
+            mergeToSeatSeats.length === 0 ? 'none in any client ring' : mergeToSeatSeats.join(', ')
+          }), counting only rollouts that finished done. The client rings are every release ring
+          after staging and before SMD's own seats. A release shows no time until every client seat
+          has it. Weekly medians group releases by the week the last client seat finished, Monday to
+          Sunday, over the last 8 weeks. Times are Phoenix time.
         </p>
         <p>
           Releases built before 2026-11-05 carry no merge time; they show the image build and seat

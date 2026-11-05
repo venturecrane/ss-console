@@ -11,9 +11,10 @@
  * rollout's `finished_at` is also set for failed, rolled-back and skipped
  * states, so only `state = 'done'` counts.
  *
- * A client seat is a provisioned seat whose obligations do not roll up to SMD
- * Services: derived from each seat's authored `seat.yaml` (`fly_app:` and
- * `client:`, through the generated registries), never a list kept here.
+ * A client seat is a seat of a CLIENT RING, the rollout's own definition: ring
+ * 0 is staging, the last ring is SMD's own seats, and every ring strictly
+ * between is a client ring. Derived from each seat's authored `seat.yaml`
+ * (`ring:`, through the generated SEAT_RINGS), never a list kept here.
  *
  * Never invents a number (docs/style/empty-state-pattern.md): a release with no
  * merge time, or with any client seat not yet done, has no all-clients time; a
@@ -21,8 +22,7 @@
  * an error for the page to say so.
  */
 
-import { REGISTERED_CUSTOMER_FLY_APPS } from '../operator/fly-app-registry'
-import { SMD_CLIENT, clientOf } from '../../../scripts/lib/seat-clients.mjs'
+import { SEAT_RINGS } from '../operator/seat-rings.generated'
 
 /** One image release joined with one done rollout (or none: the LEFT JOIN). */
 export interface MergeToSeatRow {
@@ -61,12 +61,18 @@ const ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const WEEKS_SHOWN = 8
 
-/** The client seats: provisioned, and not rolled up to SMD Services. */
-export function clientSeats(
-  provisioned: Readonly<Record<string, string>> = REGISTERED_CUSTOMER_FLY_APPS
-): string[] {
-  return Object.keys(provisioned)
-    .filter((seat) => clientOf(seat) !== SMD_CLIENT)
+/**
+ * The client seats: those whose ring is strictly between the lowest (staging)
+ * and the highest (SMD's own seats). Fewer than three rings means no ring is a
+ * client ring, so the answer is [] and nothing is measured, never a guess.
+ */
+export function clientSeats(rings: Readonly<Record<string, number>> = SEAT_RINGS): string[] {
+  const numbers = Object.values(rings)
+  if (numbers.length === 0) return []
+  const lowest = Math.min(...numbers)
+  const highest = Math.max(...numbers)
+  return Object.keys(rings)
+    .filter((seat) => rings[seat] > lowest && rings[seat] < highest)
     .sort()
 }
 

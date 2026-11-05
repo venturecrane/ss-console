@@ -303,6 +303,7 @@ describe('renderers', () => {
       expect(stale).toEqual([
         'src/lib/operator/fly-app-registry.generated.ts',
         'operator/fleet/rings.yaml',
+        'src/lib/operator/seat-rings.generated.ts',
       ])
     } finally {
       rmSync(root, { recursive: true, force: true })
