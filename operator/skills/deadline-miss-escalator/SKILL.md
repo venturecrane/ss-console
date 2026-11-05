@@ -4,7 +4,7 @@ description: >-
   Escalates a deadline that is near or already missed. Walks an approaching or missed
   firm-authored deadline up a ladder: re-surface, re-route, then notify a named human, so a
   critical date never slips silently. Internal-only; tracks authored dates, never computes one.
-version: 0.4.0
+version: 0.5.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -32,6 +32,12 @@ Like the tracker, it is held to the hardest line: **it works to dates a human au
 ## When to Use
 
 Runs **scheduled** (Hermes no-agent cron, ADR 0021 Stream B). A `pre_run.py` polls the authored dates each tick and only wakes the agent when a deadline actually needs a rung run - otherwise it writes a `SUPPRESSED_WAKE` heartbeat row and stays quiet. Never invoked interactively.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## The escalation ladder
 

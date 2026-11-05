@@ -1,7 +1,7 @@
 ---
 name: medical-records-chaser
 description: Chases outstanding medical records from providers. Watches for the plaintiff's medical records landing in the Smokeball matter (records arrive through YoCierge, imported into the matter - observed via document reads, not a YoCierge tool), tracks which requested providers are still outstanding, and chases the provider or records vendor on a cadence until the records are in. Never decides which providers to request, never infers providers from treatment, never diagnoses or characterizes treatment, never drafts a demand, and never asserts a record was received unless the matching document is observed in the matter.
-version: 0.2.0
+version: 0.3.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -78,6 +78,12 @@ name and the fact that a record for that request arrived. It does not open the
 clinical content to summarize it, date it, or judge whether the records are
 "complete." Whether a provider's production is complete is a human's call, not the
 skill's.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`, `prepare_records_order`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## This skill calls no YoCierge tool - records-landing is observed through Smokeball
 

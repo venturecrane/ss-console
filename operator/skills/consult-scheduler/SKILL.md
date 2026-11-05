@@ -3,7 +3,7 @@ name: consult-scheduler
 description: >-
   Schedules a client consult and drafts the confirmation. Offers times within the firm's rules and
   surfaces the calendar booking for human confirm.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -58,6 +58,12 @@ Invoked after `new-matter-intake` (clear) routes a matter to scheduling, or on a
 
 2. Read the responsible attorney's availability (`list_calendar_entries` over the relevant window, via the calendar binding) and the firm's rules (consult length for the matter's practice area, business hours, blackout windows, buffers).
 3. **Compute candidate slots** that satisfy every rule: inside business hours, outside blackout windows, not overlapping an existing entry, honoring buffers, of the correct consult length. Respect the client's stated preference **only where it also satisfies the rules** - a preference never overrides a blackout or a double-book.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+`update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ### Phase 2 - Draft + surface (no autonomous write)
 

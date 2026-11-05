@@ -10,7 +10,7 @@ description: >-
   supplying one, and reports a coverage diff showing that every propounded item received a
   response. It never serves, never files, never signs or fills a client verification, never
   decides objection strategy, and is never routine-initiated.
-version: 0.2.1
+version: 0.3.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -302,6 +302,12 @@ into a served court document, but the ordering is authored regardless: a voice t
 would smooth a `{{NOT IN RECORD}}` marker into readable prose, soften a candidate-objection
 label into a taken position, or tighten a quotation past verbatim loses to the rule every
 time. See `references/voice.md`.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `add_file`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## Delivery: the draft lives in the matter, the email is a pointer
 

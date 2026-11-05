@@ -12,7 +12,7 @@ description: >-
   did not hold, and anything it needs the sender to settle. It never writes a
   letter itself, never fills a gap from memory, never mails or faxes anything,
   and completes a task only when the sender says that item went out.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -36,7 +36,7 @@ metadata:
     content_ceiling: surface_only # every letter value is read from the matter by the connector; the reply reports what was filed and what was missing, never a characterization of the case
     connectors:
       - email # the reply draft to the rostered sender, in the same thread
-      - smokeball # list_matters / get_matter (the one matter), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter, health-notice and fax-cover forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), render_sr19 (the state SR 19C prefilled for the firm's signer), render_funding_case_eval (a funder's case evaluation / cash advance application prefilled for the firm to finish), get_matter_layouts + add_negotiation_rows (demands and offers on the Negotiation Details tab, empty fields only, read back), render_firm_form_letter also drafts the med pay ledger email for the sender to send and files the wage loss letter, update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
+      - smokeball # resolve_invoice_matter + resolve_matter_by_id (the one matter, and a resolution per write), get_files_on_matter + read_document (the client's insurance card, license and estimate, photos included), render_firm_form_letter (the firm's own rep-letter, health-notice and fax-cover forms, filled and filed), render_sr1 (the state SR1 prefilled for the client's signature), render_sr19 (the state SR 19C prefilled for the firm's signer), render_funding_case_eval (a funder's case evaluation / cash advance application prefilled for the firm to finish), get_matter_layouts + add_negotiation_rows (demands and offers on the Negotiation Details tab, empty fields only, read back), render_firm_form_letter also drafts the med pay ledger email for the sender to send and files the wage loss letter, update_task (only when the sender says an item went out), add_medicals_provider (one facility on the Medicals tab, no money field), prepare_records_order / place_records_order / records_orders_for_matter (references/records-orders.md: an order waits for an administrator's yes)
 ---
 
 # File Work Requests
@@ -113,18 +113,33 @@ built from the matter's filed gap audit (`from_gap_audit: true`, same reference)
 
 ### 1. Resolve the one matter
 
-Read the matter number and/or the client's name from HER words.
+Read the matter number, the client's name and, when she gives them, the claim
+number or the date of loss from HER words.
 
-1. A matter number: `list_matters(search=<number>)` and keep only a matter whose
-   `number` equals it exactly.
-2. Only a client's name: `list_matters(search=<name>)` and keep the matters whose
-   client is that person (the `caption` or `get_matter`'s client), preferring
-   Open matters.
-3. Both: they must agree on one matter.
+1. Call `resolve_invoice_matter` with those facts only, each exactly as she
+   wrote it: `matter_number`, `client_name`, `claim_number`, and the date of
+   loss in `date_of_loss_as_printed`. Leave out what she did not write. Never a
+   fact from memory, from a forwarded email or from an earlier request.
+2. Read the `verdict`:
+   - `unique`: the one matter is its `matter_id` and `matter_number`. Go on.
+   - `ambiguous` or `none`: write nothing, and reply naming the candidate
+     matter numbers it returned (never captions) and asking which one, or
+     saying no matter matched what she gave.
+   - `search_failed`: write nothing, and reply that Smokeball could not be
+     searched, so nothing was done.
 
-Exactly one matter: go on. None, several, or the two facts disagreeing: write
-nothing, and reply naming the candidate matter numbers (never captions) and
-asking which one.
+The verdict needs two of her facts to agree on one matter, so a client's name
+alone never resolves: that reply asks her for the matter number.
+
+### 1b. Each write opens with its own resolution
+
+The `unique` verdict's `matter_resolution` opens ONE write on that matter.
+Every later write in this request (each letter, form, provider, negotiation
+entry or records order) needs its own: call `resolve_matter_by_id` with the
+verdict's `matter_id` and `matter_number` immediately before it, and pass the
+`matter_resolution` it returns, unchanged, with the same `matter_id`. A verdict
+other than `unique` on that call means that write is not made: the reply says
+which item was not done and why, and the other items stand.
 
 ### 2. The letters
 
@@ -358,7 +373,8 @@ of 9/12 on negotiations").
    that row number so it goes beside its demand; otherwise leave `row` out.
 3. `add_negotiation_rows(matter_id, rows, plaintiff_index, details, minimum_settlement)`, one
    entry per demand or offer (a demand and the offer answering it may share an
-   entry), amounts as written ("15000"), dates YYYY-MM-DD, `note` only for
+   entry), amounts and dates exactly as her email or the document prints them
+   ("$15,000", "10/01/2026"), `note` only for
    what she asked to have noted. `plaintiff_index` only when a refusal lists
    several plaintiffs' tabs: ask her which, never pick one.
 4. Read the result by `status` and by each entry:

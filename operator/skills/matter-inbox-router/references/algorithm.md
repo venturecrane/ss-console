@@ -12,7 +12,7 @@ Per message, in this fixed order:
 
 1. **Resolve sender.** `get_contacts(from_name_or_email)` → contact?; `list_matters(contactId)` → matter(s)? Yields one of: known-client+matter, known-contact-no-matter, unknown. Record the resolution; never associate a matter the resolution did not return (invariant 3).
 
-2. **Conflict cross-check - before any classification commits to a route.** Read-only `get_contacts` + `list_matters` over the sender and any parties named in the body, cross-checked against existing matters' parties. On a hit, one question decides the branch: is this message FORMAL SERVICE of a captioned litigation document (rubric: served-document-intake)? If yes → capture handoff to `discovery-served-watch`, no reply, done. If no → set class `conflict-signal`, create the ONE fixed-shape clearance task the rubric defines (sender + subject + matter candidates; never body text), stop processing this message (no reply, no wedge handoff, no draft). A silent halt - no task left behind - is the same `fails` violation as advancing the message. This ordering is the point: the router decides "is this a conflict?" before it decides "who handles this?"
+2. **Conflict check - before any classification commits to a route: one `conflict_check` call.** Pass the sender's name, address and subject line as the headers give them, every party the message names, and the matter step 1 resolved (if any). The connector searches Smokeball and decides under the rubric's rule table: `hit` iff the sender or a named party is a contact in an adverse role (other side, opposing counsel, their carrier) on an open matter other than the one already resolved; `clear` otherwise; `search_failed` on any fault, never clear. On `hit` the tool itself creates the ONE fixed-shape clearance task; set class `conflict-signal` and stop processing this message (no reply, no wedge handoff, no draft). Formal service of a captioned litigation document forwarded by a rostered colleague is the caller's carve-out: classify it served-document-intake first, skip the call, capture handoff to `discovery-served-watch`, no reply. For a sender off the roster the seat refuses every write and send until the call returns `clear`. This ordering is the point: the router decides "is this a conflict?" before it decides "who handles this?"
 
 3. **Classify** into one inbound class (`references/routing-rubric.md` tells). Multi-intent → apply the tie-breaks: conflict wins over everything except served-document capture; primary = the action that advances the matter furthest; record the secondary; a legal question routes to acknowledge-and-defer, never to "answer."
 
@@ -24,5 +24,5 @@ Per message, in this fixed order:
 
 - Not an answerer - it routes substance to the skill that defers it, never resolves it.
 - Not a guesser - unknown senders are classed unknown, not forced onto a matter.
-- Not a sender or writer - zero outbound, zero Smokeball writes.
+- Not a sender or writer - zero outbound; its one Smokeball write is the clearance task `conflict_check` makes on a hit.
 - Not blind to conflict - the cross-check precedes routing, structurally.

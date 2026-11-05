@@ -324,7 +324,12 @@ def build(ctx: _Ctx) -> Plan:
             plan.messages.append(message)
     # The overlay accepts at most 50 memos and refuses the whole envelope past
     # that; a matter past the cap gets its line but no memo this run.
-    memo_rows = [{"matter_id": mid, "text": ctx.lines.memo_text(evs)} for mid, evs in sorted(memos.items())]
+    # Each memo carries its matter's number as the snapshot read it, so the turn
+    # resolves the memo's own matter (resolve_matter_by_id) before create_memo.
+    memo_rows = [
+        {"matter_id": mid, "matter_number": recipients_by_matter[mid][1] or "", "text": ctx.lines.memo_text(evs)}
+        for mid, evs in sorted(memos.items())
+    ]
     plan.memos = memo_rows[:_MAX_MEMOS]
     return plan
 

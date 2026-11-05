@@ -58,6 +58,8 @@ Triggered on a schedule (scan balances against floors) or when a balance read cr
 
 ## Trust Ceiling
 
+Before the memo, call `resolve_matter_by_id` with the matter id and matter number from the balance read, and pass its `matter_resolution` to `create_memo`.
+
 **`draft_for_review`** on the request; **autonomous** on the internal `create_memo` log.
 
 The agent MAY: read the trust balance (read-only, `get_matter_balances`); decide against the floor; draft the replenishment request; log internally.

@@ -1,7 +1,7 @@
 ---
 name: motion-package-assembler
 description: Assembles a drafted motion into a filing package. It assembles and stages a California law-and-motion package from components already authored in the matter (the drafted notice of motion and motion, memorandum of points and authorities, supporting declarations and exhibits, the separate statement where the motion is a discovery motion, the proposed order, and the proof of service), organizes them into the filing order the court and department require, records an attorney-supplied reserved hearing date onto the matter, and schedules a human check of the court's tentative-ruling posting before the hearing. It assembles, formats, and stages only. It never drafts the motion, the points and authorities, or any declaration (those are authored by the firm's drafting tool). It never invents a court or department format, never invents or reserves a hearing date, and never asserts a tentative ruling it cannot observe. Every component is traceable to a matter read; a missing component is a gap it surfaces, never a fill-in.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -202,6 +202,12 @@ plus rule 3.1345 for a discovery motion, or rule 3.1350 and Code of Civil Proced
 section 437c(b)(1) for a summary-judgment or summary-adjudication motion), confirms each
 against the matter, and surfaces the ones missing. When the required set is not specified, it uses the statewide baseline
 checklist and marks each item for the attorney to confirm; it never silently selects.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_event`, `create_folder`, `add_file`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## How it works (mapped to the real connector tools)
 

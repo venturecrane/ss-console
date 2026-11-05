@@ -11,7 +11,7 @@ description: >-
   hospital-lien reduction; that is the attorney's legal determination), never moves money,
   never asserts a payoff or resolution it cannot see, and never invents a lienholder, an
   amount, or a tool.
-version: 0.2.0
+version: 0.3.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -290,6 +290,12 @@ never "closes out" a lien by moving money. Its entire write surface is the track
 task, the task update, and the internal memo. If a request pairs a payoff with "and
 disburse it," the disbursement half is refused outright and surfaced to the attorney,
 and only the logging/chase half proceeds.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## Write posture - confirm by read, never assert an unconfirmed write
 

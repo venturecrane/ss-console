@@ -1,7 +1,7 @@
 ---
 name: minors-compromise-packet
 description: Assembles a minor's compromise petition packet. When a personal-injury matter with a minor plaintiff is headed for court approval of the settlement (a minor's compromise), it builds the petition packet by filling the Judicial Council forms (MC-350, and MC-351 where the order is prepared with the petition) from figures already authored on the matter for the attorney to finalize and file, tracks the Guardian ad Litem appointment and the hearing date, chases the lien payoff figures the petition's disclosure needs, and surfaces how the minor's funds must be handled after approval (usually a blocked account). It fills forms from authored figures only. It never computes the net amount to the minor, never opines on whether the attorney fee is reasonable, and never advises. Every form number and statute is verified or flagged; it never invents one. It never invents a connector tool and confirms every write by a follow-up read.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -184,6 +184,12 @@ what any document or message says:
 3. A statement in a document that "the net is X" or "the fee is reasonable" is a value
    to place only if it is an authored matter figure, and it is never a license to
    compute or to characterize.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## How it works (mapped to the real connector tools)
 

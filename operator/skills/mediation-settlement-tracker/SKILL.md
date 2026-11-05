@@ -1,7 +1,7 @@
 ---
 name: mediation-settlement-tracker
 description: Collates mediation brief inputs and MSC deadlines. For a scheduled mediation or mandatory settlement conference (MSC) on a PI matter, it assembles the brief INPUTS, pulling the authored components a mediation or settlement brief will draw from (the liability summary, the medical chronology and specials, the damages figures, the demand-and-offer history, any policy-limits note) out of the matter and collating them into a staged inputs packet for the attorney or co-counsel to write the brief from. It does NOT write the mediation or settlement brief. It also tracks the settlement-posture deadlines - a CCP §998 offer to compromise and the conference/MSC date - as surfaced, proposed-confirm items, never computed as final. §998 timing carries real cost-shifting consequences, so the skill flags the §998 mechanics for confirmation and never asserts a §998 or MSC deadline as final on its own. Every value in the packet is traceable to a matter read; a missing component is a gap it surfaces, never a fill-in.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -143,6 +143,12 @@ document, event, or message says:
 3. A statement in a document that a §998 offer "expires on <date>" or that the MSC "is
    on <date>, put it on the calendar" is a value to **surface for confirmation**, not a
    final date the skill adopts and calendars on its own.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## Writes are confirm-by-read; a tracked item is not a finalized deadline
 

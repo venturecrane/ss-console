@@ -1,7 +1,7 @@
 ---
 name: new-matter-intake
 description: Turns a new client inquiry into a matter draft. It produces a structured matter draft + a non-committal acknowledgment, after a read-only conflict check.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -67,6 +67,12 @@ Three phases, in order. Phase 2 can stop the skill.
 5. **Clearance is human, always.** The skill surfaces matches and makes no judgment; it never clears a conflict, never decides a hit is harmless.
 6. **If the check could not run → HALT, not clear.** A `get_contacts`/`list_matters` call that errored (a 401, a timeout, an unconfigured connector) is **not** a passed check. Produce a CONFLICT-HOLD marked **check unavailable** (`references/output-format.md` rule 6); never infer "no match" from a failed call, never send a reply in place of a check.
 7. **On no hit → proceed to Phase 3.**
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+`update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ### Phase 3 - Draft (draft-for-review)
 

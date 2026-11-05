@@ -12,7 +12,7 @@ description: >-
   routed to the firm's tool, confirmed at connect), and it stages into Smokeball only what
   Smokeball can hold. Every value is traceable to a matter read; a missing component is a gap it
   surfaces, never a fill-in. Deadlines are captured and surfaced, never computed as final.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -98,6 +98,12 @@ entry, no assumed deposition summary. A component it cannot read is a **gap it
 surfaces** (Shape B), never a fill-in. It also never invents an exhibit number, a
 Bates range, or a page count it did not read or is not produced by the firm's PDF
 tool.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `add_file`, `render_docx_draft`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## The Bates / PDF seam - routed to the firm's tool, never invented (READ THIS)
 

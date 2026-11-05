@@ -7,7 +7,7 @@ description: >-
   connective chase for the firm's most-slipped discovery step. Never decides which responses need
   verification, never sends to the signer without authenticated attorney approval, never signs,
   and never asserts a signature it cannot see.
-version: 0.4.0
+version: 0.5.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -343,6 +343,12 @@ If the ledger cannot be read, the pre_run **fires open** (wakes) rather than goi
 silent - a chase watcher that goes quiet is the dangerous failure. If the config
 cannot be read, it is treated as unauthored (fail-closed hold + the single
 surface), never a silent default.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_task`, `create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+A firm-general task or event (no `matter_id`) needs no resolution. `update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## How it works (mapped to the real connector tools)
 

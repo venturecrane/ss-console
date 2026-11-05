@@ -447,6 +447,7 @@ def test_done_since_last_time_and_its_memo(tmp_path, monkeypatch):
     assert envelope["memos"] == [
         {
             "matter_id": M001,
+            "matter_number": "PI-2026-0001",
             "text": "Task list upkeep: I closed 1 task on this matter that the record showed were done (a proof of service added Jul 9).",
         }
     ]

@@ -12,7 +12,7 @@ description: >-
   staged for the attorney to finalize and file. It authors no legal argument, drafts no substance,
   and leaves the reasons-to-compel cell for the attorney. Every value is traceable to a matter
   read; a missing component is a gap it surfaces, never a fill-in.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -195,6 +195,12 @@ COMPEL FURTHER RESPONSES TO [set]") are surfaced as an **attorney prompt (surfac
 composed)** - the skill flags them for the attorney to supply, it does not fabricate a
 court, case number, or department. See `references/output-format.md` for the exact
 columns.
+
+### Matter writes open with a resolution
+
+Every Smokeball write this skill makes on a matter (`create_memo`) takes a `matter_resolution`, and without one nothing is written. Get it immediately before each write: call `resolve_matter_by_id` with the `matter_id` and the matter's own `number` exactly as ONE read of that matter returned them (the matter listing or `get_matter` this run made, or the matter the webhook event or the thread names), never a number from memory, from an email or from another matter. Pass the `matter_resolution` it returns, unchanged, with the same `matter_id`. It opens ONE write: a second write on the same matter needs a second call. Any verdict but `unique` means the id and the number do not name the same matter: write nothing on it, read the matter again, and say so in what you report; `search_failed` says only that Smokeball could not be read.
+
+`update_task`, `update_event` and `update_memo` need none: their matter is the task's, event's or memo's own.
 
 ## How it works (mapped to the real connector tools)
 
