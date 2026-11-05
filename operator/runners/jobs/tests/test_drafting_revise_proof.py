@@ -29,7 +29,7 @@ from jobs.demand import deliver
 from jobs.drafting import briefpage
 from jobs.drafting.revise import inplace, prior
 from test_drafting_revise import BRIEF, KEY, REQUEST
-from test_drafting_revise_layout import FULL, V7_KEYS, _format_key, _render, _run, firm_styled, fmt  # noqa: F401
+from test_drafting_revise_layout import FULL, V7_KEYS, _format_key, _render, _run, firm_styled, fmt  # noqa: F401 - firm_styled and fmt are pytest fixtures, used by name
 
 W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
 LEFT = "end the solid line under the caption at the vertical line"
