@@ -158,6 +158,68 @@ describe('projectEditableConfig', () => {
 // -----------------------------------------------------------------------------
 
 describe('applyEditableChanges', () => {
+  it('keeps every field of a connector the editor does not edit, the gates included', () => {
+    const fixture = validFixture()
+    const connectors = fixture['connectors'] as Record<string, unknown>
+    connectors['PracticeManagement'] = {
+      adapter: 'smokeball',
+      backend: 'mcp:smokeball',
+      matter_resolution_mode: 'enforce',
+    }
+    connectors['WebSearch'] = {
+      adapter: 'brave',
+      backend: 'native:brave-free',
+      sealed_reader: true,
+    }
+    const result = validate(fixture)
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const current = result.value
+    expect(current.connectors.PracticeManagement?.matter_resolution_mode).toBe('enforce')
+    expect(current.connectors.WebSearch?.sealed_reader).toBe(true)
+
+    // An edit that touches nothing, and one that edits the very connector.
+    const { editable } = projectEditableConfig(current)
+    const untouched = applyEditableChanges(current, editable)
+    expect(untouched.connectors).toEqual(current.connectors)
+
+    const edited = applyEditableChanges(current, {
+      ...editable,
+      connectors: {
+        ...editable.connectors,
+        PracticeManagement: { ...editable.connectors.PracticeManagement, enabled: false },
+      },
+    })
+    expect(edited.connectors.PracticeManagement).toEqual({
+      ...current.connectors.PracticeManagement,
+      enabled: false,
+    })
+  })
+
+  it('cannot be handed a gate: a smuggled field on a connector is ignored', () => {
+    const fixture = validFixture()
+    const connectors = fixture['connectors'] as Record<string, unknown>
+    connectors['PracticeManagement'] = {
+      adapter: 'smokeball',
+      backend: 'mcp:smokeball',
+      matter_resolution_mode: 'enforce',
+    }
+    const result = validate(fixture)
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const { editable } = projectEditableConfig(result.value)
+    const tampered = {
+      ...editable,
+      connectors: {
+        ...editable.connectors,
+        PracticeManagement: {
+          ...editable.connectors.PracticeManagement,
+          matter_resolution_mode: 'observe',
+        },
+      },
+    }
+    const merged = applyEditableChanges(result.value, tampered)
+    expect(merged.connectors.PracticeManagement?.matter_resolution_mode).toBe('enforce')
+  })
+
   it('keeps the logic_in_code switches across an edit, and never adds them', () => {
     const switched = validate({ ...validFixture(), logic_in_code: { conflict_fence: 'enforce' } })
     if (!switched.ok) throw new Error('fixture must validate')

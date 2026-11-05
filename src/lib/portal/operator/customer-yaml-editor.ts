@@ -529,29 +529,17 @@ function mergeConnectors(
       merged[key] = existing
       continue
     }
+    // Everything else on the connector is locked and comes from what is there:
+    // token_ref, webhook_url, credential_custody (ADR 0042), auth_mode, msgraph_auth,
+    // poll_seconds, and the gates sealed_reader and matter_resolution_mode. Spread,
+    // not listed: a list dropped every field nobody added to it, so a later
+    // write-back would have turned a seat's matter gate off without a word.
     merged[key] = {
+      ...existing,
       adapter: update.adapter,
       backend: update.backend,
       enabled: update.enabled,
       scopes: update.scopes,
-      // token_ref locked — pulled from current, never from input.
-      token_ref: existing.token_ref,
-      // webhook_url locked — ADR 0021 Stream E, embeds customer_id so
-      // changing it via the editor would risk cross-customer routing.
-      // Configured at provisioning time, never via portal.
-      webhook_url: existing.webhook_url,
-      // credential_custody locked — ADR 0042. Custody is a security decision
-      // in the connectors authority domain, set via the dedicated custody flow,
-      // never through the general config editor.
-      credential_custody: existing.credential_custody,
-      // auth_mode locked — set at provisioning with the OAuth flow itself;
-      // the portal only READS it (connection care note).
-      auth_mode: existing.auth_mode,
-      // msgraph_auth / poll_seconds locked — Microsoft Graph mail credentials
-      // and poll cadence (ADR 0078 D5) are set at provisioning, never via the
-      // general config editor. Preserved verbatim from the current connector.
-      msgraph_auth: existing.msgraph_auth,
-      poll_seconds: existing.poll_seconds,
     }
   }
   return merged
