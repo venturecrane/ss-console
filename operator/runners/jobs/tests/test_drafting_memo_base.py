@@ -308,7 +308,9 @@ def test_a_table_of_any_width_holds_the_charts_width(columns):
     t = doc.tables[at]
     assert len(t.columns) == n
     base_doc = docx.Document(io.BytesIO(_base().bytes))
-    width = lambda tbl: sum(int(g.get(f"{W}w")) for g in tbl._tbl.find(f"{W}tblGrid"))  # noqa: E731
+    def width(tbl):
+        return sum(int(g.get(f"{W}w")) for g in tbl._tbl.find(f"{W}tblGrid"))
+
     assert width(t) == width(base_doc.tables[0])
 
 
