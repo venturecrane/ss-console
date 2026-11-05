@@ -412,6 +412,30 @@ COPY operator/requirements/ /app/requirements/
 RUN uv pip install --no-cache-dir --python /opt/hermes/.venv/bin/python \
       --no-config --require-hashes --no-deps -r /app/requirements/hermes-security.txt
 
+# ---------- Ownership of the big trees, ONCE, here ----------
+# The gateway runs as hermes (uid 10000) and owns its venv, the TUI build and
+# node_modules. Changing a file's owner or mode makes the image store copy the
+# whole file into the layer that changed it, and these trees are 1.6 GB and
+# 138,000 files (measured on smd-staging 2026-11-05: .venv 389M, node_modules
+# 1.2G). Until 2026-11-05 the one sweep that did this was the last-but-one
+# step of the build, after every COPY, so EVERY release re-ran it and wrote
+# those trees again into a new top layer: the longest, quietest step of the
+# build, and the step where the remote builder's stream dropped on two of that
+# day's three builds (#107 [stage-4 93/94]), each rebuilt from the start (14
+# and 15 minutes instead of 6).
+#
+# So the sweep runs here, above every step that changes from one release to
+# the next (the overlay, the skills, the templates): this layer is built once
+# per Hermes or requirements change and reused, and the closing sweep at the
+# end of this file touches only what later steps added. The END STATE is the
+# same as before: the closing sweep still brings every entry under these
+# trees, /app and /opt/data to the same owner and mode.
+RUN chmod -R a+rX /opt/hermes \
+ && chown -R hermes:hermes \
+      /opt/hermes/.venv \
+      /opt/hermes/ui-tui \
+      /opt/hermes/node_modules
+
 # ---------- hermes-smd overlay (plugins + CLI) ----------
 # Pip-install the overlay from the build context (operator/hermes-smd-overlay/,
 # ADR 0095: one repository for the seat runtime; until 2026-10-22 this was a
@@ -883,13 +907,27 @@ RUN mkdir -p /opt/data/honcho/pg /opt/data/honcho/redis /opt/data/.local/bin
 # Everything Hermes / Honcho / bootstrap writes to must be owned by hermes
 # (uid 10000). The plugin install above ran as root and dropped files into
 # /opt/data/.hermes — chown sweeps them to the right owner.
-RUN chmod -R a+rX /opt/hermes /app \
- && chown -R hermes:hermes \
-      /opt/hermes/.venv \
-      /opt/hermes/ui-tui \
-      /opt/hermes/node_modules \
-      /app \
-      /opt/data
+#
+# The closing sweep. It leaves exactly what
+#   chmod -R a+rX /opt/hermes /app && chown -R hermes:hermes .venv ui-tui node_modules /app /opt/data
+# left (the step this replaced), but it changes only the entries that are not
+# already right, because changing an entry copies it into this layer and the
+# big trees were swept once already ("Ownership of the big trees", above). The
+# first find is `chmod -R a+rX` entry by entry: a+rX adds read for everyone,
+# and execute for everyone on a directory or on a file that already has an
+# execute bit, and never touches a symlink. The second is `chown -R`, which
+# under -R changes a symlink itself and not its target, hence -h.
+# operator/bin/tests/test_image_own_sweep.py runs the first against
+# `chmod -R a+rX` on a tree of every mode and fails if they ever differ.
+# OWN-SWEEP-BEGIN
+RUN find /opt/hermes /app ! -type l \
+      \( ! -perm -444 -o -type d ! -perm -111 \
+         -o ! -type d \( -perm -100 -o -perm -010 -o -perm -001 \) ! -perm -111 \) \
+      -exec chmod a+rX {} + \
+ && find /opt/hermes/.venv /opt/hermes/ui-tui /opt/hermes/node_modules /app /opt/data \
+      \( ! -user hermes -o ! -group hermes \) \
+      -exec chown -h hermes:hermes {} +
+# OWN-SWEEP-END
 
 # SEC-31 (audit 2026-06-15): the blanket `chown -R hermes:hermes /app` above
 # swept the GOVERNANCE artifacts to the agent uid — the pinned overlay pack the
