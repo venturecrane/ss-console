@@ -387,7 +387,7 @@ class Finish:
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
-            undefined = sets.undefined_caps(render.split_notes(md)[0])
+            undefined = sets.undefined_caps(render.split_notes(md)[0], self.corpus())
             if undefined:
                 res.model(
                     "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
