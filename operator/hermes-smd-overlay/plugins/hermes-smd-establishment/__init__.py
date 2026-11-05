@@ -294,7 +294,7 @@ from shared.inbound import (
     unwrap_inbound,
 )
 from shared.outbound_recipient import DRAFT_RECORD_TOOLS, extract_to_recipients
-from shared.output_classes import OUTPUT_CLASSES, is_output_class
+from shared.output_classes import OUTPUT_CLASSES, has_live_rule_reader, is_output_class
 from shared.output_classes import catalogue as output_class_catalogue
 from shared.output_classes import describe as describe_output_class
 from shared.pending_acts import PENDING_ACTS, ConfirmedAct
@@ -1291,6 +1291,34 @@ _CONFIRMED_NOTE = (
     "you have not observed."
 )
 
+#: Appended to :data:`_CONFIRMED_NOTE` when the rule's class has no live reader
+#: (:data:`shared.output_classes.LIVE_RULE_READER_CLASSES`, 2026-11-04). The
+#: install is still worth committing; the claim of effect is not true.
+_UNREAD_CLASS_NOTE = (
+    " This rule is about {work}, and that work is produced by a part of the "
+    "Operator that does not read the firm's rules yet. So even once the status "
+    "says installed, do NOT say it is in effect: say it is recorded and has been "
+    "passed to SMD to build into that work, and that the Operator will write "
+    "again when the next one follows it. Give no date."
+)
+
+
+def _unread_class_note(row: Any) -> str:
+    """The extra instruction for a firm rule nothing reads, else ``""``.
+
+    Firm rules only. A personal rule is read by the person-preference loader,
+    which is a different reader with its own scope.
+    """
+    if not isinstance(row, dict) or str(row.get("scope") or "firm_adjust") == "person":
+        return ""
+    output_class = _row_output_class(row)
+    if has_live_rule_reader(output_class):
+        return ""
+    return _UNREAD_CLASS_NOTE.format(
+        work=describe_output_class(output_class) or "that kind of work"
+    )
+
+
 _FOR_ADMIN_ON_ADMIN_MESSAGE = (
     "Refused: for_admin marks a rule as WAITING for an administrator, and this "
     "turn's sender is one. Propose it with for_admin false and ask them to "
@@ -2225,6 +2253,17 @@ def _proposed_class(args: dict[str, Any], response: dict[str, Any]) -> str:
     return ""
 
 
+def _row_output_class(row: Any) -> str:
+    """The class a stored rule row binds to, from the BROKER's ``subject``.
+
+    ``""`` when the row carries none, which the install letter reads as "no
+    live reader": a rule the seat cannot place is not one it may call in effect.
+    """
+    subject = row.get("subject") if isinstance(row, dict) else None
+    value = subject.get("output_class") if isinstance(subject, dict) else None
+    return value.strip().lower() if isinstance(value, str) else ""
+
+
 # ---------------------------------------------------------------------------
 # The rule-request loop (ss-console#2546)
 #
@@ -2622,6 +2661,7 @@ def _dispatch_outcome_letter(
         session_id=session_id,
         anchor=_rule_anchor(row),
         row_kind=str(row.get("kind") or "rule"),
+        output_class=_row_output_class(row),
     )
     return notification.sent or notification.outcome_unknown
 
@@ -4162,7 +4202,7 @@ def _confirmation_note(
             proposal_id=verdict.proposal_id,
             text=str(row.get("text") or ""),
             scope=str(row.get("scope") or "firm_adjust"),
-        )
+        ) + _unread_class_note(row)
     if verdict.kind == rule_confirm.DECLINED:
         # ss-console#2546. A decline is an ACT now, not just a sentence: it
         # closes the proposal in the broker and tells the person who asked. The

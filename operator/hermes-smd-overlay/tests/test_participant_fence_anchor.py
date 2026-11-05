@@ -107,6 +107,7 @@ def test_the_rule_loop_sends_under_its_lane_and_its_anchors() -> None:
         requester="dana@firm.example",
         send=sender,
         anchor={"kind": "rule", "proposal_id": "abcd1234"},
+        output_class="staff",
     )
     assert seen[0]["lane"] == "rule_dispatch" and seen[0]["anchor"] == anchor
     assert seen[1]["lane"] is None and seen[1]["anchor"] == {

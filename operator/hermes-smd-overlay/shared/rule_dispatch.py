@@ -59,6 +59,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.output_classes import describe as describe_output_class
+from shared.output_classes import has_live_rule_reader
+
 logger = logging.getLogger(__name__)
 
 #: The participant fence's lane for the administrators' request email; the
@@ -172,6 +175,31 @@ _INSTALLED_BODY = """{applied_by} applied the rule you asked for:
 
 It is in effect from now, and work of that kind is written to it.
 """
+
+#: The install letter for a rule whose class has NO live reader (2026-11-04).
+#: Installing it is true; "in effect" is not, because the work it is about is
+#: rendered by a lane that does not read the firm's rules
+#: (:data:`shared.output_classes.LIVE_RULE_READER_CLASSES`). So the letter says
+#: what is true: recorded, not yet shaping that work, handed to SMD. No date,
+#: because none has been agreed. The "will write again" line is backed by the
+#: page :func:`_page_unread_rule` raises, which is what puts it on SMD's desk.
+_RECORDED_SUBJECT = "Your rule is recorded [rule {proposal_id}]"
+
+_RECORDED_BODY = """{applied_by} applied the rule you asked for:
+
+{readback}
+
+The rule is recorded, but it is not yet in effect for {work}. That work is
+produced by a part of the Operator that does not read the firm's rules yet, so
+the rule has been passed to SMD to build into it. The Operator will write to you
+again when the next one follows it.
+"""
+
+#: What :data:`_RECORDED_BODY` calls the work when the class has no plain words.
+_UNNAMED_WORK = "that kind of work"
+
+#: The Sentry message that puts an unread rule on SMD's desk.
+UNREAD_RULE_PAGE = "rule_installed_without_reader"
 
 _DECLINED_SUBJECT = "Your rule was declined [rule {proposal_id}]"
 
@@ -429,6 +457,54 @@ def _record(
         logger.warning("rule_dispatch: RULE_REQUEST_NOTIFIED emission failed (%s)", exc)
 
 
+def _installed_letter(
+    proposal_id: str, readback: str, tag: str, by: str, output_class: str
+) -> tuple[str, str]:
+    """Subject and body for an install, honest about whether anything reads it."""
+    if has_live_rule_reader(output_class):
+        return (
+            _INSTALLED_SUBJECT.format(proposal_id=proposal_id),
+            _compose(_INSTALLED_BODY, readback, tag, applied_by=by),
+        )
+    _page_unread_rule(proposal_id, output_class)
+    work = describe_output_class(output_class) or _UNNAMED_WORK
+    return (
+        _RECORDED_SUBJECT.format(proposal_id=proposal_id),
+        _compose(_RECORDED_BODY, readback, tag, applied_by=by, work=work),
+    )
+
+
+def _page_unread_rule(proposal_id: str, output_class: str) -> None:
+    """A firm rule installed where nothing reads it: put it on SMD's desk.
+
+    Ids and the class only, never the rule's text or an address, the same as
+    every other seat page. Never raises: the letter is the firm's, the page is
+    ours, and a monitoring fault must not cost the firm its letter.
+    """
+    logger.warning(
+        "rule_dispatch: rule %s installed for class %r, which no live reader applies; "
+        "the firm is told it is recorded, not in effect",
+        proposal_id,
+        output_class,
+    )
+    try:
+        import os
+
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("reason", UNREAD_RULE_PAGE)
+            scope.set_tag("proposal_id", proposal_id)
+            scope.set_tag("output_class", output_class or "(none)")
+            scope.set_tag(
+                "customer",
+                os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "",
+            )
+            sentry_sdk.capture_message(UNREAD_RULE_PAGE, level="error")
+    except Exception as exc:  # noqa: BLE001 - monitoring must never block the letter
+        logger.debug("rule_dispatch: unread-rule page skipped (%s)", exc)
+
+
 def notify_outcome(
     *,
     kind: str,
@@ -440,8 +516,14 @@ def notify_outcome(
     session_id: str = "",
     anchor: dict[str, str] | None = None,
     row_kind: str = "rule",
+    output_class: str = "",
 ) -> Notification:
     """Tell the person who asked how their rule ended.
+
+    ``output_class`` is the class the broker's row binds the rule to. An
+    ``installed`` letter says "in effect" only when that class has a live reader
+    (:func:`shared.output_classes.has_live_rule_reader`); any other class,
+    including an absent one, gets the recorded letter and SMD is paged.
 
     ``row_kind`` is the broker row's stored kind. A ``tool_call`` row is an act
     (an order or a send held for a yes), and its lapse and decline letters say
@@ -470,8 +552,7 @@ def notify_outcome(
     readback = f"{tag} {_clean(text)}" if is_act else _readback(proposal_id, _clean(text))
     by = _clean(by) or "An administrator"
     if kind == "installed":
-        subject = _INSTALLED_SUBJECT.format(proposal_id=proposal_id)
-        body = _compose(_INSTALLED_BODY, readback, tag, applied_by=by)
+        subject, body = _installed_letter(proposal_id, readback, tag, by, output_class)
     elif kind == "declined":
         subject = (_ACT_DECLINED_SUBJECT if is_act else _DECLINED_SUBJECT).format(
             proposal_id=proposal_id
@@ -607,6 +688,7 @@ __all__ = [
     "MAX_NOTIFIED",
     "OPS_DESK",
     "RULE_REQUEST_NOTIFIED",
+    "UNREAD_RULE_PAGE",
     "EmitFn",
     "Notification",
     "SendFn",

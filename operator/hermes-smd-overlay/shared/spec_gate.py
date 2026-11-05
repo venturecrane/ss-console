@@ -99,6 +99,7 @@ internal error downgrades. The gate never silently passes.
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any
 
 from shared import spec_manifest
@@ -193,18 +194,28 @@ _STATE_UNPROVABLE = "unprovable"
 _PROCEED_ON_BROKEN_CONTROL = frozenset({"staff"})
 
 
+#: The send site's class map: an ``ActionClass`` value to the output class a
+#: turn's message of that kind belongs to. Every class here is written in a
+#: turn that the skill stamp points at the installed spec, which is why
+#: :data:`shared.output_classes.LIVE_RULE_READER_CLASSES` is pinned to exactly
+#: these values (``tests/test_rule_reader_registry.py``).
+RECIPIENT_OUTPUT_CLASSES: MappingProxyType[str, str] = MappingProxyType(
+    {
+        "external_send_internal": "staff",
+        "external_send_client": "outbound_client",
+        "external_send_vendor": "outbound_vendor",
+        "external_send": "outbound_external",
+    }
+)
+
+
 def resolve_output_class(action_class_value: str) -> str | None:
     """Map an ``ActionClass`` value to its output class, or ``None``.
 
     Takes the enum's string VALUE rather than the enum, so this module does not
     import ``enforce`` and create a cycle (``enforce`` calls into here).
     """
-    return {
-        "external_send_internal": "staff",
-        "external_send_client": "outbound_client",
-        "external_send_vendor": "outbound_vendor",
-        "external_send": "outbound_external",
-    }.get(action_class_value)
+    return RECIPIENT_OUTPUT_CLASSES.get(action_class_value)
 
 
 def _declared(output_class: str, prop: str) -> bool:
@@ -728,6 +739,7 @@ def audit_advertising_gate(
 
 
 __all__ = [
+    "RECIPIENT_OUTPUT_CLASSES",
     "REASON_ADVERTISING_GATE",
     "REASON_OUTPUT_CHECKLIST",
     "REASON_OUTPUT_CHECKLIST_EXHAUSTED",
