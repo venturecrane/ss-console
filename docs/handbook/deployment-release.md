@@ -497,9 +497,13 @@ There is no approval step before the client ring. Since 2026-10-30 the client
 seat is ring 1, straight after smd-staging with no bake on either, and SMD's
 other seats follow it: with one client, a fix waited about an hour behind four
 rings of bakes, and the bakes protected nothing a seat's own self-test and
-automatic rollback did not. So a merged fix reaches ashton-price in the run
-straight after the one that takes staging (that run starts the next one, about
-2 minutes later), about 10 minutes after the image is built on a normal day. Staging's
+automatic rollback did not. So a merged fix reaches ashton-price in the same
+run that takes staging, straight after staging's self-test is green, about 20
+minutes after the image is built on a normal day (staging 8, the busy gate up to
+10). When a newer image lands while a run is still rolling an older one, the run
+ends after the seat it is on and the run it starts takes the newer image from
+staging; an older image is never carried through SMD's own seats while the
+client waits. Staging's
 self-test, the busy gate and holds protect it; a required approval would put a
 person back on every release. When a second client signs, revisit the order.
 
