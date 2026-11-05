@@ -20,6 +20,7 @@ phrases a set uses that its Definitions never define, for the review.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 #: (key, label used in file names and instructions, the request's words for it).
@@ -38,7 +39,7 @@ VARIANTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
         "requests_for_production",
         "Requests for Production",
         re.compile(
-            r"(?i)\brequests?\s+for\s+(?:the\s+)?production\b|\brequests?\s+to\s+produce\b|\brfps?\b|\brpds?\b|"
+            r"(?i)\brequests?\s+for\s+(?:the\s+)?production\b|\brequests?\s+to\s+produce\b|\brfp(?:d?s?)\b|\brpds?\b|"
             r"\bdocument\s+requests?\b|\brequests?\s+for\s+documents\b"
         ),
     ),
@@ -217,10 +218,12 @@ _COMMON = {
 }  # fmt: skip
 
 
-def undefined_caps(doc: str) -> list[str]:
+def undefined_caps(doc: str, record_names: Iterable[str] = ()) -> list[str]:
     """Capitalized phrases in the requests that the Definitions never define
     (a set that defines SURVEILLANCE VIDEO and asks for SURVEILLANCE FOOTAGE).
-    Party names, labels and the common words of a set are not counted."""
+    Party names, labels and the common words of a set are not counted, nor is a
+    word the file's own document names print in capitals: the name of a record
+    ("CAD Report") is not a defined term, and no definition or lower case fixes it."""
     at, end = _region(doc)
     if at < 0:
         return []
@@ -234,6 +237,7 @@ def undefined_caps(doc: str) -> list[str]:
     # The caption, the title, the attorney block and the signature block name
     # the firm and the parties; their words are never a defined term.
     framing = {w.strip(".,;:'&") for w in re.findall(r"[A-Z][A-Z'&.,-]+", doc[: _defs_start(doc)] + doc[end:])}
+    named = {w for name in record_names for w in re.findall(r"[A-Z][A-Z'&.-]+", name)}
     body = _LABEL_LINE.sub("", doc[at:end])
     body = re.sub(r"(?m)^#{1,6}\s.*$", "", body)
     body = re.sub(r"(?m)^.*\|.*$", "", body)  # a table row is a caption or a block, never a request
@@ -242,7 +246,7 @@ def undefined_caps(doc: str) -> list[str]:
     def known(w: str) -> bool:
         w = w.strip(".,;:'&-")
         stems = {w, w[:-1] if w.endswith("S") else w, w[:-2] if w.endswith("ES") else w}
-        return bool(stems & (_COMMON | parties | term_words | framing)) or not w
+        return bool(stems & (_COMMON | parties | term_words | framing | named)) or not w
 
     def scan(seg: str) -> str:
         for m in _CAPS.finditer(seg):

@@ -143,6 +143,14 @@ def test_the_request_names_three_sets_in_its_own_order():
     assert sets.variants("Draft a memo on liability") == []
 
 
+@pytest.mark.parametrize("abbrev", ["RFP", "RFPs", "RFPD", "RFPDs", "RPD"])
+def test_every_short_form_of_production_requests_is_a_set(abbrev):
+    # 2026-11-05: "We need RFA, RFPD and SROG" planned two sets, and the third
+    # was never drafted while the reply had promised it.
+    asked = sets.variants(f"We need RFA, {abbrev} and SROG")
+    assert [u.key for u in asked] == ["requests_for_admission", "requests_for_production", "special_interrogatories"]
+
+
 @pytest.mark.parametrize(
     "text, wants",
     [
@@ -371,6 +379,20 @@ def test_a_capitalized_term_never_defined_is_noted():
         "SPECIAL INTERROGATORY NO. 1\n\nIDENTIFY the custodian of the SURVEILLANCE FOOTAGE.\n\nDated: x\n"
     )
     assert sets.undefined_caps(doc) == ["SURVEILLANCE FOOTAGE"]
+
+
+def test_a_word_the_records_own_name_prints_in_capitals_is_not_a_term():
+    # 2026-11-05: a request naming the "Police Department CAD incident report"
+    # failed the format check twice; a definition or lower case cannot fix a title.
+    doc = (
+        '# DEFINITIONS\n\n1. "SURVEILLANCE VIDEO" means the store video.\n\n# REQUESTS FOR ADMISSION\n\n'
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that the Police Department CAD incident report is genuine.\n\n"
+        "REQUEST FOR ADMISSION NO. 2\n\nAdmit that the SURVEILLANCE FOOTAGE is genuine.\n\nDated: x\n"
+    )
+    names = ["CAD Report Galt", "Complaint - filed"]
+    assert sets.undefined_caps(doc) == ["CAD", "SURVEILLANCE FOOTAGE"]
+    assert sets.undefined_caps(doc, names) == ["SURVEILLANCE FOOTAGE"]
+    assert sets.undefined_caps(doc, {"Complaint - filed": "text"}) == ["CAD", "SURVEILLANCE FOOTAGE"]
 
 
 def test_the_firm_pleading_block_is_validated():
