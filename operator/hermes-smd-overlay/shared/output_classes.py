@@ -78,6 +78,12 @@ OUTPUT_CLASSES: frozenset[str] = frozenset(OUTPUT_CLASS_MEANINGS)
 #: test_rule_reader_registry.py`` fails if this set and the send site's class map
 #: ever disagree, and fails if the jobs runner starts reading the spec store, so
 #: a class joins this set in the PR that gives it a reader and not before.
+#:
+#: A LANE CLASS IS LIVE PER RULE, NOT AS A CLASS (2026-11-05). The drafting lane
+#: now reads ``work_product`` rules, but only those the seat compiled to a layout
+#: key (:mod:`shared.layout_rules`); a prose rule of that class still binds to
+#: nothing. So ``work_product`` stays out of this set, and the install letter
+#: asks :func:`shared.layout_rules.compiled_on_seat` about the one rule.
 LIVE_RULE_READER_CLASSES: frozenset[str] = frozenset(
     {"staff", "outbound_client", "outbound_vendor", "outbound_external"}
 )

@@ -66,6 +66,7 @@ from . import (
     compose,
     evidence_cost,
     firm as firm_mod,
+    firm_rules,
     howell,
     job as job_mod,
     review as review_mod,
@@ -176,6 +177,8 @@ class DraftingRun(EvidenceLane, Placing):
         self.date_stamp = self._frozen_date(today())
         self.readback_pause = readback_pause
         self.notes: list[str] = []
+        #: The firm's installed layout rules this job follows (firm_rules.py).
+        self.rule_layout = firm_rules.start(self)
 
     # ---- plumbing ------------------------------------------------------------------
     @property

@@ -68,6 +68,7 @@ from pathlib import Path
 from typing import Any
 
 from config_applier.applier import atomic_write
+from shared import layout_rules
 from shared.ids import iso_utc, sha256
 
 logger = logging.getLogger(__name__)
@@ -657,23 +658,59 @@ def _install(
             "assertions": spec.assertions,
         }
 
+    layouts = _install_layouts(spec_dir, specs)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "customer": slug,
         "source_digest": source_digest,
         "installed_at": iso_utc(),
         "specs": entries,
+        # The compiled layout rules (``shared/layout_rules.py``) the drafting
+        # lane reads, by the digest of the bytes written here; and the schema
+        # they were compiled under, so a seat installed before compiling existed
+        # recompiles on its next poll instead of waiting for a new rule.
+        "layouts": layouts,
+        "layout_schema": layout_rules.SCHEMA_VERSION,
     }
     manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8") + b"\n"
     manifest_path = spec_dir / MANIFEST_NAME
     atomic_write(manifest_path, manifest_bytes)
     _harden(manifest_path, _FILE_MODE)
 
-    pruned = _prune(spec_dir, set(entries))
+    pruned = _prune(spec_dir, set(entries), set(layouts))
     return tuple(installed), pruned
 
 
-def _prune(spec_dir: Path, keep: set[str]) -> tuple[str, ...]:
+def _install_layouts(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[str, Any]]:
+    """Compile each layout class's confirmed rules and write ``layout.json``.
+
+    Written for every class in :data:`shared.layout_rules.LAYOUT_RULE_CLASSES`
+    that carries ``format`` adjustments, BEFORE the manifest, the same commit
+    argument as the bodies: a reader between the two sees a digest mismatch and
+    applies nothing.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for spec in specs:
+        if (
+            spec.output_class not in layout_rules.LAYOUT_RULE_CLASSES
+            or spec.prop != layout_rules.LAYOUT_PROPERTY
+        ):
+            continue
+        if not spec.adjustments:
+            continue
+        doc = layout_rules.compile_adjustments(spec.adjustments)
+        blob = json.dumps(doc, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+        rel = layout_rules.layout_rel_path(spec.output_class)
+        target = spec_dir / rel
+        atomic_write(target, blob)
+        _harden(target, _FILE_MODE)
+        out[rel] = {"sha256": sha256(blob), "bytes": len(blob), "compiled": len(doc["rules"])}
+    return out
+
+
+def _prune(
+    spec_dir: Path, keep: set[str], keep_layouts: frozenset[str] | set[str] = frozenset()
+) -> tuple[str, ...]:
     """Remove installed spec bodies the new manifest no longer names.
 
     Scoped to ``classes/**/*.md`` under the spec dir so a stray file elsewhere is
@@ -685,9 +722,10 @@ def _prune(spec_dir: Path, keep: set[str]) -> tuple[str, ...]:
     if not root.is_dir():
         return ()
     pruned: list[str] = []
-    for path in sorted(root.rglob("*.md")):
+    stale = [*sorted(root.rglob("*.md")), *sorted(root.rglob(layout_rules.LAYOUT_NAME))]
+    for path in stale:
         rel = path.relative_to(spec_dir).as_posix()
-        if rel in keep:
+        if rel in keep or rel in keep_layouts:
             continue
         try:
             path.unlink()
@@ -725,7 +763,11 @@ def apply(
     source_digest = sha256(raw) or ""
 
     installed_manifest = _read_installed_manifest(target)
-    if installed_manifest.get("source_digest") == source_digest and source_digest:
+    if (
+        installed_manifest.get("source_digest") == source_digest
+        and source_digest
+        and installed_manifest.get("layout_schema") == layout_rules.SCHEMA_VERSION
+    ):
         return SpecApplyResult(
             outcome=SpecApplyOutcome.UNCHANGED,
             source_digest=source_digest,

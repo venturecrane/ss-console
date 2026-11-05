@@ -59,6 +59,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.layout_rules import compiled_on_seat
 from shared.output_classes import describe as describe_output_class
 from shared.output_classes import has_live_rule_reader
 
@@ -460,8 +461,13 @@ def _record(
 def _installed_letter(
     proposal_id: str, readback: str, tag: str, by: str, output_class: str
 ) -> tuple[str, str]:
-    """Subject and body for an install, honest about whether anything reads it."""
-    if has_live_rule_reader(output_class):
+    """Subject and body for an install, honest about whether anything reads it.
+
+    A ``work_product`` rule has a reader only when the seat compiled it to a
+    layout key the drafting lane applies (:mod:`shared.layout_rules`), and the
+    proof is the INSTALLED ``layout.json`` naming this rule, never the text.
+    """
+    if has_live_rule_reader(output_class) or compiled_on_seat(proposal_id, output_class):
         return (
             _INSTALLED_SUBJECT.format(proposal_id=proposal_id),
             _compose(_INSTALLED_BODY, readback, tag, applied_by=by),

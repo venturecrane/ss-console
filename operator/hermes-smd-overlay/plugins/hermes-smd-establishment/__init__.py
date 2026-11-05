@@ -272,6 +272,7 @@ from typing import Any
 from shared import (
     act_broker,
     admin_possession,
+    layout_rules,
     matter_gate,
     msgraph_broker,
     provenance,
@@ -1313,6 +1314,13 @@ def _unread_class_note(row: Any) -> str:
         return ""
     output_class = _row_output_class(row)
     if has_live_rule_reader(output_class):
+        return ""
+    if (
+        output_class in layout_rules.LAYOUT_RULE_CLASSES
+        and layout_rules.compile_rule(str(row.get("text") or ""))[0]
+    ):
+        # A layout rule the seat compiles to a key the drafting lane applies
+        # (shared/layout_rules.py): it is read, so the status line governs.
         return ""
     return _UNREAD_CLASS_NOTE.format(
         work=describe_output_class(output_class) or "that kind of work"
