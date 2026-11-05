@@ -505,7 +505,8 @@ top_level:
       pinned by operator/tests/test_logic_in_code_sync.py); validated on-box by
       bootstrap/validate.py _validate_logic_in_code and in the console by
       src/lib/operator/customer-yaml/sections-logic-in-code.ts (ADR 0104). Absent is
-      observe, an unreadable value is enforce. Rebuild-class in the config applier.
+      observe, an unreadable value is enforce. Rebuild-class in the config applier. The jobs
+      runner reads status_from_events through the connector's copy in its own venv.
   gmail_push:
     status: inert
     materializer: src/lib/operator/customer-yaml/sections-gmail-push.ts (validation only)

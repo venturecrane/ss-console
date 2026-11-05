@@ -10,6 +10,10 @@ defendant, a corrected value that does not parse) goes in ``unmatched``, which
 the passes record as ``unmatched_verdicts``. A reader may not set a status,
 which is derived: it corrects the event, and an overturned status is logged as
 unmatched. An "unclear" status still marks the defendant Unclear.
+
+While the seat's ``status_from_events`` switch observes, a verdict does what it
+always did to the list's values, a status included, and one that names a dated
+event or a role changes only the shadow record (``statusshadow``).
 """
 
 from __future__ import annotations
@@ -94,9 +98,16 @@ def corrected_value(ctx: MatterContext, field: str, v: dict[str, Any]) -> Any:
 
 class _Applier:
     def __init__(
-        self, ctx: MatterContext, result: dict[str, Any], pass_name: str, today: dt.date, missed: list[dict[str, Any]]
+        self,
+        ctx: MatterContext,
+        result: dict[str, Any],
+        pass_name: str,
+        today: dt.date,
+        missed: list[dict[str, Any]],
+        enforcing: bool,
     ) -> None:
         self.ctx, self.result, self.pass_name, self.today = ctx, result, pass_name, today
+        self.enforcing = enforcing
         self.log: list[dict[str, Any]] = []
         self.missed = missed
 
@@ -124,7 +135,12 @@ class _Applier:
         )
 
     def _add_defendant(self, v: dict[str, Any]) -> None:
-        d = answers.defendant(self.ctx, v.get("corrected"), self.today)
+        corrected = v.get("corrected")
+        d = (
+            answers.defendant(self.ctx, corrected, self.today)
+            if self.enforcing
+            else answers.stated_defendant(self.ctx, corrected)
+        )
         if not d["name"]:
             self._miss(v, "the corrected defendant has no name")
         elif find_defendant(self.result, d["name"]) is not None:
@@ -147,6 +163,30 @@ class _Applier:
         self.result["next_court_date"] = new
         if (old or {}).get("date") != new["date"]:
             self._logged("next_court_date", old, new, v)
+
+    def _stated_status(self, d: dict[str, Any], v: dict[str, Any], path: str) -> None:
+        """An ``observe`` seat's status: a reader may set it, as it always could."""
+        new = v.get("corrected") if v["verdict"] == "overturned" else vocab.D_UNCLEAR
+        if new not in vocab.DEFENDANT_STATUSES:
+            self._miss(v, "the corrected status is not on the list")
+            return
+        old = d.get("status")
+        if old != new:
+            d["status"] = new
+            self._logged(path, old, new, v)
+
+    def _shadow(self, d: dict[str, Any], field: str, v: dict[str, Any]) -> None:
+        """A dated event or a role on an ``observe`` seat: the shadow record
+        only. Nothing a reader says about one reaches the list, so an unclear
+        drops the value and leaves no flag."""
+        shadow = d.setdefault("shadow", {})
+        new = corrected_value(self.ctx, field, v)
+        if not (new.get("value") if field == "role" else new.get("date")):
+            shadow.pop(field, None)
+            return
+        shadow[field] = new
+        if self.ctx.source(v.get("doc"), v.get("doc_date")):
+            shadow.setdefault("overturned", []).append(field)
 
     def _status(self, d: dict[str, Any], v: dict[str, Any], path: str) -> None:
         if v["verdict"] == "overturned":
@@ -171,9 +211,9 @@ class _Applier:
         if old == new:
             return
         target[field] = new
-        if field == "next_court_date":
+        if self.enforcing and field == "next_court_date":
             target["court_dates_read"] = [new] if new.get("date") else []
-        if target is not self.result:
+        if self.enforcing and target is not self.result:
             defstatus.absorb(target, self.today)
         self._logged(path, old, new, v)
 
@@ -182,7 +222,7 @@ class _Applier:
         if path == "defendants[+]":
             self._add_defendant(v)
             return
-        if path == "court_dates":
+        if path == "court_dates" and self.enforcing:
             self._court_dates(v)
             return
         target, field = _target(self.result, path)
@@ -190,8 +230,10 @@ class _Applier:
             self._miss(v, "no defendant on the result answers to this path")
             return
         shown = path if target is self.result else f"defendants[{target.get('name')}].{field}"
-        if field == "status" and target is not self.result:
-            self._status(target, v, shown)
+        if target is not self.result and not self.enforcing and field in (*vocab.SHADOW_EVENTS, "role"):
+            self._shadow(target, field, v)
+        elif field == "status" and target is not self.result:
+            (self._status if self.enforcing else self._stated_status)(target, v, shown)
         elif v["verdict"] == "overturned":
             self._set(target, field, shown, v)
         elif field == "case_status" and target is self.result:
@@ -214,12 +256,13 @@ def apply_verdicts(
     pass_name: str,
     today: dt.date,
     unmatched: list[dict[str, Any]] | None = None,
+    enforcing: bool = False,
 ) -> list[dict[str, Any]]:
     """Apply every overturn (and every unclear) in place; a defendant whose
     event moved has its status derived again. Returns the overturn log: path,
     old, new, the source the overturn cites, why. A verdict that cannot be
     applied is appended to ``unmatched`` and changes nothing."""
-    applier = _Applier(ctx, result, pass_name, today, unmatched if unmatched is not None else [])
+    applier = _Applier(ctx, result, pass_name, today, unmatched if unmatched is not None else [], enforcing)
     for v in verdicts if isinstance(verdicts, list) else []:
         if isinstance(v, dict) and v.get("verdict") in ("overturned", "unclear"):
             applier.one(v)

@@ -562,6 +562,7 @@ logic_in_code:
   post_record_derivation: observe # or enforce
   conflict_fence: observe # or enforce
   fixed_wording: observe # or enforce
+  status_from_events: observe # or enforce
 ```
 
 Optional. Each switch governs one mechanism that can refuse an act or change what a firm sees. `observe` records exactly what it would have refused, in the mechanism's own audit row, and then behaves as if the mechanism were not there. `enforce` refuses.
@@ -570,6 +571,7 @@ Optional. Each switch governs one mechanism that can refuse an act or change wha
 - **Anything else present is refused at boot** by `bootstrap/validate.py` and in the console by `sections-logic-in-code.ts`, including an unknown key, because a misspelled switch would read as `observe` while the file said `enforce`. A reader that meets such a value anyway (a hand edit on the volume, an unparseable file) enforces.
 - **Read fresh on every call** by `logic_in_code.py`, one file in three copies (the Smokeball connector, overlay `shared/`, the broker) because those processes share no virtualenv. `operator/tests/test_logic_in_code_sync.py` pins them byte-identical.
 - **Rebuild-class.** The live config applier refuses a diff that touches the block, so a change reaches a seat with a release or re-provision, the same as `matter_resolution_mode`. Never portal-editable.
+- **`status_from_events` is the litigation lane's** (`jobs/litigation/`), read once when a job starts and kept for that job, from the connector's copy of the reader in the runner's venv. In `observe` the firm's list is what it was: a read also reports the dated events, and each run records what the derivation would have printed and held under the lane's state dir (`status_shadow/`, `python -m jobs.litigation.statusshadow`). In `enforce` a defendant's status comes from its events.
 
 ## Multi-person seats: `people`, `spaces` and roles (ADR 0090, ADR 0091)
 

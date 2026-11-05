@@ -1,4 +1,4 @@
-"""Events in, status out (ADR 0104 mechanism 6). A read reports dated events and
+"""``status_from_events: enforce``. Events in, status out (ADR 0104 mechanism 6). A read reports dated events and
 court dates; code derives the status and the next court date, applies the
 checks' verdicts, and reads a report stored before any of this as it was."""
 
@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from litigation_testkit import M1, LitSeat, ScriptedLit, good_result, make_inputs, make_job, matter_docs
+from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
 from jobs.litigation import answerkey, answers, carry, defstatus, gates, parity, read, update, vocab
 from jobs.litigation.run import LitigationRun
 from jobs.litigation.tools import MatterContext
@@ -23,8 +23,11 @@ KEY = json.loads((Path(__file__).parent / "litigation_status_answer_key.json").r
 
 
 @pytest.fixture(autouse=True)
-def _pricing(tmp_path: Path, pricing_path: Path) -> None:
+def _pricing(tmp_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "pricing.json").write_text(pricing_path.read_text())
+    seat_config = tmp_path / "customer.yaml"
+    seat_config.write_text("logic_in_code:\n  status_from_events: enforce\n")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(seat_config))
 
 
 def _ctx(tmp_path: Path, seat: LitSeat | None = None) -> MatterContext:
@@ -34,6 +37,33 @@ def _ctx(tmp_path: Path, seat: LitSeat | None = None) -> MatterContext:
 
 def _nums(ctx: MatterContext) -> dict[str, int]:
     return {k: ctx.by_id[k] for k in ("f-c1", "f-p1", "f-a1")}
+
+
+def good_result(n: dict[str, int]) -> dict:
+    """An enforce read's answer: events, no status, court dates as a list."""
+    return {
+        "case_name": "Gamma Example v. Delta Example",
+        "court": "Superior Court of Exampletown",
+        "case_number": "CV-0001",
+        "firm_role": "plaintiff",
+        "case_status": {"value": vocab.ACTIVE, "detail": "no dismissal in the file", "doc": n["f-c1"]},
+        "complaint_filed": {"date": "2026-03-02", "doc": n["f-c1"], "doc_date": "2026-03-02"},
+        "court_dates": [],
+        "defendants": [
+            {
+                "name": "Delta Example",
+                "out_for_service": {"value": "no", "doc": None},
+                "served": {"date": "2026-04-10", "method": "personal", "doc": n["f-p1"]},
+                "answered": {"date": "2026-04-30", "doc": n["f-a1"]},
+                "sent_for_service": [{"date": "2026-03-20", "doc": n["f-p1"]}],
+                "flags": [],
+            }
+        ],
+        "discovery_propounded": [],
+        "discovery_served_on_client": [],
+        "matter_flags": [],
+        "notes": "",
+    }
 
 
 def _src(fid: str = "f1") -> dict:
@@ -109,14 +139,14 @@ def test_a_typed_status_is_not_read(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path)
     raw = good_result(_nums(ctx))
     raw["defendants"][0]["status"] = vocab.D_DISMISSED
-    d = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY)["defendants"][0]
+    d = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY, True)["defendants"][0]
     assert d["status"] == vocab.ANSWERED and d["status_from"] == vocab.FROM_DERIVED
 
 
 @pytest.mark.parametrize("role", ["read", "verify", "audit"])
 def test_the_prompt_asks_for_events_and_no_status(tmp_path: Path, role: str) -> None:
     firm = SimpleNamespace(data={"form_hints": {}})
-    text = read.system_for(role, firm, TODAY)
+    text = read.system_for(role, firm, TODAY, enforcing=True)
     assert "Report every dated event you find, each with its document" in text
     assert "do not\nreport a status" in text
     assert "must be the next one AFTER today" not in text and "record\nthe most recent request" not in text
@@ -175,16 +205,16 @@ def test_a_firm_role_it_cannot_read_is_unclear_and_flagged(tmp_path: Path, bad: 
     ctx = _ctx(tmp_path)
     raw = good_result(_nums(ctx))
     raw["firm_role"] = bad
-    out = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY)
+    out = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY, True)
     assert out["firm_role"] == vocab.UNCLEAR and answers.FIRM_ROLE_UNCLEAR in out["matter_flags"]
     raw["firm_role"] = "defense"
-    out = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY)
+    out = answers.to_state(ctx, raw, list(vocab.GROUPS), TODAY, True)
     assert out["firm_role"] == "defense" and answers.FIRM_ROLE_UNCLEAR not in out["matter_flags"]
 
 
 # ---- verdicts -----------------------------------------------------------------------------------
 def _result(ctx: MatterContext) -> dict:
-    return answers.to_state(ctx, good_result(_nums(ctx)), list(vocab.GROUPS), TODAY)
+    return answers.to_state(ctx, good_result(_nums(ctx)), list(vocab.GROUPS), TODAY, True)
 
 
 def test_a_verdict_names_a_defendant_by_index_and_its_status_follows(tmp_path: Path) -> None:
@@ -198,6 +228,7 @@ def test_a_verdict_names_a_defendant_by_index_and_its_status_follows(tmp_path: P
         "verify",
         TODAY,
         missed,
+        enforcing=True,
     )
     d = res["defendants"][0]
     assert d["status"] == vocab.D_DISMISSED and d["dismissed"]["date"] == "2026-08-01" and missed == []
@@ -227,7 +258,7 @@ def test_a_verdict_that_cannot_be_applied_is_logged_and_changes_nothing(
     res = _result(ctx)
     before = copy.deepcopy(res)
     missed: list = []
-    assert read.apply_verdicts(ctx, res, [verdict], "audit", TODAY, missed) == []
+    assert read.apply_verdicts(ctx, res, [verdict], "audit", TODAY, missed, enforcing=True) == []
     assert res == before
     assert len(missed) == 1 and reason in missed[0]["reason"] and missed[0]["pass"] == "audit"
 
@@ -242,7 +273,7 @@ def test_the_old_name_form_still_applies_for_one_release(tmp_path: Path) -> None
         "corrected": {"date": "2026-04-09"},
         "doc": n,
     }
-    read.apply_verdicts(ctx, res, [v], "verify", TODAY)
+    read.apply_verdicts(ctx, res, [v], "verify", TODAY, enforcing=True)
     assert res["defendants"][0]["served"]["date"] == "2026-04-09"
 
 
@@ -251,7 +282,7 @@ def test_a_verdict_overturning_a_status_is_logged_as_unmatched(tmp_path: Path) -
     res = _result(ctx)
     missed: list = []
     v = {"path": "defendants[0].status", "verdict": "overturned", "corrected": vocab.D_DISMISSED, "doc": 1}
-    assert read.apply_verdicts(ctx, res, [v], "verify", TODAY, missed) == []
+    assert read.apply_verdicts(ctx, res, [v], "verify", TODAY, missed, enforcing=True) == []
     assert res["defendants"][0]["status"] == vocab.ANSWERED
     assert missed[0]["path"] == "defendants[0].status" and "correct the event" in missed[0]["reason"]
 
@@ -260,7 +291,7 @@ def test_an_unclear_status_verdict_marks_the_defendant_and_survives_a_settle(tmp
     ctx = _ctx(tmp_path)
     res = _result(ctx)
     v = {"path": "defendants[0].status", "verdict": "unclear", "why": "the papers disagree"}
-    log = read.apply_verdicts(ctx, res, [v], "audit", TODAY)
+    log = read.apply_verdicts(ctx, res, [v], "audit", TODAY, enforcing=True)
     d = res["defendants"][0]
     assert d["status"] == vocab.D_UNCLEAR and d["status_unclear"] == "the papers disagree"
     assert log[0]["old"] == vocab.ANSWERED and log[0]["new"] == vocab.D_UNCLEAR
@@ -274,7 +305,12 @@ def test_a_corrected_court_list_moves_the_next_date(tmp_path: Path) -> None:
     n = ctx.by_id["f-c1"]
     rows = [{"date": "2026-12-01", "event": "Trial"}, {"date": "2026-11-01", "event": "CMC"}]
     log = read.apply_verdicts(
-        ctx, res, [{"path": "court_dates", "verdict": "overturned", "corrected": rows, "doc": n}], "verify", TODAY
+        ctx,
+        res,
+        [{"path": "court_dates", "verdict": "overturned", "corrected": rows, "doc": n}],
+        "verify",
+        TODAY,
+        enforcing=True,
     )
     assert res["next_court_date"]["date"] == "2026-11-01" and len(res["court_dates_read"]) == 2
     assert log[0]["path"] == "next_court_date" and log[0]["source"]["name"] == "Complaint Gamma.pdf"
@@ -293,6 +329,7 @@ def test_the_readers_see_an_index_not_the_bookkeeping(tmp_path: Path) -> None:
 
 def test_a_check_pass_records_what_it_could_not_apply(tmp_path: Path) -> None:
     client = ScriptedLit(
+        result_fn=good_result,
         verdicts=[
             {"path": "defendants[7].served", "verdict": "overturned", "corrected": {"date": "2026-01-01"}},
             {"path": "defendants[0].status", "verdict": "overturned", "corrected": vocab.D_SETTLED},
@@ -367,7 +404,7 @@ def test_an_update_with_no_event_leaves_a_stored_status_alone() -> None:
     prior = _stored_matter(_stored(vocab.D_DISMISSED))
     fresh = copy.deepcopy(prior)
     fresh["defendants"][0]["status"] = vocab.SERVED_NO_ANSWER  # a read cannot move it
-    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY)
+    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY, enforcing=True)
     d = out["defendants"][0]
     assert d["status"] == vocab.D_DISMISSED and "status_from" not in d and "stored_status" not in d
     assert log["changed"] == []
@@ -388,7 +425,9 @@ def test_an_arrived_event_is_read_beside_a_stored_status(stored: str, field: str
     prior = _stored_matter(_stored(stored))
     fresh = copy.deepcopy(prior)
     fresh["defendants"][0][field] = {"date": "2026-09-30", "source": _src("new")}
-    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY)
+    out, log = update.guard(
+        prior, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY, enforcing=True
+    )
     d = out["defendants"][0]
     assert d["status"] == want and d["status_from"] == vocab.FROM_DERIVED and d["stored_status"] == stored
     assert f"defendants[Delta Example].{field}" in log["changed"]
@@ -400,7 +439,7 @@ def test_an_event_the_guard_put_back_leaves_the_stored_status() -> None:
     prior = _stored_matter(_stored(vocab.SERVED_NO_ANSWER))
     fresh = copy.deepcopy(prior)
     fresh["defendants"][0]["dismissed"] = {"date": "2026-09-30", "source": _src("old-pos")}  # not an arrived paper
-    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY)
+    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY, enforcing=True)
     d = out["defendants"][0]
     assert d["status"] == vocab.SERVED_NO_ANSWER and "dismissed" not in d and "status_from" not in d
     assert "defendants[Delta Example].dismissed" in log["reverted"]
@@ -409,7 +448,7 @@ def test_an_event_the_guard_put_back_leaves_the_stored_status() -> None:
 def test_a_full_read_replaces_a_stored_status(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path)
     prior = _stored_matter(_stored(vocab.SERVED_NO_ANSWER))
-    fresh = answers.to_state(ctx, good_result(_nums(ctx)), list(vocab.GROUPS), TODAY)
+    fresh = answers.to_state(ctx, good_result(_nums(ctx)), list(vocab.GROUPS), TODAY, True)
     d = read.merge(prior, fresh, list(vocab.GROUPS))["defendants"][0]
     assert d["status"] == vocab.ANSWERED and d["status_from"] == vocab.FROM_DERIVED and "stored_status" not in d
 
@@ -429,7 +468,7 @@ def test_the_run_prints_a_stored_list_unchanged_and_delivers(tmp_path: Path) -> 
     """The first run of this code on a seat, with nothing new on a matter: no
     read, no new key, the status as it printed."""
     seat = LitSeat({M1: matter_docs()})
-    assert _run(tmp_path, ScriptedLit(), seat).run().verdict == "delivered"
+    assert _run(tmp_path, ScriptedLit(result_fn=good_result), seat).run().verdict == "delivered"
     path = tmp_path / "state" / "matters" / f"{M1}.json"
     stored = json.loads(path.read_text())
     for k in ("status_from", "stored_status"):
@@ -437,7 +476,7 @@ def test_the_run_prints_a_stored_list_unchanged_and_delivers(tmp_path: Path) -> 
     stored["defendants"][0]["status"] = vocab.D_SETTLED  # asserted, no dated field
     stored.pop("court_dates_read", None)
     path.write_text(json.dumps(stored))
-    v = _run(tmp_path, ScriptedLit(), seat, job="j2", job_id="01KTJ0BX0000000000000000BB").run()
+    v = _run(tmp_path, ScriptedLit(result_fn=good_result), seat, job="j2", job_id="01KTJ0BX0000000000000000BB").run()
     assert v.verdict == "delivered", v.reason
     assert v.matters_reread == 0
     d = json.loads(path.read_text())["defendants"][0]
@@ -448,11 +487,11 @@ def test_the_final_values_follow_a_carried_event_and_the_calendar(tmp_path: Path
     """What the gates and the list read (``LitigationRun.final``): the status
     after the carry, and the next court date on this run's today."""
     seat = LitSeat({M1: matter_docs()})
-    first = _run(tmp_path, ScriptedLit(), seat)
+    first = _run(tmp_path, ScriptedLit(result_fn=good_result), seat)
     assert first.run().verdict == "delivered"
     read3 = json.loads(first._mfile(M1, "read3.json").read_text())["result"]
     # A second job, so the papers are not new since the last list.
-    r = _run(tmp_path, ScriptedLit(), seat, job="j2", job_id="01KTJ0BX0000000000000000BB")
+    r = _run(tmp_path, ScriptedLit(result_fn=good_result), seat, job="j2", job_id="01KTJ0BX0000000000000000BB")
     assert r.run().verdict == "delivered"
     d = read3["defendants"][0]
     d["answered"] = {"date": None, "source": None}  # this read left it out; its document has not changed
@@ -472,7 +511,7 @@ def test_the_final_values_follow_a_carried_event_and_the_calendar(tmp_path: Path
 # ---- update mode: changes only -------------------------------------------------------------------
 def test_an_update_read_returns_changes_and_code_keeps_the_rest(tmp_path: Path) -> None:
     seat = LitSeat({M1: matter_docs()})
-    assert _run(tmp_path, ScriptedLit(), seat).run().verdict == "delivered"
+    assert _run(tmp_path, ScriptedLit(result_fn=good_result), seat).run().verdict == "delivered"
     first = json.loads((tmp_path / "state" / "matters" / f"{M1}.json").read_text())
     _arrive(seat, "f-d1", "POS dismissal Delta.pdf", "REQUEST FOR DISMISSAL entered 09/29/2026")
 
@@ -481,7 +520,11 @@ def test_an_update_read_returns_changes_and_code_keeps_the_rest(tmp_path: Path) 
         return {"defendants": [{"name": "Delta Example", "dismissed": {"date": "2026-09-29", "doc": 1}}]}
 
     v = _run(
-        tmp_path, ScriptedLit(update_fn=only_the_change), seat, job="j2", job_id="01KTJ0BX0000000000000000BB"
+        tmp_path,
+        ScriptedLit(result_fn=good_result, update_fn=only_the_change),
+        seat,
+        job="j2",
+        job_id="01KTJ0BX0000000000000000BB",
     ).run()
     assert v.verdict == "delivered", v.reason
     now = json.loads((tmp_path / "state" / "matters" / f"{M1}.json").read_text())
@@ -560,6 +603,7 @@ def test_a_court_date_no_arrived_paper_carries_puts_its_list_back(tmp_path: Path
         ["f-p1"],
         {"f-p1": "CMC on 10/20/2026"},
         today=TODAY,
+        enforcing=True,
     )
     assert out["next_court_date"]["date"] == "2026-10-20" and "next_court_date" in log["changed"]
 
@@ -569,21 +613,26 @@ def test_a_role_or_out_for_service_stands_only_on_an_arrived_document() -> None:
     fresh = copy.deepcopy(prior)
     fresh["defendants"][0]["role"] = {"value": vocab.ROLE_UIM, "source": _src("old-pos")}
     fresh["defendants"][0]["out_for_service"] = {"value": "yes", "source": _src("old-pos")}
-    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY)
+    out, log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY, enforcing=True)
     d = out["defendants"][0]
     assert "role" not in d and d["out_for_service"] == prior["defendants"][0]["out_for_service"]
     assert d["status"] == vocab.SERVED_NO_ANSWER and len(log["reverted"]) == 2
     fresh["defendants"][0]["role"] = {"value": vocab.ROLE_UIM, "source": _src("new")}
-    out, _log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY)
+    out, _log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": ""}, today=TODAY, enforcing=True)
     assert out["defendants"][0]["status"] == vocab.UIM
 
 
 def test_a_side_the_last_list_could_not_say_can_be_read_by_an_update() -> None:
     prior = {**_stored_matter(), "firm_role": vocab.UNCLEAR}
     fresh = {**copy.deepcopy(prior), "firm_role": "defense"}
-    assert update.guard(prior, fresh, [vocab.GROUP_CASE], [], {}, today=TODAY)[0]["firm_role"] == "defense"
+    assert (
+        update.guard(prior, fresh, [vocab.GROUP_CASE], [], {}, today=TODAY, enforcing=True)[0]["firm_role"] == "defense"
+    )
     fresh = {**copy.deepcopy(_stored_matter()), "firm_role": "defense"}
-    assert update.guard(_stored_matter(), fresh, [vocab.GROUP_CASE], [], {}, today=TODAY)[0]["firm_role"] == "plaintiff"
+    assert (
+        update.guard(_stored_matter(), fresh, [vocab.GROUP_CASE], [], {}, today=TODAY, enforcing=True)[0]["firm_role"]
+        == "plaintiff"
+    )
 
 
 def test_a_new_paper_clears_the_last_lists_unclear_but_not_this_runs() -> None:
@@ -591,12 +640,16 @@ def test_a_new_paper_clears_the_last_lists_unclear_but_not_this_runs() -> None:
     prior = _stored_matter(old)
     fresh = copy.deepcopy(prior)
     fresh["defendants"][0]["answered"] = {"date": "2026-09-30", "source": _src("new")}
-    out, _log = update.guard(prior, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY)
+    out, _log = update.guard(
+        prior, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY, enforcing=True
+    )
     assert out["defendants"][0]["status"] == vocab.ANSWERED and "status_unclear" not in out["defendants"][0]
     # A check on this run marks it after an event arrived: the guard runs again and keeps the mark.
     fresh["defendants"][0]["status_unclear"] = "the new answer names someone else"
     prior2 = _stored_matter(_stored(vocab.SERVED_NO_ANSWER))
-    out, _log = update.guard(prior2, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY)
+    out, _log = update.guard(
+        prior2, fresh, list(vocab.GROUPS), ["new"], {"new": "filed 09/30/2026"}, today=TODAY, enforcing=True
+    )
     assert out["defendants"][0]["status"] == vocab.D_UNCLEAR
 
 

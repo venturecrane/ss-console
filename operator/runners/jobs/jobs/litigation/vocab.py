@@ -68,6 +68,10 @@ DEFENDANT_EVENTS = (
     "default_entered",
     "default_set_aside",
 )
+#: The events the stored shape had no field for until the derivation. While the
+#: seat's switch is ``observe`` a read's answers for these (and a role) ride apart
+#: from the list's values, in ``shadow`` on the defendant (``statusshadow``).
+SHADOW_EVENTS = tuple(f for f in DEFENDANT_EVENTS if f not in ("served", "answered", "sent_for_service"))
 #: A party's standing in the case, which no dated event carries.
 ROLE_UIM = "uim_respondent"
 ROLE_FIRM_CLIENT = "firm_client"

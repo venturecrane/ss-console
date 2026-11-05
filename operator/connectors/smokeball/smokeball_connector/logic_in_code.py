@@ -6,6 +6,7 @@ customer.yaml on every call (ADR 0104).
       post_record_derivation: observe # or enforce
       conflict_fence: observe         # or enforce
       fixed_wording: observe          # or enforce
+      status_from_events: observe     # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -26,7 +27,9 @@ config applier treats the block as rebuild-class, so a change arrives with a
 release, behind the busy gate, never as a live edit.
 
 ONE FILE, THREE COPIES. The connector, the overlay and the broker run in separate
-virtualenvs, and none of them imports another. So this module imports nothing
+virtualenvs, and none of them imports another. (The jobs runner reads the
+connector's copy: its venv carries that package, and the bundle ships the two
+together.) So this module imports nothing
 but the standard library and PyYAML (which all three already carry) and it lives
 byte for byte in three places:
 
@@ -53,7 +56,14 @@ PRINTED_SOURCE_CHECK = "printed_source_check"
 POST_RECORD_DERIVATION = "post_record_derivation"
 CONFLICT_FENCE = "conflict_fence"
 FIXED_WORDING = "fixed_wording"
-KEYS = (PRINTED_SOURCE_CHECK, POST_RECORD_DERIVATION, CONFLICT_FENCE, FIXED_WORDING)
+STATUS_FROM_EVENTS = "status_from_events"
+KEYS = (
+    PRINTED_SOURCE_CHECK,
+    POST_RECORD_DERIVATION,
+    CONFLICT_FENCE,
+    FIXED_WORDING,
+    STATUS_FROM_EVENTS,
+)
 
 #: The same file by either name: the entrypoint exports both, the gateway and
 #: its children read the first, the broker's clean environment carries the
@@ -137,6 +147,7 @@ __all__ = [
     "PATH_ENVS",
     "POST_RECORD_DERIVATION",
     "PRINTED_SOURCE_CHECK",
+    "STATUS_FROM_EVENTS",
     "Switch",
     "live_path",
     "load_switch",

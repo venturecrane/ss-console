@@ -166,6 +166,18 @@ def screen(r: Any, texts_of: Any) -> None:
     dump(r.data / "plan.json", out)
 
 
+#: The read's instruction while the seat's switch observes: the values as they
+#: stand, and the dated events only as an arrived document gives them.
+TAIL_OBSERVE = (
+    "\n\nTHIS IS AN UPDATE. The list already holds the CURRENT VALUES below, each checked earlier against the file. "
+    "New documents have arrived; they are the files listed. Report the field groups as they stand AFTER these "
+    "documents: copy every current value exactly (same date, same doc) unless an arrived document changes it, and "
+    "cite the arrived document for any value you change or add. Do not re-derive values the arrived documents do not "
+    "touch, and do not drop a defendant or a discovery set. Report a dated event or a role only if an arrived document "
+    "gives it. Then call record_result."
+)
+
+
 # ---- the overlay: the read's changes laid over the current values -------------------------
 def _overlay_defendant(ctx: Any, old: dict[str, Any], raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
     """``old`` with each value ``raw`` names replaced. A date the read did not
@@ -331,7 +343,13 @@ def _guard_standing(d: dict[str, Any], old: dict[str, Any], trigger: set[str], l
 
 
 def _guard_defendants(
-    prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict, today: dt.date
+    prior: dict[str, Any],
+    out: dict[str, Any],
+    trigger: set[str],
+    texts: dict[str, str],
+    log: dict,
+    today: dt.date,
+    enforcing: bool,
 ) -> None:
     before = {parity.party_key(str(d.get("name") or "")): d for d in prior.get("defendants") or []}
     kept: list[dict[str, Any]] = []
@@ -368,8 +386,9 @@ def _guard_defendants(
                 # there is not "Not in file", and leaving the key out does not
                 # unread one; the list keeps what it carried.
                 _restore(d, old, f)
-        _guard_standing(d, old, trigger, log)
-        defstatus.after_update(d, old, today)
+        if enforcing:
+            _guard_standing(d, old, trigger, log)
+            defstatus.after_update(d, old, today)
         if d.get("status") != old.get("status"):
             log["changed"].append(f"defendants[{d.get('name')}].status")  # always goes to the second read
         kept.append(d)
@@ -440,10 +459,11 @@ def guard(
     texts: dict[str, str],
     *,
     today: dt.date,
+    enforcing: bool = False,
 ) -> tuple[dict[str, Any], dict[str, list[str]]]:
     """``fresh`` (the update read merged over ``prior``) with every change
     that is not carried by an arrived document put back, and each defendant's
-    status worked out from what stood. Returns the result and
+    status worked out from what stood when the seat's switch enforces. Returns the result and
     ``{"changed": [...], "reverted": [...]}``."""
     out = copy.deepcopy(fresh)
     trig = set(trigger)
@@ -451,7 +471,7 @@ def guard(
     if vocab.GROUP_CASE in groups:
         _guard_case(prior, out, trig, texts, log)
     if vocab.GROUP_DEFENDANTS in groups:
-        _guard_defendants(prior, out, trig, texts, log, today)
+        _guard_defendants(prior, out, trig, texts, log, today, enforcing)
     if vocab.GROUP_DISCOVERY in groups:
         _guard_discovery(prior, out, trig, texts, log)
     return out, log

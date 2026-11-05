@@ -97,6 +97,7 @@ def read1(r: Any) -> None:
         ctx = r._ctx(mid)
         if p.get("mode") == update.MODE:
             prior = manifest.load_prior(r.state, mid) or {}
+            enforcing = r.events_enforced
             raw = read.read_raw(
                 r.doorway,
                 r.firm,
@@ -106,9 +107,14 @@ def read1(r: Any) -> None:
                 r._listing(ctx, mid),
                 r.today,
                 extra="\nCURRENT VALUES (on the list now):\n" + read.for_model(prior, ctx),
-                tail=update.TAIL,
+                tail=update.TAIL if enforcing else update.TAIL_OBSERVE,
+                enforcing=enforcing,
             )
-            res = update.overlay(ctx, prior, raw, p["read_groups"], r.today)
+            res = (
+                update.overlay(ctx, prior, raw, p["read_groups"], r.today)
+                if enforcing
+                else read.to_state(ctx, raw, p["read_groups"], r.today)
+            )
             merged, log = update.guard(
                 prior,
                 read.merge(prior, res, p["read_groups"]),
@@ -116,13 +122,16 @@ def read1(r: Any) -> None:
                 p["trigger_files"],
                 texts(r, mid),
                 today=r.today,
+                enforcing=enforcing,
             )
             dump(
                 r._mfile(mid, "read1.json"),
                 {"groups": p["read_groups"], "result": res, "guarded": merged, "update": log},
             )
             return
-        res = read.pass1(r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today)
+        res = read.pass1(
+            r.doorway, r.firm, ctx, r._header(m), p["read_groups"], r._listing(ctx, mid), r.today, r.events_enforced
+        )
         dump(r._mfile(mid, "read1.json"), {"groups": p["read_groups"], "result": res})
 
     _each(r, "read1", lambda p: bool(p["read_groups"]), one)
@@ -149,9 +158,10 @@ def read2(r: Any) -> None:
                 r.today,
                 update.check_scope(changed),
                 groups=p["read_groups"] or None,
+                enforcing=r.events_enforced,
             )
             missed: list[dict[str, Any]] = []
-            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed)
+            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed, r.events_enforced)
             merged, again = reguard(r, mid, p, merged)
             rec = {
                 "result": merged,
@@ -174,9 +184,10 @@ def read2(r: Any) -> None:
             r.today,
             "",
             groups=p["read_groups"] or None,
+            enforcing=r.events_enforced,
         )
         missed = []
-        log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed)
+        log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed, r.events_enforced)
         rec = {
             "result": merged,
             "overturns": log,
@@ -194,7 +205,9 @@ def reguard(r: Any, mid: str, p: dict[str, Any], result: dict[str, Any]) -> tupl
     (2026-10-09 replay: a verify that replaced a whole discovery list dropped
     thirteen older sets the arrived documents never mentioned)."""
     prior = manifest.load_prior(r.state, mid) or {}
-    return update.guard(prior, result, p["read_groups"], p["trigger_files"], texts(r, mid), today=r.today)
+    return update.guard(
+        prior, result, p["read_groups"], p["trigger_files"], texts(r, mid), today=r.today, enforcing=r.events_enforced
+    )
 
 
 def after_read2(r: Any, mid: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -264,9 +277,10 @@ def read3(r: Any) -> None:
             r.today,
             extra,
             groups=p["read_groups"] or None,
+            enforcing=r.events_enforced,
         )
         missed: list[dict[str, Any]] = []
-        log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit", r.today, missed)
+        log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit", r.today, missed, r.events_enforced)
         if p.get("mode") == update.MODE:
             result, _again = reguard(r, mid, p, result)
         reviewed = [

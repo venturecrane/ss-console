@@ -37,7 +37,20 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import answers, carry, defstatus, manifest, parity, passes, read, seedcheck, textcache, update, vocab
+from . import (
+    answers,
+    carry,
+    defstatus,
+    manifest,
+    parity,
+    passes,
+    read,
+    seedcheck,
+    statusshadow,
+    textcache,
+    update,
+    vocab,
+)
 from .progress import Progress
 from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported for tests and callers that import these from run
 from .runbase import RunBase
@@ -129,6 +142,7 @@ class LitigationRun(BookStages, RunBase):
         )
         self._seat_factory, self._seat = seat_factory, None
         self.today = self._frozen_today(today)
+        self.events_enforced = self._frozen_events_mode()
         self.readback_pause = readback_pause
         # Paid text is reused across jobs (``textcache.py``): read before
         # extract, written after; a held job keeps what it paid to read.
@@ -332,6 +346,8 @@ class LitigationRun(BookStages, RunBase):
         if result is None:
             return None
         result = copy.deepcopy(result)
+        for d in result.get("defendants") or []:
+            d.pop("shadow", None)  # the shadow record is never the list's (``statusshadow``)
         answers.repick_court(result, self.today)
         self._carry(mid, result)
         # Every derived status from the events as they now stand. A stored
@@ -390,6 +406,8 @@ class LitigationRun(BookStages, RunBase):
             g["issues"]["matter could not be read"] = [(u["number"], u["stage"], u["reason"][:120]) for u in unread]
             g["passed"] = False
         dump(self.data / "gates.json", g)
+        if not self.events_enforced:
+            statusshadow.record(self, ms, g, files, saved, hits, disc)
         if not g["passed"]:
             raise LitigationHold(
                 "gate_refused: the gates refused the list: "
@@ -463,6 +481,7 @@ class LitigationRun(BookStages, RunBase):
                 else set()
             )
             manifest.commit(self.state, mid, keep, files, hold=hold)
+        statusshadow.commit_events(self)
         self._put("flags_new", flags)
 
     def _walk(self) -> Verdict:

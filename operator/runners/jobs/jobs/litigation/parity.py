@@ -211,7 +211,7 @@ def _why_status(path: str, old: Any, old_obj: Any, cur: Any, cur_obj: Any, ctx: 
     if lifted and _src_id(cur_obj):
         return "a status worked out from a cited event, replacing one the last list stated without its event"
     moved = ctx["events"].get(path.rsplit(".", 1)[0])
-    if moved and all(moved):
+    if path in ctx["derived"] and moved and all(moved):
         return "it follows from the dated events that changed, each explained"
     return None
 

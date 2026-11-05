@@ -261,7 +261,13 @@ def _with_logic_in_code(block: str) -> str:
 
 @pytest.mark.parametrize(
     "switch",
-    ["printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording"],
+    [
+        "printed_source_check",
+        "post_record_derivation",
+        "conflict_fence",
+        "fixed_wording",
+        "status_from_events",
+    ],
 )
 @pytest.mark.parametrize("mode", ["observe", "enforce"])
 def test_validate_accepts_each_logic_in_code_switch(tmp_path, switch, mode):

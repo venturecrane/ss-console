@@ -78,6 +78,34 @@ def defendant(ctx: MatterContext, d: Any, today: dt.date) -> dict[str, Any]:
     return out
 
 
+def stated_defendant(ctx: MatterContext, d: Any) -> dict[str, Any]:
+    """One defendant while the seat's switch is ``observe``: the list's values
+    exactly as a stated status has always read, and the events under ``shadow``,
+    where no gate, parity check or print reaches them (``statusshadow``)."""
+    d = d if isinstance(d, dict) else {}
+    status = d.get("status") if d.get("status") in vocab.DEFENDANT_STATUSES else vocab.D_UNCLEAR
+    out: dict[str, Any] = {
+        "name": str(d.get("name") or "").strip(),
+        "status": status,
+        "out_for_service": val(ctx, d.get("out_for_service"), ("value",)),
+        "served": val(ctx, d.get("served"), ("date", "method")),
+        "answered": val(ctx, d.get("answered"), ("date",)),
+        **(
+            {"sent_for_service": val(ctx, d["sent_for_service"], ("date",))}
+            if isinstance(d.get("sent_for_service"), dict)
+            else {}
+        ),
+        "flags": [str(x) for x in d.get("flags") or []],
+    }
+    shadow = {
+        f: val(ctx, d[f], ("date",)) for f in vocab.SHADOW_EVENTS if isinstance(d.get(f), dict) and d[f].get("date")
+    }
+    shadow.update(_role(ctx, d.get("role")))
+    if shadow:
+        out["shadow"] = shadow
+    return out
+
+
 def discovery(ctx: MatterContext, rows: Any, theirs: bool) -> list[dict[str, Any]]:
     out = []
     for r in rows if isinstance(rows, list) else []:
@@ -125,6 +153,19 @@ def firm_role(raw: Any) -> str:
     return raw if raw in vocab.FIRM_ROLES else vocab.UNCLEAR
 
 
+def _stated_case_fields(ctx: MatterContext, raw: dict[str, Any]) -> dict[str, Any]:
+    """The case values while the seat's switch is ``observe``: as a read states them."""
+    return {
+        "case_name": raw.get("case_name"),
+        "court": raw.get("court"),
+        "case_number": raw.get("case_number"),
+        "firm_role": raw.get("firm_role") if raw.get("firm_role") in vocab.FIRM_ROLES else "plaintiff",
+        "case_status": case_status(ctx, raw.get("case_status")),
+        "complaint_filed": val(ctx, raw.get("complaint_filed"), ("date",)),
+        "next_court_date": val(ctx, raw.get("next_court_date"), ("date", "event")),
+    }
+
+
 def _case_fields(ctx: MatterContext, raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
     rows = court_rows(ctx, raw.get("court_dates"))
     return {
@@ -139,13 +180,20 @@ def _case_fields(ctx: MatterContext, raw: dict[str, Any], today: dt.date) -> dic
     }
 
 
-def to_state(ctx: MatterContext, raw: dict[str, Any], groups: list[str], today: dt.date) -> dict[str, Any]:
-    """The model's answer for ``groups`` in the state schema."""
+def to_state(
+    ctx: MatterContext, raw: dict[str, Any], groups: list[str], today: dt.date, enforcing: bool = False
+) -> dict[str, Any]:
+    """The model's answer for ``groups`` in the state schema: derived when the
+    seat's ``status_from_events`` switch enforces, as stated when it observes."""
     out: dict[str, Any] = {}
     if vocab.GROUP_CASE in groups:
-        out.update(_case_fields(ctx, raw, today))
+        out.update(_case_fields(ctx, raw, today) if enforcing else _stated_case_fields(ctx, raw))
     if vocab.GROUP_DEFENDANTS in groups:
-        out["defendants"] = [defendant(ctx, d, today) for d in raw.get("defendants") or [] if isinstance(d, dict)]
+        out["defendants"] = [
+            defendant(ctx, d, today) if enforcing else stated_defendant(ctx, d)
+            for d in raw.get("defendants") or []
+            if isinstance(d, dict)
+        ]
     if vocab.GROUP_DISCOVERY in groups:
         out["discovery_propounded"] = discovery(ctx, raw.get("discovery_propounded"), False)
         out["discovery_served_on_client"] = discovery(ctx, raw.get("discovery_served_on_client"), True)

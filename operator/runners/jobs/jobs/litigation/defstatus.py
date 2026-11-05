@@ -371,9 +371,9 @@ def rank(status: Any) -> int:
 
 
 def basis(d: dict[str, Any]) -> Any:
-    """The value a defendant's status rests on: the deciding event, else the
-    answer or service the defendant has a document for."""
-    field = decide(d, dt.date.max, stored_input(d)).field
+    """The value a defendant's status rests on: for a derived one the deciding
+    event; else the answer or service the defendant has a document for."""
+    field = decide(d, dt.date.max, d.get("stored_status")).field if not asserted(d) else None
     obj = d.get(field) if field else None
     if _cited(obj):
         return obj

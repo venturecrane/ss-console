@@ -26,6 +26,7 @@ describe('logic_in_code', () => {
       post_record_derivation: 'observe',
       conflict_fence: 'enforce',
       fixed_wording: 'observe',
+      status_from_events: 'enforce',
     })
     expect(errors).toEqual([])
     expect(parsed).toEqual({
@@ -33,6 +34,7 @@ describe('logic_in_code', () => {
       post_record_derivation: 'observe',
       conflict_fence: 'enforce',
       fixed_wording: 'observe',
+      status_from_events: 'enforce',
     })
   })
 

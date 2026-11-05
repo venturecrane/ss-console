@@ -88,7 +88,7 @@ def test_a_read_keeps_the_sent_date_only_when_it_answered_for_it(tmp_path):
     sent = res["defendants"][0]["sent_for_service"]
     assert sent["date"] == "2026-03-20" and sent["source"]["name"] == "POS Delta.pdf"
     raw = good_result(n)
-    raw["defendants"][0]["sent_for_service"] = []
+    raw["defendants"][0]["sent_for_service"] = {"date": None, "doc": None}
     assert read.to_state(ctx, raw, list(vocab.GROUPS), TODAY)["defendants"][0]["sent_for_service"] == {
         "date": None,
         "source": None,
@@ -117,7 +117,7 @@ def test_a_check_pass_may_correct_the_sent_date_and_the_prompt_asks_for_it(tmp_p
     )
     assert res["defendants"][0]["sent_for_service"]["date"] == "2026-03-19"
     assert [x["path"] for x in log] == ["defendants[Delta Example].sent_for_service"]
-    assert "sent_for_service" in read.PATHS
+    assert "defendants[<exact name>].sent_for_service" in read.PATHS_OBSERVE
     firm = SimpleNamespace(data={"form_hints": {}})
     for role in ("read", "verify", "audit"):
         text = read.system_for(role, firm, TODAY)
@@ -144,7 +144,7 @@ def test_verdicts_overturn_add_and_mark_unclear(tmp_path):
             {
                 "path": "defendants[+]",
                 "verdict": "overturned",
-                "corrected": {"name": "Zeta Example"},
+                "corrected": {"name": "Zeta Example", "status": vocab.NOT_SERVED},
                 "doc": n["f-c1"],
             },
             {"path": "case_status", "verdict": "unclear", "why": "a dismissal is referenced but not in the file"},
@@ -155,8 +155,7 @@ def test_verdicts_overturn_add_and_mark_unclear(tmp_path):
     )
     d = res["defendants"]
     assert d[0]["served"]["date"] == "2026-04-09" and d[0]["served"]["source"]["name"] == "POS Delta.pdf"
-    assert d[1]["name"] == "Zeta Example" and d[1]["status"] == vocab.NOT_SERVED
-    assert res["case_status"]["value"] == vocab.UNCLEAR
+    assert d[1]["name"] == "Zeta Example" and res["case_status"]["value"] == vocab.UNCLEAR
     assert [x["path"] for x in log] == ["defendants[Delta Example].served", "defendants[Zeta Example]", "case_status"]
 
 

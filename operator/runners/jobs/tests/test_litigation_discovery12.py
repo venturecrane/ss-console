@@ -714,13 +714,13 @@ def _src_stub(n, _d=None):
 )
 def test_not_yet_due_is_codes_answer(response, due, want):
     e = {"item": "RFAs, Set One", "direction": "other", "due": {"date": due, "doc": 1}, "response": response}
-    got = sections.to_result(_src_stub, {"sections": {"rfas": [e]}}, TODAY)
+    got = sections.to_result(_src_stub, {"sections": {"rfas": [e]}}, TODAY, enforcing=True)
     assert got["sections"]["rfas"][0]["response"]["value"] == want
 
 
 def test_no_read_is_offered_not_yet_due():
     assert sections.RESPONSES == ("yes", "no", "unclear")
-    assert "not yet due" not in sections.system_for("read", TODAY)
+    assert "not yet due" not in sections.system_for("read", TODAY, enforcing=True)
     enum = sections.ENTRY["properties"]["response"]["properties"]["value"]["enum"]
     assert enum == ["yes", "no", "unclear"]
 
@@ -734,7 +734,12 @@ def test_a_corrected_section_is_held_to_the_same_rule():
     }
     result = {"sections": {"rfas": []}, "flags": []}
     sections.apply_verdicts(
-        _src_stub, result, [{"section": "rfas", "verdict": "overturned", "corrected": [e]}], "verify", TODAY
+        _src_stub,
+        result,
+        [{"section": "rfas", "verdict": "overturned", "corrected": [e]}],
+        "verify",
+        TODAY,
+        enforcing=True,
     )
     assert result["sections"]["rfas"][0]["response"]["value"] == "not yet due"
 

@@ -212,16 +212,17 @@ def good_result(n: dict[str, int]) -> dict[str, Any]:
         "firm_role": "plaintiff",
         "case_status": {"value": vocab.ACTIVE, "detail": "no dismissal in the file", "doc": n["f-c1"]},
         "complaint_filed": {"date": "2026-03-02", "doc": n["f-c1"], "doc_date": "2026-03-02"},
-        "court_dates": [],
+        "next_court_date": {"date": None, "event": "", "doc": None},
         "defendants": [
             {
                 "name": "Delta Example",
+                "status": vocab.ANSWERED,
                 "out_for_service": {"value": "no", "doc": None},
                 "served": {"date": "2026-04-10", "method": "personal", "doc": n["f-p1"]},
                 "answered": {"date": "2026-04-30", "doc": n["f-a1"]},
                 # The papers went to the process server before service (2026-10-24).
                 # Cited to the POS, which records when the server received them.
-                "sent_for_service": [{"date": "2026-03-20", "doc": n["f-p1"]}],
+                "sent_for_service": {"date": "2026-03-20", "doc": n["f-p1"]},
                 "flags": [],
             }
         ],

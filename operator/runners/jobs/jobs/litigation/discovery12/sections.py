@@ -34,6 +34,8 @@ DIRECTIONS = ("propounded by the firm", "served on the firm's client", "other")
 #: What a read reports. "not yet due" is code's (``_response``), never a read's.
 RESPONSES = ("yes", "no", "unclear")
 NOT_YET_DUE = "not yet due"
+#: What a read may report while the seat's switch observes: as it always could.
+RESPONSES_OBSERVE = (*RESPONSES, NOT_YET_DUE)
 NONE_IN_FILE = "None in file"
 #: The dated fields of one entry, in print order.
 DATED = ("served", "due", "response", "extension")
@@ -132,12 +134,38 @@ TAILS = {
 }
 
 
-def system_for(role: str, today: dt.date) -> str:
+def _entry_observe() -> dict[str, Any]:
+    e = copy.deepcopy(ENTRY)
+    e["properties"]["response"]["properties"]["value"]["enum"] = list(RESPONSES_OBSERVE)
+    return e
+
+
+RECORD_RESULT_OBSERVE = {
+    **RECORD_RESULT,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "sections": {
+                "type": "object",
+                "properties": {k: {"type": "array", "items": _entry_observe()} for k in KEYS},
+            },
+            "flags": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["sections"],
+    },
+}
+RECORD_VERDICTS_OBSERVE = copy.deepcopy(RECORD_VERDICTS)
+RECORD_VERDICTS_OBSERVE["input_schema"]["properties"]["verdicts"]["items"]["properties"]["corrected"]["items"] = (
+    _entry_observe()
+)
+
+
+def system_for(role: str, today: dt.date, enforcing: bool = False) -> str:
     return (
         RULES.format(
             sections="; ".join(f"{k} ({v})" for k, v in SECTIONS),
             directions="; ".join(f'"{d}"' for d in DIRECTIONS),
-            responses="; ".join(f'"{r}"' for r in RESPONSES),
+            responses="; ".join(f'"{r}"' for r in (RESPONSES if enforcing else RESPONSES_OBSERVE)),
             today=today.isoformat(),
         )
         + TAILS[role]
@@ -164,12 +192,15 @@ def _response(resp: dict[str, Any], due: dict[str, Any], today: dt.date) -> str:
         return value
 
 
-def entry(src: Callable[[Any, Any], Any], e: Any, today: dt.date) -> dict[str, Any] | None:
+def entry(src: Callable[[Any, Any], Any], e: Any, today: dt.date, enforcing: bool = False) -> dict[str, Any] | None:
     if not isinstance(e, dict) or not str(e.get("item") or "").strip():
         return None
     due = _dated(src, e.get("due"))
     resp = _dated(src, e.get("response"), ("value",))
-    resp["value"] = _response(resp, due, today)
+    if enforcing:
+        resp["value"] = _response(resp, due, today)
+    elif resp.get("value") not in RESPONSES_OBSERVE:
+        resp["value"] = "unclear"
     return {
         "item": str(e["item"]).strip(),
         "direction": e.get("direction") if e.get("direction") in DIRECTIONS else "other",
@@ -182,21 +213,31 @@ def entry(src: Callable[[Any, Any], Any], e: Any, today: dt.date) -> dict[str, A
     }
 
 
-def section_list(src: Callable[[Any, Any], Any], rows: Any, today: dt.date) -> list[dict[str, Any]]:
-    return [x for x in (entry(src, e, today) for e in (rows if isinstance(rows, list) else [])) if x is not None]
+def section_list(
+    src: Callable[[Any, Any], Any], rows: Any, today: dt.date, enforcing: bool = False
+) -> list[dict[str, Any]]:
+    got = (entry(src, e, today, enforcing) for e in (rows if isinstance(rows, list) else []))
+    return [x for x in got if x is not None]
 
 
-def to_result(src: Callable[[Any, Any], Any], raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
+def to_result(
+    src: Callable[[Any, Any], Any], raw: dict[str, Any], today: dt.date, enforcing: bool = False
+) -> dict[str, Any]:
     got = raw.get("sections")
     secs: dict[str, Any] = got if isinstance(got, dict) else {}
     return {
-        "sections": {k: section_list(src, secs.get(k), today) for k in KEYS},
+        "sections": {k: section_list(src, secs.get(k), today, enforcing) for k in KEYS},
         "flags": [str(x) for x in raw.get("flags") or []],
     }
 
 
 def apply_verdicts(
-    src: Callable[[Any, Any], Any], result: dict[str, Any], verdicts: Any, pass_name: str, today: dt.date
+    src: Callable[[Any, Any], Any],
+    result: dict[str, Any],
+    verdicts: Any,
+    pass_name: str,
+    today: dt.date,
+    enforcing: bool = False,
 ) -> list[dict[str, Any]]:
     """An overturn replaces its section whole; an unclear one becomes a flag.
     Returns the overturn log."""
@@ -208,7 +249,7 @@ def apply_verdicts(
         if v.get("verdict") == "unclear":
             result.setdefault("flags", []).append(f"Unclear ({LABEL[key]}): {v.get('why') or 'see the file'}")
         elif v.get("verdict") == "overturned" and isinstance(v.get("corrected"), list):
-            new = section_list(src, v["corrected"], today)
+            new = section_list(src, v["corrected"], today, enforcing)
             old = copy.deepcopy(result["sections"].get(key) or [])
             if new != old:
                 result["sections"][key] = new
