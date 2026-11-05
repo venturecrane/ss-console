@@ -164,6 +164,12 @@ release-tick.yml`) the moment its candidate is published, and
    (`artifact_tick.newer_image_since`, `run_promoting` `yield_when`); when one
    has, the step ends with progress and the run it starts takes that image
    from ring 0. Skills and bundles follow it on that run's later steps.
+   The same night showed the hand-off's blind spot: a run's checkout is
+   cloned when it starts, and `_built_from_main` asked that clone, so an
+   image whose commit merged after the start was never "latest" to it (run
+   41985907116, 07:15 to 08:03Z, rolled `6db0f014` through every ring while
+   `b26226a4`, merged 07:26Z, waited). The refresh now fetches
+   `origin/main` before it judges (`artifact_tick.refreshed`).
 
    **Amended 2026-11-05: client rings roll in waves.** Designed for 10 to 20
    paying seats: ring 0 is staging and the last ring is SMD's own seats, one at

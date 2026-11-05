@@ -533,15 +533,55 @@ class AncestorRunner:
     def __init__(self, on_main: set[str], elsewhere: set[str] | None = None) -> None:
         self.on_main = on_main
         self.present = on_main | (elsewhere or set())
+        # Commits merged to origin/main after the clone: they arrive on `git fetch`.
+        self.lands_on_fetch: set[str] = set()
+        self.fetches = 0
+        self.fetch_rc = 0
 
     def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
         assert argv[:2] == ["git", "-C"]
+        if "fetch" in argv:
+            assert argv[-1] == f"+refs/heads/main:{cli.MAIN_REF}", "the fetch must move origin/main itself"
+            self.fetches += 1
+            if self.fetch_rc == 0:
+                self.on_main |= self.lands_on_fetch
+                self.present |= self.lands_on_fetch
+            return Result(self.fetch_rc, "", "")
         if "cat-file" in argv:
             return Result(0 if argv[-1].split("^")[0] in self.present else 128, "", "")
         assert "--is-ancestor" in argv
         assert argv[-1] == cli.MAIN_REF, "main is origin/main, never the checkout's HEAD"
         sha = argv[-2]
         return Result(0 if sha in self.on_main else 1 if sha in self.present else 128, "", "")
+
+
+def test_the_mid_run_hand_off_sees_an_image_merged_after_the_run_started() -> None:
+    """2026-11-05: run 41985907116 (checked out 07:15Z) rolled 6db0f014 through every ring until
+    08:03Z while b26226a4, merged 07:26Z with its image recorded 07:34Z, waited: the refresh asked a
+    clone that had never seen that commit, so it was never "built from main". The refresh now fetches
+    origin/main first. FALSIFIER: drop the fetch and the newer image stays invisible mid-run."""
+    w = World()
+    newer = dict(w.rel, release_id="img-202610230900-22222222", ss_console_sha="2" * 40,
+                 created_at="2026-10-23T09:00:00Z")  # fmt: skip
+    w.store.releases = {newer["release_id"]: newer, **w.store.releases}  # newest first
+    runner = AncestorRunner({w.rel["ss_console_sha"]})
+    runner.lands_on_fetch = {"2" * 40}
+    logs: list[str] = []
+    ctx = cli.Ctx(cli.REPO, runner, w.store, w.r2, w.fly, log=logs.append)  # type: ignore[arg-type]
+
+    def in_flight() -> list[dict]:
+        return cli._in_flight(ctx, cli._image_release(ctx, "latest"))
+
+    # The clone as checked out: the newer commit is unknown, so the older image is "latest".
+    assert in_flight()[0]["release_id"] == w.rel["release_id"]
+    # A fetch that fails is logged and the stale answer stands.
+    runner.fetch_rc = 128
+    assert cli.refreshed(ctx, in_flight)[0]["release_id"] == w.rel["release_id"]
+    assert any("fetch origin main failed" in line for line in logs)
+    # The hand-off question fetches first and sees it.
+    runner.fetch_rc = 0
+    assert cli.refreshed(ctx, in_flight)[0]["release_id"] == newer["release_id"]
+    assert runner.fetches == 2
 
 
 def test_cli_tick_refuses_an_image_without_the_selftest() -> None:
