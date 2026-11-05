@@ -273,15 +273,16 @@ def check_docx(
     met; every key it can carry is read here, so none is met on trust."""
     import docx
 
-    from . import layout as lay
+    from .. import briefpage
+    from . import filed, layout as lay
 
     d, out = docx.Document(str(path)), []
-    names = [(p, p.style.name if p.style is not None else "") for p in d.paragraphs]
-    first = next((i for i, (p, _n) in enumerate(names) if lay.heading_level(p)), len(names))
-    # The body is what follows the first heading: the front matter (court
-    # lines, title) above it keeps the caption's own spacing by design.
-    body = [p for p, n in names[first:] if n.startswith("SMD Body") and p.text.strip()]
-    heads = [p for p, _n in names if lay.heading_level(p) and p.text.strip()]
+    # The body is what follows the first heading, by role (the firm's style
+    # names or SMD's): the front matter above it keeps the caption's own
+    # spacing by design, and the signature lines are briefpage's.
+    held = {id(p._p) for p in briefpage.signature_lines(d)}
+    body = [p for p in filed.body_paragraphs(d) if id(p._p) not in held]
+    heads = [p for p in d.paragraphs if lay.heading_level(p) and p.text.strip()]
     for paras, what, exact_key, multiple_key in (
         (body, "body paragraph(s)", "line_spacing_pt", "line_spacing"),
         (heads, "heading(s)", "heading_line_spacing_pt", "heading_line_spacing"),

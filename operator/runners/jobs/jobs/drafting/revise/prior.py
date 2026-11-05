@@ -80,33 +80,38 @@ def _runs_md(p: Any) -> str:
     return "".join(parts)
 
 
+def block_md(kind: str, b: Any) -> str | None:
+    """One body element as a markdown block, or None when it reads as nothing."""
+    if kind == "t":
+        rows = [[" ".join(c.text.split()) for c in row.cells] for row in b.rows]
+        if not rows:
+            return None
+        lines = ["| " + " | ".join(r) + " |" for r in rows]
+        head_bold = all(s[1] for c in b.rows[0].cells for p in c.paragraphs for s in _segments(p))
+        if head_bold and len(lines) > 1:
+            lines.insert(1, "| " + " | ".join("---" for _ in rows[0]) + " |")
+        return "\n".join(lines)
+    if not b.text.strip():
+        return None
+    style = b.style.name if b.style is not None else ""
+    level = layout.heading_level(b)
+    if level:
+        return "#" * min(level, 6) + " " + " ".join(b.text.split())
+    if style == "List Bullet":
+        return "- " + _runs_md(b).strip()
+    return _runs_md(b).strip()
+
+
+def docx_to_md_doc(d: Any) -> str:
+    out = [md for kind, b in _blocks(d) for md in [block_md(kind, b)] if md is not None]
+    return "\n\n".join(out) + "\n"
+
+
 def docx_to_md(path: Path) -> str:
     """The drafting renderer's markdown subset, read back off a Word file."""
     import docx
 
-    d, out = docx.Document(str(path)), []
-    for kind, b in _blocks(d):
-        if kind == "t":
-            rows = [[" ".join(c.text.split()) for c in row.cells] for row in b.rows]
-            if not rows:
-                continue
-            lines = ["| " + " | ".join(r) + " |" for r in rows]
-            head_bold = all(s[1] for c in b.rows[0].cells for p in c.paragraphs for s in _segments(p))
-            if head_bold and len(lines) > 1:
-                lines.insert(1, "| " + " | ".join("---" for _ in rows[0]) + " |")
-            out.append("\n".join(lines))
-            continue
-        if not b.text.strip():
-            continue
-        style = b.style.name if b.style is not None else ""
-        level = layout.heading_level(b)
-        if level:
-            out.append("#" * min(level, 6) + " " + " ".join(b.text.split()))
-        elif style == "List Bullet":
-            out.append("- " + _runs_md(b).strip())
-        else:
-            out.append(_runs_md(b).strip())
-    return "\n\n".join(out) + "\n"
+    return docx_to_md_doc(docx.Document(str(path)))
 
 
 def printed(path: Path) -> list[tuple[str, tuple[tuple[str, bool, bool], ...]]]:

@@ -83,6 +83,53 @@ def firm_styled(path: Path) -> Path:
     return path
 
 
+NAVY = "1F3864"
+
+
+def accepted_chart(path: Path) -> Path:
+    """The damages chart as the attorney accepted it: a navy header in white
+    text, columns 2:1:1 (not equal), cell margins, the amount columns
+    right-aligned, and no keep-with-next on its rows."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import parse_xml
+    from docx.shared import RGBColor
+
+    from jobs.drafting.revise import charts
+
+    d = docx.Document(str(path))
+    t = d.tables[1]
+    widths = [4320, 2160, 2160]
+    grid = t._tbl.find(qn("w:tblGrid"))
+    for col, w in zip(grid, widths):
+        col.set(qn("w:w"), str(w))
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    charts.put(
+        t._tbl.tblPr,
+        "tblCellMar",
+        parse_xml(
+            f'<w:tblCellMar {ns}><w:left w:w="144" w:type="dxa"/><w:right w:w="144" w:type="dxa"/></w:tblCellMar>'
+        ),
+        charts.TBLPR,
+    )
+    for r_i, row in enumerate(t.rows):
+        for c_i, c in enumerate(row.cells):
+            pr = c._tc.get_or_add_tcPr()
+            charts.put(pr, "tcW", parse_xml(f'<w:tcW {ns} w:w="{widths[c_i]}" w:type="dxa"/>'), charts.TCPR)
+            if r_i == 0:
+                charts.put(
+                    pr, "shd", parse_xml(f'<w:shd {ns} w:val="clear" w:color="auto" w:fill="{NAVY}"/>'), charts.TCPR
+                )
+            for p in c.paragraphs:
+                p.paragraph_format.keep_with_next = False
+                if c_i > 0:
+                    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                for r in p.runs:
+                    if r_i == 0:
+                        r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+    d.save(str(path))
+    return path
+
+
 def _heads(path: Path) -> list[tuple[int, str]]:
     return _lay().read(path)["headings"]
 
@@ -206,7 +253,7 @@ def test_the_estimate_counts_every_section_a_document_wide_edit_makes() -> None:
 
 
 # ---- the whole job: the filed layout survives a revision --------------------------------------
-def _run(tmp_path: Path, filed: bytes, key: dict, request: str = REQUEST):
+def _run(tmp_path: Path, filed: bytes, key: dict, request: str = REQUEST, edits: dict | None = None):
     from demand_testkit import MATTER
     from drafting_testkit import envelope
     from jobs_testkit import PRICING
@@ -241,7 +288,7 @@ def _run(tmp_path: Path, filed: bytes, key: dict, request: str = REQUEST):
         inputs_dir=str(tmp_path / "inputs"),
         pricing=str(tmp_path / "pricing.json"),
         seat_factory=lambda: seat,
-        client=RunClient(scripted_edit(), scripted_read(), key),
+        client=RunClient(scripted_edit(edits), scripted_read(), key),
         log=lambda m: None,
     )
     return run.run(), seat, jd
@@ -257,7 +304,7 @@ def test_a_revision_keeps_the_filed_paper_chart_look_and_filled_sections(tmp_pat
     """FALSIFIER (D5, D6): the revision is rendered from the firm's config
     alone, so pleading paper and the accepted chart look are dropped and the
     attorney's case-value text gets a marker back."""
-    filed = firm_styled(_render(FILLED, tmp_path / "filed.docx", fmt, "pleading", **CHART_LOOK))
+    filed = accepted_chart(firm_styled(_render(FILLED, tmp_path / "filed.docx", fmt, "pleading", **CHART_LOOK)))
     key = {"items": [i for i in KEY["items"] if i["kind"] != "formatting"]}
     v, seat, jd = _run(tmp_path, filed.read_bytes(), key)
     assert v.outcome == "delivered", (v.stage, v.reason)
@@ -265,8 +312,13 @@ def test_a_revision_keeps_the_filed_paper_chart_look_and_filled_sections(tmp_pat
     out.write_bytes(seat.files["draft-0001"][-1])
     got = _lay().read(out)
     assert got["paper"] == "pleading"
-    assert _header_fill(out, 1) == "D9E2F3" == _header_fill(filed, 1)
-    assert got["tables"][1][0] == _lay().read(filed)["tables"][1][0]  # the box and inner rules
+    assert _header_fill(out, 1) == NAVY == _header_fill(filed, 1)
+    # N3: the whole accepted look, not just the fill: rules, widths, margins,
+    # alignment, keep-with-next and the header's white text.
+    assert got["tables"] == _lay().read(filed)["tables"]
+    # N4: the firm's style names, not SMD's.
+    names = {p.style.name for p in docx.Document(str(out)).paragraphs if p.text.strip()}
+    assert {"Brief Heading", "Brief Body"} <= names and not {n for n in names if n.startswith("SMD Heading")}
     assert len(got["headings"]) >= len(_heads(filed))
     text = "\n".join(p.text for p in docx.Document(str(out)).paragraphs)
     assert "$250,000.00 to $300,000.00" in text and "{{ATTORNEY" not in text
@@ -301,5 +353,139 @@ def test_a_heading_space_ask_on_pleading_paper_never_delivers_without_its_headin
         assert b"txbxContent" in headers, "delivered off its pleading paper"
     else:
         # The base proved (headings and paper read); the ask is what code refused.
-        assert v.stage == "revise-render" and "formatting" in str(v.reason), v.reason
+        assert v.stage == "revise-render", v.reason  # off the pleading pitch, or the ask unmet: a stop
         assert seat.sent == [], "a refused revision filed something"
+
+
+# ---- the second rehearsal: N1..N6 ---------------------------------------------------------------
+def test_n1_a_caption_rule_ask_is_laid_and_not_copied_back(tmp_path, fmt) -> None:
+    """FALSIFIER (N1): the caption table was carried and compared like a chart,
+    so an ask to end the caption's rule at its vertical line was laid, then the
+    filed whole-width rule was copied back: the format check refused it and the
+    tables facet refused the change."""
+    from jobs.drafting import briefpage
+
+    filed = _render(FULL, tmp_path / "filed.docx", fmt, caption_rule_below=True, signature_date_beside=True)
+    req = "Please end the solid line under the caption at the vertical line."
+    key = {
+        "items": [
+            {
+                "id": "c1",
+                "quote": "end the solid line under the caption at the vertical line",
+                "kind": "formatting",
+                "target": "document",
+                "params": {"layout": {"caption_rule_below": "left"}},
+            }
+        ]
+    }
+    v, seat, _jd = _run(tmp_path, filed.read_bytes(), key, req)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    d = docx.Document(io.BytesIO(seat.files["draft-0001"][-1]))
+    assert briefpage._check_rule(briefpage._caption_table(d), "left") == []
+
+
+def test_n2_the_revise_stops_are_known_reason_codes() -> None:
+    """FALSIFIER (N2): an unlisted code records as "unexpected"."""
+    from jobs.drafting.outcome import REASON
+
+    assert REASON.match("revise_layout_lost: x") and REASON.match("revise_unchanged: x")
+
+
+def test_n3_a_chart_that_loses_its_widths_colour_or_alignment_does_not_prove(tmp_path, fmt) -> None:
+    """FALSIFIER (N3): a chart compared on fill and borders alone reads the
+    same with equal columns, black header text and left-aligned amounts."""
+    filed = accepted_chart(_render(BRIEF, tmp_path / "filed.docx", fmt))
+    diffs = prior.prove(BRIEF, filed, _plain_render(fmt), tmp_path)
+    assert any(d.startswith("tables") for d in diffs), diffs
+
+
+def _inplace() -> Any:
+    from jobs.drafting.revise import inplace
+
+    return inplace
+
+
+def test_n5_a_border_ask_writes_tblborders_in_schema_order(tmp_path, fmt) -> None:
+    """FALSIFIER (N5): a tblBorders appended after tblLook is out of the
+    CT_TblPr sequence (Word repairs or refuses the file)."""
+    filed = _render(BRIEF, tmp_path / "filed.docx", fmt)
+    d = docx.Document(str(filed))
+    for t in d.tables:  # a chart as some firms keep it: no borders of its own, a tblLook
+        for b in t._tbl.tblPr.findall(qn("w:tblBorders")):
+            t._tbl.tblPr.remove(b)
+    d.save(str(filed))
+    ed = _inplace().open_filed(filed)
+    _inplace().edit_layout(ed, {"table_border_pt": 1})
+    out = tmp_path / "out.docx"
+    _inplace().save(ed, out)
+    order = ("tblStyle", "tblW", "jc", "tblInd", "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook")
+    for t in docx.Document(str(out)).tables[1:]:
+        tags = [c.tag.rsplit("}", 1)[-1] for c in t._tbl.tblPr]
+        seen = [x for x in tags if x in order]
+        assert "tblBorders" in seen and seen == sorted(seen, key=order.index), tags
+
+
+def _canon_body(blob: bytes) -> list[str]:
+    from lxml import etree
+
+    body = docx.Document(io.BytesIO(blob)).element.body
+    return [etree.tostring(el, method="c14n").decode() for el in body]
+
+
+def _canon_parts(blob: bytes) -> dict[str, bytes]:
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    return {n: z.read(n) for n in z.namelist() if n != "word/document.xml" and not n.startswith("docProps/")}
+
+
+def test_the_revision_is_his_file_with_only_the_asked_paragraph_changed(tmp_path, fmt) -> None:
+    """FALSIFIER (the design): a revision re-rendered from markdown and given
+    its formatting back loses what no list of carried facets names. Made in
+    place, every element but the one the ask names is his XML, and so are
+    his styles, numbering, section and headers: a navy header in white,
+    2:1 columns, a right-aligned amount column, "Brief Heading/Body"."""
+    filed = accepted_chart(firm_styled(_render(BRIEF, tmp_path / "filed.docx", fmt, "pleading", **CHART_LOOK)))
+    key = {"items": [i for i in KEY["items"] if i["id"] == "c7"]}  # the conclusion's words, made by code
+    v, seat, _jd = _run(tmp_path, filed.read_bytes(), key)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    before, after = filed.read_bytes(), seat.files["draft-0001"][-1]
+    a, b = _canon_body(before), _canon_body(after)
+    changed = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    assert len(a) == len(b) and len(changed) == 1, changed
+    para = docx.Document(io.BytesIO(after)).element.body[changed[0]]
+    assert "".join(para.itertext()).endswith("value her case fairly.")
+    assert _canon_parts(before) == _canon_parts(after)
+
+
+def _format_key(quote: str, **params) -> dict:
+    return {"items": [{"id": "c1", "quote": quote, "kind": "formatting", "target": "document", "params": params}]}
+
+
+def test_n6_an_ask_the_filed_brief_already_meets_files_nothing(tmp_path, fmt) -> None:
+    """FALSIFIER (N6): an ask already met was filed as a new, identical version."""
+    filed = _render(BRIEF, tmp_path / "filed.docx", fmt, table_font_pt=10)
+    key = _format_key("Make the table font 10 point", layout={"table_font_pt": 10})
+    v, seat, _jd = _run(tmp_path, filed.read_bytes(), key, "Make the table font 10 point please.")
+    assert v.outcome == "held" and str(v.reason).startswith("revise_unchanged:"), (v.outcome, v.reason)
+    assert "already how the filed brief reads" in str(v.reason) and seat.sent == []
+
+
+def test_n6_a_relative_ask_that_goes_no_further_than_the_filed_value_files_nothing(tmp_path, fmt) -> None:
+    """FALSIFIER (N6): "more space" was laid at a value below the filed one,
+    which would have filed LESS space as the change he asked for."""
+    filed = _render(BRIEF, tmp_path / "filed.docx", fmt, heading_space_before_pt=18)
+    req = "Put more space before the headings."
+    key = _format_key("more space before the headings", layout={"heading_space_before_pt": 12}, relative="more")
+    v, seat, _jd = _run(tmp_path, filed.read_bytes(), key, req)
+    assert v.outcome == "held" and str(v.reason).startswith("revise_unchanged:"), (v.outcome, v.reason)
+    assert "18" in str(v.reason) and seat.sent == []
+
+
+def test_n6_other_asks_none_made_file_nothing(tmp_path, fmt) -> None:
+    """FALSIFIER (N6): every ask was "other" and none could be made, and the
+    unchanged brief was still filed as a new version."""
+    filed = _render(BRIEF, tmp_path / "filed.docx", fmt)
+    liability = next(s.text for s in sec.split(BRIEF) if s.title == "V. LIABILITY")
+    key = {"items": [i for i in KEY["items"] if i["id"] == "c9"]}
+    v, seat, _jd = _run(tmp_path, filed.read_bytes(), key, edits={"V. LIABILITY": liability})
+    assert v.outcome == "held" and str(v.reason).startswith("revise_unchanged:"), (v.outcome, v.reason)
+    assert "could not be made" in str(v.reason) and seat.sent == []

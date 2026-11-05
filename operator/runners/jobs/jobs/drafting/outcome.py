@@ -57,6 +57,10 @@ REASON_CODES = (
     "revise_base_unproven",
     # Revise mode (revise/core.py): a checklist, an item or an invariant code refused after its one retry.
     "revise_unchecked",
+    # Revise mode (revise/layout.py): the revision does not carry the filed brief's layout: failed, nothing filed.
+    "revise_layout_lost",
+    # Revise mode (revise/run.py): nothing in the brief would change: held, no version filed, the attorney told why.
+    "revise_unchanged",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

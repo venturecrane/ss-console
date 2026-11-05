@@ -4,17 +4,20 @@ the same files.
 
 The graph::
 
-    destination -> revise-base (the filed files by id; the markdown that prints
-      them, proven) -> revise-estimate ($0: the projection under the cap)
-      -> revise-checklist (and the estimate again, from its section plan)
-      -> revise-edit (code edits, section edits, code checks, the narrow
-      reading, one re-edit) -> revise-render (the firm's renderer with the
-      FILED brief's layout carried onto it: its paper, first page, signature
-      and charts, the attorney's formatting asks over them; the layout
-      compared back to the filed file; the format check; formatting checked
-      in the Word XML) -> revise-notes -> manifest -> file (new versions in
-      place, the brief first and its notes only after it, compare-and-stop,
-      read back)
+    destination -> revise-base (the filed files by id; the filed brief read
+      as markdown, proven to map element for element onto the file)
+      -> revise-estimate ($0: the projection under the cap) -> revise-checklist
+      (and the estimate again, from its section plan) -> revise-edit (code
+      edits, section edits, code checks, the narrow reading, one re-edit)
+      -> revise-render (the edits made IN the filed .docx, ``inplace.py``:
+      content in the paragraphs it names, layout asks on the elements they
+      name; the XML proven unchanged everywhere else; the format check;
+      formatting checked in the Word XML) -> revise-notes -> manifest -> file
+      (new versions in place, the brief first and its notes only after it,
+      compare-and-stop, read back)
+
+It never re-renders the brief: what the attorney accepted and no ask names is
+his file's own XML afterwards.
 
 It never pulls, transcribes or digests the matter: the brief is the input, and
 the attorney's words are the instruction. Spend is capped at ``REVISE_CAP_USD``
@@ -31,11 +34,12 @@ from typing import Any
 
 from ... import proof_mode
 from ...demand import deliver
-from .. import format_check, pleading, render
+from .. import format_check
 from .. import review as review_mod
-from ..outcome import DraftingFailed, Verdict, markers
+from ..outcome import DraftingFailed, DraftingHold, Verdict, markers
 from ..run import DraftingRun
-from . import checklist as ck, checks, core, layout as lay, prior as prior_mod, sections as sec, versions
+from . import checklist as ck, checks, core, filed as filed_mod, inplace, layout as lay, prior as prior_mod
+from . import sections as sec, versions
 
 #: The ceiling on one revision's model spend, whatever the firm's per-job cap.
 REVISE_CAP_USD = 10.0
@@ -65,6 +69,7 @@ class ReviseRun(DraftingRun):
         self.limits = dataclasses.replace(self.limits, cap_usd=cap)
         self.doorway.before_request = lambda stage: self.limits.check_each_call(self.budget.refresh(), stage)
         self._filed_cache: dict[str, Any] | None = None
+        self._verdicts: dict[str, tuple[str, str, list[str]]] | None = None
 
     # ---- plumbing ---------------------------------------------------------------
     def _ask(self, model: str):
@@ -91,9 +96,6 @@ class ReviseRun(DraftingRun):
             fmt.setdefault("layout", {}).setdefault(self.cls, {}).update(layout)
         return fmt
 
-    def _render_to(self, md: str, out: Path, layout: dict[str, Any] | None = None) -> Path:
-        return render.render(md, self.cls, out, self._fmt(layout))[0]
-
     @property
     def _filed_path(self) -> Path:
         return self._base_dir / "draft.docx"
@@ -103,31 +105,17 @@ class ReviseRun(DraftingRun):
             self._filed_cache = lay.read(self._filed_path)
         return self._filed_cache
 
-    def _laid(self, md: str, out: Path, layout: dict[str, Any] | None = None) -> tuple[Path, dict[str, Any], str]:
-        """``md`` rendered as the filed brief is laid: its first page and
-        signature (inferred from the filed file), its paper, its charts'
-        borders and fills, with ``layout`` (the attorney's asks) over them.
-        Returns (path, the format the file was rendered with, its paper)."""
-        filed = self._filed_layout()
-        import docx
+    def _edit_in_place(self, md: str, layout: dict[str, Any], out: Path) -> tuple[inplace.Edit, list[str]]:
+        """``md`` and ``layout`` made in the filed file, saved to ``out``:
+        (the edit, where the result differs from the filed XML beyond it)."""
+        ed = inplace.open_filed(self._filed_path)
+        before = inplace.snapshot(ed)
+        from ..house import rules_for
 
-        natural = out.with_name(f".natural.{out.name}")
-        render.render(md, self.cls, natural, lay.without_front(self._fmt(), self.cls))
-
-        opts = lay.options(filed, lay.front_options(docx.Document(str(natural))), dict(layout or {}))
-        natural.unlink()
-        fmt = self._fmt(opts)
-        path = render.render(md, self.cls, out, fmt)[0]
-        paper = lay.paper(filed, self.job.request_text)
-        if paper == "pleading":
-            if pleading.spec_for(fmt) is None:
-                raise DraftingFailed(
-                    "revise_layout_lost: the filed brief is on pleading paper and the firm has none authored; "
-                    "nothing was edited or filed"
-                )
-            pleading.apply_for(path, fmt, self.cls)
-        lay.carry_tables(path, self._filed_path, dict(layout or {}))
-        return path, fmt, paper
+        inplace.edit_content(ed, md, rules_for(self._fmt(), self.cls))
+        inplace.edit_layout(ed, layout)
+        blob = inplace.save(ed, out)
+        return ed, inplace.prove(ed, before, self._filed_path.read_bytes(), blob, md)
 
     # ---- stages -----------------------------------------------------------------
     def _download(self, role: str) -> Path | None:
@@ -146,12 +134,19 @@ class ReviseRun(DraftingRun):
         draft = self._download("draft")
         assert draft is not None
         notes = self._download("attorney_notes")
-        candidates: list[tuple[str, str]] = []
-        prior_final = self.job.job_dir.parent / self.revise["prior_job_id"] / "data" / "draft-final.md"
-        if prior_final.is_file():
-            doc = render.split_notes(prior_final.read_text(encoding="utf-8"))[0]
-            candidates.append(("prior_job", render.reserve_judgment(doc, self.cls)[0]))
-        rec = prior_mod.resolve(draft, candidates, lambda md, out: self._laid(md, out)[0], self._base_dir)
+        # The base is the filed file read as markdown, and only that: the
+        # revision is made IN this file, block for element, so the proof is
+        # that reading it and writing it back unchanged touches nothing.
+        md = prior_mod.docx_to_md(draft)
+        ed, diffs = self._edit_in_place(md, {}, self._base_dir / "base-roundtrip.docx")
+        if diffs or ed.touched or ed.removed:
+            raise DraftingFailed(
+                "revise_base_unproven: the filed brief does not read back element for element ("
+                + "; ".join(diffs or [f"{len(ed.touched)} element(s) moved on a round trip"])[:360]
+                + "); nothing was edited or filed"
+            )
+        (self._base_dir / "base.md").write_text(md, encoding="utf-8")
+        rec: dict[str, Any] = {"source": "filed", "filed_sha256": prior_mod.sha(draft), "tried": []}
         filed = {"draft": prior_mod.sha(draft)}
         if notes is not None:
             filed["attorney_notes"] = prior_mod.sha(notes)
@@ -198,6 +193,8 @@ class ReviseRun(DraftingRun):
                 f"revise_unchecked: the request could not be turned into a checklist code accepts: {exc}"[:480]
             ) from None
         self._write("checklist.json", {"items": [i.to_dict() for i in items]})
+        if all(i.kind == "formatting" for i in items):
+            self._hold_if_unchanged(text_changed=False)  # $0: no edit can change the words
         # The section plan is known now: price every call it makes before any.
         plan = core.plan_reads(self._base_md(), self.job.request_text, items)
         self._project(plan["characters"], "the revision", calls=plan["calls"], sections=plan["sections"])
@@ -224,43 +221,100 @@ class ReviseRun(DraftingRun):
         self._atomic("revised.md", out.md)
 
     def _layout(self) -> dict[str, Any]:
+        """The formatting asks as layout keys, less a relative ask's keys that
+        would not go beyond the filed value (rendering those would undo it)."""
         layout: dict[str, Any] = {}
+        verdicts = self._formatting_verdicts()
         for i in self._items():
             if i.kind == "formatting":
-                layout.update(i.params["layout"])
+                drop = verdicts[i.id][2]
+                layout.update({k: v for k, v in i.params["layout"].items() if k not in drop})
         return layout
 
-    def _layout_lost(self, path: Path, layout: dict[str, Any]) -> list[str]:
-        """What of the filed layout the rendered revision does not carry, past
-        what the request asks to change. Headings are the edit's (the checks
-        keep every filed heading line); the count only never drops."""
-        filed, ours = self._filed_layout(), lay.read(path)
-        ignore = {"headings", "roles"} | lay.changed_by(layout, self.job.request_text)
-        if checks._about_tables(self._items()) or len(filed["tables"]) != len(ours["tables"]):
-            ignore.add("tables")  # an item about a table may reshape it; the look is still carried
-        lost = lay.compare(filed, ours, ignore)
-        if len(ours["headings"]) < len(filed["headings"]):
-            lost.append(f"headings: {len(filed['headings'])} filed, {len(ours['headings'])} in the revision")
-        return lost
+    def _formatting_verdicts(self) -> dict[str, tuple[str, str, list[str]]]:
+        """Per formatting item, against the FILED file: ("already" | "short" |
+        "change", why, the relative keys that do not go beyond the filed value)."""
+        if self._verdicts is not None:
+            return self._verdicts
+        out: dict[str, tuple[str, str, list[str]]] = {}
+        size = float(self._fmt().get("size_pt") or 12)
+        skip = len(sec.tables(sec.split(self._base_md())[0].body))
+        for i in self._items():
+            if i.kind != "formatting":
+                continue
+            asked: dict[str, Any] = i.params["layout"]
+            drop, have = self._short_keys(asked, i.params.get("relative"))
+            if drop and len(drop) == len(asked):
+                way = i.params["relative"]
+                said = ", ".join(f"{_label(k)} {have[k]:g}" for k in drop)
+                out[i.id] = (
+                    "short",
+                    f'"{i.quote}": the filed brief already has {said}; this would not make it {way}',
+                    drop,
+                )
+                continue
+            rest = {k: v for k, v in asked.items() if k not in drop}
+            if not checks.check_docx(self._filed_path, rest, size, skip, self.cls):
+                out[i.id] = ("already", f'"{i.quote}" is already how the filed brief reads', drop)
+            else:
+                out[i.id] = ("change", "", drop)
+        self._verdicts = out
+        return out
+
+    def _short_keys(self, asked: dict[str, Any], way: Any) -> tuple[list[str], dict[str, float]]:
+        """The keys of a relative ask whose value does not go beyond the filed one."""
+        if way not in ck.RELATIVE:
+            return [], {}
+        drop, have = [], {}
+        for k, v in asked.items():
+            cur = filed_mod.value(self._filed_path, k)
+            if cur is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            if not (float(v) > cur if way == "more" else float(v) < cur):
+                drop.append(k)
+                have[k] = cur
+        return drop, have
+
+    def _hold_if_unchanged(self, text_changed: bool, diff_empty: bool = False) -> None:
+        """A revision that changes nothing is never filed as a new version:
+        held, and the attorney is told why, item by item. ``diff_empty``: the
+        edit made in the file touched no element at all."""
+        verdicts = self._formatting_verdicts()
+        if not diff_empty and (text_changed or any(v[0] == "change" for v in verdicts.values())):
+            return
+        rev = self._json("revision.json") if (self.data / "revision.json").is_file() else {"statuses": []}
+        status = {s["id"]: s for s in rev["statuses"]}
+        whys = []
+        for i in self._items():
+            if i.kind == "formatting":
+                whys.append(verdicts[i.id][1])
+            elif (status.get(i.id) or {}).get("status") == "met":
+                whys.append(f'"{i.quote}" is already how the filed brief reads')
+            else:
+                whys.append(f'"{i.quote}" could not be made from what the brief already says')
+        raise DraftingHold(
+            "revise_unchanged: no new version was filed, because nothing in the brief would change: "
+            + "; ".join(whys)[:420]
+        )
 
     def _render_revise(self) -> None:
         revised = (self.data / "revised.md").read_text(encoding="utf-8")
+        self._hold_if_unchanged(text_changed=revised != self._base_md())
         md = core.reserve(revised, self._base_md(), self.cls)
         name = (self._file_entry("draft") or {})["name"]
         layout = self._layout()
-        path, fmt, paper = self._laid(md, deliver.out_dir(self.data) / name, layout)
-        lost = self._layout_lost(path, layout)
+        path = deliver.out_dir(self.data) / name
+        ed, lost = self._edit_in_place(md, layout, path)
+        if not ed.touched and not ed.removed:
+            self._hold_if_unchanged(text_changed=False, diff_empty=True)
         if lost:
-            raise DraftingFailed(
-                "revise_layout_lost: the revision does not carry the filed brief's " + "; ".join(lost)[:400]
-            )
+            raise DraftingFailed("revise_layout_lost: the revision changes what no ask names: " + "; ".join(lost)[:400])
         # The filed brief is the attorney's document as he has it: what the
         # format check says of THE FILED FILE ITSELF is not this revision's to
         # fix. Only a failure the revision brings in stops the filing.
-        filed_fmt = self._fmt(lay.options(self._filed_layout(), {}, {}))
-        filed_paper = str(self._filed_layout()["paper"])
-        before = format_check.check(self._filed_path, self.cls, filed_fmt, paper=filed_paper)
-        res = format_check.check(path, self.cls, fmt, paper=paper)
+        paper = str(self._filed_layout()["paper"])
+        before = format_check.check(self._filed_path, self.cls, self._fmt(), paper=paper)
+        res = format_check.check(path, self.cls, self._fmt(layout), paper=paper)
         new = [f for f in res.fails if f not in before.fails]
         self._write("revise-format.json", {"filed_brief": before.fails, "revision": res.fails, "new": new})
         if new:
@@ -268,10 +322,16 @@ class ReviseRun(DraftingRun):
         rev = self._json("revision.json")
         skip = len(sec.tables(sec.split(md)[0].body))
         size = float(self._fmt().get("size_pt") or 12)
+        verdicts = self._formatting_verdicts()
         for i, st in zip(self._items(), rev["statuses"]):
             if i.kind != "formatting":
                 continue
-            probs = checks.check_docx(path, i.params["layout"], size, skip, self.cls)
+            kind, why, drop = verdicts[i.id]
+            if kind == "short":  # not made, and the attorney is told why; never a stop
+                st.update(status="not_met", how="filed", detail=why)
+                continue
+            asked = {k: v for k, v in i.params["layout"].items() if k not in drop}
+            probs = checks.check_docx(path, asked, size, skip, self.cls)
             st.update(
                 status="not_met" if probs else "met", how="code", detail="; ".join(probs) or "checked in the Word file"
             )
@@ -358,3 +418,21 @@ class ReviseRun(DraftingRun):
     def _current(self) -> str:
         st = self._state()
         return next((s for s in STAGES if st.get(s, {}).get("status") != "done"), "file")
+
+
+_LABELS = {
+    "line_spacing": "line spacing",
+    "line_spacing_pt": "line spacing of",
+    "heading_line_spacing": "heading line spacing",
+    "heading_line_spacing_pt": "heading line spacing of",
+    "heading_space_before_pt": "space before the headings of",
+    "heading_space_after_pt": "space after the headings of",
+    "table_font_pt": "a chart font of",
+    "table_border_pt": "chart borders of",
+}
+
+
+def _label(key: str) -> str:
+    if key.endswith("_gap_lines"):
+        return "a count of blank lines of"
+    return _LABELS.get(key, key.replace("_", " "))

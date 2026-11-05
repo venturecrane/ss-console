@@ -183,12 +183,15 @@ def reserve(md: str, base_md: str, cls: str) -> str:
     section it sits under."""
     from .. import render
 
-    filled = {sec.norm_title(s.title): "{{ATTORNEY" not in s.text for s in sec.split(base_md) if s.heading}
+    base = sec.split(base_md)
+    filled = {sec.norm_title(s.title): "{{ATTORNEY" not in s.text for s in base if s.heading}
+    as_filed = {s.text for s in base}
     out, parent_filled = [], False
     for s in sec.split(md):
         key = sec.norm_title(s.title)
         if s.heading and key in filled:
             parent_filled = filled[key]
         done = filled.get(key, parent_filled) if s.heading else False
-        out.append(s.text if done else render.reserve_judgment(s.text, cls)[0])
+        # A section the revision did not change is the filed text, as filed.
+        out.append(s.text if done or s.text in as_filed else render.reserve_judgment(s.text, cls)[0])
     return "".join(out)

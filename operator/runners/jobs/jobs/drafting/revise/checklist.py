@@ -120,6 +120,18 @@ def _layout_problems(layout: Any) -> list[str]:
     return out
 
 
+#: A formatting ask without a number ("more space before the headings"):
+#: the layout value is the model's step, and code requires it to go beyond
+#: the value the filed brief already has (``run.py``).
+RELATIVE = ("more", "less")
+
+
+def _relative(p: dict[str, Any]) -> list[str]:
+    if "relative" in p and p["relative"] not in RELATIVE:
+        return [f"params.relative is one of {list(RELATIVE)}"]
+    return []
+
+
 def _cites(p: dict[str, Any]) -> list[str]:
     if p.get("cite_kind") not in CITE_KINDS:
         return [f"remove_citations names params.cite_kind, one of {list(CITE_KINDS)}"]
@@ -167,7 +179,7 @@ _BY_KIND = {
     "remove_citations": _cites,
     "shorten_section": _shorten,
     "restructure_section": _restructure,
-    "formatting": lambda p: _layout_problems(p.get("layout")),
+    "formatting": lambda p: _layout_problems(p.get("layout")) + _relative(p),
     "replace_text": _replace,
 }
 
@@ -228,7 +240,8 @@ SYSTEM = (
     'section title}; formatting {"layout": {keys among '
     + json.dumps(sorted(LAYOUT_KEYS))
     + "}} (line_spacing 2.0 is double spacing; fills are RRGGBB; *_gap_lines are counts of blank lines; "
-    'caption_rule_below is true or "left"); replace_text {"old": words in the brief, '
+    'caption_rule_below is true or "left"; when he asks for more or less of something without a number, '
+    'add "relative": "more" or "less" and give the value one step beyond what he has); replace_text {"old": words in the brief, '
     '"new": his replacement}; other {}. Any item may add "must_include" / "must_exclude": [phrases he '
     "states]. Never invent a change he did not ask for, a number he did not give, or new facts; when he asks for "
     "something the brief would need new facts for, still make the item (kind other) with his words."
