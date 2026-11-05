@@ -54,3 +54,14 @@
     Every drafting input staged before it still validates, and no seat's
     staged input uses the new keys yet (A&P's are held in engagements#323
     until the seat runs this image); nothing to re-stage.
+- since: 07f4a56b7d8a5213ad4921ac4e6e1e6fa6e0d857
+  lanes: [drafting]
+  date: '2026-11-04'
+  by: session drafting-firm-style (scottdurgan), for #3763
+  why: >-
+    #3763 adds optional format.layout keys only to the drafting firm schema
+    (front_court_gap_lines, signature_single_spaced, signature_gap_lines) and
+    widens caption_rule_below to accept "left". No other lane's schema module
+    changed. Every drafting input staged before it still validates; A&P's new
+    values are held in engagements#323 until the seat runs this image; nothing
+    to re-stage.
