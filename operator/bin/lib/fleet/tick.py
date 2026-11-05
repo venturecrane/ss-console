@@ -1,7 +1,9 @@
 """`fleet release <id> --tick`: one resumable step of a release, for a scheduler.
 
-A tick is what the GitHub Actions release controller runs every 15 minutes
-(.github/workflows/release-tick.yml, ADR 0096). It holds no state of its own:
+A tick is what the GitHub Actions release controller runs
+(.github/workflows/release-tick.yml, ADR 0096): started when Deploy publishes a
+seat artifact, by the run before it, and by a cron every 5 minutes as the
+backstop. It holds no state of its own:
 everything it decides is read from D1 at the moment of decision, so a tick that
 dies, a runner that is cancelled or a tick that is skipped loses nothing.
 
@@ -27,10 +29,12 @@ ONE TICK.
      failed without a reason froze every later seat, the client's included.
   6. Record, renew, release the lease, exit.
 
-So a tick advances at most one ring, never re-deploys a done seat, and never
+So a tick advances at most one ring per RUN, never re-deploys a done seat, and never
 starts the client ring until the ring before it has proved the release on real
 seats for the bake. A busy seat ends waiting_idle and the next tick retries it;
-a held seat is left alone and keeps the release incomplete.
+a held seat is left alone and keeps the release incomplete. A run that advanced a
+ring (exit 0) dispatches the next run (release-tick.yml, Start the next ring), so
+rings follow each other in minutes rather than one cron slot apart.
 
 SKILLS RELEASES (2026-10-28). A ``latest`` tick then takes the same step for
 skills releases (cli.cmd_release_tick): the newest skills release CI published,

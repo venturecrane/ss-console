@@ -100,16 +100,17 @@ Astro middleware first, so subdomain routing (`src/middleware.ts`) and session
 middleware always run even for requests that would otherwise resolve straight to a
 prerendered asset.
 
-The deploy steps run in this order, and the order matters:
+The first job, **`migrate`**, runs the D1 migrations
+(`d1 migrations apply ss-console-db --remote`). Migrations apply before the
+code that depends on them and must be backward-compatible with the currently
+deployed app. Every other job waits for it. The `deploy` job then runs these
+steps in this order, and the order matters:
 
 1. **Build** (`npm run build`).
 2. **Wrangler deploy dry-run** - catches wrangler config and binding errors
    before they reach production.
-3. **Run D1 migrations** (`d1 migrations apply ss-console-db --remote`).
-   Migrations apply before the code that depends on them and must be
-   backward-compatible with the currently deployed app.
-4. **Deploy to Cloudflare Workers** (`wrangler deploy`) - the main `ss-web` Worker.
-5. **Deploy the sub-workers** - cost-anomaly, cost-telemetry, and fleet-alerts
+3. **Deploy to Cloudflare Workers** (`wrangler deploy`) - the main `ss-web` Worker.
+4. **Deploy the sub-workers** - cost-anomaly, cost-telemetry, and fleet-alerts
    (the `ss-fleet-alerts` pager) - each from its own directory
    (`.github/workflows/deploy.yml`). (Between the root deploy and the sub-worker
    deploys the pipeline removes `.wrangler/`, because the root deploy writes a
@@ -117,8 +118,10 @@ The deploy steps run in this order, and the order matters:
    These three are all that remain under `workers/`; the lead-gen pipelines
    were retired 2026-07-01 (PRs #1610/#1616).
 
-After the `deploy` job succeeds, four more jobs in the same workflow run in
-parallel, kept separate so one failing does not stop the others:
+Five more jobs need only `migrate`, never the web build, so they run beside
+`deploy` as soon as the migrations land, kept separate so one failing does not
+stop the others. A seat artifact therefore never waits for the Cloudflare
+deploy:
 
 - **`sync-customer-configs`** (`scripts/ci-sync-customer-configs.sh`) projects
   every changed `customer.yaml` into the D1 `customer_configs` table the portal
@@ -130,9 +133,9 @@ parallel, kept separate so one failing does not stop the others:
   config the seat's running image and skills cannot run (see "A skills
   release" below).
 - **`publish-skills`** (`scripts/ci-publish-skills.sh`) publishes a candidate
-  skills release (see "A skills release" below).
+  skills release (see "A skills release" below), then starts the release tick.
 - **`build-seat-image`** runs `fleet build` when the merge changed the seat
-  image (see "The release controller" below).
+  image (see "The release controller" below), then starts the release tick.
 - **`publish-bundle`** (`scripts/ci-publish-bundle.sh`) builds and publishes a
   candidate jobs bundle after `build-seat-image` (see "A jobs bundle release"
   below).
@@ -418,10 +421,16 @@ Two workflows run the release (ADR 0096).
   compares with the last BUILT commit, so a runtime merge followed quickly by a
   docs merge is still built. When main has already moved past the commit, the
   build-source guard refuses it and the job ends green: the newer merge's own
-  run builds the newer tree.
-- **Roll by tick.** `release-tick.yml` runs `fleet release latest --tick` at 7,
-  22, 37 and 52 minutes past every hour, when Deploy completes, and on manual
-  dispatch (with an optional release id and a dry run that records nothing).
+  run builds the newer tree. A build that loses the builder's stream is tried
+  twice more, a minute and two minutes later, before the run fails.
+- **Roll by tick.** `release-tick.yml` runs `fleet release latest --tick` when
+  Deploy's `publish-skills` job has published and when `build-seat-image` has
+  built (each starts a run the moment its artifact exists, not when the whole
+  Deploy run ends), after every run that advanced a ring (that run starts the
+  next one, so rings follow each other in minutes), every 5 minutes as the
+  backstop, when Deploy completes, and on manual dispatch (with an optional
+  release id and a dry run that records nothing). A dispatch is skipped while a
+  run is already waiting, so starts never pile up as cancelled runs.
   Ticks never overlap. One tick takes the fleet lease, reads every seat's
   rollout of the image releases still in flight from D1, and advances at most
   one ring (`operator/bin/lib/fleet/tick.py`). Each ring takes the newest
@@ -488,8 +497,9 @@ There is no approval step before the client ring. Since 2026-10-30 the client
 seat is ring 1, straight after smd-staging with no bake on either, and SMD's
 other seats follow it: with one client, a fix waited about an hour behind four
 rings of bakes, and the bakes protected nothing a seat's own self-test and
-automatic rollback did not. So a merged fix reaches ashton-price in the same
-tick that takes staging, about 15 minutes after the image is built. Staging's
+automatic rollback did not. So a merged fix reaches ashton-price in the run
+straight after the one that takes staging (that run starts the next one, about
+2 minutes later), about 10 minutes after the image is built on a normal day. Staging's
 self-test, the busy gate and holds protect it; a required approval would put a
 person back on every release. When a second client signs, revisit the order.
 
