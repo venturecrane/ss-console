@@ -16,6 +16,12 @@ process is running in:
   ``/app/image-capabilities.json``, and each lane schema module present at the
   path named with the digest named.
 
+The spec pins a lane's SCHEMA, never its firm inputs (2026-11-05, ADR 0094
+amendment): those publish on an engagements merge and the seat adopts them
+live, so this verifier never reads the spec's ``lanes`` map. A spec signed
+before that change still carries a sha256 per lane there; it is ignored, so a
+seat on an older spec does not page ``spec_unverified`` when its inputs move.
+
 The verdict is written to ``/run/smd-spec/state.json`` (0644, tmp + rename) for
 the gate's heartbeat (``shared/spec_check.py`` ships it as ``spec``) and the
 ``spec_unverified`` pager. SHADOW: nothing here changes what the seat applies;

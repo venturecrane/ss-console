@@ -240,52 +240,29 @@ MEDCHRON_FIRM_YAML="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/cust
 # shellcheck source=lib/firm-config-currency.sh
 if . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_engagements_checkout_present && [ -f "${MEDCHRON_FIRM_YAML}" ] && assert_firm_config_is_main; then
   # >>> medchron-firm-validate
-  # Validate against THIS CHECKOUT's runner schema before the bytes leave for
-  # R2. The runner's key set is closed and its cost controls are required, so a
-  # firm.yaml the seat cannot load makes every chronology job defer until
-  # someone notices. Catching it here turns a silent stall into a refusal at
-  # the moment a person is watching. The schema comes from the invoking
-  # checkout, which is why the rollout note says to reprovision from a SYNCED
-  # primary: a stale checkout validates against a stale schema.
-  #
-  # The interpreter is `uv run --with pyyaml`, the same one every other
-  # python block in this script uses, NOT the bare `python3`: the runner's
-  # config module imports PyYAML, which the laptop's system python does not
-  # carry. Live-caught 2026-09-09 on the first reprovision after ss#2718: the
-  # bare interpreter died on `import yaml` and the die line below blamed the
-  # config ("does not validate"), so a validator that could not run read as a
-  # config that was wrong. The two outcomes now carry different exit codes
-  # and different sentences.
+  # Validated against THIS CHECKOUT's runner schema, then copied to
+  # vaults/<slug>/medchron-firm.yaml and read back, by lib/publish-firm-inputs.sh,
+  # the one writer of firm inputs (the engagements repo's merge workflow runs
+  # it too, against the runner the seat runs). The runner's key set is closed
+  # and its cost controls are required, so a firm.yaml the seat cannot load
+  # makes every chronology job defer until someone notices; refusing here turns
+  # that silent stall into a refusal while a person is watching. A validator
+  # that could not run (exit 4) is never read as a config that is wrong (exit
+  # 1): live-caught 2026-09-09, when a bare python3 without PyYAML made the die
+  # line blame the config. A stale checkout validates against a stale schema,
+  # which is why the rollout note says to reprovision from a SYNCED primary.
   rc=0
-  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
-    uv run --quiet --with pyyaml python3 - "${MEDCHRON_FIRM_YAML}" <<'PY' || rc=$?
-import sys
-try:
-    from jobs.medchron import config
-except Exception as exc:  # the validator itself could not start
-    print(f"medchron firm validator could not run: {exc}", file=sys.stderr)
-    sys.exit(3)
-
-try:
-    cfg = config.load(sys.argv[1])
-except config.ConfigError as exc:
-    print(f"medchron firm config: {exc}", file=sys.stderr)
-    sys.exit(1)
-print(f"medchron firm config OK ({cfg.slug})")
-PY
+  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
+    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" medchron "$(dirname "${MEDCHRON_FIRM_YAML}")" \
+      --runner-checkout "${REPO_ROOT}" || rc=$?
   case "${rc}" in
     0) ;;
     1) die "medchron firm config for ${SLUG} does not validate against this checkout's runner schema (see the line above); not uploading it. Fix the config in the engagements repo, or 'git pull' the primary if the schema is newer than this checkout" ;;
+    3) die "R2 upload of medchron-firm.yaml failed (s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml)" ;;
     *) die "medchron firm config for ${SLUG} could not be validated (the validator did not run, rc=${rc}); not uploading it. Install uv or fix the interpreter; the config itself was not judged" ;;
   esac
   # <<< medchron-firm-validate
-  log "Uploading medchron-firm.yaml to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-  AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 cp "${MEDCHRON_FIRM_YAML}" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml" \
-      --endpoint-url "${R2_ENDPOINT_URL}" \
-      --only-show-errors \
-    || die "R2 upload of medchron-firm.yaml failed"
   log "R2 upload OK (medchron-firm.yaml)"
 else
   assert_lane_not_on_main "operator/customers/${SLUG}/medchron/firm.yaml"; log "No medchron firm config for ${SLUG} (${MEDCHRON_FIRM_YAML}); the chronology runner will refuse jobs"

@@ -17,6 +17,10 @@
 # notes beside it stay in engagements. A seat with no records inputs is skipped
 # quietly here; its records lane defers records jobs and its broker refuses
 # every submit (no budget authored).
+# The write itself (validation, the key guard, the --delete sync, the read-back)
+# is lib/publish-firm-inputs.sh, the one writer, which the engagements repo's
+# merge workflow also runs (2026-11-05): provisioning and a merge publish the
+# same bytes the same way. This block keeps only the engagements-main gate.
 # >>> records-inputs-stage
 RECORDS_INPUTS_DIR="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/records"
 if [ -f "${RECORDS_INPUTS_DIR}/records-firm.yaml" ]; then
@@ -25,17 +29,10 @@ if [ -f "${RECORDS_INPUTS_DIR}/records-firm.yaml" ]; then
     [ "$(git -C "${_eng}" show "origin/main:operator/customers/${SLUG}/records/records-firm.yaml" 2>/dev/null)" = "$(cat "${RECORDS_INPUTS_DIR}/records-firm.yaml")" ] \
       || die "the records firm input records-firm.yaml at ${RECORDS_INPUTS_DIR} is not engagements origin/main; merge it first (an unmerged file is an unreviewed one)"
   fi
-  [ -f "${REPO_ROOT}/operator/runners/jobs/jobs/records/firm.py" ] \
-    || die "this checkout's runner has no records firm validator (jobs/records/firm.py); not uploading unvalidated records inputs"
-  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
-    uv run --quiet --with pyyaml python3 -m jobs.records.firm "${RECORDS_INPUTS_DIR}" \
-    || die "the records firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"
-  log "Syncing the records firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/records/"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 sync "${RECORDS_INPUTS_DIR}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/records/" --delete \
-      --exclude "*" --include "records-firm.yaml" \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
-    || die "R2 sync of the records firm inputs failed"
+  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
+    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" records "${RECORDS_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+    || die "the records firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (records firm inputs)"
 else
   assert_lane_not_on_main "operator/customers/${SLUG}/records/records-firm.yaml"

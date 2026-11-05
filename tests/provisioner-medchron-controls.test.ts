@@ -234,11 +234,17 @@ describe('behavioural: the extracted block, driven', () => {
  * chronology job DEFER -- a silent stall rather than a failure. Validating at
  * provision time turns that into a refusal while a person is watching.
  *
- * Pinned statically: the block is inside the step-2b guard and strictly before
- * the upload, and it imports the runner's own config module rather than
- * re-implementing a schema that would then drift from it.
+ * Since 2026-11-05 the validate-and-upload is lib/publish-firm-inputs.sh, the
+ * one writer the engagements merge workflow also runs (driven in
+ * tests/publish-firm-inputs.test.ts). Pinned statically here: the provisioner
+ * calls it inside the step-2b guard, and the publisher imports the runner's
+ * own config module rather than re-implementing a schema that would drift.
  */
 describe('step 2b: the firm config is validated before it is uploaded', () => {
+  const PUBLISHER = readFileSync(
+    fileURLToPath(new URL('../operator/bin/lib/publish-firm-inputs.sh', import.meta.url)),
+    'utf8'
+  )
   const block = (() => {
     const start = src.indexOf('# >>> medchron-firm-validate')
     const end = src.indexOf('# <<< medchron-firm-validate')
@@ -247,7 +253,7 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
     return src.slice(start, end)
   })()
 
-  it('runs before the firm config is copied to R2, and inside the authored guard', () => {
+  it('runs the one publisher inside the authored guard, with this checkout as the runner', () => {
     // The authored guard also sources and runs the engagements checks
     // (lib/firm-config-currency.sh) on the same line, the checkout-presence
     // check first.
@@ -255,19 +261,16 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
       '&& [ -f "${MEDCHRON_FIRM_YAML}" ] && assert_firm_config_is_main; then'
     )
     const validate = src.indexOf('# >>> medchron-firm-validate')
-    const upload = src.indexOf(
-      's3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/medchron-firm.yaml"',
-      validate
-    )
     expect(guard).toBeGreaterThan(-1)
     expect(validate).toBeGreaterThan(guard)
-    expect(upload).toBeGreaterThan(validate)
+    expect(block).toContain('lib/publish-firm-inputs.sh" "${SLUG}" medchron')
+    expect(block).toContain('--runner-checkout "${REPO_ROOT}"')
   })
 
-  it("uses the runner's own config module, from the invoking checkout", () => {
-    expect(block).toContain('operator/runners/jobs')
-    expect(block).toContain('from jobs.medchron import config')
-    expect(block).toContain('config.ConfigError')
+  it("the publisher uses the runner's own config module and writes the one medchron key", () => {
+    expect(PUBLISHER).toContain('VMOD="jobs.medchron.config"')
+    expect(PUBLISHER).toContain('config.ConfigError')
+    expect(PUBLISHER).toContain('PREFIX="vaults/${SLUG}/medchron-firm.yaml"')
   })
 
   it('a config that does not validate refuses the provision rather than uploading it', () => {
@@ -280,17 +283,17 @@ describe('step 2b: the firm config is validated before it is uploaded', () => {
    * which has no PyYAML, so `import yaml` inside the runner's config module
    * died and the die line blamed the CONFIG. A validator that cannot run must
    * say so, not read as a wrong config. Two pins: the interpreter is the
-   * script's own `uv run --with pyyaml` pattern (a bare `python3 -` fails
-   * this), and "could not run" and "does not validate" are distinct exits.
+   * `uv run --with pyyaml` pattern (a bare `python3 -` fails this), and "could
+   * not run" (exit 4) and "does not validate" (exit 1) are distinct exits.
    */
   it('runs under uv with pyyaml, never the bare system interpreter', () => {
-    expect(block).toContain('uv run --quiet --with pyyaml python3 -')
-    expect(block).not.toMatch(/medchron"\s+python3 - /)
+    expect(PUBLISHER).toContain('uv run --quiet --with pyyaml python3 -')
+    expect(PUBLISHER).not.toMatch(/medchron"\s+python3 - /)
   })
 
   it('tells a validator that could not run apart from a config that failed', () => {
-    expect(block).toContain('could not run')
-    expect(block).toContain('sys.exit(3)')
+    expect(PUBLISHER).toContain('could not run')
+    expect(PUBLISHER).toContain('sys.exit(4)')
     expect(block).toContain('does not validate')
     expect(block).toContain('could not be validated')
   })

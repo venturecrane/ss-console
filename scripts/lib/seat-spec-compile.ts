@@ -43,8 +43,14 @@ export interface CompileInputs {
   compiledFrom: string
   customerYaml: Buffer
   laneProofs: Buffer | null
-  /** lane -> the bytes of that lane's firm-input manifest in the vault (authored lanes only). */
-  lanePins: Record<string, Buffer>
+  /**
+   * The lanes whose firm-input manifest is present in the vault. Presence
+   * only: the spec pins the SCHEMA a lane's inputs are read by, never the
+   * inputs' bytes (2026-11-05, ADR 0094 amendment). Firm inputs publish on an
+   * engagements merge and the seat adopts them live, so a byte pin would go
+   * stale on every merge without an ss-console push to recompile it.
+   */
+  lanes: string[]
   /** lane -> sha256 of the schema module in the compiling checkout. */
   laneSchemaDigests: Record<string, string>
   imageManifest?: MaybeJson
@@ -270,9 +276,7 @@ export function compileSpec(inputs: CompileInputs): CompileResult {
     inputs.skillsManifest instanceof Error ? undefined : inputs.skillsManifest
   )
   const { bundles, imageNeeds } = bundleSplit(needs, inputs, notes)
-  const lanes = Object.keys(inputs.lanePins)
-    .filter((l) => l in LANE_INPUTS)
-    .sort()
+  const lanes = [...new Set(inputs.lanes)].filter((l) => l in LANE_INPUTS).sort()
   const imageRefusals = inputs.unchecked
     ? []
     : [
@@ -291,11 +295,9 @@ export function compileSpec(inputs: CompileInputs): CompileResult {
     lane_proofs: inputs.laneProofs
       ? { key: `${vault}/lane-proofs.yaml`, sha256: sha256Hex(inputs.laneProofs) }
       : null,
+    // Where each staged lane's inputs live, by key only: no digest of them.
     lanes: Object.fromEntries(
-      lanes.map((l) => [
-        l,
-        { key: `${vault}/${LANE_INPUTS[l].manifest}`, sha256: sha256Hex(inputs.lanePins[l]) },
-      ])
+      lanes.map((l) => [l, { key: `${vault}/${LANE_INPUTS[l].manifest}` }])
     ),
     skills: skillsRef(inputs.skillsPointer),
     bundles,

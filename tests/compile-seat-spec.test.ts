@@ -79,7 +79,7 @@ function inputs(over: Partial<CompileInputs> = {}): CompileInputs {
     compiledFrom: SHA,
     customerYaml: Buffer.from(CONFIG),
     laneProofs: null,
-    lanePins: {},
+    lanes: [],
     laneSchemaDigests: { demand: 'd'.repeat(64) },
     imageManifest: IMAGE_MANIFEST,
     imageCapabilities: CAPS_ALL,
@@ -220,7 +220,7 @@ describe('compileSpec: golden cases', () => {
   it('refuses the SPEC, not the config, when a lane schema digest differs from the image', () => {
     const r = compileSpec(
       inputs({
-        lanePins: { demand: Buffer.from('pins: {}\n') },
+        lanes: ['demand'],
         imageLaneInputs: { demand: 'f'.repeat(64) },
       })
     )
@@ -229,20 +229,14 @@ describe('compileSpec: golden cases', () => {
   })
 
   it('refuses a lane whose image recorded no lane-input digests', () => {
-    const r = compileSpec(
-      inputs({ lanePins: { demand: Buffer.from('x') }, imageLaneInputs: undefined })
-    )
+    const r = compileSpec(inputs({ lanes: ['demand'], imageLaneInputs: undefined }))
     expect(r.laneRefusals.join('\n')).toContain('cannot determine')
   })
 
-  it('pins a lane by digest and key only, never by content', () => {
-    const firm = Buffer.from('voice: private firm text\n')
-    const r = compileSpec(inputs({ lanePins: { demand: firm } }))
-    const bytes = new TextDecoder().decode(specBytes(r.spec))
-    expect(bytes).not.toContain('private firm text')
+  it('names a staged lane by key only and pins its schema, never its inputs (2026-11-05)', () => {
+    const r = compileSpec(inputs({ lanes: ['demand'] }))
     expect((r.spec.lanes as Record<string, unknown>).demand).toEqual({
       key: 'vaults/seat-alpha/demand/demand-firm.yaml',
-      sha256: sha256Hex(firm),
     })
     expect(
       (r.spec.requires as Record<string, Record<string, unknown>>).lane_schema_digests.demand
@@ -250,6 +244,15 @@ describe('compileSpec: golden cases', () => {
       path: '/app/runners/jobs/jobs/demand/firm.py',
       sha256: 'd'.repeat(64),
     })
+  })
+
+  it('a firm-inputs publish leaves the spec bytes unchanged (no ss-console push needed)', () => {
+    // The inputs are not an input to the compiler at all, so two compiles of
+    // the same seat on either side of an engagements merge are byte-equal.
+    const before = specBytes(compileSpec(inputs({ lanes: ['demand'] })).spec)
+    const after = specBytes(compileSpec(inputs({ lanes: ['demand'] })).spec)
+    expect(after).toEqual(before)
+    expect(new TextDecoder().decode(before)).not.toMatch(/"lanes":\{"demand":\{[^}]*sha256/)
   })
 })
 
@@ -349,7 +352,7 @@ describe('the cross-language fixture the seat verifier tests against', () => {
         'customer_id: seat-alpha\npersonas:\n  - slug: operator\n    skills:\n      - name: matter-reader\n        version: pending\n        enabled: true\n'
       ),
       laneProofs: Buffer.from('lanes: {}\n'),
-      lanePins: { demand: Buffer.from('pins: {}\n') },
+      lanes: ['demand'],
       laneSchemaDigests: { demand: 'd'.repeat(64) },
       imageManifest: {
         schema_version: 1,

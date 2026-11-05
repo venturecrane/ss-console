@@ -774,6 +774,14 @@ because it ships the image that carries them in the same run. It signs and
 publishes the spec only when `SEAT_SPEC_SIGNING_KEY` is set; otherwise the next
 push to main does.
 
+A firm's lane inputs are not part of the spec's bytes: the spec names each
+staged lane's manifest key and pins the schema module its inputs are validated
+against, never the inputs themselves (ADR 0094, amendment 2026-11-05). They
+publish on a merge to the engagements repo's main through
+`operator/bin/lib/publish-firm-inputs.sh`, validated against the runner the
+seat runs, and provisioning stages them through the same script
+([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator)).
+
 On the seat, the root `config_applier` loop runs a spec verifier
 (`config_applier/spec_verifier.py`) in **shadow mode**: it verifies the
 pointer's signature against `/app/seat-spec.pub`, baked into the image, and the

@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
  "slug": "seat-alpha",
- "spec_sha256": "9ce54d2b9114a6bd71785e6c56d2e2385d04bae2d60eb617e833281df91e37e3",
- "spec_key": "fleet/specs/seat-alpha/9ce54d2b9114a6bd71785e6c56d2e2385d04bae2d60eb617e833281df91e37e3.json",
+ "spec_sha256": "c6d1bfb08ffe108633f0963bff84724770dc96dec1adcc77b540fa1de2fdc7be",
+ "spec_key": "fleet/specs/seat-alpha/c6d1bfb08ffe108633f0963bff84724770dc96dec1adcc77b540fa1de2fdc7be.json",
  "compiled_from": "1111111111111111111111111111111111111111",
- "key_id": "fa91d2d46dccdde0",
- "signature": "xnsUJL4DtNBcshLyub/jJtXXR1ohARnzNl7w8uxb7OT9XhZVvb7uM/T4YJTPOJxJG/RQPmNb6lZtM+vYYkcfAw=="
+ "key_id": "0fd09b101bdfb0ed",
+ "signature": "HKk0UiScw7AWMB/96anjS0WkxoujDyrZXm7wH95Vfr3zy1EjdwkE96ND0bKuig89/0zJ1QfVoskZsiE7dlv7Bg=="
 }

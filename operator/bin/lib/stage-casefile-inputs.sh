@@ -19,6 +19,10 @@
 # are markdown, so unlike the litigation sync only top-level notes are left out.
 # A seat with no casefile inputs is skipped quietly here; its casefile lane
 # defers casefile jobs and its broker refuses every submit (no budget authored).
+# The write itself (validation, the key guard, the --delete sync, the read-back)
+# is lib/publish-firm-inputs.sh, the one writer, which the engagements repo's
+# merge workflow also runs (2026-11-05): provisioning and a merge publish the
+# same bytes the same way. This block keeps only the engagements-main gate.
 # >>> casefile-inputs-stage
 CASEFILE_INPUTS_DIR="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/casefile"
 if [ -f "${CASEFILE_INPUTS_DIR}/casefile-firm.yaml" ]; then
@@ -31,17 +35,10 @@ if [ -f "${CASEFILE_INPUTS_DIR}/casefile-firm.yaml" ]; then
     done
     unset _cf_rel
   fi
-  [ -f "${REPO_ROOT}/operator/runners/jobs/jobs/casefile/firm.py" ] \
-    || die "this checkout's runner has no casefile firm validator (jobs/casefile/firm.py); not uploading unvalidated casefile inputs"
-  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
-    uv run --quiet --with pyyaml python3 -m jobs.casefile.firm "${CASEFILE_INPUTS_DIR}" \
-    || die "the casefile firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"
-  log "Syncing the casefile firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/casefile/"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 sync "${CASEFILE_INPUTS_DIR}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/casefile/" --delete \
-      --exclude "eval/*" --exclude "*.md" --include "prompts/*.md" \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
-    || die "R2 sync of the casefile firm inputs failed"
+  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
+    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" casefile "${CASEFILE_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+    || die "the casefile firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (casefile firm inputs)"
 else
   assert_lane_not_on_main "operator/customers/${SLUG}/casefile/casefile-firm.yaml"

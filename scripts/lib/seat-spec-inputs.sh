@@ -4,6 +4,7 @@
 # R2: nothing here writes an object.
 #
 # Defines:
+#   r2_exists <key>                       0 present, 1 absent (404), 2 could not tell
 #   r2_fetch_optional <key> <dest>        0 fetched, 1 absent (404), 2 could not tell
 #   seat_spec_inputs <slug> <dir>         fetch every input into <dir>; 0, or 2 on a read
 #                                         that failed for a reason other than 404
@@ -33,8 +34,11 @@
 #                       must provide, so a failed read can only refuse.
 #   published.yaml      the customer.yaml the seat boots from now.
 #   spec-pointer.json and the spec it names (fleet/specs/<slug>/ only).
-#   <lane>.firm         each lane's firm-input manifest, HASHED by the compiler
-#                       and never copied anywhere: firm inputs are private.
+#   <lane>.lane         an empty marker per lane whose firm-input manifest is
+#                       in the vault: PRESENCE only, by head-object, so no firm
+#                       input byte is read here (2026-11-05). The spec pins the
+#                       schema a staged lane is read by, never the inputs, which
+#                       publish on an engagements merge and adopt live.
 #
 # Contract with the caller: an `r2` function running `aws "$@" --endpoint-url
 # ...` with R2 creds, and R2_BUCKET_CONFIG set.
@@ -56,6 +60,20 @@ _seat_d1_one() { # <sql> -> first column of the first row, or nothing
 
 _json_field() { # <file> <field> -> the string value, or nothing
   node -e "try{const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const v=p[process.argv[2]];process.stdout.write(typeof v==='string'?v:'')}catch{}" "$1" "$2"
+}
+
+# 0 present, 1 absent (404), 2 could not tell. Reads no bytes of the object.
+r2_exists() {
+  local key="$1" err
+  err="$(mktemp)"
+  if r2 s3api head-object --bucket "${R2_BUCKET_CONFIG}" --key "$key" >/dev/null 2>"$err"; then
+    rm -f "$err"
+    return 0
+  fi
+  if grep -q '(404)' "$err"; then rm -f "$err"; return 1; fi
+  sed 's/^/    /' "$err" >&2
+  rm -f "$err"
+  return 2
 }
 
 r2_fetch_optional() {
@@ -143,7 +161,8 @@ seat_spec_inputs() {
   while read -r lane key; do
     [[ -n "$lane" ]] || continue
     rc=0
-    r2_fetch_optional "$key" "${dir}/${lane}.firm" || rc=$?
+    r2_exists "$key" || rc=$?
+    [[ "$rc" -eq 0 ]] && : > "${dir}/${lane}.lane"
     if [[ "$rc" -eq 2 ]]; then
       echo "::error::${slug}: could not tell whether ${key} exists; refusing to compile a spec that may omit a lane" >&2
       return 2
@@ -161,10 +180,10 @@ seat_spec_compile() {
   done
   [[ -f "${dir}/lane-inputs.json" ]] && args+=(--image-lane-inputs "${dir}/lane-inputs.json")
   [[ -f "${dir}/published.yaml" ]] && args+=(--published "${dir}/published.yaml")
-  for f in "${dir}"/*.firm; do
+  for f in "${dir}"/*.lane; do
     [[ -f "$f" ]] || continue
-    lane="$(basename "$f" .firm)"
-    args+=(--lane-pin "${lane}=${f}")
+    lane="$(basename "$f" .lane)"
+    args+=(--lane "${lane}")
   done
   _seat_tsx "$SEAT_SPEC_COMPILER" "${args[@]}" ${1+"$@"}
 }
