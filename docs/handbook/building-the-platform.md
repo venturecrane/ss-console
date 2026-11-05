@@ -54,8 +54,12 @@ the change deployed to production - not merely merged.
 
 ## What `npm run verify` actually runs
 
-`npm run verify` is the full local gate. From `package.json`, it chains, in
-order, and stops on the first failure:
+`npm run verify` is the full local gate. CI runs it as the required Verify
+check on every PR and in the merge queue. The pre-push hook does not run it:
+since 2026-11-04 the hook runs only the two tests that keep a client token or a
+seat secret off the public remote (`tests/medchron-scrub.test.ts` and
+`tests/customer-yaml-secret-detector.test.ts`), in seconds. From `package.json`,
+`verify` chains, in order, and stops on the first failure:
 
 1. `npm run typecheck` - TypeScript validation via `astro check`.
 2. `npm run typecheck:workers` - typecheck each sub-worker under `workers/*`

@@ -40,6 +40,10 @@ const SKIP_DIRS = new Set([
   // Vendored third-party text: not ours to police, and a surname in a
   // dependency's changelog is not this firm's client.
   'vendor',
+  // Sibling worktrees under .claude/worktrees: each is its own checkout with
+  // its own run of this test; a walk from the primary checkout descended into
+  // every one of them (2026-11-04) and reported their scratch files as ours.
+  'worktrees',
 ])
 const EXTS = new Set(['.py', '.toml', '.md', '.yaml', '.yml', '.json', '.txt', '.cfg', '.ini'])
 

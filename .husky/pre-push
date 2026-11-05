@@ -1,2 +1,8 @@
-echo "Running pre-push verification..."
-npm run verify
+# The gates that protect the PUBLIC remote, in seconds. A client token (the
+# scrub gate) or a seat secret (the customer.yaml detector) must never reach
+# GitHub, where CI would report it only after it is public. Everything else
+# `npm run verify` runs, CI runs as the required Verify check on every PR and
+# in the merge queue; until 2026-11-04 this hook ran all of it, about three
+# minutes per push, six sessions, dozens of pushes a day, proving nothing CI
+# did not. Never bypass this hook: a push that fails here names the file.
+npx vitest run tests/medchron-scrub.test.ts tests/customer-yaml-secret-detector.test.ts

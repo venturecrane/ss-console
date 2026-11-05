@@ -46,7 +46,7 @@ The repo is `venturecrane/ss-console`. From the root:
 | `public/` | Static assets served as-is: `favicon.svg`, `robots.txt`, the OG image, the consultant photo, the analytics bootstrap scripts (`js/ga4-init.js`, `js/meta-pixel-init.js`), and the public evidence-packet signing key (`keys/`). |
 | `.claude/`, `.design/`, `.stitch/` | Agent session machinery (hooks, skills, `bin/` helpers such as `register` and `mission`), design explorations, and UI-drift audit output. Not shipped. |
 
-Build, test, and deploy commands are the `scripts` in `package.json` (`npm run verify` is the full local gate) and are explained at `/admin/playbook/building-the-platform` and `/admin/playbook/deployment-release`.
+Build, test, and deploy commands are the `scripts` in `package.json` (`npm run verify` is the full local gate, run by CI; the pre-push hook runs only the scrub and secret-detector tests) and are explained at `/admin/playbook/building-the-platform` and `/admin/playbook/deployment-release`.
 
 ## The src/ layout
 
