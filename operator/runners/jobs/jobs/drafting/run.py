@@ -183,6 +183,8 @@ class DraftingRun(EvidenceLane, Placing):
         self.date_stamp = self._frozen_date(today())
         self.readback_pause = readback_pause
         self.notes: list[str] = []
+        #: What the note with the document says about the rules (firm_rules.py).
+        self.rule_notes: list[str] = []
         #: The firm's installed layout rules this job follows (firm_rules.py).
         self.rule_layout = rules_for_job(self)
 

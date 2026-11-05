@@ -1299,13 +1299,31 @@ _UNREAD_CLASS_NOTE = (
     " This rule is about {work}, and that work is produced by a part of the "
     "Operator that does not read the firm's rules yet. So even once the status "
     "says installed, do NOT say it is in effect: say it is recorded and has been "
-    "passed to SMD to build into that work, and that the Operator will write "
-    "again when the next one follows it. Give no date."
+    "passed to SMD to build into that work. Give no date, and do not promise that "
+    "anyone will write again."
+)
+
+#: A layout rule the seat compiled part of (shared/layout_rules.py). The clauses
+#: come from code, so the reply cannot blur them.
+_PART_READ_NOTE = (
+    " Part of this rule takes effect and part does not, and the reply must say "
+    "which. Once the status says installed, say these parts are in effect from the "
+    "next document: {effect}. Say these parts are recorded and have been passed to "
+    "SMD, and are not in effect: {recorded}. Give no date, and do not promise that "
+    "anyone will write again."
+)
+
+_RELATIVE_NOTE = (
+    " Where the rule asks for more of something with no number, we add one step, "
+    "and the note with the document states the value we used; say so, and that "
+    "they can ask for more."
 )
 
 
 def _unread_class_note(row: Any) -> str:
-    """The extra instruction for a firm rule nothing reads, else ``""``.
+    """The extra instruction for a firm rule nothing reads, or reads in part, else
+    ``""``. Its "passed to SMD" needs something behind it, and an administrator
+    confirming their own rule gets no letter, so this is where that page goes.
 
     Firm rules only. A personal rule is read by the person-preference loader,
     which is a different reader with its own scope.
@@ -1315,13 +1333,23 @@ def _unread_class_note(row: Any) -> str:
     output_class = _row_output_class(row)
     if has_live_rule_reader(output_class):
         return ""
-    if (
-        output_class in layout_rules.LAYOUT_RULE_CLASSES
-        and layout_rules.compile_rule(str(row.get("text") or ""))[0]
-    ):
-        # A layout rule the seat compiles to a key the drafting lane applies
-        # (shared/layout_rules.py): it is read, so the status line governs.
-        return ""
+    proposal_id = str(row.get("proposal_id") or "")
+    if output_class in layout_rules.LAYOUT_RULE_CLASSES:
+        got = layout_rules.compile_rule(str(row.get("text") or ""))
+        if got["compiled"]:
+            relative = _RELATIVE_NOTE if any(c["relative"] for c in got["compiled"]) else ""
+            if not got["prose"]:
+                # Every clause is read, so the status line governs.
+                return relative
+            rule_dispatch._page_unread_rule(proposal_id, output_class)
+            return (
+                _PART_READ_NOTE.format(
+                    effect="; ".join(c["text"] for c in got["compiled"]),
+                    recorded="; ".join(c["text"] for c in got["prose"]),
+                )
+                + relative
+            )
+    rule_dispatch._page_unread_rule(proposal_id, output_class)
     return _UNREAD_CLASS_NOTE.format(
         work=describe_output_class(output_class) or "that kind of work"
     )

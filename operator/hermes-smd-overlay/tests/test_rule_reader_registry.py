@@ -16,6 +16,7 @@ registry from drifting into the same false claim one level up.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -141,7 +142,12 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_the_layout_reader():
         for path in _JOBS_RUNNER.rglob("*.py")
         if "/tests/" not in str(path) and _SPEC_STORE_READS.search(path.read_text("utf-8"))
     )
-    assert readers == ["jobs/drafting/firm_rules.py"], f"spec store readers: {readers}"
+    # layout_store.py is the reader both sides share, by byte, and it names only
+    # the file below (tests/test_drafting_firm_rules.py pins the copy).
+    assert readers == [
+        "jobs/drafting/firm_rules.py",
+        "jobs/drafting/layout_store.py",
+    ], f"spec store readers: {readers}"
     reader = (_JOBS_RUNNER / readers[0]).read_text("utf-8")
     for output_class in layout_rules.LAYOUT_RULE_CLASSES:
         assert f'RULE_CLASS = "{output_class}"' in reader
@@ -154,10 +160,19 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_the_layout_reader():
 def _layout(spec_dir: Path, rule_ids: list[str]) -> None:
     path = spec_dir / layout_rules.layout_rel_path("work_product")
     path.parent.mkdir(parents=True)
-    rules = [
-        {"rule_id": r, "layout": {"front_court_gap_lines": 2}, "doc_classes": []} for r in rule_ids
-    ]
-    path.write_text(json.dumps({"schema_version": 1, "rules": rules, "prose": []}))
+    clause = {
+        "text": "Two blank lines before the court name.",
+        "layout": {"front_court_gap_lines": 2},
+        "relative": {},
+        "base_owned": [],
+        "carried": False,
+    }
+    rules = [{"rule_id": r, "doc_classes": [], "compiled": [clause], "prose": []} for r in rule_ids]
+    blob = json.dumps({"schema_version": layout_rules.SCHEMA_VERSION, "rules": rules}).encode()
+    path.write_bytes(blob)
+    rel = layout_rules.layout_rel_path("work_product")
+    manifest = {"layouts": {rel: {"sha256": hashlib.sha256(blob).hexdigest()}}}
+    (spec_dir / "manifest.json").write_text(json.dumps(manifest))
 
 
 def test_a_work_product_rule_the_seat_compiled_is_in_effect(tmp_path, monkeypatch, pages):
@@ -189,3 +204,107 @@ def test_the_layout_classes_have_no_send_site_reader():
     """A layout class is live per rule, never as a class."""
     assert not (layout_rules.LAYOUT_RULE_CLASSES & output_classes.LIVE_RULE_READER_CLASSES)
     assert layout_rules.LAYOUT_RULE_CLASSES <= output_classes.OUTPUT_CLASSES
+
+
+# ---- the letter tells the truth clause by clause (2026-11-05) --------------------------------
+def _letter(tmp_path, monkeypatch, text):
+    """A work_product rule installed by the real applier, then the real letter."""
+    import io
+    import json
+
+    from spec_applier.applier import SCHEMA_VERSION, apply
+
+    doc = {
+        "schema_version": SCHEMA_VERSION,
+        "classes": {
+            "work_product": {
+                "format": {
+                    "adjustments": [
+                        {
+                            "id": RULE,
+                            "text": text,
+                            "instructed_by": REQUESTER,
+                            "at": "2026-12-01T00:00:00Z",
+                        }
+                    ]
+                }
+            }
+        },
+    }
+
+    class S3:
+        def get_object(self, **_k):
+            return {"Body": io.BytesIO(json.dumps(doc).encode())}
+
+    assert apply(s3_client=S3(), bucket="b", slug="s", spec_dir=tmp_path).applied
+    monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
+    send = _Recorder()
+    rule_dispatch.notify_outcome(
+        kind="installed",
+        proposal_id=RULE,
+        text=text,
+        requester=REQUESTER,
+        by=ADMIN,
+        send=send,
+        output_class="work_product",
+    )
+    (call,) = send.calls
+    return call
+
+
+def test_every_clause_compiled_says_in_effect_and_lists_them(tmp_path, monkeypatch, pages):
+    call = _letter(tmp_path, monkeypatch, "Two blank lines before the court name.")
+    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert "- Two blank lines before the court name." in call["text"]
+    assert "Recorded and passed to SMD" not in call["text"]
+    assert pages == []
+
+
+def test_a_mixed_rule_says_which_clause_is_which_and_pages_the_rest(tmp_path, monkeypatch, pages):
+    call = _letter(
+        tmp_path, monkeypatch, "Never use the word plainly; two blank lines before the court name."
+    )
+    assert call["subject"] == f"Your rule is partly in effect [rule {RULE}]"
+    effect, recorded = call["text"].split("Recorded and passed to SMD")
+    assert "- two blank lines before the court name." in effect
+    assert "- Never use the word plainly" in recorded
+    assert pages == [(RULE, "work_product")]
+    assert "\u2014" not in call["text"]
+    assert "we " in call["text"].lower()
+
+
+def test_a_relative_clause_says_the_note_will_state_the_value(tmp_path, monkeypatch, pages):
+    call = _letter(
+        tmp_path, monkeypatch, "Leave extra space between the court name and the caption."
+    )
+    assert "note with the document states the value we used" in " ".join(call["text"].split())
+
+
+def test_a_clause_the_base_owns_is_not_called_in_effect_on_a_brief(tmp_path, monkeypatch, pages):
+    call = _letter(tmp_path, monkeypatch, "Charts in 12 point.")
+    assert "your own Word file" in " ".join(call["text"].split())
+
+
+def test_a_damaged_store_is_recorded_not_in_effect(tmp_path, monkeypatch, pages):
+    from shared import layout_rules
+
+    _letter(tmp_path, monkeypatch, "Two blank lines before the court name.")
+    (tmp_path / "manifest.json").write_text("{")
+    assert layout_rules.clause_truth(RULE, "work_product", tmp_path) is None
+    send = _Recorder()
+    rule_dispatch.notify_outcome(
+        kind="installed",
+        proposal_id=RULE,
+        text="x",
+        requester=REQUESTER,
+        by=ADMIN,
+        send=send,
+        output_class="work_product",
+    )
+    assert send.calls[0]["subject"] == f"Your rule is recorded [rule {RULE}]"
+
+
+@pytest.mark.parametrize("output_class", ["work_product", "record"])
+def test_no_letter_promises_a_second_letter_nothing_sends(output_class, pages):
+    """FAILS ON #3784: "The Operator will write to you again" had no sender."""
+    assert "write to you again" not in " ".join(_install(output_class)["text"].split())

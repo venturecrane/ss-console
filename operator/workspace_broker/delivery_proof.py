@@ -52,6 +52,8 @@ CODES = frozenset(
         "wake_lost",
         "reply_unproven",
         "reply_not_in_sent_items",
+        "rule_store_unusable",
+        "rule_value_refused",
         "gate_held",
         "update_held",
         "upload_held",

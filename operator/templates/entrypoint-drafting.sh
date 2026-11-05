@@ -16,6 +16,10 @@
 # the root daemon; drafting-jobs/ is root, group jobs execute-only.
 install -d -o root -g workspace-broker -m 0770 "${JOBS_DATA_DIR}/drafting-queue"
 install -d -o root -g jobs -m 0710 "${JOBS_DATA_DIR}/drafting-jobs"
+# A firm's "more space" rule resolved once, kept across jobs and boots so it does
+# not grow (jobs/drafting/firm_rules.py). Rule ids, keys and numbers, no text.
+install -d -o jobs -g jobs -m 0700 "${JOBS_DATA_DIR}/drafting-rule-pins"
+export JOBS_DRAFTING_RULE_PINS="${JOBS_RUN_DIR}/drafting-rule-pins"
 export SMD_DRAFTING_QUEUE_DIR="${JOBS_RUN_DIR}/drafting-queue"
 # The drafting firm inputs (house style, per-class skeletons, prompts and
 # exemplars, the served attachments, drafting-firm.yaml pinning each by

@@ -704,7 +704,8 @@ def _install_layouts(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[
         target = spec_dir / rel
         atomic_write(target, blob)
         _harden(target, _FILE_MODE)
-        out[rel] = {"sha256": sha256(blob), "bytes": len(blob), "compiled": len(doc["rules"])}
+        compiled = sum(1 for rule in doc["rules"] if rule["compiled"])
+        out[rel] = {"sha256": sha256(blob), "bytes": len(blob), "compiled": compiled}
     return out
 
 
