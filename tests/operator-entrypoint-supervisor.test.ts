@@ -21,7 +21,7 @@
  * setsid): the setsid stub calls os.setsid() and execs, keeping the pid, which
  * is the property under test.
  */
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { spawn, spawnSync } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -136,12 +136,58 @@ function scenario(dir: string, body: string, env: Record<string, string> = {}) {
   ].join('\n')
   writeFileSync(`${dir}/entry.sh`, script)
   // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- argv is bash plus a script this test wrote into its own mkdtemp dir; no input reaches it
-  return spawn('bash', [`${dir}/entry.sh`], {
+  const child = spawn('bash', [`${dir}/entry.sh`], {
     detached: true, // its own process group, as tini's child is
     stdio: 'ignore',
     env: { ...process.env, ...env },
   })
+  scratch.push({ dir, reaper: reapLater(dir, child.pid!, REAP_AFTER_SECONDS) })
+  return child
 }
+
+/**
+ * Nothing a scenario starts outlives the test. On 2026-11-05 this machine held
+ * 709 supervisors orphaned by interrupted verify runs, the oldest 8 days old,
+ * each looping forever; on 11-04 they exhausted the process table and every
+ * subprocess test failed with EAGAIN.
+ *
+ * Two layers, because they fail differently. afterEach covers a test that fails
+ * or times out. A vitest killed outright (a hook timeout, a ctrl-C) runs no
+ * afterEach, so each scenario also gets a detached reaper that outlives vitest
+ * and kills everything running out of its scratch directory, including the
+ * daemon and job stand-ins, which leave the group on purpose (setsid).
+ */
+const REAP_AFTER_SECONDS = 180
+
+function reapLater(dir: string, pgid: number, seconds: number): number {
+  const reaper = spawn(
+    'sh',
+    [
+      '-c',
+      'sleep "$1"; kill -9 "-$2" 2>/dev/null; pkill -9 -f "$3/" 2>/dev/null; exit 0',
+      'reaper',
+      String(seconds),
+      String(pgid),
+      dir,
+    ],
+    { detached: true, stdio: 'ignore' }
+  )
+  reaper.unref()
+  return reaper.pid!
+}
+
+const scratch: { dir: string; reaper: number }[] = []
+
+afterEach(() => {
+  for (const { dir, reaper } of scratch.splice(0)) {
+    spawnSync('pkill', ['-9', '-f', `${dir}/`])
+    try {
+      process.kill(-reaper, 'SIGKILL')
+    } catch {
+      // already gone
+    }
+  }
+})
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -311,6 +357,30 @@ exec ${process.env.PYTHON ?? 'python3'} "$OUT/gateway.py"
     // and the gateway (the container's main process) stopped before the daemon drained
     expect(r.events.find((e) => e.e === 'gateway-term')?.daemon_exited).toBe(false)
   }, 30000)
+})
+
+describe.skipIf(!bashOk)('nothing a scenario starts outlives its test', () => {
+  const loop = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'smd-supervisor-'))
+    writeFileSync(`${dir}/entry.sh`, 'while :; do sleep 1; done\n')
+    // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- argv is bash plus a script this test wrote into its own mkdtemp dir; no input reaches it
+    const child = spawn('bash', [`${dir}/entry.sh`], { detached: true, stdio: 'ignore' })
+    return { dir, pid: child.pid! }
+  }
+
+  it('the reaper kills a supervisor whose test runner never came back', async () => {
+    const { dir, pid } = loop()
+    expect(running(pid)).toBe(true)
+    reapLater(dir, pid, 1)
+    await until(() => !running(pid), 5000)
+  })
+
+  it('FALSIFIER: with no reaper the same supervisor keeps running', async () => {
+    const { dir, pid } = loop()
+    await sleep(1500)
+    expect(running(pid)).toBe(true)
+    spawnSync('pkill', ['-9', '-f', `${dir}/`])
+  })
 })
 
 describe.skipIf(!bashOk)('entrypoint supervisor: the held gateway and the quiesce file', () => {
