@@ -454,6 +454,11 @@ Two workflows run the release (ADR 0096).
   merge never keeps the client ring waiting. Every step of a run (image,
   skills, jobs bundle) ends early when a newer image is published mid-step,
   so the run it starts can take that image from staging (2026-11-05).
+  Within a run, paying clients' seats come first for everything: the image,
+  the skills and the jobs bundle each step the rings before the last ring,
+  and only then does SMD's own last ring take them (2026-11-05, after a
+  client's jobs bundle waited 29 minutes while the image was deployed to our
+  own four seats).
   A seat already on a newer release is never moved back to an older one:
   - a seat whose latest rollout is `rolled_back` or `failed` is a **standing
     halt**: nothing moves until a person acts, and the `rollout_failed` pager

@@ -171,6 +171,19 @@ release-tick.yml`) the moment its candidate is published, and
    `b26226a4`, merged 07:26Z, waited). The refresh now fetches
    `origin/main` before it judges (`artifact_tick.refreshed`).
 
+   **Amended 2026-11-05: client seats take every release before SMD's own
+   seats take any.** A `latest` run stepped the image through every ring, then
+   the skills, then the jobs bundle. Run 42041885945 gave ashton-price the
+   image at 14:23Z, then deployed it to SMD's own four seats one at a time
+   (one a ten-minute busy wait) until 14:52Z, and only then started the jobs
+   bundle, which reached the client at 15:02Z: 34 minutes from merge for the
+   image, 74 for the bundle. Now the run makes two passes
+   (`artifact_tick.latest_tick`): the image, the skills and the bundle each
+   step the rings before the last ring, with the last ring held
+   (`run_promoting` `hold_ring`); then the three step again with no hold. The
+   second pass is skipped when a newer image landed during the first, so the
+   run that takes it starts from staging.
+
    **Amended 2026-11-05: client rings roll in waves.** Designed for 10 to 20
    paying seats: ring 0 is staging and the last ring is SMD's own seats, one at
    a time; every ring between is a client ring and rolls its seats in waves of

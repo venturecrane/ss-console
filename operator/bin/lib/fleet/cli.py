@@ -65,6 +65,7 @@ from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use 
     MAIN_REF,
     _at_or_after,
     _built_from_main,
+    latest_tick,
     refreshed,
     _bundles_defer,
     _bundles_in_flight,
@@ -93,7 +94,7 @@ from .runner import CommandRunner, Refusal, Runner, ToolingError
 from .selftest_plant import SelftestPlant
 from .skills import SkillsRollout
 from .smoke import FleetSideChecks, SmokeRunner
-from .tick import TICK_WAITING, Ticker, combine
+from .tick import TICK_WAITING, Ticker
 from .waves import Lease, SeatLease, Waves, holder_id
 
 REPO = Path(__file__).resolve().parents[4]
@@ -340,42 +341,17 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
 def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     """One scheduler step (tick.py). Never forces a busy seat, never accepts lane inputs.
 
-    ``latest`` steps the image releases, then the skills releases (2026-10-28:
-    five skills candidates were published and none reached the fleet, because
-    only a person running ``--skills`` ever rolled one). Image first, so a seat
-    the image step just moved can take skills written at that commit on the
-    same tick. A refusal or tooling error on the image side does not starve the
-    skills side: the skills step still runs, then the image error is raised.
+    ``latest`` steps the image, the skills and the jobs bundle, client rings
+    before SMD's own last ring (artifact_tick.latest_tick has the order and why).
     """
     if a.only or a.force_mid_job or a.accept_lane_inputs or a.parallel != 1:
         raise ValueError("--tick takes none of --only, --force-mid-job, --accept-lane-inputs, --parallel")
     if a.release_id != "latest":
         return _image_tick(ctx, a)
-    image_error: Exception | None = None
-    image_code = TICK_WAITING
-    try:
-        image_code = _image_tick(ctx, a)
-    except (Refusal, ToolingError) as exc:
-        ctx.log(f"tick: the image step stopped ({exc}); stepping the skills releases before reporting it")
-        image_error = exc
-    skills_code, skills_error = _isolated(ctx, "skills", lambda: _skills_tick(ctx, a))
-    bundle_code, bundle_error = _isolated(ctx, "bundle", lambda: _bundles_tick(ctx, a))
-    for err in (image_error, skills_error, bundle_error):
-        if err is not None:
-            raise err
-    return combine(image_code, skills_code, bundle_code)
+    return latest_tick(ctx, a, lambda hold_ring: _image_tick(ctx, a, hold_ring))
 
 
-def _isolated(ctx: Ctx, what: str, step: Callable[[], int]) -> tuple[int, Exception | None]:
-    """Run one step of a `latest` tick; a refusal or tooling error is kept for after the later steps."""
-    try:
-        return step(), None
-    except (Refusal, ToolingError) as exc:
-        ctx.log(f"tick: the {what} step stopped ({exc}); stepping the rest before reporting it")
-        return TICK_WAITING, exc
-
-
-def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
+def _image_tick(ctx: Ctx, a: argparse.Namespace, hold_ring: int | None = None) -> int:
     release = _image_release(ctx, a.release_id)
     if release.get("completed_last_ring_at"):
         ctx.log(f"{release['release_id']}: already completed on every seat; nothing to do")
@@ -414,6 +390,7 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
             dry_run=a.dry_run,
             # After each ring: has a newer image landed? Then this run ends and the next takes it.
             refresh=lambda: refreshed(ctx, lambda: _in_flight(ctx, _image_release(ctx, "latest"))),
+            hold_ring=hold_ring,
         )
     return ticker.run(ctx.rings(), release, do_seat_for(release), holder, dry_run=a.dry_run)
 

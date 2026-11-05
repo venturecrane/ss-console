@@ -18,7 +18,7 @@ from .busy import BusyGate
 from .rings import Ring
 from .runner import Refusal, ToolingError
 from .skills import SkillsRollout, deferrals
-from .tick import TICK_WAITING, Ticker
+from .tick import TICK_WAITING, Ticker, combine
 from .waves import holder_id
 
 # How many image releases a `latest` tick weighs at once (tick.Ticker.run_promoting).
@@ -194,7 +194,61 @@ def newer_image_since(ctx: Any) -> Callable[[], bool]:
     return lambda: bool(images() - start)
 
 
-def _skills_tick(ctx: Any, a: argparse.Namespace) -> int:
+def _isolated(ctx: Any, what: str, step: Callable[[], int]) -> tuple[int, Exception | None]:
+    """Run one step of a `latest` tick; a refusal or tooling error is kept for after the later steps."""
+    try:
+        return step(), None
+    except (Refusal, ToolingError) as exc:
+        ctx.log(f"tick: the {what} step stopped ({exc}); stepping the rest before reporting it")
+        return TICK_WAITING, exc
+
+
+def latest_tick(ctx: Any, a: argparse.Namespace, image_tick: Callable[[int | None], int]) -> int:
+    """A `latest` tick. Paying clients' seats take everything before SMD's own seats take anything.
+
+    Pass 1 holds the last ring (SMD's own seats): the image, then the skills, then the jobs bundle
+    each step the rings before it. Pass 2 runs the three again with no hold, which is the last
+    ring's turn. 2026-11-05, run 42041885945: ashton-price took the image at 14:23Z, the run then
+    deployed that image to our own four seats one at a time until 14:52Z, and the client's jobs
+    bundle only started after that (15:02Z): 34 minutes merge-to-seat for the image, 74 for the bundle.
+
+    Image first within a pass, so a seat the image step just moved can take skills and a bundle
+    written at that commit in the same run (2026-10-28). A refusal or tooling error in one step
+    does not starve the others: the rest still step, then the first error is raised. Pass 2 is
+    skipped when the image step raised (it would raise again) and when a newer image was published
+    during pass 1: the run that takes that image starts from staging, and rolling our own seats
+    on the old one first would put the client behind them again.
+    """
+    rings = [r for r in ctx.rings() if r.seats]
+    last = rings[-1].number if len(rings) > 1 else None
+    landed = newer_image_since(ctx)
+    codes: list[int] = []
+    errors: list[Exception] = []
+
+    def step(what: str, run: Callable[[], int]) -> bool:
+        code, err = _isolated(ctx, what, run)
+        codes.append(code)
+        if err is not None:
+            errors.append(err)
+        return err is None
+
+    image_ok = step("image", lambda: image_tick(last))
+    step("skills", lambda: _skills_tick(ctx, a, last))
+    step("bundle", lambda: _bundles_tick(ctx, a, last))
+    if last is not None and image_ok:
+        if landed():
+            ctx.log(f"tick: a newer image was published during this run; ring {last} is left for the run that takes it")
+        else:
+            ctx.log(f"tick: the rings before ring {last} have had every release; now ring {last}")
+            step("image", lambda: image_tick(None))
+            step("skills", lambda: _skills_tick(ctx, a))
+            step("bundle", lambda: _bundles_tick(ctx, a))
+    if errors:
+        raise errors[0]
+    return combine(*codes)
+
+
+def _skills_tick(ctx: Any, a: argparse.Namespace, hold_ring: int | None = None) -> int:
     """The skills half of a `latest` tick: the same promotion an image gets, no restart."""
     candidates = _skills_in_flight(ctx)
     if not candidates:
@@ -214,8 +268,9 @@ def _skills_tick(ctx: Any, a: argparse.Namespace) -> int:
     seats = [seat for ring in rings for seat in ring.seats]
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_skills_defer(ctx, seats))
     return ticker.run_promoting(
-        rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run, yield_when=newer_image_since(ctx)
-    )
+        rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run, yield_when=newer_image_since(ctx),
+        hold_ring=hold_ring,
+    )  # fmt: skip
 
 
 def _bundles_in_flight(ctx: Any, name: str = bundles.JOBS) -> list[dict[str, Any]]:
@@ -293,7 +348,7 @@ def bundle_release_named(ctx: Any, version: str, name: str = bundles.JOBS) -> di
     return rel
 
 
-def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
+def _bundles_tick(ctx: Any, a: argparse.Namespace, hold_ring: int | None = None) -> int:
     """The jobs bundle step of a `latest` tick: rings FILTERED to the seats that author a job lane.
 
     Filtered, not deferred: a deferred seat keeps a release incomplete for ever
@@ -317,8 +372,9 @@ def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_bundles_defer(ctx, seats))
     do_seat_for = bundle_seat_runner(ctx, holder, a.max_idle_wait, a.dry_run)
     return ticker.run_promoting(
-        rings, candidates, do_seat_for, holder, dry_run=a.dry_run, yield_when=newer_image_since(ctx)
-    )
+        rings, candidates, do_seat_for, holder, dry_run=a.dry_run, yield_when=newer_image_since(ctx),
+        hold_ring=hold_ring,
+    )  # fmt: skip
 
 
 def cmd_bundle_base(ctx: Any, a: argparse.Namespace) -> int:
