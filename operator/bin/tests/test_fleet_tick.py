@@ -480,6 +480,94 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
     assert signal() is True
 
 
+def test_a_pass_that_holds_the_last_ring_stops_before_it(tmp_path) -> None:
+    """``hold_ring`` ends a pass when the front reaches that ring; a pass without it takes the ring.
+    FALSIFIER: ignore hold_ring and the first pass deploys SMD's own seats too."""
+    w = _tick_world(tmp_path)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price"], 5, 0),
+        Ring(2, ["scott", "brokery"], 1, 0),
+    ]
+
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w.roll.run(s, r, plan)
+
+    w.clock.t = T0
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", hold_ring=2) == TICK_PROGRESS
+    assert [app for app, _, _ in w.fly.deploys] == ["hermes-smd-staging", "hermes-ashton-price"]
+    assert any("ring 2 waits" in line for line in w.logs)
+    # Nothing is left before the held ring: the same pass again waits and deploys nothing.
+    assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", hold_ring=2) == TICK_WAITING
+    assert len(w.fly.deploys) == 2 and w.rel["release_id"] not in w.store.completed
+    # The pass without the hold takes the last ring and completes the release.
+    assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h") == TICK_PROGRESS
+    assert [app for app, _, _ in w.fly.deploys][2:] == ["hermes-scott", "hermes-brokery"]
+    assert w.rel["release_id"] in w.store.completed
+
+
+def test_a_latest_tick_gives_client_rings_every_release_before_the_last_ring(monkeypatch) -> None:
+    """2026-11-05, run 42041885945: ashton-price took the image at 14:23Z, the run deployed it to SMD's
+    own four seats until 14:52Z, and the client's jobs bundle only then started (15:02Z). The order is
+    now image, skills, bundle for the rings before the last one, then the three again for the last.
+    FALSIFIER: step the image through every ring first and the first call is ("image", None)."""
+    from types import SimpleNamespace
+
+    from bin.lib.fleet import artifact_tick
+
+    calls: list[tuple[str, int | None]] = []
+    images = [{"release_id": "img-a", "kind": "image"}]
+    ctx = SimpleNamespace(
+        rings=lambda: [Ring(0, ["smd-staging"], None, 0), Ring(1, ["ashton-price"], 5, 0), Ring(2, ["scott"], 1, 0)],
+        log=lambda m: None,
+        store=SimpleNamespace(recent_releases=lambda n: list(images)),
+    )
+    monkeypatch.setattr(
+        artifact_tick, "_skills_tick", lambda c, a, hold=None: calls.append(("skills", hold)) or TICK_WAITING
+    )
+    monkeypatch.setattr(
+        artifact_tick, "_bundles_tick", lambda c, a, hold=None: calls.append(("bundle", hold)) or TICK_PROGRESS
+    )
+
+    def image(hold: int | None) -> int:
+        calls.append(("image", hold))
+        return TICK_WAITING
+
+    assert artifact_tick.latest_tick(ctx, None, image) == TICK_PROGRESS  # type: ignore[arg-type]
+    client_pass = [("image", 2), ("skills", 2), ("bundle", 2)]
+    assert calls == client_pass + [("image", None), ("skills", None), ("bundle", None)]
+
+    # A newer image lands during the client pass: our own seats are left for the run that takes it.
+    calls.clear()
+
+    def image_lands(hold: int | None) -> int:
+        calls.append(("image", hold))
+        images.append({"release_id": "img-b", "kind": "image"})
+        return TICK_PROGRESS
+
+    assert artifact_tick.latest_tick(ctx, None, image_lands) == TICK_PROGRESS  # type: ignore[arg-type]
+    assert calls == client_pass
+
+    # The image step is refused: skills and the bundle still step the client rings, then it is raised.
+    calls.clear()
+
+    def image_refuses(hold: int | None) -> int:
+        calls.append(("image", hold))
+        raise cli.Refusal("no self-test")
+
+    with pytest.raises(cli.Refusal, match="no self-test"):
+        artifact_tick.latest_tick(ctx, None, image_refuses)  # type: ignore[arg-type]
+    assert calls == client_pass
+
+    # A fleet of one ring holds nothing.
+    calls.clear()
+    ctx.rings = lambda: [Ring(0, ["smd-staging"], None, 0)]
+    artifact_tick.latest_tick(ctx, None, image)  # type: ignore[arg-type]
+    assert calls == [("image", None), ("skills", None), ("bundle", None)]
+
+
 def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:
     w = _tick_world(tmp_path)
     older, newer = _two_releases(w)

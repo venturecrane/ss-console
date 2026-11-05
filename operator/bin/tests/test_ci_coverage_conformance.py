@@ -531,15 +531,14 @@ def test_the_scheduled_tick_runs_latest_so_skills_releases_roll_too() -> None:
     """Skills releases are stepped only by a `latest` tick (cli.cmd_release_tick):
     a tick for a named image release steps that image alone. Until 2026-10-28 no
     tick stepped skills at all, and five published skills releases reached no
-    seat. FALSIFIER: default the workflow's release to a fixed id, or drop the
-    skills step from the CLI, and this fails."""
+    seat. FALSIFIER: default the workflow's release to a fixed id and this fails.
+    That the `latest` tick steps skills (and in what order) is proven by running
+    it: test_fleet_tick.py::test_a_latest_tick_gives_client_rings_every_release_before_the_last_ring."""
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
     job = wf["jobs"]["tick"]
     assert job["env"]["RELEASE"] == "${{ inputs.release || 'latest' }}", "a scheduled tick must run `latest`"
     assert _on_block(wf)["workflow_dispatch"]["inputs"]["release"]["default"] == "latest"
     assert 'release "$RELEASE" --tick' in _job_runs(job)
-    cli = (OPERATOR_DIR / "bin/lib/fleet/cli.py").read_text(encoding="utf-8")
-    assert "_skills_tick(ctx, a)" in cli, "a `latest` tick must step the skills releases"
 
 
 def test_the_urgent_one_seat_release_offers_every_ringed_seat_and_nothing_else() -> None:

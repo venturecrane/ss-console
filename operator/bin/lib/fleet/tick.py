@@ -35,6 +35,13 @@ ONE TICK.
      failed without a reason froze every later seat, the client's included.
   6. Record, renew, release the lease, exit.
 
+ORDER WITHIN A `latest` RUN (2026-11-05). Paying clients' seats take everything
+before SMD's own seats take anything: the image, then the skills, then the jobs
+bundle each step the rings BEFORE the last ring; only then does each step take
+the last ring (artifact_tick.latest_tick, ``hold_ring``). Before this the image
+rolled through every ring first, and a client seat's jobs bundle waited while
+our own four seats were deployed one at a time.
+
 So a tick advances every ring that is ready in one run (with no bake, staging
 then the client seat then the rest, one release per ring), never re-deploys a
 done seat, and never starts the client ring until the ring before it has proved
@@ -392,6 +399,7 @@ class Ticker:
         dry_run: bool = False,
         refresh: Callable[[], list[dict[str, Any]]] | None = None,
         yield_when: Callable[[], bool] | None = None,
+        hold_ring: int | None = None,
     ) -> int:
         """`latest`: one step across every release still in flight, newest first.
 
@@ -419,6 +427,14 @@ class Ticker:
         otherwise take every tick: on 2026-10-26 the client ring sat ready for
         its release while three ticks in a row went to staging.
 
+        ``hold_ring`` is a ring this pass may not start: when the front reaches
+        it the pass ends there (progress if an earlier ring moved, else waiting).
+        A `latest` tick holds the LAST ring, SMD's own seats, while the image, the
+        skills and the jobs bundle each take the rings before it, then runs every
+        step again without the hold (artifact_tick.latest_tick). 2026-11-05: a
+        client seat's jobs bundle waited 29 minutes while the image rolled to our
+        own four seats one at a time.
+
         ``yield_when`` is the same hand-off for a step that is not the image step
         (skills, bundles): asked between waves and after each ring, True means
         a newer IMAGE was published, and this run ends with progress so the run
@@ -445,6 +461,8 @@ class Ticker:
                 rel, plan = self._choose(rings, candidates, tag, taken)
                 if plan.code != TICK_PROGRESS or plan.ring is None:
                     return code if taken else plan.code
+                if plan.ring.number == hold_ring:
+                    return code
                 taken.add(plan.ring.number)
                 code = TICK_PROGRESS
         lease = Lease(self.store, holder, newest)
@@ -458,6 +476,12 @@ class Ticker:
             while True:
                 rel, plan = self._choose(rings, candidates, tag, taken)
                 if plan.code == TICK_PROGRESS and plan.ring is not None:
+                    if plan.ring.number == hold_ring:
+                        self.log(
+                            f"tick {rel['release_id']}: ring {hold_ring} waits; the rings before it take "
+                            "every release first"
+                        )
+                        return TICK_PROGRESS if taken else TICK_WAITING
                     taken.add(plan.ring.number)
                     newer_landed = (lambda: self._newer_than(refresh, newest)) if refresh is not None else yield_when
                     if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease, stop=newer_landed) == TICK_HALT:
