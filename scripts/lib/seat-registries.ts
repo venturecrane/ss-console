@@ -33,7 +33,10 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 # retried; it never holds the rings after it back. Ring 0 is SMD's own staging
 # seat. The client's seat follows it at once, with no bake (2026-10-30: with one
 # client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
-# come after. The last ring always deploys one seat at a time.
+# come after. The last ring always deploys one seat at a time; the client rings
+# between roll their seats in waves (max_parallel, CLIENT_RING_PARALLEL in
+# scripts/lib/seat-registries.ts), since twenty seats one at a time is a two-hour
+# release.
 #
 # Holds are NOT authored here. \`fleet hold <slug> --reason "..." --until "..."\` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
@@ -54,6 +57,17 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 
 /** The bake when no seat in a ring authors one; rings.py's DEFAULT_BAKE_MINUTES. */
 export const DEFAULT_BAKE_MINUTES = 10
+
+/**
+ * How many seats of a CLIENT ring deploy at once. Ring 0 is staging (one seat) and
+ * the last ring is SMD's own seats, one at a time; every ring between them is a
+ * client ring and rolls in waves of this many. Designed for 10 to 20 paying
+ * seats: serial, twenty seats at four to ten minutes each is a two-hour release;
+ * in waves of five it is four waves. Staging's self-test has already passed the
+ * image, each seat still judges itself and rolls itself back, and a failure
+ * halts the rings after it, so a wave of five is the blast radius.
+ */
+export const CLIENT_RING_PARALLEL = 5
 
 /** Seats in ring order, ordered within a ring by the day each was authored, then slug. */
 function ringsOf(seats: Seat[]): Array<{ ring: number; seats: string[]; bake: number }> {
@@ -81,9 +95,13 @@ export function renderRingsYaml(seats: Seat[]): string {
   rings.forEach((r, i) => {
     lines.push(`  - ring: ${r.ring}`, `    seats: [${r.seats.join(', ')}]`)
     // rings.py forces the last ring to one at a time regardless; stated here so
-    // the file says what the tool does.
+    // the file says what the tool does. Rings between staging and the last one
+    // are client rings and roll in waves (CLIENT_RING_PARALLEL).
     if (i === rings.length - 1) lines.push('    max_parallel: 1')
-    else lines.push(`    bake_minutes: ${r.bake}`)
+    else {
+      lines.push(`    bake_minutes: ${r.bake}`)
+      if (i > 0) lines.push(`    max_parallel: ${CLIENT_RING_PARALLEL}`)
+    }
   })
   return RINGS_HEADER + lines.join('\n') + '\n'
 }

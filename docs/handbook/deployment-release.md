@@ -428,12 +428,18 @@ Two workflows run the release (ADR 0096).
   built (each starts a run the moment its artifact exists, not when the whole
   Deploy run ends), after every run that advanced a ring (that run starts the
   next one, so rings follow each other in minutes), every 5 minutes as the
-  backstop, when Deploy completes, and on manual dispatch (with an optional
-  release id and a dry run that records nothing). A dispatch is skipped while a
-  run is already waiting, so starts never pile up as cancelled runs.
+  backstop, and on manual dispatch (with an optional release id and a dry run
+  that records nothing). A dispatch is skipped while a run is already waiting,
+  so starts never pile up as cancelled runs; the old trigger on Deploy's
+  completion is gone for the same reason (2026-11-05).
   Ticks never overlap. One tick takes the fleet lease, reads every seat's
-  rollout of the image releases still in flight from D1, and advances at most
-  one ring (`operator/bin/lib/fleet/tick.py`). Each ring takes the newest
+  rollout of the image releases still in flight from D1, and advances every
+  ring that is ready, one release per ring (`operator/bin/lib/fleet/tick.py`).
+  A client ring rolls its seats in waves of `max_parallel` (five, set in
+  `scripts/lib/seat-registries.ts` and written into `operator/fleet/rings.yaml`;
+  twenty client seats are four waves, not a two-hour line), and between waves
+  the run asks whether a newer image has landed and hands off to the next run
+  if so. Each ring takes the newest
   release that has baked on the ring before it: the newest goes as far as its
   own bakes allow, and while it waits, an older release that already passed the
   earlier rings keeps moving, so a run of merges never starves the later rings.

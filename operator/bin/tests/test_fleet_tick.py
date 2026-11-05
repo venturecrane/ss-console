@@ -365,6 +365,56 @@ def test_a_release_published_mid_run_ends_the_run_so_the_next_one_takes_it(tmp_p
     # test_with_no_bake_one_tick_takes_staging_then_the_client_seat covers a run with no newer release.
 
 
+def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> None:
+    """Designed for 10 to 20 client seats: a ring with max_parallel rolls that many seats
+    at once (a two-hour serial release becomes four waves), and between waves the run
+    asks whether a newer release landed; when it has, the rest of the ring is left for
+    the next run. FALSIFIER: pass parallel=1 and the four seats deploy one by one; drop
+    the between-wave check and all four deploy on the old release."""
+    w = _tick_world(tmp_path)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price", "pilot-smokeball", "scott", "brokery"], 2, 0),
+    ]
+    older = w.rel
+    newer = {**older, "release_id": "img-202610190100-22222222"}
+    state = {"waves": 0}
+
+    def refresh() -> list[dict]:
+        # No newer release until ring 1's first wave has rolled.
+        if len([d for d in w.fly.deploys if d[0] != "hermes-smd-staging"]) >= 2:
+            if newer["release_id"] not in w.store.releases:
+                w.store.insert_release(newer)
+            return [newer, older]
+        return [older]
+
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w.roll.run(s, r, plan)
+
+    w.clock.t = T0
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    assert ticker.run_promoting(rings, [older], do_seat_for, "h", refresh=refresh) == TICK_PROGRESS
+    apps = [app for app, _, _ in w.fly.deploys]
+    # staging, then ONE wave of two client seats, then the hand-off.
+    assert apps[0] == "hermes-smd-staging" and len(apps) == 3
+    assert set(apps[1:]) == {"hermes-ashton-price", "hermes-pilot-smokeball"}
+    assert any("left for the next run" in line for line in w.logs)
+    assert state["waves"] == 0  # (the counter exists for readers; the deploy list is the measurement)
+    # With no newer release the whole ring rolls, two at a time.
+    w2 = _tick_world(tmp_path / "w2")
+    w2.clock.t = T0
+
+    def do_seat_for2(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w2.roll.run(s, r, plan)
+
+    ticker2 = Ticker(w2.store, w2.logs.append, w2.clock)  # type: ignore[arg-type]
+    assert ticker2.run_promoting(rings, [w2.rel], do_seat_for2, "h", refresh=lambda: [w2.rel]) == TICK_PROGRESS
+    assert len(w2.fly.deploys) == 5
+    assert _done_releases(w2, "brokery") == [w2.rel["release_id"]]
+
+
 def test_promotion_never_moves_a_seat_backwards(tmp_path) -> None:
     w = _tick_world(tmp_path)
     older, newer = _two_releases(w)

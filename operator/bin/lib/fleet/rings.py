@@ -59,7 +59,9 @@ def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:
     if not rings:
         raise ValueError(f"{rings_file}: no rings")
     rings.sort(key=lambda r: r.number)
-    # Last ring always deploys one seat at a time (the paying client's seat).
+    # The last ring (SMD's own seats) always deploys one seat at a time. Client
+    # rings between staging and it carry max_parallel from rings.yaml and roll in
+    # waves (scripts/lib/seat-registries.ts CLIENT_RING_PARALLEL).
     rings[-1].max_parallel = 1
     live = live_seats(customers_dir)
     for seat in live:

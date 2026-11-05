@@ -511,7 +511,10 @@ def test_release_tick_runs_protected_serialized_and_on_schedule() -> None:
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
     on = _on_block(wf)
     assert (on.get("schedule") or [{}])[0].get("cron"), "release-tick must run on a schedule"
-    assert "Deploy" in ((on.get("workflow_run") or {}).get("workflows") or []), "it must run when Deploy completes"
+    # Deploy's publish jobs dispatch the tick the moment an artifact exists (test
+    # below); a completion trigger on top only replaced the pending run in the
+    # lane and left cancelled runs behind (four on 2026-11-05, 03:01 to 03:38Z).
+    assert "workflow_run" not in on, "the tick is started by Deploy's publish jobs, not by Deploy's completion"
     assert "workflow_dispatch" in on
     concurrency = wf.get("concurrency") or {}
     assert concurrency.get("group") and concurrency.get("cancel-in-progress") is False, (

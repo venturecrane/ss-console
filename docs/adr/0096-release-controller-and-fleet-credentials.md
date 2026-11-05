@@ -70,7 +70,8 @@ ADR 0007 exists to prevent.
    R2, not the Worker). `publish-skills` starts a tick (`gh workflow run
 release-tick.yml`) the moment its candidate is published, and
    `build-seat-image` does the same after a build. The cron is every 5 minutes,
-   as the backstop, and Deploy's completion still starts a run. Every dispatch
+   as the backstop; the trigger on Deploy's completion was removed on 2026-11-05
+   (it only replaced pending runs and left cancelled ones behind). Every dispatch
    is skipped while a tick is already waiting (`queued`, or `pending` on the
    concurrency lane): that lane keeps one running and one pending run, and a
    further dispatch would only replace the pending one and leave a cancelled
@@ -136,6 +137,17 @@ release-tick.yml`) the moment its candidate is published, and
    there with progress so the run it starts takes the newer release from ring 0. Before this, run 41958879617 carried a76ce77a through all six seats
    (03:02 to 03:35Z) while 6e384840's image, published at 03:08:58Z, waited for
    the lane; staging took it at 03:42Z.
+
+   **Amended 2026-11-05: client rings roll in waves.** Designed for 10 to 20
+   paying seats: ring 0 is staging and the last ring is SMD's own seats, one at
+   a time; every ring between is a client ring and rolls its seats in waves of
+   `max_parallel` (five, `scripts/lib/seat-registries.ts` CLIENT_RING_PARALLEL,
+   written into rings.yaml). Twenty seats serially at four to ten minutes each
+   is a two-hour release; in waves of five it is four waves. Staging's self-test
+   has already passed the image, every seat still judges itself and rolls itself
+   back, and a failure halts the rings after it, so a wave is the blast radius.
+   Between waves the run asks whether a newer image has landed and, if so, leaves
+   the rest of the ring for the run it starts.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`

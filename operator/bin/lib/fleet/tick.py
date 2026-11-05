@@ -413,7 +413,8 @@ class Ticker:
                 rel, plan = self._choose(rings, candidates, tag, taken)
                 if plan.code == TICK_PROGRESS and plan.ring is not None:
                     taken.add(plan.ring.number)
-                    if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease) == TICK_HALT:
+                    newer_landed = (lambda: self._newer_than(refresh, newest)) if refresh is not None else None
+                    if self._advance(rings, rel, plan, do_seat_for(rel), holder, lease, stop=newer_landed) == TICK_HALT:
                         return TICK_HALT
                     if refresh is not None:
                         fresh = refresh()
@@ -474,20 +475,40 @@ class Ticker:
         self.log(f"tick {rid}: {plan.reason}")
         return self._advance(rings, release, plan, do_seat, holder, lease)
 
+    def _newer_than(self, refresh: Callable[[], list[dict[str, Any]]], newest: str) -> bool:
+        fresh = refresh()
+        return bool(fresh) and fresh[0]["release_id"] != newest
+
     def _advance(self, rings: list[Ring], release: dict[str, Any], plan: TickPlan,
-                 do_seat: Callable[[str, int], SeatOutcome], holder: str, lease: Lease) -> int:  # fmt: skip
+                 do_seat: Callable[[str, int], SeatOutcome], holder: str, lease: Lease,
+                 stop: Callable[[], bool] | None = None) -> int:  # fmt: skip
+        """Roll the ring in waves of its ``max_parallel`` (rings.yaml; a client ring
+        rolls several seats at once, SMD's own last ring one at a time). Between
+        waves ``stop`` is asked whether a newer release has landed; when it has, the
+        ring is left where it is (progress) so the next run can take the newer one.
+        """
         rid = release["release_id"]
         if plan.code != TICK_PROGRESS or plan.ring is None or not plan.seats:
             return self._complete(rings, release, plan.code)
-        ring = Ring(plan.ring.number, list(plan.seats), plan.ring.max_parallel, plan.ring.bake_minutes)
-        result = Waves(self.store, self.log).run(
-            [ring], do_seat, release=release, only=None, parallel=1, dry_run=False, lease=lease, holder=holder
-        )
-        for out in result.outcomes:
-            self.log(f"  {out.seat:<18} {out.state:<14} {out.detail}")
-        if result.halted:
-            self.log(f"tick {rid}: HALTED at ring {ring.number}")
-            return TICK_HALT
+        width = max(1, plan.ring.max_parallel or 1)
+        seats = list(plan.seats)
+        for start in range(0, len(seats), width):
+            wave = seats[start : start + width]
+            if start and stop is not None and stop():
+                self.log(
+                    f"tick {rid}: a newer release landed while ring {plan.ring.number} was rolling; "
+                    f"{', '.join(seats[start:])} left for the next run"
+                )
+                return TICK_PROGRESS
+            ring = Ring(plan.ring.number, wave, width, plan.ring.bake_minutes)
+            result = Waves(self.store, self.log).run(
+                [ring], do_seat, release=release, only=None, parallel=width, dry_run=False, lease=lease, holder=holder
+            )
+            for out in result.outcomes:
+                self.log(f"  {out.seat:<18} {out.state:<14} {out.detail}")
+            if result.halted:
+                self.log(f"tick {rid}: HALTED at ring {ring.number}")
+                return TICK_HALT
         return self._complete(rings, release, TICK_PROGRESS)
 
     def _complete(self, rings: list[Ring], release: dict[str, Any], code: int) -> int:
