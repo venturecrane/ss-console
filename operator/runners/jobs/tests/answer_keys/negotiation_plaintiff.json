@@ -1,0 +1,200 @@
+{
+  "about": "Written before the code. Synthetic shapes only. For each plaintiff answer the reader can give, and each shape of file: which tab the row goes on (null: none), how the note opens, the offer's status, and the exact email (null: none). DOC is 'Offer 10-07.pdf'; the matter is 200123, Doe v. Example.",
+  "one_tab": [{ "plaintiff_index": 0, "name": "Ann Example", "rows": [], "details": null }],
+  "two_tabs": [
+    { "plaintiff_index": 0, "name": "Ann Example", "rows": [], "details": null },
+    { "plaintiff_index": 1, "name": "Bo Example", "rows": [], "details": null }
+  ],
+  "cases": [
+    {
+      "name": "one plaintiff, the document does not say: it can only be theirs",
+      "tabs": "one_tab",
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": {
+        "tab": 0,
+        "note_opens": "Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details, row 1."
+      }
+    },
+    {
+      "name": "one plaintiff, read as joint: nothing to mark joint",
+      "tabs": "one_tab",
+      "plaintiff": { "kind": "joint", "index": null },
+      "expect": {
+        "tab": 0,
+        "note_opens": "Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details, row 1."
+      }
+    },
+    {
+      "name": "one plaintiff, an index the file does not have",
+      "tabs": "one_tab",
+      "plaintiff": { "kind": "index", "index": 7 },
+      "expect": {
+        "tab": 0,
+        "note_opens": "Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details, row 1."
+      }
+    },
+    {
+      "name": "two plaintiffs, the document names the second",
+      "tabs": "two_tabs",
+      "plaintiff": { "kind": "index", "index": 1 },
+      "expect": {
+        "tab": 1,
+        "note_opens": "Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details for Bo Example, row 1."
+      }
+    },
+    {
+      "name": "two plaintiffs, the document says all of them",
+      "tabs": "two_tabs",
+      "plaintiff": { "kind": "joint", "index": null },
+      "expect": {
+        "tab": 0,
+        "note_opens": "Joint, all plaintiffs. Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details for all plaintiffs, row 1."
+      }
+    },
+    {
+      "name": "two plaintiffs, the document does not say: never joint, never a guess",
+      "tabs": "two_tabs",
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: the document does not say which plaintiff it is for."
+      }
+    },
+    {
+      "name": "two plaintiffs, an index that is neither of them reads as unstated",
+      "tabs": "two_tabs",
+      "plaintiff": { "kind": "index", "index": 7 },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: the document does not say which plaintiff it is for."
+      }
+    },
+    {
+      "name": "a shape the reader should never give reads as unstated",
+      "tabs": "two_tabs",
+      "plaintiff": { "kind": "everyone", "index": 0 },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: the document does not say which plaintiff it is for."
+      }
+    },
+    {
+      "name": "two plaintiffs on the matter, one tab, the document does not say: the tab may be the other's",
+      "tabs": "one_tab",
+      "plaintiffs": [0, 1],
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: the document does not say which plaintiff it is for."
+      }
+    },
+    {
+      "name": "two plaintiffs on the matter, one tab, the document names the one with no tab",
+      "tabs": "one_tab",
+      "plaintiffs": [0, 1],
+      "plaintiff": { "kind": "index", "index": 1 },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: that plaintiff has no Negotiation Details tab."
+      }
+    },
+    {
+      "name": "two plaintiffs on the matter, one tab, the document says all of them",
+      "tabs": "one_tab",
+      "plaintiffs": [0, 1],
+      "plaintiff": { "kind": "joint", "index": null },
+      "expect": {
+        "tab": 0,
+        "note_opens": "Joint, all plaintiffs. Example Mutual offer",
+        "status": "written",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nEntered in Negotiation Details for all plaintiffs, row 1."
+      }
+    },
+    {
+      "name": "the document does not say, and the same offer is already on a tab: nothing to tell",
+      "tabs": [
+        { "plaintiff_index": 0, "name": "Ann Example", "rows": [], "details": null },
+        {
+          "plaintiff_index": 1,
+          "name": "Bo Example",
+          "rows": [{ "row": 0, "offer_amount": 15000, "offer_date": "2026-10-07" }],
+          "details": "Entered 10/9/26."
+        }
+      ],
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": { "tab": null, "status": null, "notice": null }
+    },
+    {
+      "name": "a carrier repeating an offer word for word: code finds it on the row, no email",
+      "tabs": [
+        {
+          "plaintiff_index": 0,
+          "name": "Ann Example",
+          "rows": [{ "row": 0, "offer_amount": 15000, "offer_date": "2026-10-07" }],
+          "details": "Entered 10/9/26."
+        }
+      ],
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": { "tab": null, "status": null, "notice": null }
+    },
+    {
+      "name": "the same repeat on a tab the firm keeps: still no email",
+      "tabs": [
+        {
+          "plaintiff_index": 0,
+          "name": "Ann Example",
+          "rows": [{ "row": 0, "offer_amount": 15000, "offer_date": "2026-10-07" }],
+          "details": "Firm notes, kept by hand"
+        }
+      ],
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": { "tab": null, "status": null, "notice": null }
+    },
+    {
+      "name": "the same amount in a later letter: code cannot tell, so a person checks",
+      "tabs": [
+        {
+          "plaintiff_index": 0,
+          "name": "Ann Example",
+          "rows": [{ "row": 0, "offer_amount": 15000, "offer_date": "2026-09-07" }],
+          "details": "Entered 10/9/26."
+        }
+      ],
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": {
+        "tab": null,
+        "status": "not_entered",
+        "notice": "New offer on matter 200123, \"Doe v. Example\".\nExample Mutual offer of $15,000 dated 10/7/26, per \"Offer 10-07.pdf\" letter.\nNot entered in Negotiation Details, please check the letter: the same amount is already on row 1 with a different date."
+      }
+    },
+    {
+      "name": "the firm's own demand, two plaintiffs, the document does not say: no row, kept for SMD, no email",
+      "tabs": "two_tabs",
+      "event": { "kind": "demand", "by": "Example Law", "author_side": "our_firm", "addressed_to": "paying_side" },
+      "plaintiff": { "kind": "unstated", "index": null },
+      "expect": { "tab": null, "status": null, "notice": null, "held": "the document does not say which plaintiff it is for" }
+    },
+    {
+      "name": "the firm's own demand, two plaintiffs, the document names the first",
+      "tabs": "two_tabs",
+      "event": { "kind": "demand", "by": "Example Law", "author_side": "our_firm", "addressed_to": "paying_side" },
+      "plaintiff": { "kind": "index", "index": 0 },
+      "expect": { "tab": 0, "note_opens": "Our demand", "status": null, "notice": null }
+    }
+  ]
+}

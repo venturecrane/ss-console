@@ -1,0 +1,76 @@
+{
+  "about": "Written before the code. Synthetic shapes only. For each place a date of loss or a statute date can be on a matter's record: the date the record must carry, where it came from, and whether code asks the firm which one stands. A reminder's due date is NOT the statute date: 'N before statute runs' is due N before it. The rehearsal's --answer-key file has the same expect keys, under each matter number.",
+  "layout_dol": "Matter/CaseDetails/AccidentDetails/AccidentDate",
+  "layout_sol": "Matter/CaseDetails/StandardCaseDetails/StatuteOfLimitationDate",
+  "cases": [
+    {
+      "name": "both authored in the case details",
+      "layout": { "dol": "2025-08-12T00:00:00", "sol": "2027-08-12T00:00:00" },
+      "expect": { "date_of_loss": "2025-08-12", "date_of_loss_source": "case_details", "statute_date": "2027-08-12", "statute_source": "case_details", "asks": false }
+    },
+    {
+      "name": "case details and the reminders agree",
+      "layout": { "sol": "2027-08-12" },
+      "tasks_open": [{ "subject": "1 week before statute runs", "dueDate": "2027-08-05" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "case_details", "asks": false }
+    },
+    {
+      "name": "no statute field: a week's reminder is due a week before",
+      "tasks_open": [{ "subject": "1 week before statute runs", "dueDate": "2027-08-05" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "statute_reminder", "asks": false }
+    },
+    {
+      "name": "no statute field: a three-month reminder is three calendar months before",
+      "tasks_open": [{ "subject": "3 months until statute runs", "dueDateOnly": "2027-05-12" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "statute_reminder", "asks": false }
+    },
+    {
+      "name": "a completed reminder still says when the statute runs",
+      "tasks_done": [{ "subject": "1 month before statute runs", "dueDate": "2027-07-12" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "statute_reminder", "asks": false }
+    },
+    {
+      "name": "month-end arithmetic is not a disagreement; the shortest reminder decides",
+      "tasks_open": [
+        { "subject": "1 month before statute runs", "dueDate": "2027-02-28" },
+        { "subject": "1 week before statute runs", "dueDate": "2027-03-24" }
+      ],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-03-31", "statute_source": "statute_reminder", "asks": false }
+    },
+    {
+      "name": "reminders that really disagree: the earliest, and the firm is asked",
+      "tasks_open": [
+        { "subject": "1 week before statute runs", "dueDate": "2027-08-05" },
+        { "subject": "3 months until statute runs", "dueDate": "2027-01-12" }
+      ],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-04-12", "statute_source": "statute_reminder", "asks": true }
+    },
+    {
+      "name": "case details and a reminder disagree: the case details, and the firm is asked",
+      "layout": { "sol": "2027-08-12" },
+      "tasks_open": [{ "subject": "1 week before statute runs", "dueDate": "2027-10-05" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "case_details", "asks": true }
+    },
+    {
+      "name": "an undated reminder copy says nothing",
+      "tasks_open": [{ "subject": "1 week before statute runs" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "", "statute_source": "", "asks": false }
+    },
+    {
+      "name": "a task that only mentions the statute is not a reminder",
+      "tasks_open": [{ "subject": "Call client about the statute", "dueDate": "2027-01-01" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "", "statute_source": "", "asks": false }
+    },
+    {
+      "name": "a statute field that is not a date falls to the reminder",
+      "layout": { "sol": "soon" },
+      "tasks_open": [{ "subject": "1 week before statute runs", "dueDate": "2027-08-05" }],
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "2027-08-12", "statute_source": "statute_reminder", "asks": false }
+    },
+    {
+      "name": "a date of loss that is not a date is no date of loss",
+      "layout": { "dol": "last summer" },
+      "expect": { "date_of_loss": "", "date_of_loss_source": "", "statute_date": "", "statute_source": "", "asks": false }
+    }
+  ]
+}
