@@ -188,7 +188,11 @@ def test_a_refused_version_keeps_the_live_one_and_is_not_retried(world) -> None:
     st = state(applier)["records"]
     assert st["verdict"] == "rejected" and st["etag8"] == "1a2b3c4d"
     assert st["rejected_etag8"] == "badbadba"
-    assert st["detail"].startswith("records-firm.yaml: budget")
+    # The validator's words stay root-only beside the state, never in the world-readable state file.
+    assert "detail" not in st
+    detail = applier.state_dir / "records.rejected"
+    assert detail.read_text().startswith("records-firm.yaml: budget")
+    assert oct(os.stat(detail).st_mode & 0o777) == "0o640"
     assert (applier.lane_state_dir / "records.inputs").read_text() == "rejected\n"
     # The same refused ETag is not re-staged, even by a new process (state survives).
     calls = len(validator.calls)
@@ -200,6 +204,7 @@ def test_a_refused_version_keeps_the_live_one_and_is_not_retried(world) -> None:
     assert applier.tick()["records"] is Outcome.APPLIED
     assert os.readlink(live) == "records.vc0ffee00"
     assert state(applier)["records"]["verdict"] == "fetched"
+    assert not detail.exists()
 
 
 def test_a_validator_that_cannot_run_never_replaces_a_live_copy(world) -> None:
@@ -341,3 +346,26 @@ def test_a_missing_validator_is_noticed_before_any_download(world) -> None:
     assert gets == [] and len(validator.calls) == 1
     applier.validator_ready = lambda path: True
     assert applier.tick()["records"] is Outcome.APPLIED
+
+
+def test_the_state_is_readable_by_the_heartbeat_user_under_the_root_umask(
+    world, monkeypatch
+) -> None:
+    """2026-11-05, smd-staging: the root poller runs under the entrypoint's umask 027, mkdir(mode=0o755)
+    gave /run/smd-firm-inputs 0750, the hermes-run heartbeat could not read state.json, and the fleet
+    table showed no firm inputs for a seat that had adopted them. FALSIFIER: drop the explicit chmod
+    in _public_dir and, under umask 027, the directory is 0750 again."""
+    applier, vault, _, _ = world
+    old = os.umask(0o027)
+    try:
+        publish_records(vault, "1a2b3c4d0000")
+        applier.tick()
+    finally:
+        os.umask(old)
+    for d in (applier.state_dir, applier.lane_state_dir):
+        assert oct(os.stat(d).st_mode & 0o777) == "0o755", d
+    assert oct(os.stat(applier.state_dir / "state.json").st_mode & 0o777) == "0o644"
+    assert oct(os.stat(applier.lane_state_dir / "records.inputs").st_mode & 0o777) == "0o644"
+    assert fleet_facts.read_firm_inputs(applier.state_dir / "state.json") == {
+        "records": {"etag8": "1a2b3c4d", "verdict": "fetched", "applied_at": "2026-11-04T12:00:00Z"}
+    }

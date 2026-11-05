@@ -47,6 +47,10 @@ DEFAULT_STATE_DIR = "/run/smd-firm-inputs"
 DEFAULT_LANE_STATE_DIR = "/run/smd-lanes"
 DEFAULT_VALIDATOR_PYTHON = "/opt/jobs/.venv/bin/python"
 STATE_FILE = "state.json"
+#: The validator's first line for a lane's refused version, root-only, beside the state file:
+#: ``<lane>.rejected``. The state file itself is world-readable (the heartbeat runs as hermes and
+#: reads it), so the words that can name a firm's own values never go in it.
+REJECTED_DETAIL_SUFFIX = ".rejected"
 #: Versions kept on disk per lane (the live one is always among them).
 KEEP_VERSIONS = 3
 #: The label of a copy that predates versioning (a real dir found at boot).
@@ -229,6 +233,16 @@ def _remove(path: Path) -> None:
         path.unlink(missing_ok=True)
 
 
+def _public_dir(d: Path) -> None:
+    """Create ``d`` and make it 0755 explicitly. ``mkdir(mode=0o755)`` is masked by the process
+    umask, and the root poller inherits the entrypoint's ``umask 027``: on 2026-11-05 the state
+    dir came out 0750, the hermes-run heartbeat could not read state.json, and the fleet table
+    showed no firm inputs for a seat that had adopted them (fleet_status.firm_inputs_json NULL)."""
+    d.mkdir(mode=0o755, parents=True, exist_ok=True)
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - the state dir is meant to be world-readable: it holds version labels and verdict words only (the validator's text is 0640 beside it)
+    os.chmod(d, 0o755)
+
+
 def _safe_rel(key: str, prefix: str) -> PurePosixPath | None:
     rel = PurePosixPath(key[len(prefix) :])
     if not rel.parts or rel.is_absolute() or any(p in ("", ".", "..") for p in rel.parts):
@@ -380,7 +394,7 @@ class FirmInputsApplier:
     def _record_lane_word(self, lane: Lane, word: str) -> None:
         d = self.lane_state_dir
         try:
-            d.mkdir(mode=0o755, parents=True, exist_ok=True)
+            _public_dir(d)
             tmp = d / f".{lane.name}.inputs.{secrets.token_hex(4)}"
             tmp.write_text(word + "\n", encoding="ascii")
             os.chmod(tmp, 0o644)
@@ -401,13 +415,30 @@ class FirmInputsApplier:
 
     def _write_state(self, state: dict[str, dict[str, Any]]) -> None:
         try:
-            self.state_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+            _public_dir(self.state_dir)
             tmp = self.state_dir / f".{STATE_FILE}.{secrets.token_hex(4)}"
             tmp.write_text(json.dumps(state, sort_keys=True, indent=1), encoding="utf-8")
             os.chmod(tmp, 0o644)
             os.replace(tmp, self.state_dir / STATE_FILE)
         except OSError as exc:
             logger.warning("firm_inputs_applier: could not write %s: %s", STATE_FILE, exc)
+
+    def _write_rejected_detail(self, lane: Lane, first_line: str | None) -> None:
+        """The validator's first line for ``lane``'s refused version, root-only (0640), beside the
+        state file; removed when the lane has no refused version. Never in state.json: that file is
+        read by the hermes-run heartbeat, and a validator's words can quote a firm's own values."""
+        dest = self.state_dir / f"{lane.name}{REJECTED_DETAIL_SUFFIX}"
+        try:
+            if not first_line:
+                dest.unlink(missing_ok=True)
+                return
+            _public_dir(self.state_dir)
+            tmp = self.state_dir / f".{dest.name}.{secrets.token_hex(4)}"
+            tmp.write_text(first_line.rstrip("\n") + "\n", encoding="utf-8")
+            os.chmod(tmp, 0o640)
+            os.replace(tmp, dest)
+        except OSError as exc:
+            logger.warning("firm_inputs_applier: could not write %s: %s", dest.name, exc)
 
     def _applied_at(self, lane: Lane, label: str) -> str:
         try:
@@ -500,12 +531,12 @@ class FirmInputsApplier:
                 "etag8": live,
                 "verdict": "rejected",
                 "rejected_etag8": label,
-                "detail": verdict.first_line,
                 "applied_at": (prior.get("applied_at") or self._applied_at(lane, live))
                 if live
                 else None,
                 "checked_at": self.now(),
             }
+            self._write_rejected_detail(lane, verdict.first_line)
             self._record_lane_word(lane, "rejected")
             self._emit(lane, label, live, "rejected", verdict.first_line)
             return Outcome.REJECTED
@@ -543,6 +574,7 @@ class FirmInputsApplier:
             return Outcome.RETRY
         applied_at = self.now()
         state[lane.name] = {"etag8": label, "verdict": "fetched", "applied_at": applied_at}
+        self._write_rejected_detail(lane, None)
         self._record_lane_word(lane, "fetched")
         self.prune(lane)
         logger.info(

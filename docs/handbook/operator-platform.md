@@ -100,7 +100,7 @@ The shape. Each lane's live path is a symlink to a versioned copy named for the 
 
 What can and cannot happen. A copy the validator refuses is never swapped in: the live copy stays, the lane's state reads `rejected` with the validator's first line, and that version is not retried until the vault changes again. A validator that cannot run never replaces a working copy. Only lanes the seat authored at boot are watched (`SMD_AUTHORED_LANES`); a lane newly enabled in `customer.yaml` still needs a boot, and inputs deleted from the vault leave the seat at its next boot.
 
-How to confirm a publish landed. The applier writes `/run/smd-firm-inputs/state.json`, the heartbeat carries it as `firm_inputs` (migration 0149), and `fleet status` shows each lane's version in its `firm inputs` column, with `(refused <version>)` on a lane whose newest publish was refused. Compare it with the marker's ETag in the vault. The seat self-test check `jobs-firm-inputs-current` fails if a lane's symlink and the state disagree.
+How to confirm a publish landed. The applier writes `/run/smd-firm-inputs/state.json`, the heartbeat carries it as `firm_inputs` (migration 0149), and `fleet status` shows each lane's version in its `firm inputs` column, with `(refused <version>)` on a lane whose newest publish was refused. Compare it with the marker's ETag in the vault. The seat self-test check `jobs-firm-inputs-current` fails if a lane's symlink and the state disagree. The state file is world-readable because the heartbeat runs as the agent user; the validator's own words for a refused version stay root-only beside it, in `/run/smd-firm-inputs/<lane>.rejected`.
 
 ## Documents come back in the firm's format, and the format lives in Word
 
