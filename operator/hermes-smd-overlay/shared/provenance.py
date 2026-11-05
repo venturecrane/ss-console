@@ -564,11 +564,7 @@ def record_read(session_id: str, text: str) -> None:
 # is NOT derived here. A reply stating one over-reports; the vendor stage
 # always writes quantity 1, so its price is the entry's amount.
 
-# ``_usd`` (2026-11-04): the connector's own computed money reads name a dollar
-# figure that way (``get_matter_balances``' ``floor_usd`` and
-# ``shortfall_usd``, money_reads.py), a figure code computed from the firm's
-# record and its authored settings.
-_MONEY_KEY_SUFFIXES: tuple[str, ...] = ("amount", "price", "charge", "balance", "_usd")
+_MONEY_KEY_SUFFIXES: tuple[str, ...] = ("amount", "price", "charge", "balance")
 _BARE_AMOUNT_RE = re.compile(r"\d{1,12}(?:\.\d{1,2})?")
 _MAX_MONEY_WALK_DEPTH = 8
 _MAX_MONEY_WALK_NODES = 20_000

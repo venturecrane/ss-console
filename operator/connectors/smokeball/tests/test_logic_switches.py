@@ -30,6 +30,7 @@ from smokeball_connector import outcome_ledger as ol
 from smokeball_connector import post_journal as pj
 from smokeball_connector import vendor_invoice as vi
 from smokeball_connector import vendor_invoice_tools as vit
+from smokeball_connector import server as smokeball_server
 from smokeball_connector.server import server
 from test_layout_tools import DESIGN, _empty_tab_tenant, _use
 from test_layout_tools import lt as layout_tools
@@ -63,6 +64,12 @@ _LISTED: dict[str, dict[str, Any]] = {
         ],
         "description_sha256": "22f40129d059b5ae8913bef617829e6e88199f955e35e0dbb0152b057ec029e8",
         "added": ["message_id"],
+    },
+    # Unchanged here, and pinned: its docstring once named a tool that was not listed.
+    "get_expenses": {
+        "required": ["matter_id"],
+        "description_sha256": "4e584629dcc60f2aaf70cf91a409fa5e39cab06516de4453ec633d1ac7cdf89c",
+        "added": [],
     },
     "get_matter_balances": {
         "required": ["bank_account_id"],
@@ -139,6 +146,34 @@ def test_the_listed_surface_is_mains_until_the_skills_change(name: str) -> None:
 
 def test_no_new_tool_is_listed_until_the_skills_that_name_it() -> None:
     assert "get_expense_totals" not in _surface()
+
+
+def test_a_balance_read_returns_exactly_what_smokeball_returned(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A read's result is something a model reads too. Fields no skill explains,
+    or a sentence like "no floor authored", are words it could repeat to a firm, so
+    the low-trust decision ships with the skill that acts on it. A floor in the
+    seat's file changes nothing here."""
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        "personas:\n  - skills:\n      - name: trust-balance-nudge\n        enabled: true\n"
+        "        settings:\n          trust_floor_usd: 2500\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    vendor = {"value": [{"matterId": "m-7", "balance": 3000, "protectedBalance": 1000, "availableBalance": 2000}]}
+    asked: list[tuple[str, dict[str, Any]]] = []
+
+    class _Client:
+        def get(self, url: str, **params: Any) -> Any:
+            asked.append((url, params))
+            return vendor
+
+    monkeypatch.setattr(smokeball_server, "_get_client", _Client)
+    out = smokeball_server.get_matter_balances("bank-1", matter_id="m-7")
+    assert out == {"value": [{"matterId": "m-7", "balance": 3000, "protectedBalance": 1000, "availableBalance": 2000}]}
+    assert asked == [("/bankaccounts/bank-1/matter-balances", {"MatterId": "m-7", "Limit": 500, "Offset": 0})]
 
 
 # ---- the value forms: nothing accepted today reads differently --------------

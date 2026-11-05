@@ -98,19 +98,6 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
-      # ---- OPTIONAL: the firm's trust floor (money_reads.py) ----
-      # trust-balance-nudge acts only on a floor the firm authors: the
-      # Smokeball connector compares each matter's availableBalance to it and
-      # returns low_trust. Unauthored, low_trust is null ("no floor authored")
-      # and the nudge does nothing. A positive number of dollars, never guessed.
-      # - name: trust-balance-nudge
-      #   initiation:
-      #     manual: true
-      #     scheduled: false
-      #     webhook: false
-      #   enabled: true
-      #   settings:
-      #     trust_floor_usd: '[FIRM-AUTHORED FLOOR, dollars, e.g. 2500]'
     # ---- OPTIONAL: skill bundles (ADR 0021 Stream D) ----
     # bundles:
     #   - slug: example-bundle

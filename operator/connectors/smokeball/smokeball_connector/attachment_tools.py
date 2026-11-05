@@ -33,7 +33,6 @@ from .layout_tools import register as _register_layout_tools
 from .post_journal import register as _register_post_journal_tools
 from .matter_files import register as _register_matter_file_tools
 from .matter_by_id import register as _register_matter_by_id_tools
-from .money_reads import register as _register_money_reads
 from .resolution_gate import install as _install_resolution_gate
 
 
@@ -85,9 +84,6 @@ def register(server: Any) -> None:
     _register_matter_file_tools(server)
     # Confirm a matter already held by id before writing on it (matter_by_id.py).
     _register_matter_by_id_tools(server)
-    # The trust balance read and the expense totals, each answered in code
-    # (money_reads.py, 2026-11-04). The balance read moved here from server.py.
-    _register_money_reads(server)
 
 
 __all__ = ["register"]

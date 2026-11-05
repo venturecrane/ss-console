@@ -58,7 +58,7 @@ function checkOneSkill(raw: unknown, path: string, errors: ValidationError[]): P
   const initiation = checkSkillInitiation(raw['initiation'], `${path}.initiation`, errors)
   const cost = checkCostEstimate(raw['cost_estimate'], `${path}.cost_estimate`, errors)
   const scope = optionalStringList(raw, 'scope', `${path}.scope`, errors)
-  const settings = checkSkillSettings(raw['settings'], `${path}.settings`, errors, raw['name'])
+  const settings = checkSkillSettings(raw['settings'], `${path}.settings`, errors)
   return assembleSkill(raw, initiation, cost, scope, settings)
 }
 
@@ -73,8 +73,7 @@ function checkOneSkill(raw: unknown, path: string, errors: ValidationError[]): P
 function checkSkillSettings(
   raw: unknown,
   path: string,
-  errors: ValidationError[],
-  skillName?: unknown
+  errors: ValidationError[]
 ): Record<string, string | number | boolean> | undefined {
   if (raw === undefined || raw === null) return undefined
   if (!isPlainObject(raw)) {
@@ -94,38 +93,7 @@ function checkSkillSettings(
     }
   }
   checkRosterRecipients(out, path, errors)
-  checkTrustFloor(out, path, errors, skillName)
   return Object.keys(out).length > 0 ? out : undefined
-}
-
-/**
- * `settings.trust_floor_usd`: the firm's trust floor in dollars. The Smokeball
- * connector's `get_matter_balances` reads it to decide `low_trust` in code
- * (money_reads.py); absent is no floor, and the nudge does nothing. Only
- * `trust-balance-nudge` reads it, and it is a positive number. Mirrors the
- * overlay's `_validate_trust_floor`.
- */
-function checkTrustFloor(
-  settings: Record<string, string | number | boolean>,
-  path: string,
-  errors: ValidationError[],
-  skillName: unknown
-): void {
-  const floor = settings['trust_floor_usd']
-  if (floor === undefined) return
-  if (skillName !== 'trust-balance-nudge') {
-    errors.push({
-      code: 'InvalidSkillSetting',
-      path: `${path}.trust_floor_usd`,
-      message: `${path}.trust_floor_usd: only trust-balance-nudge reads a trust floor`,
-    })
-  } else if (typeof floor !== 'number' || !(floor > 0)) {
-    errors.push({
-      code: 'InvalidSkillSetting',
-      path: `${path}.trust_floor_usd`,
-      message: `${path}.trust_floor_usd must be a positive number (dollars) when present`,
-    })
-  }
 }
 
 /**
