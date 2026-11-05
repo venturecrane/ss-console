@@ -1,5 +1,11 @@
 # Lane firm-input schema changes a person has declared need no re-staging.
 #
+# Since 2026-11-05 most changes need no entry: the preflight asks the
+# release's own validator about each seat's staged marker
+# (operator/bin/lib/fleet/lane_validate.py) and passes a lane whose inputs
+# still validate. An entry is for what that cannot judge: a change to what a
+# pinned file means, or a seat whose marker cannot be read.
+#
 # `fleet build` records a digest of each lane's schema module in the image's
 # lane-inputs.json; a seat's preflight refuses a release whose digest for an
 # authored lane differs from the seat's current image, because the staged

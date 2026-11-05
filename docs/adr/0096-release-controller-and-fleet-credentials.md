@@ -242,7 +242,16 @@ release-tick.yml`) the moment its candidate is published, and
    whose image is from before it with a note. Added when ADR 0103 renamed the
    runner's package and every lane's digest changed in name only; the tick
    still passes no flag, and a schema that accepts different inputs is still
-   re-staged.
+   re-staged. _Amended 2026-11-05:_ the digest now only says when to look. A
+   lane whose module digest differs is put to the release's own validator:
+   the seat's staged marker, read from the vault, through `validate()` from
+   the runner tree at the release's commit
+   (`operator/bin/lib/fleet/lane_validate.py`). It passes with a note when
+   the inputs fit, is refused when they do not, and falls back to the refusal
+   above when the question cannot be asked. A second harmless edit (#3774's
+   one import line) had refused every seat the day after the first; a
+   declaration is now for the case the validator cannot judge, which is a
+   change to what a pinned file means.
 
 7. **Every judged seat writes a verify-ledger row.** After a seat ends `done`,
    `rolled_back`, `failed` or `tooling_error`, the controller POSTs a
