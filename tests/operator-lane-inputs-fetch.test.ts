@@ -128,10 +128,12 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
           `git -C "\\$\\{_eng\\}" show "origin/main:operator/customers/\\$\\{SLUG\\}/${lane}/`
         )
       )
-      expect(f).toMatch(new RegExp(`python3 -m jobs\\.${lane}\\.firm "\\$\\{[A-Z]+_INPUTS_DIR\\}"`))
+      // Validation and the --delete sync are the one publisher's (2026-11-05,
+      // lib/publish-firm-inputs.sh, driven in publish-firm-inputs.test.ts),
+      // run against THIS checkout's runner.
       expect(f).toMatch(
         new RegExp(
-          `aws s3 sync "\\$\\{[A-Z]+_INPUTS_DIR\\}/" "s3://\\$\\{R2_BUCKET_CONFIG\\}/vaults/\\$\\{SLUG\\}/${lane}/" --delete`
+          `lib/publish-firm-inputs\\.sh" "\\$\\{SLUG\\}" ${lane} "\\$\\{[A-Z]+_INPUTS_DIR\\}" --runner-checkout "\\$\\{REPO_ROOT\\}"`
         )
       )
       expect(f).toMatch(

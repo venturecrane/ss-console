@@ -10,13 +10,13 @@
  * Usage:
  *   compile-seat-spec.ts lanes --slug <slug>
  *       prints "<lane> <vault key>" for every lane's firm-input manifest, so the
- *       shell fetches exactly the objects the spec pins.
+ *       shell can tell which lanes are staged (presence only, never the bytes).
  *   compile-seat-spec.ts compile --slug <slug> --out <dir> [--repo <dir>]
  *       [--config <customer.yaml>] [--compiled-from <sha>]
  *       [--image-manifest <f>] [--image-capabilities <f>] [--image-lane-inputs <f>]
  *       [--skills-pointer <f>] [--skills-manifest <f>] [--published <f>]
  *       [--jobs-bundle-pointer <f>]
- *       [--lane-pin <lane>=<f> ...] [--current-spec <f>] [--sign] [--provisioning]
+ *       [--lane <lane> ...] [--current-spec <f>] [--sign] [--provisioning]
  *       writes <dir>/spec.json (the canonical bytes) and, with --sign and
  *       SEAT_SPEC_SIGNING_KEY set, <dir>/pointer.json. A missing input file is
  *       "not available"; an unparseable one is "unreadable". --provisioning
@@ -31,7 +31,8 @@
  * Exit codes (verify): 0 verifies, 1 does not, 2 usage.
  *
  * The signing key is read from the environment and never printed. Firm inputs
- * are hashed, never copied: only their digests reach the spec.
+ * are neither read nor hashed: the spec names a staged lane's manifest key and
+ * pins the schema module its inputs are validated against (2026-11-05).
  */
 
 import { execFileSync } from 'node:child_process'
@@ -79,14 +80,11 @@ function readOptional(path: string | undefined): Buffer | undefined {
   return path && existsSync(path) ? readFileSync(path) : undefined
 }
 
-function lanePins(values: string[]): Record<string, Buffer> {
-  const out: Record<string, Buffer> = {}
+function stagedLanes(values: string[]): string[] {
+  const out: string[] = []
   for (const v of values) {
-    const [lane, path] = v.split('=', 2)
-    if (!lane || !path || !(lane in LANE_INPUTS))
-      die(2, `--lane-pin ${v}: expected <lane>=<file> for a known lane`)
-    const bytes = readOptional(path)
-    if (bytes) out[lane] = bytes
+    if (!(v in LANE_INPUTS)) die(2, `--lane ${v}: not a known lane`)
+    out.push(v)
   }
   return out
 }
@@ -112,7 +110,7 @@ function inputsFrom(v: Record<string, string | string[] | boolean | undefined>):
     compiledFrom,
     customerYaml: readFileSync(cfg),
     laneProofs: readOptional(join(repo, 'operator', 'customers', slug, 'lane-proofs.yaml')) ?? null,
-    lanePins: lanePins((v['lane-pin'] as string[] | undefined) ?? []),
+    lanes: stagedLanes((v.lane as string[] | undefined) ?? []),
     laneSchemaDigests: readLaneSchemaDigests(repo),
     imageManifest: readJson(str('image-manifest')),
     imageCapabilities: readJson(str('image-capabilities')),
@@ -144,7 +142,7 @@ const COMPILE_OPTIONS = {
   'jobs-bundle-pointer': str,
   published: str,
   'current-spec': str,
-  'lane-pin': { type: 'string', multiple: true },
+  lane: { type: 'string', multiple: true },
   sign: { type: 'boolean' },
   provisioning: { type: 'boolean' },
 } as const

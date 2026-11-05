@@ -1,0 +1,236 @@
+# .github/workflows/publish-firm-inputs.yml for venturecrane/engagements.
+#
+# PREPARED IN ss-console (docs/handbook/firm-inputs-publish-workflow.yml.example,
+# ADR 0094 amendment 2026-11-05), APPLIED IN engagements by copying this file to
+# .github/workflows/publish-firm-inputs.yml there. ss-console is public and
+# engagements is private, so the workflow lives where the firm inputs live and
+# reads the public ss-console without a token.
+#
+# WHAT IT DOES. On a push to main that touches a firm's lane inputs
+# (operator/customers/<slug>/<lane>/), it publishes each changed <slug>/<lane>
+# to R2 (vaults/<slug>/<lane>/, or vaults/<slug>/medchron-firm.yaml) through
+# ss-console's operator/bin/lib/publish-firm-inputs.sh, the same writer
+# provisioning runs, and the seat's live applier adopts it. The inputs are
+# validated against the runner the SEAT runs: the ss-console commit its jobs
+# bundle was built from (vaults/<slug>/bundles/jobs-pointer.json -> the bundle
+# manifest's ss_console_sha), else the commit its image was built from
+# (vaults/<slug>/image-manifest.json built_from). Neither known is a refusal,
+# never a fallback to ss-console main: inputs must never be ahead of the schema
+# the seat reads them with.
+#
+# ONE JOB PER SEAT (matrix, fail-fast off), so one firm's refusal never blocks
+# another. Each lane prints one summary line: published <etag8> | refused |
+# unreachable | could-not-validate | runner-unknown.
+#
+# THE ONE SECRET. CLOUDFLARE_R2_PUBLISH_TOKEN: a Cloudflare API token limited to
+# R2 object read and write on the smd-customer-config bucket and nothing else.
+# It is the first secret this repo holds. The R2 S3 key pair is derived from it
+# inside the job (ss-console scripts/lib/r2-creds.sh: key id = the token's id,
+# secret = sha256 of the token), never stored. CLOUDFLARE_ACCOUNT_ID is read as
+# a repository variable (not a secret: it is an identifier, not a credential),
+# or a secret of that name if one is set.
+#
+# NO CLIENT CONTENT IN LOGS. A validator's messages may quote config, so its
+# output goes to a file inside the runner and the log carries only the exit
+# code and the validator's first line. The R2 key list is never printed.
+
+name: Publish firm inputs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'operator/customers/*/demand/**'
+      - 'operator/customers/*/drafting/**'
+      - 'operator/customers/*/litigation/**'
+      - 'operator/customers/*/casefile/**'
+      - 'operator/customers/*/records/**'
+      - 'operator/customers/*/medchron/**'
+  # A by-hand re-publish of one seat (every lane it authors), e.g. after the
+  # seat moves to a runner that accepts a setting it refused before.
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Seat slug to re-publish (every lane it authors)'
+        required: true
+
+# One publish at a time: two merges in a row must land in order.
+concurrency:
+  group: publish-firm-inputs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Which seats and lanes changed
+    runs-on: ubuntu-latest
+    outputs:
+      seats: ${{ steps.plan.outputs.seats }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          DISPATCH_SLUG: ${{ inputs.slug }}
+        run: |
+          set -euo pipefail
+          lanes='demand|drafting|litigation|casefile|records|medchron'
+          if [ -n "${DISPATCH_SLUG:-}" ]; then
+            [[ "$DISPATCH_SLUG" =~ ^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$ ]] || { echo "::error::not a seat slug"; exit 1; }
+            changed="$(find "operator/customers/${DISPATCH_SLUG}" -mindepth 1 -maxdepth 1 -type d | sed 's#^operator/customers/##')"
+          elif [ -z "${BEFORE:-}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            # No usable push range (first push, force push): every authored lane.
+            changed="$(find operator/customers -mindepth 2 -maxdepth 2 -type d | sed 's#^operator/customers/##')"
+          else
+            changed="$(git diff --name-only "${BEFORE}" "${AFTER}" -- operator/customers | cut -d/ -f3,4)"
+          fi
+          # Each seat once, with its changed lanes joined by spaces.
+          seats="$(printf '%s\n' "$changed" | { grep -E "^[a-z0-9-]+/(${lanes})$" || true; } | sort -u \
+            | awk -F/ '{l[$1]=l[$1] (l[$1]?" ":"") $2} END {for (s in l) printf "%s\t%s\n", s, l[s]}' \
+            | sort | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {slug: .[0], lanes: .[1]})')"
+          echo "seats=${seats}" >> "$GITHUB_OUTPUT"
+          echo "seats to publish: $(printf '%s' "$seats" | jq -r 'map(.slug + " (" + .lanes + ")") | join(", ")')"
+
+  publish:
+    name: Publish ${{ matrix.seat.slug }}
+    needs: plan
+    if: needs.plan.outputs.seats != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        seat: ${{ fromJSON(needs.plan.outputs.seats) }}
+    env:
+      SLUG: ${{ matrix.seat.slug }}
+      LANES: ${{ matrix.seat.lanes }}
+      R2_BUCKET_CONFIG: smd-customer-config
+    steps:
+      - name: Check out the firm inputs (this repo, at the pushed commit)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The publisher and the credential helper come from ss-console main: the
+      # newest key guard and read-back. The RUNNER they validate against is the
+      # seat's, checked out below.
+      - name: Check out ss-console main (the publisher)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: venturecrane/ss-console
+          ref: main
+          path: .ss-console
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      - name: Find the runner this seat runs
+        id: runner
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_PUBLISH_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=/dev/null
+          source .ss-console/scripts/lib/r2-creds.sh
+          derive_r2_creds
+          echo "::add-mask::${R2_SECRET_ACCESS_KEY}"
+          echo "::add-mask::${R2_ACCESS_KEY_ID}"
+          {
+            echo "R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}"
+            echo "R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}"
+            echo "R2_ENDPOINT_URL=${R2_ENDPOINT_URL}"
+            echo "AWS_REGION=auto"
+            echo "AWS_DEFAULT_REGION=auto"
+          } >> "$GITHUB_ENV"
+          r2() { AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"; }
+          w="$(mktemp -d)"
+          sha="" from=""
+          if r2 s3 cp "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/bundles/jobs-pointer.json" "$w/p.json" --only-show-errors 2>/dev/null; then
+            key="$(jq -r '.manifest_key // empty' "$w/p.json")"
+            if [[ "$key" =~ ^fleet/bundles/jobs/[0-9]{12}-[0-9a-f]{8}\.json$ ]] \
+               && r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${key}" "$w/m.json" --only-show-errors 2>/dev/null; then
+              sha="$(jq -r '.ss_console_sha // empty' "$w/m.json")"; from="its jobs bundle"
+            fi
+          fi
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]] \
+             && r2 s3 cp "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/image-manifest.json" "$w/i.json" --only-show-errors 2>/dev/null; then
+            sha="$(jq -r '.built_from // empty' "$w/i.json")"; from="its image"
+          fi
+          if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "runner for ${SLUG}: ss-console ${sha:0:12} (${from})"
+            echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          else
+            echo "runner for ${SLUG}: unknown (no readable bundle pointer or image manifest)"
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out ss-console at the seat's runner
+        if: steps.runner.outputs.sha != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: venturecrane/ss-console
+          ref: ${{ steps.runner.outputs.sha }}
+          path: .runner
+
+      - name: Publish each changed lane
+        env:
+          RUNNER_SHA: ${{ steps.runner.outputs.sha }}
+        run: |
+          set -uo pipefail
+          failed=0
+          logs="$(mktemp -d)"
+          for lane in ${LANES}; do
+            src="operator/customers/${SLUG}/${lane}"
+            if [ -z "${RUNNER_SHA}" ]; then
+              line="runner-unknown (nothing published)"; failed=1
+            elif [ ! -d "$src" ]; then
+              line="skipped (the lane's directory is gone; clearing a lane is a provisioning act)"
+            else
+              rc=0
+              bash .ss-console/operator/bin/lib/publish-firm-inputs.sh "${SLUG}" "${lane}" "$src" \
+                --runner-checkout .runner --validator-log "${logs}/${lane}.validator" \
+                > "${logs}/${lane}.out" 2>&1 || rc=$?
+              case "$rc" in
+                0) line="published $(sed -n 's/^published .* etag=\([0-9a-f]*\)$/\1/p' "${logs}/${lane}.out" | tail -1)" ;;
+                1)
+                  # The publisher's own lines can name files, so only the
+                  # validator's first line (or a fixed sentence) is logged.
+                  why="$(sed -n 's/^publish-firm-inputs: validator exit [0-9]*: //p' "${logs}/${lane}.out" | head -1)"
+                  line="refused (${why:-the key guard: a file name outside the allowed characters})"; failed=1 ;;
+                3) line="unreachable (R2 sync or read-back failed)"; failed=1 ;;
+                4) line="could-not-validate (the seat's runner has no validator for this lane)"; failed=1 ;;
+                *) line="error (exit ${rc})"; failed=1 ;;
+              esac
+            fi
+            echo "${SLUG}/${lane}: ${line}"
+            echo "- \`${SLUG}/${lane}\`: ${line}" >> "$GITHUB_STEP_SUMMARY"
+          done
+          rm -rf "$logs"
+          exit "$failed"
+
+# ---------------------------------------------------------------------------
+# THE engagements README PARAGRAPH (add under the repo's workflows section):
+#
+#   ### Publishing a firm's configuration (publish-firm-inputs.yml)
+#
+#   A merge to main that changes anything under
+#   `operator/customers/<slug>/{demand,drafting,litigation,casefile,records,medchron}/`
+#   publishes that firm's lane inputs to its seat. The workflow checks each
+#   changed lane against the exact version of the Operator the seat runs (the
+#   ss-console commit of the seat's jobs bundle, else of its image) with
+#   ss-console's `operator/bin/lib/publish-firm-inputs.sh`, the same writer
+#   provisioning uses, and only then writes `vaults/<slug>/<lane>/` in R2; the
+#   seat adopts it live. Each seat publishes in its own job, so one firm's
+#   refusal never blocks another, and the run summary says, per lane,
+#   `published <tag>`, `refused`, `unreachable`, `could-not-validate` or
+#   `runner-unknown`. A refused or failed lane leaves the seat on the settings
+#   it had. Logs carry no client content: validator output stays in a file on
+#   the runner and only its first line is printed. This is the one workflow in
+#   this repo that holds a secret, `CLOUDFLARE_R2_PUBLISH_TOKEN` (R2 object
+#   read and write on `smd-customer-config` only), plus the repository variable
+#   `CLOUDFLARE_ACCOUNT_ID`. Re-publish a seat by hand with Actions > Publish
+#   firm inputs > Run workflow, naming the slug. The chronology `controls/`
+#   files are still staged only by provisioning.

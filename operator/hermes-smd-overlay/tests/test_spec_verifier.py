@@ -157,6 +157,19 @@ def test_a_signed_spec_the_image_can_run_verifies(image):
     assert v.customer_yaml_match is True
 
 
+def test_a_spec_still_carrying_lane_input_pins_verifies_and_the_pins_are_ignored(image):
+    """Specs signed before 2026-11-05 pin each lane's firm-input manifest by
+    sha256. The spec now pins the schema, not the bytes (firm inputs publish on
+    an engagements merge and adopt live), so a seat holding an older spec must
+    not page spec_unverified because its live inputs moved past that digest."""
+    key = Ed25519PrivateKey.generate()
+    objects: dict[str, bytes] = {}
+    legacy = {"demand": {"key": f"vaults/{SLUG}/demand/demand-firm.yaml", "sha256": "0" * 64}}
+    publish(objects, make_spec(lanes=legacy), key)
+    v, _ = run(objects, key, image)
+    assert (v.verdict, v.unmet) == ("verified", [])
+
+
 def test_tampered_spec_bytes_fail_the_digest(image):
     key = Ed25519PrivateKey.generate()
     objects: dict[str, bytes] = {}

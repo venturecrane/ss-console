@@ -8,9 +8,11 @@
  * plus a pointer `vaults/<slug>/spec-pointer.json` naming it and carrying an
  * Ed25519 signature over the spec's exact bytes. The spec carries references
  * (sha256 and object key), never the referenced bytes: the customer.yaml, the
- * lane-proofs seed, each lane's firm-input manifest, the skills release. Firm
- * inputs live in the private engagements repo and in the seat's vault; a
- * digest of them is all that may appear in this public repo or its CI logs.
+ * lane-proofs seed, the skills release. Each staged lane's firm inputs are
+ * named by KEY ONLY, with no digest (2026-11-05, ADR 0094 amendment): they
+ * publish on an engagements merge (operator/bin/lib/publish-firm-inputs.sh)
+ * and the seat adopts them live, so the spec pins what guards the seat, the
+ * schema module those inputs are validated against, and not their bytes.
  *
  * REQUIREMENTS. What the config asks of an image, in three families:
  *   image         skill:<name>, pin:<name>@<6hex>, pre_run:<skill>/<file>,
@@ -40,7 +42,8 @@ export const SPEC_SCHEMA_VERSION = 1
 
 /**
  * lane -> the runner module its firm inputs are validated against, and the
- * vault object that pins every firm input of that lane by sha256. The module
+ * vault object (the lane's manifest, which pins every firm input of that lane
+ * by sha256) whose presence says the lane is staged. The module
  * table equals operator/bin/lib/fleet/build.py LANE_SCHEMA_MODULES, the one
  * `fleet build` hashes into lane-inputs.json (tests/compile-seat-spec.test.ts
  * holds the two equal).

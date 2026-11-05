@@ -21,6 +21,10 @@ sources:
     href: scripts/ci-reconcile-r2-customer-configs.sh
   - label: Seat-spec compiler (the image guard)
     href: scripts/compile-seat-spec.ts
+  - label: Firm-inputs publisher (provisioning and the engagements merge workflow)
+    href: operator/bin/lib/publish-firm-inputs.sh
+  - label: The engagements repo's publish workflow, as prepared here
+    href: docs/handbook/firm-inputs-publish-workflow.yml.example
   - label: Pause script
     href: operator/bin/pause-customer.sh
   - label: Sticky-stop clear runbook
@@ -69,6 +73,16 @@ You ask an agent; the agent edits the client's configuration file (`operator/cus
 - **Some settings apply within about 15 seconds of the merge**, with no restart: routine levels and permissions, who may email the Operator, the Operator's administrators, escalation contacts, and similar. The exact list is the overlay's `config_applier/safety.py`; if a change mixes live and non-live settings, none of it applies live.
 - **Everything else needs a rebuild of the seat**: which systems it connects to, the AI model, memory, the seat's role, people and spaces, and more. The agent rebuilds the seat and reports the result; it first checks that no job is running or held.
 - **A new or changed skill** goes out as a skills release, with no restart. **A change to the Operator's code** goes out as a release, ring by ring across the fleet ([Deployment & Release](/admin/playbook/deployment-release)).
+
+### Changing a firm's configuration
+
+A firm's own working settings (the spend caps and models for its chronology, demand, drafting, litigation, case-file and records work, the house style and exemplars its drafts follow, the patterns its litigation status reads) are not in `customer.yaml`. They live in the private client repository, `venturecrane/engagements`, under `operator/customers/<slug>/<lane>/`, because they are the firm's material and this repository is public.
+
+- **To change one**, ask an agent to edit the file there and open a pull request in that repository. Merging it is the act: within a few minutes of the merge, the repository's "Publish firm inputs" workflow checks the new settings against the exact version of the Operator that firm's seat is running, and only then puts them where the seat reads them. Nobody runs a rebuild and no laptop is involved.
+- **The seat picks the change up within about a minute** of the publish, without a restart, once the seat's live applier is running on it. A seat without it picks the change up at its next restart, and nothing else changes for that seat in the meantime.
+- **To see that it landed**, ask the agent for `fleet status`: each seat's `firm_inputs` field names the version it holds. The workflow's own run also says, for each changed firm and area, `published` (with a short version tag), `refused`, or `unreachable`.
+- **A refusal** means the new settings do not pass the checks for the version of the Operator the seat runs, so nothing was published and the seat keeps the settings it had. The run shows the check's first line. The usual causes are a typo or a missing required value (fix the file and merge again), or a setting the seat's version does not understand yet (the seat needs a release first). One firm's refusal never holds up another firm.
+- A first-time setup still happens when a seat is first built, from the same files the same way.
 
 ## 5. Confirming it landed
 

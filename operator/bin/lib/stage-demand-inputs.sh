@@ -17,6 +17,10 @@
 # removed from the firm inputs is removed from the vault (gone means gone). The
 # entrypoint pulls the prefix into a root-owned tree on every boot. A seat with
 # no demand inputs runs no demand jobs; the demand lane defers them.
+# The write itself (validation, the key guard, the --delete sync, the read-back)
+# is lib/publish-firm-inputs.sh, the one writer, which the engagements repo's
+# merge workflow also runs (2026-11-05): provisioning and a merge publish the
+# same bytes the same way. This block keeps only the engagements-main gate.
 # >>> demand-inputs-stage
 DEMAND_INPUTS_DIR="${SS_ENGAGEMENTS_DIR:-${HOME}/dev/engagements}/operator/customers/${SLUG}/demand"
 if [ -f "${DEMAND_INPUTS_DIR}/demand-firm.yaml" ]; then
@@ -26,15 +30,10 @@ if [ -f "${DEMAND_INPUTS_DIR}/demand-firm.yaml" ]; then
      && [ "$(git -C "${_eng}" show "origin/main:${_rel}" 2>/dev/null)" != "$(cat "${DEMAND_INPUTS_DIR}/demand-firm.yaml")" ]; then
     die "the demand firm inputs at ${DEMAND_INPUTS_DIR} are not engagements origin/main; merge them first (an unmerged file is an unreviewed one)"
   fi
-  PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
-    uv run --quiet --with pyyaml python3 -m jobs.demand.firm "${DEMAND_INPUTS_DIR}" \
-    || die "the demand firm inputs for ${SLUG} do not validate against this checkout's runner (see the line above); not uploading them"
-  log "Syncing the demand firm inputs to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/demand/"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 sync "${DEMAND_INPUTS_DIR}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/demand/" --delete \
-      --exclude "eval/*" --exclude "request-brief-*" \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
-    || die "R2 sync of the demand firm inputs failed"
+  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
+    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" demand "${DEMAND_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+    || die "the demand firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (demand firm inputs)"
 else
   assert_lane_not_on_main "operator/customers/${SLUG}/demand/demand-firm.yaml"
