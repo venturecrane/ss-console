@@ -26,6 +26,7 @@ from docx.shared import Pt
 from lxml import etree
 
 from jobs.demand import deliver
+from jobs.drafting import briefpage
 from jobs.drafting.revise import inplace, prior
 from test_drafting_revise import BRIEF, KEY, REQUEST
 from test_drafting_revise_layout import FULL, V7_KEYS, _format_key, _render, _run, firm_styled, fmt  # noqa: F401
@@ -139,10 +140,24 @@ def test_n8_the_filed_rule_keeps_its_weight(tmp_path, fmt, where) -> None:
     assert _bottom(right) is None
 
 
+def _as_he_saved_it(path: Path) -> None:
+    """A rule and signature lines that meet their asks, written as Word writes
+    them rather than as the renderer does: a heavier rule on the left cell, and
+    single spacing with no zero before and after on the signature lines."""
+    d = docx.Document(str(path))
+    _bottom(_caption(d).rows[-1].cells[0]).set(qn("w:sz"), "12")
+    for p in briefpage.signature_lines(d):
+        sp = p._p.pPr.find(qn("w:spacing"))
+        for attr in ("w:before", "w:after"):
+            sp.attrib.pop(qn(attr), None)
+    d.save(str(path))
+
+
 def test_n8_an_ask_already_met_touches_nothing(tmp_path, fmt) -> None:
     """FALSIFIER (N8): two of three asks were already how the filed brief reads,
     and their elements were written anyway."""
     filed = _render(FULL, tmp_path / "filed.docx", fmt, **V7_KEYS)
+    _as_he_saved_it(filed)
     key = {
         "items": [
             _item("c1", GAP, layout={"front_court_gap_lines": 3}, relative="more"),
