@@ -182,6 +182,26 @@ def test_update_event_moving_a_date_keeps_the_matter_link(rec: _Recorder) -> Non
     }
 
 
+def test_update_event_keeps_lawtoolbox_additional_data(rec: _Recorder) -> None:
+    """A PUT that omits additionalData reads back {} (proven live 2026-11-05,
+    vfy_01M6PJ8XAK8PRN52NG5ENPW3D3). On a LawToolBox deadline that key is
+    LawToolBox's own id for the event, so an attendee-only edit must re-send it."""
+    rec.responses["/events/e-2"] = {**_LINKED_EVENT, "additionalData": {"LawToolBox": "e-2"}, "nonBillable": False}
+    server.update_event(event_id="e-2", attendees=["s-1"])
+    put = next(c for c in rec.calls if c["method"] == "PUT")
+    assert put["json"]["additionalData"] == {"LawToolBox": "e-2"}
+    assert put["json"]["nonBillable"] is False
+
+
+def test_event_readback_flags_a_dropped_additional_data() -> None:
+    """The falsifier: a read-back that lost the LawToolBox key is a difference."""
+    from smokeball_connector.readback_records import event_diffs
+
+    sent = {"subject": "s", "additionalData": {"LawToolBox": "e-2"}}
+    assert any("additionalData" in d for d in event_diffs(sent, {"subject": "s", "additionalData": {}})[0])
+    assert not any("additionalData" in d for d in event_diffs(sent, {"subject": "s", **sent})[0])
+
+
 def test_update_event_rename_keeps_the_provenance_mark(rec: _Recorder) -> None:
     """create_event stamps "[Operator]"; a rename through update_event used to
     send the new subject bare, so staff could no longer tell the entry was
