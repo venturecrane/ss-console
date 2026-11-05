@@ -410,6 +410,7 @@ class ReviseRun(DraftingRun):
             return self._file()
         self._stage("destination", self._destination)
         self._stage("revise-base", self._base)
+        self._close_request()
         self._stage("revise-estimate", self._estimate_revise)
         self._stage("revise-checklist", self._checklist)
         self._stage("revise-edit", self._edit)

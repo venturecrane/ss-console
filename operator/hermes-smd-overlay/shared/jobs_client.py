@@ -77,6 +77,10 @@ class JobsBrokerClient:
         """``accepted`` with a ``job_id``, or ``accepted: False`` with a ``reason``."""
         return self._request({"action": "drafting_job_submit", "envelope": envelope})
 
+    def drafting_add_to_request(self, **fields: Any) -> dict[str, Any]:
+        """A requester's later words for a running job. ``result`` says what happened."""
+        return self._request({"action": "drafting_job_add_to_request", **fields})
+
     def drafting_status(self, job_id: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"action": "drafting_job_status"}
         if job_id:

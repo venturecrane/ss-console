@@ -172,9 +172,11 @@ class SubmitRefused(ValueError):
     """A valid request the ledger will not queue NOW. ``job_id`` names the job
     it collided with, when there is one."""
 
-    def __init__(self, message: str, job_id: str | None = None) -> None:
+    def __init__(self, message: str, job_id: str | None = None, *, underway: bool = False) -> None:
         super().__init__(message)
         self.job_id = job_id
+        #: The collision is a draft still running on the matter, not this same email.
+        self.underway = underway
 
 
 def digest(obj: Any) -> str:
@@ -258,7 +260,7 @@ def queue_record(env: dict[str, Any], job_id: str, revise: dict[str, Any] | None
 #: The delivery report's lists the DELIVER turn names. The runner may send each
 #: inside ``delivery`` or as a top-level field of the record; either lands in
 #: the stored delivery, so the projection has one place to read them from.
-REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections")
+REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections", "additions_not_covered")
 
 
 def incoming_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:
@@ -485,9 +487,8 @@ class DraftingLedger:
             ).fetchone()
             if twin is not None:
                 conn.rollback()
-                raise SubmitRefused(
-                    f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}", twin["id"]
-                )
+                what = f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}"
+                raise SubmitRefused(what, twin["id"], underway=True)
             if allowance is not None and revise is None:
                 window = cycle_window(now, anchor_day, effective_from)
                 used = self._used(conn, window.start, window.end)

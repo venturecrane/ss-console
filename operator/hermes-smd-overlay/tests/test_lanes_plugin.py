@@ -151,8 +151,9 @@ def test_the_three_tools_register_function_shaped_and_require_the_socket():
         "demand_job_submit",
         "demand_job_status",
         "demand_allowance",
-        # The drafting job's three (drafting.py).
+        # The drafting job's four (drafting.py).
         "drafting_job_submit",
+        "drafting_job_add_to_request",
         "drafting_job_status",
         "drafting_allowance",
         # The litigation status job's two (litigation.py).
