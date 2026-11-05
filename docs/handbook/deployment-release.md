@@ -161,9 +161,11 @@ outbound admin links - strict, no fallback), and `PORTAL_BASE_URL`
 ## Merge gates, and why no human approval is required
 
 Every change to main goes through a pull request, and the gate is mechanical. The
-`Main Branch Protection` ruleset (id 15555219) requires five checks: the verify workflow
+`Main Branch Protection` ruleset (id 15555219) requires seven checks: the verify workflow
 (`Typecheck, Lint, Format, Test`), `Security Summary`, `substrate`,
-`overlay` (the seat runtime's ruff, pytest and lockfile checks, a job of
+`runner` (the jobs runner's suite, its own parallel job of
+`.github/workflows/operator-substrate.yml` since 2026-11-04, run on four
+workers), `overlay` (the seat runtime's ruff, pytest and lockfile checks, a job of
 `.github/workflows/operator-substrate.yml`, required from the day the overlay
 fold merged; ADR 0095), and
 `Runtime ACs carry a verification ID` (the Law 9 gate, required since
@@ -199,13 +201,17 @@ to the harness app's own registry, never to `hermes-fleet`.
 Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
 green enters the queue (`gh pr merge <n>`, which `/ship` runs; the queue sets
 the squash itself and refuses `--squash` and `--delete-branch`); the
-queue tests it on top of main plus every PR ahead of it, with the same six
-checks run on the `merge_group` event, and merges it when they pass. Nobody
+queue tests it on top of main plus every PR ahead of it, with the same seven
+checks run on the `merge_group` event, running only the suites the group's
+changed paths touch (`merge_group.base_sha`), and merges it when they pass.
+Until 2026-11-04 a queue run carried no base, so every suite ran on every
+queued PR (21 minutes); a push to main still carries none and runs everything,
+the gate before the image build. Nobody
 rebases onto a moving main by hand. Before the queue, the legacy branch
 protection required branches to be up to date with main, and on a day with five
 sessions merging each PR re-ran its checks once for every merge that landed
-ahead of it. The four workflows behind those checks (`overlay` and `substrate`
-are two jobs of one workflow) carry a `merge_group` trigger for this reason; a
+ahead of it. The four workflows behind those checks (`substrate`, `runner`,
+`overlay` and `overlay-e2e` are four jobs of one workflow) carry a `merge_group` trigger for this reason; a
 required check without one leaves every queued PR waiting at "Expected".
 
 Required approving reviews are zero on both, and that is a decision rather than an
@@ -217,7 +223,7 @@ change, which is no review at all. The substitute is evidence rather than
 eyeballs: runtime claims carry `crane_verify` ids, the runtime-AC gate refuses an
 acceptance criterion marked met without one, and the doctrine's "report is a
 probe" law makes a program's own completion claim insufficient. The ruleset has
-no bypass actors, so none of its five checks can be bypassed by anyone. (Until
+no bypass actors, so none of its seven checks can be bypassed by anyone. (Until
 2026-10-21 the verify check lived on the legacy branch protection, where admin
 enforcement was off, so an administrator could merge past it; moving it into the
 ruleset with the queue closed that.) The periodic code reviews under

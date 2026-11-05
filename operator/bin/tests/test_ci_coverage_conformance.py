@@ -67,8 +67,9 @@ GUARD = "steps.changes.outputs.relevant == 'true'"
 # Directories whose tests are deliberately NOT part of the bare pytest step.
 # connectors/ runs in the workflow's per-connector uv-venv conformance step
 # (real installed artifact + live stdio MCP), never in the bare env.
-# runners/ (ss#2613, the jobs runner) runs in its own uv-venv step for the
-# same reason: it installs the connector client and needs its deps.
+# runners/ (ss#2613, the jobs runner) runs in its own job, `runner` (since
+# 2026-11-04, in parallel with `substrate`), in its own uv venv for the same
+# reason: it installs the connector client and needs its deps.
 # hermes-smd-overlay/ (the seat runtime, in-tree since the 2026-10-22 fold, ADR
 # 0095) runs as its own job, `overlay`: the seat interpreter, its own venv and
 # the pinned Hermes source; test_overlay_job_runs_the_seat_runtime_suite pins it.
@@ -205,7 +206,13 @@ def test_workflow_has_no_trigger_path_filter() -> None:
 
 
 def test_every_suite_step_is_gated_on_the_detect_step() -> None:
-    steps = _load_workflow()["jobs"]["substrate"]["steps"]
+    jobs = _load_workflow()["jobs"]
+    for job_name in ("substrate", "runner"):
+        assert job_name in jobs, f"operator-substrate.yml has no `{job_name}` job"
+        _assert_gated_on_the_detect_step(jobs[job_name]["steps"])
+
+
+def _assert_gated_on_the_detect_step(steps: list[dict]) -> None:
     names = [s.get("name") for s in steps]
     assert DETECT_STEP_NAME in names, f"missing the '{DETECT_STEP_NAME}' step"
     detect_idx = names.index(DETECT_STEP_NAME)
@@ -307,15 +314,58 @@ def test_connector_tests_are_covered_by_the_conformance_step_trigger() -> None:
 
 
 def test_runner_tests_are_covered_by_their_own_step_and_trigger() -> None:
-    # runners/ is pytest-exempt above (own venv step, ss#2613); pin both the
-    # trigger path and the step so a runner regression cannot merge green.
+    """runners/ is pytest-exempt above (ss#2613). Since 2026-11-04 the jobs
+    runner suite is its own job, `runner`, so its 13:36 serial run no longer
+    stretches the `substrate` wall clock. Pin the trigger path, the job's
+    gating shape, the seat-identical install, the parallel run, and that the
+    suite left `substrate` (two copies would run it twice)."""
     wf = _load_workflow()
     assert any(_matches(p, "operator/runners/jobs/jobs/medchron/driver.py") for p in _trigger_paths(wf))
-    steps = wf["jobs"]["substrate"]["steps"]
+    job = wf["jobs"].get("runner")
+    assert job, "operator-substrate.yml has no `runner` job"
+    steps = job["steps"]
+    names = [s.get("name") for s in steps]
+    assert names[:2] == ["Checkout", DETECT_STEP_NAME], names[:2]
+    assert steps[1].get("id") == "changes"
+    assert names[-1] == SKIP_STEP_NAME and steps[-1].get("if") == "steps.changes.outputs.relevant != 'true'"
+    ungated = [s.get("name") for s in steps[2:-1] if (s.get("if") or "").strip() != GUARD]
+    assert not ungated, f"runner job steps must carry `if: {GUARD}`: {ungated}"
     runs = "\n".join(s.get("run") or "" for s in steps)
-    assert "./runners/jobs" in runs and "runners/jobs/tests" in runs, (
-        "the jobs runner venv step is missing from operator-substrate.yml"
+    for needle in (
+        "./runners/jobs",
+        "runners/jobs/tests",
+        "--require-hashes -r requirements/jobs.txt",
+        "-c runners/jobs/pyproject.toml",
+        "--numprocesses=",
+    ):
+        assert needle in runs, f"the runner job's run text is missing {needle!r}"
+    substrate_runs = "\n".join(s.get("run") or "" for s in wf["jobs"]["substrate"]["steps"])
+    assert "runners/jobs/tests" not in substrate_runs, (
+        "the jobs runner suite moved to the `runner` job; `substrate` must not run it too"
     )
+
+
+def test_every_detect_step_reads_the_queue_base_on_merge_group() -> None:
+    """A merge-queue run carries no pull_request base, so a detect step that
+    reads only `pull_request.base.sha` fails closed there and runs every suite.
+    Each job's detect step must read `merge_group.base_sha` first and
+    `merge_group.head_sha` for the head. Falsifier: drop it in one job and that
+    job is back to 21 minutes on every queued PR. It must never read
+    `github.event.before`, which a push carries: `push: main` must keep
+    failing closed, the gate before the image build."""
+    jobs = _load_workflow()["jobs"]
+    for job_name in ("substrate", "runner", "overlay", "overlay-e2e"):
+        assert job_name in jobs, f"operator-substrate.yml has no `{job_name}` job"
+        detect = [s for s in jobs[job_name]["steps"] if s.get("id") == "changes"]
+        assert len(detect) == 1, f"{job_name}: expected exactly one `changes` step"
+        run = detect[0].get("run") or ""
+        assert re.search(r"github\.event\.merge_group\.base_sha \|\|\s*github\.event\.pull_request\.base\.sha", run), (
+            f"{job_name}: the detect step must read merge_group.base_sha before pull_request.base.sha"
+        )
+        assert "github.event.merge_group.head_sha ||" in run, (
+            f"{job_name}: the detect step must read merge_group.head_sha"
+        )
+        assert "github.event.before" not in run, f"{job_name}: push must carry no base (fails closed)"
 
 
 def test_overlay_job_runs_the_seat_runtime_suite() -> None:
