@@ -24,6 +24,8 @@ The schema (the engagements author writes to exactly this)::
                   plain_letter_paper?: bool,
                   pleading?: {lines, line_pitch_pt, margins_in: [4]},
                   limits?: {<class>: {<section title>: max pages}},
+                  firm_bases?: {mediation_brief: {path, source: {matter_id, file_id, name, sha256,
+                  version?, accepted?}}},
                   layout?: {<class>: {line_spacing, line_spacing_pt, justify,
                             first_line_indent_in, heading_indent_in: [3],
                             heading_underline: [3], item_line_spacing,
@@ -84,6 +86,10 @@ OPTIONAL_MODEL_KEYS = ("review",)
 PROMPT_KEYS = ("digest", "compose", "audit", "repair")
 LABEL_STYLES = ("caps_bold_underline", "all caps, bold, underlined")
 MEDIATION_SECTIONS = 11
+#: The classes whose first draft can be made in a firm's Word file (brief_base.py).
+FIRM_BASE_CLASSES = ("mediation_brief",)
+SOURCE_KEYS = ("matter_id", "file_id", "name", "sha256")
+ACCEPTANCE_KEYS = ("version", "accepted")
 #: format.layout.<class> keys and their types (closed).
 LAYOUT_KEYS = {
     "line_spacing": "num",  # a multiple: 2.0 is double
@@ -164,6 +170,11 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         # Optional: the classes filed on the firm's pleading paper by default,
         # asked for or not (finish.paper); needs format.pleading.
         "pleading_classes": ("list[str]", False),
+        # Optional: {<class>: {path, source: {matter_id, file_id, name, sha256, version?,
+        # accepted?}}}, the attorney's accepted save or a firm's past file, blanked: the
+        # Word file a first draft is made in (firmbase, brief_base.py); its
+        # layout outranks layout.<class>.
+        "firm_bases": ("map", False),
     },
     "classes": None,
     "attachments": {"decl_2030_050": ("str", True), "pos": ("str", True)},
@@ -342,6 +353,8 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
         refs.append((f"classes.{cls}.skeleton", entry["skeleton"]))
         refs += [(f"classes.{cls}.prompts.{k}", v) for k, v in entry["prompts"].items()]
         refs += [(f"classes.{cls}.exemplars[{i}]", v) for i, v in enumerate(entry["exemplars"])]
+    bases = data["format"].get("firm_bases") or {}
+    refs += [(f"format.firm_bases.{c}", b["path"]) for c, b in bases.items()]
     return refs + evidence_config.referenced_paths(data)
 
 
@@ -359,6 +372,26 @@ def _format(fmt: dict[str, Any]) -> list[str]:
     bad = [c for c in fmt.get("pleading_classes") or [] if c not in CLASSES]
     if bad or (fmt.get("pleading_classes") and "pleading" not in fmt):
         out.append(f"format.pleading_classes: classes from {list(CLASSES)}, and format.pleading authored")
+    out += _firm_bases(fmt.get("firm_bases") or {})
+    return out
+
+
+def _firm_bases(bases: dict[str, Any]) -> list[str]:
+    out = []
+    for c, b in bases.items():
+        where = f"format.firm_bases.{c}"
+        if c not in FIRM_BASE_CLASSES:
+            out.append(f"{where}: only {list(FIRM_BASE_CLASSES)} are made in a firm's file")
+        elif not isinstance(b, dict) or not _type_ok(b.get("path"), "path"):
+            out.append(f"{where}: expected a path")
+        elif not set(SOURCE_KEYS) <= set(b.get("source") or {}) <= {*SOURCE_KEYS, *ACCEPTANCE_KEYS}:
+            out.append(
+                f"{where}.source: expected {list(SOURCE_KEYS)}, and for an accepted save {list(ACCEPTANCE_KEYS)}"
+            )
+        elif not all(_type_ok(v, "str") for v in b["source"].values()):
+            out.append(f"{where}.source: every value is a string")
+        elif bool(b["source"].get("version")) != bool(b["source"].get("accepted")):
+            out.append(f"{where}.source: an accepted save records both {list(ACCEPTANCE_KEYS)}")
     return out
 
 
@@ -434,6 +467,12 @@ class DraftingFirm:
 
     def exemplar_paths(self, cls: str) -> list[Path]:
         return [self.root / p for p in self.data["classes"][cls]["exemplars"]]
+
+    def firm_base(self, cls: str) -> tuple[Path, dict[str, str]] | None:
+        """(the firm's Word file this class is made in, where it came from); None: the
+        config's layout."""
+        b = (self.data["format"].get("firm_bases") or {}).get(cls)
+        return (self.root / b["path"], dict(b["source"])) if b else None
 
     def attachment(self, key: str) -> str:
         return self.read(self.data["attachments"][key])
