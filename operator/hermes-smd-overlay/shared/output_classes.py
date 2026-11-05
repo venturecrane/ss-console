@@ -60,6 +60,28 @@ OUTPUT_CLASS_MEANINGS: MappingProxyType[str, str] = MappingProxyType(
 #: The membership test itself.
 OUTPUT_CLASSES: frozenset[str] = frozenset(OUTPUT_CLASS_MEANINGS)
 
+#: The classes whose output is written by something that READS an installed
+#: rule, so "your rule is in effect" is true of them the moment it installs.
+#:
+#: WHY A REGISTRY (2026-11-04, the A&P audit). The seat told a firm its rule was
+#: in effect for every class alike. For the four classes below that is true: a
+#: turn writes the message, the send site resolves its class from the recipient
+#: (:data:`shared.spec_gate.RECIPIENT_OUTPUT_CLASSES`), and the seat's skill
+#: stamp points the turn at the installed spec, which ``spec_applier`` refreshes
+#: within a minute. A lane document (a brief, a chronology, a workbook) is
+#: rendered by the jobs runner, and nothing under ``operator/runners/jobs``
+#: reads the spec store at all, so a ``work_product`` or ``record`` rule binds
+#: to nothing the firm receives. Telling the firm otherwise is the false claim
+#: :mod:`shared.rule_dispatch` now refuses to make.
+#:
+#: DERIVED FROM THE READERS, NOT DECLARED BESIDE THEM. ``tests/
+#: test_rule_reader_registry.py`` fails if this set and the send site's class map
+#: ever disagree, and fails if the jobs runner starts reading the spec store, so
+#: a class joins this set in the PR that gives it a reader and not before.
+LIVE_RULE_READER_CLASSES: frozenset[str] = frozenset(
+    {"staff", "outbound_client", "outbound_vendor", "outbound_external"}
+)
+
 
 def is_output_class(value: object) -> bool:
     """True iff ``value`` names a class in the registry. Exact match, lowered.
@@ -68,6 +90,15 @@ def is_output_class(value: object) -> bool:
     and guessing which class was meant is how ``letter`` became a directory.
     """
     return isinstance(value, str) and value.strip().lower() in OUTPUT_CLASSES
+
+
+def has_live_rule_reader(value: object) -> bool:
+    """True iff an installed rule for class ``value`` shapes what the firm gets.
+
+    Unknown, empty and non-string all read False: a rule whose class the seat
+    cannot name is a rule the seat cannot say is in effect.
+    """
+    return isinstance(value, str) and value.strip().lower() in LIVE_RULE_READER_CLASSES
 
 
 def describe(value: object) -> str:
@@ -88,9 +119,11 @@ def catalogue(separator: str = "; ") -> str:
 
 
 __all__ = [
+    "LIVE_RULE_READER_CLASSES",
     "OUTPUT_CLASSES",
     "OUTPUT_CLASS_MEANINGS",
     "catalogue",
     "describe",
+    "has_live_rule_reader",
     "is_output_class",
 ]

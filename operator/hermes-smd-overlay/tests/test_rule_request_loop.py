@@ -240,6 +240,7 @@ def test_each_outcome_says_which_thing_happened(kind, needle):
         requester=PARALEGAL,
         by=ADMIN,
         send=send,
+        output_class="outbound_client",
     )
     assert result.sent is True
     assert send.recipients == [PARALEGAL]
@@ -1179,6 +1180,8 @@ def _installed_row(**over):
         "state": "committed",
         "installed": True,
         "lapse_notified": False,
+        # TEXT is about client letters, a class a turn writes and so reads.
+        "subject": {"output_class": "outbound_client", "property": "voice"},
     }
     row.update(over)
     return row
@@ -1367,6 +1370,40 @@ def test_the_sweeper_reports_an_installed_rule(plugin):
     assert result.reported == 1
     assert [s["to"] for s in _install_notes(state)] == [[PARALEGAL]]
     assert state["marked"] == [RULE]
+
+
+def test_the_sweeper_never_calls_a_lane_document_rule_in_effect(plugin):
+    """2026-11-04, the A&P audit. A work_product rule is rendered by a jobs lane
+    that reads no installed rule, so the person is told it is recorded and
+    passed to SMD, never that it is in effect. The row is still marked: the
+    letter went, and it must not go again."""
+    mod, state = plugin
+    state["pending"] = [
+        _installed_row(subject={"output_class": "work_product", "property": "format"})
+    ]
+    result = mod._sweep_lapses_once()
+
+    assert result.reported == 1
+    assert _install_notes(state) == []
+    (letter,) = [s for s in state["sends"] if s["to"] == [PARALEGAL]]
+    assert letter["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert "passed to SMD" in letter["text"]
+    assert state["marked"] == [RULE]
+
+
+def test_an_admins_own_lane_document_rule_is_not_claimed_in_effect(plugin):
+    """The in-turn twin: the note that tells the model what to say after an
+    administrator confirms a work_product rule forbids "in effect"."""
+    mod, _state = plugin
+    row = {
+        "proposal_id": RULE,
+        "scope": "firm_adjust",
+        "subject": {"output_class": "work_product", "property": "format"},
+    }
+    assert "do NOT say it is in effect" in mod._unread_class_note(row)
+    row["subject"] = {"output_class": "staff", "property": "voice"}
+    assert mod._unread_class_note(row) == ""
+    assert mod._unread_class_note({"scope": "person", "subject": {"person": "x@y"}}) == ""
 
 
 def test_the_sweeper_leaves_a_committed_rule_nobody_has_seen_install(plugin):
