@@ -31,7 +31,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from . import letter_pages, readback, vision
+from . import letter_pages, outcome_ledger, readback, vision
 from .attachment_source import fetch_bytes
 from .extract import METHOD_PYPDF, METHOD_VISION, METHOD_VISION_CACHED
 from .letter_pages import FILED_DOCS, FILED_PAGES, SCANNED_PAGES, PageReadError
@@ -327,6 +327,7 @@ def file_attachment_pages_to_matter(
     first_page: int,
     last_page: int,
     document_kind: str = "letter",
+    message_id: str = "",
 ) -> Any:
     """File ONE letter — a page RANGE cut out of an emailed bundle — onto its
     matter. Classified INTERNAL_WRITE: a write into the firm's own record that
@@ -374,6 +375,62 @@ def file_attachment_pages_to_matter(
     that matter. A VENDOR'S BILL is not filed here at all: ``stage_vendor_invoice``
     with ``first_page`` and ``last_page`` files the range and stages the
     expense in one write."""
+    row = outcome_ledger.Outcome(
+        outcome_ledger.FILE,
+        (sha256 or "").strip().lower(),
+        message_id,
+        first_page=_whole(first_page),
+        last_page=_whole(last_page),
+        matter_id=(matter_id or "").strip(),
+    )
+    with outcome_ledger.recording(row):
+        out = _file_pages(
+            row,
+            matter_id,
+            matter_resolution,
+            download_url,
+            file_name,
+            sha256,
+            first_page,
+            last_page,
+            document_kind,
+        )
+        row.status = str(out.get("status") or "unknown")
+        row.detail = str(out.get("reason") or out.get("readback_detail") or "")
+        row.returned_id = str(out.get("fileId") or "")
+        return out
+
+
+def _whole(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _remember(row: outcome_ledger.Outcome, file_id: str, file_name: str, blob: bytes, *, from_scan: bool) -> None:
+    """What opens ``add_medicals_row`` and an Operator offer for this letter:
+    the document this run filed, on the matter it was filed on, from which
+    bundle and email, with its pages' text. See ``letter_pages.FiledDocs``."""
+    first, last = int(row.first_page or 0), int(row.last_page or 0)
+    FILED_DOCS.record(
+        row.matter_id,
+        file_id,
+        file_name,
+        first,
+        last,
+        from_scan=from_scan,
+        sha256=row.sha256,
+        message_id=(row.message_id or "").strip(),
+        matter_number=row.matter_number,
+        text=letter_pages.span_text(blob, first, last),
+    )
+
+
+def _filing_args(
+    matter_id: str, document_kind: str, first_page: Any, last_page: Any, sha256: str
+) -> tuple[str, str, int, int, str] | dict[str, Any]:
+    """(matter, kind, first, last, sha256) as the filing uses them, or the refusal."""
     matter = (matter_id or "").strip()
     if not matter:
         return _refused("matter_id is required")
@@ -390,14 +447,35 @@ def file_attachment_pages_to_matter(
     want_sha = (sha256 or "").strip().lower()
     if not want_sha:
         return _refused("sha256 is required: pass the one read_attachment_pages returned")
+    return matter, kind, first, last, want_sha
+
+
+def _file_pages(
+    row: outcome_ledger.Outcome,
+    matter_id: str,
+    matter_resolution: str,
+    download_url: str,
+    file_name: str,
+    sha256: str,
+    first_page: int,
+    last_page: int,
+    document_kind: str,
+) -> dict[str, Any]:
+    """The filing itself; ``row`` learns the matter's number from the resolution."""
+    checked = _filing_args(matter_id, document_kind, first_page, last_page, sha256)
+    if isinstance(checked, dict):
+        return checked
+    matter, kind, first, last, want_sha = checked
+    row.matter_id, row.first_page, row.last_page, row.sha256 = matter, first, last, want_sha
 
     # The gate, before anything is fetched or cut: a live resolution for THIS
     # matter. Checked here and SPENT at the upload, so a refusal below leaves it
     # usable for the corrected call.
     try:
-        verify_resolution(matter_resolution, matter)
+        resolution = verify_resolution(matter_resolution, matter)
     except ResolutionRefused as exc:
         return _refused(str(exc))
+    row.matter_number = resolution.matter_number or ""
 
     try:
         blob = fetch_bytes(_client(), download_url)
@@ -433,9 +511,7 @@ def file_attachment_pages_to_matter(
     file_id = result.get("fileId") if isinstance(result, dict) else None
     from_scan = SCANNED_PAGES.any_in(want_sha, first, last)
     if isinstance(file_id, str) and file_id:
-        # What opens ``add_medicals_row`` for this letter: the bill this run
-        # filed, on the matter it was filed on. See ``letter_pages.FiledDocs``.
-        FILED_DOCS.record(matter, file_id, safe_name, first, last, from_scan=from_scan)
+        _remember(row, file_id, safe_name, blob, from_scan=from_scan)
     # Read back by id, size and sha256 (readback.py). A shortfall keeps the
     # pages claimed: the letter may have landed, and filing it again duplicates it.
     proof = readback.prove_file(_client(), matter, file_id, cut, file_name=safe_name, folder_id=folder.get("id"))

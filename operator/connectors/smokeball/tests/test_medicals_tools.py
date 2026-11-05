@@ -26,6 +26,8 @@ import pytest
 from smokeball_connector import letter_pages as lp
 from smokeball_connector import medicals_tools as mt
 
+pytestmark = pytest.mark.usefixtures("logic_enforced")
+
 MATTER = "m-1"
 TAB = "pi-1"
 PI = {"id": TAB, "layoutDesign": {"id": "PersonalInjurySettlementDetailsItem"}, "parentIndex": 0}
@@ -121,8 +123,30 @@ def tenant(monkeypatch: pytest.MonkeyPatch) -> _Tenant:
     return t
 
 
-def _filed(file_id: str = "file-7", *, from_scan: bool = True, matter: str = MATTER) -> None:
-    lp.FILED_DOCS.record(matter, file_id, "2026-10-01 AMR pp3-4.pdf", 3, 4, from_scan=from_scan)
+#: What the filed bill's pages print, as the bundle's page read saw them: the
+#: total beside its label, a second bill's balance, and the date of service.
+BILL_TEXT = (
+    "[p.3]\nAMERICAN MEDICAL RESPONSE\nDate of service 07/16/2026\nTOTAL CHARGES $4,345.16\n\n"
+    "[p.4]\nStatement 2\nBALANCE DUE 2,000.00"
+)
+SHA = "a" * 64
+
+
+def _filed(
+    file_id: str = "file-7", *, from_scan: bool = True, matter: str = MATTER, text: str | None = BILL_TEXT
+) -> None:
+    lp.FILED_DOCS.record(
+        matter,
+        file_id,
+        "2026-10-01 AMR pp3-4.pdf",
+        3,
+        4,
+        from_scan=from_scan,
+        sha256=SHA,
+        message_id="msg-1",
+        matter_number="2026-PI-7",
+        text=text,
+    )
 
 
 def _add(**overrides: Any) -> dict[str, Any]:
@@ -148,6 +172,7 @@ def test_no_argument_carries_free_text() -> None:
         "source_file_id",
         "provider_name",
         "charge",
+        # The dates as the bill prints them, read in code (2026-11-04).
         "service_start",
         "service_end",
         "account_number",
@@ -384,20 +409,90 @@ def test_a_link_that_never_appears_stops_before_the_values(tenant: _Tenant) -> N
 # ---- the facts -------------------------------------------------------------
 
 
-@pytest.mark.parametrize("charge", ["", "0", "-5.00", "1,250.00", "1250.123", "abc", 1250.0, None])
-def test_charge_must_be_a_positive_two_decimal_string(tenant: _Tenant, charge: Any) -> None:
+@pytest.mark.parametrize("charge", ["", "0", "-5.00", "(5.00)", "1,25", "1250.123", "abc", "8 300", 1250.0, None])
+def test_charge_must_read_as_one_positive_figure(tenant: _Tenant, charge: Any) -> None:
     _filed()
     out = _add(charge=charge)
     assert out["status"] == "refused" and "charge" in out["reason"]
     assert tenant.requests == []
 
 
-@pytest.mark.parametrize("bad", ["7/16/2026", "2026-7-16", "", None])
-def test_dates_must_be_iso(tenant: _Tenant, bad: Any) -> None:
+@pytest.mark.parametrize("bad", ["2026-7-16", "13/45/2026", "07/1C/2026", "", None])
+def test_a_date_that_is_not_one_date_is_refused_by_name(tenant: _Tenant, bad: Any) -> None:
+    """``07/1C/2026`` repairs to the 10th or the 16th: two dates, so neither."""
     _filed()
     out = _add(service_start=bad)
     assert out["status"] == "refused" and "service_start" in out["reason"]
     assert tenant.requests == []
+
+
+@pytest.mark.parametrize("charge", ["$4,345.16", "4,345.16", "4345 16", "$ 4345.16"])
+def test_the_charge_is_taken_as_printed_and_written_as_its_value(tenant: _Tenant, charge: str) -> None:
+    _filed()
+    out = _add(charge=charge, service_start="07/16/2026", service_end="July 16, 2026")
+    assert out["status"] == "written", out
+    assert out["charge"] == "4345.16" and out["service_start"] == "2026-07-16" == out["service_end"]
+
+
+# ---- the figure is the bill's: confirmed in its own pages -------------------
+
+
+def test_a_charge_the_bill_does_not_print_writes_nothing(tenant: _Tenant) -> None:
+    """FALSIFIER: accept a figure absent from the text and this writes a row."""
+    _filed()
+    out = _add(charge="4354.16")
+    assert out["status"] == "refused" and "not printed" in out["reason"]
+    assert tenant.writes() == []
+
+
+def test_a_figure_printed_beside_no_total_label_is_not_the_bills_total(tenant: _Tenant) -> None:
+    _filed(text="[p.3]\nAMR\nDate of service 07/16/2026\nLine 1 ambulance 4345.16\nPaid by carrier 0.00")
+    out = _add()
+    assert out["status"] == "refused" and "beside a total" in out["reason"]
+    assert tenant.writes() == []
+
+
+def test_a_split_cents_box_on_the_bill_confirms_the_charge(tenant: _Tenant) -> None:
+    _filed(text="[p.3]\nCMS-1500\n28. TOTAL CHARGE\n$ 4345 16\nDOS 07/16/2026")
+    assert _add()["status"] == "written"
+
+
+def test_a_date_of_service_the_bill_does_not_print_writes_nothing(tenant: _Tenant) -> None:
+    _filed()
+    out = _add(service_end="07/18/2026")
+    assert out["status"] == "refused" and "2026-07-18" in out["reason"]
+    assert tenant.writes() == []
+
+
+def test_a_bill_whose_text_was_not_held_is_read_back_from_the_matter(
+    tenant: _Tenant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from smokeball_connector import cited_facts
+
+    _filed(text=None)
+    seen: list[tuple[str, str]] = []
+
+    def document_text(client: Any, matter: str, file_id: str, **_kw: Any) -> tuple[str, str]:
+        seen.append((matter, file_id))
+        return BILL_TEXT, "bill.pdf"
+
+    monkeypatch.setattr(cited_facts, "_document_text", document_text)
+    assert _add()["status"] == "written"
+    assert seen and seen[0] == (MATTER, "file-7")
+
+
+def test_a_bill_that_cannot_be_read_back_writes_nothing(tenant: _Tenant, monkeypatch: pytest.MonkeyPatch) -> None:
+    from smokeball_connector import cited_facts
+
+    _filed(text=None)
+
+    def unreadable(*_a: Any) -> tuple[str, str]:
+        raise RuntimeError("no such file")
+
+    monkeypatch.setattr(cited_facts, "_document_text", unreadable)
+    out = _add()
+    assert out["status"] == "refused" and "could not be read again" in out["reason"]
+    assert tenant.writes() == []
 
 
 def test_service_end_before_start_refuses(tenant: _Tenant) -> None:

@@ -50,16 +50,18 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Callable
 
-from . import letter_pages
+from . import letter_pages, logic_gate, logic_in_code, outcome_ledger
 from .attachment_source import fetch_bytes
 from .client import SmokeballApiError, SmokeballWriteError
 from .extract import MECHANICAL_METHODS, METHOD_XLSX_OPERATOR
 from .expense_ledger import classify_against_ledger, read_whole_ledger, row_amount
+from .cited_facts import AMOUNT_LABELS, NOT_PRINTED, PRINTED, confirm_in_text
 from .letter_pages import FILED_PAGES, SCANNED_PAGES, PageReadError
+from .printed_dates import date_from_printed
+from .printed_money import positive_money
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, find_folder_id
 from .readback import MISMATCH, confirmed, prove_file, shortfall
 from .resolution_token import ResolutionRefused
@@ -241,8 +243,6 @@ def load_expense_config(path: str | None = None) -> ExpenseConfig:
 
 # ---- The invoice facts the skill extracted -------------------------------
 
-_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,2})?$")
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _MAX_NAME = 120
 
@@ -260,39 +260,27 @@ def _clean(value: Any) -> str:
 
 
 def parse_amount(raw: Any) -> Decimal | None:
-    """A positive dollar amount written as a string with at most two decimal
-    places ("1250", "1250.5", "1250.50"). Anything else is None: no commas, no
-    currency sign, no float, because each is a place a figure can change shape."""
-    if not isinstance(raw, str) or not _AMOUNT_RE.match(raw.strip()):
-        return None
-    try:
-        value = Decimal(raw.strip())
-    except InvalidOperation:
-        return None
-    return value if value > 0 else None
-
-
-def _valid_date(raw: str) -> bool:
-    if not _DATE_RE.match(raw):
-        return False
-    try:
-        date.fromisoformat(raw)
-    except ValueError:
-        return False
-    return True
+    """A positive dollar amount exactly as the invoice prints it ("$1,250.00",
+    "1250.50", a split cents box "1250 00"), read by ``printed_money``, the one
+    money reader every connector tool shares. None for anything that is not
+    one positive figure, and for a float: "1250.0" is not a figure a page
+    prints."""
+    return positive_money(raw)
 
 
 def parse_invoice(
     *, vendor: Any, invoice_number: Any, invoice_date: Any, amount: Any, sha256: Any
 ) -> tuple[InvoiceFacts | None, str | None]:
     """Validate the extracted facts. Returns ``(facts, None)`` or ``(None, why)``."""
-    vendor_s, number_s, date_s = _clean(vendor), _clean(invoice_number), _clean(invoice_date)
+    vendor_s, number_s = _clean(vendor), _clean(invoice_number)
+    printed_date = date_from_printed(_clean(invoice_date))
+    date_s = printed_date.isoformat() if printed_date else ""
     parsed_amount = parse_amount(amount)
     problems = [
         "vendor is empty" if not vendor_s else "",
         "invoice_number is empty or has no letters or digits" if not re.search(r"[A-Za-z0-9]", number_s) else "",
         "vendor or invoice_number is too long" if max(len(vendor_s), len(number_s)) > _MAX_NAME else "",
-        "invoice_date must be an ISO date (YYYY-MM-DD)" if not _valid_date(date_s) else "",
+        "invoice_date must be an ISO date (YYYY-MM-DD)" if not date_s else "",
         "amount must be a positive figure with at most two decimals, e.g. 1250.00" if parsed_amount is None else "",
         "sha256 must be the 64-character hash read_attachment_text returned"
         if not _SHA_RE.match(_clean(sha256))
@@ -435,15 +423,78 @@ def _source_note(sha: str, bounds: tuple[int, int] | None) -> tuple[str | None, 
     return f"Pages {bounds[0]}-{bounds[1]} of the scanned mail, {read}; check the figure against the paper.", from_scan
 
 
+def _source_text(blob: bytes, file_name: str, bounds: tuple[int, int] | None) -> str | None:
+    """The invoice's own text, read again from the bytes being filed, for
+    nothing: the bill's pages of a bundle as its page read saw them, or an
+    emailed PDF's text layer (the same road ``read_attachment`` reads; never a
+    transcription). None when it cannot be read that way."""
+    try:
+        if bounds is not None:
+            return letter_pages.span_text(blob, *bounds)
+        from .extract import extract_text_ex
+
+        result = extract_text_ex(blob, file_name=file_name, file_extension=_extension(file_name), allow_vision=False)
+    except Exception:  # noqa: BLE001 - a source that cannot be read is its own status, never a failed stage
+        return None
+    return result.text if result.method in _READABLE_METHODS else None
+
+
+def _amount_problem(text: str | None, amount: Decimal) -> tuple[str, str] | None:
+    """(observation status, refusal) when the invoice's own pages do not print
+    ``amount`` beside a total, amount, balance or due label; None when they do."""
+    found = confirm_in_text(text, amount, AMOUNT_LABELS)
+    if found == PRINTED:
+        return None
+    if found == NOT_PRINTED:
+        return outcome_ledger.WOULD_REFUSE, (
+            f"the amount {amount} is not printed beside a total, amount, balance or due label on the invoice's "
+            "own pages; pass this invoice's total exactly as the bill prints it"
+        )
+    return (
+        outcome_ledger.SOURCE_UNREADABLE,
+        "the invoice's pages could not be read again to confirm the amount; read the attachment again",
+    )
+
+
+def _amount_gate(
+    blob: bytes, file_name: str, sha: str, bounds: tuple[int, int] | None, amount: Decimal, where: tuple[str, str]
+) -> str | None:
+    """The refusal when the amount check fails and the seat enforces it. In
+    ``observe`` the failure is recorded and the stage goes on as it always did."""
+    problem = _amount_problem(_source_text(blob, file_name, bounds), amount)
+    if problem is None:
+        return None
+    status, reason = problem
+    matter_id, message_id = where
+    return logic_gate.refusal(
+        logic_in_code.PRINTED_SOURCE_CHECK,
+        reason,
+        tool=outcome_ledger.STAGE,
+        status=status,
+        sha256=sha,
+        message_id=message_id,
+        first_page=bounds[0] if bounds else None,
+        last_page=bounds[1] if bounds else None,
+        matter_id=matter_id,
+    )
+
+
 def _fetch_for_staging(
-    client: Any, download_url: str, sha: str, bounds: tuple[int, int] | None, file_name: str
+    client: Any,
+    download_url: str,
+    sha: str,
+    bounds: tuple[int, int] | None,
+    file_name: str,
+    amount: Decimal,
+    where: tuple[str, str],
 ) -> tuple[bytes, str] | dict[str, Any]:
     """The bytes to file beside the expense and their file name, or a refusal.
-    Re-fetches and re-verifies the attachment; for a page range, claims the
-    pages in the filed-pages ledger and cuts them out. Keyed on the BYTES, like
-    the letter filing, so a bill's pages cannot also be filed as a letter and a
-    letter's pages cannot also be staged as a bill. A refusal after the claim
-    releases it."""
+    Re-fetches and re-verifies the attachment, confirms the amount is printed
+    on the invoice's own pages, and for a page range claims the pages in the
+    filed-pages ledger and cuts them out. Keyed on the BYTES, like the letter
+    filing, so a bill's pages cannot also be filed as a letter and a letter's
+    pages cannot also be staged as a bill. A refusal after the claim releases
+    it."""
     try:
         blob = fetch_bytes(client, download_url)
     except SmokeballWriteError as exc:
@@ -452,6 +503,9 @@ def _fetch_for_staging(
         return _refused("the attachment's bytes changed since it was read; read it again before staging")
     if is_xlsx(blob):
         return _refused("a spreadsheet is never staged as an invoice; route it to a person")
+    refusal = _amount_gate(blob, file_name, sha, bounds, amount, where)
+    if refusal:
+        return _refused(refusal)
     if bounds is None:
         return blob, file_name
     clash = FILED_PAGES.claim(sha, *bounds)
@@ -547,6 +601,8 @@ def stage_vendor_invoice(
     config: ExpenseConfig | None = None,
     first_page: int | None = None,
     last_page: int | None = None,
+    on_resolved: Callable[[str | None], None] | None = None,
+    message_id: str = "",
 ) -> dict[str, Any]:
     """Validate, check the resolution, de-duplicate, re-verify the bytes, write
     one unfinalized expense, read it back, and file the PDF. See the module
@@ -558,7 +614,14 @@ def stage_vendor_invoice(
     other letter can file those pages, cut out of the bundle, and filed as its
     own document beside the expense. The description then says the entry came
     from those pages, and from a scan when they were transcribed from paper,
-    so the person who finalizes it checks the figure against the paper."""
+    so the person who finalizes it checks the figure against the paper.
+
+    The amount is taken as printed and checked against the invoice's own pages
+    beside a total, amount, balance or due label, read again from the bytes
+    being filed; a figure it does not find is refused where the seat's
+    ``printed_source_check`` enforces, and recorded where it observes.
+    ``on_resolved`` hears the matter number the resolution named, for the
+    caller's outcome row."""
     facts, problem = parse_invoice(
         vendor=vendor, invoice_number=invoice_number, invoice_date=invoice_date, amount=amount, sha256=sha256
     )
@@ -577,6 +640,8 @@ def stage_vendor_invoice(
         resolution = verify_resolution(matter_resolution, matter_id)
     except ResolutionRefused as exc:
         return _refused(str(exc))
+    if on_resolved is not None:
+        on_resolved(resolution.matter_number)
     cfg = config if config is not None else load_expense_config()
     if cfg.error:
         return _refused(f"the seat's expense settings are malformed: {cfg.error}")
@@ -585,7 +650,9 @@ def stage_vendor_invoice(
     blocked = _preflight(client, matter_id, facts, subject, description, verify_reference)
     if blocked is not None:
         return blocked
-    got = _fetch_for_staging(client, download_url, _clean(sha256), bounds, file_name)
+    got = _fetch_for_staging(
+        client, download_url, _clean(sha256), bounds, file_name, facts.amount, (_clean(matter_id), message_id)
+    )
     if isinstance(got, dict):
         return got
     blob, file_name = got

@@ -9,8 +9,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
 from .matter_resolution import _contact_tokens, _name_tokens
+from .printed_money import positive_money
 
-_AMOUNT_RE = re.compile(r"^\d{1,9}(?:\.\d{1,2})?$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _PROV_NAME = re.compile(r"^Providers\[(\d+)\]/Provider/DisplayName$")
 _PROV_KEY = re.compile(r"^Providers\[(\d+)\]/(.+)$")
@@ -102,15 +102,13 @@ def _clean(value: Any) -> str:
 
 
 def parse_charge(raw: Any) -> Decimal | None:
-    """A positive amount with at most two decimals, as a STRING. A float is
-    refused: "1250.0" is not the figure a bill prints."""
-    if not isinstance(raw, str) or not _AMOUNT_RE.match(raw.strip()):
+    """A positive charge exactly as a bill prints it ("$4,345.16", "4345.16", a
+    split cents box "4345 16"), read by ``printed_money``, the one money reader
+    every connector tool shares. A float is refused: "1250.0" is not the
+    figure a bill prints."""
+    if not isinstance(raw, str):
         return None
-    try:
-        amount = Decimal(raw.strip())
-    except InvalidOperation:
-        return None
-    return amount if amount > 0 else None
+    return positive_money(raw)
 
 
 def _problem(

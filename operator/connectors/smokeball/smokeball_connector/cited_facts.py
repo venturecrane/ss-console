@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from .form_letter_facts import Fact
@@ -156,7 +158,7 @@ def value_after_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
     return False
 
 
-def _document_text(client: Any, matter_id: str, file_id: str) -> tuple[str, str]:
+def _document_text(client: Any, matter_id: str, file_id: str, *, allow_vision: bool = True) -> tuple[str, str]:
     """(text, file name) of a matter document, through the same extraction road
     ``read_document`` uses (cache first, so a document the agent just read costs
     nothing). Raises on a document that cannot be read."""
@@ -168,7 +170,7 @@ def _document_text(client: Any, matter_id: str, file_id: str) -> tuple[str, str]
         blob,
         file_name=name,
         file_extension=str(info.get("fileExtension") or ""),
-        allow_vision=True,
+        allow_vision=allow_vision,
     )
     return result.text or "", name
 
@@ -215,7 +217,129 @@ def confirm(client: Any, matter_id: str, cited: Any, wanted: set[str]) -> Confir
     return Confirmed(facts=facts, shown=shown, refused=refused)
 
 
+# ---- A figure or a date, confirmed in the source it was read from ----------
+#
+# WHY (the model-as-logic audit, 2026-11-04). The keying tools took a figure
+# the model typed and wrote it, so a charge read off the wrong line, or a
+# figure the model added up, reached the Medicals tab, an expense or the
+# Negotiation Details as if the bill printed it. The figure now arrives as
+# printed and is parsed in code (``printed_money``, ``printed_dates``); these
+# checks then require the parsed value to be PRINTED in the document's own
+# text: a figure beside one of its labels (a bill prints many figures, and only
+# the one beside "total" or "balance due" is the bill's), a date anywhere in
+# the pages (a date of service sits in a column whose header is lines above).
+# Values compare as values, so "$1,250.00", "1250.00" and a split "1250 00"
+# box are one figure, and "125,000.00" is never mistaken for "1,250.00".
+
+#: The labels a bill's own total sits beside.
+AMOUNT_LABELS = ("total", "amount", "balance", "due", "charges", "charge", "invoice total")
+#: The labels a settlement offer's figure sits beside.
+OFFER_LABELS = ("offer", "offers", "offered", "settle", "settlement", "amount", "total", "sum", "tender")
+
+_MONEY_TOKEN = re.compile(r"(?<![\d.,])\(?-?\$?\s?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\)?(?![\d,]|\.\d)")
+_SPLIT_TOKEN = re.compile(r"(?<![\d.,])\$?\s?(?:\d{1,3}(?:,\d{3})+|\d+)\s+\d{2}(?![\d.,])")
+_D = r"[0-9lIi|!LOoQDCcSsZzBGbgq]"
+_NUMERIC_DATE = re.compile(rf"(?<![0-9A-Za-z]){_D}{{1,2}}([/.\-]){_D}{{1,2}}\1{_D}{{2,4}}(?![0-9A-Za-z])")
+_ISO_DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
+_WRITTEN_DATE = re.compile(
+    r"(?<![A-Za-z])[A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}(?!\d)"
+    r"|(?<!\d)\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\.?,?\s+\d{4}(?!\d)"
+)
+
+#: What a source check found: the value printed where it must be, printed
+#: nowhere it counts, or a source that could not be read for the check.
+PRINTED = "printed"
+NOT_PRINTED = "not_printed"
+UNREADABLE = "unreadable"
+
+
+def figures_on(line: str) -> list[Decimal]:
+    """Every figure a line prints, as values. A split cents box ("8300 00") is
+    ONE figure: its dollars are not also read as a figure of their own, so
+    "8300 45" never confirms 8300."""
+    from .printed_money import money
+
+    split = list(_SPLIT_TOKEN.finditer(line))
+    found = [money(m.group(0)) for m in split]
+    for m in _MONEY_TOKEN.finditer(line):
+        if not any(s.start() <= m.start() < s.end() or s.start() < m.end() <= s.end() for s in split):
+            found.append(money(m.group(0)))
+    return [value for value in found if value is not None]
+
+
+def dates_on(line: str) -> list[date]:
+    """Every date a line prints that reads as exactly one date."""
+    from .printed_dates import date_from_printed
+
+    tokens = [m.group(0) for pattern in (_NUMERIC_DATE, _ISO_DATE, _WRITTEN_DATE) for m in pattern.finditer(line)]
+    return [d for d in (date_from_printed(t) for t in tokens) if d is not None]
+
+
+def printed_in(text: str, value: Decimal | date, labels: tuple[str, ...] | None) -> bool:
+    """True when ``value`` is printed in ``text``: on a line carrying one of
+    ``labels`` or on the line right under one, or anywhere when ``labels`` is
+    None. A ``Decimal`` is matched against the line's figures, a ``date``
+    against its dates, each compared as a value."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    for i, line in enumerate(lines):
+        values = dates_on(line) if isinstance(value, date) else figures_on(line)
+        if value not in values:
+            continue
+        if labels is None or _has_label(line, labels) or (i > 0 and _has_label(lines[i - 1], labels)):
+            return True
+    return False
+
+
+def confirm_in_text(text: str | None, value: Decimal | date, labels: tuple[str, ...] | None) -> str:
+    """``PRINTED``, ``NOT_PRINTED``, or ``UNREADABLE`` when there is no text."""
+    if text is None or not text.strip():
+        return UNREADABLE
+    return PRINTED if printed_in(text, value, labels) else NOT_PRINTED
+
+
+def confirm_in_pages(
+    client: Any,
+    matter_id: str,
+    file_id: str,
+    first_page: int | None,
+    last_page: int | None,
+    value: Decimal | date,
+    labels: tuple[str, ...] | None,
+    *,
+    allow_vision: bool = True,
+) -> str:
+    """Whether a matter document prints ``value`` (see ``printed_in``), over
+    pages ``first_page``..``last_page`` or the whole file when both are None.
+    The whole file is read through ``read_document``'s road (cache first); a
+    page range is read for nothing (``letter_pages.span_text``) or not at all.
+    Returns ``PRINTED``, ``NOT_PRINTED`` or ``UNREADABLE``; a document that
+    cannot be fetched or read is ``UNREADABLE``, never "not printed". With
+    ``allow_vision`` False a scan with no text layer and no cached reading is
+    ``UNREADABLE`` rather than a paid transcription."""
+    try:
+        if first_page is None and last_page is None:
+            text: str | None = _document_text(client, matter_id, file_id, allow_vision=allow_vision)[0]
+        else:
+            from .letter_pages import span_text
+
+            _, blob = client.download_file(matter_id, file_id)
+            text = span_text(blob, int(first_page or 0), int(last_page or 0))
+    except Exception:  # noqa: BLE001 - a document that cannot be read confirms nothing
+        return UNREADABLE
+    return confirm_in_text(text, value, labels)
+
+
 __all__ = [
+    "AMOUNT_LABELS",
+    "NOT_PRINTED",
+    "OFFER_LABELS",
+    "PRINTED",
+    "UNREADABLE",
+    "confirm_in_pages",
+    "confirm_in_text",
+    "dates_on",
+    "figures_on",
+    "printed_in",
     "LABELS",
     "SAME_LINE",
     "SHOWN_IN_REPLY",

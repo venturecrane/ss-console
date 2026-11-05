@@ -70,6 +70,22 @@ have made is a `SMOKEBALL_WRITE` audit row with phase `would_refuse` (tool,
 matter, reason code). It mints from `resolve_invoice_matter` (a letter's facts)
 and `resolve_matter_by_id` (a matter id and the number read with it).
 
+## A check that can refuse ships switched off
+
+A merge reaches a client seat without a person, so a check that can refuse an act
+or change what a firm sees reads its switch from the seat's `logic_in_code` block
+on every call (`docs/specs/operator/customer-yaml-schema.md`, ADR 0104). In the
+Smokeball connector every such check asks `smokeball_connector/logic_gate.py`:
+under `enforce` it refuses; under `observe`, the default, it writes an observation
+row under `$SMD_POST_JOURNAL_DIR/observations/` and the call goes on as if the
+check were not there. A check that only observes never pays for a model read.
+
+**What a model reads ships with the skills, not the code.** A tool's required
+arguments, its docstring and a new tool's listing can change a seat's behaviour
+with no skill changing. So the code PR adds only optional arguments and keeps the
+words, and the words that tell the model to fill them ride the skills PR.
+`tests/test_logic_switches.py` pins the listing of each changed tool.
+
 ## What the platform generalizes — and does not
 
 The connector **lifecycle** (author → install → activate → govern → verify) is

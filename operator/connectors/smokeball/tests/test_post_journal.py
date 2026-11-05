@@ -5,8 +5,12 @@ fail:
 
 * every page of a bundle is recorded exactly once, so a held letter cannot
   drop out of the daily list by being left out of the record;
-* a letter recorded as filed must be pages this process filed, and a letter
-  recorded as held must not be;
+* where a letter was filed, its issue and its candidates are DERIVED from the
+  tools' outcome rows (``outcome_ledger``), never typed: a letter passed with
+  any of them is refused and the refusal names what they derive to (the
+  derivation table itself is pinned in ``test_outcome_ledger.py``);
+* a letter derived as filed must be pages this process filed, and a letter
+  derived as held must not be;
 * the closed vocabulary decides what is listed, and a filed letter with no
   issue is not listed unless it is a court paper;
 * the daily list is authored only by an enabled skill with a recipient AND a
@@ -24,9 +28,13 @@ from typing import Any
 
 import pytest
 from smokeball_connector import letter_pages as lp
+from smokeball_connector import outcome_ledger as ol
 from smokeball_connector import post_journal as pj
 
+pytestmark = pytest.mark.usefixtures("logic_enforced")
+
 SHA = "a" * 64
+MESSAGE = "msg-1"
 
 
 @pytest.fixture(autouse=True)
@@ -40,11 +48,25 @@ def _journal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _letters() -> list[dict[str, Any]]:
     return [
-        {"first_page": 1, "last_page": 2, "sender": "Allstate", "kind": "settlement_offer", "placed_on": "2026-PI-102"},
-        {"first_page": 3, "last_page": 3, "sender": "Radiology Associates", "issue": "one_candidate",
-         "candidates": ["2026-PI-104"]},
-        {"first_page": 4, "last_page": 5, "sender": "Superior Court", "kind": "court_paper", "placed_on": "2026-PI-105"},
-    ]  # fmt: skip
+        {"first_page": 1, "last_page": 2, "sender": "Allstate", "kind": "settlement_offer"},
+        {"first_page": 3, "last_page": 3, "sender": "Radiology Associates"},
+        {"first_page": 4, "last_page": 5, "sender": "Superior Court", "kind": "court_paper"},
+    ]
+
+
+def _row(tool: str, first: int, last: int, status: str, message_id: str = MESSAGE, **kw: Any) -> None:
+    outcome = ol.Outcome(tool, SHA, message_id, first_page=first, last_page=last, status=status, **kw)
+    assert ol.append(outcome)
+
+
+def _outcomes() -> None:
+    """What the tools recorded for the standard bundle: the offer filed and
+    keyed on 2026-PI-102, page 3 resolved to one candidate, the court paper
+    filed on 2026-PI-105."""
+    _row(ol.FILE, 1, 2, "filed", matter_id="m-102", matter_number="2026-PI-102", returned_id="f-1")
+    _row(ol.NEGOTIATION, 1, 2, "written", matter_id="m-102", matter_number="2026-PI-102")
+    _row(ol.RESOLVE, 3, 3, "none", candidates=["2026-PI-104"])
+    _row(ol.FILE, 4, 5, "filed", matter_id="m-105", matter_number="2026-PI-105")
 
 
 def _filed(*ranges: tuple[int, int]) -> None:
@@ -54,7 +76,7 @@ def _filed(*ranges: tuple[int, int]) -> None:
 
 def _record(letters: list[dict[str, Any]] | None = None, **kw: Any) -> dict[str, Any]:
     args: dict[str, Any] = {
-        "message_id": "msg-1",
+        "message_id": MESSAGE,
         "file_name": "Post 10-29.pdf",
         "sha256": SHA,
         "page_count": 5,
@@ -71,22 +93,88 @@ def _only_record(journal: Path) -> dict[str, Any]:
     return json.loads(files[0].read_text())
 
 
-def test_a_bundle_is_recorded_and_counts_what_will_be_listed(_journal: Path) -> None:
+def test_a_bundle_is_recorded_from_what_the_tools_did(_journal: Path) -> None:
     _filed((1, 2), (4, 5))
+    _outcomes()
     out = _record()
     assert out["status"] == "recorded", out
     # The held letter and the court paper; the filed offer is not listed.
     assert out["to_list"] == 2
     assert out["daily_list"] is False
     record = _only_record(_journal)
-    assert [e["first_page"] for e in record["letters"]] == [1, 3, 4]
+    assert [(e["first_page"], e["placed_on"], e["issue"], e["candidates"]) for e in record["letters"]] == [
+        (1, "2026-PI-102", "", []),
+        (3, "", "one_candidate", ["2026-PI-104"]),
+        (4, "2026-PI-105", "", []),
+    ]
+    assert out["letters_recorded"][1]["issue"] == "one_candidate"
     assert record["filing_unverified"] is False
     path = next((_journal / "batches").glob("*.json"))
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+@pytest.mark.parametrize(
+    "typed",
+    [{"placed_on": "2026-PI-102"}, {"issue": ""}, {"candidates": []}, {"placed_on": "2026-PI-999", "issue": ""}],
+)
+def test_a_letter_passed_with_a_derived_field_is_refused_naming_the_derived_values(
+    typed: dict[str, Any], _journal: Path
+) -> None:
+    """The model learns the fields are code's: the refusal says what they
+    derive to. Even the RIGHT value is refused, because a typed field is the
+    channel a wrong one would ride."""
+    _filed((1, 2), (4, 5))
+    _outcomes()
+    letters = _letters()
+    letters[0] = {**letters[0], **typed}
+    out = _record(letters)
+    assert out["status"] == "refused"
+    assert "derived from what the tools recorded" in out["reason"]
+    assert "placed_on '2026-PI-102'" in out["reason"] and "issue ''" in out["reason"]
+    assert not (_journal / "batches").exists()
+
+
+def test_a_letter_nothing_was_recorded_for_is_listed_as_not_attempted(_journal: Path) -> None:
+    _filed((1, 2), (4, 5))
+    _row(ol.FILE, 1, 2, "filed", matter_id="m-102", matter_number="2026-PI-102")
+    _row(ol.NEGOTIATION, 1, 2, "written", matter_id="m-102")
+    _row(ol.FILE, 4, 5, "filed", matter_id="m-105", matter_number="2026-PI-105")
+    out = _record()
+    assert out["status"] == "recorded" and out["to_list"] == 2
+    assert _only_record(_journal)["letters"][1]["issue"] == "not_attempted"
+
+
+def test_rows_from_another_message_never_describe_this_bundle(_journal: Path) -> None:
+    """The same PDF sent again is a new run: its letters start with nothing."""
+    _outcomes()
+    out = _record(message_id="msg-2")
+    assert out["status"] == "recorded"
+    assert {e["issue"] for e in _only_record(_journal)["letters"]} == {"not_attempted"}
+
+
+def test_a_letter_recorded_on_pages_other_than_those_filed_refuses(_journal: Path) -> None:
+    _filed((1, 2), (4, 5))
+    _outcomes()
+    letters = [
+        {"first_page": 1, "last_page": 1, "sender": "Allstate", "kind": "settlement_offer"},
+        {"first_page": 2, "last_page": 3, "sender": "Radiology Associates"},
+        {"first_page": 4, "last_page": 5, "sender": "Superior Court", "kind": "court_paper"},
+    ]
+    out = _record(letters)
+    assert out["status"] == "refused" and "pages 1-2 were filed as one document" in out["reason"]
+
+
+def test_pages_staged_as_a_bill_cannot_be_recorded_as_a_letter(_journal: Path) -> None:
+    _filed((1, 2), (3, 3), (4, 5))
+    _outcomes()
+    _row(ol.STAGE, 3, 3, "staged", matter_id="m-104", matter_number="2026-PI-104")
+    out = _record()
+    assert out["status"] == "refused" and "record their kind as vendor_bill" in out["reason"]
+
+
 def test_a_letter_left_out_of_the_record_refuses(_journal: Path) -> None:
     _filed((1, 2), (4, 5))
+    _outcomes()
     letters = [e for e in _letters() if e["first_page"] != 3]
     out = _record(letters)
     assert out["status"] == "refused" and "page 3" in out["reason"]
@@ -100,54 +188,52 @@ def test_a_page_recorded_twice_refuses(_journal: Path) -> None:
 
 
 def test_a_held_letter_whose_pages_were_filed_refuses(_journal: Path) -> None:
+    """The two code sources disagree (the in-process filed-pages ledger says
+    page 3 went somewhere; no outcome row says so): the record refuses."""
     _filed((1, 2), (3, 3), (4, 5))
+    _outcomes()
     out = _record()
     assert out["status"] == "refused" and "pages 3-3 were filed" in out["reason"]
 
 
 def test_a_filed_letter_whose_pages_were_not_filed_refuses(_journal: Path) -> None:
     _filed((4, 5))
+    _outcomes()
     out = _record()
     assert out["status"] == "refused" and "pages 1-2 were not filed" in out["reason"]
 
 
 def test_after_a_restart_the_record_is_kept_and_marked_unverified(_journal: Path) -> None:
+    """The in-process ledger forgot the bundle; the outcome rows on disk did
+    not, so the record is still derived, and marked unverified."""
+    _outcomes()
     out = _record()
     assert out["status"] == "recorded" and out["filing_unverified"] is True
+    assert _only_record(_journal)["letters"][0]["placed_on"] == "2026-PI-102"
 
 
 @pytest.mark.parametrize(
     "bad",
-    [
-        {"issue": "one_candidate", "candidates": []},
-        {"issue": "ambiguous", "candidates": ["2026-PI-104"]},
-        {"issue": "no_match", "candidates": ["2026-PI-104"]},
-        {"issue": "no_match", "candidates": [], "placed_on": "2026-PI-104"},
-        {"issue": "something_else", "candidates": []},
-        {"kind": "brochure"},
-        {"sender": " "},
-        {"summary": "the adjuster offers 25000"},
-    ],
+    [{"kind": "brochure"}, {"sender": " "}, {"summary": "the adjuster offers 25000"}, {"first_page": 0}],
 )
-def test_the_vocabulary_is_closed(bad: dict[str, Any], _journal: Path) -> None:
+def test_the_letter_shape_is_closed(bad: dict[str, Any], _journal: Path) -> None:
+    _outcomes()
     letters = _letters()
     letters[1] = {**letters[1], **bad}
     assert _record(letters)["status"] == "refused"
 
 
-def test_a_filed_letter_must_say_where(_journal: Path) -> None:
-    letters = _letters()
-    letters[0] = {k: v for k, v in letters[0].items() if k != "placed_on"}
-    assert _record(letters)["status"] == "refused"
-
-
 def test_a_placed_letter_with_a_check_is_listed(_journal: Path) -> None:
     _filed((1, 2), (4, 5))
-    letters = _letters()
-    letters[0] = {**letters[0], "issue": "possible_duplicate", "detail": "the tab already shows 25000 — on 10-20"}
-    out = _record(letters)
+    _row(ol.FILE, 1, 2, "filed", matter_id="m-102", matter_number="2026-PI-102")
+    _row(ol.NEGOTIATION, 1, 2, "possible_duplicate", matter_id="m-102", detail="the tab already shows 25000 on 10-20")
+    _row(ol.RESOLVE, 3, 3, "none", candidates=["2026-PI-104"])
+    _row(ol.FILE, 4, 5, "filed", matter_id="m-105", matter_number="2026-PI-105")
+    out = _record()
     assert out["to_list"] == 3
-    assert _only_record(_journal)["letters"][0]["detail"] == "the tab already shows 25000 , on 10-20"
+    first = _only_record(_journal)["letters"][0]
+    assert first["issue"] == "possible_duplicate"
+    assert first["detail"] == "the tab already shows 25000 on 10-20"
 
 
 def test_a_bundle_nothing_was_filed_from(_journal: Path) -> None:
@@ -159,6 +245,7 @@ def test_a_bundle_nothing_was_filed_from(_journal: Path) -> None:
 
 def test_a_retry_replaces_the_record_and_keeps_its_time(_journal: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _filed((1, 2), (4, 5))
+    _outcomes()
     _record()
     monkeypatch.setattr(pj, "NOW", lambda: datetime(2026, 10, 29, 18, 0, tzinfo=timezone.utc))
     _record()
