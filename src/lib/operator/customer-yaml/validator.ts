@@ -81,6 +81,7 @@ import { checkGoogleAuth } from './sections-google-auth'
 import { checkAuthority } from './sections-authority'
 import { checkRelationship } from './sections-relationship'
 import { checkCaseManager } from './sections-case-manager'
+import { checkLogicInCode } from './sections-logic-in-code'
 import type { AuthorityPosture } from '../authority'
 import type { CredentialCustody } from '../credential-custody'
 
@@ -272,6 +273,7 @@ interface ParsedSections {
   mcpConnector: ReturnType<typeof checkMcpConnector>
   relationship: ReturnType<typeof checkRelationship>
   caseManager: ReturnType<typeof checkCaseManager>
+  logicInCode: ReturnType<typeof checkLogicInCode>
   people: ReturnType<typeof checkPeople>
   spaces: ReturnType<typeof checkSpaces>
 }
@@ -350,6 +352,7 @@ function validateSections(
     mcpConnector,
     relationship: checkRelationship(root, errors),
     caseManager: checkCaseManager(root, errors),
+    logicInCode: checkLogicInCode(root, errors),
   }
 }
 
@@ -393,6 +396,7 @@ function assembleCustomerYaml(root: Record<string, unknown>, p: ParsedSections):
     mcp_connector: p.mcpConnector,
     relationship: p.relationship,
     case_manager: p.caseManager,
+    ...(p.logicInCode !== null ? { logic_in_code: p.logicInCode } : {}),
     ...(p.people !== null ? { people: p.people } : {}),
     ...(p.spaces !== null ? { spaces: p.spaces } : {}),
   }

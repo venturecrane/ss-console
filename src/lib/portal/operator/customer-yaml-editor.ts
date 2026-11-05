@@ -466,10 +466,14 @@ function lockedFromCurrent(current: CustomerYaml): Pick<
   // decide what the Operator does to the firm's task list unasked; they change
   // by PR until the portal carries the levels as their own control
   | 'case_manager'
+  // the logic-in-code switches (ADR 0104) open or shut a door on the seat; they
+  // are an SMD act after a proof, never portal-editable
+  | 'logic_in_code'
 > {
   return {
     schema_version: current.schema_version,
     case_manager: current.case_manager,
+    ...(current.logic_in_code ? { logic_in_code: current.logic_in_code } : {}),
     custody_exceptions: current.custody_exceptions,
     send_policy: current.send_policy,
     customer_id: current.customer_id,

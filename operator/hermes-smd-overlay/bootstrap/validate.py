@@ -262,6 +262,7 @@ def validate_customer_yaml(customer_yaml: Path) -> list[str]:
     _validate_memory(cfg, errors)
     _validate_voice_library(cfg, errors)
     _validate_custody_guard(cfg, errors)
+    _validate_logic_in_code(cfg, errors)
 
     return errors
 
@@ -1438,6 +1439,41 @@ def _validate_matter_resolution_mode(
         _err(f"{prefix}: must be one of {list(MATTER_RESOLUTION_MODES)}; got {raw!r}", errors)
 
 
+#: The ``logic_in_code`` switches and their two values. Mirrors ss-console
+#: ``sections-logic-in-code.ts``; the runtime readers are the three byte-identical
+#: ``logic_in_code.py`` copies (connector, overlay ``shared/``, broker), which
+#: enforce on any value they do not recognise.
+LOGIC_IN_CODE_SWITCHES = (
+    "printed_source_check",
+    "post_record_derivation",
+    "conflict_fence",
+    "fixed_wording",
+)
+LOGIC_IN_CODE_MODES = ("observe", "enforce")
+
+
+def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
+    """``logic_in_code``: optional, a mapping of the four switches, each
+    ``observe`` or ``enforce``. An unknown key is refused because a misspelled
+    switch would otherwise read as observe, the door left open with the file
+    saying it was shut. A key with no value is absent, as the readers treat it."""
+    block = cfg.get("logic_in_code")
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        _err(f"logic_in_code: must be a mapping; got {type(block).__name__}", errors)
+        return
+    for key, raw in block.items():
+        if key not in LOGIC_IN_CODE_SWITCHES:
+            _err(
+                f"logic_in_code.{key}: unknown switch; expected one of "
+                f"{list(LOGIC_IN_CODE_SWITCHES)}",
+                errors,
+            )
+        elif raw is not None and raw not in LOGIC_IN_CODE_MODES:
+            _err(f"logic_in_code.{key}: must be one of {list(LOGIC_IN_CODE_MODES)}", errors)
+
+
 def _validate_sealed_reader(key: str, conn: dict[str, Any], errors: list[str]) -> None:
     """``sealed_reader`` (ADR 0099): an optional boolean, valid only on the
     WebSearch connector. Mirrors ss-console ``checkSealedReader``. Absent means
@@ -1711,6 +1747,8 @@ __all__ = [
     "MSGRAPH_GUID_PATTERN",
     "MSGRAPH_SECRET_REF_PATTERN",
     "OUTBOUND_ROSTER_CLASSES",
+    "LOGIC_IN_CODE_MODES",
+    "LOGIC_IN_CODE_SWITCHES",
     "REQUIRED_TOP_LEVEL_FIELDS",
     "SEND_ACTION_CLASSES",
     "validate_customer_yaml",
