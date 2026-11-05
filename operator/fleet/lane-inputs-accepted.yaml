@@ -9,7 +9,10 @@
 # `since` passes a seat whose image is from before it, with a note naming this
 # entry. The tick reads this file from its checkout of main (ADR 0096 amendment,
 # 2026-11-04). A schema that accepts different inputs gets no entry; its seats
-# are re-staged (operator/bin/reprovision.sh <slug>).
+# are re-staged (operator/bin/reprovision.sh <slug>). A release the refusal
+# already halted clears on the tick after the entry reaches main: a `failed`
+# row that was only this refusal deployed nothing, so the tick re-asks it
+# (ADR 0096, amended 2026-11-05).
 #
 # since: the full commit the schema modules changed at
 # date: quoted, so YAML keeps it a string

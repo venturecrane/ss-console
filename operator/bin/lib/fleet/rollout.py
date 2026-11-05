@@ -116,6 +116,10 @@ class ImageRollout:
         rel = self.store.release_for_image(ref)
         return rel.get("image_digest") if rel else None
 
+    def current_sha(self, seat: str) -> str | None:
+        """The ss-console commit of the image the seat runs now (the tick asks, for a halted row)."""
+        return self._current_sha(seat)
+
     def _current_sha(self, seat: str) -> str | None:
         """The ss-console commit the seat's running image was built from (its release row)."""
         ref = (self.store.seat_status(seat) or {}).get("image_ref")

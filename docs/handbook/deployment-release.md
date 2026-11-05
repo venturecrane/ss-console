@@ -451,7 +451,13 @@ Two workflows run the release (ADR 0096).
   - a seat whose latest rollout is `rolled_back` or `failed` is a **standing
     halt**: nothing moves until a person acts, and the `rollout_failed` pager
     has already mailed. Finish it from a laptop with
-    `fleet release <id> --only <seat>`, or hold the seat.
+    `fleet release <id> --only <seat>`, or hold the seat. One halt clears
+    itself: a `failed` row that was only a lane-input refusal ("the lane's
+    firm-input schema changed; re-stage") deployed nothing, so each tick asks
+    whether `operator/fleet/lane-inputs-accepted.yaml` on main now declares
+    every refused lane for that release and that seat; when it does, the seat
+    is pending again and its ring rolls it. Merging the declaration is the
+    whole fix (2026-11-05, ADR 0096 amended).
   - a seat that is **stalled** (`tooling_error`, or `waiting_idle` because it
     was busy) in a ring where another seat is done does not hold the rings
     after it back: the next ring bakes on the done seats, and the stalled seat

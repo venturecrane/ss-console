@@ -106,6 +106,32 @@ def test_a_full_release_by_ticks_never_redeploys_and_completes(tmp_path) -> None
     assert len(w.fly.deploys) == 5
 
 
+def test_a_preflight_refusal_the_declarations_now_cover_is_retried_not_halted() -> None:
+    """A `failed` row that deployed nothing (a lane-input refusal) stops standing as a halt once
+    ``retriable`` says main now declares its lanes: the seat is pending and the front ring rolls.
+    FALSIFIER: without the retriable hook the same rows are a standing halt (asserted below)."""
+    now = datetime.fromtimestamp(T0, timezone.utc)
+    refused = "preflight refused: lane records: the lane's firm-input schema changed; re-stage with operator/bin/reprovision.sh ashton-price"
+    latest = {"ashton-price": {"state": "failed", "finished_at": DONE_AT, "detail": refused}}
+    asked: list[str] = []
+
+    def retriable(seat: str, row: dict[str, Any]) -> bool:
+        asked.append(seat)
+        return row.get("detail") == refused
+
+    plan = plan_tick(RINGS, latest, {}, lambda seats: [], now, None, retriable)
+    assert plan.code == TICK_PROGRESS and plan.seats == ["smd-staging"] and asked == ["ashton-price"]
+    # the hook says no (the declaration does not cover it): the halt stands exactly as before
+    plan = plan_tick(RINGS, latest, {}, lambda seats: [], now, None, lambda seat, row: False)
+    assert plan.code == TICK_HALTED_STANDING and "ashton-price=failed" in plan.reason
+    plan = plan_tick(RINGS, latest, {}, lambda seats: [], now)
+    assert plan.code == TICK_HALTED_STANDING
+    # a rollback is never retriable by this path, whatever the hook says about a refusal
+    rolled = {"ashton-price": {"state": "rolled_back", "finished_at": DONE_AT, "detail": "self-test failed"}}
+    plan = plan_tick(RINGS, rolled, {}, lambda seats: [], now, None, retriable)
+    assert plan.code == TICK_HALTED_STANDING
+
+
 def test_a_halt_stands_until_a_person_acts(tmp_path) -> None:
     w = _tick_world(tmp_path)
     for seat in w.store.status:
