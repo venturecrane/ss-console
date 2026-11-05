@@ -254,11 +254,11 @@ PROBE_MD = (
 def _probe_fails(
     where: Path, name: str, cls: str, fmt: dict[str, Any], paper: str, held: Any, layout: dict[str, Any]
 ) -> list[str]:
-    from . import brief_base, format_check
+    from . import base_lay, format_check
 
     tried = copy.deepcopy(fmt)
     tried.setdefault("layout", {}).setdefault(cls, {}).update(layout)
-    path, _report, _laid, checked = brief_base.lay_out(PROBE_MD, where / name, cls, tried, paper, held, layout)
+    path, _report, _laid, checked = base_lay.lay_out(PROBE_MD, where / name, cls, tried, paper, held, layout)
     return list(format_check.check(path, cls, checked, "", None, paper).fails)
 
 

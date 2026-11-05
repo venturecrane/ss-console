@@ -267,9 +267,7 @@ def test_a_relative_rule_is_capped_by_the_keys_range():
     assert rows[0]["applied"] is False and "limit" in rows[0]["reason"]
     assert notes == []
     rules = [_rule(relative={"table_font_pt": 1})]
-    layout, _r, _n = firm_rules.for_class(
-        rules, "memo", on_base=False, effective={"table_font_pt": 19.5}
-    )
+    layout, _r, _n = firm_rules.for_class(rules, "memo", on_base=False, effective={"table_font_pt": 19.5})
     assert layout == {"table_font_pt": 20.0}
 
 
@@ -320,9 +318,7 @@ def test_a_relative_rule_carried_by_hand_changes_nothing():
 
 
 # ---- Fix A in the lane: a class on pleading paper or a base never takes line_spacing -------
-@pytest.mark.parametrize(
-    "paper, on_base", [("pleading", False), ("plain", True), ("pleading", True)]
-)
+@pytest.mark.parametrize("paper, on_base", [("pleading", False), ("plain", True), ("pleading", True)])
 def test_double_spaced_with_no_class_named_becomes_the_pitch_where_the_pitch_rules(paper, on_base):
     rules = [_rule(layout={"line_spacing": 2.0, "heading_line_spacing": 2.0})]
     layout, _r, _n = firm_rules.for_class(rules, "mediation_brief", on_base=on_base, paper=paper, pitch=24.0)

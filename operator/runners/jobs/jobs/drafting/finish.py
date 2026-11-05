@@ -31,8 +31,7 @@ from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
-from . import grounding, notes as notes_mod, wording
-from . import settle as settle_mod
+from . import grounding, notes as notes_mod, settle as settle_mod, wording
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
