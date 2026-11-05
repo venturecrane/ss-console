@@ -1057,6 +1057,21 @@ export interface CaseManagerQuiet {
   level: CaseManagerLevel
 }
 
+/** Whether a logic-in-code mechanism only records, or refuses. */
+export type LogicInCodeMode = 'observe' | 'enforce'
+
+/**
+ * The `logic_in_code:` block. Each switch: absent means `observe` (record what
+ * would have been refused, then behave as before); `enforce` refuses. Read fresh
+ * on every call by `logic_in_code.py` in the connector, the overlay and the broker.
+ */
+export interface LogicInCode {
+  printed_source_check?: LogicInCodeMode
+  post_record_derivation?: LogicInCodeMode
+  conflict_fence?: LogicInCodeMode
+  fixed_wording?: LogicInCodeMode
+}
+
 /**
  * The `case_manager:` block. ABSENT = every case-manager job off (ADR 0035):
  * the escalator renders exactly as it did before the block existed. Each
@@ -1576,6 +1591,11 @@ export interface CustomerYaml {
    * authored, which turns every job off. See {@link CaseManager}.
    */
   case_manager: CaseManager | null
+  /**
+   * The per-seat switches for the logic-in-code mechanisms (ADR 0104). Omitted
+   * when unauthored, which every reader takes as `observe`.
+   */
+  logic_in_code?: LogicInCode
 }
 
 export type ValidationErrorCode =

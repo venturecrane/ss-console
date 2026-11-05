@@ -248,6 +248,74 @@ def test_validator_modes_match_the_connectors_own(tmp_path):
     assert MATTER_RESOLUTION_MODES == ("observe", "enforce")
 
 
+# ---- logic_in_code (ADR 0104) ------------------------------------------------
+#
+# The per-seat switches. The readers enforce on any value they do not recognise,
+# so the validator refuses it rather than let a seat boot on a door it cannot read.
+
+
+def _with_logic_in_code(block: str) -> str:
+    assert block.endswith("\n")
+    return VALID_YAML + block
+
+
+@pytest.mark.parametrize(
+    "switch",
+    ["printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording"],
+)
+@pytest.mark.parametrize("mode", ["observe", "enforce"])
+def test_validate_accepts_each_logic_in_code_switch(tmp_path, switch, mode):
+    body = _with_logic_in_code(f"logic_in_code:\n  {switch}: {mode}\n")
+    assert validate_customer_yaml(_write(tmp_path, body)) == []
+
+
+def test_validate_accepts_a_seat_with_no_logic_in_code(tmp_path):
+    assert "logic_in_code" not in VALID_YAML
+    assert validate_customer_yaml(_write(tmp_path, VALID_YAML)) == []
+
+
+@pytest.mark.parametrize("mode", ["off", "Observe", "true", "1", "''"])
+def test_validate_rejects_any_other_logic_in_code_value(tmp_path, mode):
+    body = _with_logic_in_code(f"logic_in_code:\n  conflict_fence: {mode}\n")
+    errors = validate_customer_yaml(_write(tmp_path, body))
+    assert any("logic_in_code.conflict_fence" in e and "one of" in e for e in errors)
+
+
+def test_validate_rejects_a_misspelled_logic_in_code_switch(tmp_path):
+    body = _with_logic_in_code("logic_in_code:\n  printed_sauce_check: enforce\n")
+    errors = validate_customer_yaml(_write(tmp_path, body))
+    assert any("logic_in_code.printed_sauce_check" in e and "unknown" in e for e in errors)
+
+
+def test_validate_rejects_logic_in_code_that_is_not_a_mapping(tmp_path):
+    body = _with_logic_in_code("logic_in_code: enforce\n")
+    errors = validate_customer_yaml(_write(tmp_path, body))
+    assert any("logic_in_code" in e and "mapping" in e for e in errors)
+
+
+def test_the_validator_and_the_readers_name_the_same_switches():
+    """One meaning: the validator's lists are the canonical reader's constants."""
+    from bootstrap.validate import LOGIC_IN_CODE_MODES, LOGIC_IN_CODE_SWITCHES
+    from shared import logic_in_code
+
+    assert LOGIC_IN_CODE_SWITCHES == logic_in_code.KEYS
+    assert LOGIC_IN_CODE_MODES == logic_in_code.MODES
+
+
+def test_a_logic_in_code_switch_is_never_live_writable():
+    """Unlisted in the applier, so a change arrives with a release, behind the
+    busy gate, and a door is never opened by a live edit."""
+    from config_applier import safety
+    from shared import logic_in_code
+
+    for key in logic_in_code.KEYS:
+        assert safety.live_writable(f"logic_in_code.{key}") is False
+    assert safety.non_live_writable_changes(
+        {"logic_in_code": {"conflict_fence": "enforce"}},
+        {"logic_in_code": {"conflict_fence": "observe"}},
+    ) == ["logic_in_code.conflict_fence"]
+
+
 # ---------------------------------------------------------------------------
 # validate_customer_yaml — failure modes
 # ---------------------------------------------------------------------------

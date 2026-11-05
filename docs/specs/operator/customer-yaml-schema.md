@@ -554,6 +554,23 @@ Field rules:
 - **A step never exceeds its job.** A step authored above `date_prep.level` is refused: a firm that chose "Prepares it for you" for prep has not chosen "Handles it" for any part of it.
 - Materialization is config-as-data: the `task-list-keeper`, `date-prep-brief` and `deadline-miss-escalator` pre_runs read the block off the seat's own `/var/lib/smd-config/customer.yaml` at each tick (`operator/contracts/customer-yaml-blocks.yaml`, `case_manager`). Not portal-editable yet: the levels change by PR (`src/lib/portal/operator/customer-yaml-editor.ts` keeps them locked).
 
+## Logic in code: the per-seat switches (ADR 0104)
+
+```yaml
+logic_in_code:
+  printed_source_check: observe # or enforce
+  post_record_derivation: observe # or enforce
+  conflict_fence: observe # or enforce
+  fixed_wording: observe # or enforce
+```
+
+Optional. Each switch governs one mechanism that can refuse an act or change what a firm sees. `observe` records exactly what it would have refused, in the mechanism's own audit row, and then behaves as if the mechanism were not there. `enforce` refuses.
+
+- **Absent is `observe`**, at every depth: no block, no key, or a key with no value. A seat authors nothing until a switch is proven.
+- **Anything else present is refused at boot** by `bootstrap/validate.py` and in the console by `sections-logic-in-code.ts`, including an unknown key, because a misspelled switch would read as `observe` while the file said `enforce`. A reader that meets such a value anyway (a hand edit on the volume, an unparseable file) enforces.
+- **Read fresh on every call** by `logic_in_code.py`, one file in three copies (the Smokeball connector, overlay `shared/`, the broker) because those processes share no virtualenv. `operator/tests/test_logic_in_code_sync.py` pins them byte-identical.
+- **Rebuild-class.** The live config applier refuses a diff that touches the block, so a change reaches a seat with a release or re-provision, the same as `matter_resolution_mode`. Never portal-editable.
+
 ## Multi-person seats: `people`, `spaces` and roles (ADR 0090, ADR 0091)
 
 A seat may name the packaged job it does with `seat.role` (ADR 0090; today only

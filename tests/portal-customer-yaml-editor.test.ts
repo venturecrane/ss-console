@@ -158,6 +158,23 @@ describe('projectEditableConfig', () => {
 // -----------------------------------------------------------------------------
 
 describe('applyEditableChanges', () => {
+  it('keeps the logic_in_code switches across an edit, and never adds them', () => {
+    const switched = validate({ ...validFixture(), logic_in_code: { conflict_fence: 'enforce' } })
+    if (!switched.ok) throw new Error('fixture must validate')
+    const { editable } = projectEditableConfig(switched.value)
+    const tampered = { ...editable, logic_in_code: { conflict_fence: 'observe' } }
+    const merged = applyEditableChanges(switched.value, tampered)
+    expect(merged.logic_in_code).toEqual({ conflict_fence: 'enforce' })
+
+    const unswitched = validate(validFixture())
+    if (!unswitched.ok) throw new Error('fixture must validate')
+    const plain = applyEditableChanges(
+      unswitched.value,
+      projectEditableConfig(unswitched.value).editable
+    )
+    expect('logic_in_code' in plain).toBe(false)
+  })
+
   it('preserves locked identity fields even when input would change them', () => {
     const current = validYaml()
     const editable = projectEditableConfig(current).editable

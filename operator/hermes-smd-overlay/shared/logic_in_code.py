@@ -1,0 +1,144 @@
+"""Whether a logic-in-code mechanism records or refuses, read off the seat's own
+customer.yaml on every call (ADR 0104).
+
+    logic_in_code:
+      printed_source_check: observe   # or enforce
+      post_record_derivation: observe # or enforce
+      conflict_fence: observe         # or enforce
+      fixed_wording: observe          # or enforce
+
+WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
+ring before the pilot. Anything that can refuse an act or change what a firm
+sees therefore ships switched off, per seat, and is switched on only after it
+has been proven.
+
+THE MEANING OF A VALUE. Absent (no file, no block, no key, or a key with no
+value) is ``observe``: the mechanism records exactly what it would have refused,
+in its own audit row, and then behaves as it did before it existed. A present
+value that is not one of the two is ``enforce``, and so is a config that cannot
+be read, parsed or understood, because an unreadable switch must not hold a door
+open. The validator refuses such a value at boot, so it is reachable only by a
+hand edit on the volume.
+
+READ FRESH ON EVERY CALL, cached nowhere, so the module holds no state between
+calls. A switch reaches a seat the way ``matter_resolution_mode`` does: the
+config applier treats the block as rebuild-class, so a change arrives with a
+release, behind the busy gate, never as a live edit.
+
+ONE FILE, THREE COPIES. The connector, the overlay and the broker run in separate
+virtualenvs, and none of them imports another. So this module imports nothing
+but the standard library and PyYAML (which all three already carry) and it lives
+byte for byte in three places:
+
+    operator/hermes-smd-overlay/shared/logic_in_code.py  (canonical)
+    operator/connectors/smokeball/smokeball_connector/logic_in_code.py
+    operator/workspace_broker/logic_in_code.py
+
+``operator/tests/test_logic_in_code_sync.py`` fails on any difference. Edit the
+canonical and copy it over the other two.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+BLOCK = "logic_in_code"
+OBSERVE = "observe"
+ENFORCE = "enforce"
+MODES = (OBSERVE, ENFORCE)
+DEFAULT_MODE = OBSERVE
+
+PRINTED_SOURCE_CHECK = "printed_source_check"
+POST_RECORD_DERIVATION = "post_record_derivation"
+CONFLICT_FENCE = "conflict_fence"
+FIXED_WORDING = "fixed_wording"
+KEYS = (PRINTED_SOURCE_CHECK, POST_RECORD_DERIVATION, CONFLICT_FENCE, FIXED_WORDING)
+
+#: The same file by either name: the entrypoint exports both, the gateway and
+#: its children read the first, the broker's clean environment carries the
+#: second, and a connector process inherits neither, so it reads the fixed path
+#: (``smokeball_connector/library.py``).
+PATH_ENVS = ("SMD_CUSTOMER_YAML_PATH", "SMD_CUSTOMER_YAML")
+DEFAULT_PATH = "/var/lib/smd-config/customer.yaml"
+
+
+@dataclass(frozen=True)
+class Switch:
+    key: str
+    mode: str
+    error: str | None = None
+
+    @property
+    def enforcing(self) -> bool:
+        return self.mode != OBSERVE
+
+
+def live_path() -> str:
+    for name in PATH_ENVS:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return DEFAULT_PATH
+
+
+def parse_switch(data: object, key: str) -> Switch:
+    """The mode a parsed customer.yaml authors for one switch."""
+    if key not in KEYS:
+        return Switch(key, ENFORCE, error=f"{key!r} is not a {BLOCK} switch")
+    if data is None:
+        return Switch(key, DEFAULT_MODE)
+    if not isinstance(data, dict):
+        return Switch(key, ENFORCE, error="customer.yaml is not a mapping")
+    block = data.get(BLOCK)
+    if block is None:
+        return Switch(key, DEFAULT_MODE)
+    if not isinstance(block, dict):
+        return Switch(key, ENFORCE, error=f"{BLOCK} is not a mapping")
+    value = block.get(key)
+    if value is None:
+        return Switch(key, DEFAULT_MODE)
+    if value not in MODES:
+        return Switch(key, ENFORCE, error=f"{BLOCK}.{key} must be one of {list(MODES)}")
+    return Switch(key, value)
+
+
+def load_switch(key: str, path: str | None = None) -> Switch:
+    """Read the switch from the seat's config. Never raises into the caller's
+    act: a file that is not there is the default, one that is there and cannot
+    be read or parsed enforces."""
+    target = path or live_path()
+    try:
+        with open(target, encoding="utf-8") as fh:
+            raw = fh.read()
+    except (FileNotFoundError, NotADirectoryError):
+        return parse_switch(None, key)
+    except (OSError, ValueError) as exc:
+        return Switch(key, ENFORCE, error=f"customer.yaml not readable: {exc.__class__.__name__}")
+    try:
+        import yaml
+
+        data = yaml.safe_load(raw)
+    except Exception as exc:  # noqa: BLE001 - an unparseable config enforces, never raises into a write
+        return Switch(key, ENFORCE, error=f"customer.yaml not parseable: {exc.__class__.__name__}")
+    return parse_switch(data, key)
+
+
+__all__ = [
+    "BLOCK",
+    "CONFLICT_FENCE",
+    "DEFAULT_MODE",
+    "DEFAULT_PATH",
+    "ENFORCE",
+    "FIXED_WORDING",
+    "KEYS",
+    "MODES",
+    "OBSERVE",
+    "PATH_ENVS",
+    "POST_RECORD_DERIVATION",
+    "PRINTED_SOURCE_CHECK",
+    "Switch",
+    "live_path",
+    "load_switch",
+    "parse_switch",
+]

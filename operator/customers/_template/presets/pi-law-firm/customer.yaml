@@ -222,6 +222,18 @@ connectors:
 #       actors:
 #         - '[VENDOR USER GUID]'   # e.g. the supervising principal's own edits
 
+# ---- LOGIC IN CODE (ADR 0104) ----
+# Whether each mechanism that can refuse an act or change what the firm sees
+# only records what it would have refused (observe) or refuses (enforce). Leave
+# this out on a new seat: absent is observe. A switch goes to enforce only after
+# it has been proven on the pilot, and on a client seat only with the Captain's
+# yes. A value that is not one of the two is refused at boot.
+# logic_in_code:
+#   printed_source_check: observe     # a figure or date not on its source
+#   post_record_derivation: observe   # the post record's typed fields
+#   conflict_fence: observe           # a write before the conflict check clears
+#   fixed_wording: observe            # a job reply that is not the rendered text
+
 # ---- SCOPE ----
 scope:
   email_folders_visible:
