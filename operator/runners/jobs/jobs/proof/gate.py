@@ -44,6 +44,10 @@ CODES = frozenset(
         "reply_not_in_sent_items",  # the broker sent it and could not find it
         # A HELD job whose hold is ours (proof/holds.py), 2026-10-13: the firm is
         # told SMD is finishing it, so SMD must actually hear.
+        # A firm's layout rule the drafting lane could not trust or could not lay
+        # (drafting/firm_rules.py), 2026-11-05: the firm was told it is in effect.
+        "rule_store_unusable",  # the compiled rules are present and not to be believed
+        "rule_value_refused",  # a compiled value the format check would refuse
         "gate_held",  # a gate, a seed value or an unclassified hold stopped it
         "update_held",  # an update into the delivered chronology could not go on
         "upload_held",  # filing or retiring on the matter did not finish

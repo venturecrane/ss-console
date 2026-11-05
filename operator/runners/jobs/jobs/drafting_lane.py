@@ -48,6 +48,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
+from .drafting import firm_rules
 from .firm_inputs import pin_env
 from .proof import watch as proof_watch
 from .skill_load import load_line
@@ -176,6 +177,9 @@ class DraftingLane(Daemon):
             return "deferred"
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
         env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+        if os.environ.get(firm_rules.PINS_ENV):
+            env[firm_rules.PINS_ENV] = os.environ[firm_rules.PINS_ENV]
+        firm_rules.alert_unusable(self, job_id)
         if self.inputs_dir:
             env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         env.setdefault("JOBS_SEAT", "client")
@@ -194,6 +198,7 @@ class DraftingLane(Daemon):
                 preexec=self._cgroup_preexec(),
             )
         self.jobs_run += 1
+        firm_rules.alert_refused(self, job_id)
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
         return self._report(job_id, code, out)

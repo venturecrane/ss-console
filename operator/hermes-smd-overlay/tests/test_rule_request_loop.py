@@ -1401,9 +1401,35 @@ def test_an_admins_own_lane_document_rule_is_not_claimed_in_effect(plugin):
         "subject": {"output_class": "work_product", "property": "format"},
     }
     assert "do NOT say it is in effect" in mod._unread_class_note(row)
+    assert "write again" not in mod._unread_class_note(row)
     row["subject"] = {"output_class": "staff", "property": "voice"}
     assert mod._unread_class_note(row) == ""
     assert mod._unread_class_note({"scope": "person", "subject": {"person": "x@y"}}) == ""
+
+
+def test_the_in_turn_note_names_each_clause_and_pages_what_it_passes_on(plugin, monkeypatch):
+    """A rule the administrator confirms himself gets no letter, so this note is
+    the whole of what he hears, and its "passed to SMD" needs a page behind it."""
+    mod, _state = plugin
+    pages: list = []
+    monkeypatch.setattr(mod.rule_dispatch, "_page_unread_rule", lambda *a: pages.append(a))
+    row = {
+        "proposal_id": RULE,
+        "scope": "firm_adjust",
+        "text": "Never use the word plainly; two blank lines before the court name.",
+        "subject": {"output_class": "work_product", "property": "format"},
+    }
+    note = mod._unread_class_note(row)
+    assert "two blank lines before the court name." in note
+    assert "Never use the word plainly" in note
+    assert pages == [(RULE, "work_product")]
+    pages.clear()
+    row["text"] = "Two blank lines before the court name."
+    assert mod._unread_class_note(row) == ""
+    assert pages == []
+    row["text"] = "Be warmer."
+    assert "do NOT say it is in effect" in mod._unread_class_note(row)
+    assert pages == [(RULE, "work_product")]
 
 
 def test_the_sweeper_leaves_a_committed_rule_nobody_has_seen_install(plugin):

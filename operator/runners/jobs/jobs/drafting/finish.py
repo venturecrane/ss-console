@@ -31,8 +31,7 @@ from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
-from . import grounding, notes as notes_mod, wording
-from . import settle as settle_mod
+from . import grounding, notes as notes_mod, settle as settle_mod, wording
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
@@ -69,6 +68,7 @@ class Finish:
         log: Callable[[str], None]
         date_stamp: str
         rule_layout: dict[str, Any]
+        rule_notes: list[str]
         _units: list[Unit] | None
         _corpus: dict[str, str] | None
 
@@ -420,7 +420,7 @@ class Finish:
                 "located": markers_located(doc) + body_fills,
                 # The renderer's own report stays here, never in the attorney
                 # notes ("named styles defined on the starter base", 2026-10-13).
-                "notes": [*attached, *reserved, *cited, *laid],
+                "notes": [*attached, *reserved, *cited, *laid, *self.rule_notes],
                 "render_report": report.get("notes", []),
             },
         )
