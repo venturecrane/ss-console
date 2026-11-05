@@ -160,7 +160,7 @@ def _relative(
         if LAYOUT_KEYS[key][0] is int:
             baseline, value = int(have), int(value)
     row.update(baseline=baseline, value=value)
-    if float(value) <= have:
+    if float(value or 0) <= have:
         why = "at the limit of what this setting allows" if not pin else "the firm's layout already goes past it"
         row["reason"] = why
         return {}, row
