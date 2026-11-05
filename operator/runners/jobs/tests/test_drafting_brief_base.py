@@ -293,7 +293,9 @@ def test_a_wider_chart_keeps_the_label_columns_ratio():
 
 def test_a_total_row_takes_the_total_and_the_header_its_own(tmpl):
     rows = docx.Document(io.BytesIO(_fill(tmpl, MD))).tables[1].rows
-    fill = lambda r: r.cells[0]._tc.tcPr.find(f"{W}shd")  # noqa: E731
+    def fill(r):
+        return r.cells[0]._tc.tcPr.find(f"{W}shd")
+
     assert fill(rows[0]).get(f"{W}fill") == "1F3864"
     assert fill(rows[-1]).get(f"{W}fill") == "D9E2F3"
 
