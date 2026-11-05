@@ -1775,6 +1775,7 @@ def build_payload(
     jobs_queued: int | None = None,
     wakes_pending: int | None = None,
     bundles: dict[str, str] | None = None,
+    firm_inputs: dict[str, dict[str, str | None]] | None = None,
     selftest: dict | None = None,
     spec: dict | None = None,
 ) -> dict[str, object]:
@@ -1947,6 +1948,10 @@ def build_payload(
     # version). Absent on a seat that authors no job lane.
     if bundles:
         payload["bundles"] = bundles
+    # Which version of each lane's firm inputs the seat runs, and any version
+    # the validator refused (firm_inputs_applier). Absent on a seat with none.
+    if firm_inputs:
+        payload["firm_inputs"] = firm_inputs
     # The in-image self-test's verdict (shared/selftest_check.py). None is
     # "nothing to say yet" (the boot run has not finished) and stays absent so
     # the console holds; a dead loop or an unreadable file is not None, it ships
@@ -2435,6 +2440,7 @@ class HeartbeatEmitter:
             jobs_queued=fleet.jobs_queued if fleet is not None else None,
             wakes_pending=fleet.wakes_pending if fleet is not None else None,
             bundles=fleet.bundles if fleet is not None else None,
+            firm_inputs=fleet.firm_inputs if fleet is not None else None,
             selftest=self._read_selftest(),
             spec=self._read_spec(),
         )

@@ -24,10 +24,10 @@ export SMD_DEMAND_QUEUE_DIR="${JOBS_RUN_DIR}/demand-queue"
 # deferred demand jobs when there is none. Root-owned, group jobs
 # read-only: the demand child reads its firm's voice and can never rewrite it.
 export JOBS_DEMAND_INPUTS="${CONFIG_DIR}/demand"
+# Versioned and validated before the swap (entrypoint-fetch-inputs.sh says how).
+_lane_inputs_begin demand "${JOBS_DEMAND_INPUTS}"
 if _fetch_lane_inputs demand "${JOBS_DEMAND_INPUTS}" demand-firm.yaml; then
-  rm -rf "${JOBS_DEMAND_INPUTS}"
-  mv "${JOBS_DEMAND_INPUTS}.r2.tmp" "${JOBS_DEMAND_INPUTS}"
-  log "demand firm inputs refreshed from R2 into ${JOBS_DEMAND_INPUTS}"
+  _adopt_lane_inputs demand "${JOBS_DEMAND_INPUTS}" "${JOBS_DEMAND_INPUTS}.r2.tmp" || true
 elif [ -f "${JOBS_DEMAND_INPUTS}/demand-firm.yaml" ]; then
   log "WARN: R2 fetch of the demand firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
 elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
@@ -36,7 +36,5 @@ else
   log "ERROR: the demand firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the demand lane will defer demand jobs until a restart fetches them"
 fi
 if [ -d "${JOBS_DEMAND_INPUTS}" ]; then
-  chown -R root:jobs "${JOBS_DEMAND_INPUTS}"
-  find "${JOBS_DEMAND_INPUTS}" -type d -exec chmod 0750 {} +
-  find "${JOBS_DEMAND_INPUTS}" -type f -exec chmod 0640 {} +
+  _own_lane_inputs "${JOBS_DEMAND_INPUTS}/"
 fi

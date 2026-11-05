@@ -577,8 +577,14 @@ describe('entrypoint: the jobs bundle mount (ADR 0100 W3)', () => {
   it('is sourced after the authored lanes are known and before every user of the job code', () => {
     const lanesSource = LANES_CODE.indexOf('. /app/entrypoint-bundles.sh')
     expect(lanesSource).toBeGreaterThan(LANES_CODE.indexOf('export SMD_AUTHORED_LANES'))
-    // The last thing the lanes file does.
-    expect(LANES_CODE.slice(lanesSource).trim()).toBe('. /app/entrypoint-bundles.sh')
+    // The last thing the lanes file does, but for the chronology firm config's
+    // adoption, which runs after it so the bundle's validator judges the copy
+    // before the swap (2026-11-04, versioned firm inputs).
+    const after = LANES_CODE.slice(lanesSource).trim()
+    expect(after.startsWith('. /app/entrypoint-bundles.sh\n')).toBe(true)
+    expect(after.split('\n').slice(1).join('\n').trim()).toMatch(
+      /^rm -f "\$\{SMD_LANE_INPUTS_STATE_DIR:-\/run\/smd-lanes\}\/medchron\.inputs"\n[\s\S]*chmod 0640 "\$\{MEDCHRON_FIRM_CONFIG\}"\nfi$/
+    )
     const lanes = ENTRYPOINT_CODE.indexOf('. /app/entrypoint-lanes.sh')
     for (const later of [
       'for _lane in fetch-inputs', // the lane fragments (casefile runs /opt/jobs python)
@@ -881,5 +887,153 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
     expect(log).not.toMatch(/moved|REFUSED/)
     expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
     expect(existsSync(join(root, 'opt/data/jobs'))).toBe(true)
+  })
+})
+
+/**
+ * Firm inputs adopt live (2026-11-04): every lane's inputs land as a VERSIONED
+ * copy behind a symlink, validated by the runner's own validator BEFORE the
+ * swap. The helpers in entrypoint-fetch-inputs.sh are run as the lane fragments
+ * call them, against a fake vault (aws), a stub validator and a fake root; the
+ * root firm-inputs applier (overlay firm_inputs_applier) does the same live.
+ * The falsifiers: swap before validating (a refused copy goes live), `rm -rf;
+ * mv` (no symlink, no version), and a refusal that removes the live copy.
+ */
+describe('entrypoint lane fragments: versioned firm inputs, validated before the swap', () => {
+  const HELPER = resolve('operator/templates/entrypoint-fetch-inputs.sh')
+  const LANE_CODE = (lane: string) =>
+    readFileSync(resolve(`operator/templates/entrypoint-${lane}.sh`), 'utf8')
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n')
+  const INPUTS_ENV: Record<string, string> = {
+    demand: 'JOBS_DEMAND_INPUTS',
+    drafting: 'JOBS_DRAFTING_INPUTS',
+    litigation: 'JOBS_LITIGATION_INPUTS',
+    casefile: 'JOBS_CASEFILE_INPUTS_DIR',
+    records: 'JOBS_RECORDS_INPUTS_DIR',
+  }
+
+  for (const [lane, env] of Object.entries(INPUTS_ENV)) {
+    it(`the ${lane} fragment adopts through the versioned helper, never rm -rf + mv`, () => {
+      const f = LANE_CODE(lane)
+      const V = `"\${${env}}"`
+      expect(f).toContain(`_lane_inputs_begin ${lane} ${V}`)
+      expect(f).toContain(`_adopt_lane_inputs ${lane} ${V} "\${${env}}.r2.tmp"`)
+      expect(f.indexOf('_lane_inputs_begin')).toBeLessThan(f.indexOf('if _fetch_lane_inputs'))
+      expect(f).not.toContain(`rm -rf ${V}\n`)
+      expect(f).not.toContain(`mv "\${${env}}.r2.tmp" ${V}`)
+    })
+  }
+
+  it('the chronology config is adopted after the bundle mounts, through the same helper', () => {
+    const lanes = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+    const adopt = lanes.indexOf(
+      '_adopt_lane_inputs medchron "${MEDCHRON_FIRM_CONFIG}" "${MEDCHRON_FIRM_CONFIG}.r2.tmp"'
+    )
+    expect(adopt).toBeGreaterThan(lanes.indexOf('. /app/entrypoint-bundles.sh'))
+    expect(lanes).not.toContain('mv -f "${MEDCHRON_FIRM_CONFIG}.r2.tmp" "${MEDCHRON_FIRM_CONFIG}"')
+  })
+
+  const world = () => {
+    const root = mkdtempSync(join(tmpdir(), 'firm-inputs-'))
+    const shims = join(root, 'shims')
+    mkdirSync(shims)
+    const shim = (name: string, body: string) =>
+      writeFileSync(join(shims, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 })
+    // head-object answers the ETag; cp lands records-firm.yaml with the budget word.
+    shim(
+      'aws',
+      [
+        'case "$1 $2" in',
+        '  "s3api head-object") echo "\\"$(cat "$FAKE_DIR/etag")\\""; exit 0 ;;',
+        '  "s3 cp") for a in "$@"; do d="$a"; done; mkdir -p "$d"; printf \'budget: %s\\n\' "$(cat "$FAKE_DIR/budget")" > "$d/records-firm.yaml"; exit 0 ;;',
+        '  "s3 ls") exit 0 ;;',
+        'esac',
+        'exit 2',
+      ].join('\n')
+    )
+    shim('chown', 'exit 0')
+    shim('sleep', 'exit 0')
+    shim(
+      'install',
+      'args=""; while [ $# -gt 0 ]; do case "$1" in -o|-g) shift 2 ;; *) args="$args $1"; shift ;; esac; done; exec /usr/bin/install $args'
+    )
+    // The stub validator: `-m jobs.records.firm <dir>`, exit 1 on a "bad" budget.
+    shim(
+      'validator',
+      'if grep -q bad "$3/records-firm.yaml"; then echo "records-firm.yaml: budget is not a number" >&2; exit 1; fi; echo OK; exit 0'
+    )
+    mkdirSync(join(root, 'config'))
+    return { root, shims }
+  }
+
+  const boot = (w: { root: string; shims: string }, etag: string, budget: string) => {
+    writeFileSync(join(w.root, 'etag'), etag)
+    writeFileSync(join(w.root, 'budget'), budget)
+    const script = [
+      'set -euo pipefail',
+      'log() { echo "LOG $*"; }',
+      'R2_BUCKET_CONFIG=b CUSTOMER_SLUG=pilot R2_ACCESS_KEY_ID=k R2_SECRET_ACCESS_KEY=s _seed_endpoint=http://e',
+      `. "${HELPER}"`,
+      `DIR="${w.root}/config/records"`,
+      '_lane_inputs_begin records "${DIR}"',
+      'if _fetch_lane_inputs records "${DIR}" records-firm.yaml; then',
+      '  _adopt_lane_inputs records "${DIR}" "${DIR}.r2.tmp" || true',
+      'fi',
+    ].join('\n')
+    // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell - a test running the repo's own shell helper on a temp dir it made; no outside input
+    const r = spawnSync('bash', ['-c', script], {
+      encoding: 'utf8',
+      timeout: 20000,
+      env: {
+        PATH: `${w.shims}:/usr/bin:/bin`,
+        FAKE_DIR: w.root,
+        SMD_LANE_INPUTS_STATE_DIR: join(w.root, 'run/smd-lanes'),
+        SMD_FIRM_VALIDATOR_PYTHON: join(w.shims, 'validator'),
+        SMD_FIRM_LINK_PYTHON: 'python3',
+      },
+    })
+    expect(r.status, r.stderr + r.stdout).toBe(0)
+    return r.stdout
+  }
+  const live = (w: { root: string }) => join(w.root, 'config/records')
+  const word = (w: { root: string }) =>
+    readFileSync(join(w.root, 'run/smd-lanes/records.inputs'), 'utf8').trim()
+  const versions = (w: { root: string }) =>
+    readdirSync(join(w.root, 'config'))
+      .filter((n) => n.startsWith('records.v'))
+      .sort()
+
+  it('lands a versioned copy behind a symlink, and a refused copy never replaces it', () => {
+    const w = world()
+    let out = boot(w, '1a2b3c4d00ff', '100')
+    expect(lstatSync(live(w)).isSymbolicLink()).toBe(true)
+    expect(readFileSync(join(live(w), 'records-firm.yaml'), 'utf8')).toBe('budget: 100\n')
+    expect(versions(w)).toEqual(['records.v1a2b3c4d'])
+    expect(word(w)).toBe('fetched')
+    expect(out).toContain('(version 1a2b3c4d)')
+
+    out = boot(w, 'badbadba0000', 'bad')
+    expect(readFileSync(join(live(w), 'records-firm.yaml'), 'utf8')).toBe('budget: 100\n')
+    expect(versions(w)).toEqual(['records.v1a2b3c4d'])
+    expect(word(w)).toBe('rejected')
+    expect(out).toMatch(/ERROR: the records firm inputs .*do not validate.*budget is not a number/)
+    expect(existsSync(`${live(w)}.r2.tmp`)).toBe(false)
+  })
+
+  it('converts a pre-versioning copy and prunes to the newest three', () => {
+    const w = world()
+    mkdirSync(live(w))
+    writeFileSync(join(live(w), 'records-firm.yaml'), 'budget: 1\n')
+    spawnSync('touch', ['-t', '202501010000', live(w)])
+    for (const [i, etag] of ['aaaaaaaa', 'bbbbbbbb', 'cccccccc', 'dddddddd'].entries()) {
+      boot(w, `${etag}00`, String(i + 2))
+      spawnSync('touch', ['-t', `20260101000${i}`, join(w.root, `config/records.v${etag}`)])
+    }
+    expect(lstatSync(live(w)).isSymbolicLink()).toBe(true)
+    expect(readFileSync(join(live(w), 'records-firm.yaml'), 'utf8')).toBe('budget: 5\n')
+    // The legacy copy (00000000) and the oldest new one are pruned.
+    expect(versions(w)).toEqual(['records.vbbbbbbbb', 'records.vcccccccc', 'records.vdddddddd'])
   })
 })

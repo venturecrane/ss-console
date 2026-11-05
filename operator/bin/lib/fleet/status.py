@@ -2,7 +2,9 @@
 
 Per seat: ring, hold, image (and the release it is), overlay ref, skills
 version, bundles (what each bundle runs at: a version, "image" when the image's
-own copy runs, "-" when the seat reports none because it authors no lane), config digest, jobs (running / queued / wakes pending), heartbeat age,
+own copy runs, "-" when the seat reports none because it authors no lane), firm inputs (which
+version of each lane's firm configuration the seat runs, by the first 8 hex of
+its vault ETag, and any published version the validator refused), config digest, jobs (running / queued / wakes pending), heartbeat age,
 the last rollout's state, DRIFT against the newest release that completed
 its last ring, and whether the identifier-gate rollback lever is set. NULL means
 unknown and is shown as "?", never as 0.
@@ -52,6 +54,34 @@ def bundles_cell(raw: str | None) -> str:
     return ",".join(f"{k}={v}" for k, v in sorted(doc.items())) or "-"
 
 
+def firm_inputs_doc(raw: str | None) -> dict[str, Any] | None:
+    """fleet_status.firm_inputs_json parsed; None when absent or unreadable."""
+    if raw is None:
+        return None
+    try:
+        doc = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def firm_inputs_cell(raw: str | None) -> str:
+    """``records=1a2b3c4d``, with ``(refused badbadba)`` on a lane the validator refused."""
+    if raw is None:
+        return "-"
+    doc = firm_inputs_doc(raw)
+    if doc is None:
+        return "?"
+    cells = []
+    for lane, entry in sorted(doc.items()):
+        entry = entry if isinstance(entry, dict) else {}
+        cell = f"{lane}={entry.get('etag8') or 'none'}"
+        if entry.get("verdict") == "rejected":
+            cell += f"(refused {entry.get('rejected_etag8') or '?'})"
+        cells.append(cell)
+    return ",".join(cells) or "-"
+
+
 LEVER = "SMD_IDENTIFIER_GATE_MODE"
 
 
@@ -97,6 +127,8 @@ def seat_rows(
                 "seat": seat, "ring": ring.number, "hold": (holds.get(seat) or {}).get("reason"),
                 "image_ref": image, "overlay": st.get("version"), "skills_version": st.get("skills_version"),
                 "bundles": bundles_cell(st.get("bundles_json")),
+                "firm_inputs": firm_inputs_doc(st.get("firm_inputs_json")),
+                "firm_inputs_cell": firm_inputs_cell(st.get("firm_inputs_json")),
                 "config_digest": st.get("config_digest"), "jobs_running": st.get("jobs_running"),
                 "jobs_queued": st.get("jobs_queued"), "wakes_pending": st.get("wakes_pending"),
                 "heartbeat_ts": st.get("last_heartbeat_ts"), "heartbeat_status": st.get("heartbeat_status"),
@@ -115,6 +147,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         "overlay",
         "skills",
         "bundles",
+        "firm inputs",
         "config",
         "jobs r/q/w",
         "beat",
@@ -127,7 +160,8 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         image = (r["image_ref"] or "?").rsplit("/", 1)[-1]
         lines.append([
             r["seat"], str(r["ring"]), "HELD" if r["hold"] else "", image[:40], (r["overlay"] or "?")[:8],
-            _q(r["skills_version"]), r.get("bundles") or "-", (r["config_digest"] or "?")[:10],
+            _q(r["skills_version"]), r.get("bundles") or "-", r.get("firm_inputs_cell") or "-",
+            (r["config_digest"] or "?")[:10],
             f"{_q(r['jobs_running'])}/{_q(r['jobs_queued'])}/{_q(r['wakes_pending'])}",
             f"{_age(r['heartbeat_ts'])} {r['heartbeat_status'] or ''}".strip(), _q(r["last_rollout"]),
             ",".join(r["drift"]) or "-", _lever(r.get("identifier_gate_lever")),

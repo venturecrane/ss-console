@@ -53,6 +53,7 @@ from typing import Any, Callable
 from . import resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
+from .firm_inputs import pin_env
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
@@ -307,7 +308,11 @@ class RecordsLane(DraftingLane):
     def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
         env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in CHILD_ENV}
         env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
-        for key, value in ((INPUTS_ENV, self.inputs_dir), (STATE_ENV, self.state_dir), (INDEX_ENV, self.index_dir)):
+        for key, value in (
+            (INPUTS_ENV, pin_env(self.inputs_dir)),
+            (STATE_ENV, self.state_dir),
+            (INDEX_ENV, self.index_dir),
+        ):
             if value:
                 env[key] = str(value)
         env.setdefault("JOBS_SEAT", "client")

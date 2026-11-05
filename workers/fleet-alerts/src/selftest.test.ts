@@ -75,6 +75,15 @@ describe('selftest_failing', () => {
     expect(s?.detail).toContain('boot self-test')
   })
 
+  // Firm inputs adopt live (2026-11-04): a lane whose live symlink disagrees
+  // with the applier's state (the heartbeat's firm_inputs) fails
+  // jobs-firm-inputs-current, and that failure pages like any jobs-* check.
+  it('a boot run failing jobs-firm-inputs-current pages and names it', () => {
+    const s = state(failing({ run_kind: 'boot', failed: ['jobs-firm-inputs-current'] }))
+    expect(s?.active).toBe(true)
+    expect(s?.detail).toContain('jobs-firm-inputs-current')
+  })
+
   it('a stale or unreadable verdict opens on its first reading', () => {
     expect(state(failing({ run_kind: 'stale', failed: ['selftest-loop-dead'] }))?.active).toBe(true)
   })

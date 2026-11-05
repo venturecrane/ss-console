@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 
 from ..deadline import NETWORK_RETRY_S
+from ..firm_inputs import pin
 
 ENV_PATH = "MEDCHRON_FIRM_CONFIG"
 DEFAULT_PATH = "/var/lib/smd-config/medchron-firm.yaml"
@@ -341,7 +342,8 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
 
 
 def resolve_path(explicit: str | None = None) -> Path:
-    return Path(explicit or os.environ.get(ENV_PATH) or DEFAULT_PATH)
+    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
+    return pin(explicit or os.environ.get(ENV_PATH) or DEFAULT_PATH)
 
 
 def load(explicit: str | None = None) -> FirmConfig:

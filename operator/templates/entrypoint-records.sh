@@ -68,10 +68,10 @@ unset _RECORDS_INDEX_DIR _OLD_INDEX_DIR
 # vaults/<slug>/records/. Fail-static like the case file inputs: refreshed every
 # boot, the existing copy kept on a failed fetch, deferred jobs when there is none.
 export JOBS_RECORDS_INPUTS_DIR="${CONFIG_DIR}/records"
+# Versioned and validated before the swap (entrypoint-fetch-inputs.sh says how).
+_lane_inputs_begin records "${JOBS_RECORDS_INPUTS_DIR}"
 if _fetch_lane_inputs records "${JOBS_RECORDS_INPUTS_DIR}" records-firm.yaml; then
-  rm -rf "${JOBS_RECORDS_INPUTS_DIR}"
-  mv "${JOBS_RECORDS_INPUTS_DIR}.r2.tmp" "${JOBS_RECORDS_INPUTS_DIR}"
-  log "records firm inputs refreshed from R2 into ${JOBS_RECORDS_INPUTS_DIR}"
+  _adopt_lane_inputs records "${JOBS_RECORDS_INPUTS_DIR}" "${JOBS_RECORDS_INPUTS_DIR}.r2.tmp" || true
 elif [ -f "${JOBS_RECORDS_INPUTS_DIR}/records-firm.yaml" ]; then
   log "WARN: R2 fetch of the records firm inputs failed (${_FETCH_INPUTS_STATE}); keeping the existing root-owned copy"
 elif [ "${_FETCH_INPUTS_STATE}" = absent ]; then
@@ -80,9 +80,7 @@ else
   log "ERROR: the records firm inputs could not be fetched from the vault for ${CUSTOMER_SLUG} and this seat has no copy; the records lane will defer records jobs until a restart fetches them"
 fi
 if [ -d "${JOBS_RECORDS_INPUTS_DIR}" ]; then
-  chown -R root:jobs "${JOBS_RECORDS_INPUTS_DIR}"
-  find "${JOBS_RECORDS_INPUTS_DIR}" -type d -exec chmod 0750 {} +
-  find "${JOBS_RECORDS_INPUTS_DIR}" -type f -exec chmod 0640 {} +
+  _own_lane_inputs "${JOBS_RECORDS_INPUTS_DIR}/"
   # The runner's own validator: a copy that does not pass is said here at
   # boot. Exit 1 is a problem with the inputs; anything else is a validator
   # that could not run.

@@ -1,4 +1,4 @@
-"""root_pollers: the four root poll loops in one process (ADR 0100)."""
+"""root_pollers: the five root poll loops in one process (ADR 0100)."""
 
 from __future__ import annotations
 
@@ -65,9 +65,10 @@ def test_one_loop_that_crashes_restarts_and_the_others_keep_running(monkeypatch)
     assert starts["steady"] == 1
 
 
-def test_the_table_is_the_four_root_loops_and_each_one_imports() -> None:
+def test_the_table_is_the_five_root_loops_and_each_one_imports() -> None:
     from config_applier import __main__ as config_main
     from establish_intake import __main__ as intake_main
+    from firm_inputs_applier import __main__ as firm_inputs_main
     from skills_applier import __main__ as skills_main
     from spec_applier import __main__ as spec_main
 
@@ -75,21 +76,23 @@ def test_the_table_is_the_four_root_loops_and_each_one_imports() -> None:
         "config_applier",
         "spec_applier",
         "skills_applier",
+        "firm_inputs_applier",
         "establish_intake",
     }
     for builder in (
         config_main.build_loop,
         spec_main.build_loop,
         skills_main.build_loop,
+        firm_inputs_main.build_loop,
         intake_main.serve,
     ):
         assert callable(builder)
     # `python -m <loop>` keeps working on its own: tests and a hand run on a seat use it.
-    for mod in (config_main, spec_main, skills_main, intake_main):
+    for mod in (config_main, spec_main, skills_main, firm_inputs_main, intake_main):
         assert callable(mod.main)
 
 
-def test_the_entrypoint_launches_one_root_poller_not_four() -> None:
+def test_the_entrypoint_launches_one_root_poller_not_five() -> None:
     entry = (TEMPLATES / "entrypoint.sh").read_text(encoding="utf-8")
     supervisor = (OVERLAY.parent / "runners/supervisor/entrypoint-supervisor.sh").read_text(
         encoding="utf-8"
@@ -110,3 +113,9 @@ def test_the_entrypoint_launches_one_root_poller_not_four() -> None:
     assert "-m establish_intake" not in code
     # The boot fetches stay their own synchronous processes, before the drop.
     assert "-m spec_applier --once" in code and "-m skills_applier --once" in code
+    assert "-m firm_inputs_applier --once" in code
+    # The one poller process is import-gated on every loop it runs.
+    assert (
+        "import root_pollers, config_applier, spec_applier, skills_applier, firm_inputs_applier,"
+        in code
+    )

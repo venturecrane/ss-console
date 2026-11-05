@@ -429,6 +429,7 @@ def test_fleet_status_shows_what_each_seat_runs_its_bundles_at() -> None:
     table = status.render_table(rows).splitlines()
     assert "bundles" in table[0] and f"jobs={V1}" in table[1]
     assert status.bundles_cell("not json") == "?"
+    assert [r["firm_inputs_cell"] for r in rows] == ["-", "-", "-"]
     rel = [{"release_id": f"bnd-{V1}", "kind": "bundle", "artifact_name": "jobs", "artifact_version": V1}]
     assert f"bundle jobs {V1}" in status.render_releases(rel, False)
 
@@ -519,3 +520,27 @@ def test_a_bundle_the_urgent_seat_never_reports_is_rolled_back_there(
     cw.w.refuses.add("lane-b")
     assert cli.main(["release", "--bundle", "latest", "--only", "lane-b"], ctx=cw.ctx) == 1
     assert cw.w.pointer("lane-b") is None and cw.w.store.states() == {"lane-b": "rolled_back"}
+
+
+def test_fleet_status_reads_back_each_lanes_firm_inputs_version() -> None:
+    """A publish is confirmed on the seat by `fleet status` (firm inputs adopt live, 0149).
+
+    FALSIFIER: drop the cell or the refused marker and a seat running an older
+    version than the vault holds reads as current.
+    """
+    from bin.lib.fleet import status
+
+    good = {"etag8": "1a2b3c4d", "verdict": "fetched", "applied_at": "2026-11-04T12:00:00Z"}
+    refused = {**good, "verdict": "rejected", "rejected_etag8": "badbadba"}
+    store = FakeStore()
+    store.status = {
+        "lane-a": {**fresh_status(), "firm_inputs_json": json.dumps({"records": good, "demand": refused})},
+        "core-c": fresh_status(),
+    }
+    rows = status.seat_rows(store, [Ring(0, ["lane-a", "core-c"], None, 0)])  # type: ignore[arg-type]
+    assert rows[0]["firm_inputs_cell"] == "demand=1a2b3c4d(refused badbadba),records=1a2b3c4d"
+    assert rows[0]["firm_inputs"]["records"]["etag8"] == "1a2b3c4d"
+    assert rows[1]["firm_inputs"] is None and rows[1]["firm_inputs_cell"] == "-"
+    table = status.render_table(rows).splitlines()
+    assert "firm inputs" in table[0] and "records=1a2b3c4d" in table[1]
+    assert status.firm_inputs_cell("not json") == "?"
