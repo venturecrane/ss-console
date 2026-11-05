@@ -404,14 +404,68 @@ def _build_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _retry_builder(tmp_path: Path, fly: _BuildFly, store: FakeStore, r2: FakeR2, logged: list[str], slept: list[float]):
+#: HEAD's committer time as `git show -s --format=%cI` prints it (local offset).
+_COMMIT_TIME = "2026-11-04T21:14:05-07:00\n"
+
+
+def _retry_builder(
+    tmp_path: Path, fly: _BuildFly, store: FakeStore, r2: FakeR2, logged: list[str], slept: list[float],
+    commit_time: Result | None = None,
+):  # fmt: skip
     from bin.lib.fleet.build import Builder
 
-    runner = ScriptRunner(Result(0, "source guard: ok\n", ""), Result(0, _SS_SHA + "\n", ""))
+    runner = ScriptRunner(
+        Result(0, "source guard: ok\n", ""), Result(0, _SS_SHA + "\n", ""), commit_time or Result(0, _COMMIT_TIME, "")
+    )
     return Builder(
         _build_repo(tmp_path), runner, fly, store, r2, _BuildExtractor("sha256:" + "d" * 64), logged.append,  # type: ignore[arg-type]
         sleep=slept.append,
     )  # fmt: skip
+
+
+def test_a_build_records_the_merge_commits_time_in_utc(tmp_path: Path) -> None:
+    """The start of the admin Fleet page's merge-to-seat clock.
+
+    FALSIFIER: drop "merged_at" from the release dict and the stored row has
+    no key; store the raw %cI text and it keeps the -07:00 offset the page's
+    Z-form parser refuses.
+    """
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_PUSHED), FakeStore(), FakeR2()
+    builder = _retry_builder(tmp_path, fly, store, r2, [], [])
+    rel = builder.build(BuildOptions())
+    assert rel["merged_at"] == "2026-11-05T04:14:05Z"
+    assert store.releases[rel["release_id"]]["merged_at"] == "2026-11-05T04:14:05Z"
+    assert ["git", "-C", str(tmp_path), "show", "-s", "--format=%cI", "HEAD"] in builder.runner.calls  # type: ignore[attr-defined]
+
+
+def test_a_build_whose_commit_time_is_unreadable_records_null_and_still_builds(tmp_path: Path) -> None:
+    """A metric never blocks a release. FALSIFIER: require_ok the git show and
+    this build raises instead of recording a release with merged_at None."""
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_PUSHED), FakeStore(), FakeR2()
+    logged: list[str] = []
+    builder = _retry_builder(tmp_path, fly, store, r2, logged, [], Result(128, "", "fatal: bad object"))
+    rel = builder.build(BuildOptions())
+    assert rel["merged_at"] is None and list(store.releases) == [rel["release_id"]]
+    assert any("records no merge time" in m for m in logged)
+
+
+def test_insert_release_writes_merged_at_and_null_when_a_caller_omits_it() -> None:
+    """FALSIFIER: leave merged_at out of insert_release's cols and the image
+    build's merge time never reaches D1."""
+    runner = ScriptRunner(Result(0, "[]", ""), Result(0, "[]", ""))
+    store = FleetStore(D1(runner, "/repo"))
+    store.insert_release(
+        {"release_id": "img-202611050000-aaaaaaaa", "kind": "image", "merged_at": "2026-11-05T00:00:00Z"}
+    )
+    store.insert_release({"release_id": "skl-202611050000-bbbbbbbb", "kind": "skills"})
+    with_time, without = runner.calls[0][-1], runner.calls[1][-1]
+    assert "merged_at, created_at)" in with_time and "merged_at, created_at)" in without
+    assert "2026-11-05T00:00:00Z".encode().hex() in with_time.lower()
+    assert "2026-11-05T00:00:00Z".encode().hex() not in without.lower()
 
 
 def test_the_remote_builders_dropped_stream_is_a_build_transport_failure() -> None:
