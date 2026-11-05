@@ -156,6 +156,22 @@ def _bundles_defer(ctx: Any, seats: list[str]) -> Callable[[dict[str, Any]], dic
     return lambda rel: bundles.deferrals(rel, seats, status, reads.image_sha_of, reads.at_or_after, reads.base_of)
 
 
+def newer_image_since(ctx: Any) -> Callable[[], bool]:
+    """The hand-off signal for the skills and bundle steps of a `latest` tick: True once an image
+    release newer than the newest recorded when this was made exists, so the step ends with
+    progress and the run it starts takes that image from ring 0 (tick.run_promoting ``yield_when``).
+    2026-11-05: the bundle step carried bnd-1991f54c through every ring, busy-gate waits included,
+    while 6db0f014's image waited 18 minutes for the lane."""
+
+    def images() -> set[str]:
+        return {str(r["release_id"]) for r in ctx.store.recent_releases(20) if r.get("kind") == "image"}
+
+    start = images()
+    # Any image row that was not there at the start: order-free, so a fake or a
+    # D1 read that lists oldest first answers the same.
+    return lambda: bool(images() - start)
+
+
 def _skills_tick(ctx: Any, a: argparse.Namespace) -> int:
     """The skills half of a `latest` tick: the same promotion an image gets, no restart."""
     candidates = _skills_in_flight(ctx)
@@ -175,7 +191,9 @@ def _skills_tick(ctx: Any, a: argparse.Namespace) -> int:
     rings = ctx.rings()
     seats = [seat for ring in rings for seat in ring.seats]
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_skills_defer(ctx, seats))
-    return ticker.run_promoting(rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run)
+    return ticker.run_promoting(
+        rings, candidates, do_seat_for, holder_id(), dry_run=a.dry_run, yield_when=newer_image_since(ctx)
+    )
 
 
 def _bundles_in_flight(ctx: Any, name: str = bundles.JOBS) -> list[dict[str, Any]]:
@@ -276,7 +294,9 @@ def _bundles_tick(ctx: Any, a: argparse.Namespace) -> int:
         return TICK_WAITING
     ticker = Ticker(ctx.store, ctx.log, ctx.clock, defer=_bundles_defer(ctx, seats))
     do_seat_for = bundle_seat_runner(ctx, holder, a.max_idle_wait, a.dry_run)
-    return ticker.run_promoting(rings, candidates, do_seat_for, holder, dry_run=a.dry_run)
+    return ticker.run_promoting(
+        rings, candidates, do_seat_for, holder, dry_run=a.dry_run, yield_when=newer_image_since(ctx)
+    )
 
 
 def cmd_bundle_base(ctx: Any, a: argparse.Namespace) -> int:

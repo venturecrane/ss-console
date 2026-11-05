@@ -154,6 +154,17 @@ release-tick.yml`) the moment its candidate is published, and
    (03:02 to 03:35Z) while 6e384840's image, published at 03:08:58Z, waited for
    the lane; staging took it at 03:42Z.
 
+   **Amended 2026-11-05: the skills and bundle steps hand off too.** The
+   hand-off above was the image step's alone. Run 41982023842 handed its image
+   off correctly, then carried the jobs bundle `bnd-1991f54c` through every
+   ring (06:57 to 07:22Z, busy-gate waits included) while `6db0f014`'s image,
+   built 07:05:11Z, waited 18 minutes for the lane. Now every step of a
+   `latest` run asks, between waves and after each ring, whether an image
+   newer than the newest at its start has been recorded
+   (`artifact_tick.newer_image_since`, `run_promoting` `yield_when`); when one
+   has, the step ends with progress and the run it starts takes that image
+   from ring 0. Skills and bundles follow it on that run's later steps.
+
    **Amended 2026-11-05: client rings roll in waves.** Designed for 10 to 20
    paying seats: ring 0 is staging and the last ring is SMD's own seats, one at
    a time; every ring between is a client ring and rolls its seats in waves of
