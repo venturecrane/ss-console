@@ -11,6 +11,18 @@
 # Code: operator/bin/lib/fleet/tick.py. The laptop `fleet release` stays as the
 # manual fallback (docs/handbook/deployment-release.md).
 #
+# WHAT STARTS A RUN (2026-11-04). Deploy's publish jobs (publish-skills, and
+# build-seat-image after a build) start a tick the moment the artifact is
+# published, not when the whole Deploy run ends. A run that advanced a ring
+# (exit 0) starts the next run itself, so the next ring follows in minutes
+# instead of waiting for a cron slot: A&P follows staging about 2 minutes after
+# staging's run ends. Every dispatch is skipped when a tick is already waiting
+# (queued or pending), because this lane keeps one running and one pending run
+# and a further dispatch would only replace the pending one, leaving a
+# cancelled run behind.
+# The cron every 5 minutes is the backstop, and Deploy's completion still
+# starts a run.
+#
 # SKILLS RELEASES TOO (2026-10-28). The same `latest` run then steps the newest
 # skills release CI published (deploy.yml publish-skills) with the same rings,
 # bake, holds, standing halt and lease. A skills release is a pointer write and a
@@ -63,8 +75,10 @@
 name: release-tick
 
 on:
+  # The backstop: a run is normally started by Deploy's publish jobs and by the
+  # previous run (Start the next ring). A run with nothing to do exits 5, green.
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '*/5 * * * *'
   workflow_run:
     workflows: [Deploy]
     types: [completed]
@@ -115,6 +129,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     environment: fleet-release
+    permissions:
+      contents: read
+      packages: read
+      # gh workflow run release-tick.yml (Start the next ring).
+      actions: write
     if: >-
       vars.FLEET_RELEASE_ENABLED == 'true' && vars.DEPLOY_ENABLED == 'true' &&
       github.ref == 'refs/heads/main' &&
@@ -173,6 +192,7 @@ jobs:
           ln -sf flyctl /usr/local/bin/fly
 
       - name: Tick
+        id: tick
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -243,6 +263,8 @@ jobs:
           run_fleet "${args[@]}"
           rc=$?
           set -e
+          # The fleet exit code, before the mapping below, for Start the next ring.
+          echo "fleet_rc=$rc" >> "$GITHUB_OUTPUT"
           case "$rc" in
             0) echo "::notice::release-tick: progress" ;;
             5) echo "::notice::release-tick: waiting (bake running, lease held, or nothing to do)"; rc=0 ;;
@@ -250,6 +272,27 @@ jobs:
             *) echo "::error::release-tick: exit $rc (1 = this run halted the release; see the log above)" ;;
           esac
           exit "$rc"
+
+      # A run advances at most one ring. When it advanced one, start the next run
+      # now so the next ring does not wait for a cron slot. Never after a dry run,
+      # an urgent one-seat run (it exits before writing fleet_rc), or a run that
+      # waited or halted. Skipped when a tick is already queued (see the header).
+      - name: Start the next ring
+        if: steps.tick.outputs.fleet_rc == '0' && env.DRY_RUN == '' && env.SEAT == 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A run waiting on the concurrency lane reports `pending`, a run not yet
+          # picked up reports `queued`; either one already covers this change.
+          waiting=$(
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow release-tick.yml --status queued --json databaseId --jq '.[0].databaseId'
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow release-tick.yml --status pending --json databaseId --jq '.[0].databaseId'
+          )
+          if [ -z "$waiting" ]; then
+            gh workflow run release-tick.yml --repo "$GITHUB_REPOSITORY" --ref main
+          else
+            echo "a tick is already queued"
+          fi
 
   # No environment and no secrets: says why a run did nothing.
   disabled:

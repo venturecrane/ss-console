@@ -60,6 +60,22 @@ ADR 0007 exists to prevent.
    7, 22, 37 and 52 past the hour), when the Deploy workflow completes, and on
    dispatch, in one concurrency group that never cancels a running tick.
 
+   **Amended 2026-11-04: the tick starts on publish, and seat artifacts wait
+   only for the migrations.** The tick used to start when the whole Deploy run
+   completed, so a skill edit waited behind the Cloudflare web build and every
+   other job, the image build included. Now Deploy's D1
+   migrations are their own first job, `migrate`, and `publish-skills`,
+   `build-seat-image` and `publish-bundle` need it alone, never the web
+   `deploy` job (the two config projections moved to it too: they need D1 and
+   R2, not the Worker). `publish-skills` starts a tick (`gh workflow run
+release-tick.yml`) the moment its candidate is published, and
+   `build-seat-image` does the same after a build. The cron is every 5 minutes,
+   as the backstop, and Deploy's completion still starts a run. Every dispatch
+   is skipped while a tick is already waiting (`queued`, or `pending` on the
+   concurrency lane): that lane keeps one running and one pending run, and a
+   further dispatch would only replace the pending one and leave a cancelled
+   run behind.
+
 2. **A tick is resumable and advances at most one ring**
    (`operator/bin/lib/fleet/tick.py`). It takes the fleet lease (another holder
    means wait, exit 5), reads each seat's latest rollout of this release, and:
@@ -106,6 +122,16 @@ ADR 0007 exists to prevent.
    pointed by hand at something newer is never moved back. An image step that
    refuses or errors does not stop the skills step; the run reports the image
    error after it. A tick for a named image release steps that image only.
+
+   **Amended 2026-11-04: a run that advanced a ring starts the next run.** A
+   tick still advances at most one ring per release per run, so with the rings
+   chained only by the cron, the client ring waited a cron slot behind staging
+   even with no bake on either. Now a `--tick` run that exits 0 (progress)
+   dispatches the next run itself (`release-tick.yml`, step `Start the next
+ring`), with the same queued-or-pending guard as Deploy's dispatches; a run
+   that waited (5), halted, was a dry run or was an urgent one-seat run starts
+   nothing. So rings follow each other in minutes: ashton-price is stepped in
+   the run straight after staging's, about 2 minutes after it ends.
 
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`

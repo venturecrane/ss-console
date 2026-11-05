@@ -881,8 +881,10 @@ def test_publish_bundle_builds_after_the_image_from_the_protected_environment() 
     job = wf["jobs"].get("publish-bundle")
     assert job, "deploy.yml has no publish-bundle job"
     assert job.get("environment") == FLEET_RELEASE_ENVIRONMENT
-    assert "build-seat-image" in job.get("needs") and "deploy" in job.get("needs")
-    assert "!cancelled()" in job.get("if") and "needs.deploy.result == 'success'" in job.get("if")
+    # The migrations job, not the web deploy: seat artifacts need the schema only.
+    assert "build-seat-image" in job.get("needs") and "migrate" in job.get("needs")
+    assert "deploy" not in job.get("needs"), "the bundle must not wait on the web deploy"
+    assert "!cancelled()" in job.get("if") and "needs.migrate.result == 'success'" in job.get("if")
     assert ((job.get("concurrency") or {}).get("cancel-in-progress")) is False
     steps = job["steps"]
     assert (steps[0].get("with") or {}).get("fetch-depth") == 0
@@ -894,6 +896,72 @@ def test_publish_bundle_builds_after_the_image_from_the_protected_environment() 
     assert env.get("FLY_REGISTRY_TOKEN") == "${{ secrets.FLY_REGISTRY_TOKEN }}"
     assert env.get("AFTER_SHA") == "${{ github.sha }}"
     assert not any(k.startswith("FLY_DEPLOY_TOKEN__") for k in env), "the bundle build never holds a seat token"
+
+
+def test_seat_artifacts_need_the_migrations_job_not_the_web_deploy() -> None:
+    """Skills, the image and the bundle need the migrated D1 schema, never the
+    Cloudflare web build, so they wait on `migrate` alone and the migrations run
+    nowhere else. FALSIFIER: put `deploy` back in publish-skills' needs and a skill
+    edit waits for the web build again; move the migrations back into `deploy` and
+    the artifacts run against an unmigrated schema."""
+    wf = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))
+    jobs = wf["jobs"]
+    for name in ("publish-skills", "build-seat-image", "publish-bundle"):
+        needs = jobs[name].get("needs")
+        needs = [needs] if isinstance(needs, str) else list(needs or [])
+        assert "migrate" in needs and "deploy" not in needs, f"{name} must need migrate, not deploy"
+    assert jobs["deploy"].get("needs") == "migrate", "the web deploy runs after the migrations"
+    assert "d1 migrations apply" in yaml.safe_dump(jobs["migrate"])
+    for name, job in jobs.items():
+        if name != "migrate":
+            assert "d1 migrations apply" not in yaml.safe_dump(job), f"{name} must not apply migrations"
+
+
+def _dispatches(job: dict) -> list[str]:
+    return [
+        s.get("run") or "" for s in job.get("steps") or [] if "gh workflow run release-tick.yml" in (s.get("run") or "")
+    ]
+
+
+def test_the_tick_re_dispatches_itself_after_progress_and_deploy_dispatches_it_on_publish() -> None:
+    """A tick advances one ring per run. The run that advanced one starts the next
+    run, and Deploy's publish jobs start a run the moment an artifact is published,
+    so A&P follows staging in minutes and no artifact waits for the whole Deploy run.
+    Every dispatch is skipped while a run is already waiting (queued, or pending on
+    the concurrency lane). FALSIFIER: drop the guard and every merge leaves a
+    cancelled tick run behind (a dispatch replaces the pending run); drop the chain
+    and A&P waits for the cron; drop the publish-job dispatch and an artifact waits
+    for the web deploy and the rest of Deploy."""
+    tick_wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    tick = tick_wf["jobs"]["tick"]
+    assert (tick.get("permissions") or {}).get("actions") == "write"
+    assert (tick.get("permissions") or {}).get("contents") == "read"
+    runs = _job_runs(tick)
+    assert runs.index("--tick") < runs.index("gh workflow run release-tick.yml"), "the chain runs after the tick"
+    chain = next(s for s in tick["steps"] if "gh workflow run release-tick.yml" in (s.get("run") or ""))
+    assert "steps.tick.outputs.fleet_rc == '0'" in str(chain.get("if")), "chain only after progress (exit 0)"
+    assert "env.DRY_RUN == ''" in str(chain.get("if")) and "env.SEAT == 'none'" in str(chain.get("if"))
+    tick_step = next(s for s in tick["steps"] if s.get("name") == "Tick")
+    assert tick_step.get("id") == "tick" and 'echo "fleet_rc=$rc" >> "$GITHUB_OUTPUT"' in tick_step["run"]
+    deploy_jobs = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))["jobs"]
+    dispatching = [deploy_jobs["publish-skills"], deploy_jobs["build-seat-image"], tick]
+    for job in dispatching:
+        assert (job.get("permissions") or {}).get("actions") == "write"
+        found = _dispatches(job)
+        assert found, "this job must start the release tick"
+        for run in found:
+            assert "--status queued" in run and "--status pending" in run, "every dispatch is guarded"
+            assert "--ref main" in run
+    publish = _dispatches(deploy_jobs["publish-skills"])[0]
+    steps = deploy_jobs["publish-skills"]["steps"]
+    names = [s.get("run") or "" for s in steps]
+    assert names.index(publish) > next(i for i, r in enumerate(names) if "ci-publish-skills.sh" in r)
+    build_steps = deploy_jobs["build-seat-image"]["steps"]
+    build_runs = [s.get("run") or "" for s in build_steps]
+    start = next(s for s in build_steps if "gh workflow run release-tick.yml" in (s.get("run") or ""))
+    assert start.get("if") == "steps.changes.outputs.relevant == 'true'"
+    assert build_runs.index(start["run"]) > next(i for i, r in enumerate(build_runs) if "fleet build" in r)
+    assert "FLY_" not in str(deploy_jobs["publish-skills"]), "publish-skills holds no Fly secret"
 
 
 def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> None:
