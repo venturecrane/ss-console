@@ -4,7 +4,7 @@ Paid when it has work; the always-run $0 safety net otherwise.
 
 A truncated map file is dangerous precisely because it LOOKS fine: a full
 ## ENTRIES section the assembler parses happily, while the chunk's tail and
-its INDEX / BILLING-DATES / FILES-SEEN blocks are gone. That is a silent
+its FILES-SEEN block is gone. That is a silent
 under-count of the record. Since the compose window moved to 128k a chunk
 rarely reaches the cap, and this stage prints "no unrepaired truncated
 chunks" for $0; it repairs at the same window as composition, so a repair

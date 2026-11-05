@@ -1,10 +1,10 @@
 """`group`: a unit's source files into provider record-sets, one per exhibit.
 $0.
 
-Provider attribution comes from the MAP INDEX, what the record itself states,
-not from the file name or the folder it sits in (a file named for one clinic
-was another's per the record's own clinic block). Folder is the fallback for
-files that produced no index rows (billing-only sources), walking up past
+Provider attribution comes from the map's parsed entries, what the record
+itself states, not from the file name or the folder it sits in (a file named for
+one clinic was another's per the record's own clinic block). Folder is the
+fallback for files no entry cites (billing-only sources), walking up past
 filing-convention names to the nearest ancestor that names someone; a
 matter-root file with no brand in its name goes to ONE sentinel lane that
 must be resolved before exhibits, never to a lane of its own.
@@ -71,7 +71,6 @@ FACILITY_WORD = re.compile(
 )
 CORP = re.compile(r"(?i)^(inc|llc|l\.l\.c|pc|p\.c|apc|a\.p\.c|corp|ltd|co)\.?$")
 INDEX_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-MAP_FILE = re.compile(r"map-\d+(-\d+)?\.md$")
 
 
 class Canon:
@@ -138,55 +137,47 @@ class Canon:
 def index_rows(run_dir, id_to_name: dict[str, str] | None = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Per file name: the dates and providers the map attributes to it.
 
-    The INDEX is the source: one row per entry, and a row's file cell may name
-    several files (`a.pdf; b.jpg (msgatt-…)`), each of which the row attributes.
-    A file the INDEX never names but an entry CITES takes the citing entry's
-    provider and date: the model wrote "a further copy of the same MRI report
-    appears in the client's letter" under the imaging facility's entry, and
-    that entry is the record's own statement of who produced it. Citation
-    attribution is the fallback only; it never outvotes an INDEX row.
+    The source is the parsed entries: each entry attributes its date and its
+    provider to every file it cites, resolved the way ``assemble`` resolves them,
+    so a shortened citation names its file here too. The model wrote "a further
+    copy of the same MRI report appears in the client's letter" under the
+    imaging facility's entry, and that entry is the record's own statement of who
+    produced it. A map composed before ADR 0104 W8 also carries INDEX rows, where
+    a row's file cell may name several files (`a.pdf; b.jpg (msgatt-...)`); a file
+    such a row names keeps its rows and the citations do not outvote them, so a
+    kept job groups as it did.
     """
     from . import assemble  # the entry and citation grammar lives there; one definition
 
     ids = id_to_name or {}
     known = set(ids)
+    resolve = assemble.Resolver(list(ids.values()), ids) if ids else None
 
     def key(ref: str) -> str:
         name, fid = fileref.parse(ref, known)
-        return ids[fid] if fid else name
+        return ids[fid] if fid else ((resolve(ref) if resolve else None) or name)
 
     idx_dates: dict[str, list[str]] = defaultdict(list)
     idx_prov: dict[str, list[str]] = defaultdict(list)
     cite_dates: dict[str, list[str]] = defaultdict(list)
     cite_prov: dict[str, list[str]] = defaultdict(list)
-    for p in sorted(run_dir.iterdir()):
-        if not MAP_FILE.match(p.name):
-            continue
-        txt = p.read_text(encoding="utf-8")
-        m = re.search(r"##\s*INDEX\s*\n(.*?)(?=\n##\s|\Z)", txt, re.S)
-        for line in m.group(1).splitlines() if m else []:
+    for fn in assemble.map_names(run_dir):
+        txt = (run_dir / fn).read_text(encoding="utf-8")
+        for line in assemble.section(txt, "INDEX").splitlines():
             parts = [x.strip() for x in line.split("|")]
             if len(parts) >= 4 and INDEX_DATE.match(parts[0]):
                 for name, fid in fileref.split_cell(parts[3], known):
                     k = ids[fid] if fid else name
                     idx_dates[k].append(parts[0])
                     idx_prov[k].append(parts[1])
-        body = assemble.section(txt, "ENTRIES")
-        for chunk in assemble.ENTRY_SPLIT.split(body):
-            dm = assemble.DATE_HEAD.match(chunk.strip())
-            if dm is None:
+        if resolve is not None:
+            resolve.scope = assemble.scope_of(run_dir, fn, txt)
+        for e in assemble.map_entries(txt):
+            if not e["provider"]:
                 continue
-            lines = chunk.strip().splitlines()
-            head = lines[1] if len(lines) > 1 else ""
-            prov = head.split("|")[0].strip() if "|" in head else ""
-            if not prov:
-                continue
-            date = f"{dm.group(3)}-{dm.group(1)}-{dm.group(2)}"
-            cited = [fname for fname, _ in assemble.CITE.findall(chunk)]
-            cited += [f for f in assemble.CITE_NOPAGE.findall(chunk) if ", p." not in f]
-            for k in {key(c) for c in cited}:
-                cite_dates[k].append(date)
-                cite_prov[k].append(prov)
+            for k in {key(c) for c in assemble.cited_refs(e["text"])}:
+                cite_dates[k].append(e["date"])
+                cite_prov[k].append(e["provider"])
     for k in cite_prov:
         if k not in idx_prov:
             idx_prov[k] = cite_prov[k]

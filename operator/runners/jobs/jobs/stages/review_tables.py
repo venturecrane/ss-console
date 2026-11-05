@@ -19,6 +19,15 @@ remain, never patched by hand:
   from).
 
 The rest of the document is untouched, byte for byte.
+
+CHECK 4 IS DECIDED HERE (ADR 0104 W8, audit finding B1). A reviewer's "this
+summary has no entry behind it" used to delete the line on the model's word,
+though the model sees a sample of the entries and these tables are computed from
+all of them. Code now answers the question for the lines code can answer it for
+(``decide_check4``): a Treatment Timeline or Diagnostic Highlights row is
+recomputed from the entries, and a Prior Medical History line, whose entries the
+body no longer carries, is held against the pre-incident entries on disk. Kept,
+corrected or removed, the attorney's Review Notes say which.
 """
 
 from __future__ import annotations
@@ -26,7 +35,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from . import build_doc as BD
+from ..medchron.audit import diag
+from . import build_doc as BD, summarize
 from .base import StageRun
 from .group import Canon
 
@@ -96,12 +106,74 @@ def rederive(sr: StageRun, before: str, after: str) -> str:
                 continue
             if key not in now:
                 continue  # only the removed entry carried it
-            day, code, prov = now[key]
-            same_day = [e for e in entries if e["iso"] == day]
-            best = max(
-                same_day, key=lambda e: len(BD._toks(str(e.get("provider") or "")) & BD._toks(prov)), default=None
-            )
-            desc = c[1] if len(c) > 1 else ""
-            out.append(f"| {code} | {desc} | {day[5:7]}/{day[8:10]}/{day[:4]} | {best['ref'] if best else ''} |")
+            out.append(_highlight_row(now[key], c[1] if len(c) > 1 else "", entries))
         lines[first:end] = out
     return "\n".join(lines)
+
+
+def _highlight_row(derived: tuple[str, str, str], desc: str, entries: list[dict[str, Any]]) -> str:
+    day, code, prov = derived
+    same_day = [e for e in entries if e["iso"] == day]
+    best = max(same_day, key=lambda e: len(BD._toks(str(e.get("provider") or "")) & BD._toks(prov)), default=None)
+    return f"| {code} | {desc} | {day[5:7]}/{day[8:10]}/{day[:4]} | {best['ref'] if best else ''} |"
+
+
+def _timeline_line(sr: StageRun, md: str, line: str) -> str | None:
+    """The row as the entries compute it; None when no entry names the provider."""
+    c = _cells(line)
+    for _first, prov, period, n, ref in BD.provider_rows(_entries(md), Canon(sr.cfg)):
+        if prov == c[0]:
+            return line if c == [prov, period, str(n), ref] else f"| {prov} | {period} | {n} | {ref} |"
+    return None
+
+
+def _highlight_line(sr: StageRun, md: str, line: str) -> str | None:
+    """The row as the entries compute it. A code the maps do not derive (an
+    audited code in the spelling the tables read) stands while an entry carries
+    its date; None when no entry does."""
+    entries = _entries(md)
+    c = _cells(line)
+    m = re.match(r"(\d{2})/(\d{2})/(\d{4})", c[2] if len(c) > 2 else "")
+    day = f"{m.group(3)}-{m.group(1)}-{m.group(2)}" if m else ""
+    now = BD.icd_codes(sr.slug_dir / "runs" / sr.unit.unit, {e["iso"] for e in entries})
+    derived = now.get(c[0].replace(".", ""))
+    if derived is not None:
+        return line if derived[0] == day else _highlight_row(derived, c[1] if len(c) > 1 else "", entries)
+    return line if any(e["iso"] == day for e in entries) else None
+
+
+def prior_history_line(sr: StageRun, line: str) -> str | None:
+    """The line when every page it cites is a page the pre-incident entries cite
+    (``summarize.PRE_ENTRIES``, carried through the strip's page remap); None
+    when one is not, or it cites nothing, or a job built before that file existed
+    has nothing to hold it against, so the line goes as it always did."""
+    src = sr.slug_dir / "runs" / sr.unit.unit / summarize.PRE_ENTRIES
+    if not src.is_file():
+        return None
+    remap = diag.page_remap(sr.slug_dir, sr.unit.unit)
+    have = {
+        ex: {remap.get(ex, {}).get(p, p) for p in pages}
+        for ex, pages in summarize.pages_by_exhibit(src.read_text(encoding="utf-8")).items()
+    }
+    want = summarize.pages_by_exhibit(line)
+    return line if want and all(ex in have and pages <= have[ex] for ex, pages in want.items()) else None
+
+
+def decide_check4(sr: StageRun, md: str, at: int | None) -> tuple[str, str | None, str | None]:
+    """(the document, the line removed, what to tell the attorney) for a check 4
+    finding on summary line ``at``. ``at`` None (the quote names no single line)
+    decides nothing: the finding stays as it was, for the repair round."""
+    if at is None:
+        return md, None, None
+    lines = md.splitlines(keepends=True)
+    line = lines[at].rstrip("\n")
+    head = next((ln.strip() for ln in reversed(lines[:at]) if ln.startswith("## ")), "")
+    decide = {TIMELINE: _timeline_line, HIGHLIGHTS: _highlight_line}.get(head)
+    new = decide(sr, md, line) if decide else prior_history_line(sr, line)
+    if new is None:
+        del lines[at]
+        return re.sub(r"\n{3,}", "\n\n", "".join(lines)), line, "removed before delivery, no entry supports it"
+    if new == line:
+        return md, None, "checked against the entries and kept"
+    lines[at] = new + "\n"
+    return "".join(lines), None, "corrected from the entries before delivery"

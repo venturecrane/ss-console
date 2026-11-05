@@ -55,10 +55,12 @@ import re
 from typing import Callable
 
 from .. import llm
+from ..medchron import icd_tables
 from ..medchron.audit import claims as CL, coverage, diag, repair
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.audit.run import AuditPaths, Round
 from ..medchron.config import DEFAULT_AUDIT_WORKERS
+from . import icd_claims
 from .base import StageRun
 
 # Rounds converge steeply and each one is cheap: later rounds re-audit only the
@@ -183,7 +185,21 @@ def run(sr: StageRun) -> int:
             sr.log("===== final gate, after the gate drop =====")
             ok, summary = coverage.check(paths, sr.log)
     _record_drops(sr, paths)
-    return 0 if ok else 1
+    if not ok:
+        return 1
+    return _settle_codes(sr)
+
+
+def _settle_codes(sr: StageRun) -> int:
+    """The audited diagnosis claims into the Diagnostic Highlights (full build
+    only; a document with none pending is left alone). 2 when the code tables
+    have gone: a rerun settles it, and the claims never reach the render."""
+    try:
+        icd_claims.settle(sr)
+    except icd_tables.TablesMissing as exc:
+        sr.log(str(exc))
+        return 2
+    return 0
 
 
 def _drop_at_gate(sr: StageRun, paths: AuditPaths) -> bool:

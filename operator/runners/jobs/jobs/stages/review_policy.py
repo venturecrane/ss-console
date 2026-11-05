@@ -18,8 +18,9 @@ delivery with no SMD touch. So, in order:
    to the notes as a NOTE. Any other check 2 MUST-FIX stays MUST.
 3. A check 4 MUST-FIX (a summary line no entry supports) whose quoted text
    matches exactly ONE summary line (the tables before the entries, the Prior
-   Medical History block) has that line deleted from ``final-chronology.md``.
-   Deletion only: nothing is written. Otherwise it stays MUST.
+   Medical History block) is decided in code, against the entries
+   (``review_tables.decide_check4``): kept, corrected or deleted. Otherwise it
+   stays MUST.
 4. ONE repair round for the check 2/4 MUST-FIX left, with the update lane's
    finisher (``update/finisher.py`` via ``stages/update_review``): anchored to
    the entry the finding cites, every entry anchored ``N<k>`` (an empty
@@ -187,20 +188,15 @@ def summary_lines(md: str) -> list[int]:
     return out
 
 
-def delete_supported(md: str, f: review.Finding) -> tuple[str, str | None]:
-    """(md, the line deleted) when the finding's quoted text matches exactly
-    one summary line; (md, None) otherwise."""
+def summary_hit(md: str, f: review.Finding) -> int | None:
+    """The index of the one summary line the finding's quoted text matches, or
+    None when it matches none or several."""
     quotes = [a or b for a, b in _QUOTED.findall(_text(f))]
     if not quotes:
-        return md, None
+        return None
     lines = md.splitlines(keepends=True)
     hits = {i for i in summary_lines(md) for q in quotes if _norm(q) and _norm(q) in _norm(lines[i])}
-    if len(hits) != 1:
-        return md, None
-    i = hits.pop()
-    gone = lines[i].rstrip("\n")
-    del lines[i]
-    return re.sub(r"\n{3,}", "\n\n", "".join(lines)), gone
+    return hits.pop() if len(hits) == 1 else None
 
 
 # ---- step 4: one repair round -------------------------------------------------------
@@ -457,7 +453,7 @@ def settle(
         ),
         0,
     )
-    from . import review_evidence as EV
+    from . import review_evidence as EV, review_tables
 
     pages = EV.Pages(sr)
     try:
@@ -467,15 +463,15 @@ def settle(
     md = doc.read_text(encoding="utf-8")
     for k, f in enumerate(out.findings):
         if f.by == "model" and f.grade == review.MUST and check_no(f) == 4:
-            md, gone = delete_supported(md, f)
+            md, gone, word = review_tables.decide_check4(sr, md, summary_hit(md, f))
             if gone is not None:
                 out.deleted_lines.append(gone)
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"removed before delivery, no entry supports it: {f.finding}"
-                )
-    if out.deleted_lines:
+            if word:
+                out.findings[k] = replace(f, grade=review.NOTE, finding=f"{word}: {f.finding}")
+    if md != doc.read_text(encoding="utf-8"):
         doc.write_text(md, encoding="utf-8")
         out.changed = True
+    if out.deleted_lines:
         _sync_entries(sr, out.deleted_lines)
         stats["summary_deleted"] = len(out.deleted_lines)
         sr.log(f"review: {len(out.deleted_lines)} summary line(s) no entry supports, deleted")

@@ -224,7 +224,13 @@ def test_a_check2_on_the_records_differ_sentence_is_a_note_and_files(job_dir, fi
 
 
 def test_a_check4_summary_line_no_entry_supports_is_deleted_and_re_rendered(job_dir, firm_config_path, data_root):
-    sr, log = _package(job_dir, firm_config_path, data_root)
+    """Decided in code: no entry carries the row's date, so the row goes. A row an
+    entry does carry stays whatever the reviewer says (test_chronology_logic_in_code)."""
+    doc = DOC.replace(
+        "| Sprain of ligaments of cervical spine | 01/20/2026 |",
+        "| Sprain of ligaments of cervical spine | 02/02/2026 |",
+    )
+    sr, log = _package(job_dir, firm_config_path, data_root, doc)
     chron = sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx"
     assert "Sprain of ligaments of cervical spine" in review.docx_text(chron)
     row = (

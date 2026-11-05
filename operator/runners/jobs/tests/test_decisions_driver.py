@@ -679,9 +679,9 @@ def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     assert json.loads((sd / "nonrecord.json").read_text())["1"]["drop_pages"] == []
     assert json.loads((sd / "scanned_labels.json").read_text())["controls_ok"] is True
     audit_rows = [json.loads(line) for line in (sd / "out" / "alpha" / "audit-results.jsonl").read_text().splitlines()]
-    assert [r["verdict"] for r in audit_rows if r["kind"] == "real"] == [
-        "SUPPORTED"
-    ]  # "Cervical strain." is under the 30-char floor
+    # The diagnosis code's claim and the one prose claim ("Cervical strain." is under the 30-char floor).
+    assert [r["verdict"] for r in audit_rows if r["kind"] == "real"] == ["SUPPORTED", "SUPPORTED"]
+    assert "Diagnosis code" not in doc, "the audited claim became the table row and left the body"
     assert "GATE PASS" in (sd / "runs" / "alpha" / "log-audit.txt").read_text()
     # The worksheet read the invoice the run transcribed: one claim form, no
     # ledger, so the total is stated as not derivable rather than invented.

@@ -329,7 +329,11 @@ def test_a_password_protected_bill_is_a_named_gap_and_the_rest_are_read(
     _billing_docs(sr, {"Example Clinic bill": make_pdf([""]), "locked statement": locked_pdf(2)})
     assert billing_stage.run(sr) == 0
     recs = _assert_locked_gap(sr, "locked statement", 2)
-    assert recs["Example Clinic bill"]["failures"] == [] and recs["Example Clinic bill"]["chunks"][0] == BILL
+    assert recs["Example Clinic bill"]["failures"] == [] and recs["Example Clinic bill"]["chunks"][0] == {
+        **BILL,
+        "date_last": "01/02/2026",  # computed from the one visit BILL lists
+        "page_first": 1,
+    }
     assert _named(client.calls) == {"Document: Example Clinic bill"}
     assert any("password-protected" in line for line in log), log
     # A rerun skips both: the locked record is a finished extraction.

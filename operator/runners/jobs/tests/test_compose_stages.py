@@ -318,7 +318,8 @@ def test_assemble_numbers_exhibits_substitutes_citations_and_keeps_both_page_gro
     entries = (d / "entries.md").read_text()
     assert "(Exhibit 1 - p. 1)" in entries and "(Exhibit 1 - p. 2)" in entries
     assert "(Exhibit 2 - p. 1, 3)" in entries  # the second page group is not swallowed
-    assert (d / "clusters.md").read_text() == "" and "none observed" not in (d / "conflicts.md").read_text()
+    assert (d / "clusters.md").read_text() == ""
+    assert not (d / "conflicts.md").exists() and not (d / "billing_dates.md").exists(), "nothing ever read them"
 
 
 def test_assemble_resolves_a_citation_carrying_a_file_id_to_that_file_not_its_namesake(

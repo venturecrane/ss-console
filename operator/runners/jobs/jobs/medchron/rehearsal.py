@@ -25,6 +25,12 @@ the daemon's cgroup and shares the Machine with the gateway.
 
 The copy is left in place as the evidence; the daemon wipes it with the job
 dir at 72 h, so the report is the durable artifact.
+
+Every rehearsal also lays what code counts per file against what the composer
+reported (``stages/map_counts``), done stages or not, because a delivered job
+walks to its end without a single probe: that comparison is the $0 proof that
+the coverage gate's counts moved into code safely. ``answer_key`` checks them
+against a key written by someone reading the files.
 """
 
 from __future__ import annotations
@@ -117,10 +123,12 @@ def run(
     pricing: str | None = None,
     log=print,
     redo: tuple[str, ...] = (),
+    answer_key: str | None = None,
     **driver_kw: Any,
 ) -> tuple[Path, list[Any]]:
     from . import driver as driver_mod  # lazy: driver imports this module
 
+    key = _read_key(answer_key)
     copy = prepare(Path(job_dir))
     log(f"[rehearse] workdir {copy}")
     d = driver_mod.Driver(
@@ -129,7 +137,30 @@ def run(
     outcomes = d.run()
     for o in outcomes:
         o.notes.append(f"rehearse summary: workdir {copy}")
+        o.notes.extend(f"rehearse counts: {line}" for line in count_lines(d.slug_dir, o.unit, key))
     return copy, outcomes
+
+
+def _read_key(path: str | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    try:
+        key = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise RehearsalError(f"the answer key {path} cannot be read: {exc}") from None
+    if not isinstance(key, dict) or not isinstance(key.get("units"), dict):
+        raise RehearsalError(f'the answer key {path} is not {{"units": {{"<unit>": {{"files": ...}}}}}}')
+    return key
+
+
+def count_lines(slug_dir: Path, unit: str, key: dict[str, Any] | None) -> list[str]:
+    """An observer, as a probe is: what it cannot read is a line, never a crash."""
+    from ..stages import map_counts  # lazy: the stages import this package
+
+    try:
+        return map_counts.report(slug_dir, unit, key)
+    except Exception as exc:  # noqa: BLE001 - see above; the failure is reported, never raised
+        return [f"could not run: {type(exc).__name__}: {str(exc)[:120]}"]
 
 
 # ---- the driver's rehearse half, kept here so driver.py stays under the 500-line module ceiling ----

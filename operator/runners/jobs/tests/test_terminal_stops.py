@@ -137,11 +137,12 @@ def _sentinel_matter(sr, head: str) -> Path:
     (d / "units" / "alpha.json").write_text(json.dumps(files))
     rd = d / "runs" / "alpha"
     rd.mkdir(parents=True)
-    # The map cited the scan by a shortened name: assemble resolved it by
-    # prefix, the group stage's exact-name key could not, so no row names it.
+    # The map's entry names no provider on its head line, so no row names the
+    # scan. (A shortened citation no longer lands here: group resolves it the way
+    # assemble does; test_chronology_logic_in_code.)
     (rd / "map-01.md").write_text(
         "## ENTRIES\n01/02/2026\nExample Clinic | Medical Diagnoses\n\nStrain. (FILE: clinic note.pdf, p. 1)\n\n"
-        "01/05/2026\nExample Imaging | Diagnostics\n\nMRI. (FILE: scan00, p. 1)\n\n"
+        "01/05/2026\nDiagnostics\n\nMRI. (FILE: scan00, p. 1)\n\n"
         "## INDEX\n2026-01-02 | Example Clinic | -- | clinic note.pdf\n\n## FILES-SEEN\n"
     )
     (rd / "exhibit_map.json").write_text(json.dumps({"clinic note.pdf": 1, "scan0001.pdf": 2}))

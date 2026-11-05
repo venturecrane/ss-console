@@ -52,6 +52,7 @@ from ..medchron.audit import claims as CL
 from . import exhibit_merge_io as IO, limitations
 from .base import StageRefusal, StageRun, read_json
 from .build_doc import ENTRY
+from .summarize import PRE_ENTRIES
 from .classify import resolve_exhibit_files
 from .exhibit_merge_io import (  # noqa: F401 - re-exported: the stage's public names live here
     ARTEFACTS,
@@ -405,7 +406,7 @@ def _cites_fit(m: Merge, cited: dict[int, set[int]], log: Callable[[str], None])
 def _entries(rd: Path, plan: Plan, log: Callable[[str], None]) -> None:
     """The assembled bodies the gates read (pre-strip pages): renumbered, B's
     pages mapped through the strip into A's, the same duplicates deleted."""
-    for name in ("entries_scoped_final.md", "entries_final.md"):
+    for name in ("entries_scoped_final.md", "entries_final.md", PRE_ENTRIES):
         p = rd / name
         if not p.is_file():
             continue

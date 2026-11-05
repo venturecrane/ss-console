@@ -36,14 +36,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from ..medchron import icd_tables, meta_markers, prompts
-from .. import llm
+from ..medchron import icd_tables, meta_markers
 from ..medchron.audit import claims as CL
 from ..medchron.update import body as B, collect as C, handwritten as H, icd, legend as LG, providers as P
 from ..medchron.update import outcome as UO, records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
-from .summarize import beyond_source
+from .summarize import summary_block
 from .update_base import headings, plan, update_dir
 
 
@@ -360,31 +359,11 @@ def run_summary(sr: StageRun) -> int:
     if not added_pre:
         sr.log("no pre-incident visit added; the delivered Prior Medical History stands alone")
         return 0
-    r = sr.doorway.call(
-        "summarize",
-        model=llm.model_for(sr.cfg, "judgment"),
-        system=prompts.load("summarize-system", sr.cfg),
-        max_tokens=16000,
-        messages=[{"role": "user", "content": "\n\n".join(added_pre)}],
-        effort="high",
-        timeout=240.0,
-        custom_id="update-summarize",
-    )
-    block = r.text.strip()
-    bad = beyond_source("\n".join(added_pre), block)
-    head, _, text = block.partition("\n")
-    why = (
-        "reaches beyond its source: " + str(bad[:5])
-        if bad
-        else "does not open with its heading"
-        if not B.PMH_HEAD.match(head)
-        else "carries a heading and no text"
-        if not text.strip()
-        else ""
-    )
-    if why:
-        sr.log(f"REJECTED: the added prior history {why}")
+    block = summary_block(sr, added_pre, custom_id="update-summarize")
+    if block is None:
+        sr.log("REJECTED: the added prior history reaches beyond its source, or carries no text, after one retry")
         return 1
+    text = block.partition("\n")[2]
     keep = read_json(ud / "new_exhibits.final.json", [])
     added = added_history_line(sr, keep) + "\n" + text.strip("\n")
     (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")

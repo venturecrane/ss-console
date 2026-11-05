@@ -213,11 +213,7 @@ def audit_document(
 
 
 def index_rows(run_dir: Path) -> list[str]:
-    """The compose pass's INDEX rows (date | provider | codes | file)."""
-    rows: list[str] = []
-    for p in sorted(run_dir.iterdir()):
-        if re.match(r"map-\d+(-\d+)?\.md$", p.name):
-            m = re.search(r"##\s*INDEX\s*\n(.*?)(?=\n##\s|\Z)", p.read_text(encoding="utf-8"), re.S)
-            if m:
-                rows.extend(ln.strip() for ln in m.group(1).splitlines() if ln.strip())
-    return rows
+    """What the compose pass recorded, as (date | provider | codes | file) rows."""
+    from ...stages.assemble import code_rows  # lazy: stages import this package
+
+    return code_rows(run_dir)

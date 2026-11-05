@@ -1,6 +1,6 @@
 """CLI: `jobs run <job_dir> [--from STAGE] [--dry-run] [--firm-config PATH]
 [--pricing PATH] [--json]`, `jobs rehearse <job_dir> [--redo STAGE,...]
-[--firm-config PATH] [--pricing PATH] [--json]`, `jobs dag`,
+[--firm-config PATH] [--pricing PATH] [--json] [--answer-key PATH]`, `jobs dag`,
 `jobs validate-config PATH`."""
 
 from __future__ import annotations
@@ -434,6 +434,7 @@ def _cmd_rehearse(args: argparse.Namespace) -> int:
             pricing=args.pricing,
             log=lambda m: print(m, file=sys.stderr),
             redo=redo,
+            answer_key=args.answer_key,
         )
     except (driver_mod.DriverError, config_mod.ConfigError, rehearsal.RehearsalError) as exc:
         print(f"jobs: {exc}", file=sys.stderr)
@@ -581,6 +582,7 @@ def main(argv: list[str] | None = None) -> int:
     rh.add_argument("--firm-config", default=None)
     rh.add_argument("--pricing", default=None)
     rh.add_argument("--json", action="store_true")
+    rh.add_argument("--answer-key", default=None, help="per-file counts to check against (stages/map_counts.py)")
     rh.set_defaults(fn=_cmd_rehearse)
     dm = sub.add_parser("demand", help="run one demand job (gap audit + draft demand) from pull to read-back")
     dm.add_argument("job_dir")

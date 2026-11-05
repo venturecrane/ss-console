@@ -9,7 +9,14 @@ which is the silent-omission class a chronology must not have.
 
 Outputs under runs/<unit>/: entries.md (standalone entries, pre-merge),
 clusters.md (same date+provider fragments for the merge), exhibit_map.json
-(file name -> exhibit number), billing_dates.md, conflicts.md, files_seen.md.
+(file name -> exhibit number).
+
+This module is also the one reader of a composed map. A map's entries, the
+codes each records and the files each cites are parsed here, so what the file
+counts and the code table say is what the entries say (``map_entries``,
+``file_entry_counts``, ``code_rows``). Two shapes are on disk and both read: the
+two blocks the prompt asks for since ADR 0104 W8, and the five blocks of a map a
+kept or in-flight job composed before it (its INDEX rows stay what they were).
 """
 
 from __future__ import annotations
@@ -32,11 +39,14 @@ from .compose import read_usage
 # the first ", p." and every following page group is captured together.
 CITE = re.compile(r"\(FILE:\s*((?:(?!,\s*p\.).)+?)((?:,\s*p\.\s*[0-9,\s\-]+)+)\)")
 CITE_NOPAGE = re.compile(r"\(FILE:\s*(.+?)\)")
-# the chunk header as the model echoes it (chunking.py writes it; FILES-SEEN repeats it verbatim)
+# the chunk header (chunking.py writes it; a map's FILES-SEEN echoes the ones it accounts for)
 FILE_HEADER = re.compile(r"=== FILE: (.+?) \(fileId ([\w.-]+)[,)]")
 ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
 DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 MAP_FILE = re.compile(r"map-0*(\d+)(?:-(\d+))?\.md$")
+#: The line an entry records its ICD codes on (prompts/map-system.md). A cited
+#: line is a sentence of the record, never this.
+CODES_LINE = re.compile(r"(?im)^[ \t]*ICD codes?:[ \t]*([^\n]*)$")
 
 
 def section(txt: str, name: str) -> str:
@@ -94,47 +104,106 @@ class Resolver:
         return None
 
 
-def parse_maps(d: Path, maps: list[str]) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
+def take_codes(chunk: str) -> tuple[str, str]:
+    """(the entry without its codes line, the codes it recorded). The line never
+    reaches a stage downstream of here, so it cannot reach the firm."""
+    codes: list[str] = []
+
+    def one(m: re.Match) -> str:
+        if "(FILE:" in m.group(0):
+            return m.group(0)
+        codes.append(m.group(1).strip())
+        return ""
+
+    text = CODES_LINE.sub(one, chunk)
+    return (re.sub(r"\n{3,}", "\n\n", text).strip(), ", ".join(c for c in codes if c)) if codes else (chunk, "")
+
+
+def map_entries(txt: str) -> list[dict[str, Any]]:
+    """The dated entries of one map's ENTRIES block, in the order written."""
+    body = section(txt, "ENTRIES")
+    if not body or "none in this chunk" in body.lower():
+        return []
+    out: list[dict[str, Any]] = []
+    for chunk in ENTRY_SPLIT.split(body):
+        chunk = chunk.strip()
+        m = DATE_HEAD.match(chunk)
+        if m is None:
+            continue
+        chunk, codes = take_codes(re.sub(r"(?m)^\[entry may continue in next chunk\]\s*$", "", chunk).strip())
+        lines = chunk.splitlines()
+        head = lines[1] if len(lines) > 1 else ""
+        prov = head.split("|")[0].strip() if "|" in head else ""
+        out.append(
+            {
+                "date": f"{m.group(3)}-{m.group(1)}-{m.group(2)}",
+                "provider": prov,
+                "key": norm_provider(prov),
+                "text": chunk,
+                "codes": codes,
+            }
+        )
+    return out
+
+
+def cited_refs(text: str) -> list[str]:
+    """Every file reference an entry's citations make, as written."""
+    return [f.strip() for f, _ in CITE.findall(text)] + [
+        f.strip() for f in CITE_NOPAGE.findall(text) if ", p." not in f
+    ]
+
+
+def scope_of(d: Path, fn: str, txt: str) -> dict[str, set[str]]:
+    """name -> ids this map's chunk carried. The chunk text on disk is the
+    source: a map of the two-block shape echoes only the headers it wrote no
+    entry from, so the map alone would forget which of two same-named files its
+    entries mean. The map's own echoes still count, for a job whose chunk text
+    is gone."""
+    seen: dict[str, set[str]] = defaultdict(set)
+    chunk = d / ("chunk-" + fn[len("map-") : -len(".md")] + ".txt")
+    for source in (txt, chunk.read_text(encoding="utf-8", errors="replace") if chunk.is_file() else ""):
+        for name, fid in FILE_HEADER.findall(source):
+            seen[name.strip()].add(fid)
+    return seen
+
+
+def map_names(d: Path) -> list[str]:
+    return sorted(p.name for p in d.iterdir() if MAP_FILE.match(p.name)) if d.is_dir() else []
+
+
+def parse_maps(d: Path, maps: list[str]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    buckets: dict[str, list[str]] = {"billing_dates.md": [], "conflicts.md": [], "files_seen.md": []}
-    names = (
-        ("BILLING-DATES", "billing_dates.md"),
-        ("CONFLICTS / REFERENCED-BUT-ABSENT", "conflicts.md"),
-        ("FILES-SEEN", "files_seen.md"),
-    )
     for fn in maps:
         txt = (d / fn).read_text(encoding="utf-8")
-        seen: dict[str, set[str]] = defaultdict(set)
-        for name, fid in FILE_HEADER.findall(txt):
-            seen[name.strip()].add(fid)
-        body = section(txt, "ENTRIES")
-        if body and "none in this chunk" not in body.lower():
-            for chunk in ENTRY_SPLIT.split(body):
-                chunk = chunk.strip()
-                if not DATE_HEAD.match(chunk):
-                    continue
-                chunk = re.sub(r"(?m)^\[entry may continue in next chunk\]\s*$", "", chunk).strip()
-                lines = chunk.splitlines()
-                head = lines[1] if len(lines) > 1 else ""
-                prov = head.split("|")[0].strip() if "|" in head else ""
-                m = DATE_HEAD.match(chunk)
-                if m is None:
-                    continue
-                entries.append(
-                    {
-                        "date": f"{m.group(3)}-{m.group(1)}-{m.group(2)}",
-                        "provider": prov,
-                        "key": norm_provider(prov),
-                        "text": chunk,
-                        "src": fn,
-                        "seen": seen,
-                    }
-                )
-        for name, out in names:
-            s = section(txt, re.escape(name))
-            if s and "none" not in s.lower()[:20]:
-                buckets[out].append(f"<!-- {fn} -->\n{s}")
-    return entries, buckets
+        seen = scope_of(d, fn, txt)
+        entries += [{**e, "src": fn, "seen": seen} for e in map_entries(txt)]
+    return entries
+
+
+def file_entry_counts(d: Path, unit_files: list[dict[str, Any]]) -> dict[str, int]:
+    """Per unit file, the entries that cite it, counted here and resolved the way
+    ``substitute`` resolves them: the counts the coverage gate decides on, never
+    a number a model typed. A file no entry cites is absent."""
+    names = [f["name"] + (f.get("ext") or "") for f in unit_files]
+    resolve = Resolver(names, {f["id"]: n for f, n in zip(unit_files, names)})
+    out: dict[str, int] = {}
+    for e in parse_maps(d, map_names(d)):
+        resolve.scope = e["seen"]
+        for name in {resolve(ref) for ref in cited_refs(e["text"])} - {None}:
+            out[str(name)] = out.get(str(name), 0) + 1
+    return out
+
+
+def code_rows(d: Path) -> list[str]:
+    """Every map's codes as `YYYY-MM-DD | provider | codes | file` rows, the shape
+    ``update/icd.index_codes`` reads: from the entries that record them, and from
+    the INDEX block of a map composed before the block went."""
+    rows: list[str] = []
+    for fn in map_names(d):
+        txt = (d / fn).read_text(encoding="utf-8")
+        rows += [ln.strip() for ln in section(txt, "INDEX").splitlines() if ln.strip()]
+        rows += [f"{e['date']} | {e['provider']} | {e['codes']} | --" for e in map_entries(txt) if e["codes"]]
+    return rows
 
 
 def exhibit_numbers(entries: list[dict[str, Any]], resolve: Resolver) -> dict[str, int]:
@@ -184,7 +253,7 @@ def _substitute_entry(e: dict[str, Any], exhibit: dict[str, int], resolve: Resol
 
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
-    maps = sorted(p.name for p in d.iterdir() if MAP_FILE.match(p.name))
+    maps = map_names(d)
     trunc: set[str] = set()
     for u in read_usage(d):
         if u.get("stop") == "max_tokens":
@@ -205,7 +274,7 @@ def run(sr: StageRun) -> int:
     if refused:
         sr.log(f"REFUSING TO ASSEMBLE: chunk(s) {refused} were refused and carry no entries")
         return 1
-    entries, buckets = parse_maps(d, maps)
+    entries = parse_maps(d, maps)
     unit_files = read_json(sr.slug_dir / "units" / f"{sr.unit.unit}.json", [])
     real_names = [f["name"] + (f.get("ext") or "") for f in unit_files]
     resolve = Resolver(real_names, {f["id"]: n for f, n in zip(unit_files, real_names)})
@@ -225,8 +294,6 @@ def run(sr: StageRun) -> int:
         for dt, key, grp in clusters:
             fh.write(f"##### CLUSTER {dt} | {key} ({len(grp)} fragments)\n")
             fh.write("\n---FRAGMENT-BREAK---\n".join(_substitute_entry(g, exhibit, resolve) for g in grp) + "\n\n")
-    for fname, bucket in buckets.items():
-        (d / fname).write_text("\n\n".join(bucket), encoding="utf-8")
     sr.log(f"{sr.unit.unit}: {len(maps)} map files, {len(entries)} entry fragments")
     sr.log(f"  {len(singles)} standalone, {len(clusters)} clusters to merge")
     sr.log(f"  {len(exhibit)} source files -> exhibit numbers")

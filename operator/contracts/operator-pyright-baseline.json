@@ -1,6 +1,6 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 83,
+  "total": 82,
   "files": {
     "adapter/voice/transform.py": 3,
     "bin/control-probes.py": 5,
@@ -27,7 +27,6 @@
     "runners/jobs/jobs/medchron/probes.py": 1,
     "runners/jobs/jobs/seat.py": 5,
     "runners/jobs/jobs/stages/billing.py": 3,
-    "runners/jobs/jobs/stages/build_doc.py": 1,
     "runners/jobs/jobs/stages/download.py": 4,
     "runners/jobs/jobs/stages/group.py": 1,
     "runners/jobs/jobs/stages/manifest.py": 1,

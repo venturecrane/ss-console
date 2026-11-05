@@ -28,6 +28,7 @@ ARTEFACTS: tuple[tuple[str, str], ...] = (
     ("runs/{u}/final-chronology.md", "re-pointed and renumbered, duplicates deleted, lists rebuilt"),
     ("runs/{u}/entries_scoped_final.md", "renumbered; B's pre-strip pages mapped through the strip to A's"),
     ("runs/{u}/entries_final.md", "as entries_scoped_final.md (the coverage gate's fallback body)"),
+    ("runs/{u}/pre_incident_entries.md", "as entries_scoped_final.md (the review checks Prior History against it)"),
     ("runs/{u}/" + MERGES_FILE, "the record of each merge, read by Limitations"),
     ("out/{u}/page_map.json", "B's row folded into A's (files without start_page), the rest renumbered"),
     ("out/{u}/Exhibit *.pdf", "B deleted, later exhibits renamed to their new number"),
@@ -47,6 +48,7 @@ ARTEFACTS: tuple[tuple[str, str], ...] = (
 #: Files that can carry an exhibit number and are deliberately not rewritten.
 NOT_REWRITTEN: tuple[tuple[str, str], ...] = (
     ("runs/{u}/exhibit_map.json", "assemble's per-file numbers, not delivered exhibit numbers"),
+    ("runs/{u}/icd_claims.json", "what build_doc wrote, counted by settle; the live claims are read off the document"),
     ("runs/{u}/exhibit_remap.json", "written by exhibits and read by no stage"),
     ("runs/{u}/entries.md", "per-file numbers from assemble, before exhibits renumbers"),
     ("runs/{u}/merged.md", "per-file numbers from assemble"),

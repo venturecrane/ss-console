@@ -164,6 +164,9 @@ def _scene(job_dir: Path, firm: Path, data_root: Path, pages=PAGES, doc: str = D
     (out / "page_map.json").write_text(json.dumps(pm))
     (rd / "final-chronology.md").write_text(doc)
     (rd / "entries_scoped_final.md").write_text(BODY)
+    (rd / "pre_incident_entries.md").write_text(
+        "01/02/2020\nKaiser | History\n\nOld neck pain noted. (Exhibit 5 - p. 1)\n"
+    )
     (rd / "exhibit_map.json").write_text(json.dumps({f"{FILES[n]}.pdf": n for n in pages}))
     units = [{"id": f"f{n}", "name": FILES[n], "ext": ".pdf", "chars": 100} for n in pages]
     (sd / "units").mkdir()
@@ -326,6 +329,7 @@ def test_the_merge_repoints_renumbers_dedupes_and_discloses(
     # the gates' body: renumbered, the same paragraphs gone (pre-strip pages: no strip here)
     ents = (rd / "entries_scoped_final.md").read_text()
     assert "Exhibit 5" not in ents and "Exhibit 6" not in ents and ents.count("Seen in the emergency") == 1
+    assert "(Exhibit 3 - p. 3)" in (rd / "pre_incident_entries.md").read_text(), "the review reads it after the merge"
     # the page map, the PDFs and every keyed file agree
     pm = json.loads((out / "page_map.json").read_text())
     assert [(e["exhibit"], e["title"]) for e in pm] == [

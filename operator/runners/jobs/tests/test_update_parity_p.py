@@ -143,5 +143,5 @@ def test_a_printouts_as_of_date_is_never_a_visit_nor_a_handwritten_reading(
     assert not any(r.get("reading") == "09/11/2026" for r in rep["handwritten_dates"])
     # The map prompt says so at the source.
     text = (Path(prompts.__file__).parent / "map-system.md").read_text(encoding="utf-8")
-    assert "as-of" in text and "no dated encounter on pp." in text
+    assert "as-of" in text and "no dated encounter" in text
     assert "month and day with no year" in text

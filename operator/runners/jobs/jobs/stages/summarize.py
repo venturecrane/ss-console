@@ -75,6 +75,10 @@ def _iso(entry: str) -> str:
 #: Written when no block could be kept (the pre-incident entries are itemized
 #: instead); stages/limitations.py discloses it.
 FALLBACK = "prior_history_itemized.json"
+#: The entries a kept block summarizes, in the numbering ``entries_scoped_final``
+#: holds (``exhibit_merge`` rewrites both): what the review checks a Prior Medical
+#: History line against, since the body no longer carries those entries.
+PRE_ENTRIES = "pre_incident_entries.md"
 HEADING = "Prior Medical History"
 # A first line that is a heading of the model's own wording: markdown, bold,
 # a trailing colon, or a short line naming a history. The heading is set here
@@ -99,10 +103,12 @@ def with_heading(block: str) -> str:
     return (HEADING + "\n\n" + "\n".join(lines).strip()).strip()
 
 
-def _summary(sr: StageRun, pre: list[str]) -> str | None:
-    """The cited block, or None when two attempts both reach beyond the
-    source. The retry is told exactly which citations reached too far: the
-    common case is merged ranges ("pp. 3-7" for "pp. 3, 5" and "p. 7")."""
+def summary_block(sr: StageRun, pre: list[str], custom_id: str = "summarize") -> str | None:
+    """The cited block under the house heading, or None when two attempts both
+    reach beyond the source or carry no text. The retry is told exactly which
+    citations reached too far: the common case is merged ranges ("pp. 3-7" for
+    "pp. 3, 5" and "p. 7"). The update lane's added prior history comes through
+    here too, so neither lane stops a job on how a model worded a heading."""
     source = "\n\n".join(pre)
     messages: list[dict[str, str]] = [{"role": "user", "content": source}]
     for attempt in (1, 2):
@@ -117,12 +123,13 @@ def _summary(sr: StageRun, pre: list[str]) -> str | None:
             messages=messages,
             effort="high",
             timeout=240.0,
-            custom_id="summarize" if attempt == 1 else "summarize-retry",
+            custom_id=custom_id if attempt == 1 else f"{custom_id}-retry",
         )
         block = with_heading(r.text)
         bad = beyond_source(source, block)
-        if not bad:
+        if not bad and block != HEADING:
             return block
+        bad = bad or ["the section carries a heading and no text"]
         sr.log(f"summary attempt {attempt} reaches beyond the source record:")
         for b in bad[:5]:
             sr.log(f"    - {b}")
@@ -130,7 +137,7 @@ def _summary(sr: StageRun, pre: list[str]) -> str | None:
             {"role": "assistant", "content": r.text.strip()},
             {
                 "role": "user",
-                "content": "These citations name pages the entries never cite: "
+                "content": "These are wrong: "
                 + "; ".join(bad)
                 + ". Rewrite the section. Cite each page exactly as the entries cite it; never join two cited "
                 "pages into a range that covers a page the entries do not cite.",
@@ -160,10 +167,11 @@ def run(sr: StageRun) -> int:
     else:
         sr.log(f"{sr.unit.unit}: {len(pre)} pre-incident entries -> summary, {len(post)} post-incident kept in full")
     (d / FALLBACK).unlink(missing_ok=True)
+    (d / PRE_ENTRIES).unlink(missing_ok=True)
     if not pre:
         (d / "entries_scoped_final.md").write_text("\n\n".join(post), encoding="utf-8")
         return 0
-    block = _summary(sr, pre)
+    block = summary_block(sr, pre)
     if block is None:
         # Still beyond the record after the retry: decided by rule, never a
         # stop. Every pre-incident entry is itemized (under itemize_all they
@@ -178,6 +186,7 @@ def run(sr: StageRun) -> int:
         (d / "entries_scoped_final.md").write_text("\n\n".join(body), encoding="utf-8")
         return 0
     sr.log(f"summary {len(block.split())} words; every cited page is one the source entries cited")
+    (d / PRE_ENTRIES).write_text("\n\n".join(pre), encoding="utf-8")
     # itemize_all: the block leads, then EVERY entry in date order, because the
     # firm asked that no pre-incident visit be left out of the itemized body.
     body = sorted(entries, key=_iso) if itemize_all else post

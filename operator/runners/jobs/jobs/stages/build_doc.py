@@ -5,9 +5,10 @@ Sections: Title / Treatment Timeline (provider table) / Diagnostic Highlights
 (ICD table) / Medical Chronology (the entries, with the Prior Medical History
 block and the scope note at its head) / Exhibit List / Records Reviewed and
 Limitations. Tables are computed FROM THE ENTRIES in code, never by a model,
-so they cannot disagree with the body; ICD descriptors come from the vendored
-CMS tables (a code the tables do not carry is left blank); the provider table
-is facility level through the same canon the exhibits use.
+so they cannot disagree with the body; the provider table is facility level
+through the same canon the exhibits use. A diagnosis code is an audited claim
+(``icd_claims``): the document carries its claim for the audit, and the row the
+firm reads is settled from what the audit kept.
 
 Refuses (exit 1) when text precedes the first dated entry and is not a Prior
 Medical History heading: that text would be dropped by the entry parser and
@@ -17,24 +18,21 @@ able to see it (three delivered chronologies shipped that way).
 
 from __future__ import annotations
 
-import json
 import re
 from collections import defaultdict
 from typing import Any
 
 from ..medchron import icd_tables, meta_markers
+from ..medchron.update import icd
+from . import assemble, icd_claims
 from .base import StageRun, read_json
-from .group import Canon, index_rows
+from .group import Canon
 from .limitations import section as limitations_section
 
 ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
 DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
 PRIOR_HEAD = re.compile(r"^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*Prior Medical History\s*(?:\*\*)?\s*$", re.IGNORECASE)
-# An ICD-10-CM code is a letter, exactly two digits, then at most four more
-# characters (with or without the dot); a shape that admitted three digits
-# before the decimal shipped garbled codes into a client's table.
-ICD_SHAPE = re.compile(r"[A-Z]\d{2}(\.[0-9A-Z]{1,4}|[0-9A-Z]{0,4})|\d{3}(\.\d{1,2})?|[VE]\d{2,3}(\.\d)?")
 
 
 class BuildRefusal(RuntimeError):
@@ -99,32 +97,9 @@ def provider_rows(entries: list[dict[str, Any]], canon: Canon) -> list[tuple]:
 
 
 def icd_codes(run_dir, kept_dates: set[str]) -> dict[str, tuple[str, str, str]]:
-    """{dotless code: (first date, display code, provider)} from the INDEX
-    blocks, restricted to dates the document carries."""
-    _dates, provs = index_rows(run_dir)
-    icd: dict[str, tuple[str, str, str]] = {}
-    for p in run_dir.iterdir():
-        if not re.match(r"map-\d+(-\d+)?\.md$", p.name):
-            continue
-        m = re.search(r"##\s*INDEX\s*\n(.*?)(?=\n##\s|\Z)", p.read_text(encoding="utf-8"), re.S)
-        if not m:
-            continue
-        for line in m.group(1).splitlines():
-            cols = [x.strip() for x in line.split("|")]
-            if len(cols) < 3 or not re.match(r"^\d{4}-\d{2}-\d{2}$", cols[0]) or cols[0] not in kept_dates:
-                continue
-            for code in re.split(r"[,/;]\s*", cols[2]):
-                code = re.sub(r"\s*\(.*?\)", "", code).strip()
-                code = re.sub(r"(?i)\s+(?:as recorded|history).*$", "", code).strip()
-                if not code or code == "--" or not ICD_SHAPE.fullmatch(code):
-                    continue
-                key = code.replace(".", "")
-                prior = icd.get(key)
-                if prior is None or cols[0] < prior[0]:
-                    icd[key] = (cols[0], code, cols[1] if len(cols) > 1 else "")
-                elif cols[0] == prior[0] and "." in code and "." not in prior[1]:
-                    icd[key] = (prior[0], code, prior[2])
-    return icd
+    """{dotless code: (first date, display code, provider)} from what the maps
+    record, restricted to dates the document carries."""
+    return icd.index_codes(assemble.code_rows(run_dir), kept_dates)
 
 
 def _toks(s: str) -> set[str]:
@@ -150,23 +125,11 @@ def run(sr: StageRun) -> int:
     entries = parse_entries(text)
     canon = Canon(sr.cfg)
     rows = provider_rows(entries, canon)
-    icd = icd_codes(rd, {e["iso"] for e in entries})
-    desc: dict[str, str] = {}
-    if icd:
-        try:
-            tables = icd_tables.load(sr.job.install_root)
-        except icd_tables.TablesMissing as exc:
-            sr.log(str(exc))
-            return 1
-        blank = []
-        for _key, (_d, code, _prov) in sorted(icd.items()):
-            label = icd_tables.describe(code, tables)
-            (desc.__setitem__(code, label) if label else blank.append(code))
-        (rd / "icd_descriptors.json").write_text(json.dumps(desc, indent=1), encoding="utf-8")
-        sr.log(
-            f"  ICD descriptors: {len(desc)}/{len(icd)} resolved, {len(blank)} left blank"
-            + (f": {', '.join(blank)}" if blank else "")
-        )
+    try:
+        table, claims = icd_claims.build(sr, rd, [e["text"] for e in entries])
+    except icd_tables.TablesMissing as exc:
+        sr.log(str(exc))
+        return 1
     note = (
         (rd / "preincident_note.txt").read_text(encoding="utf-8").strip()
         if (rd / "preincident_note.txt").is_file()
@@ -179,18 +142,13 @@ def run(sr: StageRun) -> int:
         "| Medical Provider | Treatment Period | Visits | Reference |",
     ]
     o += [f"| {prov} | {period} | {n} | {ref} |" for _, prov, period, n, ref in rows]
-    o += ["", "## Diagnostic Highlights\n", "| ICD Code | Description | First Diagnosed | Reference |"]
-    for _key, (first, code, prov) in sorted(icd.items(), key=lambda kv: (kv[1][0], kv[1][1])):
-        same_day = [e for e in entries if e["iso"] == first]
-        best = max(same_day, key=lambda e: len(_toks(e.get("provider")) & _toks(prov)), default=None)
-        o.append(
-            f"| {code} | {desc.get(code, '')} | {first[5:7]}/{first[8:10]}/{first[:4]} | {best['ref'] if best else ''} |"
-        )
+    o += ["", "## Diagnostic Highlights\n", *table]
     o += ["", "## Medical Chronology\n"]
     if prior_block:
         o.append(prior_block + "\n")
     if note:
         o.append(note + "\n")
+    o += [c + "\n" for c in claims]
     o += [e["text"] + "\n" for e in entries]
     o += ["## Exhibit List\n", "| Exhibit No. | Description |"]
     o += [f"| {e['exhibit']} | {e['title'].split(' - ', 1)[1]} |" for e in pm]
@@ -199,7 +157,7 @@ def run(sr: StageRun) -> int:
     (rd / "final-chronology.md").write_text(out, encoding="utf-8")
     pre = sum(1 for e in entries if e["iso"] < sr.job.incident_date)
     sr.log(
-        f"{unit}: {len(entries)} entries ({pre} pre-incident), {len(rows)} providers, {len(icd)} ICD codes, "
+        f"{unit}: {len(entries)} entries ({pre} pre-incident), {len(rows)} providers, {len(table) - 1} ICD codes, "
         f"{len(pm)} exhibits, {len(out.split())} words"
     )
     return 0

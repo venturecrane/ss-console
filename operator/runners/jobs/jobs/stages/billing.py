@@ -50,8 +50,8 @@ SCHEMA_NOTE = """Return ONE json object, no prose, no code fence:
  "doc_type": "MEDICAL_BILL|LEDGER|LIEN_SUBROGATION|VENDOR_INVOICE|CERTIFICATE|RECORDS_ONLY|OTHER",
  "provider": "<the treating provider or clinic exactly as printed>",
  "patient": "<patient name exactly as printed, or null>",
- "date_first": "<earliest date of SERVICE on these pages, MM/DD/YYYY, or null>",
- "date_last":  "<latest date of SERVICE on these pages, MM/DD/YYYY, or null>",
+ "date_first": "<ONLY when no line item below carries a date: the earliest date of SERVICE printed on these pages, MM/DD/YYYY; otherwise null>",
+ "date_last":  "<ONLY when no line item below carries a date: the latest date of SERVICE printed on these pages, MM/DD/YYYY; otherwise null>",
  "printed_totals": [ {"label":"<the words next to it>", "amount":"<as printed>", "page":<n>} ],
  "line_items":     [ {"date":"<MM/DD/YYYY>", "description":"<short>", "charge":"<as printed>", "page":<n>} ],
  "notes": "<anything ambiguous, illegible, or that looks like a duplicate>"
@@ -150,6 +150,22 @@ def parse(result: llm.Result) -> dict[str, Any] | None:
     return got if isinstance(got, dict) else None
 
 
+def settle_chunk(got: dict[str, Any], first_page: int) -> dict[str, Any]:
+    """What code holds, set by code on a chunk the model transcribed: the first
+    page the call read, and the date range of the visits it listed. The model's
+    own range stands only where it listed no dated visit (a totals-only page),
+    because there it is a transcription and there is nothing to compute from."""
+    from ..medchron.dos_check import _item_is_visit
+    from .billing_chart import dt
+
+    got["page_first"] = first_page
+    items = [i for i in got.get("line_items") or [] if isinstance(i, dict) and _item_is_visit(i)]
+    days = sorted(d for d in (dt(i.get("date")) for i in items) if d)
+    if days:
+        got["date_first"], got["date_last"] = (f"{d[5:7]}/{d[8:10]}/{d[:4]}" for d in (days[0], days[-1]))
+    return got
+
+
 def usage_of(result: llm.Result) -> list[int]:
     return [int(getattr(result.usage, "input_tokens", 0) or 0), int(getattr(result.usage, "output_tokens", 0) or 0)]
 
@@ -200,7 +216,7 @@ class _Reader:
                 if usage:
                     out["usage"].append(usage)
             if got is not None:
-                return [got]
+                return [settle_chunk(got, start)]
             if start == end:
                 # A single page that overflowed 8k is dense, not broken: a much
                 # larger budget, then totals-only, before giving up.
@@ -213,7 +229,7 @@ class _Reader:
                             got["line_items_omitted"] = True
                             with lock:
                                 out.setdefault("totals_only_pages", []).append(start)
-                        return [got]
+                        return [settle_chunk(got, start)]
                 with lock:
                     out["failures"].append(start)
                 return [{"FAILED_PAGE": start}]

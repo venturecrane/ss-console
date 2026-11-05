@@ -144,6 +144,19 @@ def test_the_added_history_is_dated_by_the_filing_date_never_the_run_date(tmp_pa
     assert ADDED_HISTORY.search(pmh)
 
 
+def test_a_summary_reply_with_no_heading_or_its_own_wording_of_one_does_not_stop_the_job(tmp_path: Path) -> None:
+    """The heading is code's in this lane too (ADR 0104 W8, audit finding C3): a
+    formatting miss used to end a whole job with no retry."""
+    from jobs.stages import update_collect as UC
+
+    body = "Radiographs before the incident showed straightening. (Exhibit 2 - p. 1)"
+    for n, reply in enumerate((body, f"**Prior History:**\n{body}", f"# Prior Medical History\n\n{body}")):
+        sr, _ = _summary_sr(tmp_path / str(n), reply, "2026-10-01T15:04:00Z")
+        assert UC.run_summary(sr) == 0  # type: ignore[arg-type]
+        pmh = (tmp_path / str(n) / "runs" / "alpha" / "update" / "pmh.md").read_text()
+        assert pmh == f"Additional prior history from records filed through 10-01-26\n{body}\n"
+
+
 def test_a_heading_only_summary_reply_is_refused_cleanly(tmp_path: Path) -> None:
     from jobs.stages import update_collect as UC
 

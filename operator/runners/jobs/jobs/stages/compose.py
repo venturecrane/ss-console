@@ -61,8 +61,9 @@ from ..limits import LimitHold
 from .base import StageRun, append_jsonl, read_json
 from .chunking import build_chunks, chunk_size, pieces_pages, sha, split_chunk, split_files
 
-# The five blocks the prompt demands (prompts/map-system.md "OUTPUT SHAPE").
-BLOCKS = ("## ENTRIES", "## INDEX", "## BILLING-DATES", "## CONFLICTS / REFERENCED-BUT-ABSENT", "## FILES-SEEN")
+# The blocks the prompt demands (prompts/map-system.md "OUTPUT SHAPE"). A map
+# composed before ADR 0104 W8 carries these two among its five, so it still reads.
+BLOCKS = ("## ENTRIES", "## FILES-SEEN")
 
 
 def well_formed(text: str) -> bool:
@@ -233,7 +234,7 @@ def clear_unread(d: Path, i: int) -> None:
 
 def record_unread(d: Path, label: str, text: str, reason: str, out_name: str) -> list[dict[str, Any]]:
     """Name the pages of `text` as unread and write the map file that carries
-    their account: every block in the house shape, no entry, and one
+    their account: both blocks of the house shape, no entry, and one
     FILES-SEEN line per file reading `nothing extractable: not read (...)`,
     so assemble parses it and the coverage gate finds the file explained."""
     why = UNREAD_REASONS[reason]
@@ -242,11 +243,8 @@ def record_unread(d: Path, label: str, text: str, reason: str, out_name: str) ->
     seen = [
         f"{p['header']} | nothing extractable: not read ({why}); named as unread in the limitations" for p in pieces
     ]
-    none = "none in this chunk"
     (d / out_name).write_text(
-        f"## ENTRIES\n{none}\n\n## INDEX\n{none}\n\n## BILLING-DATES\n{none}\n\n"
-        f"## CONFLICTS / REFERENCED-BUT-ABSENT\n{none}\n\n## FILES-SEEN\n" + "\n".join(seen) + "\n",
-        encoding="utf-8",
+        "## ENTRIES\nnone in this chunk\n\n## FILES-SEEN\n" + "\n".join(seen) + "\n", encoding="utf-8"
     )
     p = d / UNREAD
     kept = [r for r in read_json(p, []) if str(r.get("chunk")) != label]

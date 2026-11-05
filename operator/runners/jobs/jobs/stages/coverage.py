@@ -18,17 +18,21 @@ class enters. A citation counts only where prose carries it: a bare
 citation on a line of its own once let two exhibits pass this gate while
 appearing nowhere in the chronology.
 
-Since 2026-10-23 an uncited unit file with no other account is split by what
-the composer said it found (``entry_counts``), because the two cases are
-opposites and only one of them is a question:
+Since 2026-10-23 an uncited unit file with no other account is split by how
+many entries were drawn from it (``entry_counts``), because the two cases are
+opposites and only one of them is a question. Since ADR 0104 W8 that number is
+counted here from the parsed entries, never read off the composer's own count;
+the composer contributes only its reason for a file it drew nothing from. A map
+composed before then still carries `entries: N`, and that line still counts as
+its account of a file no entry cites, so a kept job reads as it did.
 
-* ``entries: 0`` on every FILES-SEEN line for the file: the composer read it
-  and drew no entry from it. That is the record's own statement, so it is
-  explained by rule (``rule_rows``), written to ``coverage_decisions.json``
-  with ``by: "rule"``, and named to the firm in the Records Reviewed and
-  Limitations section. Curtis held seven times on SMD-only questions; this
-  was one shape of them.
-* ``entries: N`` above zero, where every citation of the file in the full
+* No entry cites the file and the composer's reason is ``no dated encounter``
+  (or a map of the old shape reads ``entries: 0``): that is the record's own
+  statement, so it is explained by rule (``rule_rows``), written to
+  ``coverage_decisions.json`` with ``by: "rule"``, and named to the firm in the
+  Records Reviewed and Limitations section. Curtis held seven times on SMD-only
+  questions; this was one shape of them.
+* Entries above zero, where every citation of the file in the full
   assembly (``full_cites.json``) left with a block the ``filter`` stage
   removed by rule: a block naming another patient (``omitted_coclient.json``)
   or a pre-incident encounter reviewed and not itemized
@@ -36,7 +40,7 @@ opposites and only one of them is a question:
   carried, so the file is explained by rule with that factual reason and
   named in Limitations, never held (2026-10-24: a joint matter's shared intake
   form, stripped as the co-plaintiff's, held a finished chronology).
-* ``entries: N`` above zero otherwise, or no FILES-SEEN line at all: the
+* Entries above zero otherwise, or no FILES-SEEN line at all: the
   composer drew entries from it (or never accounted for it) and the document
   cites none. That is pipeline LOSS, never a disclosure (the 08-27 rule: no
   record the map read is dropped into a sentence about what was not cited),
@@ -55,6 +59,7 @@ from pathlib import Path
 from typing import Any
 
 from ..medchron import coverage_decide
+from . import assemble
 from .base import StageRun, read_json, read_jsonl
 from .units import billing_stem
 
@@ -78,6 +83,14 @@ SEEN_LINE = re.compile(
     r"=== FILE: (?P<name>.+?)(?: \(fileId (?P<id>[\w.-]+)[^)]*\))?(?: \[part \d+/\d+\])?(?: \[continued\])? ===\s*\|?\s*"
     r"(?P<what>nothing extractable: [^\n]+|billing-dates: \d+|entries: \d+[^\n]*)"
 )
+#: The composer's reason for a medical record that dates no encounter
+#: (prompts/map-system.md). Code words what the firm reads: ``NO_ENCOUNTER``.
+NO_ENCOUNTER_REASON = "no dated encounter"
+
+
+def _no_encounter(what: str) -> bool:
+    """The account is that reason, however the model cased or stopped it."""
+    return what.strip().rstrip(" .").lower() == f"nothing extractable: {NO_ENCOUNTER_REASON}"
 
 
 def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, str]:
@@ -88,7 +101,11 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
     stage that read every page, and it is the reason this gate lacked on
     2026-09-16: 97 pleadings, filings, photos and letters, each with a stated
     reason, held the run because the firm's name table had never met them.
-    `entries: 0` with no reason explains nothing, so it is not returned.
+    `entries: 0` with no reason explains nothing, so it is not returned, and
+    ``NO_ENCOUNTER_REASON`` goes the way `entries: 0` goes (``entry_counts``).
+
+    `billing-dates: N` is the old shape's account, read so a kept job reads as
+    it did; the prompt no longer asks for it.
 
     The billing-dates account is read wherever it appears in the line, not only
     at its start. The composer writes it BOTH alone (`billing-dates: 29`) and
@@ -109,7 +126,8 @@ def composer_dispositions(run_dir: Path, unit_files: list[dict[str, Any]]) -> di
             bills = re.search(r"billing-dates:\s*(\d+)", what)
             entries = re.search(r"entries:\s*(\d+)", what)
             if what.startswith("nothing extractable:"):
-                out.setdefault(name, "composer: " + what[len("nothing extractable:") :].strip())
+                if not _no_encounter(what):
+                    out.setdefault(name, "composer: " + what[len("nothing extractable:") :].strip())
             elif bills and int(bills.group(1)) > 0 and not (entries and int(entries.group(1)) > 0):
                 out.setdefault(
                     name,
@@ -169,19 +187,24 @@ def omitted_by_rule(run_dir: Path) -> dict[str, str]:
 
 
 def entry_counts(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, int]:
-    """Per unit file, the entries the composer said it drew from the file,
-    summed over every FILES-SEEN line that carries a count (a file split
-    across chunks has one line per part, and a part with entries makes the
-    file a source even when another part had none). A file the maps never
-    name, or name only with another account, is absent."""
+    """Per unit file, the entries drawn from it: what code counts from the parsed
+    entries (``assemble.file_entry_counts``). Where no entry cites the file, 0
+    when the composer said it dates no encounter (a map of the old shape: its
+    `entries: N`, kept, so a count no citation backs stays a source and an
+    uncited one stays a hold). A file with any other account, or none, is absent."""
+    counted = assemble.file_entry_counts(run_dir, unit_files)
     id_to_name = {f["id"]: file_key(f) for f in unit_files}
-    out: dict[str, int] = {}
+    out: dict[str, int] = dict(counted)
     for p in sorted(run_dir.glob("map-*.md")):
         for m in SEEN_LINE.finditer(p.read_text(encoding="utf-8")):
+            name = id_to_name.get(m.group("id") or "", m.group("name").strip())
+            if name in counted:
+                continue
             entries = re.search(r"entries:\s*(\d+)", m.group("what"))
             if entries:
-                name = id_to_name.get(m.group("id") or "", m.group("name").strip())
                 out[name] = out.get(name, 0) + int(entries.group(1))
+            elif _no_encounter(m.group("what")):
+                out.setdefault(name, 0)
     return out
 
 
@@ -270,7 +293,8 @@ def _record_rules(sr: StageRun, rows: list[dict[str, str]]) -> None:
                 "name": r["name"],
                 "reason": r["reason"],
                 "by": RULE_BY,
-                "source": r.get("source") or "coverage_gate: the composer's FILES-SEEN line reads entries: 0",
+                "source": r.get("source")
+                or "coverage_gate: no entry cites the file and the composer read no encounter in it",
                 "at": at,
             },
         )
