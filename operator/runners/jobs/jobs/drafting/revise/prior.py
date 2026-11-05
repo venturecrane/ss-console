@@ -114,6 +114,24 @@ def docx_to_md(path: Path) -> str:
     return docx_to_md_doc(docx.Document(str(path)))
 
 
+def notes_md(path: Path) -> str:
+    """Attorney notes read back with their numbered lines numbered, so they
+    render as a numbered list again. Notes only: a brief's numbering belongs
+    to its own file, which a revision edits in place."""
+    import docx
+
+    d, out, n = docx.Document(str(path)), [], 0
+    for kind, b in _blocks(d):
+        md = block_md(kind, b)
+        if md is None:
+            continue
+        if kind == "p" and b.style is not None and b.style.name == "List Number":
+            n += 1
+            md = f"{n}. {md}"
+        out.append(md)
+    return "\n\n".join(out) + "\n"
+
+
 def printed(path: Path) -> list[tuple[str, tuple[tuple[str, bool, bool], ...]]]:
     """What a reader sees, in order: each paragraph's words and emphasis, and
     each table row's cells as words."""

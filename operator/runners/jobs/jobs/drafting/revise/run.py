@@ -150,7 +150,7 @@ class ReviseRun(DraftingRun):
         filed = {"draft": prior_mod.sha(draft)}
         if notes is not None:
             filed["attorney_notes"] = prior_mod.sha(notes)
-            (self._base_dir / "notes.md").write_text(prior_mod.docx_to_md(notes), encoding="utf-8")
+            (self._base_dir / "notes.md").write_text(prior_mod.notes_md(notes), encoding="utf-8")
         rec["filed"] = filed
         # The version each file was at when the revision read it: the filing's
         # compare-and-stop (versions.py) refuses a file that moved since.
@@ -221,8 +221,8 @@ class ReviseRun(DraftingRun):
         self._atomic("revised.md", out.md)
 
     def _layout(self) -> dict[str, Any]:
-        """The formatting asks as layout keys, less a relative ask's keys that
-        would not go beyond the filed value (rendering those would undo it)."""
+        """The formatting asks as layout keys, less those the filed brief
+        already meets and a relative ask's that would not go beyond it."""
         layout: dict[str, Any] = {}
         verdicts = self._formatting_verdicts()
         for i in self._items():
@@ -233,7 +233,9 @@ class ReviseRun(DraftingRun):
 
     def _formatting_verdicts(self) -> dict[str, tuple[str, str, list[str]]]:
         """Per formatting item, against the FILED file: ("already" | "short" |
-        "change", why, the relative keys that do not go beyond the filed value)."""
+        "change", why, the keys not to lay: a relative key that does not go
+        beyond the filed value, or a key the filed brief already meets, whose
+        elements stay exactly as filed)."""
         if self._verdicts is not None:
             return self._verdicts
         out: dict[str, tuple[str, str, list[str]]] = {}
@@ -243,21 +245,19 @@ class ReviseRun(DraftingRun):
             if i.kind != "formatting":
                 continue
             asked: dict[str, Any] = i.params["layout"]
-            drop, have = self._short_keys(asked, i.params.get("relative"))
-            if drop and len(drop) == len(asked):
-                way = i.params["relative"]
-                said = ", ".join(f"{_label(k)} {have[k]:g}" for k in drop)
-                out[i.id] = (
-                    "short",
-                    f'"{i.quote}": the filed brief already has {said}; this would not make it {way}',
-                    drop,
-                )
-                continue
-            rest = {k: v for k, v in asked.items() if k not in drop}
-            if not checks.check_docx(self._filed_path, rest, size, skip, self.cls):
-                out[i.id] = ("already", f'"{i.quote}" is already how the filed brief reads', drop)
-            else:
+            short, have = self._short_keys(asked, i.params.get("relative"))
+            rest = {k: v for k, v in asked.items() if k not in short}
+            met = [k for k, v in rest.items() if not checks.check_docx(self._filed_path, {k: v}, size, skip, self.cls)]
+            drop = [*short, *met]
+            if len(drop) < len(asked):
                 out[i.id] = ("change", "", drop)
+            elif short:
+                way = i.params["relative"]
+                said = ", ".join(f"{_label(k)} {have[k]:g}" for k in short)
+                why = f'"{i.quote}": the filed brief already has {said}; this would not make it {way}'
+                out[i.id] = ("short", why, drop)
+            else:
+                out[i.id] = ("already", f'"{i.quote}" is already how the filed brief reads', drop)
         self._verdicts = out
         return out
 
@@ -329,6 +329,9 @@ class ReviseRun(DraftingRun):
             kind, why, drop = verdicts[i.id]
             if kind == "short":  # not made, and the attorney is told why; never a stop
                 st.update(status="not_met", how="filed", detail=why)
+                continue
+            if kind == "already":
+                st.update(status="met", how="code", detail="already how the filed brief reads; left as filed")
                 continue
             asked = {k: v for k, v in i.params["layout"].items() if k not in drop}
             probs = checks.check_docx(path, asked, size, skip, self.cls)

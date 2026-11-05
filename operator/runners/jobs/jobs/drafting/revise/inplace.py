@@ -18,9 +18,10 @@ in meaning:
   elements it names (body or heading paragraphs, the charts, the caption,
   the first page, the signature lines), every element in its schema's order.
 
-``Edit`` records every top-level element it touched, so ``prove`` can hold
-the result to it: every other element, and every other part of the package
-(styles, numbering, section properties, headers, footers), must be the filed
+``Edit`` records each top-level element it touched with the leaves that edit
+may change, so ``prove`` holds the result to them (``xmlproof``): inside a
+touched element only those leaves, every other element and every other part of
+the package (styles, numbering, section properties, headers, footers) the filed
 XML, rsid noise aside; anything else is ``revise_layout_lost``.
 """
 
@@ -30,16 +31,15 @@ import copy
 import difflib
 import io
 import re
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .. import briefpage, frontpage
-from . import charts, filed as filed_mod, layout as lay, prior
+from . import charts, filed as filed_mod, layout as lay, prior, xmlproof
+from .xmlproof import Allow
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-_NOISE = re.compile(r'\s(?:w:rsid\w*|w14:paraId|w14:textId)="[^"]*"')
 _HEADING = re.compile(r"^(#{1,6})\s+(.+)$")
 _BULLET = re.compile(r"^\s*-\s+")
 _SEPARATOR = re.compile(r"^\|?\s*:?-{3,}")
@@ -51,9 +51,12 @@ class Edit:
     """The filed document, open, and what this revision touched in it."""
 
     doc: Any
-    #: The top-level body elements changed or added. Held as elements, never as
-    #: id()s: an lxml proxy lives only while referenced, so an id is reused.
-    touched: set[Any] = field(default_factory=set)
+    #: Each changed top-level element and the leaves its edit may change. Held
+    #: as elements, never as id()s: an lxml proxy lives only while referenced,
+    #: so an id is reused.
+    allowed: dict[Any, list[Any]] = field(default_factory=dict)
+    #: The top-level elements an edit made.
+    added: set[Any] = field(default_factory=set)
     removed: int = 0
     said: list[str] = field(default_factory=list)
 
@@ -63,8 +66,12 @@ class Edit:
             el = el.getparent()
         return el
 
-    def mark(self, el: Any) -> None:
-        self.touched.add(self.top(el))
+    @property
+    def touched(self) -> set[Any]:
+        return set(self.allowed) | self.added
+
+    def mark(self, el: Any, may_change: Any) -> None:
+        self.allowed.setdefault(self.top(el), []).append(may_change)
 
 
 def open_filed(path: Path) -> Edit:
@@ -212,6 +219,7 @@ def _level(ed: Edit, el: Any, level: int, rules: Any) -> None:
     p = Paragraph(el, ed.doc)
     if lay.heading_level(p) == level:
         return
+    ed.mark(el, Allow.HEADING_LEVEL)
     name = p.style.name if p.style is not None else ""
     want = re.sub(r"\d\s*$", str(level), name) if name[-1:].isdigit() else ""
     if want and want in [st.name for st in ed.doc.styles]:
@@ -271,11 +279,12 @@ def edit_content(ed: Edit, revised_md: str, rules: Any = None) -> None:
             if i < i2 and _same_role(_role(old[i]), _role(new[j])):
                 el = pairs[i][0]  # the same element, its words replaced
                 reused.add(i)
+                ed.mark(el, Allow.TABLE_TEXT if el.tag == f"{_W}tbl" else Allow.RUNS)
             else:
                 el = copy.deepcopy(_template(pairs, _role(new[j]), i))
                 _insert(ed, el, anchor, pairs)
+                ed.added.add(el)
             _apply_block(ed, el, new[j], rules)
-            ed.mark(el)
             anchor = el
         for i in range(i1, i2):  # filed blocks the revision no longer has
             if i not in reused:
@@ -316,7 +325,7 @@ def _spacing(ed: Edit, key: str, v: Any) -> None:
             pf.line_spacing_rule, pf.line_spacing = WD_LINE_SPACING.EXACTLY, Pt(float(v))
         else:
             pf.line_spacing = float(v)
-        ed.mark(p._p)
+        ed.mark(p._p, Allow.SPACING)
 
 
 def _shade(cell: Any, fill: str) -> None:
@@ -329,6 +338,14 @@ def _shade(cell: Any, fill: str) -> None:
         parse_xml(f'<w:shd {ns} w:val="clear" w:color="auto" w:fill="{fill}"/>'),
         charts.TCPR,
     )
+
+
+_TABLE_LEAVES = {
+    "table_font_pt": Allow.CHART_FONT,
+    "table_header_fill": Allow.CHART_FILL,
+    "table_total_fill": Allow.CHART_FILL,
+    "table_border_pt": Allow.CHART_BORDERS,
+}
 
 
 def _tables(ed: Edit, key: str, v: Any) -> None:
@@ -359,7 +376,7 @@ def _tables(ed: Edit, key: str, v: Any) -> None:
             charts.put(
                 t._tbl.tblPr, "tblBorders", parse_xml(f"<w:tblBorders {ns}>{edges}</w:tblBorders>"), charts.TBLPR
             )
-        ed.mark(t._tbl)
+        ed.mark(t._tbl, _TABLE_LEAVES[key])
 
 
 _EDGES = ("top", "left", "bottom", "right", "insideH", "insideV")
@@ -367,12 +384,29 @@ _TCB = ("top", "start", "left", "bottom", "end", "right", "insideH", "insideV", 
 _TBLB = ("top", "start", "left", "bottom", "end", "right", "insideH", "insideV")
 
 
-def _bottom(parent: Any, order: tuple[str, ...], on: bool) -> None:
+def _bottom(parent: Any, order: tuple[str, ...], rule: Any) -> None:
+    """``rule`` as ``parent``'s bottom edge, or none; a single rule it already
+    has stays exactly as filed."""
+    have = parent.find(f"{_W}bottom")
+    if rule is not None and have is not None and have.get(f"{_W}val") == "single":
+        return
+    charts.put(parent, "bottom", rule, order)
+
+
+def _rule_filed(tbl: Any) -> Any:
+    """The rule the caption already carries, so an ask about where it ends
+    keeps his weight and colour: its last row's, else the table's, else the
+    renderer's own."""
     from docx.oxml import parse_xml
 
+    last = tbl.findall(f"{_W}tr")[-1].findall(f"{_W}tc")
+    pr = tbl.tblPr
+    for parent in [*[tc.find(f"{_W}tcPr/{_W}tcBorders") for tc in last], pr.find(f"{_W}tblBorders")]:
+        b = parent.find(f"{_W}bottom") if parent is not None else None
+        if b is not None and b.get(f"{_W}val") == "single":
+            return copy.deepcopy(b)
     ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-    src = parse_xml(f'<w:bottom {ns} w:val="single" w:sz="8" w:space="0" w:color="auto"/>') if on else None
-    charts.put(parent, "bottom", src, order)
+    return parse_xml(f'<w:bottom {ns} w:val="single" w:sz="8" w:space="0" w:color="auto"/>')
 
 
 def _caption_rule(ed: Edit, v: Any) -> None:
@@ -383,26 +417,51 @@ def _caption_rule(ed: Edit, v: Any) -> None:
     tbl = briefpage._caption_table(ed.doc)
     if tbl is None:
         return
+    rule = _rule_filed(tbl)
     pr = tbl.tblPr
     borders = pr.find(f"{_W}tblBorders")
-    if borders is None:
+    if borders is None and v is True:
         charts.put(pr, "tblBorders", OxmlElement("w:tblBorders"), charts.TBLPR)
         borders = pr.find(f"{_W}tblBorders")
-    _bottom(borders, _TBLB, v is True)
-    last = tbl.findall(f"{_W}tr")[-1].findall(f"{_W}tc")
-    for n, tc in enumerate(last):
+    if borders is not None:
+        _bottom(borders, _TBLB, rule if v is True else None)
+    rows = tbl.findall(f"{_W}tr")
+    for n, tc in enumerate(rows[-1].findall(f"{_W}tc")):
         tc_pr = tc.find(f"{_W}tcPr")
+        tcb = tc_pr.find(f"{_W}tcBorders") if tc_pr is not None else None
+        if tcb is None and not (v == "left" and n == 0):
+            continue
         if tc_pr is None:
             tc_pr = OxmlElement("w:tcPr")
             tc.insert(0, tc_pr)
-        tcb = tc_pr.find(f"{_W}tcBorders")
-        if tcb is None and not (v == "left" and n == 0):
-            continue
         if tcb is None:
             charts.put(tc_pr, "tcBorders", OxmlElement("w:tcBorders"), charts.TCPR)
             tcb = tc_pr.find(f"{_W}tcBorders")
-        _bottom(tcb, _TCB, v == "left" and n == 0)
-    ed.mark(tbl)
+        _bottom(tcb, _TCB, rule if v == "left" and n == 0 else None)
+    ed.mark(tbl, Allow.caption_rule(len(rows) - 1))
+
+
+def _signature(ed: Edit, key: str, v: Any) -> None:
+    doc = ed.doc
+    blk = briefpage._block(doc)
+    if key == "signature_single_spaced":
+        if v:
+            lines = briefpage.signature_lines(doc)
+            briefpage._single(lines)
+            for p in lines:
+                ed.mark(p._p, Allow.SPACING)
+        return
+    was = list(doc.element.body)
+    if blk is not None and key == "signature_date_beside" and v and blk[1] >= 0:
+        for p in blk[0][blk[1] : blk[2] + 4]:
+            ed.mark(p._p, Allow.ANYWHERE)
+        briefpage._move_date(*blk)
+    if blk is not None and key == "signature_gap_lines" and blk[1] == -1:
+        briefpage._gap(blk[0], blk[2], int(v))
+        ed.mark(blk[0][blk[2]]._p, Allow.ANYWHERE)
+    now = list(doc.element.body)
+    ed.added.update(set(now) - set(was))
+    ed.removed += len(set(was) - set(now))
 
 
 def _front(ed: Edit, key: str, v: Any) -> None:
@@ -416,23 +475,10 @@ def _front(ed: Edit, key: str, v: Any) -> None:
         paras = briefpage.front_paragraphs(doc)
         briefpage._single(paras)
         for p in paras:
-            ed.mark(p._p)
+            ed.mark(p._p, Allow.SPACING)
         return
     if key.startswith("signature"):
-        blk = briefpage._block(doc)
-        if blk is not None and key == "signature_date_beside" and v and blk[1] >= 0:
-            for p in blk[0][blk[1] : blk[2] + 4]:
-                ed.mark(p._p)
-            briefpage._move_date(*blk)
-        blk = briefpage._block(doc)
-        if blk is not None and key == "signature_gap_lines" and blk[1] == -1:
-            briefpage._gap(blk[0], blk[2], int(v))
-            ed.mark(blk[0][blk[2]]._p)
-        if key == "signature_single_spaced" and v:
-            lines = briefpage.signature_lines(doc)
-            briefpage._single(lines)
-            for p in lines:
-                ed.mark(p._p)
+        _signature(ed, key, v)
         return
     paras, table = frontpage._front(doc)
     at = {
@@ -457,7 +503,7 @@ def _front(ed: Edit, key: str, v: Any) -> None:
         if ppr is not None:
             blank.append(copy.deepcopy(ppr))
         anchor.addprevious(blank)
-        ed.mark(blank)
+        ed.added.add(blank)
 
 
 def edit_layout(ed: Edit, layout: dict[str, Any]) -> None:
@@ -472,55 +518,27 @@ def edit_layout(ed: Edit, layout: dict[str, Any]) -> None:
 
 
 # ---- the proof --------------------------------------------------------------------------
-def _canon(el: Any) -> str:
-    from lxml import etree
-
-    return _NOISE.sub("", etree.tostring(el, encoding="unicode"))
-
-
 def snapshot(ed: Edit) -> dict[Any, str]:
-    """Every top-level body element as filed, before any edit."""
-    return {el: _canon(el) for el in ed.doc.element.body}
-
-
-def _parts(blob: bytes) -> dict[str, str]:
-    """Every XML part but the body and the package's properties, canonical."""
-    from lxml import etree
-
-    z = zipfile.ZipFile(io.BytesIO(blob))
-    out = {}
-    for n in z.namelist():
-        if n == "word/document.xml" or n.startswith("docProps/") or not n.endswith((".xml", ".rels")):
-            continue
-        tree = etree.fromstring(z.read(n))
-        for el in tree.iter():
-            for k in [k for k in el.attrib if "rsid" in k or k.endswith("}paraId") or k.endswith("}textId")]:
-                del el.attrib[k]
-        out[n] = etree.tostring(tree, method="c14n").decode("utf-8", "replace")
-    return out
+    """Every top-level body element as filed, in order, before any edit."""
+    return {el: xmlproof.canon(el).decode("utf-8") for el in ed.doc.element.body}
 
 
 def prove(ed: Edit, before: dict[Any, str], filed_blob: bytes, out_blob: bytes, revised_md: str) -> list[str]:
-    """Where the revised file differs from the filed one beyond what the edit
-    touched; empty is a proof. The words read back are the revision's own."""
-    out: list[str] = []
-    kept = [el for el in ed.doc.element.body if el not in ed.touched]
-    for el in kept:
-        if el not in before:
-            out.append(f"an element no ask made appeared: {_canon(el)[:80]!r}")
-        elif before[el] != _canon(el):
-            out.append(f"an element no ask names changed: {_canon(el)[:80]!r}")
-    a, b = _parts(filed_blob), _parts(out_blob)
-    for name in sorted(set(a) | set(b)):
-        if a.get(name) != b.get(name):
-            out.append(f"{name} changed, and no ask names it")
+    """Where the revised file differs from the filed one beyond the leaves its
+    asks name (``xmlproof``); empty is a proof. The words read back are the
+    revision's own."""
+    out = xmlproof.prove_body(ed, before, filed_blob, out_blob)
+    out += [f"{name} changed, and no ask names it" for name in xmlproof.parts_differ(filed_blob, out_blob)]
     import docx
 
     got = blocks(prior.docx_to_md_doc(docx.Document(io.BytesIO(out_blob))))
     want = blocks(revised_md)
     if got != want:
-        diff = next((f"{x!r} for {y!r}" for x, y in zip(got, want) if x != y), f"{len(got)} blocks for {len(want)}")
-        out.append(f"the revised file does not read as the revision: {diff[:160]}")
+        diff = next(
+            (f"block {i + 1}" for i, (x, y) in enumerate(zip(got, want)) if x != y),
+            f"{len(got)} blocks for {len(want)}",
+        )
+        out.append(f"the revised file does not read as the revision: {diff}")
     return out
 
 

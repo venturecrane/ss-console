@@ -253,7 +253,14 @@ def test_the_estimate_counts_every_section_a_document_wide_edit_makes() -> None:
 
 
 # ---- the whole job: the filed layout survives a revision --------------------------------------
-def _run(tmp_path: Path, filed: bytes, key: dict, request: str = REQUEST, edits: dict | None = None):
+def _run(
+    tmp_path: Path,
+    filed: bytes,
+    key: dict,
+    request: str = REQUEST,
+    edits: dict | None = None,
+    notes_md: str = "# Attorney notes\n\nThe filed notes.\n",
+):
     from demand_testkit import MATTER
     from drafting_testkit import envelope
     from jobs_testkit import PRICING
@@ -261,7 +268,7 @@ def _run(tmp_path: Path, filed: bytes, key: dict, request: str = REQUEST, edits:
     from jobs.demand import deliver
     from jobs.drafting.revise.run import ReviseRun
 
-    notes = deliver.render_plain("# Attorney notes\n\nThe filed notes.\n", tmp_path, "n.docx", "Example").read_bytes()
+    notes = deliver.render_plain(notes_md, tmp_path, "n.docx", "Example").read_bytes()
     seat = RunSeat({"draft-0001": filed, "notes-0001": notes})
     files = [
         {"role": r, "file_id": f, "name": n, "size": len(b), "sha256": hashlib.sha256(b).hexdigest()}
