@@ -106,6 +106,18 @@ email itself; never ask for them to be sent another way.
 Facts only the client knows are left as `{{CLIENT}}` items, and the verification is left
 for the client to sign. Say so in the acknowledgment's terms only if the email asks.
 
+**Changes to a draft already filed.** A reply in the thread of a filed draft asking for
+changes to it ("take out the record cites", "shorten the facts", "double space it") is
+a request for that same document. Submit it exactly as any request, with the SAME class
+(step 3 below): never decline it as a duplicate, never describe it as a new draft, and
+never pass anything that says it is a revision. The broker decides that from its own
+record (a draft of that class delivered on the matter, in this email's thread) and
+answers with `mode: "revise"`: the job then makes the attorney's changes to the filed
+draft itself and files them as new versions of the same files, without reading the
+matter file again. Acknowledge it in those terms ("Received. The changes to the
+<document> for matter <number> are being made to the filed draft; I'll reply in this
+thread when they're filed.").
+
 ## Who may ask
 
 Reserved to the firm's **Named Administrators** (`scope.admins`). A draft spends the
@@ -200,6 +212,12 @@ failed job in any case.
      describe an earlier failed attempt, and the filed document is what the firm
      reads. Report only the files, markers, caption discrepancies and caption
      corrections the job reports.
+   - **delivered, when the wake says `Mode: revision`**: the requested changes are made
+     to the filed document, and it and its attorney notes are filed as new versions of
+     the same files in the same folder (each named exactly as filed; the earlier
+     versions stay in each file's version history). The attorney notes list each change
+     asked for and whether it was made; name any the notes say were not made, as they
+     state the reason. Then the markers, as for any delivered document.
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never

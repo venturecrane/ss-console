@@ -103,6 +103,11 @@ _UUID = re.compile(r"^[0-9a-fA-F-]{32,40}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
 _MATTER_NUMBER = re.compile(r"^[A-Za-z0-9 ._-]{1,64}$")
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
+_ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
+#: Revise mode (2026-11-04): a job that revises a delivered brief in place
+#: names that job here. Added to an existing table by ``ensure_schema``.
+REVISE_COLUMN = "revise_of"
+ADD_REVISE_SQL = "ALTER TABLE drafting_jobs ADD COLUMN revise_of TEXT"
 
 CREATE_SQL = (
     "CREATE TABLE IF NOT EXISTS drafting_jobs ("
@@ -190,8 +195,12 @@ def _matter(raw: Any, field: str) -> dict[str, str]:
 def validate_envelope(req: Any) -> dict[str, Any]:
     """The submit envelope, normalized, or ``EnvelopeError``."""
     keys = {"matter", "file_to", "requested_by", "request_ref", "request_text", "document_class"}
-    if not isinstance(req, dict) or not keys <= set(req) <= keys | {"attachments"}:
-        raise EnvelopeError(f"a drafting envelope carries exactly {sorted(keys)}, and optionally attachments")
+    if not isinstance(req, dict) or not keys <= set(req) <= keys | {"attachments", "revise_of"}:
+        raise EnvelopeError(
+            f"a drafting envelope carries exactly {sorted(keys)}, and optionally attachments (and, from root, revise_of)"
+        )
+    if "revise_of" in req and not (isinstance(req["revise_of"], str) and _ULID.match(req["revise_of"])):
+        raise EnvelopeError("revise_of must be the delivered drafting job's id")
     try:
         attachments = drafting_attachments.validate(req["attachments"]) if req.get("attachments") else []
     except drafting_attachments.AttachmentError as exc:
@@ -223,10 +232,14 @@ def validate_envelope(req: Any) -> dict[str, Any]:
     return out
 
 
-def queue_record(env: dict[str, Any], job_id: str) -> dict[str, Any]:
-    """The runner's job file, from a validated envelope. Exactly these keys."""
+def queue_record(env: dict[str, Any], job_id: str, revise: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The runner's job file, from a validated envelope. Exactly these keys,
+    plus ``revise`` (the broker's resolution of the brief to revise) when the
+    job revises a delivered brief."""
     file_to = env["file_to"]
     extra = {"attachments": env["attachments"]} if env.get("attachments") else {}
+    if revise is not None:
+        extra["revise"] = revise
     return {
         **extra,
         "kind": "drafting",
@@ -298,6 +311,9 @@ class DraftingLedger:
             conn.execute(CREATE_UNIQUE_REF_SQL)
             conn.execute(CREATE_SPEND_SQL)
             conn.execute(CREATE_SPEND_INDEX_SQL)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(drafting_jobs)")}
+            if REVISE_COLUMN not in cols:
+                conn.execute(ADD_REVISE_SQL)
             conn.commit()
         finally:
             conn.close()
@@ -326,11 +342,74 @@ class DraftingLedger:
 
     @staticmethod
     def _used(conn: sqlite3.Connection, start: str, end: str, exclude: str = "") -> int:
+        """Drafts this cycle. A revision of a delivered brief is not a draft:
+        it is the delivered draft, finished as the attorney asked, and its spend
+        stays inside the job cap and the month's budget (2026-11-04)."""
         return conn.execute(
             "SELECT COUNT(*) AS n FROM drafting_jobs WHERE created_at >= ? AND created_at < ? AND id != ? "
-            "AND (state IN ('submitted','running') OR cents > 0)",
+            "AND revise_of IS NULL AND (state IN ('submitted','running') OR cents > 0)",
             (start, end, exclude),
         ).fetchone()["n"]
+
+    # -- revise mode: the delivered briefs, and their filed files by id ------
+    def delivered_on_matter(self, matter_id: str, document_class: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Delivered jobs of this class on this matter, newest first."""
+        conn = self._connect()
+        try:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM drafting_jobs WHERE matter_id=? AND document_class=? AND state='delivered' "
+                    "ORDER BY created_at DESC LIMIT ?",
+                    (matter_id, document_class, int(limit)),
+                )
+            ]
+        finally:
+            conn.close()
+
+    def proven_files(self, job_id: str) -> list[dict[str, Any]] | None:
+        """The delivered job's filed files, each {role, file_id, name, size,
+        sha256}: the names and roles from the job's own delivery report, the
+        ids and hashes from the LAST ``DELIVERY_PROVEN`` audit row of the job
+        (the daemon's read-back by id), paired in manifest order and required
+        to agree on size. None when they cannot be paired (never a guess)."""
+        row = self.read(job_id)
+        if row is None or row["state"] != "delivered" or not row.get("delivery_json"):
+            return None
+        files = (json.loads(row["delivery_json"]) or {}).get("files") or []
+        conn = self._connect()
+        try:
+            proof = conn.execute(
+                "SELECT metadata FROM audit_log WHERE action_type='DELIVERY_PROVEN' "
+                "AND json_extract(metadata,'$.lane')='drafting' AND json_extract(metadata,'$.job_id')=? "
+                "ORDER BY rowid DESC LIMIT 1",
+                (job_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        finally:
+            conn.close()
+        proven = (json.loads(proof["metadata"]) or {}).get("files") if proof else None
+        if not isinstance(proven, list) or len(proven) != len(files) or not files:
+            return None
+        out = []
+        for f, p in zip(files, proven):
+            if not (isinstance(f, dict) and isinstance(p, dict)) or int(f.get("size") or -1) != int(
+                p.get("size") or -2
+            ):
+                return None
+            if not (p.get("file_id") and re.fullmatch(r"[0-9a-f]{64}", str(p.get("sha256") or ""))):
+                return None
+            out.append(
+                {
+                    "role": str(f.get("role") or ""),
+                    "file_id": str(p["file_id"]),
+                    "name": str(f.get("name") or ""),
+                    "size": int(p["size"]),
+                    "sha256": str(p["sha256"]),
+                }
+            )
+        return out
 
     def spend_between(self, start: str, end: str, exclude: str = "") -> int:
         """Cents WRITTEN in [start, end), without ``exclude``'s."""
@@ -379,8 +458,11 @@ class DraftingLedger:
         allowance: int | None = None,
         anchor_day: int | None = None,
         effective_from: str | None = None,
+        revise: dict[str, Any] | None = None,
     ) -> str:
-        """Row, then queue file, so a job file on disk always has its row."""
+        """Row, then queue file, so a job file on disk always has its row.
+        ``revise``: the broker's resolution of a delivered brief this job
+        revises in place (no draft is counted against the allowance)."""
         env = validate_envelope(envelope)
         klass = env["document_class"]
         job_id = _ulid()
@@ -406,7 +488,7 @@ class DraftingLedger:
                 raise SubmitRefused(
                     f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}", twin["id"]
                 )
-            if allowance is not None:
+            if allowance is not None and revise is None:
                 window = cycle_window(now, anchor_day, effective_from)
                 used = self._used(conn, window.start, window.end)
                 if used >= allowance:
@@ -416,8 +498,8 @@ class DraftingLedger:
                     )
             conn.execute(
                 "INSERT INTO drafting_jobs (id, created_at, updated_at, state, matter_id, matter_number, "
-                "file_to_matter_id, document_class, requester, request_ref, envelope_digest) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "file_to_matter_id, document_class, requester, request_ref, envelope_digest, revise_of) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -430,6 +512,7 @@ class DraftingLedger:
                     env["requested_by"],
                     env["request_ref"],
                     digest(env),
+                    revise["prior_job_id"] if revise else None,
                 ),
             )
             conn.commit()
@@ -437,7 +520,7 @@ class DraftingLedger:
             conn.close()
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps(queue_record(env, job_id), indent=1, sort_keys=True), encoding="utf-8")
+        tmp.write_text(json.dumps(queue_record(env, job_id, revise), indent=1, sort_keys=True), encoding="utf-8")
         tmp.chmod(0o640)
         tmp.replace(self.queue_dir / f"{job_id}.json")
         return job_id

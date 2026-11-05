@@ -7,7 +7,10 @@ The envelope (the broker's ``drafting_job_submit`` writes exactly this)::
     {"kind": "drafting", "job_id": <ULID>, "matter_id": str, "matter_number": str,
      "document_class": one of CLASSES, "requester": email, "message_ref": str,
      "request_text": str, "file_to_matter_id": str|null, "file_to_matter_number": str|null,
-     "attachments"?: [{"filename": .docx, "sha256", "b64"}]}   (the request email's own Word documents)
+     "attachments"?: [{"filename": .docx, "sha256", "b64"}],   (the request email's own Word documents)
+     "revise"?: {"prior_job_id": <ULID>, "folder_id": str,
+                 "files": [{"role", "file_id", "name", "size", "sha256"}]}}
+                 (revise mode: the broker named the filed files from its delivery proof)
 
 Re-validated here rather than imported from the broker, whose package is not on
 the runner's venv: the runner refuses an envelope it cannot read the same way
@@ -60,6 +63,10 @@ class DraftingJob:
     #: from its release record (``drafting_lane.RELEASES``); None when the lane
     #: did not stamp it, which counts as none released.
     ledger_releases: int | None = None
+    #: Revise mode (``drafting/revise``): the prior delivered job and its filed
+    #: files by id, as the BROKER resolved them from its delivery proof. None
+    #: for a fresh draft.
+    revise: dict[str, Any] | None = None
 
     @property
     def data(self) -> Path:
@@ -117,7 +124,53 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         allowance_remaining=remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None,
         attachments=_attachments(data.get("attachments")),
         ledger_releases=_count(data.get("ledger_releases")),
+        revise=_revise(data.get("revise")),
     )
+
+
+_ROLES = ("draft", "attorney_notes")
+_SHA = re.compile(r"^[0-9a-f]{64}$")
+_FILE_ID = re.compile(r"^[0-9A-Za-z-]{8,64}$")
+
+
+def _revise_file_ok(f: Any) -> bool:
+    return (
+        isinstance(f, dict)
+        and set(f) == {"role", "file_id", "name", "size", "sha256"}
+        and f["role"] in _ROLES
+        and isinstance(f["file_id"], str)
+        and bool(_FILE_ID.match(f["file_id"]))
+        and isinstance(f["name"], str)
+        and 0 < len(f["name"]) <= 240
+        and isinstance(f["size"], int)
+        and not isinstance(f["size"], bool)
+        and f["size"] > 0
+        and isinstance(f["sha256"], str)
+        and bool(_SHA.match(f["sha256"]))
+    )
+
+
+def _revise(raw: Any) -> dict[str, Any] | None:
+    """The revise block, re-checked: a ULID prior job, a folder id, and one
+    filed file per role (the draft, and its attorney notes when filed), each
+    by id, size and sha256."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or set(raw) != {"prior_job_id", "folder_id", "files"}:
+        raise DraftingJobError("revise carries exactly prior_job_id, folder_id and files")
+    if not (isinstance(raw["prior_job_id"], str) and _ULID.match(raw["prior_job_id"])):
+        raise DraftingJobError("revise.prior_job_id must be the prior job's ULID")
+    if not (isinstance(raw["folder_id"], str) and _FILE_ID.match(raw["folder_id"])):
+        raise DraftingJobError("revise.folder_id must be the delivery folder's id")
+    files = raw["files"]
+    if not isinstance(files, list) or not files:
+        raise DraftingJobError("revise.files names the filed files")
+    roles = [f.get("role") for f in files if isinstance(f, dict)]
+    if not all(_revise_file_ok(f) for f in files) or len(set(roles)) != len(files):
+        raise DraftingJobError("each revise file is one role's {role, file_id, name, size, sha256}")
+    if "draft" not in roles:
+        raise DraftingJobError("revise.files must name the filed draft")
+    return {"prior_job_id": raw["prior_job_id"], "folder_id": raw["folder_id"], "files": [dict(f) for f in files]}
 
 
 def _count(v: Any) -> int | None:

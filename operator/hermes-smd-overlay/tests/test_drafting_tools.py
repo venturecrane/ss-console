@@ -220,6 +220,31 @@ def test_a_broker_refusal_is_relayed_with_the_existing_job(drafting, monkeypatch
     assert out == {"accepted": False, "reason": "already underway", "job_id": JOB}
 
 
+def test_a_revision_the_broker_routed_is_named_as_one(drafting, monkeypatch) -> None:
+    """The model passes the request only; the broker's mode decides the ticket
+    (ss-console drafting_verbs._route, 2026-11-04)."""
+    mod, _client = drafting
+
+    class _Revises:
+        def drafting_submit(self, envelope):
+            assert "revise_of" not in envelope  # never the model's to say
+            return {
+                "ok": True,
+                "accepted": True,
+                "job_id": JOB,
+                "state": "submitted",
+                "document_class": "mediation_brief",
+                "mode": "revise",
+                "revise_of": "01J0000000000000000000000Y",
+            }
+
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Revises())
+    _email(text="Please take the record cites out of the filed brief.")
+    out = json.loads(mod.drafting_job_submit(MATTER))
+    assert out["mode"] == "revise" and out["revise_of"] == "01J0000000000000000000000Y"
+    assert "new versions of the same files" in out["message"]
+
+
 def test_the_tools_are_classified() -> None:
     assert classify_tool("drafting_job_submit").action_class is ActionClass.INTERNAL_WRITE
     assert classify_tool("drafting_job_status").action_class is ActionClass.READ

@@ -29,8 +29,12 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
    listed is refused with a sentence the skill relays to the requester;
    checked after the requester, so a non-admin learns nothing of it);
 6. the filing target is the matter itself or the authored rehearsal matter;
-7. the cycle's allowance has a draft left;
-8. no unfinished draft of the same class on the matter (re-checked in the
+7. REVISE OR DRAFT (``_route``, 2026-11-04): a request email in the thread of
+   a draft of its class DELIVERED on the matter revises that draft in place
+   (the queue file carries ``revise``: the filed files by id, from the
+   delivery proof); a thread the mailbox cannot read refuses, never a guess;
+8. the cycle's allowance has a draft left (a revision counts no draft);
+9. no unfinished draft of the same class on the matter (re-checked in the
    ledger's write transaction, with the request-email duplicate).
 
 Audit rows carry ids, counts, classes and states, never the request text.
@@ -41,7 +45,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from . import delivery_proof
@@ -131,11 +135,44 @@ def enabled_classes_of(settings: dict[str, Any] | None) -> frozenset[str]:
     return frozenset(c.strip() for c in value if isinstance(c, str) and c.strip() in DOCUMENT_CLASSES)
 
 
+class ThreadUnknown(RuntimeError):
+    """The mailbox could not say which conversation a request email is in."""
+
+
+def graph_thread_of(msgraph: Any) -> Callable[[str], str] | None:
+    """The conversation id of an email by its internetMessageId, read from the
+    seat's own mailbox (``msgraph_lookup.find_received``), or None on a seat
+    with no Graph mailbox (no thread to compare by). Raises ``ThreadUnknown``
+    when it could not look: "could not tell" must never read as "not a reply"."""
+    if msgraph is None:
+        return None
+
+    def thread_of(internet_message_id: str) -> str:
+        from . import msgraph_lookup
+
+        try:
+            found = msgraph_lookup.find_received(msgraph, internet_message_id)
+        except Exception as exc:  # noqa: BLE001 - any failure to look is "unknown", never "none"
+            raise ThreadUnknown(str(exc)[:200]) from None
+        return str((found or {}).get("conversation_id") or "")
+
+    return thread_of
+
+
 class DraftingVerbs:
-    def __init__(self, ledger: DraftingLedger | None, *, customer_yaml: str, audit_append: Any) -> None:
+    def __init__(
+        self,
+        ledger: DraftingLedger | None,
+        *,
+        customer_yaml: str,
+        audit_append: Any,
+        thread_of: Callable[[str], str] | None = None,
+    ) -> None:
         self.ledger = ledger
         self.customer_yaml = customer_yaml
         self._audit_append = audit_append
+        #: Revise-mode routing (2026-11-04): an email's conversation id.
+        self.thread_of = thread_of
 
     @classmethod
     def build(cls, broker: BrokerContext, *, audit_db_path: str | None, queue_dir: str | None) -> DraftingVerbs:
@@ -151,7 +188,12 @@ class DraftingVerbs:
                 raise ValueError("drafting verbs have no audit ledger on this broker")
             return writer.append(row)
 
-        return cls(ledger, customer_yaml=str(broker.customer_path), audit_append=audit_append)
+        return cls(
+            ledger,
+            customer_yaml=str(broker.customer_path),
+            audit_append=audit_append,
+            thread_of=graph_thread_of(getattr(broker, "msgraph", None)),
+        )
 
     @property
     def _db(self) -> DraftingLedger:
@@ -180,7 +222,7 @@ class DraftingVerbs:
         if action == "drafting_job_status":
             return self._status(request, full=peer_uid == 0)
         if action == "drafting_job_submit":
-            return self._submit(request)
+            return self._submit(request, peer_uid)
         if action == "drafting_job_record":
             return self._record(request)
         if action == "drafting_job_resume":
@@ -243,14 +285,55 @@ class DraftingVerbs:
             library and library_id and file_to["number"] == library and file_to["id"].strip().lower() == library_id
         )
 
-    def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _route(self, envelope: dict[str, Any], revise_of: str, peer_uid: int | None) -> dict[str, Any] | str | None:
+        """REVISE OR DRAFT, decided here from the job store, never by the model.
+
+        A request is a revision when a brief of its class was DELIVERED on its
+        matter and the request email is in that delivery's email thread (the
+        same Graph conversation as the email that asked for the brief). Root
+        may name the delivered job (``revise_of``: the ops workspace's
+        rehearsal). Returns the runner's ``revise`` block, None for a fresh
+        draft, or a refusal sentence. A thread that could not be read refuses:
+        queuing a fresh draft on a guess is the $56 re-read of 2026-11-04."""
+        delivered = self._db.delivered_on_matter(envelope["matter"]["id"], envelope["document_class"])
+        if revise_of:
+            if peer_uid != 0:
+                return "revise_of is accepted from root only; nothing was queued"
+            prior = next((r for r in delivered if r["id"] == revise_of), None)
+            if prior is None:
+                return f"job {revise_of} is not a delivered draft of this class on this matter; nothing was queued"
+        else:
+            if not delivered or self.thread_of is None:
+                return None
+            try:
+                here = self.thread_of(envelope["request_ref"])
+                prior = next((r for r in delivered if here and self.thread_of(r["request_ref"]) == here), None)
+            except ThreadUnknown:
+                return (
+                    "this email could not be matched to the email thread of the draft already filed on the matter "
+                    "(the mailbox did not answer), so it is not known whether it asks to revise that draft; "
+                    "nothing was queued"
+                )
+            if prior is None:
+                return None
+        files = self._db.proven_files(prior["id"])
+        if not files or not prior.get("folder_id"):
+            return (
+                f"the draft filed as job {prior['id']} cannot be identified on the matter by file id, so it cannot be "
+                "revised in place; nothing was queued"
+            )
+        return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
+
+    def _submit(self, request: dict[str, Any], peer_uid: int | None = None) -> dict[str, Any]:
         def refused(reason: str, **extra: Any) -> dict[str, Any]:
             return {"ok": True, "accepted": False, "reason": reason, **extra}
 
+        raw = request.get("envelope") or {}
         try:
-            envelope = validate_envelope(request.get("envelope") or {})
+            envelope = validate_envelope(raw)
         except EnvelopeError as exc:
             return refused(str(exc))
+        revise_of = str(raw.get("revise_of") or "") if isinstance(raw, dict) else ""
         settings = drafting_skill_settings(self.customer_yaml)
         if settings is None:
             return refused(
@@ -285,17 +368,30 @@ class DraftingVerbs:
                 "a draft is filed on the matter it reads, or on the firm's own authored "
                 "library matter for a rehearsal; that filing target is neither, so nothing was queued"
             )
-        if state["remaining"] <= 0:
+        revise = self._route(envelope, revise_of, peer_uid)
+        if isinstance(revise, str):
+            return refused(revise)
+        # A revision is the delivered draft finished as asked: no draft is
+        # counted, so a spent allowance never blocks it (its spend is capped).
+        if revise is None and state["remaining"] <= 0:
             return refused(
                 f"this cycle's drafting allowance is spent ({state['used']} of {state['allowance']} in "
                 f"{state['cycle']}); nothing was queued"
             )
         try:
             job_id = self._db.submit(
-                envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from
+                envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from, revise=revise
             )
         except SubmitRefused as exc:
             return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
+        return self._accepted(job_id, envelope, state["remaining"], revise)
+
+    def _accepted(
+        self, job_id: str, envelope: dict[str, Any], remaining: int, revise: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """The submitted row's audit and the answer the agent relays."""
+        klass = envelope["document_class"]
+        mode = {"mode": "revise" if revise else "draft", **({"revise_of": revise["prior_job_id"]} if revise else {})}
         self._audit(
             AUDIT_TYPES["submitted"],
             {
@@ -303,9 +399,10 @@ class DraftingVerbs:
                 "matter_number": envelope["matter"]["number"],
                 "file_to_other_matter": envelope["file_to"] is not None,
                 "document_class": klass,
-                "allowance_remaining": state["remaining"],
+                "allowance_remaining": remaining,
                 "requested_by": envelope["requested_by"],
                 "request_ref": envelope["request_ref"],
+                **mode,
             },
             envelope["matter"]["id"],
         )
@@ -315,7 +412,8 @@ class DraftingVerbs:
             "job_id": job_id,
             "state": "submitted",
             "document_class": klass,
-            "allowance_remaining": state["remaining"],
+            "allowance_remaining": remaining,
+            **mode,
         }
 
     # -- the runner's report and a person's resume ---------------------------------

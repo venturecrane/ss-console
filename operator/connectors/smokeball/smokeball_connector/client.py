@@ -466,6 +466,72 @@ class SmokeballClient:
             "uploaded": True,
         }
 
+    def add_file_version(
+        self,
+        matter_id: str,
+        file_id: str,
+        data: bytes,
+        *,
+        expected_version: str,
+        expected_folder: str | None = None,
+        expected_name: str | None = None,
+    ) -> dict[str, Any]:
+        """A NEW VERSION of an existing matter file, in place, by id (revise
+        mode, ss-console ``drafting/revise/versions.py``).
+
+        The method the A&P ops workspace proved on 2026-11-04 (04:53 and
+        13:56, four files, four new versions):
+
+        1. ``GET /matters/{m}/documents/files/{f}``, the COMPARE AND STOP read:
+           nothing is sent unless ``versionId == expected_version``, the file
+           is not deleted, and (when given) ``folder.id == expected_folder``
+           and ``name + fileExtension == expected_name``. A mismatch means
+           someone saved over, moved, deleted or renamed the file since the
+           caller read it.
+        2. ``GET .../files/{f}/upload`` mints a presigned PUT for a new version
+           of THIS file; its ``fileId`` must be ``f``.
+        3. The write's intent row (``WriteRecord``), then the bytes PUT to the
+           presigned URL, empty ``Content-Type``, no auth headers. There is no
+           separate commit: the vendor versions the file on the PUT. A failed
+           PUT records its error and raises; it is never retried blind.
+
+        The read-back (the version id moved, the size, the downloaded bytes'
+        sha256) is the caller's, by id."""
+        meta = self.request("GET", f"/matters/{matter_id}/documents/files/{file_id}")
+        meta = meta if isinstance(meta, dict) else {}
+        current = str(meta.get("versionId") or "")
+        why = []
+        if not expected_version or current != expected_version:
+            why.append("its version changed")
+        if meta.get("isDeleted") is not False:
+            why.append("it reads deleted (or its state is unknown)")
+        if expected_folder is not None and str((meta.get("folder") or {}).get("id") or "") != expected_folder:
+            why.append("it is in another folder")
+        if expected_name is not None and f"{meta.get('name') or ''}{meta.get('fileExtension') or ''}" != expected_name:
+            why.append("it has another name")
+        if why:
+            raise SmokeballWriteError(f"add_file_version: file {file_id!r}: {'; '.join(why)}; nothing sent")
+        info = self.request("GET", f"/matters/{matter_id}/documents/files/{file_id}/upload")
+        if not isinstance(info, dict) or info.get("fileId") != file_id or not info.get("uploadUrl"):
+            raise SmokeballWriteError(
+                f"add_file_version: the upload answer for file {file_id!r} names another file or no URL; nothing sent"
+            )
+        upload = WriteRecord(
+            "PUT",
+            f"/matters/{matter_id}/documents/files/{file_id}/content",
+            matter_id,
+            None,
+            body_sha256=hashlib.sha256(data).hexdigest(),
+        )
+        upload.begin()
+        try:
+            self._put_presigned(info["uploadUrl"], data)
+        except Exception as exc:
+            upload.finish(None, error=type(exc).__name__)
+            raise
+        upload.finish(200, {"fileId": file_id})
+        return {"fileId": file_id, "matterId": matter_id, "versionBefore": current, "uploaded": True}
+
     # ---- document reads -----------------------------------------------------
     def download_file(self, matter_id: str, file_id: str) -> tuple[dict[str, Any], bytes]:
         """Fetch a matter document's bytes via the documented download flow:
