@@ -18,12 +18,18 @@ const REQUIRED: Record<string, string> = {
   'Typecheck, Lint, Format, Test': 'verify.yml',
   'Security Summary': 'security.yml',
   substrate: 'operator-substrate.yml',
+  runner: 'operator-substrate.yml',
+  overlay: 'operator-substrate.yml',
+  'overlay-e2e': 'operator-substrate.yml',
   'Runtime ACs carry a verification ID': 'runtime-ac-proof.yml',
 }
 
 function workflow(file: string): string {
   return readFileSync(resolve(__dirname, '../.github/workflows', file), 'utf8')
 }
+
+/** Contexts reported by a job with no `name:`, so the context is the job key. */
+const JOB_KEY_CONTEXTS = new Set(['substrate', 'runner', 'overlay', 'overlay-e2e'])
 
 /** The top-level `on:` block, up to the next top-level key. */
 function onBlock(text: string): string {
@@ -48,10 +54,21 @@ describe('merge queue: every required check reports on merge_group', () => {
   for (const [context, file] of Object.entries(REQUIRED)) {
     it(`${context} (${file})`, () => {
       const text = workflow(file)
-      expect(text).toContain(context === 'substrate' ? 'substrate:' : `name: ${context}`)
+      if (JOB_KEY_CONTEXTS.has(context)) {
+        expect(text).toMatch(new RegExp(`^ {2}${context}:$`, 'm'))
+      } else {
+        expect(text).toContain(`name: ${context}`)
+      }
       expect(onBlock(text)).toMatch(/^ {2}merge_group:\n {4}types: \[checks_requested\]/m)
     })
   }
+
+  it('every operator-substrate detect step diffs against the queue base (4 jobs)', () => {
+    // Without merge_group.base_sha a queue run carries no base, the detect
+    // step fails closed, and every suite runs (21 min) on every queued PR.
+    const text = workflow('operator-substrate.yml')
+    expect(text.match(/merge_group\.base_sha \|\|/g)?.length).toBe(4)
+  })
 
   it('the Semgrep baseline has a merge_group case (no baseline = a full audit that blocks the queue)', () => {
     const text = workflow('security.yml')

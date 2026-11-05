@@ -286,17 +286,19 @@ exports only (defaults allowed only in framework positions like
 
 ## The merge gates
 
-Five checks are required to merge to main, all in the `Main Branch Protection`
+Seven checks are required to merge to main, all in the `Main Branch Protection`
 ruleset: the `Verify` job (`Typecheck, Lint, Format, Test`), `Security Summary`
-(`security.yml`), `substrate` and `overlay` (both jobs of
-`operator-substrate.yml`; `overlay` joined the required list the day the
-overlay fold merged, ADR 0095), and `Runtime ACs carry
+(`security.yml`), `substrate`, `runner`, `overlay` and `overlay-e2e` (all jobs
+of `operator-substrate.yml`; `overlay` joined the required list the day the
+overlay fold merged, ADR 0095, and `runner`, the jobs runner's suite, became
+its own parallel job on 2026-11-04), and `Runtime ACs carry
 a verification ID` (`runtime-ac-proof.yml`, which refuses to mark an acceptance
 criterion tagged `(runtime)` as met without a `crane_verify` ID in the PR's
 Evidence column). The same ruleset puts main behind a merge queue (2026-10-21):
-a green PR is queued and the queue re-runs the five checks on the `merge_group`
-event against main plus the PRs ahead of it, so every one of those workflows
-must keep its `merge_group` trigger. Probe the ruleset when checking what is
+a green PR is queued and the queue re-runs the seven checks on the `merge_group`
+event against main plus the PRs ahead of it, running only the suites the
+group's changed paths touch (`merge_group.base_sha`), so every one of those
+workflows must keep its `merge_group` trigger. Probe the ruleset when checking what is
 required (`gh api repos/venturecrane/ss-console/rules/branches/main`), and
 confirm the legacy surface stays empty
 (`gh api repos/venturecrane/ss-console/branches/main/protection` returns 404

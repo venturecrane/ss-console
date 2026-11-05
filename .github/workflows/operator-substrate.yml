@@ -27,8 +27,11 @@ on:
   # invariant: this trigger must never grow a path filter again.
   pull_request:
   # The merge queue (2026-10-21): "substrate" is required there too. A queue
-  # run carries no PR base sha, so the detect step fails closed and runs every
-  # suite, which is right for the last gate before main.
+  # run diffs against the queue base (main plus the PRs ahead of it in the
+  # group, the same three-dot diff a PR run makes, via merge_group.base_sha),
+  # so a queued PR runs only the suites its paths touch. Until 2026-11-04 it
+  # carried no base and ran every suite (21 min). `push: main` still carries no
+  # base and runs everything: it is the gate before the image build.
   merge_group:
     types: [checks_requested]
   push:
@@ -73,8 +76,8 @@ jobs:
         id: changes
         run: >-
           python3 operator/bin/substrate-paths-changed.py
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha || github.sha }}"
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
 
       - name: Set up Python
         if: steps.changes.outputs.relevant == 'true'
@@ -279,10 +282,40 @@ jobs:
             PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q
           done
 
-      # ss#2613: the jobs runner is installed exactly as the seat image
-      # installs it (its hash-locked file, then sdk, connector, runner
-      # --no-deps), and its tests run against that artifact. Not the bare env:
-      # the runner's seat access imports the connector's client.
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the substrate suites did not need to run. This job still reports so
+          the required check is satisfied."
+
+  # The jobs runner's suite (ss#2613), its own job since 2026-11-04 so it runs
+  # in parallel with `substrate` instead of after it. The runner is installed
+  # exactly as the seat image installs it (its hash-locked file, then sdk,
+  # contract, connector, runner --no-deps), and its tests run against that
+  # artifact. Not the bare env: the runner's seat access imports the
+  # connector's client. Same gating shape as `overlay`;
+  # bin/tests/test_ci_coverage_conformance.py pins it.
+  runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up uv
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
       - name: jobs runner tests (own venv)
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
@@ -291,14 +324,18 @@ jobs:
           uv venv --python 3.13 /tmp/jobsv
           uv pip install --python /tmp/jobsv/bin/python --no-config --require-hashes -r requirements/jobs.txt
           uv pip install --python /tmp/jobsv/bin/python --no-deps ./connectors/_sdk ./connectors/_contract ./connectors/smokeball ./runners/jobs
-          uv pip install --python /tmp/jobsv/bin/python pytest
-          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q
+          uv pip install --python /tmp/jobsv/bin/python pytest pytest-xdist
+          # Four workers, one test file per worker at a time (loadfile). The
+          # suite is tmp_path-isolated, so parallel files share nothing; this
+          # step was 13:36 of the substrate job's 21 min serial on 2026-11-04,
+          # and a four-worker probe passed 3544/3544, the serial count, in 356 s vs 735 s.
+          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q --numprocesses=4 --dist=loadfile
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
         run: >-
           echo "No file under .github/operator-substrate-paths.txt changed;
-          the substrate suites did not need to run. This job still reports so
+          the jobs runner suite did not need to run. This job still reports so
           the required check is satisfied."
 
   # The seat runtime's own suite (operator/hermes-smd-overlay, ADR 0095). Until
@@ -321,8 +358,8 @@ jobs:
         id: changes
         run: >-
           python3 operator/bin/substrate-paths-changed.py
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha || github.sha }}"
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
 
       - name: Set up uv
         if: steps.changes.outputs.relevant == 'true'
@@ -416,8 +453,8 @@ jobs:
         id: changes
         run: >-
           python3 operator/bin/substrate-paths-changed.py
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha || github.sha }}"
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
 
       # The sha the image installs, read from the Dockerfile so the two cannot
       # drift; a dispatch may override it with a candidate, which must be a
