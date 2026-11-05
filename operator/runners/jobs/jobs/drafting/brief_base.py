@@ -469,14 +469,30 @@ def checked_format(fmt: dict[str, Any], cls: str, base: FirmBase) -> dict[str, A
 
 
 def lay_out(
-    doc: str, dest: Path, cls: str, fmt: dict[str, Any], paper: str, held: tuple[Path, dict[str, str]] | None
+    doc: str,
+    dest: Path,
+    cls: str,
+    fmt: dict[str, Any],
+    paper: str,
+    held: tuple[Path, dict[str, str]] | None,
+    rules: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, Any], list[str], dict[str, Any]]:
     """The Word file: in the firm's own file when it has a base (``held``), else on
     ours with the config's layout. Returns (path, report, what was laid, the
-    format the check reads)."""
+    format the check reads). ``rules``: the firm's installed layout rules
+    (``firm_rules``), already in ``fmt``; on a base they are edited into the
+    rendered file in place, proven to touch only their own leaves."""
     if held is not None:
+        from . import firm_rules
+
         base = load_base(*held)
         path, report = render_into(doc, dest, base, paper)
+        lost = firm_rules.onto_base(path, dict(rules or {}))
+        if lost:
+            path.unlink(missing_ok=True)
+            raise unfit("a firm layout rule could not be laid onto the base: " + "; ".join(lost[:3]))
+        if rules:
+            report["notes"].append("the firm's layout rules laid onto the base: " + ", ".join(sorted(rules)))
         return path, report, [], checked_format(fmt, cls, base)
     from . import pleading, render
 

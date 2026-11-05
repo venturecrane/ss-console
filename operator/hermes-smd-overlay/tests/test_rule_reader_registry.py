@@ -16,12 +16,13 @@ registry from drifting into the same false claim one level up.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 import pytest
 
-from shared import output_classes, rule_dispatch, spec_gate
+from shared import layout_rules, output_classes, rule_dispatch, spec_gate
 
 RULE = "7f3a2c1d"
 REQUESTER = "paralegal@firm.example"
@@ -32,8 +33,11 @@ _JOBS_RUNNER = Path(__file__).resolve().parents[2] / "runners" / "jobs"
 #: Anything that would mean a lane reads the installed spec store.
 _SPEC_STORE_READS = re.compile(
     r"spec_manifest|spec_stamp|SMD_SPEC_DIR|specs/classes|output-classes\.json|"
-    r"ADJUSTMENTS_HEADING|entries_for_class"
+    r"ADJUSTMENTS_HEADING|entries_for_class|smd-config/specs|layout\.json"
 )
+
+#: The spec applier's install dir (``spec_applier/__main__.py``).
+_SPEC_DIR_DEFAULT = "/var/lib/smd-config/specs"
 
 
 class _Recorder:
@@ -123,15 +127,65 @@ def test_lane_document_classes_are_not_in_the_registry():
     assert not output_classes.has_live_rule_reader("record")
 
 
-def test_the_jobs_runner_still_reads_no_spec_store():
-    """The other half of the parity. If a lane starts reading installed rules,
-    this fails: add that lane's class to ``LIVE_RULE_READER_CLASSES`` in the
-    same PR, so the firm is told the rule is in effect only once it is."""
+def test_the_jobs_runner_reads_the_spec_store_only_through_the_layout_reader():
+    """The other half of the parity (rewritten 2026-11-05, when the drafting
+    lane gained its first reader). The ONLY jobs-runner module that reads the
+    installed spec store is ``drafting/firm_rules.py``, and it reads exactly
+    the ``layout.json`` of each class :data:`shared.layout_rules.
+    LAYOUT_RULE_CLASSES` names. A second reader, or a reader of another file,
+    fails here: give its class a letter that says what it reads, in the same PR."""
     if not _JOBS_RUNNER.is_dir():
         pytest.skip("jobs runner not in this checkout")
-    readers = [
+    readers = sorted(
         str(path.relative_to(_JOBS_RUNNER))
         for path in _JOBS_RUNNER.rglob("*.py")
         if "/tests/" not in str(path) and _SPEC_STORE_READS.search(path.read_text("utf-8"))
+    )
+    assert readers == ["jobs/drafting/firm_rules.py"], f"spec store readers: {readers}"
+    reader = (_JOBS_RUNNER / readers[0]).read_text("utf-8")
+    for output_class in layout_rules.LAYOUT_RULE_CLASSES:
+        assert f'RULE_CLASS = "{output_class}"' in reader
+    assert 'LAYOUT_REL = f"classes/{RULE_CLASS}/layout.json"' in reader
+    assert f'DEFAULT_DIR = "{_SPEC_DIR_DEFAULT}"' in reader
+    applier_main = Path(__file__).resolve().parents[1] / "spec_applier" / "__main__.py"
+    assert f'_DEFAULT_SPEC_DIR = "{_SPEC_DIR_DEFAULT}"' in applier_main.read_text("utf-8")
+
+
+def _layout(spec_dir: Path, rule_ids: list[str]) -> None:
+    path = spec_dir / layout_rules.layout_rel_path("work_product")
+    path.parent.mkdir(parents=True)
+    rules = [
+        {"rule_id": r, "layout": {"front_court_gap_lines": 2}, "doc_classes": []} for r in rule_ids
     ]
-    assert readers == [], f"a lane now reads the spec store: {readers}"
+    path.write_text(json.dumps({"schema_version": 1, "rules": rules, "prose": []}))
+
+
+def test_a_work_product_rule_the_seat_compiled_is_in_effect(tmp_path, monkeypatch, pages):
+    """FAILS ON THE PRE-FIX CODE: every work_product rule was "recorded"."""
+    _layout(tmp_path, [RULE])
+    monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
+    call = _install("work_product")
+    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert pages == []
+
+
+def test_a_work_product_rule_the_seat_left_as_prose_is_recorded(tmp_path, monkeypatch, pages):
+    _layout(tmp_path, ["00000000"])  # another rule compiled; this one did not
+    monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
+    call = _install("work_product")
+    assert call["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert pages == [(RULE, "work_product")]
+
+
+def test_a_compiled_rule_of_a_class_with_no_layout_reader_is_still_recorded(
+    tmp_path, monkeypatch, pages
+):
+    _layout(tmp_path, [RULE])
+    monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
+    assert _install("record")["subject"] == f"Your rule is recorded [rule {RULE}]"
+
+
+def test_the_layout_classes_have_no_send_site_reader():
+    """A layout class is live per rule, never as a class."""
+    assert not (layout_rules.LAYOUT_RULE_CLASSES & output_classes.LIVE_RULE_READER_CLASSES)
+    assert layout_rules.LAYOUT_RULE_CLASSES <= output_classes.OUTPUT_CLASSES

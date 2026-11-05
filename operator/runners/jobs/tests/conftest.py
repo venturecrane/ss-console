@@ -22,6 +22,15 @@ def _litigation_textcache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
     return d
 
 
+@pytest.fixture(autouse=True)
+def _spec_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Every test reads an empty spec store of its own (firm_rules.py), never
+    the seat's install path."""
+    d = tmp_path / "spec-store"
+    monkeypatch.setenv("JOBS_SPEC_DIR", str(d))
+    return d
+
+
 @pytest.fixture
 def firm_config_path(tmp_path: Path) -> Path:
     p = tmp_path / "firm.yaml"
