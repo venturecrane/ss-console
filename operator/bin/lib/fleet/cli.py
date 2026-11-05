@@ -236,7 +236,8 @@ def _add_ci_parsers(sub: Any) -> None:
 
 def cmd_build(ctx: Ctx, a: argparse.Namespace) -> int:
     opts = BuildOptions(a.notes, tuple(a.declare_secret), not a.not_volume_forward_compatible)
-    rel = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ctx.extractor(), ctx.log).build(opts)
+    builder = Builder(ctx.repo, ctx.runner, ctx.fly, ctx.store, ctx.r2, ctx.extractor(), ctx.log, sleep=ctx.sleep)
+    rel = builder.build(opts)
     print(rel["release_id"])
     return 0
 

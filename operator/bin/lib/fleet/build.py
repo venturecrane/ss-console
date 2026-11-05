@@ -41,9 +41,9 @@ from typing import Any, Callable
 
 from . import ids
 from .d1 import FleetStore
-from .fly import Fly, FlyTokens, digest_from_build_output
+from .fly import Fly, FlyTokens, deploy_excerpt, digest_from_build_output
 from .r2 import R2, image_key
-from .runner import Refusal, Runner, ToolingError, require_ok
+from .runner import Refusal, Result, Runner, ToolingError, looks_like_build_transport_failure, require_ok
 
 ARTIFACT_PATHS = {
     "image-manifest.json": "app/image-manifest.json",
@@ -102,6 +102,13 @@ ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 # seconds after the push and `fleet artifacts` had to re-read it by hand; the
 # remote builder's push and the registry's index are not one write.
 MANIFEST_RETRY_DELAYS_S: tuple[float, ...] = (15.0, 30.0, 60.0, 120.0)
+# How long a `fly deploy --build-only --push` that failed with a build-transport
+# marker (BUILD_TRANSPORT_MARKERS) waits before it is tried again: the waits
+# between attempts, three minutes in all. Any other failure is final at once.
+# On 2026-11-04 two of three builds died at the final layer with the remote
+# builder's `rpc error: code = Unavailable desc = error reading from server: EOF`
+# and each cost a hand rerun of the Deploy run and 40 minutes.
+BUILD_RETRY_DELAYS_S: tuple[float, ...] = (60.0, 120.0)
 MANIFEST_ACCEPT = ", ".join(
     (
         "application/vnd.oci.image.manifest.v1+json",
@@ -282,6 +289,8 @@ class Builder:
         r2: R2,
         extractor: ImageExtractor,
         log: Callable[[str], None],
+        *,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.repo, self.runner, self.fly, self.store, self.r2, self.extractor, self.log = (
             repo,
@@ -292,6 +301,7 @@ class Builder:
             extractor,
             log,
         )
+        self.sleep = sleep
 
     def guard(self) -> None:
         res = self.runner.run(
@@ -338,7 +348,11 @@ class Builder:
         toml_path.parent.mkdir(parents=True, exist_ok=True)
         toml_path.write_text(BUILD_TOML.format(app=ids.FLEET_REGISTRY_APP), encoding="utf-8")
         self.log(f"building {label} (remote builder; cached layers make a code-only release short)")
-        res = self.fly.build_push(str(toml_path), label, pins["ss_console_sha"])
+        # The guard, the pins and the toml ran once and nothing between them and
+        # the push changed, so only the push is retried. The label is the same on
+        # every attempt on purpose: the same tree, and registry_digest reads the
+        # tag's digest, so the last successful push is the one recorded.
+        res = self.push_retrying(str(toml_path), label, pins["ss_console_sha"])
         require_ok(res, "fly deploy --build-only --push")
         image_ref = f"{ids.FLEET_REGISTRY}:{label}"
         digest = self.registry_digest(image_ref, digest_from_build_output(res.text))
@@ -355,6 +369,22 @@ class Builder:
         self.store.insert_release(release)
         self.log(f"release {release['release_id']}: {image_ref} {digest}")
         return release
+
+    def push_retrying(self, toml_path: str, label: str, ss_sha: str) -> Result:
+        """``fly deploy --build-only --push``, tried again on BUILD_RETRY_DELAYS_S
+        when it fails with a build-transport marker. Returns the last Result; the
+        caller's require_ok decides. Any other failure is returned at once."""
+        attempts = len(BUILD_RETRY_DELAYS_S) + 1
+        for attempt, delay in enumerate(BUILD_RETRY_DELAYS_S + (None,), start=1):
+            res = self.fly.build_push(toml_path, label, ss_sha)
+            if res.ok or not looks_like_build_transport_failure(res) or delay is None:
+                return res
+            self.log(
+                f"fly deploy --build-only decided nothing ({deploy_excerpt(res)}); "
+                f"attempt {attempt} of {attempts}, retrying in {int(delay)}s"
+            )
+            self.sleep(delay)
+        raise AssertionError("unreachable")
 
     def registry_digest(self, image_ref: str, printed: str | None) -> str | None:
         """The pushed image's digest as the registry holds it for the tag.
