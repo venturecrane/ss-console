@@ -182,9 +182,21 @@ def _modified(seg: str, start: int) -> bool:
     return bool(m and m.group(1) == m.group(1).lower() and m.group(1) not in _DETERMINERS)
 
 
+def _in_title(seg: str, m: re.Match[str]) -> bool:
+    """A Title-case match with a capitalized word beside it is part of a proper
+    name, such as a record's own title ("CAD Incident Report"); 2026-11-05 the
+    caps pass turned that title into "CAD INCIDENT Report"."""
+    word = m.group(0)
+    if not (word[:1].isupper() and word != word.upper()):
+        return False
+    before = re.search(r"([A-Za-z]+)[ \t]+$", seg[: m.start()])
+    after = re.match(r"[ \t]+([A-Za-z]+)", seg[m.end() :])
+    return any(w and w.group(1)[:1].isupper() for w in (before, after))
+
+
 def _general(seg: str, m: re.Match[str]) -> bool:
     """A lower-case match that is part of a general phrase, not the defined term."""
-    return _in_compound(seg, m.end()) or _modified(seg, m.start())
+    return _in_compound(seg, m.end()) or _modified(seg, m.start()) or _in_title(seg, m)
 
 
 def enforce_caps(doc: str) -> tuple[str, list[str]]:
