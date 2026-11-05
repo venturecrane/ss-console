@@ -121,6 +121,21 @@ def looks_like_transport_failure(result: Result) -> bool:
     return any(marker in low for marker in TRANSPORT_MARKERS)
 
 
+# The image build's own transport failures: every TRANSPORT_MARKERS entry plus
+# the remote builder's gRPC stream dropping mid-build. On 2026-11-04 two of three
+# `fly deploy --build-only --push` runs died at the final chmod layer with
+# `rpc error: code = Unavailable desc = error reading from server: EOF`, which
+# decides nothing about the image. Kept apart from TRANSPORT_MARKERS because
+# classify_deploy reads that list for SEAT rollouts, whose classification must
+# not move.
+BUILD_TRANSPORT_MARKERS: tuple[str, ...] = TRANSPORT_MARKERS + ("code = unavailable", "error reading from server")
+
+
+def looks_like_build_transport_failure(result: Result) -> bool:
+    low = result.text.lower()
+    return any(marker in low for marker in BUILD_TRANSPORT_MARKERS)
+
+
 def require_ok(result: Result, what: str) -> Result:
     """Raise :class:`ToolingError` (naming ``what``) unless the command exited 0."""
     if not result.ok:

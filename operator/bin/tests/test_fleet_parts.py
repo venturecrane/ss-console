@@ -365,6 +365,114 @@ def test_an_unreadable_registry_falls_back_to_the_build_log_and_says_so() -> Non
     assert any("could not read" in m for m in logged)
 
 
+# -- build push retry ----------------------------------------------------------------------
+_BUILDER_DROP = Result(
+    1,
+    "",
+    "Error: failed to fetch an image or build from source: rpc error: code = Unavailable desc = error reading from server: EOF",
+)
+_DOCKERFILE_ERROR = Result(
+    1, "", 'Error: failed to solve: process "/bin/sh -c pip install" did not complete successfully: exit code: 1'
+)
+_PUSHED = Result(0, "pushed hermes-fleet:rel", "")
+_SS_SHA = "a" * 40
+
+
+class _BuildFly:
+    def __init__(self, *results: Result) -> None:
+        self.results = list(results)
+        self.pushes: list[tuple[str, str, str]] = []
+
+    def app_exists(self, app: str) -> bool:
+        return True
+
+    def build_push(self, config_path: str, label: str, ss_sha: str) -> Result:
+        self.pushes.append((config_path, label, ss_sha))
+        return self.results.pop(0)
+
+
+class _BuildExtractor(_TagExtractor):
+    def extract(self, ref: str) -> dict[str, bytes]:
+        raise ToolingError("crane is not here")
+
+
+def _build_repo(tmp_path: Path) -> Path:
+    templates = tmp_path / "operator/templates"
+    templates.mkdir(parents=True)
+    (templates / "Dockerfile").write_text("FROM python:3.13\nARG HERMES_UPSTREAM_SHA=" + "b" * 40 + "\n")
+    (templates / "_env-arrays.generated.sh").write_text("REQUIRED_ENV=(\n  ANTHROPIC_API_KEY\n)\n")
+    return tmp_path
+
+
+def _retry_builder(tmp_path: Path, fly: _BuildFly, store: FakeStore, r2: FakeR2, logged: list[str], slept: list[float]):
+    from bin.lib.fleet.build import Builder
+
+    runner = ScriptRunner(Result(0, "source guard: ok\n", ""), Result(0, _SS_SHA + "\n", ""))
+    return Builder(
+        _build_repo(tmp_path), runner, fly, store, r2, _BuildExtractor("sha256:" + "d" * 64), logged.append,  # type: ignore[arg-type]
+        sleep=slept.append,
+    )  # fmt: skip
+
+
+def test_the_remote_builders_dropped_stream_is_a_build_transport_failure() -> None:
+    """2026-11-04: the remote builder's gRPC stream dropped at the final layer.
+
+    FALSIFIER: drop "error reading from server" / "code = unavailable" from
+    BUILD_TRANSPORT_MARKERS and the EOF text stops being a build-transport
+    failure; add them to TRANSPORT_MARKERS instead and the last assert fails,
+    because seat-rollout classification (classify_deploy) would have moved.
+    """
+    from bin.lib.fleet.runner import looks_like_build_transport_failure, looks_like_transport_failure
+
+    assert looks_like_build_transport_failure(_BUILDER_DROP)
+    assert not looks_like_build_transport_failure(_DOCKERFILE_ERROR)
+    assert not looks_like_transport_failure(_BUILDER_DROP)
+
+
+def test_a_build_push_that_drops_once_is_retried_under_the_same_label_and_recorded_once(tmp_path: Path) -> None:
+    """Through Builder.build, so the seam is proven wired.
+
+    FALSIFIER: put `self.fly.build_push` back in build() and the first EOF is a
+    ToolingError with one push and no release; recompute the label per attempt
+    and the two labels differ.
+    """
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_BUILDER_DROP, _PUSHED), FakeStore(), FakeR2()
+    logged: list[str] = []
+    slept: list[float] = []
+    rel = _retry_builder(tmp_path, fly, store, r2, logged, slept).build(BuildOptions())
+    assert len(fly.pushes) == 2 and fly.pushes[0] == fly.pushes[1]
+    assert slept == [60.0]
+    assert list(store.releases) == [rel["release_id"]]
+    assert any("attempt 1 of 3" in m and "retrying in 60s" in m for m in logged)
+
+
+def test_a_build_push_that_fails_for_its_own_reason_is_not_retried(tmp_path: Path) -> None:
+    """FALSIFIER: retry on any failure and a Dockerfile error is pushed three
+    times with two waits before the run says what the build already said."""
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_DOCKERFILE_ERROR), FakeStore(), FakeR2()
+    slept: list[float] = []
+    with pytest.raises(ToolingError, match="fly deploy --build-only --push failed"):
+        _retry_builder(tmp_path, fly, store, r2, [], slept).build(BuildOptions())
+    assert len(fly.pushes) == 1 and slept == [] and store.releases == {}
+
+
+def test_a_build_push_that_drops_every_time_exhausts_the_schedule_and_is_a_tooling_error(tmp_path: Path) -> None:
+    """FALSIFIER: an unbounded retry never ends; a schedule that swallowed the
+    last failure would record a release (or write R2) for an image never pushed."""
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_BUILDER_DROP, _BUILDER_DROP, _BUILDER_DROP), FakeStore(), FakeR2()
+    slept: list[float] = []
+    with pytest.raises(ToolingError, match="fly deploy --build-only --push failed"):
+        _retry_builder(tmp_path, fly, store, r2, [], slept).build(BuildOptions())
+    assert len(fly.pushes) == 3 and slept == [60.0, 120.0]
+    assert store.releases == {} and r2.objects == {}
+
+
 # -- render-fly-toml ------------------------------------------------------------------------
 def test_render_fly_toml_sourced_mode_renders_every_token(tmp_path: Path) -> None:
     out = tmp_path / "fly.toml"

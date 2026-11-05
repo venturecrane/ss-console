@@ -288,6 +288,7 @@ jobs:
     # before the environment is entered, so a disabled run never creates it.
     if: ${{ vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
     environment: fleet-release
+    # Three push attempts of a fast transport failure (BUILD_RETRY_DELAYS_S, 3 minutes of waits) fit; each attempt's own budget is fly.py's 3600 s; the job timeout is the ceiling.
     timeout-minutes: 90
     concurrency:
       group: build-seat-image
