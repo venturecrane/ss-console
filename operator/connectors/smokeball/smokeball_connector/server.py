@@ -1820,21 +1820,8 @@ def get_bank_accounts(type: str | None = None, matter_id: str | None = None) -> 
     return _get_client().get("/bankaccounts", type=type, matterId=matter_id)
 
 
-@server.tool()
-def get_matter_balances(
-    bank_account_id: str,
-    matter_id: str | None = None,
-    limit: int = 500,
-    offset: int = 0,
-) -> Any:
-    """Per-matter trust balances (balance / protectedBalance / availableBalance).
-    The low-trust flag is availableBalance vs the firm's authored floor."""
-    return _get_client().get(
-        f"/bankaccounts/{bank_account_id}/matter-balances",
-        MatterId=matter_id,
-        Limit=limit,
-        Offset=offset,
-    )
+# ``get_matter_balances`` (per-matter trust balances with the low-trust
+# decision made in code) lives in money_reads.py, registered from attachment_tools.
 
 
 # ---- Billing (AR — kept distinct from trust) ------------------------------
@@ -1862,8 +1849,8 @@ def get_expenses(
     ``deletedExcluded``, so a figure read from this listing is a figure the
     firm still carries. Pass ``include_deleted=True`` only for an audit read.
 
-    One call is one page. ``stage_vendor_invoice`` reads every page itself
-    before it writes; a caller totalling a ledger must page the same way.
+    One call is one page. Never total it yourself: ``get_expense_totals``
+    reads every page and totals the ledger in code.
 
     Each row and the envelope carry ``matterNumber`` / ``matterCaption``
     resolved from the matter this read was scoped to, so a reply citing a

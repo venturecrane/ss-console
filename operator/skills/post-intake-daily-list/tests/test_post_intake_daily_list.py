@@ -246,3 +246,17 @@ def test_the_vocabulary_is_the_connectors(pr):
         assert set(getattr(pr, name)) == connector[name], name
     assert set(pr.KIND_WORDS) == connector["KINDS"]
     assert pr.DEFAULT_JOURNAL_DIR in _CONNECTOR.read_text()
+
+
+def test_every_issue_has_its_own_sentence(pr):
+    """The connector derives ``not_attempted`` when no tool recorded anything
+    for a letter (2026-11-04); a vocabulary word with no sentence would fall
+    through to "filed on matter ." and tell the office manager a held letter
+    was filed."""
+    fallthrough = pr._ask({"issue": "", "placed_on": "X"})
+    for issue in (*pr.NOT_PLACED, *pr.PLACED_CHECK):
+        entry = {"issue": issue, "placed_on": "" if issue in pr.NOT_PLACED else "X", "candidates": ["A", "B"]}
+        assert pr._ask(entry) != fallthrough, issue
+    assert pr._ask({"issue": "not_attempted"}) == (
+        "nothing was recorded as done with it, so it was not filed. Which matter is it?"
+    )

@@ -31,6 +31,8 @@ from smokeball_connector import letter_pages as lp
 from smokeball_connector import letter_tools as lt
 from smokeball_connector import resolution_token
 
+pytestmark = pytest.mark.usefixtures("logic_enforced")
+
 
 def _pdf(page_texts: list[str]) -> bytes:
     """A PDF of ``len(page_texts)`` pages. An empty string means a page with NO
@@ -629,11 +631,49 @@ def test_filing_records_the_document_for_the_medicals_write(monkeypatch: pytest.
         sha256=sha,
         first_page=2,
         last_page=3,
+        message_id="msg-1",
     )
     assert out["status"] == "filed" and out["fileId"] == "file-1"
     assert out["fromScan"] is True
     record = lp.FILED_DOCS.lookup("m-1", "file-1")
-    assert record == {"file_name": out["fileName"], "first_page": 2, "last_page": 3, "from_scan": True}
+    assert record is not None
+    text = record.pop("text")
+    assert record == {
+        "file_name": out["fileName"],
+        "first_page": 2,
+        "last_page": 3,
+        "from_scan": True,
+        # Where it came from, so the keying tools record their outcome under
+        # this bundle and message, on the matter number the resolution named.
+        "sha256": sha,
+        "message_id": "msg-1",
+        "matter_number": record["matter_number"],
+    }
+    assert record["matter_number"], "the number the resolution named rides the record"
+    # The pages' own text, numbered as the bundle numbers them, for the keying
+    # tools to confirm a figure against.
+    assert text.startswith("[p.2]\nDear Counsel") and "\n\n[p.3]\nDear Counsel" in text
+
+
+def test_a_scanned_page_with_no_cached_reading_holds_no_text(monkeypatch: pytest.MonkeyPatch, client: _Client) -> None:
+    """A page with no text layer and no cached transcription is not re-read
+    for free, so nothing is held: a keying tool then reads the matter's copy
+    rather than confirming a figure against a blank page."""
+    blob = _pdf([DIGITAL, ""])
+    url = _spooled(monkeypatch, blob)
+    sha = hashlib.sha256(blob).hexdigest()
+    out = lt.file_attachment_pages_to_matter(
+        matter_id="m-1",
+        matter_resolution=_token("m-1"),
+        download_url=url,
+        file_name="2026-10-01 AMR",
+        sha256=sha,
+        first_page=1,
+        last_page=2,
+    )
+    assert out["status"] == "filed"
+    record = lp.FILED_DOCS.lookup("m-1", out["fileId"])
+    assert record is not None and record["text"] is None
     assert lp.FILED_DOCS.lookup("m-2", "file-1") is None
     assert lp.FILED_DOCS.lookup("m-1", "file-9") is None
 

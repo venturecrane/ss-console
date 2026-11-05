@@ -30,12 +30,32 @@ consequence of silence this list must not create. A figure read from a scan is
 NOT low confidence by itself: the row or expense already says so to whoever
 relies on it, and on a firm whose post is all paper it would list every bill.
 
-THE RECORD IS CHECKED AGAINST WHAT THIS PROCESS FILED. A letter recorded as
-filed must be a page range ``letter_pages.FILED_PAGES`` holds for that
-bundle, and a letter recorded as not placed must not be. After a restart the
-ledger has forgotten the bundle; the record is kept and marked
-``filing_unverified`` rather than refused, because the list matters more than
-the check.
+THE MODEL SUPPLIES THE LETTERS, CODE SUPPLIES WHAT HAPPENED TO THEM
+(2026-11-04). Per letter the model gives ``first_page``, ``last_page``,
+``sender`` (as printed), ``kind`` and an optional ``detail``. ``kind`` is the
+one judgement the model still makes: what the paper IS, which decides which
+keying act the letter needed. Where it was filed (``placed_on``), what kept it
+from landing (``issue``) and the candidate matters (``candidates``) are
+DERIVED in code from the outcome rows the resolve, filing and keying tools
+wrote for this bundle and message (``outcome_ledger``, ``post_outcomes``). A
+letter submitted with any of those three is refused, and the refusal names
+what they derive to, so the model learns the fields are code's. A letter
+nothing was recorded for is ``not_attempted`` and goes on the list.
+
+WHILE THE SEAT OBSERVES (``logic_in_code.post_record_derivation``, absent is
+``observe``). A letter that carries any of the three is recorded as typed, checked
+exactly as it always was, and what code derives for it is written beside it: any
+disagreement is an observation row (``differs``), and nothing the record would
+have refused is refused. A letter that carries none is derived. ``enforce``
+refuses the typed fields. So a skill that still types them behaves as it did the
+day before this shipped, until the switch is thrown.
+
+THE RECORD IS ALSO CHECKED AGAINST WHAT THIS PROCESS FILED. A letter derived
+as filed must be a page range ``letter_pages.FILED_PAGES`` holds for that
+bundle, and a letter derived as not placed must not be. After a restart the
+in-process ledger has forgotten the bundle (the outcome rows on disk have
+not); the record is kept and marked ``filing_unverified`` rather than refused,
+because the list matters more than the check.
 
 WHERE IT LIVES. ``$SMD_POST_JOURNAL_DIR`` (default
 ``/opt/data/post-intake-journal``): ``batches/`` one 0600 JSON file per
@@ -55,6 +75,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from . import logic_in_code, outcome_ledger, post_outcomes
 from .letter_pages import FILED_PAGES
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 
@@ -65,12 +86,16 @@ RETAIN_DAYS = 45
 SCHEMA_VERSION = 1
 
 KINDS = frozenset({"letter", "court_paper", "medical_bill", "vendor_bill", "settlement_offer"})
-NOT_PLACED = frozenset({"no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused"})
+NOT_PLACED = frozenset({"no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused", "not_attempted"})
 PLACED_CHECK = frozenset(
     {"tab_not_written", "figure_not_saved", "possible_duplicate", "offer_not_written", "expense_not_staged"}
 )
 BUNDLE_ISSUES = frozenset({"unreadable", "partition_failed", "not_processed"})
-_LETTER_KEYS = frozenset({"first_page", "last_page", "sender", "kind", "placed_on", "issue", "candidates", "detail"})
+#: What the model gives per letter. The three derived fields are code's.
+_LETTER_KEYS = frozenset({"first_page", "last_page", "sender", "kind", "detail"})
+_DERIVED_KEYS = ("placed_on", "issue", "candidates")
+#: What a typed ``issue`` may say: ``not_attempted`` is only ever derived.
+_TYPED_ISSUES = (NOT_PLACED - {"not_attempted"}) | PLACED_CHECK
 _MAX_LETTERS = 200
 _MAX_TEXT = 200
 _MAX_SENDER = 120
@@ -122,10 +147,15 @@ def daily_list_authored(path: str | None = None) -> bool:
     return False
 
 
-def _letter(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
-    """One validated letter entry, or the reason it is refused."""
-    if not isinstance(raw, dict) or set(raw) - _LETTER_KEYS:
-        return None, f"each letter carries only {sorted(_LETTER_KEYS)}"
+def _letter(raw: Any, enforcing: bool) -> tuple[dict[str, Any] | None, str | None]:
+    """One validated letter as the model gave it, or the reason it is
+    refused. The derived fields are checked by the caller, which can name
+    what they derive to."""
+    if not isinstance(raw, dict) or set(raw) - _LETTER_KEYS - set(_DERIVED_KEYS):
+        return (
+            None,
+            f"each letter carries only {sorted(_LETTER_KEYS if enforcing else _LETTER_KEYS | set(_DERIVED_KEYS))}",
+        )
     first, last = raw.get("first_page"), raw.get("last_page")
     if not isinstance(first, int) or not isinstance(last, int) or isinstance(first, bool) or first < 1 or last < first:
         return None, "first_page and last_page are the letter's [p.N] bounds, first <= last"
@@ -134,39 +164,170 @@ def _letter(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
         return None, "sender is who the letter is from, as it prints it"
     if kind not in KINDS:
         return None, f"kind is one of {sorted(KINDS)}"
-    issue, placed_on = raw.get("issue") or "", _text(raw.get("placed_on"), _MAX_NUMBER)
-    candidates = raw.get("candidates") or []
-    if not isinstance(candidates, list) or len(candidates) > _MAX_CANDIDATES:
-        return None, f"candidates is a list of at most {_MAX_CANDIDATES} matter numbers"
-    candidates = [_text(c, _MAX_NUMBER) for c in candidates if _text(c, _MAX_NUMBER)]
-    if issue and issue not in NOT_PLACED | PLACED_CHECK:
-        return None, f"issue is one of {sorted(NOT_PLACED | PLACED_CHECK)}, or empty for a letter that simply filed"
-    where = f"pages {first}-{last}"
-    if issue in NOT_PLACED:
-        if placed_on:
-            return None, f"{where}: a letter that was not placed has no placed_on"
-        if issue == "one_candidate" and len(candidates) != 1:
-            return None, f"{where}: one_candidate names exactly one candidate matter number"
-        if issue == "ambiguous" and len(candidates) < 2:
-            return None, f"{where}: ambiguous names every candidate matter number the resolve listed"
-        if issue not in ("one_candidate", "ambiguous") and candidates:
-            return None, f"{where}: only one_candidate and ambiguous carry candidates"
-    else:
-        if not placed_on:
-            return None, f"{where}: a filed letter carries placed_on, the matter number it was filed on"
-        if candidates:
-            return None, f"{where}: a filed letter carries no candidates"
     entry = {
         "first_page": first,
         "last_page": last,
         "sender": sender,
         "kind": kind,
-        "placed_on": placed_on,
-        "issue": issue,
-        "candidates": candidates,
         "detail": _text(raw.get("detail"), _MAX_TEXT),
     }
     return entry, None
+
+
+def _typed_letter(raw: dict[str, Any], entry: dict[str, Any]) -> str | None:
+    """Fill ``entry`` from the fields the model typed, or the reason it is
+    refused. The checks a typed letter has always had, unchanged."""
+    first, last = entry["first_page"], entry["last_page"]
+    issue, placed_on = raw.get("issue") or "", _text(raw.get("placed_on"), _MAX_NUMBER)
+    candidates = raw.get("candidates") or []
+    if not isinstance(candidates, list) or len(candidates) > _MAX_CANDIDATES:
+        return f"candidates is a list of at most {_MAX_CANDIDATES} matter numbers"
+    candidates = [_text(c, _MAX_NUMBER) for c in candidates if _text(c, _MAX_NUMBER)]
+    if issue and issue not in _TYPED_ISSUES:
+        return f"issue is one of {sorted(_TYPED_ISSUES)}, or empty for a letter that simply filed"
+    where = f"pages {first}-{last}"
+    if issue in NOT_PLACED:
+        if placed_on:
+            return f"{where}: a letter that was not placed has no placed_on"
+        if issue == "one_candidate" and len(candidates) != 1:
+            return f"{where}: one_candidate names exactly one candidate matter number"
+        if issue == "ambiguous" and len(candidates) < 2:
+            return f"{where}: ambiguous names every candidate matter number the resolve listed"
+        if issue not in ("one_candidate", "ambiguous") and candidates:
+            return f"{where}: only one_candidate and ambiguous carry candidates"
+    else:
+        if not placed_on:
+            return f"{where}: a filed letter carries placed_on, the matter number it was filed on"
+        if candidates:
+            return f"{where}: a filed letter carries no candidates"
+    entry.update(placed_on=placed_on, issue=issue, candidates=candidates)
+    return None
+
+
+def _derivation_problem(entry: dict[str, Any], rows: list[dict[str, Any]]) -> str | None:
+    first, last = entry["first_page"], entry["last_page"]
+    return post_outcomes.span_problem(first, last, rows) or post_outcomes.kind_problem(entry["kind"], first, last, rows)
+
+
+def _fill_derived(entry: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    """Fill ``entry``'s ``placed_on``, ``issue`` and ``candidates`` from the
+    outcome rows."""
+    found = post_outcomes.derive(entry["kind"], entry["first_page"], entry["last_page"], rows)
+    detail = found["detail"]
+    if detail == post_outcomes.NO_ATTEMPT and entry["detail"]:
+        detail = f"{detail}; {entry['detail']}"
+    entry.update(
+        placed_on=_text(found["placed_on"], _MAX_NUMBER),
+        issue=found["issue"],
+        candidates=[_text(c, _MAX_NUMBER) for c in found["candidates"]][:_MAX_CANDIDATES],
+        detail=_text(detail or entry["detail"], _MAX_TEXT),
+    )
+
+
+def _is_typed(raw: dict[str, Any]) -> bool:
+    return any(key in raw for key in _DERIVED_KEYS)
+
+
+def _observe(entry: dict[str, Any], status: str, reason: str, digest: str, message: str) -> None:
+    outcome_ledger.observe(
+        logic_in_code.POST_RECORD_DERIVATION,
+        "record_post_batch",
+        status,
+        reason,
+        sha256=digest,
+        message_id=message,
+        first_page=entry["first_page"],
+        last_page=entry["last_page"],
+    )
+
+
+def _note_difference(entry: dict[str, Any], rows: list[dict[str, Any]], digest: str, message: str) -> None:
+    """Write what code would have recorded for a typed letter, when it differs.
+    Rows written with no message id count too: a skill that still types these
+    fields does not pass one to the filing."""
+    derived = dict(entry)
+    _fill_derived(derived, rows)
+    changed = [
+        f"typed {key} {entry[key]!r}, derived {derived[key]!r}"
+        for key in _DERIVED_KEYS
+        if (sorted(entry[key]) if key == "candidates" else entry[key])
+        != (sorted(derived[key]) if key == "candidates" else derived[key])
+    ]
+    if changed:
+        where = f"pages {entry['first_page']}-{entry['last_page']}: "
+        _observe(entry, outcome_ledger.DIFFERS, where + "; ".join(changed), digest, message)
+
+
+def _derive_observing(letters: list[Any], parsed: list[dict[str, Any]], digest: str, message: str) -> str | None:
+    """Under ``observe``: a typed letter stands as typed and is compared; an
+    untyped one is derived. Nothing here refuses except a typed letter's own
+    long-standing checks."""
+    keyed = outcome_ledger.outcomes(digest, message)
+    wider = keyed + (outcome_ledger.outcomes(digest, "") if message else [])
+    for raw, entry in zip(letters, parsed):
+        typed = _is_typed(raw)
+        problem = _derivation_problem(entry, wider if typed else keyed)
+        if problem:
+            _observe(entry, outcome_ledger.WOULD_REFUSE, problem, digest, message)
+        if typed:
+            _note_difference(entry, wider, digest, message)
+        else:
+            _fill_derived(entry, keyed)
+    return None
+
+
+def _derive_enforcing(letters: list[Any], parsed: list[dict[str, Any]], digest: str, message: str) -> str | None:
+    """Under ``enforce``: every letter is derived, and a typed field is refused
+    with what it derives to."""
+    rows = outcome_ledger.outcomes(digest, message)
+    for entry in parsed:
+        problem = _derivation_problem(entry, rows)
+        if problem:
+            return problem
+        _fill_derived(entry, rows)
+    return _typed_refusal(letters, parsed)
+
+
+def _recorded_letters(
+    letters: list[Any], page_count: int, digest: str, message: str
+) -> tuple[list[dict[str, Any]], bool, str | None]:
+    """(the letters as recorded, filing_unverified, refusal). Validates what the
+    model gave, checks the partition, derives each letter from the outcome rows
+    (``post_record_derivation`` decides what happens to a typed field), and
+    cross-checks the filed pages."""
+    enforcing = logic_in_code.load_switch(logic_in_code.POST_RECORD_DERIVATION).enforcing
+    parsed: list[dict[str, Any]] = []
+    for raw in letters:
+        entry, problem = _letter(raw, enforcing)
+        if problem is None and not enforcing and _is_typed(raw):
+            problem = _typed_letter(raw, entry)  # type: ignore[arg-type]
+        if problem:
+            return [], False, problem
+        parsed.append(entry)  # type: ignore[arg-type]
+    if not parsed or page_count < 1:
+        return [], False, "record every letter, or a bundle_issue when nothing could be filed"
+    problem = _partition_problem(parsed, page_count)
+    if problem is None:
+        derive = _derive_enforcing if enforcing else _derive_observing
+        problem = derive(letters, parsed, digest, message)
+    if problem is not None:
+        return [], False, problem
+    problem, unverified = _filing_problem(parsed, digest)
+    return parsed, unverified, problem
+
+
+def _typed_refusal(raw_letters: list[Any], parsed: list[dict[str, Any]]) -> str | None:
+    """A letter that carried ``placed_on``, ``issue`` or ``candidates`` is
+    refused, naming what code derived for it, so the next call leaves them out."""
+    for raw, entry in zip(raw_letters, parsed):
+        typed = [k for k in _DERIVED_KEYS if k in raw]
+        if typed:
+            derived = ", ".join(f"{k} {entry[k]!r}" for k in _DERIVED_KEYS)
+            return (
+                f"pages {entry['first_page']}-{entry['last_page']}: {', '.join(typed)} are derived from what the "
+                f"tools recorded, never passed; leave them out (code derives {derived})"
+            )
+    return None
 
 
 def _partition_problem(letters: list[dict[str, Any]], page_count: int) -> str | None:
@@ -274,17 +435,7 @@ def record_post_batch(
             return _refused("a bundle nothing was filed from carries no letters")
         parsed: list[dict[str, Any]] = []
     else:
-        parsed = []
-        for raw in letters:
-            entry, problem = _letter(raw)
-            if problem:
-                return _refused(problem)
-            parsed.append(entry)  # type: ignore[arg-type]
-        if not parsed or page_count < 1:
-            return _refused("record every letter, or a bundle_issue when nothing could be filed")
-        problem = _partition_problem(parsed, page_count)
-        if problem is None:
-            problem, unverified = _filing_problem(parsed, digest)
+        parsed, unverified, problem = _recorded_letters(letters, page_count, digest, message)
         if problem:
             return _refused(problem)
     now = NOW().astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -314,7 +465,7 @@ def record_post_batch(
         _prune(path.parent)
     except OSError as exc:
         return _refused(f"the journal could not be written ({exc.__class__.__name__}); nothing recorded")
-    return {
+    result = {
         "status": "recorded",
         "recorded": True,
         "letters": len(parsed),
@@ -322,6 +473,12 @@ def record_post_batch(
         "daily_list": daily_list_authored(),
         "filing_unverified": unverified,
     }
+    if any(not _is_typed(raw) for raw in letters):
+        result["letters_recorded"] = [
+            {k: e[k] for k in ("first_page", "last_page", "kind", "placed_on", "issue", "candidates")}
+            for e in record["letters"]
+        ]
+    return result
 
 
 def get_post_list(list_ref: str) -> Any:

@@ -226,6 +226,9 @@ def test_no_tool_argument_can_reach_finalized_or_the_billing_settings() -> None:
         # A bill inside a scanned bundle: the page range to cut and file.
         "first_page",
         "last_page",
+        # The email it came in on: the key the stage's outcome row is written
+        # under (outcome_ledger, 2026-11-04). It fetches nothing.
+        "message_id",
     }
     # The overlay's draft gate scans write arguments by these names; the entry's
     # text is composed in the connector, so none may exist.
@@ -336,11 +339,42 @@ def test_readback_amount_mismatch_is_reported() -> None:
     assert any("amount" in p for p in out["readback"]["problems"])
 
 
-@pytest.mark.parametrize("amount", ["1,250.00", "12.345", "-5", "0", "0.00", "$10", "1e3", "", " ", "NaN"])
-def test_amount_must_be_a_positive_two_decimal_string(amount: str) -> None:
+@pytest.mark.parametrize("amount", ["1,25", "12.345", "-5", "(5.00)", "0", "0.00", "1e3", "", " ", "NaN", "8 300"])
+def test_amount_must_read_as_one_positive_figure(amount: str) -> None:
     tenant = Tenant()
     out = _stage(tenant, amount=amount)
-    assert out["status"] == "refused", amount
+    assert out["status"] == "refused" and "amount must be a positive figure" in out["reason"], amount
+    assert tenant.posts("/expenses") == []
+
+
+@pytest.mark.parametrize("amount", ["$1,250.00", "1,250.00", "1250", "$ 1250.00", "1250 00"])
+def test_the_amount_is_taken_as_printed(amount: str) -> None:
+    out = _stage(Tenant(), amount=amount)
+    assert out["status"] == "staged", (amount, out)
+    assert out["amount"] == "1250.00" or out["amount"] == "1250"
+
+
+def test_an_amount_the_invoice_does_not_print_creates_nothing() -> None:
+    """FALSIFIER: accept a figure absent from the text and this stages it."""
+    tenant = Tenant()
+    out = _stage(tenant, amount="1520.00")
+    assert out["status"] == "refused" and "not printed beside a total" in out["reason"]
+    assert tenant.posts("/expenses") == [] and tenant.uploaded is None
+
+
+def test_a_figure_beside_no_total_label_is_not_the_invoices_amount() -> None:
+    blob = _text_pdf(["Acme Records Inc", "Invoice INV-2026-001", "Date 2026-09-01", "Pages copied 1250.00"])
+    tenant = Tenant(blob=blob)
+    out = _stage(tenant, sha256=hashlib.sha256(blob).hexdigest())
+    assert out["status"] == "refused" and "beside a total" in out["reason"]
+    assert tenant.posts("/expenses") == []
+
+
+def test_a_scanned_invoice_cannot_be_confirmed_and_creates_nothing() -> None:
+    blob = _scanned_pdf(1)
+    tenant = Tenant(blob=blob)
+    out = _stage(tenant, sha256=hashlib.sha256(blob).hexdigest())
+    assert out["status"] == "refused" and "could not be read again" in out["reason"]
     assert tenant.posts("/expenses") == []
 
 
@@ -355,10 +389,18 @@ def test_amount_is_decimal_exact() -> None:
     assert str(vi.parse_amount("0.10")) == "0.10"
 
 
-@pytest.mark.parametrize("bad", ["2026-02-30", "09/01/2026", "2026-9-1", ""])
-def test_invoice_date_must_be_iso(bad: str) -> None:
+@pytest.mark.parametrize("bad", ["2026-02-30", "09/1C/2026", "2026-9-1", "13/45/2026", ""])
+def test_invoice_date_must_read_as_one_date(bad: str) -> None:
     out = _stage(Tenant(), invoice_date=bad)
     assert out["status"] == "refused" and "invoice_date" in out["reason"]
+
+
+def test_the_invoice_date_is_taken_as_printed() -> None:
+    tenant = Tenant()
+    out = _stage(tenant, invoice_date="09/01/2026")
+    assert out["status"] == "staged", out
+    (body,) = tenant.posted
+    assert body["expenseDate"] == "2026-09-01"
 
 
 def test_text_naming_another_matter_refuses() -> None:
@@ -435,7 +477,7 @@ def test_a_refusal_before_the_write_leaves_the_resolution_spendable() -> None:
     """The token is spent at the POST, not at the door: a bad figure corrected
     and restaged must not also need a second search of the firm's record."""
     token = _resolution()
-    assert _stage(Tenant(), matter_resolution=token, amount="1,250.00")["status"] == "refused"
+    assert _stage(Tenant(), matter_resolution=token, amount="1,25")["status"] == "refused"
     assert _stage(Tenant(), matter_resolution=token)["status"] == "staged"
 
 
@@ -677,6 +719,8 @@ def test_drop_deleted_keeps_a_bare_list_a_list() -> None:
 # ---- A vendor's bill inside a scanned bundle (2026-10-01) ------------------
 
 from smokeball_connector import letter_pages as lp  # noqa: E402 - the bundle section imports the page ledgers where its tests begin, after the module's fixtures
+
+pytestmark = pytest.mark.usefixtures("logic_enforced")
 
 
 def _bundle(page_texts: list[str]) -> bytes:

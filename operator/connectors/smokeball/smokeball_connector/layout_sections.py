@@ -18,9 +18,11 @@ offer that answered it."""
 from __future__ import annotations
 
 import re
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from .printed_dates import date_from_printed
+from .printed_money import positive_money
 
 NEG_SECTION = "Negotiation Details"
 NEG_MARK = "/SettlementNegotiations/"
@@ -39,8 +41,6 @@ ROW_FIELDS = {
 AMOUNT_FIELDS = ("demand_amount", "offer_amount")
 DATE_FIELDS = ("demand_date", "offer_date")
 _ROW_KEY = re.compile(r"^Matter/Plaintiffs/SettlementNegotiations/SettlementNegotiationsDetails(?:\[(\d)\])?/(\w+)$")
-_AMOUNT = re.compile(r"^\d{1,9}(?:\.\d{1,2})?$")
-_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAX_NOTE = 1000
 
 #: Identifiers a reply never needs to repeat. Masked unless asked for by name.
@@ -162,19 +162,14 @@ def norm(field: str, raw: Any) -> Any:
     return str(raw).strip() if filled(raw) else None
 
 
-def _real_date(text: str) -> bool:
-    try:
-        date.fromisoformat(text)
-    except ValueError:
-        return False
-    return True
-
-
 def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
     """Validate one row argument. Returns ``(row, None)`` or ``(None, problem)``.
-    An amount is a string or integer with at most two decimals (a float is
-    refused: "1250.0" is not the figure a letter prints); a date is
-    YYYY-MM-DD."""
+    An amount and a date arrive EXACTLY AS PRINTED and are read in code: an
+    amount by ``printed_money`` ("$25,000.00", "25000", a split cents box; a
+    float is refused, "1250.0" is not a figure a letter prints), a date by
+    ``printed_dates`` ("10/01/2026", "October 1, 2026", or ISO). The row
+    carries the values read, so the tab is written with the figure the page
+    prints and never with a conversion of it."""
     if not isinstance(raw, dict):
         return None, "each row must be an object"
     unknown = set(raw) - set(ROW_FIELDS) - {"row"}
@@ -185,17 +180,18 @@ def parse_row(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
         value = raw.get(field)
         if value is None or value == "":
             continue
-        text = str(value) if isinstance(value, int) and not isinstance(value, bool) else value
-        if not isinstance(text, str) or not _AMOUNT.match(text.strip()) or Decimal(text.strip()) <= 0:
+        amount = positive_money(value)
+        if amount is None:
             return None, f'{field} must be the figure as written, e.g. "25000" or "25000.00"'
-        out[field] = text.strip()
+        out[field] = str(amount)
     for field in DATE_FIELDS:
         value = raw.get(field)
         if value is None or value == "":
             continue
-        if not isinstance(value, str) or not _DATE.match(value.strip()) or not _real_date(value.strip()):
+        read = date_from_printed(value)
+        if read is None:
             return None, f"{field} must be a real date, YYYY-MM-DD"
-        out[field] = value.strip()
+        out[field] = read.isoformat()
     note = raw.get("note")
     if note not in (None, ""):
         if not isinstance(note, str) or len(note.strip()) > MAX_NOTE:

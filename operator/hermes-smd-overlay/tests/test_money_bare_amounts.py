@@ -114,6 +114,27 @@ def test_the_dispatcher_envelope_seen_on_seats_is_peeled(trust) -> None:
     assert _gate(session, "Staged as an expense of $96.25, unfinalized.").allowed
 
 
+def test_the_connectors_computed_money_reads_license_their_figures(trust) -> None:
+    """2026-11-04: ``get_matter_balances`` decides low trust against the authored
+    floor (``floor_usd``, ``shortfall_usd``). A reply stating those figures must
+    pass, because code computed them from the firm's record."""
+    session = "s-computed"
+    _read(
+        trust,
+        session,
+        "mcp_smokeball_get_matter_balances",
+        json.dumps(
+            {
+                "value": [{"availableBalance": 2000}],
+                "floor_usd": "2500.00",
+                "shortfall_usd": "500.00",
+            }
+        ),
+    )
+    decision = _gate(session, "Trust is $2,000.00, $500.00 under the $2,500.00 floor.")
+    assert decision.allowed, decision.reason
+
+
 def test_a_medicals_row_read_back_licenses_its_charge(trust) -> None:
     session = "s-bare-medicals"
     _read(trust, session, "mcp_smokeball_get_matter_layouts", json.dumps(_MEDICALS))

@@ -29,6 +29,8 @@ from smokeball_connector import vendor_invoice as vi
 from smokeball_connector import vendor_invoice_tools as vit
 from smokeball_connector.client import SmokeballWriteError
 
+pytestmark = pytest.mark.usefixtures("logic_enforced")
+
 PDF = b"%PDF-1.7 a spooled invoice"
 # Built rather than written out: a 32-hex literal reads as a credential to
 # gitleaks, and this is a fixture token for a file name on disk.
@@ -251,7 +253,7 @@ def test_the_staging_tool_gained_no_attachment_argument() -> None:
     finalizing. (``matter_resolution`` arrives from the matter-resolution gate,
     a separate change; it carries no attachment and no money.)"""
     params = set(inspect.signature(vit.stage_vendor_invoice).parameters)
-    assert not params & {"spool_token", "attachment_id", "inbox_id", "message_id"}
+    assert not params & {"spool_token", "attachment_id", "inbox_id"}
     assert params == {
         "matter_id",
         "matter_resolution",
@@ -267,5 +269,21 @@ def test_the_staging_tool_gained_no_attachment_argument() -> None:
         # an attachment source and not money.
         "first_page",
         "last_page",
+        # The email the invoice came in on (2026-11-04): ONLY the key its
+        # outcome row is written under (outcome_ledger). It fetches nothing;
+        # the source is still download_url alone, as the next test proves.
+        "message_id",
     }
     assert not params & {"description", "subject", "title", "body", "note", "finalized"}
+
+
+def test_the_message_id_names_the_outcome_row_and_fetches_nothing() -> None:
+    """``message_id`` reaches exactly one place: the outcome ledger's key. If a
+    change ever read an attachment by it, the stage would need no download_url,
+    and this source scan would see the parameter used outside the row and the
+    source check's observation key, the two places it is passed."""
+    import ast
+
+    source = inspect.getsource(vit.stage_vendor_invoice)
+    uses = [n for n in ast.walk(ast.parse(source.lstrip())) if isinstance(n, ast.Name) and n.id == "message_id"]
+    assert len(uses) == 2, "message_id is read into the outcome row and handed to the stage for its check"

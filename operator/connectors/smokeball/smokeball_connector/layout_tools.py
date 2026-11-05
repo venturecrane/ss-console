@@ -22,13 +22,18 @@ import json
 import os
 import time
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
+from . import logic_gate, logic_in_code, outcome_ledger
+from .cited_facts import OFFER_LABELS, PRINTED, UNREADABLE, confirm_in_pages, confirm_in_text
 from .layout_config import load_layout_config
+from .letter_pages import FILED_DOCS
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .layout_sections import (
     AMOUNT_FIELDS,
+    DATE_FIELDS,
     DETAILS_KEY,
     DETAILS_MAX,
     MINIMUM_KEY,
@@ -347,6 +352,7 @@ def add_negotiation_rows(
     details: str = "",
     minimum_settlement: str = "",
     operator_tab: bool = False,
+    source_file_id: str = "",
 ) -> Any:
     """Add demand and offer rows to a matter's Negotiation Details tab.
     Classified INTERNAL_WRITE: the firm's own record; nothing is sent.
@@ -381,18 +387,138 @@ def add_negotiation_rows(
     ``possible_duplicate`` (the same amount with a different date is on that
     ``row``; not written, ask the sender). ``gap_rows`` names empty rows left
     above the last filled one."""
-    matter = (matter_id or "").strip()
-    if not matter or not isinstance(rows, list) or not rows and not details and not minimum_settlement:
-        return _refused("matter_id and at least one row (or details / minimum_settlement) are required")
+    row = outcome_ledger.Outcome(outcome_ledger.NEGOTIATION, "", "", matter_id=(matter_id or "").strip())
+    with outcome_ledger.recording(row):
+        out = _add_rows(
+            row, matter_id, rows, plaintiff_index, details, minimum_settlement, operator_tab, source_file_id
+        )
+        row.status, row.detail = negotiation_outcome(out)
+        return out
+
+
+def negotiation_outcome(out: dict[str, Any]) -> tuple[str, str]:
+    """(status, detail) for the outcome row: the offer is on the tab
+    (``written``), there but a value did not read back (``figure_not_saved``),
+    the same amount is on a row with another date (``possible_duplicate``), or
+    it is not on the tab (``offer_not_written``)."""
+    status = str(out.get("status") or "")
+    duplicate = [e for e in out.get("entries") or [] if e.get("status") == "possible_duplicate"]
+    if status in ("written", "nothing_to_write") and duplicate:
+        return "possible_duplicate", f"the same amount is already on row {duplicate[0].get('row')} with another date"
+    if status in ("written", "nothing_to_write"):
+        return "written", ""
+    if status == "readback_mismatch":
+        return "figure_not_saved", ", ".join(sorted(out.get("mismatch") or {})) or "a value did not read back"
+    return "offer_not_written", str(out.get("reason") or status)
+
+
+def _source_check(
+    client: Any, row: outcome_ledger.Outcome, matter: str, source_file_id: str, parsed: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """For an Operator-found offer: the document it was read from must be on
+    this matter and print every amount beside an offer label and every date.
+    Fills ``row``'s bundle key from the filing ledger. None means go: nothing
+    wrong, or the seat's ``printed_source_check`` only observes."""
+    found = _source_problem(client, row, matter, (source_file_id or "").strip(), parsed)
+    if found is None:
+        return None
+    status, reason = found
+    refusal = logic_gate.refusal(
+        logic_in_code.PRINTED_SOURCE_CHECK,
+        reason,
+        tool=outcome_ledger.NEGOTIATION,
+        status=status,
+        sha256=row.sha256,
+        message_id=row.message_id,
+        first_page=row.first_page,
+        last_page=row.last_page,
+        matter_id=matter,
+    )
+    return _refused(refusal) if refusal else None
+
+
+def _source_problem(
+    client: Any, row: outcome_ledger.Outcome, matter: str, file_id: str, parsed: list[dict[str, Any]]
+) -> tuple[str, str] | None:
+    """(observation status, refusal), or None when the source prints it all."""
+    if not file_id:
+        return (
+            outcome_ledger.WOULD_REFUSE,
+            "operator_tab needs source_file_id, the fileId of the document the offer was read from",
+        )
+    source = FILED_DOCS.lookup(matter, file_id) or {}
+    row.sha256, row.message_id = str(source.get("sha256") or ""), str(source.get("message_id") or "")
+    row.first_page, row.last_page = source.get("first_page"), source.get("last_page")
+    row.matter_number = str(source.get("matter_number") or "")
+    spends = logic_gate.spends_on_a_read(logic_in_code.PRINTED_SOURCE_CHECK)
+    for entry in parsed:
+        for field in (*AMOUNT_FIELDS, *DATE_FIELDS):
+            if field not in entry:
+                continue
+            value: Decimal | date = (
+                Decimal(entry[field]) if field in AMOUNT_FIELDS else date.fromisoformat(entry[field])
+            )
+            labels = OFFER_LABELS if field in AMOUNT_FIELDS else None
+            text = source.get("text")
+            found = (
+                confirm_in_text(text, value, labels)
+                if text
+                else confirm_in_pages(client, matter, file_id, None, None, value, labels, allow_vision=spends)
+            )
+            if found == UNREADABLE:
+                return (
+                    outcome_ledger.SOURCE_UNREADABLE,
+                    "the source document could not be read again to confirm the offer; nothing was written",
+                )
+            if found != PRINTED:
+                beside = " beside an offer, settlement, amount or total label" if labels else ""
+                return (
+                    outcome_ledger.WOULD_REFUSE,
+                    f"{field} {entry[field]} is not printed on the source document{beside}; "
+                    "pass it exactly as the letter prints it",
+                )
+    return None
+
+
+def _read_rows(rows: list[Any], minimum_settlement: str) -> tuple[list[dict[str, Any]], str] | dict[str, Any]:
+    """(the rows as read, the minimum settlement as read), or the refusal. Each
+    figure and date is read as printed by ``parse_row``."""
     parsed: list[dict[str, Any]] = []
     for raw in rows or []:
         row, problem = parse_row(raw)
         if problem:
             return _refused(problem)
         parsed.append(row)  # type: ignore[arg-type]
-    if minimum_settlement and parse_row({"demand_amount": minimum_settlement})[1]:
+    if not minimum_settlement:
+        return parsed, ""
+    read, _ = parse_row({"demand_amount": minimum_settlement})
+    if read is None:
         return _refused('minimum_settlement must be the figure as written, e.g. "50000"')
+    return parsed, read["demand_amount"]
+
+
+def _add_rows(
+    outcome: outcome_ledger.Outcome,
+    matter_id: str,
+    rows: list[dict[str, Any]],
+    plaintiff_index: int | None,
+    details: str,
+    minimum_settlement: str,
+    operator_tab: bool,
+    source_file_id: str,
+) -> dict[str, Any]:
+    matter = (matter_id or "").strip()
+    if not matter or not isinstance(rows, list) or not rows and not details and not minimum_settlement:
+        return _refused("matter_id and at least one row (or details / minimum_settlement) are required")
+    read = _read_rows(rows, minimum_settlement)
+    if isinstance(read, dict):
+        return read
+    parsed, minimum = read
     client = _client()
+    if operator_tab:
+        blocked = _source_check(client, outcome, matter, source_file_id, parsed)
+        if blocked is not None:
+            return blocked
     found = _negotiation_item(client, matter, plaintiff_index)
     if found.get("status") == "refused":
         return found
@@ -405,7 +531,7 @@ def add_negotiation_rows(
     plan = _plan(parsed, negotiation_rows(values))
     if plan.get("status") == "refused":
         return plan
-    top, skipped = _top_level(values, details.strip(), minimum_settlement.strip())
+    top, skipped = _top_level(values, details.strip(), minimum)
     writes = {**plan["writes"], **top}
     entries = [{**r, "status": "written" if r["status"] == "to_write" else r["status"]} for r in plan["results"]]
     base = {

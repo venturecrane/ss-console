@@ -27,6 +27,8 @@ from smokeball_connector import layout_config as lc
 from smokeball_connector import layout_sections as ls
 from smokeball_connector import layout_tools as lt
 
+pytestmark = pytest.mark.usefixtures("logic_enforced")
+
 MATTER = "m-1"
 DESIGN = "f6719448-d924-4c59-9c1e-3bd2b76550ca"
 B = "Matter/Plaintiffs/SettlementNegotiations/SettlementNegotiationsDetails"
@@ -264,8 +266,9 @@ def test_a_value_that_does_not_read_back_is_reported(monkeypatch: pytest.MonkeyP
     "row",
     [
         {"offer_amount": 1500.5},
-        {"offer_amount": "15,000"},
-        {"offer_date": "09/01/2026"},
+        {"offer_amount": "15,00"},
+        {"offer_date": "13/45/2026"},
+        {"offer_date": "09/1C/2026"},
         {"note": "only a note"},
         {"offer_amount": "100", "colour": "red"},
         {"row": 12, "offer_amount": "100"},
@@ -429,12 +432,39 @@ def _empty_tab_tenant() -> _Tenant:
     return _Tenant([_item("neg", f"{DESIGN}_404f")], {"neg": {}})
 
 
+#: The offer letters the day's post filed, as their pages read.
+LETTER = (
+    "[p.1]\nAcme Casualty\nOctober 27, 2026\nWe offer $18,500.00 to settle this claim.\n"
+    "Dated 09/01/2026, our offer of $15,000 stands.\nSeptember 23, 2026: settlement amount 956,000.00"
+)
+
+
+def _letter(file_id: str = "file-offer", text: str | None = LETTER) -> str:
+    from smokeball_connector import letter_pages as lp
+
+    lp.FILED_DOCS.record(
+        MATTER,
+        file_id,
+        "2026-10-29 Acme pp1-1.pdf",
+        1,
+        1,
+        from_scan=False,
+        sha256="b" * 64,
+        message_id="msg-9",
+        matter_number="2026-PI-9",
+        text=text,
+    )
+    return file_id
+
+
 def test_an_empty_tab_gets_the_operators_summary_with_the_row(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import date
 
     monkeypatch.setattr(lt, "TODAY", lambda: date(2026, 10, 29))
     t = _use(monkeypatch, _empty_tab_tenant())
-    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "18500.00", "offer_date": "2026-10-27"}], operator_tab=True)
+    out = lt.add_negotiation_rows(
+        MATTER, [{"offer_amount": "18500.00", "offer_date": "2026-10-27"}], operator_tab=True, source_file_id=_letter()
+    )
     assert out["status"] == "written", out
     want = "Entered 10/29/26 from the offer letters and emails saved in this file."
     assert t.values["neg"][ls.DETAILS_KEY] == want
@@ -445,18 +475,89 @@ def test_a_tab_the_firm_keeps_refuses_an_operator_offer(monkeypatch: pytest.Monk
     t = _filled_tenant()
     t.values["neg"][ls.DETAILS_KEY] = "Paralegal notes: client wants 50k floor"
     _use(monkeypatch, t)
-    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True)
+    out = lt.add_negotiation_rows(
+        MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True, source_file_id=_letter()
+    )
     assert out["status"] == "refused" and "kept by the firm" in out["reason"]
     assert t.patches() == []
     # Rows with no summary at all are the firm's too.
     t2 = _use(monkeypatch, _filled_tenant())
-    again = lt.add_negotiation_rows(MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True)
+    again = lt.add_negotiation_rows(
+        MATTER, [{"offer_amount": "15000", "offer_date": "2026-09-01"}], operator_tab=True, source_file_id=_letter()
+    )
     assert again["status"] == "refused" and t2.patches() == []
 
 
 def test_an_operator_tab_keeps_its_summary_and_takes_the_row(monkeypatch: pytest.MonkeyPatch) -> None:
     t = _use(monkeypatch, _summary_tenant(OURS))
-    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "956000", "offer_date": "2026-09-23"}], operator_tab=True)
+    out = lt.add_negotiation_rows(
+        MATTER, [{"offer_amount": "956000", "offer_date": "2026-09-23"}], operator_tab=True, source_file_id=_letter()
+    )
     assert out["status"] == "written", out
     assert t.values["neg"][f"{B}/Details"] == OURS, "an existing Operator summary is never rewritten here"
     assert all(p["key"] != f"{B}/Details" for patch in t.patches() for p in patch["values"])
+
+
+# ---- an offer the Operator found: as printed, confirmed in its document ----
+#
+# 2026-11-04: an offer from the day's post was entered from the figure the
+# model typed. It now arrives as printed, is read in code, and must be printed
+# on the document it was read from.
+
+
+def test_an_operator_offer_names_its_document(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _empty_tab_tenant())
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "18500.00", "offer_date": "2026-10-27"}], operator_tab=True)
+    assert out["status"] == "refused" and "source_file_id" in out["reason"]
+    assert t.patches() == []
+
+
+def test_an_operator_offer_is_taken_as_printed(monkeypatch: pytest.MonkeyPatch) -> None:
+    t = _use(monkeypatch, _empty_tab_tenant())
+    out = lt.add_negotiation_rows(
+        MATTER,
+        [{"offer_amount": "$18,500.00", "offer_date": "October 27, 2026"}],
+        operator_tab=True,
+        source_file_id=_letter(),
+    )
+    assert out["status"] == "written", out
+    written = {p["key"]: p["value"] for patch in t.patches() for p in patch["values"]}
+    assert any(v == "2026-10-27" for v in written.values())
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"offer_amount": "18,050.00", "offer_date": "2026-10-27"},
+        {"offer_amount": "18500.00", "offer_date": "2026-10-28"},
+    ],
+)
+def test_an_operator_offer_the_letter_does_not_print_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, row: dict[str, Any]
+) -> None:
+    t = _use(monkeypatch, _empty_tab_tenant())
+    out = lt.add_negotiation_rows(MATTER, [row], operator_tab=True, source_file_id=_letter())
+    assert out["status"] == "refused" and "not printed" in out["reason"], out
+    assert t.patches() == []
+
+
+def test_an_operator_offer_from_a_document_this_run_did_not_file_reads_it_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from smokeball_connector import cited_facts
+
+    _use(monkeypatch, _empty_tab_tenant())
+    monkeypatch.setattr(cited_facts, "_document_text", lambda *_a, **_k: (LETTER, "offer.pdf"))
+    out = lt.add_negotiation_rows(
+        MATTER, [{"offer_amount": "18500.00", "offer_date": "2026-10-27"}], operator_tab=True, source_file_id="file-x"
+    )
+    assert out["status"] == "written", out
+
+
+def test_a_person_dictated_row_needs_no_document(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A figure a rostered sender wrote in her own email is hers; there is no
+    document to confirm it in, and the row is written as she wrote it."""
+    t = _use(monkeypatch, _empty_tab_tenant())
+    out = lt.add_negotiation_rows(MATTER, [{"offer_amount": "$12,000", "offer_date": "10/01/2026"}])
+    assert out["status"] == "written", out
+    assert t.patches()
