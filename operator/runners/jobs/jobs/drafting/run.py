@@ -126,6 +126,12 @@ def demand_view(firm: firm_mod.DraftingFirm) -> DemandFirm:
     )
 
 
+def rules_for_job(run: Any) -> dict[str, Any]:
+    """The firm's layout rules this job follows. None for a revision: it edits
+    the attorney's accepted file, and only as he asked (``revise/inplace.py``)."""
+    return {} if run.job.revise else firm_rules.start(run)
+
+
 class DraftingRun(EvidenceLane, Placing):
     def __init__(
         self,
@@ -178,7 +184,7 @@ class DraftingRun(EvidenceLane, Placing):
         self.readback_pause = readback_pause
         self.notes: list[str] = []
         #: The firm's installed layout rules this job follows (firm_rules.py).
-        self.rule_layout = firm_rules.start(self)
+        self.rule_layout = rules_for_job(self)
 
     # ---- plumbing ------------------------------------------------------------------
     @property

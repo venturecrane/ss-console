@@ -237,7 +237,7 @@ class _Run:
         self.cls = "mediation_brief"
         self.data = tmp_path / "data"
         self.data.mkdir(parents=True)
-        self.job = SimpleNamespace(job_id="01DRAFTJ0B000000000000000A")
+        self.job = SimpleNamespace(job_id="01DRAFTJ0B000000000000000A", revise=None)
         data = copy.deepcopy(firm_data())
         self.firm = SimpleNamespace(data=data, firm_base=lambda cls: (Path("b"), {}) if base else None)
         self.st: dict = {}
@@ -280,3 +280,17 @@ def test_a_resumed_job_keeps_the_rules_it_started_with(tmp_path, spec_store):
 def spec_store(_spec_store: Path) -> Path:
     _spec_store.mkdir(parents=True, exist_ok=True)
     return _spec_store
+
+
+def test_a_revision_reads_no_rules_and_records_none(tmp_path, spec_store):
+    """A revision edits the attorney's accepted file and only as he asked: it
+    never applies a firm rule, so it must never record one as applied."""
+    from jobs.drafting import run as run_mod
+
+    _install(spec_store, "Three blank lines before the court name.")
+    assert run_mod.rules_for_job(_Run(tmp_path / "first")) == {"front_court_gap_lines": 3}
+    run = _Run(tmp_path / "revision")
+    run.job.revise = {"prior_job_id": "x"}
+    assert run_mod.rules_for_job(run) == {}
+    assert not (run.data / firm_rules.LEDGER).exists()
+    assert "front_court_gap_lines" not in run.firm.data["format"]["layout"]["mediation_brief"]
