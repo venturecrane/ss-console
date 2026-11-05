@@ -447,26 +447,29 @@ def _plan(tmp_path: Path, seat: VersionSeat) -> list[dict]:
     return out
 
 
-def test_new_versions_go_notes_first_on_the_same_ids_and_read_back(tmp_path) -> None:
+def test_new_versions_go_brief_first_on_the_same_ids_and_read_back(tmp_path) -> None:
     seat = VersionSeat({"draft-0001": b"filed brief", "notes-0001": b"filed notes"})
     plan = _plan(tmp_path, seat)
     proof = versions.file_versions(seat, "m", plan, tmp_path, lambda m: None, folder_id="folder-0001", pause=0)
-    assert seat.sent == ["notes-0001", "draft-0001"]
-    assert [p["file_id"] for p in proof] == ["notes-0001", "draft-0001"]
+    assert seat.sent == ["draft-0001", "notes-0001"]
+    assert [p["file_id"] for p in proof] == ["draft-0001", "notes-0001"]
     assert all(p["sha256"] == hashlib.sha256(seat.files[p["file_id"]][-1]).hexdigest() for p in proof)
     # A resume after delivery sends nothing twice.
     versions.file_versions(seat, "m", plan, tmp_path, lambda m: None, folder_id="folder-0001", pause=0)
-    assert seat.sent == ["notes-0001", "draft-0001"]
+    assert seat.sent == ["draft-0001", "notes-0001"]
 
 
-def test_a_file_the_firm_changed_since_it_was_read_is_never_written_over(tmp_path) -> None:
-    """FALSIFIER: drop the compare-and-stop and the firm's own edit is buried."""
+def test_a_held_brief_files_no_notes_describing_a_revision_that_did_not_file(tmp_path) -> None:
+    """FALSIFIER (D7): file the notes first and a held brief leaves notes
+    describing a revision that never reached the matter. Also: drop the
+    compare-and-stop and the firm's own edit is buried."""
     seat = VersionSeat({"draft-0001": b"filed brief", "notes-0001": b"filed notes"})
     plan = _plan(tmp_path, seat)
     seat.files["draft-0001"].append(b"the attorney's own edit")
     with pytest.raises(DraftingHold, match="filing_refused"):
         versions.file_versions(seat, "m", plan, tmp_path, lambda m: None, folder_id="folder-0001", pause=0)
-    assert seat.sent == ["notes-0001"]  # the canary went; the brief did not
+    assert seat.sent == []  # the brief held, so its notes were never touched
+    assert seat.files["notes-0001"] == [b"filed notes"]
 
 
 # ---- the envelope and the lane key ---------------------------------------------------------
@@ -601,8 +604,8 @@ def test_a_revision_runs_off_the_seat_to_new_versions_on_the_same_ids(tmp_path, 
     assert v.outcome == "delivered", (v.stage, v.reason)
     # It never pulled the matter file: a checklist, the edited sections, their readings.
     assert set(client.stages) == {"checklist", "edit", "read"}
-    assert seat.sent == ["notes-0001", "draft-0001"]
-    assert v.proof["mode"] == "revise" and [f["file_id"] for f in v.proof["files"]] == ["notes-0001", "draft-0001"]
+    assert seat.sent == ["draft-0001", "notes-0001"]
+    assert v.proof["mode"] == "revise" and [f["file_id"] for f in v.proof["files"]] == ["draft-0001", "notes-0001"]
     assert v.folder_id == REVISE["folder_id"] and v.dollars < 1.0
     text = "\n".join(p.text for p in docx.Document(io.BytesIO(seat.files["draft-0001"][-1])).paragraphs)
     assert "value her case fairly" in text

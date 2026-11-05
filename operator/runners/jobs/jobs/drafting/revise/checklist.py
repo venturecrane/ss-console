@@ -29,7 +29,7 @@ KINDS = ("remove_citations", "shorten_section", "restructure_section", "formatti
 CITE_KINDS = ("record", "deposition", "case", "statute", "all")
 #: The renderer's firm style keys a formatting item may set
 #: (``drafting-firm.yaml`` ``format.layout.<class>``, brief-format's schema).
-LAYOUT_KEYS = {
+LAYOUT_KEYS: dict[str, tuple[Any, Any, Any]] = {
     "line_spacing": (float, 1.0, 3.0),
     "heading_line_spacing": (float, 1.0, 3.0),
     # Exact points; each wins over its multiple (a body at exact 24 pt is a
@@ -42,6 +42,15 @@ LAYOUT_KEYS = {
     "table_border_pt": (float, 0.0, 6.0),
     "table_header_fill": (str, None, None),
     "table_total_fill": (str, None, None),
+    # The first page and signature block (briefpage.py, frontpage.py).
+    "front_single_spaced": (bool, None, None),
+    "front_attorney_gap_lines": (int, 0, 10),
+    "front_court_gap_lines": (int, 0, 10),
+    "front_caption_gap_lines": (int, 0, 10),
+    "caption_rule_below": ("rule", None, None),
+    "signature_date_beside": (bool, None, None),
+    "signature_single_spaced": (bool, None, None),
+    "signature_gap_lines": (int, 0, 10),
 }
 _HEX = re.compile(r"^[0-9A-Fa-f]{6}$")
 MAX_ITEMS = 40
@@ -97,9 +106,30 @@ def _layout_problems(layout: Any) -> list[str]:
         if typ is str:
             if not (isinstance(v, str) and _HEX.match(v)):
                 out.append(f"layout {k} is a six-digit RRGGBB colour")
+        elif typ is bool:
+            if not isinstance(v, bool):
+                out.append(f"layout {k} is true or false")
+        elif typ == "rule":
+            if not (isinstance(v, bool) or v == "left"):
+                out.append(f'layout {k} is true, false or "left" (ending at the caption\'s vertical line)')
+        elif typ is int:
+            if not (isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi):
+                out.append(f"layout {k} is a whole number from {lo} to {hi}")
         elif not (isinstance(v, (int, float)) and not isinstance(v, bool) and lo <= float(v) <= hi):
             out.append(f"layout {k} is a number from {lo} to {hi}")
     return out
+
+
+#: A formatting ask without a number ("more space before the headings"):
+#: the layout value is the model's step, and code requires it to go beyond
+#: the value the filed brief already has (``run.py``).
+RELATIVE = ("more", "less")
+
+
+def _relative(p: dict[str, Any]) -> list[str]:
+    if "relative" in p and p["relative"] not in RELATIVE:
+        return [f"params.relative is one of {list(RELATIVE)}"]
+    return []
 
 
 def _cites(p: dict[str, Any]) -> list[str]:
@@ -149,7 +179,7 @@ _BY_KIND = {
     "remove_citations": _cites,
     "shorten_section": _shorten,
     "restructure_section": _restructure,
-    "formatting": lambda p: _layout_problems(p.get("layout")),
+    "formatting": lambda p: _layout_problems(p.get("layout")) + _relative(p),
     "replace_text": _replace,
 }
 
@@ -209,7 +239,9 @@ SYSTEM = (
     'restructure_section {"subheadings": [titles in order] | "into_list": true | "move_before"|"move_after": '
     'section title}; formatting {"layout": {keys among '
     + json.dumps(sorted(LAYOUT_KEYS))
-    + '}} (line_spacing 2.0 is double spacing; fills are RRGGBB); replace_text {"old": words in the brief, '
+    + "}} (line_spacing 2.0 is double spacing; fills are RRGGBB; *_gap_lines are counts of blank lines; "
+    'caption_rule_below is true or "left"; when he asks for more or less of something without a number, '
+    'add "relative": "more" or "less" and give the value one step beyond what he has); replace_text {"old": words in the brief, '
     '"new": his replacement}; other {}. Any item may add "must_include" / "must_exclude": [phrases he '
     "states]. Never invent a change he did not ask for, a number he did not give, or new facts; when he asks for "
     "something the brief would need new facts for, still make the item (kind other) with his words."
