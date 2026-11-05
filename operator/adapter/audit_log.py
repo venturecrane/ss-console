@@ -283,6 +283,8 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "CONFIRM_SEND_INTENT",
         # Authored-format spec gate (overlay shared/spec_gate.py, overlay#207):
         "SPEC_GATE_TRIGGERED",
+        # The conflict fence while observing (overlay hermes-smd-trust/conflict_fence.py):
+        "CONFLICT_FENCE_WOULD_REFUSE",
         # Report-only voice gate (overlay hermes-smd-trust/voice_gate.py) —
         # distinct from the VOICE_GATE_PASSED/NEAR_PASS/FAILED triple above,
         # which nothing currently emits:

@@ -14,8 +14,9 @@ body, and the tool modules stay unchanged.
 WHAT THE DECLARATION DOES, on the MCP-registered wrapper only (Python callers of
 the decorated name, the runner and the tests, keep the plain function):
 
-* the tool's input schema gains a ``matter_resolution`` string, listed as
-  required, and its description gains one sentence saying where to get one;
+* the tool's input schema gains a ``matter_resolution`` string, and while the
+  gate enforces it is listed as required and the description gains one sentence
+  saying where to get one (see THE LISTING FOLLOWS THE MODE below);
 * a call's ``matter_resolution`` is popped before the tool body runs, so no
   body ever sees it;
 * the target matter is read from the call by the per-tool resolver (for most
@@ -35,13 +36,24 @@ TWO MODES, read per call from the connector (``ResolutionGate.mode``):
 * ``enforce`` -- the call is refused with the token's own sentence, and the body
   never runs.
 
-THE SCHEMA SAYS REQUIRED WHILE OBSERVE TOLERATES ABSENCE. The parameter carries
-a default in the signature, so a call without it still reaches the gate in
-observe mode and is recorded (``missing``) rather than rejected by argument
-validation before anything could see it. The advertised schema lists it as
-required (``ConnectorServer`` marks it in ``list_tools``), because what the
-model reads is the contract it must follow; the mode decides only what the
-server does when it is not followed. In enforce mode absence is refused here.
+THE LISTING FOLLOWS THE MODE, READ AT LIST TIME. The parameter carries a default
+in the signature, so a call without it still reaches the gate in observe mode and
+is recorded (``missing``) rather than rejected by argument validation before
+anything could see it. What the model is shown depends on the mode:
+
+* ``enforce`` (or a mode that cannot be read, or no gate): the parameter is
+  REQUIRED and the description carries the sentence saying where to get one,
+  because that is the contract the gate holds the call to;
+* ``observe``: the parameter is optional and the sentence is gone. A gated
+  registration can reach a seat before the skills that pass a resolution, and the
+  model reads a listing as instructions: "without it nothing is written" on a seat
+  whose gate writes anyway would change the model's behaviour for nothing, and
+  could stop it writing at all. Observe means nothing changes for the firm.
+
+The listing and the gate read the same mode (``enforcing`` below), so they cannot
+disagree inside the connector. A client that holds an earlier listing sees the new
+one when it reconnects; the mode is rebuild-class on a seat, so a change to it
+arrives with a release, which restarts the connector.
 
 The SDK knows nothing about Smokeball. A connector supplies the gate: how a
 token is claimed and put back, which exception means "refused", the mode, and
@@ -85,10 +97,19 @@ class MatterArg:
     """The common resolver: the target matter is one named argument of the call.
 
     A class rather than a lambda so the refusal can name the argument a call left
-    out, and so a test can read which argument a tool resolves from."""
+    out, and so a test can read which argument a tool resolves from.
 
-    def __init__(self, argument: str = "matter_id") -> None:
+    ``optional`` is for a tool whose matter argument is itself optional, because
+    the vendor record can stand without a matter (a firm-general task or
+    calendar event). A call that leaves the argument out then names NO matter,
+    so there is no matter for it to be wrong about: the door opens without a
+    resolution and records nothing. A call that names a matter is gated exactly
+    as a required one is. A required argument (the default) that is absent is
+    refused in enforce mode and recorded in observe mode."""
+
+    def __init__(self, argument: str = "matter_id", *, optional: bool = False) -> None:
         self.argument = argument
+        self.optional = optional
 
     def __call__(self, arguments: dict[str, Any]) -> str | None:
         value = arguments.get(self.argument)
@@ -96,12 +117,15 @@ class MatterArg:
         return text or None
 
     def __repr__(self) -> str:
-        return f"matter_arg({self.argument!r})"
+        suffix = ", optional=True" if self.optional else ""
+        return f"matter_arg({self.argument!r}{suffix})"
 
 
-def matter_arg(argument: str = "matter_id") -> MatterArg:
-    """The resolver for a tool whose target matter is ``argument``."""
-    return MatterArg(argument)
+def matter_arg(argument: str = "matter_id", *, optional: bool = False) -> MatterArg:
+    """The resolver for a tool whose target matter is ``argument``. Pass
+    ``optional=True`` only where the tool's own signature makes the matter
+    optional (see :class:`MatterArg`)."""
+    return MatterArg(argument, optional=optional)
 
 
 @dataclass(frozen=True)
@@ -180,6 +204,13 @@ def _mode(gate: ResolutionGate) -> str:
     return value if value in MODES else MODE_ENFORCE
 
 
+def enforcing(gate: ResolutionGate | None) -> bool:
+    """Does a call that fails the gate get refused? The same answer :func:`admit`
+    acts on, so what the model is told and what happens are one decision. No gate
+    refuses in both modes (see :func:`admit`), so it counts as enforcing."""
+    return gate is None or _mode(gate) == MODE_ENFORCE
+
+
 def _record(gate: ResolutionGate, tool: str, matter_id: str | None, code: str) -> None:
     """Record an observation. Never raises: in observe mode the call proceeds
     whether or not its row landed, and a lost row is logged loudly instead."""
@@ -212,12 +243,16 @@ def admit(
     if gate is None:
         raise GateRefused(f"{tool} needs a matter resolution, and this connector has no resolution gate installed")
     mode = _mode(gate)
+    faulted = False
     try:
         matter_id = resolver(arguments)
     except Exception:  # noqa: BLE001 - a resolver fault is no matter, refused or recorded below
         logger.warning("resolution gate: resolver for %s raised", tool, exc_info=True)
-        matter_id = None
+        matter_id, faulted = None, True
     if not matter_id:
+        if not faulted and getattr(resolver, "optional", False) is True:
+            # The call names no matter (a firm-general task): nothing to resolve.
+            return Admission()
         argument = getattr(resolver, "argument", "matter_id")
         if mode == MODE_OBSERVE:
             _record(gate, tool, None, CODE_NO_MATTER)
@@ -257,6 +292,7 @@ __all__ = [
     "augment",
     "call_arguments",
     "doc_sentence",
+    "enforcing",
     "matter_arg",
     "release",
 ]

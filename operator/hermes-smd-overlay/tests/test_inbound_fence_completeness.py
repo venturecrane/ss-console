@@ -374,6 +374,7 @@ SMOKEBALL_FIRM_RECORD_READS: frozenset[str] = frozenset(
         "mcp_smokeball_get_expenses",
         "mcp_smokeball_resolve_invoice_matter",
         "mcp_smokeball_resolve_matter_by_id",
+        "mcp_smokeball_conflict_check",
         # Seat-owned webhook configuration.
         "mcp_smokeball_get_webhook_subscriptions",
     }

@@ -27,6 +27,7 @@ Thin wrapper over the MCP SDK's MCPServer (mcp 2.x; FastMCP before 2.0). Two job
 
 from __future__ import annotations
 
+import copy
 import functools
 import inspect
 import json
@@ -126,21 +127,45 @@ def _as_tool_error(exc: Exception, connector: str, tool_name: str) -> ToolError:
 
 
 class _GatedMCPServer(MCPServer):
-    """MCPServer whose tool listing marks ``matter_resolution`` REQUIRED on every
-    gated tool. The signature gives the parameter a default so that observe mode
-    can see a call that left it out (``resolution.py``); the schema the model
-    reads must still say required, because that is the contract it follows."""
+    """MCPServer whose tool listing follows the gate's mode, read when the listing
+    is asked for, so the two can never disagree.
 
-    def __init__(self, name: str, gated: Mapping[str, Any]) -> None:
+    Enforcing (or a mode that cannot be read, or no gate installed): every gated
+    tool lists ``matter_resolution`` as REQUIRED and carries the sentence saying
+    where to get one, because that is the contract the gate then holds it to.
+
+    Observing: the parameter stays visible but optional and the sentence is
+    dropped. A gated registration reaches a seat before the skills that pass a
+    resolution, and the model reads the listing as instructions, so telling it
+    "without it nothing is written" would change what it does on a seat where
+    nothing is meant to change until the mode is switched (``resolution.py``)."""
+
+    def __init__(
+        self, name: str, gated: Mapping[str, Any], enforcing: Callable[[], bool], sentence: Callable[[], str]
+    ) -> None:
         super().__init__(name)
         self._gated = gated  # the ConnectorServer's own dict: tools register after construction
+        self._enforcing = enforcing
+        self._sentence = sentence
 
     async def list_tools(self):  # type: ignore[override]
-        tools = await super().list_tools()
-        for t in tools:
-            if t.name in self._gated:
-                _mark_required(t.input_schema)
-        return tools
+        return self._advertised(await super().list_tools(), enforcing=self._enforcing())
+
+    async def enforced_listing(self):
+        """What a seat in enforce mode is shown, whatever this process's mode is."""
+        return self._advertised(await super().list_tools(), enforcing=True)
+
+    def _advertised(self, tools: list[Tool], *, enforcing: bool) -> list[Tool]:
+        return [self._as_listed(t, enforcing=enforcing) if t.name in self._gated else t for t in tools]
+
+    def _as_listed(self, tool: Tool, *, enforcing: bool) -> Tool:
+        # A copy: the registered tool must not remember one mode's listing into the next.
+        if enforcing:
+            schema = copy.deepcopy(tool.input_schema)
+            _mark_required(schema)
+            return tool.model_copy(update={"input_schema": schema})
+        description = (tool.description or "").replace(self._sentence(), "").rstrip()
+        return tool.model_copy(update={"description": description})
 
 
 def _mark_required(schema: Any) -> None:
@@ -160,14 +185,17 @@ class ConnectorServer:
         resolution; a gated tool's description tells the model to call one."""
         self.name = name
         self._gated: dict[str, Callable[[dict[str, Any]], str | None]] = {}
-        self._mcp = _GatedMCPServer(name, self._gated)
         self._resolvers = tuple(resolvers)
         self._gate: ResolutionGate | None = None
+        self._mcp = _GatedMCPServer(name, self._gated, self._listing_enforces, self._sentence)
 
     def install_resolution_gate(self, gate: ResolutionGate) -> None:
         """Install the connector's gate. Read at CALL time, so a connector may
         install it after its tools register."""
         self._gate = gate
+
+    def _listing_enforces(self) -> bool:
+        return resolution.enforcing(self._gate)
 
     def gated_tools(self) -> dict[str, Callable[[dict[str, Any]], str | None]]:
         """Each gated tool's name and the resolver that reads its target matter."""
@@ -287,6 +315,12 @@ class ConnectorServer:
         Synchronous convenience over MCPServer's async ``list_tools`` — call from
         sync code (tests, conformance), not from inside a running event loop."""
         return anyio.run(self._mcp.list_tools)
+
+    def enforced_surface(self) -> list[Tool]:
+        """The surface as a seat in enforce mode lists it, whatever the mode here.
+        Conformance holds this contract: ``tool_surface`` follows the live mode, and
+        off a seat that mode is observe."""
+        return anyio.run(self._mcp.enforced_listing)
 
     def run_stdio(self) -> None:
         """Serve over stdio — the transport Hermes launches the connector with."""

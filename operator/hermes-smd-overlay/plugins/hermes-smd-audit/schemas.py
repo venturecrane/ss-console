@@ -192,6 +192,8 @@ ACCEPTED_ACTION_TYPES: frozenset[str] = frozenset(
         "CONFIRM_SEND_FAILED",
         #   shared/spec_gate.py (authored-format gate, overlay #207)
         "SPEC_GATE_TRIGGERED",
+        #   plugins/hermes-smd-trust/conflict_fence.py (the fence while observing)
+        "CONFLICT_FENCE_WOULD_REFUSE",
         #   plugins/hermes-smd-trust/voice_gate.py (report-only voice gate)
         "VOICE_GATE_TRIGGERED",
         #   webhook_gate.py (suppression audit)

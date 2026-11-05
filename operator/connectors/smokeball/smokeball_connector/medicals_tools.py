@@ -66,6 +66,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
 
+from operator_connector_sdk import matter_arg
+
 from . import logic_gate, logic_in_code, outcome_ledger
 from .cited_facts import AMOUNT_LABELS, PRINTED, UNREADABLE, confirm_in_pages, confirm_in_text
 from .printed_dates import date_from_printed
@@ -625,7 +627,7 @@ def _link_and_fill(
 def register(server: Any) -> None:
     """Register the Medicals write onto the connector's server. Called once,
     from ``attachment_tools.register``."""
-    server.tool()(add_medicals_row)
+    server.tool(requires_resolution=matter_arg())(add_medicals_row)
 
 
 __all__ = [

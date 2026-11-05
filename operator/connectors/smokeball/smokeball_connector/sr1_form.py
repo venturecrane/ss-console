@@ -40,6 +40,8 @@ import io
 from datetime import date
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from . import cited_facts
 from . import form_letter_facts as facts
 from .form_letter_facts import Fact
@@ -356,7 +358,7 @@ def render_sr1(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
 
 def register(server: Any) -> None:
     """Register the SR1 tool. Called once, from ``attachment_tools.register``."""
-    server.tool()(render_sr1)
+    server.tool(requires_resolution=matter_arg())(render_sr1)
 
 
 __all__ = ["BOXES", "DEFAULT_TEMPLATE", "FILE_NAME", "fill_acroform", "fill_sr1", "gather", "register", "render_sr1"]

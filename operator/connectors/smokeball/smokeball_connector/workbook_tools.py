@@ -22,6 +22,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from .readback import file_and_prove
 from .xlsx_io import WorkbookRefused, build_workbook, normalize_sheets, verify_workbook
 
@@ -106,7 +108,7 @@ def add_workbook(
 
 def register(server: Any) -> None:
     """Register ``add_workbook``. Called once, from ``attachment_tools.register``."""
-    server.tool()(add_workbook)
+    server.tool(requires_resolution=matter_arg())(add_workbook)
 
 
 __all__ = ["add_workbook", "register"]

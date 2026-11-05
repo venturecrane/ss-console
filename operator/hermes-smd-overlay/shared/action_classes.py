@@ -665,6 +665,12 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # the live matter at that id carries the number the model read with it. A
     # firm-record read; nothing is written.
     "mcp_smokeball_resolve_matter_by_id": ActionClass.READ,
+    # 2026-11-04: the conflict check over an inbound message (conflict_check.py).
+    # A firm-record read under a fixed rule table: hit / clear / search_failed.
+    # On a hit the connector itself writes the one clearance task (code-composed
+    # subject and note, stamped and recorded); the model never authors it. The
+    # trust gate (hermes-smd-trust conflict_fence) enforces the recorded verdict.
+    "mcp_smokeball_conflict_check": ActionClass.READ,
     # Combined post intake (ss-console, 2026-09-22): a firm scans the day's post
     # as ONE PDF holding several letters for different matters. This reads it
     # PAGE BY PAGE, transcribing when a page is paper, and returns page-marked

@@ -43,13 +43,13 @@ def check_tool_schemas(server: ConnectorServer) -> list[str]:
 
 
 def check_resolution_schemas(server: ConnectorServer) -> set[str]:
-    """Every tool registered with ``requires_resolution`` is live and its
-    advertised inputSchema lists ``matter_resolution`` as a REQUIRED string, so
+    """Every tool registered with ``requires_resolution`` is live and the
+    inputSchema it advertises on an enforcing seat lists ``matter_resolution`` as a REQUIRED string, so
     the model reads the rule in the contract it follows. A gated tool whose
     schema lets the argument look optional is a gate the model is told it may
     skip. Returns the gated tool names."""
     gated = set(server.gated_tools())
-    surface = {t.name: t.input_schema for t in server.tool_surface()}
+    surface = {t.name: t.input_schema for t in server.enforced_surface()}
     for name in sorted(gated):
         schema = surface.get(name)
         if schema is None:

@@ -51,7 +51,7 @@ from shared.spec_status import SPEC_STATUS
 from shared.tool_registration import register_wrapped_tool
 from shared.workspace_broker import GRANT_ARG, authorize
 
-from . import approval, enforce, outbound, outbound_send, spec_read
+from . import approval, conflict_fence, enforce, outbound, outbound_send, spec_read
 
 logger = logging.getLogger(__name__)
 
@@ -389,6 +389,17 @@ def on_pre_tool_call(**kwargs: Any) -> dict | None:
         if fence_block is not None:
             return fence_block
 
+        # The conflict fence (2026-11-04, conflict_fence.py). An email turn from a
+        # sender off the roster writes and sends nothing until conflict_check has
+        # returned clear for that sender this turn, and nothing at all after a
+        # hit. Ahead of the ceiling: a held message is not an entitlement question.
+        # logic_in_code.conflict_fence decides whether it refuses or only records.
+        conflict_block = conflict_fence.check(
+            tool_name, session_id, args, kwargs.get("tool_call_id") or ""
+        )
+        if conflict_block is not None:
+            return conflict_block
+
         # Authored-spec read observation (ss ADR 0083 #2084). Runs BEFORE the
         # ceiling check because it is pure observation on a READ-class tool that
         # enforcement always allows, and because the ordering makes it obvious
@@ -654,6 +665,8 @@ def on_post_tool_call(**kwargs: Any) -> None:
         CASEWORK_ACTS.on_post_tool(tool_name, resolved, kwargs)
         # A prep routine's memo: the trace a recorded date-prep step claims.
         STEP_WITNESS.on_post_tool(tool_name, resolved, kwargs)
+        # The connector's own conflict_check verdict, for the fence (conflict_fence.py).
+        conflict_fence.record(tool_name, resolved, kwargs.get("args"), kwargs.get("result"))
 
         try:
             classification = enforce.classify_tool(tool_name)

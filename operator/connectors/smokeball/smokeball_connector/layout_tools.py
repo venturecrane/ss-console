@@ -26,6 +26,8 @@ from decimal import Decimal
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
+from operator_connector_sdk import matter_arg
+
 from . import logic_gate, logic_in_code, outcome_ledger
 from .cited_facts import OFFER_LABELS, PRINTED, UNREADABLE, confirm_in_pages, confirm_in_text
 from .layout_config import load_layout_config
@@ -613,7 +615,7 @@ def register(server: Any) -> None:
     """Register the layout read and the Negotiation Details write. Called once,
     from ``attachment_tools.register``."""
     server.tool()(get_matter_layouts)
-    server.tool()(add_negotiation_rows)
+    server.tool(requires_resolution=matter_arg())(add_negotiation_rows)
 
 
 __all__ = [

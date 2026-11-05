@@ -984,6 +984,34 @@ def test_memos_come_back_to_the_turn_once_sent(tmp_path, rows):
     assert "create_memo" in out["note"]
 
 
+def test_a_memo_carries_its_matter_number_and_the_note_resolves_before_filing(tmp_path, rows):
+    memos = [
+        {
+            "matter_id": "m-104",
+            "matter_number": "2026-PI-104",
+            "text": "Closed the July intake task.",
+        }
+    ]
+    envelope = _review_envelope(memos=memos)
+    envelope["messages"][0]["closes"] = []
+    _write_envelope(tmp_path, "casework", envelope, "task-list-keeper")
+    out = _finish(tmp_path, [], [])
+    assert out["status"] == "sent" and out["memos"] == memos
+    assert "resolve_matter_by_id" in out["note"] and "matter_resolution" in out["note"]
+
+
+def test_a_memo_from_the_older_skill_keeps_the_note_it_has_always_had(tmp_path, rows):
+    """The image reaches a seat before the skill that adds the number."""
+    memos = [{"matter_id": "m-104", "text": "Closed the July intake task."}]
+    envelope = _review_envelope(memos=memos)
+    envelope["messages"][0]["closes"] = []
+    _write_envelope(tmp_path, "casework", envelope, "task-list-keeper")
+    out = _finish(tmp_path, [], [])
+    assert out["status"] == "sent" and out["memos"] == memos
+    assert "file each memo in memos with create_memo, verbatim" in out["note"]
+    assert "resolve_matter_by_id" not in out["note"]
+
+
 def test_a_malformed_memo_refuses_the_envelope(tmp_path, rows):
     envelope = _review_envelope(memos=[{"matter_id": "m-104", "text": "x", "extra": 1}])
     _write_envelope(tmp_path, "casework", envelope, "task-list-keeper")

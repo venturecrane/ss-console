@@ -348,10 +348,13 @@ def _valid_memos(value: object) -> bool:
         return True
     if not isinstance(value, list) or len(value) > _MAX_MEMOS:
         return False
+    # ``matter_number`` (2026-11-04): the number the snapshot read beside the id,
+    # so the turn resolves the memo's matter before create_memo.
     return all(
         isinstance(memo, dict)
-        and set(memo) == {"matter_id", "text"}
+        and set(memo) in ({"matter_id", "text"}, {"matter_id", "matter_number", "text"})
         and _id(memo.get("matter_id"))
+        and isinstance(memo.get("matter_number", ""), str)
         and _text(memo.get("text"), _MAX_LEAD)
         for memo in value
     )
