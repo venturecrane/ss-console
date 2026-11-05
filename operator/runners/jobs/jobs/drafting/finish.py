@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
+from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck, quote_end
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, settle as settle_mod, wording
@@ -311,6 +311,8 @@ class Finish:
             return (u.data / FINAL).read_text(encoding="utf-8")
         doc, notes = render.split_notes(md)
         doc, log = nestquote.repair(doc)
+        doc, trimmed = quote_end.trim(doc)
+        log += trimmed
         if self.cls == "discovery_set":
             doc, caps = sets.enforce_caps(doc)
             doc, fronted = self._front(u, doc)

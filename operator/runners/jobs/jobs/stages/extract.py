@@ -1,6 +1,7 @@
 """`extract`: local text extraction over the pulled `raw/` set. $0.
 
-Per file: pypdf text with `[p.N]` page markers, docx via python-docx. A PDF
+Per file: pypdf text with `[p.N]` page markers (pleading paper's margin line
+numbers removed: ``pleading_margin``), docx via python-docx. A PDF
 whose text layer is absent, is glyph indices, or is a constant-offset cipher
 goes to the scan queue for the vision pass, and so does a text-layer PDF
 holding image pages its text layer does not carry (``vision_pages``: those
@@ -25,6 +26,7 @@ from typing import Any
 
 from ..medchron.update import medlegal as ML
 from .base import StageRun, read_jsonl
+from .pleading_margin import strip_page
 
 GLYPH_RUN = re.compile(r"(?:/\d+ ?){4,}")
 GLYPH_THRESHOLD = 0.08  # junk files score 0.21-0.31; the highest clean file 0.031
@@ -49,7 +51,7 @@ def pdf_text(path: Path) -> list[tuple[int, str]]:
             t = pg.extract_text() or ""
         except Exception:  # noqa: BLE001 - one unreadable page is an empty page
             t = ""
-        pages.append((i, t))
+        pages.append((i, strip_page(t)))  # pleading paper's margin numbers are not its words
     return pages
 
 

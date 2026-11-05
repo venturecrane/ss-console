@@ -39,6 +39,7 @@ from .. import unopened
 from ..deadline import is_transient
 from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
+from ..stages.pleading_margin import strip_page
 
 PAGE_MARK = "===== page {n} ====="
 SCAN_FLOOR = 25  # characters: a page with less carries no text layer
@@ -178,6 +179,8 @@ def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
     for i, t in enumerate(texts):
         if len(t.strip()) < SCAN_FLOOR and i not in picks:
             texts[i] = DEFERRED.format(n=i + 1)
+        else:
+            texts[i] = strip_page(t)  # pleading paper's margin numbers are not its words
     return _pages(texts), scanned
 
 
