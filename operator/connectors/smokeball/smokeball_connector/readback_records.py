@@ -90,7 +90,9 @@ def event_diffs(want: dict[str, Any], got: Any) -> tuple[list[str], list[str]]:
     if missing:
         diffs.append(f"attendees missing {sorted(missing)}")
     if "additionalData" in want and (got.get("additionalData") or {}) != want["additionalData"]:
-        diffs.append(f"additionalData keys read {sorted(got.get('additionalData') or {})}, sent {sorted(want['additionalData'])}")
+        diffs.append(
+            f"additionalData keys read {sorted(got.get('additionalData') or {})}, sent {sorted(want['additionalData'])}"
+        )
     return diffs, unchecked
 
 
