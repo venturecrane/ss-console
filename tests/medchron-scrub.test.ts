@@ -257,7 +257,11 @@ describe('scrub gate: no client, provider, or matter token anywhere in this publ
       findings,
       'a denylisted token appears in this PUBLIC repo (the plaintext list is in the private engagements repo; the offset is reported instead of the token)'
     ).toEqual([])
-  }, 60_000)
+    // The limit is how long the scan may run, not what it checks. A 2-CPU ops
+    // workspace takes about 460 s (measured 458 and 485 on 2026-11-05) and a
+    // loaded laptop has passed 60 s too, so 60 s refused clean pushes and
+    // invited bypassing the hook. A finding still fails as an assertion above.
+  }, 900_000)
 
   it('the legacy ledger only shrinks', () => {
     // Every entry must still be dirty. When one is cleaned it leaves the set,
