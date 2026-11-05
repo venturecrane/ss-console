@@ -1238,6 +1238,21 @@ def test_a_defined_term_inside_a_different_phrase_is_not_capitalized():
     assert sets.lowercase_uses(out) == []
 
 
+def test_a_defined_term_after_a_modifier_or_an_indefinite_is_left_as_written():
+    # 2026-11-05: the caps pass wrote "pavement CONDITION rating", "a dangerous
+    # CONDITION of public property" and "an INCIDENT" (another incident, not his).
+    doc = (
+        '# DEFINITIONS\n\n1. "CONDITION" means the dip in the bike lane.\n\n2. "INCIDENT" means the fall.\n\n'
+        "# SPECIAL INTERROGATORIES\n\nSPECIAL INTERROGATORY NO. 1\n\n"
+        "State the pavement condition rating, whether the condition was a dangerous condition of public "
+        "property, and whether an incident like the incident occurred before.\n\nDated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "pavement condition rating" in out and "a dangerous condition of public property" in out
+    assert "whether the CONDITION was" in out and "an incident like the INCIDENT" in out
+    assert len(lines) == 2 and sets.lowercase_uses(out) == []
+
+
 def test_a_definition_alias_says_also_spelled():
     out, notes = sets.alias_wording(
         '9. "YOUNG" means Charley Young, whose name also appears in the record as Charlie Young.'

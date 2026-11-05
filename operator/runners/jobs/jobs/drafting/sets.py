@@ -149,7 +149,21 @@ def _term_pattern(term: str) -> re.Pattern[str]:
 COMPOUND_HEADS = frozenset(
     "report reports date dates scene number numbers history log logs file files form forms photo photos "
     "photograph photographs video videos investigation investigations review reviews notice notices "
-    "summary summaries statement statements record records".split()
+    "summary summaries statement statements record records rating ratings index".split()
+)
+
+#: Words that may stand before a defined term when it means the defined thing:
+#: determiners, quantifiers, prepositions and conjunctions. Any OTHER lower-case
+#: word before it is a modifier making a different phrase ("pavement condition",
+#: "dangerous condition of public property"), and "a/an/another/other" point at
+#: something other than the defined one ("an incident" before or after his).
+#: 2026-11-05: the caps pass wrote "pavement CONDITION rating", "a dangerous
+#: CONDITION of the SUBJECT BIKE LANE" and "an INCIDENT", the last changing what
+#: a request asked for.
+_DETERMINERS = frozenset(
+    "the this that these those such said its their his her your our my all any each every no same subject "
+    "of in on at to for from with by about regarding concerning during after before since until "
+    "and or nor but which what whose".split()
 )
 
 
@@ -157,6 +171,20 @@ def _in_compound(seg: str, end: int) -> bool:
     """The match ending at ``end`` is followed by a compound head noun."""
     m = re.match(r"[ \t]+([A-Za-z]+)", seg[end:])
     return bool(m and m.group(1) == m.group(1).lower() and m.group(1) in COMPOUND_HEADS)
+
+
+def _modified(seg: str, start: int) -> bool:
+    """The match starting at ``start`` follows a lower-case word that is not a
+    determiner, preposition or conjunction: a modifier ("pavement", "dangerous")
+    or an indefinite pointer ("a", "an", "another", "other"), so the words name
+    something other than the defined term."""
+    m = re.search(r"([A-Za-z]+)[ \t]+$", seg[:start])
+    return bool(m and m.group(1) == m.group(1).lower() and m.group(1) not in _DETERMINERS)
+
+
+def _general(seg: str, m: re.Match[str]) -> bool:
+    """A lower-case match that is part of a general phrase, not the defined term."""
+    return _in_compound(seg, m.end()) or _modified(seg, m.start())
 
 
 def enforce_caps(doc: str) -> tuple[str, list[str]]:
@@ -175,7 +203,7 @@ def enforce_caps(doc: str) -> tuple[str, list[str]]:
             pat = _term_pattern(t)
 
             def up(m: re.Match[str], t: str = t, seg: str = seg) -> str:
-                if m.group(0) == m.group(0).upper() or _in_compound(seg, m.end()):
+                if m.group(0) == m.group(0).upper() or _general(seg, m):
                     return m.group(0)
                 counts[t] = counts.get(t, 0) + 1
                 return m.group(0).upper()
@@ -202,7 +230,7 @@ def lowercase_uses(doc: str) -> list[str]:
     def scan(seg: str) -> str:
         for t in defined_terms(doc):
             for m in _term_pattern(t).finditer(seg):
-                if m.group(0) != m.group(0).upper() and not _in_compound(seg, m.end()) and t not in found:
+                if m.group(0) != m.group(0).upper() and not _general(seg, m) and t not in found:
                     found.append(t)
         return seg
 
