@@ -18,6 +18,10 @@ from smokeball_connector.server import server
 
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / "manifest.toml"
 
+#: On the menu only when the seat's conflict_fence is enforce (conflict_check.py).
+#: The test env authors no switch, so EXPECTED_TOOLS below is the observe menu.
+EXPECTED_ON_AN_ENFORCING_SEAT = {"conflict_check"}
+
 EXPECTED_TOOLS = {
     "auth_status",
     "list_matters",
@@ -113,6 +117,7 @@ def test_manifest_loads_and_is_client_credentials() -> None:
 
 def test_full_surface_matches() -> None:
     assert {t.name for t in server.tool_surface()} == EXPECTED_TOOLS
+    assert {t.name for t in server.enforced_surface()} == EXPECTED_TOOLS | EXPECTED_ON_AN_ENFORCING_SEAT
 
 
 def test_the_in_turn_records_tools_are_not_on_the_mcp_surface() -> None:
@@ -161,13 +166,78 @@ def test_conformance_every_tool_classified() -> None:
 #: quietly lost its gate, fails here. ``stage_vendor_invoice`` and
 #: ``file_attachment_pages_to_matter`` check their resolution in their own
 #: bodies and are not declared (the SDK refuses a tool that does both).
-EXPECTED_RESOLUTION_GATED: set[str] = set()
+EXPECTED_RESOLUTION_GATED: set[str] = {
+    # server.py
+    "create_task",
+    "create_event",
+    "create_folder",
+    "add_file",
+    "file_attachment_to_matter",
+    "render_docx_template",
+    "render_docx_draft",
+    "create_memo",
+    # the tool modules, each at its own register() line
+    "add_workbook",
+    "add_negotiation_rows",
+    "add_medicals_row",
+    "add_medicals_provider",
+    "render_firm_form_letter",
+    "render_sr1",
+    "render_sr19",
+    "render_funding_case_eval",
+    "prepare_records_order",
+}
+
+#: The gated tools whose matter argument is itself optional: a firm-general
+#: task or event names no matter, so it opens without a resolution. Every other
+#: gated tool is strict.
+EXPECTED_OPTIONAL_MATTER: set[str] = {"create_task", "create_event"}
+
+#: The matter writes whose matter comes from an object the call already names
+#: (a task, an event, a memo, a file, a placed order), so the model picks no
+#: matter and nothing is gated. A tool moving off this list is a decision.
+EXPECTED_UNGATED_BY_OBJECT: set[str] = {
+    "update_task",
+    "update_event",
+    "update_memo",
+    "delete_file",
+    "place_records_order",
+}
 
 
 def test_the_resolution_gated_set_is_the_declared_one_and_each_schema_requires_it() -> None:
     assert set(server.gated_tools()) == EXPECTED_RESOLUTION_GATED
     assert conformance.check_resolution_schemas(server) == EXPECTED_RESOLUTION_GATED
     assert _manifest().tool_classes["resolve_matter_by_id"] == "read"
+
+
+def test_only_the_firm_general_writes_take_an_optional_matter() -> None:
+    gated = server.gated_tools()
+    optional = {name for name, resolver in gated.items() if getattr(resolver, "optional", False)}
+    assert optional == EXPECTED_OPTIONAL_MATTER
+    assert all(getattr(resolver, "argument", None) == "matter_id" for resolver in gated.values())
+
+
+#: These two check their resolution in their own bodies (see above).
+EXPECTED_CHECKS_ITS_OWN_RESOLUTION: set[str] = {"stage_vendor_invoice", "file_attachment_pages_to_matter"}
+
+
+def test_every_write_that_takes_a_matter_is_gated_or_named_as_why_not() -> None:
+    """Re-derives the set from the surface, so the next write that takes a model-chosen
+    matter fails here until it is gated or someone writes down why not."""
+    classes = _manifest().tool_classes
+    takes_a_matter = {
+        t.name
+        for t in server.enforced_surface()
+        if classes[t.name] != "read" and "matter_id" in (t.input_schema.get("properties") or {})
+    }
+    accounted = EXPECTED_RESOLUTION_GATED | EXPECTED_UNGATED_BY_OBJECT | EXPECTED_CHECKS_ITS_OWN_RESOLUTION
+    assert takes_a_matter - accounted == set()
+
+
+def test_writes_whose_matter_is_their_object_stay_ungated() -> None:
+    assert EXPECTED_UNGATED_BY_OBJECT.isdisjoint(server.gated_tools())
+    assert EXPECTED_UNGATED_BY_OBJECT <= EXPECTED_TOOLS
 
 
 def test_write_surface_is_memo_document_and_deadline_engine() -> None:

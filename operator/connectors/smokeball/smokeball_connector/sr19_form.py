@@ -29,6 +29,8 @@ import dataclasses
 import hashlib
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from . import cited_facts
 from . import form_letter_facts as facts
 from . import readback
@@ -200,7 +202,7 @@ def render_sr19(matter_id: str, cited: dict[str, Any] | None = None) -> Any:
 
 def register(server: Any) -> None:
     """Register the SR19 tool. Called once, from ``attachment_tools.register``."""
-    server.tool()(render_sr19)
+    server.tool(requires_resolution=matter_arg())(render_sr19)
 
 
 __all__ = ["BOXES", "CHECKS", "DEFAULT_TEMPLATE", "FILE_NAME", "gather", "load_firm", "register", "render_sr19"]

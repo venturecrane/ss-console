@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from .layout_shape import layout_values
 from .matter_resolution import contacts_by_name
 from .medicals_layout import (
@@ -206,7 +208,7 @@ def _link_and_describe(
 
 def register(server: Any) -> None:
     """Register the provider write. Called once, from ``attachment_tools.register``."""
-    server.tool()(add_medicals_provider)
+    server.tool(requires_resolution=matter_arg())(add_medicals_provider)
 
 
 __all__ = ["add_medicals_provider", "register"]

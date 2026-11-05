@@ -16,6 +16,8 @@ import os
 from datetime import date, datetime
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .records_vendor import (
     NOT_CONNECTED,
@@ -186,7 +188,7 @@ def records_orders_for_matter(matter_id: str) -> Any:
 
 def register(server: Any) -> None:
     """Register the three tools. Called once, from ``attachment_tools.register``."""
-    server.tool()(prepare_records_order)
+    server.tool(requires_resolution=matter_arg())(prepare_records_order)
     server.tool()(place_records_order)
     server.tool()(records_orders_for_matter)
 

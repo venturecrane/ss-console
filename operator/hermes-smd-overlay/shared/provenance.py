@@ -233,6 +233,9 @@ TENANT_SOURCE_READ_TOOLS: frozenset[str] = frozenset(
         # The same verdict for a matter already held by id: the live matter's
         # own id and number, read back; a mismatch returns neither.
         "mcp_smokeball_resolve_matter_by_id",
+        # The conflict check: the matter numbers of the open matters a sender or
+        # party is adverse on, read from the tenant's own records.
+        "mcp_smokeball_conflict_check",
         "mcp_smokeball_get_webhook_subscriptions",
         "mcp_smokeball_get_event_types",
         "mcp_smokeball_list_events",

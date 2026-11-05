@@ -362,6 +362,11 @@
       "overlayProducer": "shared/spec_gate.py (authored-format gate, overlay#207)",
       "reason": "emitted when output fails the client-authored format spec."
     },
+    "CONFLICT_FENCE_WOULD_REFUSE": {
+      "side": "overlay",
+      "overlayProducer": "plugins/hermes-smd-trust/conflict_fence.py",
+      "reason": "one row per call the conflict fence would have refused while logic_in_code.conflict_fence is observe; nothing was refused. The lead reads these for a daily cycle before enforce."
+    },
     "VOICE_GATE_TRIGGERED": {
       "side": "overlay",
       "overlayProducer": "plugins/hermes-smd-trust/voice_gate.py",

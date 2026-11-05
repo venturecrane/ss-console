@@ -30,7 +30,7 @@ import hashlib
 import re
 from typing import Any
 
-from operator_connector_sdk.server import ConnectorServer
+from operator_connector_sdk import ConnectorServer, matter_arg
 
 from .client import SmokeballClient, build_client_from_env
 from .event_update import create_event_proven, put_event_update
@@ -785,7 +785,7 @@ def get_task(task_id: str) -> Any:
     return enrich_task(task)
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg("matter_id", optional=True))
 def create_task(
     staff_id: str,
     subject: str,
@@ -903,7 +903,7 @@ def list_events(
     return enrich_events(resp)
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg("matter_id", optional=True))
 def create_event(
     subject: str,
     start_time: str,
@@ -1202,7 +1202,7 @@ def list_folders(matter_id: str, limit: int = 500, offset: int = 0) -> Any:
     return _get_client().get(f"/matters/{matter_id}/documents/folders", Limit=limit, Offset=offset)
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def create_folder(matter_id: str, name: str, parent_folder_id: str | None = None) -> Any:
     """Create a document folder on a matter — e.g. a ``Discovery/[set]`` folder the
     Operator stages served requests + supporting docs into for BriefPoint/CoCounsel
@@ -1251,7 +1251,7 @@ def create_matter(description: str, matter_type_id: str, client_contact_id: str,
     return create_operator_matter(_get_client(), _body, description, matter_type_id, client_contact_id, number)
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def add_file(
     matter_id: str,
     file_name: str,
@@ -1316,7 +1316,7 @@ def delete_file(matter_id: str, file_id: str) -> Any:
     return prove_file_deleted(client, matter_id, file_id, client.delete_file(matter_id, file_id))
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str, folder_id: str | None = None) -> Any:
     """File an email attachment to a matter — the mechanical cross-connector
     transfer the served-discovery and vendor-invoice email paths need (#1744):
@@ -1381,7 +1381,7 @@ def _render_with_format(markdown: str, document_class: str | None) -> tuple[byte
     return data, report.to_dict(), None
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def render_docx_template(
     matter_id: str,
     file_name: str,
@@ -1613,7 +1613,7 @@ def _collect_matter_sources(
     return sources, vision_sources, unextractable
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def render_docx_draft(
     matter_id: str,
     file_name: str,
@@ -1795,7 +1795,7 @@ def get_memos_on_matter(matter_id: str, limit: int = 500, offset: int = 0) -> An
     return resp
 
 
-@server.tool()
+@server.tool(requires_resolution=matter_arg())
 def create_memo(matter_id: str, text: str) -> Any:
     """Write a file note on a matter; classified INTERNAL_WRITE. The result
     carries ``confirmed``: true when read back by id and matching, false on a

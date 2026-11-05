@@ -408,7 +408,7 @@ def test_the_summary_write_is_not_a_tool() -> None:
     registered: list[str] = []
 
     class _Server:
-        def tool(self) -> Any:
+        def tool(self, **_: Any) -> Any:
             def deco(fn: Any) -> Any:
                 registered.append(fn.__name__)
                 return fn

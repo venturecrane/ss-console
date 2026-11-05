@@ -38,6 +38,8 @@ import hashlib
 import io
 from typing import Any
 
+from operator_connector_sdk import matter_arg
+
 from . import form_letter_facts as facts
 from . import readback
 from .form_letters import _file_proved
@@ -363,7 +365,7 @@ def render_funding_case_eval(matter_id: str) -> Any:
 
 def register(server: Any) -> None:
     """Register the funding form tool. Called once, from ``attachment_tools.register``."""
-    server.tool()(render_funding_case_eval)
+    server.tool(requires_resolution=matter_arg())(render_funding_case_eval)
 
 
 __all__ = [

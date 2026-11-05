@@ -28,7 +28,7 @@ from .server import ConnectorServer
 def check_tool_schemas(server: ConnectorServer) -> list[str]:
     """Every exposed tool has a well-formed object inputSchema (present where
     Hermes reads it). Returns the tool names."""
-    tools = server.tool_surface()
+    tools = server.enforced_surface()  # every tool, whichever a switch is holding back
     if not tools:
         raise AssertionError(f"{server.name}: exposes no tools")
     for t in tools:
@@ -43,13 +43,13 @@ def check_tool_schemas(server: ConnectorServer) -> list[str]:
 
 
 def check_resolution_schemas(server: ConnectorServer) -> set[str]:
-    """Every tool registered with ``requires_resolution`` is live and its
-    advertised inputSchema lists ``matter_resolution`` as a REQUIRED string, so
+    """Every tool registered with ``requires_resolution`` is live and the
+    inputSchema it advertises on an enforcing seat lists ``matter_resolution`` as a REQUIRED string, so
     the model reads the rule in the contract it follows. A gated tool whose
     schema lets the argument look optional is a gate the model is told it may
     skip. Returns the gated tool names."""
     gated = set(server.gated_tools())
-    surface = {t.name: t.input_schema for t in server.tool_surface()}
+    surface = {t.name: t.input_schema for t in server.enforced_surface()}
     for name in sorted(gated):
         schema = surface.get(name)
         if schema is None:
@@ -65,7 +65,7 @@ def check_resolution_schemas(server: ConnectorServer) -> set[str]:
 def check_no_banned_tools(server: ConnectorServer, banned: Iterable[str]) -> None:
     """The server must not expose any tool the connector declares as banned
     (defense in depth: never on the menu *and* refused at the trust layer)."""
-    names = {t.name for t in server.tool_surface()}
+    names = {t.name for t in server.enforced_surface()}
     leaked = names & set(banned)
     if leaked:
         raise AssertionError(f"{server.name}: exposes banned tools {sorted(leaked)}")
@@ -92,7 +92,7 @@ def check_tool_classes(
     fails here. Returns the runtime-prefixed name -> class map the overlay test
     will check against ``_RAW_TOOL_ACTION_CLASS_MAP``.
     """
-    live = {t.name for t in server.tool_surface()}
+    live = {t.name for t in server.enforced_surface()}
     declared = set(manifest.tool_classes)
     expected_unclassified = set(expected_unclassified)
 

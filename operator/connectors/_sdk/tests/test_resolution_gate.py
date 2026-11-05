@@ -141,8 +141,142 @@ def test_the_description_names_the_resolver_in_one_appended_sentence() -> None:
     assert "resolve_matter_by_id" in tool.description
 
 
+def test_in_observe_the_listing_asks_nothing_of_the_model() -> None:
+    """A gated registration reaches a seat before the skills that pass a resolution.
+    The parameter stays visible for those skills, but nothing tells a model on the
+    old skills that it must have one, or that nothing is written without it."""
+    srv = _server(FakeGate("observe"), [])
+    tool = next(t for t in srv.tool_surface() if t.name == "create_task")
+    assert PARAM not in tool.input_schema["required"]
+    assert tool.input_schema["properties"][PARAM]["type"] == "string"
+    assert tool.description == "Create one task on a matter."
+
+
+def test_the_listing_and_the_gate_read_the_mode_at_the_same_moment() -> None:
+    """One running server, the mode changing under it: what it advertises and what it
+    does move together, in both directions, with nothing remembered in between."""
+    fake = FakeGate("observe")
+    written: list[dict] = []
+    srv = _server(fake, written)
+
+    def required() -> bool:
+        return PARAM in _schema(srv, "create_task")["required"]
+
+    assert required() is False
+    assert _call(srv, "create_task", {"matter_id": "m", "subject": "s"}).is_error is False
+
+    fake.mode_value = "enforce"
+    assert required() is True
+    assert _call(srv, "create_task", {"matter_id": "m", "subject": "s"}).is_error is True
+
+    fake.mode_value = "observe"
+    assert required() is False
+    assert _call(srv, "create_task", {"matter_id": "m", "subject": "s"}).is_error is False
+    assert len(written) == 2
+
+
+@pytest.mark.parametrize("mode", ["", "bogus", None])
+def test_an_unreadable_mode_lists_the_contract_it_enforces(mode) -> None:
+    srv = _server(FakeGate(mode), [])
+    assert PARAM in _schema(srv, "create_task")["required"]
+
+
+def test_no_gate_installed_lists_the_contract_it_enforces() -> None:
+    srv = _server(None, [])
+    assert PARAM in _schema(srv, "create_task")["required"]
+
+
+def test_the_observe_description_is_the_tools_own_words_byte_for_byte() -> None:
+    srv = ConnectorServer("c", resolvers=("resolve_matter_by_id",))
+
+    @srv.tool(requires_resolution=matter_arg())
+    def create_task(matter_id: str) -> dict:
+        """Create one task.
+
+        Trailing whitespace is part of what the model read before this gate.
+        """
+        return {}
+
+    srv.install_resolution_gate(FakeGate("observe").gate())
+    tool = next(t for t in srv.tool_surface() if t.name == "create_task")
+    assert tool.description == create_task.__doc__
+
+
+def _switched_server(state: dict, *, predicate=None) -> tuple[ConnectorServer, list[str]]:
+    ran: list[str] = []
+    srv = ConnectorServer("c")
+
+    @srv.tool(listed_when=predicate or (lambda: state["on"]))
+    def held_read(subject: str) -> dict:
+        """A read that writes when it finds something."""
+        ran.append(subject)
+        return {"subject": subject}
+
+    @srv.tool()
+    def plain_read() -> dict:
+        """Always here."""
+        return {}
+
+    return srv, ran
+
+
+def _names(srv: ConnectorServer) -> set[str]:
+    return {t.name for t in srv.tool_surface()}
+
+
+def test_a_tool_held_by_a_switch_is_off_the_menu_and_refused_before_its_body() -> None:
+    srv, ran = _switched_server({"on": False})
+    assert _names(srv) == {"plain_read"}
+    result = _call(srv, "held_read", {"subject": "s"})
+    assert result.is_error is True
+    assert "ToolNotAvailable" in _text(result)
+    assert ran == []
+
+
+def test_a_tool_held_by_a_switch_is_listed_and_runs_when_it_is_on() -> None:
+    srv, ran = _switched_server({"on": True})
+    assert _names(srv) == {"held_read", "plain_read"}
+    assert _call(srv, "held_read", {"subject": "s"}).is_error is False
+    assert ran == ["s"]
+
+
+def test_the_menu_and_the_door_follow_the_switch_together_on_one_running_server() -> None:
+    state = {"on": False}
+    srv, ran = _switched_server(state)
+    assert _call(srv, "held_read", {"subject": "a"}).is_error is True
+    state["on"] = True
+    assert "held_read" in _names(srv)
+    assert _call(srv, "held_read", {"subject": "b"}).is_error is False
+    state["on"] = False
+    assert "held_read" not in _names(srv)
+    assert _call(srv, "held_read", {"subject": "c"}).is_error is True
+    assert ran == ["b"]
+
+
+def test_a_switch_that_cannot_be_read_reads_as_on() -> None:
+    def broken() -> bool:
+        raise OSError("unreadable")
+
+    srv, ran = _switched_server({}, predicate=broken)
+    assert "held_read" in _names(srv)
+    assert _call(srv, "held_read", {"subject": "s"}).is_error is False
+    assert ran == ["s"]
+
+
+def test_conformance_sees_a_tool_a_switch_is_holding_back() -> None:
+    srv, _ran = _switched_server({"on": False})
+    assert set(conformance.check_tool_schemas(srv)) == {"held_read", "plain_read"}
+    with pytest.raises(AssertionError, match="banned"):
+        conformance.check_no_banned_tools(srv, ["held_read"])
+
+
 def test_conformance_holds_every_gated_tool_to_a_required_param() -> None:
     srv = _server(FakeGate(), [])
+    assert conformance.check_resolution_schemas(srv) == {"create_task"}
+
+
+def test_conformance_holds_the_enforce_contract_on_a_server_observing() -> None:
+    srv = _server(FakeGate("observe"), [])
     assert conformance.check_resolution_schemas(srv) == {"create_task"}
 
 
@@ -329,3 +463,68 @@ def test_an_async_tool_is_gated_the_same_way() -> None:
     assert "no matter resolution" in _text(_call(srv, "render", {"target": M1}))
     assert _call(srv, "render", {"target": M1, PARAM: fake.mint(M1)}).is_error is False
     assert seen == [M1]
+
+
+# ---- An optional matter argument (a firm-general task) ----------------------
+
+
+def _optional_server(fake: FakeGate, written: list[dict]) -> ConnectorServer:
+    srv = ConnectorServer("c", resolvers=("resolve_matter_by_id",))
+
+    @srv.tool(requires_resolution=matter_arg("matter_id", optional=True))
+    def create_task(subject: str, matter_id: str | None = None) -> dict:
+        """Create one task, on a matter or firm-general."""
+        written.append({"matter_id": matter_id, "subject": subject})
+        return {"status": "created"}
+
+    srv.install_resolution_gate(fake.gate())
+    return srv
+
+
+@pytest.mark.parametrize("mode", ["enforce", "observe"])
+def test_an_optional_matter_left_out_opens_with_no_claim_and_no_row(mode) -> None:
+    fake, written = FakeGate(mode), []
+    result = _call(_optional_server(fake, written), "create_task", {"subject": "firm-general"})
+    assert result.is_error is False
+    assert written == [{"matter_id": None, "subject": "firm-general"}]
+    assert fake.observed == []
+
+
+def test_an_optional_resolver_with_a_present_matter_still_claims_the_token() -> None:
+    fake, written = FakeGate("enforce"), []
+    srv = _optional_server(fake, written)
+    refused = _call(srv, "create_task", {"subject": "s", "matter_id": M1})
+    assert refused.is_error is True and written == []
+    elsewhere = _call(srv, "create_task", {"subject": "s", "matter_id": M2, PARAM: fake.mint(M1)})
+    assert elsewhere.is_error is True and "different matter" in _text(elsewhere) and written == []
+    token = fake.mint(M1)
+    ok = _call(srv, "create_task", {"subject": "s", "matter_id": M1, PARAM: token})
+    assert ok.is_error is False and written == [{"matter_id": M1, "subject": "s"}]
+    assert token not in fake.live
+
+
+def test_an_optional_resolver_that_raises_is_not_an_open_door() -> None:
+    class Faulty:
+        argument = "matter_id"
+        optional = True
+
+        def __call__(self, arguments: dict) -> str | None:
+            raise RuntimeError("resolver fault")
+
+    fake, written = FakeGate("enforce"), []
+    srv = ConnectorServer("c", resolvers=("resolve_matter_by_id",))
+
+    @srv.tool(requires_resolution=Faulty())
+    def create_task(subject: str, matter_id: str | None = None) -> dict:
+        """Create one task."""
+        written.append({"subject": subject})
+        return {"status": "created"}
+
+    srv.install_resolution_gate(fake.gate())
+    assert _call(srv, "create_task", {"subject": "s"}).is_error is True and written == []
+
+
+def test_matter_arg_reports_whether_it_is_optional() -> None:
+    assert repr(matter_arg()) == "matter_arg('matter_id')"
+    assert repr(matter_arg("matter_id", optional=True)) == "matter_arg('matter_id', optional=True)"
+    assert matter_arg().optional is False

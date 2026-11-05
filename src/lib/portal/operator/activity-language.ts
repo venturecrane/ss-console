@@ -207,6 +207,8 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
     'INSTRUMENT. The fabrication filter ran at skill-output time. The client-facing event is the draft that resulted, already mapped.',
   IDENTIFIER_UNVERIFIED:
     'INSTRUMENT. The identifier gate is report-only and non-blocking, so a row here means nothing changed for the client.',
+  CONFLICT_FENCE_WOULD_REFUSE:
+    'INSTRUMENT. The conflict fence recording what it would have refused while it runs in observe mode. Nothing was refused, so nothing changed for the client.',
   VOICE_GATE_TRIGGERED:
     'INSTRUMENT. Report-only voice-gate signal, fires on ordinary drafting turns.',
   VOICE_GATE_PASSED: 'INSTRUMENT. The gate passing is the unremarkable case, by design.',

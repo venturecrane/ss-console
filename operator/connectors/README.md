@@ -49,7 +49,10 @@ declarative, not bespoke wiring.
 A write tool whose target matter comes from the model, not from an object it
 already names, is declared once at registration:
 `server.tool(requires_resolution=matter_arg())` (`_sdk/operator_connector_sdk/resolution.py`).
-`matter_arg("<argument>")` reads the target from that argument; any callable
+`matter_arg("<argument>")` reads the target from that argument
+(`matter_arg("matter_id", optional=True)` where the tool's matter is itself
+optional: a call that names no matter, a firm-general task, opens with no
+resolution and records nothing, and a call that names one is gated as usual); any callable
 taking the call's arguments and returning a matter id or None also works. The
 registered MCP tool then gains a required `matter_resolution` argument and one
 sentence in its description, and the SDK claims the token for that matter before
@@ -69,6 +72,17 @@ connector entry in `customer.yaml` (absent is `observe`), and a refusal it would
 have made is a `SMOKEBALL_WRITE` audit row with phase `would_refuse` (tool,
 matter, reason code). It mints from `resolve_invoice_matter` (a letter's facts)
 and `resolve_matter_by_id` (a matter id and the number read with it).
+
+The Smokeball connector's `conflict_check` (`smokeball/smokeball_connector/conflict_check.py`)
+answers whether the sender of an inbound message, or a party it names, is on the
+other side of an open matter (`hit` / `clear` / `search_failed` under a written rule
+table), and on a hit writes the one clearance task itself. It is on the menu only
+where `logic_in_code.conflict_fence` is `enforce`; elsewhere a direct call is refused
+before it reads or writes anything. The overlay's trust gate
+(`hermes-smd-trust/conflict_fence.py`) records that verdict and refuses every write
+and send in an outside sender's email turn until it is `clear`, under the
+`logic_in_code.conflict_fence` switch; in `observe` it writes a
+`CONFLICT_FENCE_WOULD_REFUSE` audit row instead and the call goes on.
 
 ## A check that can refuse ships switched off
 

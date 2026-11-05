@@ -915,6 +915,21 @@ class SessionInboundOrigin:
             return ""
         return self._turn_prompt_id.get(session_id, "")
 
+    def turn_origin(self, session_id: str) -> tuple[bool, InboundOrigin | None]:
+        """``(an email opened this turn, that email's verified origin or None)``.
+
+        For a gate that must decide on THIS turn's email even when the session
+        has been handed others before it (:meth:`bound_this_turn` answers None
+        then, which a gate must not read as "no email"). The origin is looked up
+        by the message id the turn's trusted prompt prefix named, in the index
+        only the router's signature-verified records fill, so a forged id finds
+        nothing. ``(True, None)`` is an email turn whose sender is unknown: a
+        caller that fences outside senders fences it."""
+        prompt_id = self._turn_prompt_id.get(session_id, "") if session_id else ""
+        if not prompt_id:
+            return False, None
+        return True, self._by_message.get(prompt_id)
+
     def bound_this_turn(self, session_id: str) -> InboundOrigin | None:
         """The origin of the email that opened THIS turn, or ``None``.
 

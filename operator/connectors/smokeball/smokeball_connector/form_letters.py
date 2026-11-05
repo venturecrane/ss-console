@@ -44,6 +44,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
 
+from operator_connector_sdk import matter_arg
+
 from . import cited_facts, readback
 from . import form_letter_facts as facts
 from .form_docx import FormError, fill_form, placeholders_in
@@ -655,7 +657,7 @@ def _police(matter: str, date: str | None, cited: Any, words: str | None, given:
 
 def register(server: Any) -> None:
     """Register the form-letter tool. Called once, from ``attachment_tools.register``."""
-    server.tool()(render_firm_form_letter)
+    server.tool(requires_resolution=matter_arg())(render_firm_form_letter)
 
 
 __all__ = [

@@ -185,6 +185,12 @@ resolve_invoice_matter = "read"
 # it. COORDINATED CHANGE: mcp_smokeball_resolve_matter_by_id = ActionClass.READ
 # in hermes-smd-overlay shared/action_classes.py, same PR.
 resolve_matter_by_id = "read"
+# The conflict check over an inbound message (conflict_check.py, 2026-11-04):
+# hit / clear / search_failed under a fixed rule table. On a hit the tool writes
+# the one clearance task itself (the connector's own stamped, recorded write).
+# COORDINATED CHANGE: mcp_smokeball_conflict_check = ActionClass.READ in
+# hermes-smd-overlay shared/action_classes.py, same PR.
+conflict_check = "read"
 stage_vendor_invoice = "internal_write"
 # Combined-post intake. A firm scans the day's post as ONE PDF holding several
 # letters for different matters; these two read it with page numbers that can be

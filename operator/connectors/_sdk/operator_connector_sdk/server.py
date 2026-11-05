@@ -27,6 +27,7 @@ Thin wrapper over the MCP SDK's MCPServer (mcp 2.x; FastMCP before 2.0). Two job
 
 from __future__ import annotations
 
+import copy
 import functools
 import inspect
 import json
@@ -126,21 +127,52 @@ def _as_tool_error(exc: Exception, connector: str, tool_name: str) -> ToolError:
 
 
 class _GatedMCPServer(MCPServer):
-    """MCPServer whose tool listing marks ``matter_resolution`` REQUIRED on every
-    gated tool. The signature gives the parameter a default so that observe mode
-    can see a call that left it out (``resolution.py``); the schema the model
-    reads must still say required, because that is the contract it follows."""
+    """MCPServer whose tool listing follows the gate's mode, read when the listing
+    is asked for, so the two can never disagree.
 
-    def __init__(self, name: str, gated: Mapping[str, Any]) -> None:
+    Enforcing (or a mode that cannot be read, or no gate installed): every gated
+    tool lists ``matter_resolution`` as REQUIRED and carries the sentence saying
+    where to get one, because that is the contract the gate then holds it to.
+
+    Observing: the parameter stays visible but optional and the sentence is
+    dropped. A gated registration reaches a seat before the skills that pass a
+    resolution, and the model reads the listing as instructions, so telling it
+    "without it nothing is written" would change what it does on a seat where
+    nothing is meant to change until the mode is switched (``resolution.py``)."""
+
+    def __init__(
+        self,
+        name: str,
+        gated: Mapping[str, Any],
+        enforcing: Callable[[], bool],
+        plain_descriptions: Mapping[str, str],
+        listed: Callable[[str], bool],
+    ) -> None:
         super().__init__(name)
         self._gated = gated  # the ConnectorServer's own dict: tools register after construction
+        self._enforcing = enforcing
+        self._plain_descriptions = plain_descriptions  # the tool's words as written, byte for byte
+        self._listed = listed
 
     async def list_tools(self):  # type: ignore[override]
-        tools = await super().list_tools()
-        for t in tools:
-            if t.name in self._gated:
-                _mark_required(t.input_schema)
-        return tools
+        tools = [t for t in await super().list_tools() if self._listed(t.name)]
+        return self._advertised(tools, enforcing=self._enforcing())
+
+    async def enforced_listing(self):
+        """What a seat in enforce mode is shown, whatever this process's mode is:
+        every tool, including any registered ``listed_when``."""
+        return self._advertised(await super().list_tools(), enforcing=True)
+
+    def _advertised(self, tools: list[Tool], *, enforcing: bool) -> list[Tool]:
+        return [self._as_listed(t, enforcing=enforcing) if t.name in self._gated else t for t in tools]
+
+    def _as_listed(self, tool: Tool, *, enforcing: bool) -> Tool:
+        # A copy: the registered tool must not remember one mode's listing into the next.
+        if enforcing:
+            schema = copy.deepcopy(tool.input_schema)
+            _mark_required(schema)
+            return tool.model_copy(update={"input_schema": schema})
+        return tool.model_copy(update={"description": self._plain_descriptions[tool.name]})
 
 
 def _mark_required(schema: Any) -> None:
@@ -160,14 +192,34 @@ class ConnectorServer:
         resolution; a gated tool's description tells the model to call one."""
         self.name = name
         self._gated: dict[str, Callable[[dict[str, Any]], str | None]] = {}
-        self._mcp = _GatedMCPServer(name, self._gated)
         self._resolvers = tuple(resolvers)
         self._gate: ResolutionGate | None = None
+        self._listed_when: dict[str, Callable[[], bool]] = {}
+        self._plain_descriptions: dict[str, str] = {}
+        self._mcp = _GatedMCPServer(
+            name, self._gated, self._listing_enforces, self._plain_descriptions, self._is_listed
+        )
 
     def install_resolution_gate(self, gate: ResolutionGate) -> None:
         """Install the connector's gate. Read at CALL time, so a connector may
         install it after its tools register."""
         self._gate = gate
+
+    def _listing_enforces(self) -> bool:
+        return resolution.enforcing(self._gate)
+
+    def _is_listed(self, tool_name: str) -> bool:
+        """Read per call, by the listing and by the door alike, so the two cannot
+        disagree. A predicate that raises lists the tool: it stands for a switch, and
+        an unreadable switch reads as on."""
+        predicate = self._listed_when.get(tool_name)
+        if predicate is None:
+            return True
+        try:
+            return bool(predicate())
+        except Exception:  # noqa: BLE001 - an unreadable switch reads as on, never raises into a listing
+            logger.warning("%s.%s: listed_when raised; listing it", self.name, tool_name, exc_info=True)
+            return True
 
     def gated_tools(self) -> dict[str, Callable[[dict[str, Any]], str | None]]:
         """Each gated tool's name and the resolver that reads its target matter."""
@@ -178,6 +230,7 @@ class ConnectorServer:
         *args,
         bound: ResultBound | None = None,
         requires_resolution: Callable[[dict[str, Any]], str | None] | None = None,
+        listed_when: Callable[[], bool] | None = None,
         **kwargs,
     ):
         """Register a tool. Delegates to MCPServer; the input schema is derived from
@@ -188,6 +241,11 @@ class ConnectorServer:
         Optional ``requires_resolution`` gates the tool on a matter resolution: a
         callable that reads the target ``matter_id`` from the call's arguments
         (``resolution.matter_arg()`` for the common case). See ``resolution.py``.
+
+        Optional ``listed_when`` holds a whole tool behind a switch: read at list
+        time and at call time, it decides whether the tool is on the menu, and a
+        direct call while it is off is refused before the body runs. For a tool a
+        seat must not reach until it is switched on, because reaching it writes.
 
         The decorator hands back the ORIGINAL function. The MCP boundary (result
         governance, exception translation) lives on the registered wrapper only;
@@ -201,10 +259,15 @@ class ConnectorServer:
             options = dict(kwargs)
             if requires_resolution is not None:
                 tool_name = options.get("name") or (args[0] if args and isinstance(args[0], str) else fn.__name__)
+                self._plain_descriptions[tool_name] = options.get("description") or fn.__doc__ or ""
                 wrapped = self._gate_wrapper(fn, wrapped, requires_resolution, tool_name)
                 if options.get("description"):
                     options["description"] = f"{options['description'].rstrip()}\n\n{self._sentence()}"
                 self._gated[tool_name] = requires_resolution
+            if listed_when is not None:
+                tool_name = options.get("name") or (args[0] if args and isinstance(args[0], str) else fn.__name__)
+                self._listed_when[tool_name] = listed_when
+                wrapped = self._listed_wrapper(wrapped, tool_name)
             self._mcp.tool(*args, **options)(wrapped)
             return fn
 
@@ -212,6 +275,29 @@ class ConnectorServer:
 
     def _sentence(self) -> str:
         return resolution.doc_sentence(self._resolvers)
+
+    def _listed_wrapper(self, wrapped, tool_name: str):
+        """The door of a ``listed_when`` tool: off the menu means not callable."""
+
+        def door() -> None:
+            if not self._is_listed(tool_name):
+                raise ToolError(f"ToolNotAvailable: {tool_name} is not available on this seat; nothing was done")
+
+        if inspect.iscoroutinefunction(wrapped):
+
+            @functools.wraps(wrapped)
+            async def alisted(*a, **k):
+                door()
+                return await wrapped(*a, **k)
+
+            return alisted
+
+        @functools.wraps(wrapped)
+        def listed(*a, **k):
+            door()
+            return wrapped(*a, **k)
+
+        return listed
 
     def _gate_wrapper(self, fn, wrapped, resolver: Callable[[dict[str, Any]], str | None], tool_name: str):
         """The resolution door around an already-wrapped tool: pop the token,
@@ -287,6 +373,12 @@ class ConnectorServer:
         Synchronous convenience over MCPServer's async ``list_tools`` — call from
         sync code (tests, conformance), not from inside a running event loop."""
         return anyio.run(self._mcp.list_tools)
+
+    def enforced_surface(self) -> list[Tool]:
+        """The surface as a seat in enforce mode lists it, whatever the mode here.
+        Conformance holds this contract: ``tool_surface`` follows the live mode, and
+        off a seat that mode is observe."""
+        return anyio.run(self._mcp.enforced_listing)
 
     def run_stdio(self) -> None:
         """Serve over stdio — the transport Hermes launches the connector with."""

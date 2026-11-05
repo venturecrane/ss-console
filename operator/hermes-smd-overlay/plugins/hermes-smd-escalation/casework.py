@@ -326,7 +326,17 @@ def _send_reviews(
         note = "; ".join(parts) + ". Report that in one plain line and send nothing else."
     memos = list(state["envelope"].get("memos") or [])
     if memos:
-        note += " Then file each memo in memos with create_memo, verbatim, on its matter."
+        # The image reaches a seat before the skill that puts a number on each memo,
+        # and a memo with no number cannot be resolved: the note follows the envelope,
+        # so a seat on the older skill is told what it has always been told.
+        if all(memo.get("matter_number") for memo in memos):
+            note += (
+                " Then, for each memo in memos: call resolve_matter_by_id with its matter_id and"
+                " matter_number, and file it with create_memo, verbatim, on that matter_id with"
+                " the matter_resolution it returned. A memo whose matter does not resolve is not filed."
+            )
+        else:
+            note += " Then file each memo in memos with create_memo, verbatim, on its matter."
     return _finish_result("sent", note, messages=sent, memos=memos)
 
 

@@ -1,0 +1,508 @@
+{
+  "add_file": {
+    "description_sha256": "42d2cedd513efe1fae968e1b2b2e7ea67ca24b7da719286790bcf387e3192138",
+    "properties": ["content_base64", "content_text", "file_name", "folder_id", "matter_id"],
+    "required": ["file_name", "matter_id"]
+  },
+  "add_medicals_provider": {
+    "description_sha256": "a89126db0e61898f7d005d4a817f6dc289a37d690f75bce1ca5d83d9c33c46aa",
+    "properties": ["address", "claimant_index", "create_new", "matter_id", "note", "provider_name"],
+    "required": ["matter_id", "provider_name"]
+  },
+  "add_medicals_row": {
+    "description_sha256": "67f9faf2f5dbe90906020f30437fc861c53a03ea7097df002aa8cfd7811cf654",
+    "properties": [
+      "account_number",
+      "charge",
+      "claimant_index",
+      "matter_id",
+      "patient_name",
+      "provider_address",
+      "provider_name",
+      "service_end",
+      "service_start",
+      "source_file_id"
+    ],
+    "required": [
+      "charge",
+      "matter_id",
+      "provider_name",
+      "service_end",
+      "service_start",
+      "source_file_id"
+    ]
+  },
+  "add_negotiation_rows": {
+    "description_sha256": "2149e254e93b34ed344f63a23fe6f20791084c42133ab1fd563d9e951214c142",
+    "properties": [
+      "details",
+      "matter_id",
+      "minimum_settlement",
+      "operator_tab",
+      "plaintiff_index",
+      "rows",
+      "source_file_id"
+    ],
+    "required": ["matter_id", "rows"]
+  },
+  "add_workbook": {
+    "description_sha256": "c73a11a77b3f7109d26935be3617f2cef4dd69242513ebbc63ba5c18c243376e",
+    "properties": ["file_name", "folder_id", "matter_id", "sheets"],
+    "required": ["file_name", "matter_id", "sheets"]
+  },
+  "auth_status": {
+    "description_sha256": "560594f648fccdffbccb643d168aa013785a8b7d473fbdc1e0fc2b6cfe6d9be5",
+    "properties": [],
+    "required": []
+  },
+  "create_event": {
+    "description_sha256": "35ab3704ed562235d1845244c17f8a3ebc53858546a84592df1b9f7f5eb706f5",
+    "properties": [
+      "all_day",
+      "attendees",
+      "description",
+      "end_time",
+      "location",
+      "matter_id",
+      "start_time",
+      "subject",
+      "time_zone"
+    ],
+    "required": ["attendees", "end_time", "start_time", "subject", "time_zone"]
+  },
+  "create_event_reminder": {
+    "description_sha256": "63f7ddf411433825140e81b0b2e7102a3efa14d8c1575a191bf14a3e16c3af6f",
+    "properties": ["event_id", "is_all_day_reminder", "offset", "offset_type_id", "user_ids"],
+    "required": ["event_id", "offset", "offset_type_id"]
+  },
+  "create_folder": {
+    "description_sha256": "ce0e02d55674fcd3658ea915a8d297f19e959f00c5ce2e3bd7e2698bd61d29da",
+    "properties": ["matter_id", "name", "parent_folder_id"],
+    "required": ["matter_id", "name"]
+  },
+  "create_matter": {
+    "description_sha256": "ad08d254b56dbd02191a057f98afe03b91eaa1a5c78edfcc38e17eebded0c3b2",
+    "properties": ["client_contact_id", "description", "matter_type_id", "number"],
+    "required": ["client_contact_id", "description", "matter_type_id", "number"]
+  },
+  "create_memo": {
+    "description_sha256": "a9c94d135e5f2ca87bb1e2b2f879918045748c48f84e5e24ba3eb67dc7bccc0d",
+    "properties": ["matter_id", "text"],
+    "required": ["matter_id", "text"]
+  },
+  "create_task": {
+    "description_sha256": "2cb36e5042fba1ad1c92314bd7ceacf424d2782615293fb89a24f737b46b9947",
+    "properties": ["assignee_ids", "due_date", "matter_id", "note", "staff_id", "subject"],
+    "required": ["staff_id", "subject"]
+  },
+  "create_webhook_subscription": {
+    "description_sha256": "96a149a2069173651c653c8f179e37599ba8c9501655b4c87dff772b97aaa5fc",
+    "properties": ["event_types", "key", "name", "notification_url"],
+    "required": ["event_types", "name"]
+  },
+  "delete_events": {
+    "description_sha256": "74813f7931d574ff6d38202f69c8d50c9b3659a08222a21faea0a109dca45301",
+    "properties": ["events"],
+    "required": ["events"]
+  },
+  "delete_file": {
+    "description_sha256": "ff6994c671fd58732560c3905bf4e8af92ff0161823a14d27f71fa4bdb757bc9",
+    "properties": ["file_id", "matter_id"],
+    "required": ["file_id", "matter_id"]
+  },
+  "file_attachment_pages_to_matter": {
+    "description_sha256": "22f40129d059b5ae8913bef617829e6e88199f955e35e0dbb0152b057ec029e8",
+    "properties": [
+      "document_kind",
+      "download_url",
+      "file_name",
+      "first_page",
+      "last_page",
+      "matter_id",
+      "matter_resolution",
+      "message_id",
+      "sha256"
+    ],
+    "required": [
+      "download_url",
+      "file_name",
+      "first_page",
+      "last_page",
+      "matter_id",
+      "matter_resolution",
+      "sha256"
+    ]
+  },
+  "file_attachment_to_matter": {
+    "description_sha256": "02a050cb833365be6773ed49a8e8ec87e718a1fbfa99f4338a51af8e1025bb4d",
+    "properties": ["download_url", "file_name", "folder_id", "matter_id"],
+    "required": ["download_url", "file_name", "matter_id"]
+  },
+  "find_files_on_matter": {
+    "description_sha256": "2b71116c565e4634f098cc2c76b2ec56ab52b6afc8661b10eb947b985384949a",
+    "properties": ["extension", "folder", "limit", "matter_id", "name"],
+    "required": ["matter_id"]
+  },
+  "get_bank_accounts": {
+    "description_sha256": "ccdbb50dda20484f14650bc0370f8baff4b23bb219e115d5c2b13e2f729740fa",
+    "properties": ["matter_id", "type"],
+    "required": []
+  },
+  "get_contact": {
+    "description_sha256": "30a8e5fc4f4ef04998cdd896fa8d58dd8700a6e12af12fb7302be2175b2162c2",
+    "properties": ["contact_id"],
+    "required": ["contact_id"]
+  },
+  "get_contact_relations": {
+    "description_sha256": "136b7c49d7dfb30f631ff26d32463b431fcacc7b59fc2a2a160609440d56faf5",
+    "properties": ["contact_id"],
+    "required": ["contact_id"]
+  },
+  "get_contacts": {
+    "description_sha256": "dac779334e4c25a90987b336c62f474083bf969489457d67fae91f6d2aa06162",
+    "properties": ["limit", "offset", "search", "sort", "type", "updated_since"],
+    "required": []
+  },
+  "get_download_url": {
+    "description_sha256": "f17f4a92c29ad590188841dc4fc14cfa254fa1df236b0744e0de81bdb350f036",
+    "properties": ["file_id", "matter_id"],
+    "required": ["file_id", "matter_id"]
+  },
+  "get_event_types": {
+    "description_sha256": "57a5a4828bccebb8ab09b0819908202a9419c0d6633c3f4c56237c59b9a4bdcf",
+    "properties": [],
+    "required": []
+  },
+  "get_expenses": {
+    "description_sha256": "4e584629dcc60f2aaf70cf91a409fa5e39cab06516de4453ec633d1ac7cdf89c",
+    "properties": ["include_deleted", "limit", "matter_id", "offset", "updated_since"],
+    "required": ["matter_id"]
+  },
+  "get_fees": {
+    "description_sha256": "3136d42175252e88daa7a82902754e55f1911f0a9cc9ca9b2a253c32ba7df0f0",
+    "properties": ["limit", "matter_id", "offset"],
+    "required": ["matter_id"]
+  },
+  "get_file": {
+    "description_sha256": "dd4360e4674a4c5b3b82f86731fd51884dc5cc81331949f8b9715281c0cc9097",
+    "properties": ["file_id", "matter_id"],
+    "required": ["file_id", "matter_id"]
+  },
+  "get_files_on_matter": {
+    "description_sha256": "9ba340f8147084bd2dae0ea01893606c84cf3dc9ec2105d658ee5a897f629ede",
+    "properties": ["limit", "matter_id", "offset"],
+    "required": ["matter_id"]
+  },
+  "get_matter": {
+    "description_sha256": "291c56de9c6ee16513bb2030abaa17468d655c632a6bc9a3f2904bd6dc54ac44",
+    "properties": ["matter_id"],
+    "required": ["matter_id"]
+  },
+  "get_matter_balances": {
+    "description_sha256": "269bb70f615aa58f86e974e1df0ad8d21097ec3cbbe5a007a0b73757e6f9ec41",
+    "properties": ["bank_account_id", "limit", "matter_id", "offset"],
+    "required": ["bank_account_id"]
+  },
+  "get_matter_billing_config": {
+    "description_sha256": "fe1b3f61252263ad1cf706bb7fad5137541dc94f1f456c7865da7c2c6a201757",
+    "properties": ["matter_id"],
+    "required": ["matter_id"]
+  },
+  "get_matter_layouts": {
+    "description_sha256": "db518a6921377c8d432740919eef22e9f5c8f4ac4e52c6392436be52d733fb77",
+    "properties": ["include_sensitive", "item_id", "matter_id", "section"],
+    "required": ["matter_id"]
+  },
+  "get_memos_on_matter": {
+    "description_sha256": "b8531f3da57c5c755c843bf2f504d323fd24ffe1555aecbecec7e8098cc406fa",
+    "properties": ["limit", "matter_id", "offset"],
+    "required": ["matter_id"]
+  },
+  "get_post_list": {
+    "description_sha256": "373aca3380e4ab7ee7d365d56345603eb198fb18a1d8972578754d23083dad67",
+    "properties": ["list_ref"],
+    "required": ["list_ref"]
+  },
+  "get_relationships_on_matter": {
+    "description_sha256": "80ca51bf9b0156671566432c88b99113410588c7d1060a45550ccab40ba494ee",
+    "properties": ["matter_id", "role_id"],
+    "required": ["matter_id", "role_id"]
+  },
+  "get_roles_on_matter": {
+    "description_sha256": "97f907f7f7b0fe32d753876d2a996ee681c65580a05e19afe373b7ee63ab1d7c",
+    "properties": ["matter_id"],
+    "required": ["matter_id"]
+  },
+  "get_staff": {
+    "description_sha256": "e1fa59c2d8723495d292b0366110e5476e3e14b74c2cebcad83d85c3989bf505",
+    "properties": ["staff_id"],
+    "required": ["staff_id"]
+  },
+  "get_stage_sets": {
+    "description_sha256": "142f4605d9db3474742bf2aef925e20b8de553569133447c3781b16e58da77d5",
+    "properties": [],
+    "required": []
+  },
+  "get_stage_to_matter_mappings": {
+    "description_sha256": "cedb0b9bae06308d0bf0739c096eaedf79149c4db2aecedabb2e283eaa00538d",
+    "properties": [],
+    "required": []
+  },
+  "get_task": {
+    "description_sha256": "abf4fef76618b16e4b697e07ea206fbf8fc61b6993a7530d01051c377cd06844",
+    "properties": ["task_id"],
+    "required": ["task_id"]
+  },
+  "get_webhook_subscriptions": {
+    "description_sha256": "c4632faf791adf4f417e8901f559cb6a5d3a35ae74f07e254cf9335ec7cfe1d1",
+    "properties": [],
+    "required": []
+  },
+  "list_events": {
+    "description_sha256": "d6f93dbc84966910ff688f94f012f9bd9217d596888955d274e0d58bf8d7e93b",
+    "properties": [
+      "exclude_deleted",
+      "from_",
+      "limit",
+      "matter_id",
+      "offset",
+      "to",
+      "updated_since"
+    ],
+    "required": []
+  },
+  "list_folders": {
+    "description_sha256": "ba11bf6ccd0d971d37224dfc208b4a9d056bd7b20faffa9947223fa85d84bf66",
+    "properties": ["limit", "matter_id", "offset"],
+    "required": ["matter_id"]
+  },
+  "list_matter_types": {
+    "description_sha256": "5d97ef2ea025fdd9ef73382e847f375fa1a4a639417a4658a4d01ee81f45409b",
+    "properties": [],
+    "required": []
+  },
+  "list_matters": {
+    "description_sha256": "d0e2835c8ba86a241e8dc1113ab1f1a191af2f60bb40c99006fde12e93d33a82",
+    "properties": [
+      "contact_id",
+      "is_lead",
+      "limit",
+      "matter_type_id",
+      "offset",
+      "search",
+      "sort",
+      "status",
+      "updated_since"
+    ],
+    "required": []
+  },
+  "list_tasks": {
+    "description_sha256": "6c49ec045bfb94ab1704eae00f49fc1a06f2e3316592a9f18b42d2d6014b2352",
+    "properties": [
+      "include_probe_artifacts",
+      "is_completed",
+      "limit",
+      "matter_id",
+      "offset",
+      "updated_since"
+    ],
+    "required": []
+  },
+  "place_records_order": {
+    "description_sha256": "a4b7097e680d0a27178f7f080cde529e3e17eac4da6e161a5aa15a8abb9c4f5b",
+    "properties": ["order"],
+    "required": ["order"]
+  },
+  "prepare_event_deletion": {
+    "description_sha256": "02a94c66aa78ecd7d191296765a2110c4eea4d44bd61eec9e5b15cb1c40419e5",
+    "properties": ["event_ids", "matter_ids"],
+    "required": ["matter_ids"]
+  },
+  "prepare_records_order": {
+    "description_sha256": "b939a27c48db76ad9ac0d5ae5512de0c94195dedfc67fa0b090d44722a6678de",
+    "properties": [
+      "certification",
+      "facilities",
+      "from_gap_audit",
+      "hipaa_file_id",
+      "language",
+      "matter_id",
+      "order_by_email",
+      "pre_approved_custodian_fee",
+      "record_types",
+      "service_end",
+      "service_start",
+      "years"
+    ],
+    "required": ["matter_id"]
+  },
+  "read_attachment_pages": {
+    "description_sha256": "3213d157bbdc6df9504d2ecb4453dffb09e071a2461b2f1e9421aac492cb9a68",
+    "properties": ["download_url", "file_name", "first_page", "last_page"],
+    "required": ["download_url", "file_name"]
+  },
+  "read_attachment_text": {
+    "description_sha256": "7344819b8c68a9aeb1ab2bfce35316b5b19398d3ba4fd400c0f87f6d269f79cd",
+    "properties": ["download_url", "file_name"],
+    "required": ["download_url", "file_name"]
+  },
+  "read_document": {
+    "description_sha256": "3fde748dd22adddcecbcee526750c8cce0adf8a37e235da523030dae2840b458",
+    "properties": ["file_id", "matter_id", "max_chars", "offset"],
+    "required": ["file_id", "matter_id"]
+  },
+  "record_post_batch": {
+    "description_sha256": "5fce300fa9f40c70f1c109fbb049ec8490c96b19ec74289330e0d4d30f91e2bd",
+    "properties": [
+      "bundle_detail",
+      "bundle_issue",
+      "file_name",
+      "letters",
+      "message_id",
+      "page_count",
+      "received_at",
+      "sha256"
+    ],
+    "required": ["file_name", "letters", "message_id", "page_count", "sha256"]
+  },
+  "records_orders_for_matter": {
+    "description_sha256": "fefd9bcf8b14f1b27a3cbd37084cc6b447f717c2c7b22e7310272f5b55fa1f58",
+    "properties": ["matter_id"],
+    "required": ["matter_id"]
+  },
+  "render_docx_draft": {
+    "description_sha256": "f4930b4ae211b2a471926d31fa8ac13eedad41c7fb7249478836f0f0c12e09a8",
+    "properties": [
+      "document_class",
+      "draft_markdown",
+      "file_name",
+      "folder_id",
+      "held_out_file_names",
+      "matter_id"
+    ],
+    "required": ["draft_markdown", "file_name", "matter_id"]
+  },
+  "render_docx_template": {
+    "description_sha256": "482df5702416b2ab760cce09864b03b9403ade8f0a96b778c58caa589a7b4120",
+    "properties": ["document_class", "file_name", "folder_id", "matter_id", "skeleton_markdown"],
+    "required": ["file_name", "matter_id", "skeleton_markdown"]
+  },
+  "render_firm_form_letter": {
+    "description_sha256": "4f457215af1d3e297bfb84a14a3457cc6e0370a6d739937d7bd59f1d02fc869c",
+    "properties": [
+      "agency_given",
+      "agency_words",
+      "cited",
+      "date",
+      "employer",
+      "form",
+      "matter_id"
+    ],
+    "required": ["form", "matter_id"]
+  },
+  "render_funding_case_eval": {
+    "description_sha256": "3fb70871c01d8555c35e2eb61dcaec282d4d198f63fa70119bf9ac90e99f8f1e",
+    "properties": ["matter_id"],
+    "required": ["matter_id"]
+  },
+  "render_sr1": {
+    "description_sha256": "fc25edf6da5f299b16a9a9167df4e0722e622f5a4f6aaefb3d61010d02668aac",
+    "properties": ["cited", "matter_id"],
+    "required": ["matter_id"]
+  },
+  "render_sr19": {
+    "description_sha256": "e76a34ec9d1467961479fa45596dff03bac52f229899b96513cfeddc1fcef682",
+    "properties": ["cited", "matter_id"],
+    "required": ["matter_id"]
+  },
+  "resolve_invoice_matter": {
+    "description_sha256": "ad3f4c2b42d77354581754cf5f20e50c96bd93f073ca37800575ef5a31f16ece",
+    "properties": [
+      "case_number",
+      "claim_number",
+      "client_name",
+      "date_of_birth",
+      "date_of_birth_as_printed",
+      "date_of_loss",
+      "date_of_loss_as_printed",
+      "first_page",
+      "last_page",
+      "matter_number",
+      "message_id",
+      "sha256"
+    ],
+    "required": []
+  },
+  "resolve_matter_by_id": {
+    "description_sha256": "4723636240e2049c4af8bd301245aa01dd3274b1b5fa91ab94a57a2dae2173dd",
+    "properties": ["matter_id", "matter_number"],
+    "required": ["matter_id", "matter_number"]
+  },
+  "search_staff": {
+    "description_sha256": "79da0aa766c2e16a858479dd0bda2e546e2996542ebfa1d99aed0404176e5470",
+    "properties": ["limit", "offset", "search"],
+    "required": []
+  },
+  "stage_vendor_invoice": {
+    "description_sha256": "6bab522b72d960d2352503e94dc6a50653b83d22fc9eb8e8692b108c10310086",
+    "properties": [
+      "amount",
+      "download_url",
+      "file_name",
+      "first_page",
+      "invoice_date",
+      "invoice_number",
+      "last_page",
+      "matter_id",
+      "matter_resolution",
+      "message_id",
+      "sha256",
+      "vendor"
+    ],
+    "required": [
+      "amount",
+      "download_url",
+      "file_name",
+      "invoice_date",
+      "invoice_number",
+      "matter_id",
+      "matter_resolution",
+      "sha256",
+      "vendor"
+    ]
+  },
+  "update_event": {
+    "description_sha256": "ed8814a4833fb858e50028256eb83b82e7fe4e22f9022af2fc051ffc12880213",
+    "properties": [
+      "all_day",
+      "attendees",
+      "description",
+      "end_time",
+      "event_id",
+      "location",
+      "matter_id",
+      "start_time",
+      "subject",
+      "time_zone"
+    ],
+    "required": ["event_id"]
+  },
+  "update_memo": {
+    "description_sha256": "6d3359b84995a962329c062fe1e7344d9801551db4a22b980d03a11a35da4d64",
+    "properties": ["matter_id", "memo_id", "text"],
+    "required": ["matter_id", "memo_id", "text"]
+  },
+  "update_task": {
+    "description_sha256": "24a20bd86a97bb6153abdddf845a6ebf9e6df6e43d270de101cd179704038e83",
+    "properties": [
+      "assignee_ids",
+      "due_date",
+      "is_completed",
+      "note",
+      "staff_id",
+      "subject",
+      "task_id"
+    ],
+    "required": ["task_id"]
+  }
+}

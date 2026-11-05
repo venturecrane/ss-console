@@ -158,6 +158,7 @@ export const AUDIT_ACTION_TYPES = [
   // every vendor call (send_intent.py); its confirm row names it.
   'CONFIRM_SEND_INTENT',
   'SPEC_GATE_TRIGGERED',
+  'CONFLICT_FENCE_WOULD_REFUSE',
   'VOICE_GATE_TRIGGERED',
   'CORRECTION_PROPOSED',
   'RULE_PROPOSED',
