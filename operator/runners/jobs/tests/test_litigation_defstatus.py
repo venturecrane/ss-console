@@ -196,6 +196,7 @@ def test_the_run_prints_the_notes_status_before_the_gates(tmp_path, pricing_path
     assert r.run().verdict == "delivered"
     bad = copy.deepcopy(manifest.load_prior(tmp_path / "state", M1))
     d = bad["defendants"][0]
+    d.pop("status_from")  # a report stored before the derivation: its status was asserted
     d.update(status=vocab.SERVED_NO_ANSWER, answered={"date": None, "source": None})
     d["flags"] = ["Default entered 2026-06-01."]
     r._mfile(M1, "read3.json").write_text(json.dumps({"result": bad, "overturns": []}))

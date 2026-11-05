@@ -84,12 +84,20 @@ def _each_parallel(r: Any, stage: str, wants: Any, one: Any, width: int) -> None
     workers.in_parallel(r, todo, run_one, width)
 
 
+def _noted_misses(r: Any, stage: str, missed: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The verdicts code could not apply, said in the run's log as well as the
+    pass's record: a check that changed nothing must not read as one that agreed."""
+    if missed:
+        r.log(f"[{stage}] {len(missed)} verdicts could not be applied; see unmatched_verdicts")
+    return missed
+
+
 def read1(r: Any) -> None:
     def one(m: dict[str, Any], mid: str, p: dict[str, Any]) -> None:
         ctx = r._ctx(mid)
         if p.get("mode") == update.MODE:
             prior = manifest.load_prior(r.state, mid) or {}
-            res = read.pass1(
+            raw = read.read_raw(
                 r.doorway,
                 r.firm,
                 ctx,
@@ -100,8 +108,14 @@ def read1(r: Any) -> None:
                 extra="\nCURRENT VALUES (on the list now):\n" + read.for_model(prior, ctx),
                 tail=update.TAIL,
             )
+            res = update.overlay(ctx, prior, raw, p["read_groups"], r.today)
             merged, log = update.guard(
-                prior, read.merge(prior, res, p["read_groups"]), p["read_groups"], p["trigger_files"], texts(r, mid)
+                prior,
+                read.merge(prior, res, p["read_groups"]),
+                p["read_groups"],
+                p["trigger_files"],
+                texts(r, mid),
+                today=r.today,
             )
             dump(
                 r._mfile(mid, "read1.json"),
@@ -136,9 +150,16 @@ def read2(r: Any) -> None:
                 update.check_scope(changed),
                 groups=p["read_groups"] or None,
             )
-            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
+            missed: list[dict[str, Any]] = []
+            log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed)
             merged, again = reguard(r, mid, p, merged)
-            rec = {"result": merged, "overturns": log, "verdicts": got["verdicts"], "update": again}
+            rec = {
+                "result": merged,
+                "overturns": log,
+                "verdicts": got["verdicts"],
+                "unmatched_verdicts": _noted_misses(r, "read2", missed),
+                "update": again,
+            }
             dump(r._mfile(mid, "read2.json"), rec)
             return
         merged = read.merge(manifest.load_prior(r.state, mid), r1["result"], r1["groups"])
@@ -154,8 +175,15 @@ def read2(r: Any) -> None:
             "",
             groups=p["read_groups"] or None,
         )
-        log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify")
-        dump(r._mfile(mid, "read2.json"), {"result": merged, "overturns": log, "verdicts": got["verdicts"]})
+        missed = []
+        log = read.apply_verdicts(ctx, merged, got["verdicts"], "verify", r.today, missed)
+        rec = {
+            "result": merged,
+            "overturns": log,
+            "verdicts": got["verdicts"],
+            "unmatched_verdicts": _noted_misses(r, "read2", missed),
+        }
+        dump(r._mfile(mid, "read2.json"), rec)
 
     _each(r, "read2", lambda p: bool(p["read_groups"]), one)
 
@@ -166,7 +194,7 @@ def reguard(r: Any, mid: str, p: dict[str, Any], result: dict[str, Any]) -> tupl
     (2026-10-09 replay: a verify that replaced a whole discovery list dropped
     thirteen older sets the arrived documents never mentioned)."""
     prior = manifest.load_prior(r.state, mid) or {}
-    return update.guard(prior, result, p["read_groups"], p["trigger_files"], texts(r, mid))
+    return update.guard(prior, result, p["read_groups"], p["trigger_files"], texts(r, mid), today=r.today)
 
 
 def after_read2(r: Any, mid: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -237,7 +265,8 @@ def read3(r: Any) -> None:
             extra,
             groups=p["read_groups"] or None,
         )
-        log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit")
+        missed: list[dict[str, Any]] = []
+        log = log + read.apply_verdicts(ctx, result, got["verdicts"], "audit", r.today, missed)
         if p.get("mode") == update.MODE:
             result, _again = reguard(r, mid, p, result)
         reviewed = [
@@ -245,7 +274,13 @@ def read3(r: Any) -> None:
             for x in got["settlement_reviewed"]
             if isinstance(x, dict)
         ]
-        rec = {"result": result, "overturns": log, "settlement_reviewed": reviewed, "hits_asked": hits}
+        rec = {
+            "result": result,
+            "overturns": log,
+            "settlement_reviewed": reviewed,
+            "hits_asked": hits,
+            "unmatched_verdicts": _noted_misses(r, "read3", missed),
+        }
         dump(r._mfile(mid, "read3.json"), rec)
 
     def wants(p: dict[str, Any]) -> bool:

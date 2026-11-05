@@ -14,21 +14,25 @@
 
 The model cites by ``[doc N]``; code maps N to ``{file_id, name, doc_date}``.
 A value whose doc number does not resolve keeps no source, which the gates
-refuse. Nothing a model writes becomes the responsible person or a file id.
+refuse. Nothing a model writes becomes the responsible person or a file id, or
+a defendant's status: the reads report dated events and code derives the status
+(``answers``, ``defstatus.derive``); their verdicts are applied in ``verdicts``.
 """
 
 from __future__ import annotations
 
-import copy
 import datetime as dt
 import json
 from typing import Any
 
-from . import identity, vocab
+from . import vocab
+from .answers import merge, to_state  # noqa: F401 - ``read.merge``, ``read.to_state``: callers read them here
 from .tools import MatterContext, run_loop
+from .verdicts import apply_verdicts  # noqa: F401 - ``read.apply_verdicts``: callers read it here
 
 _REF = {"doc": {"type": ["integer", "null"]}, "doc_date": {"type": ["string", "null"]}}
 _DATED = {"type": "object", "properties": {"date": {"type": ["string", "null"]}, **_REF}}
+_OTHER_EVENTS = tuple(f for f in vocab.DEFENDANT_EVENTS if f not in ("served", "answered", "sent_for_service"))
 RESULT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -45,9 +49,12 @@ RESULT_SCHEMA = {
             },
         },
         "complaint_filed": _DATED,
-        "next_court_date": {
-            "type": "object",
-            "properties": {"date": {"type": ["string", "null"]}, "event": {"type": "string"}, **_REF},
+        "court_dates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"date": {"type": ["string", "null"]}, "event": {"type": "string"}, **_REF},
+            },
         },
         "defendants": {
             "type": "array",
@@ -55,7 +62,10 @@ RESULT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "status": {"type": "string", "enum": list(vocab.DEFENDANT_STATUSES)},
+                    "role": {
+                        "type": "object",
+                        "properties": {"value": {"type": "string", "enum": list(vocab.DEFENDANT_ROLES)}, **_REF},
+                    },
                     "out_for_service": {
                         "type": "object",
                         "properties": {"value": {"type": "string", "enum": ["yes", "no", "unknown"]}, **_REF},
@@ -69,10 +79,11 @@ RESULT_SCHEMA = {
                         },
                     },
                     "answered": _DATED,
-                    "sent_for_service": _DATED,
+                    "sent_for_service": {"type": "array", "items": _DATED},
+                    **{f: _DATED for f in _OTHER_EVENTS},
                     "flags": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["name", "status"],
+                "required": ["name"],
             },
         },
         "discovery_propounded": {
@@ -144,10 +155,13 @@ RECORD_VERDICTS = {
 }
 
 PATHS = (
-    "case_status | complaint_filed | next_court_date | case_name | court | case_number | firm_role | "
-    "defendants[<exact name>].status | defendants[<exact name>].served | defendants[<exact name>].answered | "
-    "defendants[<exact name>].out_for_service | defendants[<exact name>].sent_for_service | defendants[+] (a defendant the result is missing; corrected is the "
-    "whole defendant) | discovery_propounded | discovery_served_on_client (corrected is the whole list)"
+    "case_status | complaint_filed | court_dates (corrected is the whole list of court dates that still stand) | "
+    "case_name | court | case_number | firm_role | defendants[<index>].<event>, where <index> is the defendant's "
+    "index in the result and <event> is one of " + ", ".join(vocab.DEFENDANT_EVENTS) + " | "
+    "defendants[<index>].out_for_service | defendants[<index>].role | defendants[+] (a defendant the result is "
+    "missing; corrected is the whole defendant) | discovery_propounded | discovery_served_on_client (corrected is the "
+    "whole list). A defendant's status is worked out by code from its events: to change one, correct the event. If the "
+    "papers cannot settle it, record defendants[<index>].status with verdict unclear."
 )
 
 COMMON = """You read one litigation matter's documents in a law firm's case-management system and report facts.
@@ -161,26 +175,31 @@ it: answers (including inside emails), dismissals, proofs of service and process
 extensions, defaults, case management statements newer than your finding, settlement emails ("settled",
 "release", "W-9", "settlement check", "notice of settlement"). Settlement language in an email changes the case
 status. Take defendants from the complaint caption and any amendments, and add any party a proof of service, a
-Doe amendment or a case management statement names as a defendant. Record each defendant's served and answered
-dates whatever its status now (a dismissed or settled defendant was usually served first); a defendant dropped by an amended
-complaint is "{dropped}". Never list the firm's own client as a defendant unless the firm is defense counsel, in
-which case firm_role is "defense" and the client is "{firm_client}". An uninsured/underinsured motorist arbitration
-respondent is "{uim}", not a court defendant. A defendant whose service was rejected (a registered agent's
-notice that it is not the agent, a returned service) and who was not then served is "{rejected}". Use only the listed statuses,
-spelled exactly; a corrected status is one of them too.
-Case statuses: {case_statuses}.
-Defendant statuses: {defendant_statuses}.
+Doe amendment or a case management statement names as a defendant. Never list the firm's own client as a defendant
+unless the firm is defense counsel, in which case firm_role is "defense" and the client has role "{firm_client}". An
+uninsured/underinsured motorist arbitration respondent has role "{uim}". Cite the document for any role; every other
+defendant has no role.
+A case status is one of: {case_statuses}.
 Write plain sentences for flags and notes: facts only, no legal advice, no doc numbers, no file ids.
 
-Sent out for service (sent_for_service, on each defendant): the date the firm sent the papers out to be served,
-which is its request to, or dispatch of, a process server or service company (an email or order to InfoTrack,
-One Legal, a registered process server and the like), cited to that email or document. It is NEVER the date the
-defendant was served. Record it whatever the defendant's status; if the papers went out more than once, record
-the most recent request. If you searched and found no such request, record sent_for_service with a null date.
+EVENTS. Report every dated event you find, each with its document, whatever has happened to the defendant since (a
+dismissed or settled defendant was usually served first). Code works out each defendant's status from these; do not
+report a status. A defendant's events: served; answered; appeared (a general or special appearance, a motion or a
+stipulation filed for it, with no answer); service_rejected (a registered agent's notice that it is not the agent, a
+returned service); dismissed; settled; dropped (an amended complaint no longer names it); default_entered;
+default_set_aside. A paper that states an event without a date: leave the date null and say so in that defendant's
+flags. Flag an answer to the original complaint that does not reach the amended one in those words.
 
-Today is {today}. A next court date must be the next one AFTER today; if none is set in the file, leave its date
-null. Discovery: list each set the firm propounded (what, on whom, the date served) and each set served on the
-firm's client (what, by whom, the date served, and whether responses were served, with their date).
+Sent out for service (sent_for_service, on each defendant): every date the firm sent the papers out to be served,
+which is its request to, or dispatch of, a process server or service company (an email or order to InfoTrack,
+One Legal, a registered process server and the like), each cited to that email or document. It is NEVER the date the
+defendant was served. Record it whatever else has happened. If you searched and found no such request, record an
+empty list.
+
+Today is {today}. court_dates: every court date the file sets, each with its event and document; leave out one that
+was continued, vacated or taken off calendar. Discovery: list each set the firm propounded (what, on whom, the date
+served) and each set served on the firm's client (what, by whom, the date served, and whether responses were served,
+with their date).
 
 The court's forms in this firm's files:
 {hints}"""
@@ -202,12 +221,9 @@ def system_for(role: str, firm: Any, today: dt.date) -> str:
     base = COMMON.format(
         today=today.isoformat(),
         hints=_hints(firm),
-        dropped=vocab.DROPPED,
-        firm_client=vocab.FIRM_CLIENT,
-        uim=vocab.UIM,
-        rejected=vocab.SERVICE_REJECTED,
+        firm_client=vocab.ROLE_FIRM_CLIENT,
+        uim=vocab.ROLE_UIM,
         case_statuses=_quoted(vocab.CASE_STATUSES),
-        defendant_statuses=_quoted(vocab.DEFENDANT_STATUSES),
     )
     tail = {
         "read": "\n\nYOUR PASS: determine the field groups you are asked for, then call record_result.",
@@ -264,7 +280,7 @@ def file_list(
 def ask(header: str, groups: list[str], listing: str, extra: str = "") -> str:
     want = ", ".join(groups)
     must = (
-        "\nEvery defendant named in the complaint caption or any amendment goes in defendants, each with a status."
+        "\nEvery defendant named in the complaint caption or any amendment goes in defendants, each with its events."
         if vocab.GROUP_DEFENDANTS in groups
         else ""
     )
@@ -275,207 +291,8 @@ def ask(header: str, groups: list[str], listing: str, extra: str = "") -> str:
     )
 
 
-# ---- model answer -> state ---------------------------------------------------------
-def _val(ctx: MatterContext, v: Any, keys: tuple[str, ...]) -> dict[str, Any]:
-    v = v if isinstance(v, dict) else {}
-    out = {k: v.get(k) for k in keys}
-    out["source"] = ctx.source(v.get("doc"), v.get("doc_date"))
-    return out
-
-
-def _defendant(ctx: MatterContext, d: Any) -> dict[str, Any]:
-    d = d if isinstance(d, dict) else {}
-    status = d.get("status") if d.get("status") in vocab.DEFENDANT_STATUSES else vocab.D_UNCLEAR
-    return {
-        "name": str(d.get("name") or "").strip(),
-        "status": status,
-        "out_for_service": _val(ctx, d.get("out_for_service"), ("value",)),
-        "served": _val(ctx, d.get("served"), ("date", "method")),
-        "answered": _val(ctx, d.get("answered"), ("date",)),
-        # Kept only when the read answered it: an absent key renders "Not read
-        # yet", never "Not in file", which would be a finding nobody made.
-        **(
-            {"sent_for_service": _val(ctx, d["sent_for_service"], ("date",))}
-            if isinstance(d.get("sent_for_service"), dict)
-            else {}
-        ),
-        "flags": [str(x) for x in d.get("flags") or []],
-    }
-
-
-def _discovery(ctx: MatterContext, rows: Any, theirs: bool) -> list[dict[str, Any]]:
-    out = []
-    for r in rows if isinstance(rows, list) else []:
-        if not isinstance(r, dict):
-            continue
-        row = _val(ctx, r, ("set", "served_by", "date") if theirs else ("set", "served_on", "date"))
-        if theirs:
-            row["responses_served"] = _val(ctx, r.get("responses_served"), ("value", "date"))
-        out.append(row)
-    return identity.split_rows(out)  # one row per set, as the papers are served (identity.py)
-
-
-def to_state(ctx: MatterContext, raw: dict[str, Any], groups: list[str]) -> dict[str, Any]:
-    """The model's answer for ``groups`` in the state schema."""
-    out: dict[str, Any] = {}
-    if vocab.GROUP_CASE in groups:
-        cs_raw = raw.get("case_status")
-        cs: dict[str, Any] = cs_raw if isinstance(cs_raw, dict) else {}
-        out.update(
-            case_name=raw.get("case_name"),
-            court=raw.get("court"),
-            case_number=raw.get("case_number"),
-            firm_role=raw.get("firm_role") if raw.get("firm_role") in vocab.FIRM_ROLES else "plaintiff",
-            case_status={
-                **_val(ctx, cs, ("value", "detail")),
-                "value": cs.get("value") if cs.get("value") in vocab.CASE_STATUSES else vocab.UNCLEAR,
-            },
-            complaint_filed=_val(ctx, raw.get("complaint_filed"), ("date",)),
-            next_court_date=_val(ctx, raw.get("next_court_date"), ("date", "event")),
-        )
-    if vocab.GROUP_DEFENDANTS in groups:
-        out["defendants"] = [_defendant(ctx, d) for d in raw.get("defendants") or [] if isinstance(d, dict)]
-    if vocab.GROUP_DISCOVERY in groups:
-        out["discovery_propounded"] = _discovery(ctx, raw.get("discovery_propounded"), False)
-        out["discovery_served_on_client"] = _discovery(ctx, raw.get("discovery_served_on_client"), True)
-    out["matter_flags"] = [str(x) for x in raw.get("matter_flags") or []]
-    if raw.get("notes"):
-        out["notes"] = str(raw["notes"])
-    return out
-
-
-def merge(prior: dict[str, Any] | None, fresh: dict[str, Any], groups: list[str]) -> dict[str, Any]:
-    """The fresh groups over the prior result; flags and notes from this read
-    replace the prior's only when the whole matter was read."""
-    base = copy.deepcopy(prior) if prior else {}
-    for g in groups:
-        for k in vocab.GROUP_FIELDS[g]:
-            if k in fresh:
-                base[k] = fresh[k]
-    if vocab.GROUP_DEFENDANTS in groups:
-        base["defendants"] = identity.merge_defendants(base.get("defendants") or [])
-    full = set(groups) == set(vocab.GROUPS)
-    if full or not base.get("matter_flags"):
-        base["matter_flags"] = fresh.get("matter_flags", [])
-    else:
-        base["matter_flags"] = list(dict.fromkeys([*base.get("matter_flags", []), *fresh.get("matter_flags", [])]))
-    if fresh.get("notes") and (full or not base.get("notes")):
-        base["notes"] = fresh["notes"]
-    base["fields_read"] = sorted(set(base.get("fields_read") or []) | set(groups))
-    return base
-
-
-# ---- verdicts ------------------------------------------------------------------------
-def _find_defendant(result: dict[str, Any], name: str) -> dict[str, Any] | None:
-    key = " ".join(name.lower().split())
-    return next(
-        (d for d in result.get("defendants") or [] if " ".join(str(d.get("name")).lower().split()) == key), None
-    )
-
-
-def _corrected_value(ctx: MatterContext, field: str, v: dict[str, Any]) -> Any:
-    c = v.get("corrected")
-    ref = {"doc": v.get("doc"), "doc_date": v.get("doc_date")}
-    if field in ("case_name", "court", "case_number"):
-        return c if isinstance(c, str) else None
-    if field == "firm_role":
-        return c if c in vocab.FIRM_ROLES else None
-    if field == "status":
-        return c if c in vocab.DEFENDANT_STATUSES else None
-    if field == "case_status":
-        val = c.get("value") if isinstance(c, dict) else c
-        return (
-            {
-                "value": val,
-                "detail": (c or {}).get("detail") if isinstance(c, dict) else v.get("why"),
-                "source": ctx.source(ref["doc"], ref["doc_date"]),
-            }
-            if val in vocab.CASE_STATUSES
-            else None
-        )
-    if field in ("discovery_propounded", "discovery_served_on_client"):
-        return _discovery(ctx, c, field == "discovery_served_on_client") if isinstance(c, list) else None
-    keys = {
-        "served": ("date", "method"),
-        "answered": ("date",),
-        "sent_for_service": ("date",),
-        "out_for_service": ("value",),
-        "complaint_filed": ("date",),
-        "next_court_date": ("date", "event"),
-    }.get(field)
-    if keys is None:
-        return None
-    c = c if isinstance(c, dict) else {"date": c} if isinstance(c, str) or c is None else {}
-    return _val(ctx, {**ref, **c}, keys)
-
-
-def apply_verdicts(
-    ctx: MatterContext, result: dict[str, Any], verdicts: list[dict[str, Any]], pass_name: str
-) -> list[dict[str, Any]]:
-    """Apply every overturn (and every unclear status) in place. Returns the
-    overturn log: path, old, new, the source the overturn cites, why."""
-    log: list[dict[str, Any]] = []
-    for v in verdicts if isinstance(verdicts, list) else []:
-        if not isinstance(v, dict) or v.get("verdict") not in ("overturned", "unclear"):
-            continue
-        path = str(v.get("path") or "")
-        if path == "defendants[+]":
-            d = _defendant(ctx, v.get("corrected"))
-            if d["name"] and _find_defendant(result, d["name"]) is None:
-                result.setdefault("defendants", []).append(d)
-                log.append(
-                    {
-                        "path": f"defendants[{d['name']}]",
-                        "old": None,
-                        "new": d,
-                        "source": ctx.source(v.get("doc"), v.get("doc_date")),
-                        "why": v.get("why"),
-                        "pass": pass_name,
-                    }
-                )
-            continue
-        target, field = result, path
-        if path.startswith("defendants[") and "]." in path:
-            name, field = path[len("defendants[") :].split("].", 1)
-            target = _find_defendant(result, name)  # type: ignore[assignment]
-            if target is None:
-                continue
-        if v["verdict"] == "unclear":
-            new: Any = (
-                vocab.D_UNCLEAR
-                if field == "status"
-                else (
-                    {"value": vocab.UNCLEAR, "detail": v.get("why"), "source": None} if field == "case_status" else None
-                )
-            )
-            if new is None:
-                target.setdefault("flags" if target is not result else "matter_flags", []).append(
-                    f"Unclear: {v.get('why') or path}"
-                )
-                continue
-        else:
-            new = _corrected_value(ctx, field, v)
-            if new is None:
-                continue
-        old = copy.deepcopy(target.get(field))
-        if old == new:
-            continue
-        target[field] = new
-        log.append(
-            {
-                "path": path,
-                "old": old,
-                "new": new,
-                "source": ctx.source(v.get("doc"), v.get("doc_date")),
-                "why": v.get("why"),
-                "pass": pass_name,
-            }
-        )
-    return log
-
-
 # ---- the passes ------------------------------------------------------------------------
-def pass1(
+def read_raw(
     doorway: Any,
     firm: Any,
     ctx: MatterContext,
@@ -486,7 +303,8 @@ def pass1(
     extra: str = "",
     tail: str = "",
 ) -> dict[str, Any]:
-    raw = run_loop(
+    """The read pass, its answer as the model recorded it."""
+    return run_loop(
         doorway,
         "litigation_read",
         model=firm.model("read"),
@@ -496,22 +314,45 @@ def pass1(
         final_tool=RECORD_RESULT,
         max_iterations=int(firm.get("tool_iterations")),
     )
-    return to_state(ctx, raw, groups)
+
+
+def pass1(
+    doorway: Any,
+    firm: Any,
+    ctx: MatterContext,
+    header: str,
+    groups: list[str],
+    listing: str,
+    today: dt.date,
+) -> dict[str, Any]:
+    raw = read_raw(doorway, firm, ctx, header, groups, listing, today)
+    return to_state(ctx, raw, groups, today)
+
+
+#: Not what a reader checks: bookkeeping, and how code arrived at a status.
+_NOT_SHOWN = ("source", "provenance", "overturns", "integrity", "status_from", "stored_status", "status_unclear")
 
 
 def for_model(result: dict[str, Any], ctx: MatterContext) -> str:
-    """The result with sources shown as doc numbers (what the reader can open)."""
+    """The result with sources shown as doc numbers (what the reader can open)
+    and each defendant with the index its verdicts name it by."""
 
     def conv(x: Any) -> Any:
         if isinstance(x, dict):
-            out = {k: conv(v) for k, v in x.items() if k not in ("source", "provenance", "overturns", "integrity")}
+            out = {k: conv(v) for k, v in x.items() if k not in _NOT_SHOWN}
             src = x.get("source")
             if isinstance(src, dict):
                 out["doc"] = ctx.by_id.get(str(src.get("file_id")))
             return out
         return [conv(v) for v in x] if isinstance(x, list) else x
 
-    return json.dumps(conv(result), indent=1)
+    shown = conv(result)
+    if "court_dates_read" in shown:
+        shown["court_dates"] = shown.pop("court_dates_read")
+    for i, d in enumerate(shown.get("defendants") or []):
+        if isinstance(d, dict):
+            d["index"] = i
+    return json.dumps(shown, indent=1)
 
 
 def check_pass(

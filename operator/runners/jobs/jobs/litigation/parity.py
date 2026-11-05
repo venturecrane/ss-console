@@ -72,14 +72,9 @@ def points(m: dict[str, Any] | None) -> dict[str, tuple[Any, dict[str, Any] | No
         name = party_key(str(d.get("name") or ""))
         if _PLACEHOLDER.match(name):
             continue
-        basis = d.get("answered") if _src_id(d.get("answered")) else d.get("served")
-        out[f"defendants[{name}].status"] = (d.get("status"), basis)
-        out[f"defendants[{name}].served"] = (_key(d.get("served"), "date"), d.get("served"))
-        out[f"defendants[{name}].answered"] = (_key(d.get("answered"), "date"), d.get("answered"))
-        out[f"defendants[{name}].sent_for_service"] = (
-            _key(d.get("sent_for_service"), "date"),
-            d.get("sent_for_service"),
-        )
+        out[f"defendants[{name}].status"] = (d.get("status"), defstatus.basis(d))
+        for f, key in identity.DATED_FIELDS:
+            out[f"defendants[{name}].{f}"] = (_key(d.get(f), key), d.get(f))
     for kind in ("discovery_propounded", "discovery_served_on_client"):
         for key, r in identity.keyed_rows(m.get(kind)):
             label = f"{kind}[{key}]"
@@ -154,6 +149,73 @@ def _unsupported(
     return bool(src and isinstance(date, str) and (src, date) in pairs)
 
 
+def _statuses(m: dict[str, Any], asserted: bool) -> set[str]:
+    """The status paths on a list that a read stated (or that code derived)."""
+    return {
+        f"defendants[{party_key(str(d.get('name') or ''))}].status"
+        for d in m.get("defendants") or []
+        if defstatus.asserted(d) == asserted
+    }
+
+
+def _fell_below_a_stated_status(path: str, old: Any, cur: Any, ctx: dict[str, Any]) -> bool:
+    """The last list stated "Dismissed" and this read's events give only
+    "Served, no answer": no paper on the matter explains a defendant coming
+    back, however well cited the service date is. A person decides. Unclear is
+    not a claim, so it is judged as any other value."""
+    fell = cur != vocab.D_UNCLEAR and defstatus.rank(cur) > defstatus.rank(old)
+    return fell and path in ctx["asserted"] and path in ctx["derived"]
+
+
+def _why_value(path: str, old: Any, old_obj: Any, cur: Any, cur_obj: Any, ctx: dict[str, Any]) -> str | None:
+    """Why any value differs from the last list, from a document or the calendar."""
+    cited, moved = ctx["cited"], ctx["moved"]
+    src = _src_id(cur_obj)
+    unsupported = _unsupported(path, old, old_obj, ctx["unsupported"], ctx["on_matter"])
+    reasons: tuple[tuple[Any, str], ...] = (
+        (
+            any(path == c or path.startswith(c + ".") or path.startswith(c + "[") for c in cited),
+            "a pass overturned it citing a document",
+        ),
+        (cur is not None and src in moved, "its source is a document new or changed since the last list"),
+        (old is None and cur is not None and src, "a value the last list did not have, with a source"),
+        (
+            cur is not None and src and not _src_id(old_obj),
+            "a cited value replacing one the last list carried without a source",
+        ),
+        (
+            path == "next_court_date" and isinstance(old, str) and old < ctx["today"],
+            "the last list's court date has passed",
+        ),
+        (
+            cur is not None and src and unsupported,
+            "a cited value replacing one the last list carried that its document did not support",
+        ),
+        (
+            cur is None and unsupported,
+            "the last list's value was not supported by its document, and no document gives one",
+        ),
+    )
+    return next((why for test, why in reasons if test), None)
+
+
+def _why_status(path: str, old: Any, old_obj: Any, cur: Any, cur_obj: Any, ctx: dict[str, Any]) -> str | None:
+    """Why a status differs when no document explains the status itself."""
+    if old is None and cur in _NO_PAPER:
+        return "a status the last list did not carry that claims no service, so no paper exists to cite"
+    if _contradicted_its_proof(old, old_obj, cur, cur_obj):
+        return "the last list's status contradicted its own cited proof of service"
+    if ctx["noted"].get(path) == cur:
+        return "the last list's status contradicted the defendant's own note, which states this one"
+    lifted = path in ctx["asserted"] and path in ctx["derived"] and defstatus.rank(cur) <= defstatus.rank(old)
+    if lifted and _src_id(cur_obj):
+        return "a status worked out from a cited event, replacing one the last list stated without its event"
+    moved = ctx["events"].get(path.rsplit(".", 1)[0])
+    if moved and all(moved):
+        return "it follows from the dated events that changed, each explained"
+    return None
+
+
 def compare(
     prior: dict[str, Any] | None,
     new: dict[str, Any],
@@ -171,35 +233,34 @@ def compare(
     if prior is None:
         return [{"path": "matter", "old": None, "new": "added to the list", "explained": True, "why": "new matter"}]
     before, after = points(prior), _renamed(points(new), prior, new)
-    cited = {_keyed(str(o.get("path"))) for o in overturns if o.get("source")}
-    noted = _noted(prior)
+    ctx: dict[str, Any] = {
+        "cited": {_keyed(str(o.get("path"))) for o in overturns if o.get("source")},
+        "moved": moved_files,
+        "today": today.isoformat(),
+        "unsupported": unsupported,
+        "on_matter": on_matter,
+        "noted": _noted(prior),
+        "asserted": _statuses(prior, asserted=True),
+        "derived": _statuses(new, asserted=False),
+        # {defendant path: was each of its changed events explained}; every
+        # event sorts ahead of ".status", so it is complete when a status asks.
+        "events": {},
+    }
     out = []
     for path in sorted(set(before) | set(after)):
         old, old_obj = before.get(path, (None, None))
         cur, cur_obj = after.get(path, (None, None))
         if old == cur or (old is None and cur is None):
             continue
-        why = None
-        if any(path == c or path.startswith(c + ".") or path.startswith(c + "[") for c in cited):
-            why = "a pass overturned it citing a document"
-        elif cur is not None and _src_id(cur_obj) in moved_files:
-            why = "its source is a document new or changed since the last list"
-        elif old is None and cur is not None and _src_id(cur_obj):
-            why = "a value the last list did not have, with a source"
-        elif cur is not None and _src_id(cur_obj) and not _src_id(old_obj):
-            why = "a cited value replacing one the last list carried without a source"
-        elif path == "next_court_date" and isinstance(old, str) and old < today.isoformat():
-            why = "the last list's court date has passed"
-        elif cur is not None and _src_id(cur_obj) and _unsupported(path, old, old_obj, unsupported, on_matter):
-            why = "a cited value replacing one the last list carried that its document did not support"
-        elif cur is None and _unsupported(path, old, old_obj, unsupported, on_matter):
-            why = "the last list's value was not supported by its document, and no document gives one"
-        elif old is None and cur in _NO_PAPER and _is_status(path):
-            why = "a status the last list did not carry that claims no service, so no paper exists to cite"
-        elif _is_status(path) and _contradicted_its_proof(old, old_obj, cur, cur_obj):
-            why = "the last list's status contradicted its own cited proof of service"
-        elif _is_status(path) and noted.get(path) == cur:
-            why = "the last list's status contradicted the defendant's own note, which states this one"
+        why = (
+            None
+            if _fell_below_a_stated_status(path, old, cur, ctx)
+            else _why_value(path, old, old_obj, cur, cur_obj, ctx)
+        )
+        if why is None and _is_status(path):
+            why = _why_status(path, old, old_obj, cur, cur_obj, ctx)
+        if path.startswith("defendants[") and not _is_status(path):
+            ctx["events"].setdefault(path.rsplit(".", 1)[0], []).append(why is not None)
         out.append(
             {
                 "path": path,

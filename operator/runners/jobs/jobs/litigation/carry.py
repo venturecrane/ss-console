@@ -20,10 +20,11 @@ A value is carried forward only when ALL of these hold:
   file's save date is carried only when this run holds the file's text and
   the text carries the date;
 * the date is not in the future, and a next court date is not in the past;
-* a defendant's answer date is carried only while its status says answered,
-  a service date only while its status does not say not served (the gates
-  refuse either contradiction); a sent-out-for-service date whatever the
-  status (papers go out before service, 2026-10-24).
+* on a stored status (``defstatus.asserted``), a defendant's answer date is
+  carried only while its status says answered, a service date only while its
+  status does not say not served (the gates refuse either contradiction); a
+  sent-out-for-service date whatever the status (papers go out before service,
+  2026-10-24). A derived status follows the events, so every event carries.
 
 No date is ever derived from a file NAME: the runner has no such convention,
 and a name is not the document.
@@ -35,7 +36,7 @@ import copy
 import datetime as dt
 from typing import Any, Callable
 
-from . import gates, identity, vocab
+from . import defstatus, gates, identity, vocab
 
 DISCOVERY = ("discovery_propounded", "discovery_served_on_client")
 
@@ -113,6 +114,22 @@ def _carry_top(prior: dict[str, Any], result: dict[str, Any], kw: dict[str, Any]
     return out
 
 
+def _carryable(d: dict[str, Any]) -> dict[str, bool]:
+    """Which of a defendant's events may be carried. A derived status follows
+    its events (the run works it out again after the carry), so there is
+    nothing for an event to contradict. An asserted one still rules, because
+    the gates compare it with the dates beside it."""
+    if not defstatus.asserted(d):
+        return {f: True for f, _k in identity.DATED_FIELDS}
+    st = d.get("status")
+    return {
+        "answered": st in (vocab.ANSWERED, vocab.ANSWERED_ORIGINAL),
+        "served": st not in (vocab.NOT_SERVED, vocab.OUT_FOR_SERVICE, vocab.D_UNCLEAR),
+        # Papers go out before service whatever the status says now.
+        "sent_for_service": True,
+    }
+
+
 def _carry_defendants(prior: dict[str, Any], result: dict[str, Any], kw: dict[str, Any]) -> list[str]:
     out: list[str] = []
     olds = identity.merge_defendants(prior.get("defendants") or [])
@@ -120,14 +137,7 @@ def _carry_defendants(prior: dict[str, Any], result: dict[str, Any], kw: dict[st
         old = next((o for o in olds if identity.same_person(str(o.get("name") or ""), str(d.get("name") or ""))), None)
         if old is None:
             continue
-        st = d.get("status")
-        allowed = {
-            "answered": st in (vocab.ANSWERED, vocab.ANSWERED_ORIGINAL),
-            "served": st not in (vocab.NOT_SERVED, vocab.OUT_FOR_SERVICE, vocab.D_UNCLEAR),
-            # Papers go out before service whatever the status says now.
-            "sent_for_service": True,
-        }
-        for f, ok in allowed.items():
+        for f, ok in _carryable(d).items():
             if ok and _empty(d.get(f)) and _qualifies(old.get(f), **kw):
                 d[f] = copy.deepcopy(old[f])
                 out.append(f"defendants[{d.get('name')}].{f}")

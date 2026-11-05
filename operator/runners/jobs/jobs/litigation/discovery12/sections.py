@@ -31,7 +31,9 @@ SECTIONS = (
 KEYS = tuple(k for k, _l in SECTIONS)
 LABEL = dict(SECTIONS)
 DIRECTIONS = ("propounded by the firm", "served on the firm's client", "other")
-RESPONSES = ("yes", "no", "unclear", "not yet due")
+#: What a read reports. "not yet due" is code's (``_response``), never a read's.
+RESPONSES = ("yes", "no", "unclear")
+NOT_YET_DUE = "not yet due"
 NONE_IN_FILE = "None in file"
 #: The dated fields of one entry, in print order.
 DATED = ("served", "due", "response", "extension")
@@ -150,39 +152,51 @@ def _dated(src: Callable[[Any, Any], Any], v: Any, extra: tuple[str, ...] = ()) 
     return out
 
 
-def entry(src: Callable[[Any, Any], Any], e: Any) -> dict[str, Any] | None:
+def _response(resp: dict[str, Any], due: dict[str, Any], today: dt.date) -> str:
+    """A read's answer, or "not yet due" when no response is on file and its
+    due date, as a paper states it, has not passed. A read cannot say so itself."""
+    value = str(resp["value"]) if resp.get("value") in RESPONSES else "unclear"
+    if value == "yes" or resp.get("date"):
+        return value
+    try:
+        return NOT_YET_DUE if dt.date.fromisoformat(str(due.get("date"))) >= today else value
+    except ValueError:
+        return value
+
+
+def entry(src: Callable[[Any, Any], Any], e: Any, today: dt.date) -> dict[str, Any] | None:
     if not isinstance(e, dict) or not str(e.get("item") or "").strip():
         return None
+    due = _dated(src, e.get("due"))
     resp = _dated(src, e.get("response"), ("value",))
-    if resp.get("value") not in RESPONSES:
-        resp["value"] = "unclear"
+    resp["value"] = _response(resp, due, today)
     return {
         "item": str(e["item"]).strip(),
         "direction": e.get("direction") if e.get("direction") in DIRECTIONS else "other",
         "party": str(e.get("party") or "").strip(),
         "served": _dated(src, e.get("served")),
-        "due": _dated(src, e.get("due")),
+        "due": due,
         "response": resp,
         "extension": _dated(src, e.get("extension"), ("detail",)),
         "notes": str(e.get("notes") or "").strip(),
     }
 
 
-def section_list(src: Callable[[Any, Any], Any], rows: Any) -> list[dict[str, Any]]:
-    return [x for x in (entry(src, e) for e in (rows if isinstance(rows, list) else [])) if x is not None]
+def section_list(src: Callable[[Any, Any], Any], rows: Any, today: dt.date) -> list[dict[str, Any]]:
+    return [x for x in (entry(src, e, today) for e in (rows if isinstance(rows, list) else [])) if x is not None]
 
 
-def to_result(src: Callable[[Any, Any], Any], raw: dict[str, Any]) -> dict[str, Any]:
+def to_result(src: Callable[[Any, Any], Any], raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
     got = raw.get("sections")
     secs: dict[str, Any] = got if isinstance(got, dict) else {}
     return {
-        "sections": {k: section_list(src, secs.get(k)) for k in KEYS},
+        "sections": {k: section_list(src, secs.get(k), today) for k in KEYS},
         "flags": [str(x) for x in raw.get("flags") or []],
     }
 
 
 def apply_verdicts(
-    src: Callable[[Any, Any], Any], result: dict[str, Any], verdicts: Any, pass_name: str
+    src: Callable[[Any, Any], Any], result: dict[str, Any], verdicts: Any, pass_name: str, today: dt.date
 ) -> list[dict[str, Any]]:
     """An overturn replaces its section whole; an unclear one becomes a flag.
     Returns the overturn log."""
@@ -194,7 +208,7 @@ def apply_verdicts(
         if v.get("verdict") == "unclear":
             result.setdefault("flags", []).append(f"Unclear ({LABEL[key]}): {v.get('why') or 'see the file'}")
         elif v.get("verdict") == "overturned" and isinstance(v.get("corrected"), list):
-            new = section_list(src, v["corrected"])
+            new = section_list(src, v["corrected"], today)
             old = copy.deepcopy(result["sections"].get(key) or [])
             if new != old:
                 result["sections"][key] = new

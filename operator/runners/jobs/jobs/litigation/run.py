@@ -37,7 +37,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import carry, defstatus, manifest, parity, passes, read, seedcheck, textcache, update, vocab
+from . import answers, carry, defstatus, manifest, parity, passes, read, seedcheck, textcache, update, vocab
 from .progress import Progress
 from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported for tests and callers that import these from run
 from .runbase import RunBase
@@ -332,10 +332,12 @@ class LitigationRun(BookStages, RunBase):
         if result is None:
             return None
         result = copy.deepcopy(result)
+        answers.repick_court(result, self.today)
         self._carry(mid, result)
-        # A no-answer status beside a note stating a default, dismissal or
-        # answer prints the note's status (``defstatus``, 2026-11-02).
-        log = [*log, *defstatus.reconcile(result)]
+        # Every derived status from the events as they now stand. A stored
+        # no-answer status beside a note stating a default, dismissal or answer
+        # prints the note's status (``defstatus``, 2026-11-02).
+        log = [*log, *defstatus.settle(result, self.today)]
         out = {
             **result,
             "matter_id": mid,

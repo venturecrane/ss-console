@@ -2,63 +2,408 @@
   "_comment": "The answer key for defstatus.derive, written before the derivation was built. Each row is one defendant's event set and the status a firm should read. 'events' maps an event to its date, every one cited to a document by the loader (answerkey.defendant); a null date is a document cited for a negative (no event). 'uncited' lists events carried with a date and no document. Every name and date is invented.",
   "today": "2026-10-07",
   "rows": [
-    { "id": "uim role outranks a dismissal", "role": "uim_respondent", "events": { "dismissed": "2026-05-01", "served": "2026-04-10" }, "status": "UIM arbitration respondent (not a court defendant)", "rule": "role_uim" },
-    { "id": "firm client role outranks an answer", "role": "firm_client", "events": { "answered": "2026-04-30" }, "status": "Firm's client (firm is defense counsel)", "rule": "role_firm_client" },
-    { "id": "dismissal outranks a settlement, an answer and service", "events": { "dismissed": "2026-08-01", "settled": "2026-07-01", "answered": "2026-04-30", "served": "2026-04-10" }, "status": "Dismissed", "rule": "dismissed" },
-    { "id": "dismissal outranks a default", "events": { "dismissed": "2026-08-01", "default_entered": "2026-06-01" }, "status": "Dismissed", "rule": "dismissed" },
-    { "id": "settlement outranks being dropped", "events": { "settled": "2026-07-01", "dropped": "2026-06-01" }, "status": "Settled", "rule": "settled" },
-    { "id": "settlement outranks a default beside an answer", "events": { "settled": "2026-07-01", "default_entered": "2026-05-01", "answered": "2026-04-30" }, "status": "Settled", "rule": "settled" },
-    { "id": "dropped outranks a default", "events": { "dropped": "2026-07-01", "default_entered": "2026-05-01" }, "status": "Dropped by amendment", "rule": "dropped" },
-    { "id": "dropped outranks an answer", "events": { "dropped": "2026-07-01", "answered": "2026-04-30", "served": "2026-04-10" }, "status": "Dropped by amendment", "rule": "dropped" },
-    { "id": "a default and an answer neither undone is unclear", "events": { "default_entered": "2026-06-01", "answered": "2026-04-30", "served": "2026-04-10" }, "status": "Unclear", "rule": "default_and_answer" },
-    { "id": "default outranks service", "events": { "default_entered": "2026-06-01", "served": "2026-04-10" }, "status": "Default entered", "rule": "default" },
-    { "id": "default set aside later, then answered", "events": { "default_entered": "2026-06-01", "default_set_aside": "2026-07-01", "answered": "2026-07-15", "served": "2026-04-10" }, "status": "Answered", "rule": "answered" },
-    { "id": "default set aside later, served only", "events": { "default_entered": "2026-06-01", "default_set_aside": "2026-07-01", "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "default set aside the same day is undone", "events": { "default_entered": "2026-06-01", "default_set_aside": "2026-06-01", "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "default entered again after a set aside stands", "events": { "default_entered": "2026-08-01", "default_set_aside": "2026-07-01", "served": "2026-04-10" }, "status": "Default entered", "rule": "default" },
-    { "id": "a set aside with no default moves nothing", "events": { "default_set_aside": "2026-07-01", "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "a note says the default was set aside, no set aside event", "events": { "default_entered": "2026-06-01", "served": "2026-04-10" }, "flags": ["Default later set aside by the court."], "status": "Unclear", "rule": "default_undone_in_notes" },
-    { "id": "answered and served", "events": { "answered": "2026-04-30", "served": "2026-04-10" }, "status": "Answered", "rule": "answered" },
-    { "id": "answered with no service date", "events": { "answered": "2026-04-30" }, "status": "Answered", "rule": "answered" },
-    { "id": "answered the original, not the amended", "events": { "answered": "2026-04-30" }, "flags": ["Answered the original complaint; no answer to the amended complaint."], "status": "Answered original complaint, not the amended complaint", "rule": "answered_original" },
-    { "id": "a note naming only the amended complaint is a plain answer", "events": { "answered": "2026-04-30" }, "flags": ["Amended complaint filed 2026-04-01."], "status": "Answered", "rule": "answered" },
-    { "id": "an answer outranks an appearance", "events": { "answered": "2026-04-30", "appeared": "2026-04-20" }, "status": "Answered", "rule": "answered" },
-    { "id": "appeared outranks service", "events": { "appeared": "2026-04-20", "served": "2026-04-10" }, "status": "Appeared, no answer in file", "rule": "appeared" },
-    { "id": "appeared, service never proved", "events": { "appeared": "2026-04-20" }, "status": "Appeared, no answer in file", "rule": "appeared" },
-    { "id": "served", "events": { "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "served beside papers sent out", "events": { "served": "2026-04-10", "sent_for_service": "2026-03-20" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "rejected, then served again", "events": { "service_rejected": "2026-03-25", "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "served, then the service rejected", "events": { "served": "2026-04-10", "service_rejected": "2026-04-25" }, "status": "Unclear", "rule": "served_then_rejected" },
-    { "id": "served and rejected the same day", "events": { "served": "2026-04-10", "service_rejected": "2026-04-10" }, "status": "Unclear", "rule": "served_then_rejected" },
-    { "id": "rejected and not served", "events": { "service_rejected": "2026-03-25" }, "status": "Service rejected (not served)", "rule": "rejected" },
-    { "id": "rejection outranks being out for service", "events": { "service_rejected": "2026-03-25" }, "out_for_service": "yes", "status": "Service rejected (not served)", "rule": "rejected" },
-    { "id": "out for service, cited", "out_for_service": "yes", "events": {}, "status": "Out for service", "rule": "out_for_service" },
-    { "id": "out for service with no document is no evidence", "out_for_service": "yes", "out_for_service_uncited": true, "events": {}, "status": "Not served", "rule": "not_served" },
-    { "id": "papers sent out, no return in file", "events": { "sent_for_service": "2026-03-20" }, "status": "Out for service", "rule": "out_for_service" },
-    { "id": "papers sent out, the read says not out", "events": { "sent_for_service": "2026-03-20" }, "out_for_service": "no", "status": "Not served", "rule": "not_served" },
+    {
+      "id": "uim role outranks a dismissal",
+      "role": "uim_respondent",
+      "events": { "dismissed": "2026-05-01", "served": "2026-04-10" },
+      "status": "UIM arbitration respondent (not a court defendant)",
+      "rule": "role_uim"
+    },
+    {
+      "id": "firm client role outranks an answer",
+      "role": "firm_client",
+      "events": { "answered": "2026-04-30" },
+      "status": "Firm's client (firm is defense counsel)",
+      "rule": "role_firm_client"
+    },
+    {
+      "id": "dismissal outranks a settlement, an answer and service",
+      "events": {
+        "dismissed": "2026-08-01",
+        "settled": "2026-07-01",
+        "answered": "2026-04-30",
+        "served": "2026-04-10"
+      },
+      "status": "Dismissed",
+      "rule": "dismissed"
+    },
+    {
+      "id": "dismissal outranks a default",
+      "events": { "dismissed": "2026-08-01", "default_entered": "2026-06-01" },
+      "status": "Dismissed",
+      "rule": "dismissed"
+    },
+    {
+      "id": "settlement outranks being dropped",
+      "events": { "settled": "2026-07-01", "dropped": "2026-06-01" },
+      "status": "Settled",
+      "rule": "settled"
+    },
+    {
+      "id": "settlement outranks a default beside an answer",
+      "events": {
+        "settled": "2026-07-01",
+        "default_entered": "2026-05-01",
+        "answered": "2026-04-30"
+      },
+      "status": "Settled",
+      "rule": "settled"
+    },
+    {
+      "id": "dropped outranks a default",
+      "events": { "dropped": "2026-07-01", "default_entered": "2026-05-01" },
+      "status": "Dropped by amendment",
+      "rule": "dropped"
+    },
+    {
+      "id": "dropped outranks an answer",
+      "events": { "dropped": "2026-07-01", "answered": "2026-04-30", "served": "2026-04-10" },
+      "status": "Dropped by amendment",
+      "rule": "dropped"
+    },
+    {
+      "id": "a default and an answer neither undone is unclear",
+      "events": {
+        "default_entered": "2026-06-01",
+        "answered": "2026-04-30",
+        "served": "2026-04-10"
+      },
+      "status": "Unclear",
+      "rule": "default_and_answer"
+    },
+    {
+      "id": "default outranks service",
+      "events": { "default_entered": "2026-06-01", "served": "2026-04-10" },
+      "status": "Default entered",
+      "rule": "default"
+    },
+    {
+      "id": "default set aside later, then answered",
+      "events": {
+        "default_entered": "2026-06-01",
+        "default_set_aside": "2026-07-01",
+        "answered": "2026-07-15",
+        "served": "2026-04-10"
+      },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "default set aside later, served only",
+      "events": {
+        "default_entered": "2026-06-01",
+        "default_set_aside": "2026-07-01",
+        "served": "2026-04-10"
+      },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "default set aside the same day is undone",
+      "events": {
+        "default_entered": "2026-06-01",
+        "default_set_aside": "2026-06-01",
+        "served": "2026-04-10"
+      },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "default entered again after a set aside stands",
+      "events": {
+        "default_entered": "2026-08-01",
+        "default_set_aside": "2026-07-01",
+        "served": "2026-04-10"
+      },
+      "status": "Default entered",
+      "rule": "default"
+    },
+    {
+      "id": "a set aside with no default moves nothing",
+      "events": { "default_set_aside": "2026-07-01", "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "a note says the default was set aside, no set aside event",
+      "events": { "default_entered": "2026-06-01", "served": "2026-04-10" },
+      "flags": ["Default later set aside by the court."],
+      "status": "Unclear",
+      "rule": "default_undone_in_notes"
+    },
+    {
+      "id": "answered and served",
+      "events": { "answered": "2026-04-30", "served": "2026-04-10" },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "answered with no service date",
+      "events": { "answered": "2026-04-30" },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "answered the original, not the amended",
+      "events": { "answered": "2026-04-30" },
+      "flags": ["Answered the original complaint; no answer to the amended complaint."],
+      "status": "Answered original complaint, not the amended complaint",
+      "rule": "answered_original"
+    },
+    {
+      "id": "a note naming only the amended complaint is a plain answer",
+      "events": { "answered": "2026-04-30" },
+      "flags": ["Amended complaint filed 2026-04-01."],
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "an answer outranks an appearance",
+      "events": { "answered": "2026-04-30", "appeared": "2026-04-20" },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "appeared outranks service",
+      "events": { "appeared": "2026-04-20", "served": "2026-04-10" },
+      "status": "Appeared, no answer in file",
+      "rule": "appeared"
+    },
+    {
+      "id": "appeared, service never proved",
+      "events": { "appeared": "2026-04-20" },
+      "status": "Appeared, no answer in file",
+      "rule": "appeared"
+    },
+    {
+      "id": "served",
+      "events": { "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "served beside papers sent out",
+      "events": { "served": "2026-04-10", "sent_for_service": "2026-03-20" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "rejected, then served again",
+      "events": { "service_rejected": "2026-03-25", "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "served, then the service rejected",
+      "events": { "served": "2026-04-10", "service_rejected": "2026-04-25" },
+      "status": "Unclear",
+      "rule": "served_then_rejected"
+    },
+    {
+      "id": "served and rejected the same day",
+      "events": { "served": "2026-04-10", "service_rejected": "2026-04-10" },
+      "status": "Unclear",
+      "rule": "served_then_rejected"
+    },
+    {
+      "id": "rejected and not served",
+      "events": { "service_rejected": "2026-03-25" },
+      "status": "Service rejected (not served)",
+      "rule": "rejected"
+    },
+    {
+      "id": "rejection outranks being out for service",
+      "events": { "service_rejected": "2026-03-25" },
+      "out_for_service": "yes",
+      "status": "Service rejected (not served)",
+      "rule": "rejected"
+    },
+    {
+      "id": "out for service, cited",
+      "out_for_service": "yes",
+      "events": {},
+      "status": "Out for service",
+      "rule": "out_for_service"
+    },
+    {
+      "id": "out for service with no document is no evidence",
+      "out_for_service": "yes",
+      "out_for_service_uncited": true,
+      "events": {},
+      "status": "Not served",
+      "rule": "not_served"
+    },
+    {
+      "id": "papers sent out, no return in file",
+      "events": { "sent_for_service": "2026-03-20" },
+      "status": "Out for service",
+      "rule": "out_for_service"
+    },
+    {
+      "id": "papers sent out, the read says not out",
+      "events": { "sent_for_service": "2026-03-20" },
+      "out_for_service": "no",
+      "status": "Not served",
+      "rule": "not_served"
+    },
     { "id": "nothing in the file", "events": {}, "status": "Not served", "rule": "not_served" },
-    { "id": "out for service unknown", "out_for_service": "unknown", "events": {}, "status": "Not served", "rule": "not_served" },
-    { "id": "a document cited for no dismissal is no dismissal", "events": { "dismissed": null, "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "a document cited for no answer is no answer", "events": { "answered": null, "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "an answer dated today counts", "events": { "answered": "2026-10-07" }, "status": "Answered", "rule": "answered" },
-    { "id": "an event dated after today has not happened", "events": { "answered": "2026-10-08", "served": "2026-04-10" }, "status": "Unclear", "rule": "future_event" },
-    { "id": "a dated event with no document", "events": {}, "uncited": { "served": "2026-04-10" }, "status": "Unclear", "rule": "uncited_event" },
-    { "id": "a role the vocabulary does not know", "role": "intervenor", "events": { "served": "2026-04-10" }, "status": "Unclear", "rule": "unreadable_role" },
-    { "id": "a role with no document", "role": "firm_client", "role_uncited": true, "events": {}, "status": "Unclear", "rule": "unreadable_role" },
-    { "id": "a check pass could not settle it", "marked_unclear": "the file disagrees with itself", "events": { "answered": "2026-04-30" }, "status": "Unclear", "rule": "checked_unclear" },
-    { "id": "stored dismissed, an answer arrives", "stored_status": "Dismissed", "events": { "answered": "2026-04-30" }, "status": "Dismissed", "rule": "dismissed" },
-    { "id": "stored settled, a dismissal arrives", "stored_status": "Settled", "events": { "dismissed": "2026-08-01" }, "status": "Dismissed", "rule": "dismissed" },
-    { "id": "stored dropped, a paper sent out arrives", "stored_status": "Dropped by amendment", "events": { "sent_for_service": "2026-03-20" }, "status": "Dropped by amendment", "rule": "dropped" },
-    { "id": "stored default, an answer arrives", "stored_status": "Default entered", "events": { "answered": "2026-07-15" }, "status": "Unclear", "rule": "default_and_answer" },
-    { "id": "stored default, a set aside arrives", "stored_status": "Default entered", "events": { "default_set_aside": "2026-07-01", "served": "2026-04-10" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "stored served with no date, an answer arrives", "stored_status": "Served, no answer in file", "events": { "answered": "2026-07-15" }, "status": "Answered", "rule": "answered" },
-    { "id": "stored not served, a proof of service arrives", "stored_status": "Not served", "events": { "served": "2026-09-01" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "stored rejected, a proof of service arrives", "stored_status": "Service rejected (not served)", "events": { "served": "2026-09-01" }, "status": "Served, no answer in file", "rule": "served" },
-    { "id": "stored appeared, service arrives", "stored_status": "Appeared, no answer in file", "events": { "served": "2026-09-01" }, "status": "Appeared, no answer in file", "rule": "appeared" },
-    { "id": "stored out for service stays out", "stored_status": "Out for service", "events": {}, "status": "Out for service", "rule": "out_for_service" },
-    { "id": "stored uim stays, a paper arrives", "stored_status": "UIM arbitration respondent (not a court defendant)", "events": { "served": "2026-09-01" }, "status": "UIM arbitration respondent (not a court defendant)", "rule": "role_uim" },
-    { "id": "stored firm client stays, a paper arrives", "stored_status": "Firm's client (firm is defense counsel)", "events": { "served": "2026-09-01" }, "status": "Firm's client (firm is defense counsel)", "rule": "role_firm_client" },
-    { "id": "stored answered original keeps its reading", "stored_status": "Answered original complaint, not the amended complaint", "events": { "answered": "2026-04-30" }, "status": "Answered original complaint, not the amended complaint", "rule": "answered_original" },
-    { "id": "stored unclear yields to a cited event", "stored_status": "Unclear", "events": { "served": "2026-09-01" }, "status": "Served, no answer in file", "rule": "served" }
+    {
+      "id": "out for service unknown",
+      "out_for_service": "unknown",
+      "events": {},
+      "status": "Not served",
+      "rule": "not_served"
+    },
+    {
+      "id": "a document cited for no dismissal is no dismissal",
+      "events": { "dismissed": null, "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "a document cited for no answer is no answer",
+      "events": { "answered": null, "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "an answer dated today counts",
+      "events": { "answered": "2026-10-07" },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "an event dated after today has not happened",
+      "events": { "answered": "2026-10-08", "served": "2026-04-10" },
+      "status": "Unclear",
+      "rule": "future_event"
+    },
+    {
+      "id": "a dated event with no document",
+      "events": {},
+      "uncited": { "served": "2026-04-10" },
+      "status": "Unclear",
+      "rule": "uncited_event"
+    },
+    {
+      "id": "a role the vocabulary does not know",
+      "role": "intervenor",
+      "events": { "served": "2026-04-10" },
+      "status": "Unclear",
+      "rule": "unreadable_role"
+    },
+    {
+      "id": "a role with no document",
+      "role": "firm_client",
+      "role_uncited": true,
+      "events": {},
+      "status": "Unclear",
+      "rule": "unreadable_role"
+    },
+    {
+      "id": "a check pass could not settle it",
+      "marked_unclear": "the file disagrees with itself",
+      "events": { "answered": "2026-04-30" },
+      "status": "Unclear",
+      "rule": "checked_unclear"
+    },
+    {
+      "id": "stored dismissed, an answer arrives",
+      "stored_status": "Dismissed",
+      "events": { "answered": "2026-04-30" },
+      "status": "Dismissed",
+      "rule": "dismissed"
+    },
+    {
+      "id": "stored settled, a dismissal arrives",
+      "stored_status": "Settled",
+      "events": { "dismissed": "2026-08-01" },
+      "status": "Dismissed",
+      "rule": "dismissed"
+    },
+    {
+      "id": "stored dropped, a paper sent out arrives",
+      "stored_status": "Dropped by amendment",
+      "events": { "sent_for_service": "2026-03-20" },
+      "status": "Dropped by amendment",
+      "rule": "dropped"
+    },
+    {
+      "id": "stored default, an answer arrives",
+      "stored_status": "Default entered",
+      "events": { "answered": "2026-07-15" },
+      "status": "Unclear",
+      "rule": "default_and_answer"
+    },
+    {
+      "id": "stored default, a set aside arrives",
+      "stored_status": "Default entered",
+      "events": { "default_set_aside": "2026-07-01", "served": "2026-04-10" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "stored served with no date, an answer arrives",
+      "stored_status": "Served, no answer in file",
+      "events": { "answered": "2026-07-15" },
+      "status": "Answered",
+      "rule": "answered"
+    },
+    {
+      "id": "stored not served, a proof of service arrives",
+      "stored_status": "Not served",
+      "events": { "served": "2026-09-01" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "stored rejected, a proof of service arrives",
+      "stored_status": "Service rejected (not served)",
+      "events": { "served": "2026-09-01" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    },
+    {
+      "id": "stored appeared, service arrives",
+      "stored_status": "Appeared, no answer in file",
+      "events": { "served": "2026-09-01" },
+      "status": "Appeared, no answer in file",
+      "rule": "appeared"
+    },
+    {
+      "id": "stored out for service stays out",
+      "stored_status": "Out for service",
+      "events": {},
+      "status": "Out for service",
+      "rule": "out_for_service"
+    },
+    {
+      "id": "stored uim stays, a paper arrives",
+      "stored_status": "UIM arbitration respondent (not a court defendant)",
+      "events": { "served": "2026-09-01" },
+      "status": "UIM arbitration respondent (not a court defendant)",
+      "rule": "role_uim"
+    },
+    {
+      "id": "stored firm client stays, a paper arrives",
+      "stored_status": "Firm's client (firm is defense counsel)",
+      "events": { "served": "2026-09-01" },
+      "status": "Firm's client (firm is defense counsel)",
+      "rule": "role_firm_client"
+    },
+    {
+      "id": "stored answered original keeps its reading",
+      "stored_status": "Answered original complaint, not the amended complaint",
+      "events": { "answered": "2026-04-30" },
+      "status": "Answered original complaint, not the amended complaint",
+      "rule": "answered_original"
+    },
+    {
+      "id": "stored unclear yields to a cited event",
+      "stored_status": "Unclear",
+      "events": { "served": "2026-09-01" },
+      "status": "Served, no answer in file",
+      "rule": "served"
+    }
   ]
 }

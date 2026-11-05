@@ -217,11 +217,11 @@ class Discovery12Run(LitigationRun):
             return True
         ctx = ctxs[mid]
         if role == "read":
-            rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
+            rec = {"result": sections.to_result(ctx.source, got, self.today), "overturns": []}
         else:
             prev = self._prev(mid, role, k) or {}
             result = copy.deepcopy(prev["result"])
-            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
+            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role, self.today)
             rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
         dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
         return True

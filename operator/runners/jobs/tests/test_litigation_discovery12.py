@@ -690,6 +690,55 @@ def test_a_not_yet_due_answer_is_read_again_once_its_day_passes():
     assert carry.reusable(saved, "other", dt.date(2026, 11, 1)) is None
 
 
+def _src_stub(n, _d=None):
+    return {"file_id": f"d{n}", "name": "x", "doc_date": None} if n else None
+
+
+@pytest.mark.parametrize(
+    "response,due,want",
+    [
+        ({"value": "no"}, "2026-10-30", "not yet due"),  # due tomorrow
+        ({"value": "no"}, "2026-10-29", "not yet due"),  # due today
+        ({"value": "no"}, "2026-10-28", "no"),  # due yesterday, nothing served
+        ({"value": "unclear"}, "2026-10-30", "not yet due"),
+        ({"value": "unclear"}, "2026-10-28", "unclear"),
+        ({"value": "unclear"}, None, "unclear"),
+        ({"value": "no"}, None, "no"),  # no paper states a due date
+        ({"value": "yes", "date": "2026-10-20", "doc": 2}, "2026-10-30", "yes"),
+        ({"value": "no", "date": "2026-10-20", "doc": 2}, "2026-10-30", "no"),  # a dated answer is the read's
+        ({"value": "unclear", "date": "2026-10-20", "doc": 2}, "2026-10-30", "unclear"),
+        ({"value": "not yet due"}, "2026-10-28", "unclear"),  # no read's to say; not on its list
+        ({"value": "not yet due"}, "2026-10-30", "not yet due"),  # code reaches the same answer
+        ({"value": "yes"}, "2026-10-30", "yes"),  # served, its date not read: still a response
+    ],
+)
+def test_not_yet_due_is_codes_answer(response, due, want):
+    e = {"item": "RFAs, Set One", "direction": "other", "due": {"date": due, "doc": 1}, "response": response}
+    got = sections.to_result(_src_stub, {"sections": {"rfas": [e]}}, TODAY)
+    assert got["sections"]["rfas"][0]["response"]["value"] == want
+
+
+def test_no_read_is_offered_not_yet_due():
+    assert sections.RESPONSES == ("yes", "no", "unclear")
+    assert "not yet due" not in sections.system_for("read", TODAY)
+    enum = sections.ENTRY["properties"]["response"]["properties"]["value"]["enum"]
+    assert enum == ["yes", "no", "unclear"]
+
+
+def test_a_corrected_section_is_held_to_the_same_rule():
+    e = {
+        "item": "RFAs, Set One",
+        "direction": "other",
+        "due": {"date": "2026-10-30", "doc": 1},
+        "response": {"value": "no"},
+    }
+    result = {"sections": {"rfas": []}, "flags": []}
+    sections.apply_verdicts(
+        _src_stub, result, [{"section": "rfas", "verdict": "overturned", "corrected": [e]}], "verify", TODAY
+    )
+    assert result["sections"]["rfas"][0]["response"]["value"] == "not yet due"
+
+
 def test_a_proof_and_a_held_list_save_nothing(tmp_path):
     from jobs.litigation.discovery12 import carry
 
