@@ -365,21 +365,6 @@ class Finish:
             "notes": f"{base} - attorney notes.docx",
         }
 
-    def _laid_out(
-        self, u: Unit, doc: str, fmt: dict[str, Any], paper: str
-    ) -> tuple[Path, dict[str, Any], list[str], dict[str, Any]]:
-        """The Word file: in the firm's own file when it has a base, else on ours
-        with the config's layout. (path, report, what was laid, the format
-        the check reads.)"""
-        dest = deliver.out_dir(self.data) / self._names(u)["draft"]
-        held = self.firm.firm_base(self.cls)
-        if held is not None:
-            base = brief_base.load_base(*held)
-            path, report = brief_base.render_into(doc, dest, base, paper)
-            return path, report, [], brief_base.checked_format(fmt, self.cls, base)
-        path, report = render.render(doc, self.cls, dest, fmt)
-        return path, report, pleading.apply_for(path, fmt, self.cls) if paper == "pleading" else [], fmt
-
     def _render_unit(self, u: Unit, md: str, digest: str) -> None:
         if self._is_done(u.stage("rendered")):
             return
@@ -395,7 +380,8 @@ class Finish:
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
         fmt, paper = self.firm.data["format"], self.paper()
-        path, report, laid, checked = self._laid_out(u, doc, fmt, paper)
+        dest = deliver.out_dir(self.data) / self._names(u)["draft"]
+        path, report, laid, checked = brief_base.lay_out(doc, dest, self.cls, fmt, paper, self.firm.firm_base(self.cls))
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check

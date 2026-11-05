@@ -466,3 +466,19 @@ def checked_format(fmt: dict[str, Any], cls: str, base: FirmBase) -> dict[str, A
     if size:
         layout["table_font_pt"] = size
     return {**fmt, "layout": {**(fmt.get("layout") or {}), cls: layout}}
+
+
+def lay_out(
+    doc: str, dest: Path, cls: str, fmt: dict[str, Any], paper: str, held: tuple[Path, dict[str, str]] | None
+) -> tuple[Path, dict[str, Any], list[str], dict[str, Any]]:
+    """The Word file: in the firm's own file when it has a base (``held``), else on
+    ours with the config's layout. Returns (path, report, what was laid, the
+    format the check reads)."""
+    if held is not None:
+        base = load_base(*held)
+        path, report = render_into(doc, dest, base, paper)
+        return path, report, [], checked_format(fmt, cls, base)
+    from . import pleading, render
+
+    path, report = render.render(doc, cls, dest, fmt)
+    return path, report, pleading.apply_for(path, fmt, cls) if paper == "pleading" else [], fmt
