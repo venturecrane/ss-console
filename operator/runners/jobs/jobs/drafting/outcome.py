@@ -61,6 +61,10 @@ REASON_CODES = (
     "revise_layout_lost",
     # Revise mode (revise/run.py): nothing in the brief would change: held, no version filed, the attorney told why.
     "revise_unchanged",
+    # A brief in the firm's own file (brief_base.py): the draft has what the base cannot place.
+    "firm_base_unfit",
+    # A brief in the firm's own file (firmbase): more than its slots differ: failed, nothing filed.
+    "firm_base_lost",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

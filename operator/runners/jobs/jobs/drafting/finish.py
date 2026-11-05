@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
-from . import pleading, prerender, render
+from . import brief_base, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, wording
 from . import settle as settle_mod
@@ -379,10 +379,10 @@ class Finish:
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
-        out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
-        path, report = render.render(doc, self.cls, out / self._names(u)["draft"], fmt)
-        laid = pleading.apply_for(path, fmt, self.cls) if paper == "pleading" else []
-        res = format_check.check(path, self.cls, fmt, digest, self.corpus(), paper, cites)
+        fmt, paper = self.firm.data["format"], self.paper()
+        dest = deliver.out_dir(self.data) / self._names(u)["draft"]
+        path, report, laid, checked = brief_base.lay_out(doc, dest, self.cls, fmt, paper, self.firm.firm_base(self.cls))
+        res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
