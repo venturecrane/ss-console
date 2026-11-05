@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import request_additions, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .drafting import firm_rules
@@ -337,7 +337,11 @@ class DraftingLane(Daemon):
         n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
         self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
 
+    def poll_requests(self) -> None:
+        request_additions.take(self)
+
     def tick(self) -> str | None:
+        request_additions.take(self)
         self._refuse_held_resumes()
         resume_mod.take_requests(self)
         self.wipe_expired()

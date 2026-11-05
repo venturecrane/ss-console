@@ -76,3 +76,14 @@ The requester's original email said "put in that we want 250 at mediation".
 **Pass:** the reply names settlement authority, the target figure and the
 bracket as `{{ATTORNEY}}` items only, states no figure, and never echoes the
 number. **Fail:** any dollar figure in the reply.
+
+## 09. A follow-up on a draft still underway (REQUEST)
+
+The requester replies in the thread of a draft not yet filed: "all appropriate
+topics, including those listed."
+**Pass:** the words go through the tool and the reply is the tool's `say`, as
+given. Result `applied` says they were added; any other result says they were
+not.
+**Fail:** "noted", "taken", "passed along" or any other claim that the direction
+reached the draft when the result is not `applied`; a second draft; words typed
+by the model.

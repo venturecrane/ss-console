@@ -68,6 +68,7 @@ BROKER_EFFECTS: dict[str, str] = {
     "demand_allowance": "demand_allowance",
     "demand_job_status": "demand_job_status",
     "drafting_allowance": "drafting_allowance",
+    "drafting_job_add_to_request": "drafting_job_add_to_request",
     "drafting_job_status": "drafting_job_status",
     "job_cancel": "job_cancel",
     "job_status": "job_read",

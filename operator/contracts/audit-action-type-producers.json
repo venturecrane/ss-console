@@ -492,6 +492,11 @@
       "producerFile": "operator/workspace_broker/drafting_verbs.py",
       "reason": "A drafting job failed on SMD's own machinery or stopped at a spend cap; resumable by a person, never reported to the client."
     },
+    "DRAFTING_JOB_REQUEST_ADDED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/drafting_additions.py",
+      "reason": "A drafting job's requester added to his request in its thread while it ran (drafting_job_add_to_request): the job id, the result, the email's id and the envelope digest after it; never the words."
+    },
     "DRAFTING_JOB_RESUME_REQUESTED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/drafting_verbs.py",

@@ -213,6 +213,7 @@ VERBS: tuple[Verb, ...] = (
     Verb("drafting_allowance", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
+    Verb("drafting_job_add_to_request", GATEWAY_OR_ROOT, drafting_verbs.drafting_dispatch),
     # The litigation status job's request edge (litigation_verbs.py). Submit's
     # table gate admits all three classes because it has two forms; the handler
     # pins each form to its peers (a request from the gateway or root, a

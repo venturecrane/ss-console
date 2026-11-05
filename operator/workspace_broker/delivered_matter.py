@@ -83,6 +83,14 @@ SENTENCES: dict[str, dict[str, str]] = {
         "outside": OUTSIDE,
     },
     "drafting": {
+        "addition_not_covered": (
+            "What you wrote later in this thread is not in this document, because the drafting had started when it "
+            'reached us: "{words}" Reply here if you want it added, and we will make the change to the filed document.'
+        ),
+        "addition_not_covered_held": (
+            "What you wrote later in this thread is not covered here, because the drafting had started when it "
+            'reached us: "{words}"'
+        ),
         "lead_client": (
             "The document for matter {number} is filed in the client matter, in the firm's house style and ready "
             "for attorney review: {drafts}."
@@ -361,6 +369,7 @@ def _revise_delivered(row: dict[str, Any], files: list[Any], delivery: dict[str,
             _s("drafting", "revise_notes"),
         ),
         _markers(delivery),
+        _not_covered(delivery),
         _s("drafting", "outside") or "",
     )
 
@@ -383,12 +392,20 @@ def _drafting_held(row: dict[str, Any]) -> str:
     return paragraph(_s("drafting", "held_lead", number=_number(row)), why or _s("drafting", "held_ours"))
 
 
+def _not_covered(delivery: dict[str, Any], key: str = "addition_not_covered") -> str:
+    """What the requester added once the drafting had started, said as a fact:
+    he was told when it arrived, and the filed document does not hold it."""
+    found = delivery.get("additions_not_covered")
+    items = found if isinstance(found, list) else []
+    return lines(*(_s("drafting", key, words=a.get("words")) for a in items if isinstance(a, dict)))
+
+
 def drafting(row: dict[str, Any]) -> str:
     """A drafted document's reply: delivered or held."""
-    if row.get("state") == "held":
-        return _drafting_held(row)
-    files = files_of(row)
     delivery = obj(row, "delivery_json")
+    if row.get("state") == "held":
+        return compose(_drafting_held(row), _not_covered(delivery, "addition_not_covered_held"))
+    files = files_of(row)
     if row.get("revise_of"):
         return _revise_delivered(row, files, delivery)
     where = "client" if _in_client_matter(row) else "library"
@@ -407,6 +424,7 @@ def drafting(row: dict[str, Any]) -> str:
             _s("drafting", "verification") if row.get("document_class") == "discovery_response" else None,
         ),
         _caption(delivery),
+        _not_covered(delivery),
         _s("drafting", "outside") or "",
     )
 

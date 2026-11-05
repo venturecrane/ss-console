@@ -397,6 +397,11 @@ class Daemon:
         (`retention.py` carries the policy and why it is two windows)."""
         return retention.wipe_expired(self, TERMINAL)
 
+    def poll_requests(self) -> None:
+        """HOOK. What a lane answers while it would otherwise only wait: called
+        once a second from the idle sleep and from a running child's wait. It
+        must not raise (``request_additions.take`` does not)."""
+
     def tick(self) -> str | None:
         """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
         resume_mod.take_requests(self)
@@ -424,6 +429,7 @@ class Daemon:
             while slept < poll_seconds and not stop():
                 time.sleep(min(1.0, poll_seconds - slept))
                 slept += 1.0
+                self.poll_requests()
 
 
 def _require(name: str) -> str:

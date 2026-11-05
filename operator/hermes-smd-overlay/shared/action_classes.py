@@ -1138,6 +1138,9 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # the turn's verified inbound, not tool arguments. The reads return
     # broker-authored states, counts and file roles only.
     "drafting_job_submit": ActionClass.INTERNAL_WRITE,
+    # A requester's later words for his running job. The words are the seat's
+    # index row for the turn's verified email, never a tool argument.
+    "drafting_job_add_to_request": ActionClass.INTERNAL_WRITE,
     "drafting_job_status": ActionClass.READ,
     "drafting_allowance": ActionClass.READ,
     # The litigation status job (hermes-smd-lanes/litigation.py, ss-console

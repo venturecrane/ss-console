@@ -118,6 +118,18 @@ matter file again. Acknowledge it in those terms ("Received. The changes to the
 <document> for matter <number> are being made to the filed draft; I'll reply in this
 thread when they're filed.").
 
+**A follow-up on a draft still underway.** A reply in the thread of a draft not yet filed
+that adds to or changes what it asks for ("all appropriate topics, including those
+listed", "also cover the second defendant") must reach the draft, or the requester must
+hear that it did not. Submit it exactly as any request, with the SAME class. The tool sees
+the draft underway, carries the email's own words to it, and answers with `result` and
+`say`; or call `drafting_job_add_to_request` with the `job_id` when you already hold it.
+**Reply with `say`, as given, and nothing else about it.** Only `applied` means the words
+reached the draft: never write that the direction is noted, taken, passed along or has been
+given to anyone unless the result is `applied`. When the answer instead carries
+`next: "drafting_job_submit"`, the draft is already filed: treat the email as a change to a
+filed draft, below. A reply that asks for nothing ("thanks") submits nothing.
+
 ## Who may ask
 
 Reserved to the firm's **Named Administrators** (`scope.admins`). A draft spends the
@@ -218,6 +230,13 @@ failed job in any case.
      versions stay in each file's version history). The attorney notes list each change
      asked for and whether it was made; name any the notes say were not made, as they
      state the reason. Then the markers, as for any delivered document.
+   - **in a delivered or held reply, when the job reports `additions_not_covered`**:
+     what the requester wrote after the drafting had started. For each one, with his words,
+     on a delivered document: What you wrote later in this thread is not in this document,
+     because the drafting had started when it reached us: "{words}" Reply here if you want it
+     added, and we will make the change to the filed document.
+     On a held document: What you wrote later in this thread is not covered here, because
+     the drafting had started when it reached us: "{words}"
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never
