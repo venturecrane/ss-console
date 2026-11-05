@@ -6,11 +6,15 @@ The graph::
 
     destination -> revise-base (the filed files by id; the markdown that prints
       them, proven) -> revise-estimate ($0: the projection under the cap)
-      -> revise-checklist -> revise-edit (code edits, section edits, code
-      checks, the narrow reading, one re-edit) -> revise-render (the firm's
-      renderer, the attorney's formatting asks as layout options, the format
-      check, formatting checked in the Word XML) -> revise-notes -> manifest
-      -> file (new versions in place, notes first, compare-and-stop, read back)
+      -> revise-checklist (and the estimate again, from its section plan)
+      -> revise-edit (code edits, section edits, code checks, the narrow
+      reading, one re-edit) -> revise-render (the firm's renderer with the
+      FILED brief's layout carried onto it: its paper, first page, signature
+      and charts, the attorney's formatting asks over them; the layout
+      compared back to the filed file; the format check; formatting checked
+      in the Word XML) -> revise-notes -> manifest -> file (new versions in
+      place, the brief first and its notes only after it, compare-and-stop,
+      read back)
 
 It never pulls, transcribes or digests the matter: the brief is the input, and
 the attorney's words are the instruction. Spend is capped at ``REVISE_CAP_USD``
@@ -27,18 +31,17 @@ from typing import Any
 
 from ... import proof_mode
 from ...demand import deliver
-from .. import format_check, render
+from .. import format_check, pleading, render
 from .. import review as review_mod
 from ..outcome import DraftingFailed, Verdict, markers
 from ..run import DraftingRun
-from . import checklist as ck, checks, core, prior as prior_mod, sections as sec, versions
+from . import checklist as ck, checks, core, layout as lay, prior as prior_mod, sections as sec, versions
 
 #: The ceiling on one revision's model spend, whatever the firm's per-job cap.
 REVISE_CAP_USD = 10.0
-#: The projection: every model call reads at most the brief and the request,
-#: and a revision makes about this many such reads (checklist twice, one edit
-#: and one reading per section, one re-edit) priced at the firm's read rate.
-READS_PROJECTED = 8
+#: Before the checklist: its two reads of the request and the brief. After it,
+#: the projection counts the section plan itself (``core.plan_reads``).
+CHECKLIST_READS = 2
 FIXED_USD = 0.5
 STAGES = (
     "destination",
@@ -61,6 +64,7 @@ class ReviseRun(DraftingRun):
         cap = min(float(self.limits.cap_usd), REVISE_CAP_USD)
         self.limits = dataclasses.replace(self.limits, cap_usd=cap)
         self.doorway.before_request = lambda stage: self.limits.check_each_call(self.budget.refresh(), stage)
+        self._filed_cache: dict[str, Any] | None = None
 
     # ---- plumbing ---------------------------------------------------------------
     def _ask(self, model: str):
@@ -90,6 +94,41 @@ class ReviseRun(DraftingRun):
     def _render_to(self, md: str, out: Path, layout: dict[str, Any] | None = None) -> Path:
         return render.render(md, self.cls, out, self._fmt(layout))[0]
 
+    @property
+    def _filed_path(self) -> Path:
+        return self._base_dir / "draft.docx"
+
+    def _filed_layout(self) -> dict[str, Any]:
+        if self._filed_cache is None:
+            self._filed_cache = lay.read(self._filed_path)
+        return self._filed_cache
+
+    def _laid(self, md: str, out: Path, layout: dict[str, Any] | None = None) -> tuple[Path, dict[str, Any], str]:
+        """``md`` rendered as the filed brief is laid: its first page and
+        signature (inferred from the filed file), its paper, its charts'
+        borders and fills, with ``layout`` (the attorney's asks) over them.
+        Returns (path, the format the file was rendered with, its paper)."""
+        filed = self._filed_layout()
+        import docx
+
+        natural = out.with_name(f".natural.{out.name}")
+        render.render(md, self.cls, natural, lay.without_front(self._fmt(), self.cls))
+
+        opts = lay.options(filed, lay.front_options(docx.Document(str(natural))), dict(layout or {}))
+        natural.unlink()
+        fmt = self._fmt(opts)
+        path = render.render(md, self.cls, out, fmt)[0]
+        paper = lay.paper(filed, self.job.request_text)
+        if paper == "pleading":
+            if pleading.spec_for(fmt) is None:
+                raise DraftingFailed(
+                    "revise_layout_lost: the filed brief is on pleading paper and the firm has none authored; "
+                    "nothing was edited or filed"
+                )
+            pleading.apply_for(path, fmt, self.cls)
+        lay.carry_tables(path, self._filed_path, dict(layout or {}))
+        return path, fmt, paper
+
     # ---- stages -----------------------------------------------------------------
     def _download(self, role: str) -> Path | None:
         f = self._file_entry(role)
@@ -112,7 +151,7 @@ class ReviseRun(DraftingRun):
         if prior_final.is_file():
             doc = render.split_notes(prior_final.read_text(encoding="utf-8"))[0]
             candidates.append(("prior_job", render.reserve_judgment(doc, self.cls)[0]))
-        rec = prior_mod.resolve(draft, candidates, lambda md, out: self._render_to(md, out), self._base_dir)
+        rec = prior_mod.resolve(draft, candidates, lambda md, out: self._laid(md, out)[0], self._base_dir)
         filed = {"draft": prior_mod.sha(draft)}
         if notes is not None:
             filed["attorney_notes"] = prior_mod.sha(notes)
@@ -140,13 +179,15 @@ class ReviseRun(DraftingRun):
     def _base_md(self) -> str:
         return (self._base_dir / "base.md").read_text(encoding="utf-8")
 
-    def _estimate_revise(self) -> None:
-        chars = len(self._base_md()) + len(self.job.request_text)
+    def _project(self, chars: int, stage: str, **rec: Any) -> None:
         rate = float(self.firm.data["budget"]["usd_per_million_chars"])
-        projected = FIXED_USD + READS_PROJECTED * chars / 1_000_000 * rate
-        spent = self.budget.refresh()
-        self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage="the revision")
-        self._write("revise-estimate.json", {"characters": chars, "projected_usd": round(projected, 4)})
+        projected = FIXED_USD + chars / 1_000_000 * rate
+        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(), stage=stage)
+        self._write("revise-estimate.json", {**rec, "characters": chars, "projected_usd": round(projected, 4)})
+
+    def _estimate_revise(self) -> None:
+        chars = CHECKLIST_READS * (len(self._base_md()) + len(self.job.request_text))
+        self._project(chars, "the revision's checklist", calls=CHECKLIST_READS)
 
     def _checklist(self) -> None:
         prior = sec.split(self._base_md())
@@ -157,6 +198,9 @@ class ReviseRun(DraftingRun):
                 f"revise_unchecked: the request could not be turned into a checklist code accepts: {exc}"[:480]
             ) from None
         self._write("checklist.json", {"items": [i.to_dict() for i in items]})
+        # The section plan is known now: price every call it makes before any.
+        plan = core.plan_reads(self._base_md(), self.job.request_text, items)
+        self._project(plan["characters"], "the revision", calls=plan["calls"], sections=plan["sections"])
 
     def _items(self) -> list[ck.Item]:
         return [ck.Item(**i) for i in self._json("checklist.json")["items"]]
@@ -186,18 +230,37 @@ class ReviseRun(DraftingRun):
                 layout.update(i.params["layout"])
         return layout
 
+    def _layout_lost(self, path: Path, layout: dict[str, Any]) -> list[str]:
+        """What of the filed layout the rendered revision does not carry, past
+        what the request asks to change. Headings are the edit's (the checks
+        keep every filed heading line); the count only never drops."""
+        filed, ours = self._filed_layout(), lay.read(path)
+        ignore = {"headings", "roles"} | lay.changed_by(layout, self.job.request_text)
+        if checks._about_tables(self._items()) or len(filed["tables"]) != len(ours["tables"]):
+            ignore.add("tables")  # an item about a table may reshape it; the look is still carried
+        lost = lay.compare(filed, ours, ignore)
+        if len(ours["headings"]) < len(filed["headings"]):
+            lost.append(f"headings: {len(filed['headings'])} filed, {len(ours['headings'])} in the revision")
+        return lost
+
     def _render_revise(self) -> None:
-        md = render.reserve_judgment((self.data / "revised.md").read_text(encoding="utf-8"), self.cls)[0]
+        revised = (self.data / "revised.md").read_text(encoding="utf-8")
+        md = core.reserve(revised, self._base_md(), self.cls)
         name = (self._file_entry("draft") or {})["name"]
         layout = self._layout()
-        path = self._render_to(md, deliver.out_dir(self.data) / name, layout)
+        path, fmt, paper = self._laid(md, deliver.out_dir(self.data) / name, layout)
+        lost = self._layout_lost(path, layout)
+        if lost:
+            raise DraftingFailed(
+                "revise_layout_lost: the revision does not carry the filed brief's " + "; ".join(lost)[:400]
+            )
         # The filed brief is the attorney's document as he has it: what the
-        # format check says of IT is not this revision's to fix. Only a failure
-        # the revision brings in stops the filing.
-        before = format_check.check(
-            self._render_to(self._base_md(), self._base_dir / "base-render.docx"), self.cls, self._fmt()
-        )
-        res = format_check.check(path, self.cls, self._fmt(layout))
+        # format check says of THE FILED FILE ITSELF is not this revision's to
+        # fix. Only a failure the revision brings in stops the filing.
+        filed_fmt = self._fmt(lay.options(self._filed_layout(), {}, {}))
+        filed_paper = str(self._filed_layout()["paper"])
+        before = format_check.check(self._filed_path, self.cls, filed_fmt, paper=filed_paper)
+        res = format_check.check(path, self.cls, fmt, paper=paper)
         new = [f for f in res.fails if f not in before.fails]
         self._write("revise-format.json", {"filed_brief": before.fails, "revision": res.fails, "new": new})
         if new:
@@ -208,7 +271,7 @@ class ReviseRun(DraftingRun):
         for i, st in zip(self._items(), rev["statuses"]):
             if i.kind != "formatting":
                 continue
-            probs = checks.check_docx(path, i.params["layout"], size, skip)
+            probs = checks.check_docx(path, i.params["layout"], size, skip, self.cls)
             st.update(
                 status="not_met" if probs else "met", how="code", detail="; ".join(probs) or "checked in the Word file"
             )

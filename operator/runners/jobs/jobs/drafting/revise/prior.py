@@ -9,7 +9,11 @@ document than any working file the job kept.
 The markdown is never trusted on its say-so. A candidate is a base only when
 the seat's own renderer, given it, prints the filed document back: the same
 paragraphs in the same order, table cells included, with the same bold and
-italic runs (``prove``). Candidates, in order:
+italic as Word resolves it (a heading's bold is usually its style's), AND the
+same layout: the same headings at the same levels, paper, page, charts and
+first page (``layout.compare``). A base that prints the words but loses the
+headings or the pleading paper is not a proof (``prove``). Candidates, in
+order:
 
 1. the prior job's own ``draft-final.md`` with its render-time settlements
    applied (``render.reserve_judgment``), when the job dir still holds it;
@@ -29,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ..outcome import DraftingFailed
+from . import layout
 
 Render = Callable[[str, Path], Path]
 
@@ -55,7 +60,7 @@ def _segments(p: Any) -> list[tuple[str, bool, bool]]:
     for r in p.runs:
         if not r.text:
             continue
-        key = (bool(r.bold), bool(r.italic))
+        key = (layout.flag(r, p, "bold"), layout.flag(r, p, "italic"))
         if out and (out[-1][1], out[-1][2]) == key:
             out[-1] = (out[-1][0] + r.text, *key)
         else:
@@ -94,9 +99,9 @@ def docx_to_md(path: Path) -> str:
         if not b.text.strip():
             continue
         style = b.style.name if b.style is not None else ""
-        if style.startswith("SMD Heading"):
-            level = int(style.rsplit(" ", 1)[-1]) if style[-1:].isdigit() else 1
-            out.append("#" * level + " " + " ".join(b.text.split()))
+        level = layout.heading_level(b)
+        if level:
+            out.append("#" * min(level, 6) + " " + " ".join(b.text.split()))
         elif style == "List Bullet":
             out.append("- " + _runs_md(b).strip())
         else:
@@ -121,17 +126,19 @@ def printed(path: Path) -> list[tuple[str, tuple[tuple[str, bool, bool], ...]]]:
 
 
 def prove(md: str, filed: Path, render: Render, workdir: Path | None = None) -> list[str]:
-    """Where the rendering of ``md`` differs from the filed document; empty is a proof."""
+    """Where the rendering of ``md`` differs from the filed document, in words,
+    emphasis or layout; empty is a proof."""
     with tempfile.TemporaryDirectory(dir=workdir) as tmp:
-        ours = printed(render(md, Path(tmp) / "candidate.docx"))
+        cand = render(md, Path(tmp) / "candidate.docx")
+        ours, looks = printed(cand), layout.read(cand)
     theirs = printed(filed)
-    diffs: list[str] = []
+    diffs: list[str] = layout.compare(layout.read(filed), looks)[:5]
     for i, (a, b) in enumerate(zip(ours, theirs)):
         if a[0] != b[0]:
             diffs.append(f"paragraph {i + 1} reads differently")
         elif a[1] != b[1] and b[1]:
             diffs.append(f"paragraph {i + 1} carries different bold or italic runs")
-        if len(diffs) >= 5:
+        if len(diffs) >= 8:
             break
     if len(ours) != len(theirs):
         diffs.append(f"{len(ours)} paragraphs rendered, {len(theirs)} filed")

@@ -2,8 +2,10 @@
 
 The order and the guards are the 04:53 hand filing of 2026-11-04, as code:
 
-1. the attorney notes first, then the brief: a brief versioned with stale
-   notes beside it is worse than the reverse;
+1. the brief first, then the attorney notes, and the notes only once the
+   brief's new version reads back as ours: the notes describe this revision,
+   so a brief held or refused (the firm changed it, it would not read back)
+   leaves the filed notes describing the brief that is still filed;
 2. COMPARE AND STOP: before each upload the file's current bytes must still be
    the bytes the revision read (``base_sha256``), and its version id is read
    just before the upload and handed to it (``expected_version``): a file the
@@ -26,7 +28,7 @@ from typing import Any, Callable
 from ...proof.readback import remote_sha
 from ..outcome import DraftingFailed, DraftingHold
 
-ORDER = ("attorney_notes", "draft")
+ORDER = ("draft", "attorney_notes")
 #: The proven method's read-back: 16 polls, 15 s apart (both landed in one wait).
 TRIES = 16
 PAUSE_SECONDS = 15.0

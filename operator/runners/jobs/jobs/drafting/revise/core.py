@@ -141,3 +141,54 @@ def _retry_findings(out: Outcome, todo: dict[str, list[Item]]) -> dict[str, list
             if any(i.id == st.id for i in its):
                 retry.setdefault(sid, []).append(f"{st.id} ({by_item[st.id].kind}) is not done: {st.detail}")
     return retry
+
+
+# ---- what the revision will cost, from its own section plan ---------------------------
+#: A model's output is priced at about five times its input; the projection
+#: counts output characters at that weight on the firm's read rate.
+OUTPUT_WEIGHT = 5
+#: A reading's answer: a verdict and one sentence per item, about this long.
+READ_ANSWER_CHARS = 600
+
+
+def plan_reads(base_md: str, request_text: str, items: list[Item]) -> dict[str, int]:
+    """The model calls this checklist makes and the characters they read: the
+    checklist's two reads, then for every section a model edits (a
+    ``document`` target is every headed section) one edit and one reading,
+    each twice (the one re-edit round). Pure: code's own edits are made here
+    at $0 to know which sections are left for a model."""
+    prior = sec.split(base_md)
+    current, _did, done = edit.code_edits(prior, items)
+    todo = edit.by_section(current, items, done)
+    by_id = {s.id: s for s in current}
+    titles = sum(len(s.title) + 3 for s in prior if s.heading)
+    listed = len(json.dumps([i.to_dict() for i in items], ensure_ascii=False))
+    chars = 2 * (len(ck.SYSTEM) + len(request_text) + titles + OUTPUT_WEIGHT * listed)
+    calls = 2
+    for sid, its in todo.items():
+        asks = len(json.dumps([i.to_dict() for i in its], ensure_ascii=False))
+        text = len(by_id[sid].text)
+        edit_call = len(edit.SYSTEM) + text + asks + OUTPUT_WEIGHT * text
+        read_call = len(reading.SYSTEM) + 2 * text + asks + OUTPUT_WEIGHT * READ_ANSWER_CHARS
+        chars += 2 * (edit_call + read_call)
+        calls += 4
+    return {"calls": calls, "sections": len(todo), "characters": chars}
+
+
+# ---- the attorney's markers, on revise ---------------------------------------------
+def reserve(md: str, base_md: str, cls: str) -> str:
+    """``render.reserve_judgment`` for a revision, never in a section the
+    attorney already filled (its filed text carries no ``{{ATTORNEY`` marker).
+    A section with no filed counterpart (a new sub-heading) follows the filed
+    section it sits under."""
+    from .. import render
+
+    filled = {sec.norm_title(s.title): "{{ATTORNEY" not in s.text for s in sec.split(base_md) if s.heading}
+    out, parent_filled = [], False
+    for s in sec.split(md):
+        key = sec.norm_title(s.title)
+        if s.heading and key in filled:
+            parent_filled = filled[key]
+        done = filled.get(key, parent_filled) if s.heading else False
+        out.append(s.text if done else render.reserve_judgment(s.text, cls)[0])
+    return "".join(out)

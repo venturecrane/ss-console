@@ -266,17 +266,22 @@ def _exact_ok(p: Any, want_pt: float) -> bool:
     return sp.get(f"{_W}lineRule") == "exact" and int(sp.get(f"{_W}line")) == round(want_pt * 20)
 
 
-def check_docx(path: Any, layout: dict[str, Any], size_pt: float, skip_tables: int) -> list[str]:
-    """What a formatting item asked of the file, read from its XML. Empty is met."""
+def check_docx(
+    path: Any, layout: dict[str, Any], size_pt: float, skip_tables: int, cls: str = "mediation_brief"
+) -> list[str]:
+    """What a formatting item asked of the file, read from its XML. Empty is
+    met; every key it can carry is read here, so none is met on trust."""
     import docx
+
+    from . import layout as lay
 
     d, out = docx.Document(str(path)), []
     names = [(p, p.style.name if p.style is not None else "") for p in d.paragraphs]
-    first = next((i for i, (_p, n) in enumerate(names) if n.startswith("SMD Heading")), len(names))
+    first = next((i for i, (p, _n) in enumerate(names) if lay.heading_level(p)), len(names))
     # The body is what follows the first heading: the front matter (court
     # lines, title) above it keeps the caption's own spacing by design.
     body = [p for p, n in names[first:] if n.startswith("SMD Body") and p.text.strip()]
-    heads = [p for p, n in names if n.startswith("SMD Heading")]
+    heads = [p for p, _n in names if lay.heading_level(p) and p.text.strip()]
     for paras, what, exact_key, multiple_key in (
         (body, "body paragraph(s)", "line_spacing_pt", "line_spacing"),
         (heads, "heading(s)", "heading_line_spacing_pt", "heading_line_spacing"),
@@ -292,6 +297,8 @@ def check_docx(path: Any, layout: dict[str, Any], size_pt: float, skip_tables: i
             continue
         if bad or not paras:
             out.append(f"{len(bad)} of {len(paras)} {what} not at {label}")
+    out += _heading_space(heads, layout)
+    out += _front(d, layout, cls)
     tables = d.tables[skip_tables:]
     if "table_font_pt" in layout:
         want = float(layout["table_font_pt"])
@@ -312,11 +319,60 @@ def check_docx(path: Any, layout: dict[str, Any], size_pt: float, skip_tables: i
         bad = [t for t in tables if not _row_filled(t.rows[0], want_fill)] if tables else [None]
         if bad:
             out.append(f"{len(bad)} table header row(s) not shaded {want_fill}")
+    if "table_total_fill" in layout:
+        from smokeball_connector.docx_classes import is_total_row
+
+        want_fill = str(layout["table_total_fill"]).upper()
+        totals = [row for t in tables for row in list(t.rows)[1:] if is_total_row([row.cells[0].text])]
+        bad = [row for row in totals if not _row_filled(row, want_fill)]
+        if bad or not totals:
+            out.append(f"{len(bad)} of {len(totals)} table total row(s) not shaded {want_fill}")
     if "table_border_pt" in layout:
         want_sz = round(float(layout["table_border_pt"]) * 8)
         bad = [t for t in tables if _border_sz(t) != want_sz] if tables else [None]
         if bad:
             out.append(f"{len(bad)} table(s) without {layout['table_border_pt']} pt borders")
+    return out
+
+
+def _heading_space(heads: list[Any], layout: dict[str, Any]) -> list[str]:
+    from docx.shared import Pt
+
+    from . import layout as lay
+
+    out = []
+    for key, attr in (("heading_space_before_pt", "space_before"), ("heading_space_after_pt", "space_after")):
+        if key not in layout:
+            continue
+        want = Pt(float(layout[key]))
+        bad = [p for p in heads if (lay.eff(p, attr) or Pt(0)) != want]
+        if bad or not heads:
+            out.append(f"{len(bad)} of {len(heads)} heading(s) without {layout[key]:g} pt {attr.replace('_', ' ')}")
+    return out
+
+
+def _front(d: Any, layout: dict[str, Any], cls: str) -> list[str]:
+    """The first-page and signature asks, by the renderer's own checks; a
+    document without the line a key is about is not met (never vacuous)."""
+    from .. import briefpage, frontpage
+    from . import layout as lay
+
+    asked = {k: v for k, v in layout.items() if k in lay.FRONT_KEYS}
+    if not asked:
+        return []
+    fmt = {"layout": {cls: asked}}
+    out = frontpage.check(d, fmt, cls) + briefpage.check(d, fmt, cls)
+    have = lay.anchors(d)
+    out += [f"{k}: the brief has no {have[k][1]} to lay it on" for k in asked if asked[k] and not have[k][0]]
+    blk = briefpage._block(d)
+    if asked.get("signature_gap_lines") and blk is not None and blk[1] != -1:
+        # briefpage counts the gap only once the date sits on the "By:" line.
+        paras, _dated, by = blk
+        n = 0
+        while by - 1 - n >= 0 and not paras[by - 1 - n].text.strip():
+            n += 1
+        if n != int(asked["signature_gap_lines"]):
+            out.append(f"signature: {n} blank line(s) above the By line, not {asked['signature_gap_lines']}")
     return out
 
 
