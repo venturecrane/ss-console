@@ -163,6 +163,7 @@ cost: high
 tier: gate
 enforcement:
   - .husky/pre-commit
+  - .husky/pre-push
   - .claude/hooks/worktree-guard.mjs
   - tests/customer-yaml-secret-detector.test.ts
 incidents:

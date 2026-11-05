@@ -925,6 +925,6 @@ The npm scripts that bear on a deploy (full list in `package.json`):
 
 - `npm run build` - the production Astro build (`dist/client` + `dist/server`).
 - `npm run preview` - a local Worker preview via `wrangler dev`.
-- `npm run verify` - the full pre-merge gate; see
+- `npm run verify` - the full pre-merge gate, run by CI (the pre-push hook runs only the scrub and secret-detector tests); see
   `/admin/playbook/building-the-platform` for exactly what it runs.
 - `npm run db:migrate:local` - apply D1 migrations against the local database.

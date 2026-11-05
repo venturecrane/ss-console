@@ -62,7 +62,7 @@ npm run test         # Vitest test suite
 npm run lint         # ESLint
 npm run typecheck    # TypeScript validation (astro check)
 
-npm run verify       # Full CI-equivalent run — typecheck, lint, build, test
+npm run verify       # Full CI-equivalent run: typecheck, lint, build, test (CI runs it; pre-push runs only the scrub and secret-detector tests)
 npm run db:migrate:local  # Apply D1 migrations locally
 ```
 
