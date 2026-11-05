@@ -46,6 +46,28 @@ def _known_commit(ctx: Any, sha: str | None) -> bool:
     return present.rc == 0
 
 
+def fetch_main(ctx: Any) -> bool:
+    """Bring ``refs/remotes/origin/main`` up to date in the run's checkout, so a commit merged
+    since the run started counts as built from main. 2026-11-05: run 41985907116 was checked out
+    at 07:15Z; #3777 merged 07:26Z and its image was recorded 07:34Z, but ``_built_from_main``
+    asked a clone that had never seen that commit, so the refresh after each ring kept naming the
+    old release and the run rolled it through every ring until 08:03Z while the newer image
+    waited. A failed fetch is logged and the stale answer stands (never a halt)."""
+    res = ctx.runner.run(
+        ["git", "-C", str(ctx.repo), "fetch", "-q", "origin", f"+refs/heads/main:{MAIN_REF}"], timeout=120
+    )
+    if res.rc != 0:
+        ctx.log("tick: git fetch origin main failed; an image merged since this run started may not count as latest")
+    return res.rc == 0
+
+
+def refreshed(ctx: Any, read: Callable[[], list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """The mid-run hand-off question, asked of main as it is NOW: fetch, then ``read()`` (cli.py's
+    releases in flight, newest first). Here, not in cli.py, because cli.py sits at its size ceiling."""
+    fetch_main(ctx)
+    return read()
+
+
 def _built_from_main(ctx: Any, sha: str | None) -> bool:
     """Whether ``sha`` is an ancestor of origin/main (MAIN_REF).
 

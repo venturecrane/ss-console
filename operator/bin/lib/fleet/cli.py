@@ -65,6 +65,7 @@ from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use 
     MAIN_REF,
     _at_or_after,
     _built_from_main,
+    refreshed,
     _bundles_defer,
     _bundles_in_flight,
     _bundles_tick,
@@ -412,7 +413,7 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace) -> int:
             holder,
             dry_run=a.dry_run,
             # After each ring: has a newer image landed? Then this run ends and the next takes it.
-            refresh=lambda: _in_flight(ctx, _image_release(ctx, "latest")),
+            refresh=lambda: refreshed(ctx, lambda: _in_flight(ctx, _image_release(ctx, "latest"))),
         )
     return ticker.run(ctx.rings(), release, do_seat_for(release), holder, dry_run=a.dry_run)
 
