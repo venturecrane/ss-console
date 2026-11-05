@@ -258,8 +258,8 @@ jobs:
   # names, each skill's needs from the image). It never writes a seat's
   # pointer. The release controller (release-tick.yml) walks it through the
   # rings. This job starts a tick the moment the candidate is published (its last
-  # step), a tick that advanced a ring starts the next one, a cron every 5
-  # minutes is the backstop, and this workflow's completion still starts one. Each
+  # step), a tick that advanced a ring starts the next one, and a cron every 5
+  # minutes is the backstop (this workflow's completion no longer starts one). Each
   # seat takes it once that seat's image was built from this commit or a later
   # one, so skills follow the image this same merge builds. `operator/bin/fleet
   # release --skills <version>` is the by-hand path. Same CF-token-derived R2 credentials as

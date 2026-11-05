@@ -1,10 +1,13 @@
 # The release controller (ADR 0096): seat image releases roll with no laptop.
 #
 # WHAT ONE RUN DOES. `fleet release latest --tick` takes the fleet lease, reads
-# every seat's rollout of the newest image release from D1, and advances AT
-# MOST ONE ring: ring N+1 starts only when every seat of ring N has been done
-# on the release for that ring's bake_minutes (operator/fleet/rings.yaml) with
-# no open selftest_failing or image_drift alarm. A seat is verified by its own
+# every seat's rollout of the image releases in flight from D1, and advances
+# every ring that is ready, one release per ring: ring N+1 starts only when
+# every seat of ring N has been done on the release for that ring's
+# bake_minutes (operator/fleet/rings.yaml) with no open selftest_failing or
+# image_drift alarm. A client ring rolls its seats in waves (max_parallel);
+# between waves and between rings the run asks whether a newer image has been
+# published and, if so, ends there so the run it starts takes the newer one. A seat is verified by its own
 # heartbeat self-test; there is no ssh boot smoke here, so no verdict is a
 # tooling error that halts and pages. Holds are re-read before every seat. A
 # seat running a client job waits (the busy gate) and a later run picks it up.
@@ -15,13 +18,13 @@
 # build-seat-image after a build) start a tick the moment the artifact is
 # published, not when the whole Deploy run ends. A run that advanced a ring
 # (exit 0) starts the next run itself, so the next ring follows in minutes
-# instead of waiting for a cron slot: A&P follows staging about 2 minutes after
-# staging's run ends. Every dispatch is skipped when a tick is already waiting
-# (queued or pending), because this lane keeps one running and one pending run
-# and a further dispatch would only replace the pending one, leaving a
-# cancelled run behind.
-# The cron every 5 minutes is the backstop, and Deploy's completion still
-# starts a run.
+# instead of waiting for a cron slot. Every dispatch is skipped when a tick is
+# already waiting (queued or pending), because this lane keeps one running and
+# one pending run and a further dispatch would only replace the pending one,
+# leaving a cancelled run behind. The cron every 5 minutes is the backstop.
+# Deploy's completion no longer starts a run (2026-11-05): with the publish
+# jobs dispatching, that trigger only replaced pending runs and left four
+# cancelled ones behind in one evening.
 #
 # SKILLS RELEASES TOO (2026-10-28). The same `latest` run then steps the newest
 # skills release CI published (deploy.yml publish-skills) with the same rings,
@@ -77,12 +80,9 @@ name: release-tick
 on:
   # The backstop: a run is normally started by Deploy's publish jobs and by the
   # previous run (Start the next ring). A run with nothing to do exits 5, green.
+  # No workflow_run trigger: see WHAT STARTS A RUN above.
   schedule:
     - cron: '*/5 * * * *'
-  workflow_run:
-    workflows: [Deploy]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       release:
@@ -136,8 +136,7 @@ jobs:
       actions: write
     if: >-
       vars.FLEET_RELEASE_ENABLED == 'true' && vars.DEPLOY_ENABLED == 'true' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+      github.ref == 'refs/heads/main'
     env:
       RELEASE: ${{ inputs.release || 'latest' }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
