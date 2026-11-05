@@ -433,7 +433,7 @@ def _fake_probe(monkeypatch, fails_when):
 
 def test_a_value_the_check_refuses_is_dropped_before_any_paid_draft(tmp_path, spec_store, monkeypatch):
     _install(spec_store, "Three blank lines before the court name.", "One blank line before the caption.")
-    _fake_probe(monkeypatch, lambda l: "pleading: off pitch" if "front_court_gap_lines" in l else "")
+    _fake_probe(monkeypatch, lambda laid: "pleading: off pitch" if "front_court_gap_lines" in laid else "")
     run = _Run(tmp_path)
     assert firm_rules.start(run) == {"front_caption_gap_lines": 1}
     rows = [json.loads(x) for x in (run.data / firm_rules.LEDGER).read_text().splitlines()]

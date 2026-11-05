@@ -1299,8 +1299,8 @@ _UNREAD_CLASS_NOTE = (
     " This rule is about {work}, and that work is produced by a part of the "
     "Operator that does not read the firm's rules yet. So even once the status "
     "says installed, do NOT say it is in effect: say it is recorded and has been "
-    "passed to SMD to build into that work. Give no date, and do not promise that "
-    "anyone will write again."
+    "passed to SMD to build into that work. Give no date, and do not promise a "
+    "further message."
 )
 
 #: A layout rule the seat compiled part of (shared/layout_rules.py). The clauses
@@ -1309,8 +1309,8 @@ _PART_READ_NOTE = (
     " Part of this rule takes effect and part does not, and the reply must say "
     "which. Once the status says installed, say these parts are in effect from the "
     "next document: {effect}. Say these parts are recorded and have been passed to "
-    "SMD, and are not in effect: {recorded}. Give no date, and do not promise that "
-    "anyone will write again."
+    "SMD, and are not in effect: {recorded}. Give no date, and do not promise a "
+    "further message."
 )
 
 _RELATIVE_NOTE = (
