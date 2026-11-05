@@ -39,7 +39,17 @@ MAX_NAME_CHARS = 100
 _NAMED = (("attorneys", MAX_ATTORNEYS), ("paralegals", MAX_PARALEGALS))
 #: What the status read projects: states and counts. Never spend, never a
 #: matter fact: the completion reply carries counts only.
-_STATUS_KEYS = ("job_id", "state", "stage", "matters_total", "matters_reread", "flags_new")
+_STATUS_KEYS = (
+    "job_id",
+    "state",
+    "stage",
+    "matters_total",
+    "matters_reread",
+    "flags_new",
+    # The reply the bind will enforce, rendered by the broker (fixed_wording).
+    "reply_text",
+    "reply_texts",
+)
 
 
 def _names(key: str, names: Any, cap: int) -> list[str] | str:

@@ -516,16 +516,21 @@ class RelaySendError(RuntimeError):
     """The AgentMail reply POST failed (HTTP error, unreachable, or timeout)."""
 
 
-class HeldWordingRefused(RelaySendError):
-    """The broker refused a held job's bound reply because its words were not
-    the hold class's fixed wording (ss-console ``workspace_broker/held_wording``,
-    2026-10-24). Nothing was sent and the one reply is unspent. The message is
-    the broker's sentence quoting the exact text, which the model is told so its
-    retry succeeds: a hold to redraft, never a transport failure to escalate."""
+class FixedWordingRefused(RelaySendError):
+    """The broker refused a job's bound reply because its words were not the
+    job's fixed wording, held or delivered (ss-console
+    ``workspace_broker/fixed_wording``, 2026-10-24 held, 2026-11-04 delivered).
+    Nothing was sent and the one reply is unspent. The message is the broker's
+    sentence quoting the exact text, which the model is told so its retry
+    succeeds: a hold to redraft, never a transport failure to escalate."""
 
 
-#: The broker's error code for that refusal (the exception's class name).
-HELD_WORDING_CODE = "HeldWordingRefused"
+#: The name this refusal had while only a held job's reply was fixed.
+HeldWordingRefused = FixedWordingRefused
+
+#: The broker's error codes for that refusal (the exception's class name, and
+#: the name it had until 2026-11-04).
+FIXED_WORDING_CODES = frozenset({"FixedWordingRefused", "HeldWordingRefused"})
 
 
 class RelayOutcomeUnknown(RelaySendError):
@@ -549,8 +554,8 @@ def reply_failure(exc: Exception, what: str) -> RelaySendError:
     anything that may have gone out is a :class:`RelayOutcomeUnknown`.
     """
     if isinstance(exc, BrokerError):
-        if getattr(exc, "code", "") == HELD_WORDING_CODE:
-            return HeldWordingRefused(str(exc))
+        if getattr(exc, "code", "") in FIXED_WORDING_CODES:
+            return FixedWordingRefused(str(exc))
         if send_outcome_unknown(exc):
             return RelayOutcomeUnknown(f"{what}: outcome unknown, it may have been sent: {exc}")
         return RelaySendError(f"broker refused the {what}: {exc}")

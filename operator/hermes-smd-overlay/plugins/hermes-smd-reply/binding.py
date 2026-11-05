@@ -195,13 +195,27 @@ def handle_tool(args: dict[str, Any], **_: Any) -> str:
             "passes the reply checks. Nothing else in this turn can be sent."
         )
     held = verdict.get("held_wording")
+    fixed = verdict.get("fixed_wording")
     if isinstance(held, list) and held and all(isinstance(t, str) for t in held):
         # A held job (ss-console 2026-10-24): the broker sends only its fixed
         # wording and refuses any other words, so the model is handed it here.
         out["held_wording"] = held
+        if not fixed:
+            out["message"] += (
+                " This job is held: the reply's whole body must be exactly "
+                + ("one of the held_wording texts" if len(held) > 1 else "the held_wording text")
+                + ", with nothing before or after it (fill <file name> with the file's name only). "
+                "Any other words are refused and nothing is sent."
+            )
+    if isinstance(fixed, list) and fixed and all(isinstance(t, str) for t in fixed):
+        # A seat in enforce: every job's reply, held or delivered, is rendered
+        # by the broker from the job's record, which refuses any other words, so
+        # the model composes nothing. A seat in observe sends no such key, and
+        # the model hears nothing of the words.
+        out["fixed_wording"] = fixed
         out["message"] += (
-            " This job is held: the reply's whole body must be exactly "
-            + ("one of the held_wording texts" if len(held) > 1 else "the held_wording text")
+            " The reply's whole body must be exactly "
+            + ("one of the fixed_wording texts" if len(fixed) > 1 else "the fixed_wording text")
             + ", with nothing before or after it (fill <file name> with the file's name only). "
             "Any other words are refused and nothing is sent."
         )

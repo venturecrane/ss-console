@@ -125,15 +125,19 @@ CREATE_SQL = (
     "report TEXT, "
     "counts_json TEXT, "
     "reassign_json TEXT, "
-    "over_allowance_ref TEXT"
+    "over_allowance_ref TEXT, "
+    "folder_name TEXT"
     ")"
 )
 #: Columns added after the table first shipped: (name, type), added on upgrade.
 #: ``reassign_json`` (2026-10-24): a staff reassignment's names as the request
 #: gave them, so a ``staff_unresolved`` reply can only name one of them
-#: (held_wording). ``over_allowance_ref`` (2026-10-24): SMD's evidence that a
+#: (fixed_wording). ``over_allowance_ref`` (2026-10-24): SMD's evidence that a
 #: status list past the cycle's included lists was quoted and accepted (root's
 #: submit only); the lane's allowance check lets that one job run.
+#: ``folder_name`` (2026-11-04): the authored folder the job was submitted to
+#: file into, so the delivered reply names the folder the job used, never one
+#: re-read from settings that may have changed since (fixed_wording).
 ADDED_COLUMNS = (
     ("close_reason", "TEXT"),
     ("close_ref", "TEXT"),
@@ -141,6 +145,7 @@ ADDED_COLUMNS = (
     ("counts_json", "TEXT"),
     ("reassign_json", "TEXT"),
     ("over_allowance_ref", "TEXT"),
+    ("folder_name", "TEXT"),
 )
 # The ALTER TABLE below formats these into DDL (which takes no bound
 # parameters); this keeps them plain identifiers and types, so it stays safe.
@@ -423,7 +428,7 @@ class LitigationLedger:
             conn.execute(
                 "INSERT INTO litigation_jobs (id, created_at, updated_at, state, trigger, requester, request_ref, "
                 "scope_key, scope_json, file_to_matter_id, envelope_digest, report, reassign_json, "
-                "over_allowance_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "over_allowance_ref, folder_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -439,6 +444,7 @@ class LitigationLedger:
                     env.get("report") or "status",
                     json.dumps(env["reassign"], sort_keys=True) if env.get("reassign") else None,
                     over_allowance_ref,
+                    env["folder_name"],
                 ),
             )
             conn.commit()

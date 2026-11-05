@@ -1,25 +1,34 @@
-"""The fixed words a HELD job's reply says, by lane, report and hold class,
-and the check that refuses any other words at the bound send.
+"""The fixed words a job's reply says, held or delivered, and the check that
+refuses any other words at the bound send (mechanism 4, ADR 0104).
 
-WHY (2026-10-24 01:19Z, ashton-price). Litigation job 01M5MWGB was held; its
-DELIVER wake carried ``Hold class: smd_finishing.`` and the litigation-status
-skill held the one sentence for that class. The model bound the reply and sent
-its own words: "The litigation status list was not produced ... tell me if you
-want the run requested again. SMD will also need to look at why it stopped."
-The broker sent them, because the wording lived only in a skill and nothing
-checked it. A hold of ours must never come back to the firm as a question or a
-route to SMD; the skill said so and the model did it anyway.
+WHY (2026-10-24 01:19Z, the first client seat). Litigation job 01M5MWGB was
+held; its DELIVER wake carried ``Hold class: smd_finishing.`` and the
+litigation-status skill held the one sentence for that class. The model bound
+the reply and sent its own words: "The litigation status list was not produced
+... tell me if you want the run requested again. SMD will also need to look at
+why it stopped." The broker sent them, because the wording lived only in a
+skill and nothing checked it.
 
-So the wording lives HERE, the broker refuses a held litigation reply whose
-words are not one of these (``check``), and the refusal quotes the exact text,
-so the model's retry succeeds in one step. The skill carries the same
-sentences (``tests/test_held_wording_parity.py`` pins skill == code).
+So the held wording moved HERE, and on 2026-11-04 the delivered wording joined
+it (``delivered_wording``, ``delivered_matter``): every job kind's reply, held
+or delivered, is rendered by code when the model binds (``render``), from the
+job's ledger row and the broker's own reads, and the send refuses any other
+words (``check``). The refusal quotes the exact text, so the model's retry
+succeeds in one step and the one reply is still unspent. A delivered reply
+used to be the model's composition from counts under exact-label rules in skill
+prose; a count it restated was a count it could restate wrong.
+
+THE SWITCH. This module renders and compares; whether a send is refused is the
+seat's ``logic_in_code.fixed_wording`` (``reply_text.refuses``). In
+``observe``, which is every seat until the proofs need otherwise, only a held
+litigation or case file reply is refused, as it has been since the incident.
 
 THE CHRONOLOGY HAS NO HELD WORDING (2026-10-24, the Captain): the firm hears
 about a chronology only when it is delivered, so ``reply_binding`` refuses a
-held chronology its bind outright, before any wording could matter.
+held chronology its bind outright, before any wording could matter. Its
+delivered reply is rendered like every other.
 
-THE REGISTRY. ``WORDING[lane][hold class]`` is one entry per class:
+THE HELD REGISTRY. ``WORDING[lane][hold class]`` is one entry per class:
 
 * a string: that class's wording for every report of the lane, or
 * a dict ``{report: wording or (wording, ...)}``: per report (litigation's
@@ -28,17 +37,18 @@ THE REGISTRY. ``WORDING[lane][hold class]`` is one entry per class:
 
 Adding a class is one entry here plus its sentence in the skill's held step.
 A class with no entry for a report falls back to that report's
-``smd_finishing``, as the skills say.
+``smd_finishing``, as the skills say. Demand and drafting holds are worded by
+``delivered_matter`` from the hold's reason (``hold_class`` names no class for
+those lanes).
 
-SLOTS. A wording may carry ``<number>`` (a matter number, from the job row),
-``<name>`` and ``<why>`` (a staff reassignment's unresolved name and its kind,
-from the request's own names on the row and the hold's reason), and
-``<file name>``. The first three are filled from the job and so are verified,
-not accepted. ``<file name>`` is one the broker cannot look up: it is
-constrained to one short line with no question and no new sentence, and every
-other word around it must match. (``<file name>`` was the chronology's
-another_person question; no wording carries it today, and the matcher keeps it
-for a lane that may.)
+SLOTS. Only a held wording may carry a slot: ``<number>`` (a matter number,
+from the job row), ``<name>`` and ``<why>`` (a staff reassignment's unresolved
+name and its kind, from the request's own names on the row and the hold's
+reason), and ``<file name>``. The first three are filled from the job and so
+are verified, not accepted. ``<name>`` survives only on a row that predates its
+recorded request names; ``<file name>`` is carried by no wording today and the
+matcher keeps it for a lane that may. A delivered wording has no slot at all:
+a value code cannot fill omits its sentence.
 
 MATCHING. HTML tags become spaces and entities are decoded, curly quotes become
 straight ones, and runs of whitespace (line breaks included) collapse to one
@@ -54,7 +64,7 @@ import json
 import re
 from typing import Any
 
-from . import hold_class
+from . import delivered_matter, delivered_wording, hold_class
 from .reply_binding import BindingRefused
 
 SLOT_NUMBER = "<number>"
@@ -153,15 +163,33 @@ _ROLE_NAMES = {"from": "from_names", "to": "to_name", "attorney": "attorney_name
 _UNRESOLVED = re.compile(r"^staff_unresolved:\s*(from|to|attorney)\s+(unknown|ambiguous|inactive|same)\b")
 #: A legacy row with no recorded request names: the wake's own name alphabet.
 _NAME = re.compile(r"[A-Za-z][A-Za-z .'-]{0,79}")
-#: The kinds whose state is held and whose reply this module words. Not the
-#: chronology: a held chronology is refused its reply (reply_binding).
-KIND_LANE = {"litigation_job": "litigation", "casefile_job": "casefile"}
+#: Every job kind whose reply this module words, and its lane. The
+#: chronology's reply is worded only when delivered (a held chronology is
+#: refused its reply in reply_binding); a negotiation JOB never binds (only its
+#: notices are announced, and a notice reads as a delivered negotiation_job).
+KIND_LANE = {
+    "litigation_job": "litigation",
+    "casefile_job": "casefile",
+    "medchron_job": "medchron",
+    "demand_job": "demand",
+    "drafting_job": "drafting",
+    "negotiation_job": "negotiation",
+    "note_job": "note",
+}
+#: The lanes whose HELD reply is a hold class's wording (WORDING).
+HELD_CLASS_LANES = frozenset(WORDING)
 _FILE_MAX = 200
 
 
-class HeldWordingRefused(BindingRefused):
-    """A held job's reply carried words other than its fixed wording. The
-    message quotes the text to send; the overlay hands it to the model."""
+class FixedWordingRefused(BindingRefused):
+    """A job's reply carried words other than its fixed wording. The message
+    quotes the text to send; the overlay hands it to the model."""
+
+
+#: The name the overlay's error mapping knew until 2026-11-04. The broker's
+#: error code is the class name (``request_errors``), now ``FixedWordingRefused``;
+#: the overlay maps both, and this alias keeps old imports working.
+HeldWordingRefused = FixedWordingRefused
 
 
 def _casefile_report(row: dict[str, Any]) -> str:
@@ -226,9 +254,9 @@ def _staff_fills(row: dict[str, Any]) -> list[tuple[str | None, str]]:
 
 
 def allowed(kind: str, row: dict[str, Any]) -> list[str]:
-    """The texts a held job's reply may be, every verifiable slot filled.
-    ``<file name>`` (and ``<name>`` on a row that predates its recorded
-    request names) stays a slot."""
+    """The texts a HELD job's reply may be on a lane with hold classes, every
+    verifiable slot filled. ``<file name>`` (and ``<name>`` on a row that
+    predates its recorded request names) stays a slot."""
     lane = KIND_LANE[kind]
     cls = hold_class.classify(lane, row.get("reason"))[0]
     number = str(row.get("matter_number") or "").strip() or SLOT_NUMBER
@@ -241,6 +269,53 @@ def allowed(kind: str, row: dict[str, Any]) -> list[str]:
         else:
             out.append(w)
     return list(dict.fromkeys(out))
+
+
+def _rendered(lane: str, row: dict[str, Any], reads: dict[str, Any]) -> str:
+    """One text for a row whose wording is not a hold class's, or "" when its
+    lane words nothing in its state."""
+    state = row.get("state")
+    if lane == "negotiation":
+        return delivered_matter.stored(row) if row.get("notice") is True else ""
+    if lane == "note":
+        return delivered_matter.stored(row)
+    if lane in ("demand", "drafting") and state in ("delivered", "held"):
+        return (delivered_matter.demand if lane == "demand" else delivered_matter.drafting)(row)
+    if state != "delivered":
+        return ""
+    if lane == "medchron":
+        return delivered_matter.medchron(row, reads)
+    return (delivered_wording.litigation if lane == "litigation" else delivered_wording.casefile)(row)
+
+
+def render(kind: str, row: dict[str, Any], reads: dict[str, Any] | None = None) -> list[str]:
+    """Every text this job's reply may be, held or delivered: one text for a
+    delivered reply, the hold class's wordings for a held one. ``[]`` when the
+    kind has no fixed wording in this state (the binding refuses those states
+    before any wording could matter). ``reads`` is what the broker read at bind
+    time that is not on the row (the chronology's allowance)."""
+    lane = KIND_LANE.get(kind)
+    if lane is None:
+        return []
+    if row.get("state") == "held" and lane in HELD_CLASS_LANES:
+        return allowed(kind, row)
+    text = _rendered(lane, row, reads or {})
+    return [text] if text.strip() else []
+
+
+def delivered_templates() -> list[tuple[str, str, str]]:
+    """Every ``(lane, key, sentence)`` a delivered (or a demand or drafting
+    held) reply is built from, fields unfilled, plus each fixed phrase the
+    sentences take as a value: what the skills carry word for word."""
+    out = [
+        (lane, key, text)
+        for table in (delivered_wording.SENTENCES, delivered_matter.SENTENCES)
+        for lane, sentences in table.items()
+        for key, text in sentences.items()
+    ]
+    out += [("litigation", f"label:{key}", label) for key, label in delivered_wording.DEADLINE_LABELS]
+    out += [("medchron", f"kind:{key}", phrase) for key, phrase in delivered_matter.CURRENT_KINDS.items()]
+    return out
 
 
 def _norm(text: str) -> str:
@@ -271,16 +346,23 @@ def _matches(text: str, wording: str) -> bool:
     return bool(m) and all(_slot_ok(s, m.group(s.strip("<>").replace(" ", "_"))) for s in slots)
 
 
-def check(kind: str, row: dict[str, Any], comment: str, html: str) -> None:
-    """Refuse a held job's reply unless every part it carries is one of
-    ``allowed``. A no-op for any other kind or state."""
-    if kind not in KIND_LANE or row.get("state") != "held":
+def check(kind: str, row: dict[str, Any], comment: str, html: str, texts: list[str] | None = None) -> None:
+    """Refuse a job's reply unless every part it carries is one of ``texts``
+    (``render``'s, by default). A no-op for a kind this module does not word.
+    A worded kind whose row renders nothing is refused too: the model never
+    composes the words a code renderer could not."""
+    if kind not in KIND_LANE:
         return
-    texts = allowed(kind, row)
+    texts = render(kind, row) if texts is None else texts
+    if not texts:
+        raise FixedWordingRefused(
+            "fixed_wording: nothing was sent. This reply has no words the record can give, and no other words may "
+            "be sent in their place. Send nothing and end the turn."
+        )
     parts = [_norm(p) for p in (comment, _from_html(html) if html else "") if p and p.strip()]
     if parts and all(any(_matches(p, t) for t in texts) for p in parts):
         return
-    raise HeldWordingRefused(refusal(texts))
+    raise FixedWordingRefused(refusal(texts))
 
 
 def refusal(texts: list[str]) -> str:
@@ -288,10 +370,23 @@ def refusal(texts: list[str]) -> str:
     quoted = " OR ".join(f'"{t}"' for t in texts)
     slot = f" Replace {SLOT_FILE} with the file's name and nothing else." if any(SLOT_FILE in t for t in texts) else ""
     return (
-        "held_wording: nothing was sent and the one reply is still yours. A held job's reply is its fixed "
-        f"wording, nothing before or after it. Send exactly {'one of these' if len(texts) > 1 else 'this'}: "
+        "fixed_wording: nothing was sent and the one reply is still yours. This reply is its fixed wording, "
+        f"nothing before or after it. Send exactly {'one of these' if len(texts) > 1 else 'this'}: "
         f"{quoted}.{slot}"
     )
 
 
-__all__ = ["KIND_LANE", "STAFF_WHY", "WORDING", "HeldWordingRefused", "allowed", "check", "refusal", "templates"]
+__all__ = [
+    "HELD_CLASS_LANES",
+    "KIND_LANE",
+    "STAFF_WHY",
+    "WORDING",
+    "FixedWordingRefused",
+    "HeldWordingRefused",
+    "allowed",
+    "check",
+    "delivered_templates",
+    "refusal",
+    "render",
+    "templates",
+]

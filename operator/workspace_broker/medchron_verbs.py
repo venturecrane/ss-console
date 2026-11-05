@@ -333,28 +333,32 @@ class MedchronVerbs:
         )
 
     # -- dispatch ------------------------------------------------------------
+    def allowance_state(self, exclude_job_id: str | None = None) -> dict[str, Any]:
+        """The cycle's page allowance, exactly as ``medchron_allowance``
+        answers it. Also what a delivered chronology's reply states at bind
+        time (``reply_binding``), so the reply and the tool cannot disagree."""
+        if self.ledger is None:
+            raise ValueError("medchron ledger not configured on this broker")
+        try:
+            anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
+        except AnchorInvalid as exc:
+            # Authored-but-unreadable is refused, never quietly demoted to
+            # the calendar month: a firm metered on a window it did not
+            # author is the harm, and the key it must fix is named.
+            return {"authored": False, "invalid": True, "reason": str(exc)}
+        return self._db.allowance(
+            allowance_from_customer_yaml(self.customer_yaml),
+            exclude_job_id=exclude_job_id,
+            anchor_day=anchor,
+            effective_from=effective_from,
+        )
+
     def handle(self, action: str, request: dict[str, Any], peer_pid: int, peer_uid: int | None) -> dict[str, Any]:
         self._gate(action, peer_pid, peer_uid)
         if self.ledger is None:
             raise ValueError("medchron ledger not configured on this broker")
         if action == "medchron_allowance":
-            exclude = str(request.get("exclude_job_id") or "") or None
-            try:
-                anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
-            except AnchorInvalid as exc:
-                # Authored-but-unreadable is refused, never quietly demoted to
-                # the calendar month: a firm metered on a window it did not
-                # author is the harm, and the key it must fix is named.
-                return {"ok": True, "authored": False, "invalid": True, "reason": str(exc)}
-            return {
-                "ok": True,
-                **self._db.allowance(
-                    allowance_from_customer_yaml(self.customer_yaml),
-                    exclude_job_id=exclude,
-                    anchor_day=anchor,
-                    effective_from=effective_from,
-                ),
-            }
+            return {"ok": True, **self.allowance_state(str(request.get("exclude_job_id") or "") or None)}
         if action == "medchron_job_status":
             return self._status(request)
         if action == "medchron_job_list":

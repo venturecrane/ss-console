@@ -65,7 +65,7 @@ the recipient. So the broker, which the agent cannot steer, decides:
       once a delivered review's reply is sent and settled, the broker raises
       that job's numbered changes on the casework ledger, on this reply's thread
       (``casefile_casework.after_bound_reply``), so the requester can approve
-      them by number there; a held job's reply is its fixed wording (held_wording);
+      them by number there;
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -95,9 +95,10 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from typing import Any
 
-from . import bound_replies, delivery_proof, msgraph_lookup
+from . import bound_replies, delivery_proof, msgraph_lookup, reply_text
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
@@ -197,8 +198,8 @@ class Verified:
     conversation_id: str
     mode: str = MODE_REPLY
     subject: str = ""
-    #: The job's ledger row as verified (job kinds only): what the held
-    #: wording check reads. Never a body, never sent.
+    #: The job's ledger row as verified (job kinds only): what the fixed
+    #: wording is rendered from. Never a body, never sent.
     row: Any = None
 
 
@@ -556,38 +557,11 @@ def bind_verb(
         # the recipient (``sender``) and this subject; the caller sends a body.
         "mode": v.mode,
         **({"subject": v.subject} if v.subject else {}),
-        # A held litigation or chronology job: the exact texts its reply may
-        # be (held_wording). The send refuses any other words.
-        **_held_texts(v),
+        # The exact texts a reply the send holds to its words may be
+        # (fixed_wording, rendered by code from the job's row and the broker's
+        # own reads). Nothing at all on a reply the send will not refuse.
+        **reply_text.bind_keys(broker, v.kind, v.row),
     }
-
-
-def _held_texts(v: Verified) -> dict[str, Any]:
-    from . import held_wording  # held_wording imports BindingRefused from here
-
-    if v.kind not in held_wording.KIND_LANE or not v.row or v.row.get("state") != "held":
-        return {}
-    return {"held_wording": held_wording.allowed(v.kind, v.row)}
-
-
-def _check_held_wording(broker: BrokerContext, raw: Any, v: Verified, payload: dict[str, Any]) -> None:
-    """A held litigation or chronology job's reply is its fixed wording
-    (2026-10-24, job 01M5MWGB: the model sent its own words on a held job and
-    nothing checked them). Refused BEFORE the claim, so the retry with the
-    quoted text still has its one reply. The audit row names the class, never
-    the body."""
-    from . import held_wording, hold_class
-
-    if v.kind not in held_wording.KIND_LANE or not v.row:
-        return
-    raw_html = payload.get("html")
-    html = raw_html if isinstance(raw_html, str) else ""
-    try:
-        held_wording.check(v.kind, v.row, str(payload.get("comment") or ""), html)
-    except held_wording.HeldWordingRefused:
-        cls = hold_class.classify(held_wording.KIND_LANE[v.kind], v.row.get("reason"))[0]
-        _audit(broker, "send_refused", raw, v=v, reason=f"held_wording: the body is not the {cls} wording")
-        raise
 
 
 def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
@@ -615,7 +589,7 @@ def reply_verb(
         raise ValueError(f"{action} requires a 'payload' object")
     raw = request.get("binding")
     v = _verified_or_audited(broker, raw, "send")
-    _check_held_wording(broker, raw, v, payload)
+    reply_text.check_send(broker, v.kind, v.row, payload, partial(_audit, broker, raw=raw, v=v))
     db_path = str(broker.audit_db_path)
     session_id = str(request.get("session_id") or "").strip()
     state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
