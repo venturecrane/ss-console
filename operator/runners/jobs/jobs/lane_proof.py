@@ -224,6 +224,22 @@ def holds(run_dir: Path) -> list[dict[str, Any]]:
     return sorted(out, key=lambda h: float(h.get("held_at") or 0))
 
 
+def set_aside_hold(d: Any, job_id: str, dest: Path) -> Path | None:
+    """Move a job's hold marker out of ``lane-holds/`` to ``dest`` (a file
+    path), for a job that ended without running: ``holds`` then no longer
+    lists it as waiting on a proof, and the marker is kept beside the job for
+    whoever reads it later. None when the job had no hold."""
+    marker = _hold_path(d, job_id)
+    if not marker.is_file():
+        return None
+    dest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        marker.replace(dest)
+    except FileNotFoundError:
+        return None
+    return dest
+
+
 def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
     """True when the daemon may claim this envelope now. Records the hold once,
     and clears it once, through the lane's own broker ``record``."""
@@ -306,6 +322,7 @@ __all__ = [
     "lane_key",
     "load",
     "read_events",
+    "set_aside_hold",
     "validate",
 ]
 
