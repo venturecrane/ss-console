@@ -168,6 +168,23 @@ def test_spend_is_dated_when_written(ledger) -> None:
     assert ledger.spend_between("2000-01-01T00:00:00.000Z", "2999-01-01T00:00:00.000Z", exclude=job) == 0
 
 
+def test_a_later_record_of_less_never_lowers_a_rows_spend(ledger) -> None:
+    """2026-11-06: a resumed job that died without a verdict recorded 0, which
+    dropped its paid row out of the allowance and, on the next record, billed
+    its earlier spend a second time. MUTATION: let a record lower ``cents`` and
+    the allowance reads 0 and the month's spend reads 800."""
+    job = ledger.submit(_env())
+    ledger.record(job, "running", {})
+    ledger.record(job, "failed", {"cents": 300, "reason": "no_verdict: the runner exited -15 without a verdict"})
+    ledger.record(job, "running", {})
+    row = ledger.record(job, "failed", {"cents": 0, "reason": "no_verdict: the runner exited -15 without a verdict"})
+    assert row["cents"] == 300
+    assert ledger.allowance(25)["used"] == 1
+    ledger.record(job, "running", {})
+    ledger.record(job, "delivered", {"cents": 500, "folder_id": "f"})
+    assert ledger.spend_between("2000-01-01T00:00:00.000Z", "2999-01-01T00:00:00.000Z") == 500
+
+
 def test_a_resumed_job_delivered_carries_no_reason_from_its_failure(ledger) -> None:
     # 2026-10-08: a drafting job failed at the gate, was resumed and delivered,
     # and the DELIVER turn read the failure's reason off the delivered row and
