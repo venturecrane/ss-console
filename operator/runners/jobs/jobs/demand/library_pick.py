@@ -56,7 +56,7 @@ from operator_connector_sdk.library.caller import (
 )
 from operator_connector_sdk.library.resolver import replace_status
 
-from .outcome import DemandFailed
+from .outcome import DemandFailed, DemandHold
 
 KIND = "demand_letter"
 #: Where an accepted reference is written for the writer to open.
@@ -91,6 +91,31 @@ def _stop(run: Any, res: Resolution) -> DemandFailed:
         f"the firm's document library cannot give this demand's file ({res.status}: {res.reason}); "
         "it was not written on another file. Nothing was spent."
     )
+
+
+def select(run: Any, variant: str) -> tuple[Any, Path | None]:
+    """The firm selected for the matter's responsible attorney and ``variant``,
+    and the reference the demand is written in. The attorney is chosen in code
+    from the matter record; an unmapped attorney, or a variant with no format
+    for them, holds the job (``DemandHold``) before anything is spent."""
+    firm = run.firm
+    who = run._json("facts.json").get("responsible_attorney")
+    signs = firm.attorney_for(who)
+    # The format is the responsible attorney's when their row names one
+    # (2026-10-14); unmapped, the firm's default.
+    if variant not in firm.variants_for(signs):
+        whose = f"{who}'s demands" if (signs or {}).get("format") else "the firm"
+        raise DemandHold(
+            f"this is a {variant.replace('_', '-')} demand and no {variant.replace('_', '-')} format is "
+            f"authored for {whose}. Nothing was spent."
+        )
+    if not signs:
+        raise DemandHold(
+            f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "
+            "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
+        )
+    run.firm = firm.select(variant, signs)
+    return run.firm, pick_reference(run)
 
 
 def pick_reference(run: Any) -> Path | None:
@@ -134,4 +159,4 @@ def pick_reference(run: Any) -> Path | None:
     return dest
 
 
-__all__ = ["KIND", "REFERENCE_NAME", "open_store", "pick_reference", "spec_dir"]
+__all__ = ["KIND", "REFERENCE_NAME", "open_store", "pick_reference", "select", "spec_dir"]

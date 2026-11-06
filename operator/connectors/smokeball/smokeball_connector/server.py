@@ -1350,8 +1350,8 @@ def _render_with_format(
     uploaded. ``libraryResolution`` is the accepted-file record
     (``library_pick``), None only for a classless render."""
     from .docx_format import DOCUMENT_CLASSES, FormatRefused, FormatReport, load_firm_identity, render_document
-    from .library import NotResolved, load_library_config, resolve_template
-    from .library_pick import chat_base, chat_record
+    from .library import load_library_config
+    from .library_pick import base_for, chat_base, chat_record
     from .render import render_markdown_to_docx
 
     if not document_class:
@@ -1362,27 +1362,11 @@ def _render_with_format(
     cfg = load_library_config()
     report.template_expected = cfg.authored
     report.class_template_name = cfg.template_name(document_class)
-    # The firm's accepted file when its ledger names one (library_pick); else today's lookup.
+    # The firm's accepted file when its ledger names one; else today's lookup (library_pick).
     pick = chat_base(_get_client, cfg, document_class, matter_id)
     if pick.refusal:
         return b"", report.to_dict(), pick.refusal, chat_record(pick, None)
-    base: bytes | None = pick.data
-    if base is not None:
-        report.template_used = pick.template_used()
-    else:
-        try:
-            resolved = resolve_template(_get_client(), cfg, document_class)
-        except Exception as exc:  # noqa: BLE001 - a found template that would not download: say so, render on the starter
-            resolved = NotResolved(f"template found but could not be downloaded: {exc.__class__.__name__}")
-        if isinstance(resolved, NotResolved):
-            report.notes.append(f"firm template not used: {resolved.reason}")
-        else:
-            base = resolved.bytes
-            report.template_used = {
-                "name": resolved.name,
-                "fileId": resolved.file_id,
-                "sha256": hashlib.sha256(resolved.bytes).hexdigest(),
-            }
+    base = base_for(pick, _get_client, cfg, document_class, report)
     library = chat_record(pick, base, (report.template_used or {}).get("name", ""))
     try:
         # The letterhead is AUTHORED config printed by code, never model text,

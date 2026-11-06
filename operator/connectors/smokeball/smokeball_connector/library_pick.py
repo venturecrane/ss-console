@@ -6,7 +6,7 @@ ask :func:`chat_base` first, before today's newest-by-name lookup
 (``library.resolve_template``). What the tool then does, by the resolver's answer:
 
 * ``none_accepted`` (every seat today): nothing changes. The tool runs today's
-  lookup, by today's code in ``server._render_with_format``, and the record says
+  lookup, by today's code (moved here unchanged, ``_by_name``), and the record says
   which fallback it used (the library file by name, or the starter).
 * ``resolved``: the accepted file's bytes are the base, in place of the lookup.
   The chat tool writes a document by clearing its base's body and keeping its
@@ -30,6 +30,7 @@ The record (``caller.build_record``) goes in the tool's result as
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -165,6 +166,37 @@ def chat_base(
     return ChatPick(res, _refusal(res))
 
 
+def _by_name(client_factory: Callable[[], Any], cfg: LibraryConfig, kind: str, report: Any) -> bytes | None:
+    """Today's lookup, unchanged: the newest file of the kind's name in the
+    library, else None (the starter), each said in the report."""
+    from . import library
+
+    try:
+        resolved = library.resolve_template(client_factory(), cfg, kind)
+    except Exception as exc:  # noqa: BLE001 - a found template that would not download: say so, render on the starter
+        resolved = library.NotResolved(f"template found but could not be downloaded: {exc.__class__.__name__}")
+    if isinstance(resolved, library.NotResolved):
+        report.notes.append(f"firm template not used: {resolved.reason}")
+        return None
+    report.template_used = {
+        "name": resolved.name,
+        "fileId": resolved.file_id,
+        "sha256": hashlib.sha256(resolved.bytes).hexdigest(),
+    }
+    return resolved.bytes
+
+
+def base_for(
+    pick: ChatPick, client_factory: Callable[[], Any], cfg: LibraryConfig, kind: str, report: Any
+) -> bytes | None:
+    """The base to render on, given an answer that did not refuse: the
+    accepted file, or with nothing accepted, today's lookup."""
+    if pick.data is not None:
+        report.template_used = pick.template_used()
+        return pick.data
+    return _by_name(client_factory, cfg, kind, report)
+
+
 def chat_record(pick: ChatPick, base: bytes | None, name: str = "") -> dict[str, Any]:
     """The record for the tool's result: the answer, and the base the render used."""
     res = pick.resolution
@@ -177,4 +209,13 @@ def chat_record(pick: ChatPick, base: bytes | None, name: str = "") -> dict[str,
     return build_record(CHAT_TOOL, res, used)
 
 
-__all__ = ["CHAT_CONTRACTS", "ChatPick", "chat_base", "chat_record", "matter_attorney", "open_store", "spec_dir"]
+__all__ = [
+    "CHAT_CONTRACTS",
+    "ChatPick",
+    "chat_base",
+    "chat_record",
+    "base_for",
+    "matter_attorney",
+    "open_store",
+    "spec_dir",
+]

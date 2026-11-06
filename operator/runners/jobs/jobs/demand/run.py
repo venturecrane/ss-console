@@ -584,23 +584,8 @@ class DemandRun:
                 + "; ".join(variant.get("evidence") or ["no evidence either way"])[:300]
                 + ". Nothing was spent."
             )
-        who = self._json("facts.json").get("responsible_attorney")
-        signs = self.firm.attorney_for(who)
-        # The format is the responsible attorney's (an attorney row may name
-        # its own, e.g. Craig Ashton's, 2026-10-14); unmapped, the firm's default.
-        if name not in self.firm.variants_for(signs):
-            whose = f"{who}'s demands" if (signs or {}).get("format") else "the firm"
-            raise DemandHold(
-                f"this is a {name.replace('_', '-')} demand and no {name.replace('_', '-')} format is "
-                f"authored for {whose}. Nothing was spent."
-            )
-        if not signs:
-            raise DemandHold(
-                f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "
-                "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
-            )
-        self.firm = self.firm.select(name, signs)
-        self._reference = library_pick.pick_reference(self)
+        # Whose demand, in which format, and which file it is written in (library_pick).
+        self.firm, self._reference = library_pick.select(self, name)
 
     def run(self) -> Verdict:
         try:

@@ -55,7 +55,7 @@ JOBS = "runners/jobs/jobs"
 ADAPTERS = {
     "chat_tool": (f"{CONNECTOR}/library_pick.py", "chat_base"),
     "drafting_job": (f"{JOBS}/drafting/library_pick.py", "pick_base"),
-    "demand_job": (f"{JOBS}/demand/library_pick.py", "pick_reference"),
+    "demand_job": (f"{JOBS}/demand/library_pick.py", "select"),
 }
 #: Where each path makes its documents: the functions that ask the adapter.
 CALLERS = {
@@ -274,7 +274,7 @@ HANDS_ON = [
     (f"{JOBS}/drafting/finish.py", "_render_unit", "lay_out", "styles=made_in.styles"),
     (f"{JOBS}/drafting/placing.py", "_place_unit", "render", "made_in.styles"),
     (f"{JOBS}/demand/run.py", "_build_deliverables", "render_demand", "self._reference"),
-    (f"{JOBS}/demand/run.py", "_select_format", "pick_reference", "self"),
+    (f"{JOBS}/demand/run.py", "_select_format", "select", "self"),
 ]
 
 
