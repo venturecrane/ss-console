@@ -20,7 +20,17 @@ entity; and DOES 1 through 50, inclusive"); the 11-05 rehearsal planned one
 party from it. ``entities`` splits each value into the names it prints,
 exactly as printed, drops the fictitious defendants and the descriptions, and
 splits at "and" only between whole names ("Smith and Sons, Inc." stays one).
-A value it cannot split is kept whole and named in the stop.
+A jurisdiction qualifier ("County of X", "State of CA - Department of Y")
+belongs to the party before it ("<agency>, County of X, State of CA - <dept>"
+is one party); a semicolon, a description or "and" ends a party. A qualifier
+after a name that is itself a jurisdiction ("CITY OF X, COUNTY OF Y": two
+parties, or one?) is undecided. A value it cannot split is kept whole and
+named in the stop.
+
+**A scope line.** "to X only" (the attorney's words, or SMD's hand line on a
+re-submitted job: the envelope's only free text is ``request_text``) limits
+the plan to exactly those parties, even one; each is still checked against
+the matter's parties.
 
 A request that serves every defendant, or names two or more parties, is never
 planned as one party: when the matter resolves to fewer, or two of its names
@@ -105,6 +115,11 @@ _ENTITY = frozenset(
 )
 
 
+#: A jurisdiction or location a caption prints after an agency's name ("County of X",
+#: "State of CA - Department of Y"): part of the party before it, never a party of its own.
+_QUALIFIER = re.compile(r"(?i)^(?:the\s+)?(?:state|county|city|commonwealth|territory)\s+of\s+\S")
+
+
 class Undecided(ValueError):
     """A caption value code cannot split into entities with confidence."""
 
@@ -125,19 +140,40 @@ def entities(value: str) -> list[str]:
     descriptions are dropped. ``Undecided`` when a piece is neither a name, a
     description, a suffix nor a fictitious entry."""
     pieces: list[str] = []
-    for raw in re.split(r"[;,]", str(value or "")):
+    qualified: set[int] = set()  # pieces that carry a jurisdiction qualifier: never split at "and"
+    boundary = True  # the next piece starts a party: the value's start, a semicolon, a description, "and"
+    for raw in re.split(r"([;,])", str(value or "")):
+        if raw == ";":
+            boundary = True
+            continue
         p = raw.strip()
-        if not p or _DESCRIBES.match(p):
+        if not p or p == ",":
+            continue
+        if _DESCRIBES.match(p):
+            boundary = True
             continue
         if _SUFFIX.match(p) and pieces:
             pieces[-1] = f"{pieces[-1]}, {p}"
             continue
-        p = re.sub(r"(?i)^and\s+", "", p).strip()
+        if re.match(r"(?i)^and\s+", p):
+            p, boundary = re.sub(r"(?i)^and\s+", "", p).strip(), True
         if _FICTITIOUS.match(p) or _DESCRIBES.match(p):
+            boundary = True
+            continue
+        if _QUALIFIER.match(p) and not boundary and pieces:
+            if _QUALIFIER.match(pieces[-1]):
+                # "CITY OF X, COUNTY OF Y": two parties, or one qualified? Code cannot tell.
+                raise Undecided(f'"{p[:80]}" after "{pieces[-1][:60]}" in the caption\'s "{str(value)[:160]}"')
+            pieces[-1] = f"{pieces[-1]}, {p}"  # "<agency>, County of X, State of CA - <dept>": one party
+            qualified.add(len(pieces) - 1)
             continue
         pieces.append(p)
+        boundary = False
     out: list[str] = []
-    for p in pieces:
+    for i, p in enumerate(pieces):
+        if i in qualified:
+            out.append(p)
+            continue
         parts = [x.strip() for x in re.split(r"(?i)\s+and\s+", p)]
         parts = [x for x in parts if x and not _FICTITIOUS.match(x)]
         if len(parts) > 1 and all(_entity(x) for x in parts):
@@ -238,6 +274,35 @@ def _claims(request: str) -> list[str]:
     return out
 
 
+#: A line limiting the parties ("to the School District only", "only to the City"): the
+#: request's own words or SMD's hand line on a re-submitted job; both live in request_text.
+_ONLY = re.compile(
+    r"(?i)\bto\s+(?P<a>(?:[^.;\n]|\.(?=\S)|\.(?=\s+only\b))+?)\s+only\b|\bonly\s+(?:to|on|upon)\s+(?P<b>[^.;\n]+)"
+)
+
+
+def _scope(request: str, theirs: list[str], ours: list[str]) -> list[str]:
+    """The parties a "to X only" line limits the request to, in its order;
+    [] when it carries none. A name in it that is not exactly one of the
+    matter's parties stops (``PartyUnknown``)."""
+    out: list[str] = []
+    for m in _ONLY.finditer(request):
+        for chunk in re.split(r",|;|&|\band\b", m.group("a") or m.group("b") or ""):
+            c = _LEAD.sub("", chunk).strip()
+            if not c[:1].isupper():
+                continue
+            got = [t for t in theirs if _named_at(c, t, theirs, ours) is not None]
+            if len(got) != 1:
+                raise PartyUnknown(
+                    f'the request limits its sets to "{c[:80]}", which is '
+                    + ("none" if not got else "more than one")
+                    + f" of the matter's parties ({'; '.join(theirs)})"
+                )
+            if got[0] not in out:
+                out.append(got[0])
+    return out
+
+
 def plan(request: str, theirs: list[str], ours: list[str], unsplit: list[str] | None = None) -> list[str]:
     """The parties the request serves its sets on, in the order it names them;
     [] when it serves one party (the job drafts as it always did).
@@ -271,6 +336,9 @@ def plan(request: str, theirs: list[str], ours: list[str], unsplit: list[str] | 
         if prior is not None:
             raise PartyUnknown(f'the request names "{prior[:60]}" and "{c[:60]}", which are the same party ({got[0]})')
         resolved[c] = got[0]
+    scoped = _scope(request, theirs, ours)
+    if scoped:
+        return scoped  # "to X only": exactly those parties, even one
     at = {t: _named_at(request, t, theirs, ours) for t in theirs}
     named = sorted((p for p, pos in at.items() if pos is not None), key=lambda p: at[p] or 0)
     if every or (not named and _PLURAL.search(request)):

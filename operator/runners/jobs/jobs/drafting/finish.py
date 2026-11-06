@@ -112,7 +112,7 @@ class Finish:
                 ]
             else:
                 plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
-            if len(plan) < 2:
+            if len(plan) < 2 and not who:  # one set to a scoped party keeps its party
                 plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
             self._put("units", plan)
         out = []

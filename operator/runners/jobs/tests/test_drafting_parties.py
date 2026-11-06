@@ -102,6 +102,61 @@ def test_a_caption_value_is_split_into_its_entities_as_printed(value, want):
     assert parties.entities(value) == want
 
 
+AGENCY = "EXAMPLETOWN SHERIFF'S DEPARTMENT, County of Exampletown, State of CA - Department of Example Services"
+THREE = (
+    "CITY OF EXAMPLETOWN, a public entity; EXAMPLETOWN UNIFIED SCHOOL DISTRICT, a public entity; "
+    f"{AGENCY}; and DOES 1 through 50, inclusive"
+)
+
+
+@pytest.mark.parametrize(
+    "value, want",
+    [
+        (THREE, [CITY, DISTRICT, AGENCY]),
+        (
+            f"CITY OF EXAMPLETOWN, EXAMPLETOWN UNIFIED SCHOOL DISTRICT, {AGENCY}, and DOES 1-50",
+            [CITY, DISTRICT, AGENCY],
+        ),
+        # a qualified name is never split at its own "and"
+        (
+            "EXAMPLE CLINIC, State of CA - Department of Health and Human Services",
+            ["EXAMPLE CLINIC, State of CA - Department of Health and Human Services"],
+        ),
+        # a semicolon, "and" or a description ends a party: what follows is its own
+        (
+            "EXAMPLETOWN SHERIFF'S DEPARTMENT; COUNTY OF EXAMPLETOWN",
+            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
+        ),
+        (
+            "EXAMPLETOWN SHERIFF'S DEPARTMENT, and COUNTY OF EXAMPLETOWN",
+            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
+        ),
+        (
+            "EXAMPLETOWN SHERIFF'S DEPARTMENT, a public entity, COUNTY OF EXAMPLETOWN, a public entity",
+            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
+        ),
+    ],
+)
+def test_a_jurisdiction_qualifier_belongs_to_the_party_before_it(value, want):
+    assert parties.entities(value) == want
+
+
+def test_all_defendants_on_a_qualified_agency_caption_is_exactly_three_parties():
+    ours, theirs = parties.matter_parties(_one_string_cap(THREE), {})
+    assert parties.plan("Draft RFAs and SROGs set one to all defendants.", theirs, ours) == [CITY, DISTRICT, AGENCY]
+    assert parties.plan("Draft RFAs set one to each defendant.", theirs, ours) == [CITY, DISTRICT, AGENCY]
+
+
+def test_a_qualifier_after_a_jurisdiction_name_is_undecided_and_the_stop_quotes_it():
+    value = "CITY OF EXAMPLETOWN, COUNTY OF EXAMPLETOWN, and DOES 1-10"  # two parties, or one qualified?
+    with pytest.raises(parties.Undecided):
+        parties.entities(value)
+    cap = _one_string_cap(value)
+    ours, theirs = parties.matter_parties(cap, {})
+    with pytest.raises(parties.PartyUnknown, match="COUNTY OF EXAMPLETOWN"):
+        parties.plan("Draft RFAs to all defendants.", theirs, ours, parties.undecided(cap))
+
+
 def test_a_caption_value_code_cannot_split_is_undecided_never_guessed():
     with pytest.raises(parties.Undecided):
         parties.entities("CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10")
@@ -301,3 +356,48 @@ def test_a_plan_frozen_before_parties_resumes_unchanged(tmp_path, pricing):
     r._put("units", frozen)
     assert [(u.key, u.label, u.party) for u in r.units()] == [(p["key"], p["label"], None) for p in frozen]
     assert json.loads((r.data / "state.json").read_text())["units"] == frozen
+
+
+# ---- SMD's scope line on a re-submitted job ------------------------------------------------
+#
+# The envelope's only free text is request_text (drafting_ledger.validate_envelope);
+# SMD's hand line on a re-submitted job ("to <party> only") is read from it by code.
+
+SCOPED = TWO + "\n\nSMD, re-submitted: to Exampletown Unified School District only."
+
+
+def test_a_scope_line_limits_the_plan_to_the_parties_it_names():
+    assert parties.plan(SCOPED, THEIRS, OURS) == [DISTRICT]
+    assert parties.plan("Draft RFAs only to the City and the School District.", THEIRS, OURS) == [CITY, DISTRICT]
+    with pytest.raises(parties.PartyUnknown, match="limits its sets"):
+        parties.plan(TWO + "\n\nSMD: to Acme Paving Inc. only.", THEIRS, OURS)
+
+
+def _units_for(tmp_path, pricing, request_text):
+    from drafting_testkit import make_inputs, make_job
+    from jobs.drafting.run import DraftingRun
+
+    _cap, seat = _two_defendants()
+    make_inputs(tmp_path / "inputs")
+    jd = make_job(tmp_path / "job", cls="discovery_set")
+    doc = json.loads((jd / "job.json").read_text())
+    doc["request_text"] = request_text
+    (jd / "job.json").write_text(json.dumps(doc))
+    r = DraftingRun(
+        jd,
+        inputs_dir=str(tmp_path / "inputs"),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=Client(),
+        log=lambda _m: None,
+    )
+    (r.data / "caption.json").write_text(json.dumps(_one_string_cap()))
+    return [(u.key, u.label, u.party) for u in r.units()]
+
+
+def test_a_scoped_resubmission_drafts_only_the_scoped_partys_sets(tmp_path, pricing):
+    got = _units_for(tmp_path / "a", pricing, SCOPED)
+    assert [(label, p) for _k, label, p in got] == [(f"{k} to {DISTRICT}", DISTRICT) for k in (RFA, RFP, SROG)]
+    # one set to one scoped party is still bound to that party, never the unbound default
+    one = "Draft RFAs set one to the City and the School District.\n\nSMD: to the City of Exampletown only."
+    assert [(k, p) for k, _l, p in _units_for(tmp_path / "b", pricing, one)] == [("set-1", CITY)]
