@@ -24,6 +24,7 @@ The rules, each pinned by a test:
   not a record is refused: the stored values stand, the group leaves
   ``fields_read`` so the next run reads it, and the refusal is counted. Only the ``final.json``
   shape is read; any other file is refused whole.
+* **A status a person corrected stays corrected** (``_keep_hand_statuses``).
 * **Em dashes are normalized** (U+2014 to ", ", in every text value outside a
   source) and counted; the gates refuse them in a workbook.
 * **Newer state wins.** A matter whose stored ``provenance.read_at`` is after
@@ -43,9 +44,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import gates, identity, manifest, seedcheck, vocab
+from . import defstatus, gates, identity, manifest, seedcheck, vocab
 
 DROP = ("overturns", "responsible", "integrity", "provenance")
+_COURT_LIST = "court_dates_read"
 _DASH = re.compile(r"\s*—\s*")
 
 
@@ -145,16 +147,32 @@ def merge(stored: dict[str, Any] | None, src: dict[str, Any], out: dict[str, Any
         fresh = {k: copy.deepcopy(src[k]) for k in vocab.GROUP_FIELDS[g]}
         if g == vocab.GROUP_DEFENDANTS:
             out["sent_for_service_kept"] += _keep_sent(base.get("defendants") or [], fresh["defendants"])
+        if g == vocab.GROUP_CASE:
+            # The list the next court date is picked from goes with that date:
+            # a stale one would move the date the hand finish just loaded.
+            base.pop(_COURT_LIST, None)
+            if _COURT_LIST in src:
+                fresh[_COURT_LIST] = copy.deepcopy(src[_COURT_LIST])
         base.update(fresh)
         replaced.append(g)
     if replaced:  # the matter's own notes and flags come with a delivered read, never alone
-        group_keys = {k for ks in vocab.GROUP_FIELDS.values() for k in ks}
+        group_keys = {k for ks in vocab.GROUP_FIELDS.values() for k in ks} | {_COURT_LIST}
         for k, v in src.items():
             if k not in group_keys and k not in DROP and k != "fields_read":
                 base[k] = copy.deepcopy(v)
     out["groups_replaced"] += len(replaced)
     base["fields_read"] = sorted((set(base.get("fields_read") or []) | set(replaced)) - set(refused))
     return base, replaced
+
+
+def _keep_hand_statuses(src: dict[str, Any], read_at: dt.date) -> None:
+    """A status a person corrected on a hand finish, which its events do not
+    give, is a stated status from here on: the next run would otherwise work it
+    out from the events and put back what the person corrected."""
+    for d in src.get("defendants") or []:
+        if isinstance(d, dict) and not defstatus.asserted(d) and d.get("status") != defstatus.derive(d, read_at):
+            d.pop("status_from")
+            d.pop("stored_status", None)
 
 
 def _read_at(final_json: Path) -> str | None:
@@ -232,6 +250,7 @@ def _one(
     n = [0]
     src = _norm({k: v for k, v in raw.items() if k not in DROP}, n)
     out["normalized"] += n[0]
+    _keep_hand_statuses(src, dt.date.fromisoformat(src_at))
     new, replaced = merge(stored, src, out)
     if not replaced:  # nothing delivered here is fit to store: only a refused group's mark changes
         if stored:

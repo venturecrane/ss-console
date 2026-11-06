@@ -25,7 +25,7 @@ _COPIES = [
     OPERATOR_ROOT / "workspace_broker" / "logic_in_code.py",
 ]
 _ALL = [_CANONICAL, *_COPIES]
-_FOUR = ("printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording")
+_FIVE = ("printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording", "status_from_events")
 
 
 def _load(path: Path) -> ModuleType:
@@ -52,8 +52,8 @@ def test_the_copies_are_byte_identical() -> None:
     )
 
 
-def test_it_names_the_four_switches(reader: ModuleType) -> None:
-    assert reader.KEYS == _FOUR
+def test_it_names_the_five_switches(reader: ModuleType) -> None:
+    assert reader.KEYS == _FIVE
     assert reader.MODES == ("observe", "enforce")
 
 

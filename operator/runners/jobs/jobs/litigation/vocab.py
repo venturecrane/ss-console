@@ -54,6 +54,33 @@ DEFENDANT_STATUSES = (
 DEFENDANT_DONE = (ANSWERED, D_DISMISSED, D_SETTLED, DROPPED, UIM, DEFAULT)
 #: Statuses that assert there is NO answer: an answer date contradicts them.
 NO_ANSWER = (NOT_SERVED, SERVICE_REJECTED, OUT_FOR_SERVICE, SERVED_NO_ANSWER, APPEARED_NO_ANSWER)
+#: What a read reports for a defendant: each dated, each with its document.
+#: Code derives the status from these (``defstatus.derive``); no read returns one.
+DEFENDANT_EVENTS = (
+    "served",
+    "answered",
+    "sent_for_service",
+    "appeared",
+    "service_rejected",
+    "dismissed",
+    "settled",
+    "dropped",
+    "default_entered",
+    "default_set_aside",
+)
+#: The events the stored shape had no field for until the derivation. While the
+#: seat's switch is ``observe`` a read's answers for these (and a role) ride apart
+#: from the list's values, in ``shadow`` on the defendant (``statusshadow``).
+SHADOW_EVENTS = tuple(f for f in DEFENDANT_EVENTS if f not in ("served", "answered", "sent_for_service"))
+#: A party's standing in the case, which no dated event carries.
+ROLE_UIM = "uim_respondent"
+ROLE_FIRM_CLIENT = "firm_client"
+DEFENDANT_ROLES = (ROLE_UIM, ROLE_FIRM_CLIENT)
+#: ``status_from`` on a stored defendant: ``derived`` came from its events;
+#: ``seed`` is a hand run's text; no key is a status a read asserted before the
+#: derivation existed, on a report already stored on a seat (``defstatus``).
+FROM_DERIVED = "derived"
+FROM_SEED = "seed"
 
 FIRM_ROLES = ("plaintiff", "defense")
 

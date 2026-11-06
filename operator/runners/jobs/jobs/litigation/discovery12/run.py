@@ -217,11 +217,13 @@ class Discovery12Run(LitigationRun):
             return True
         ctx = ctxs[mid]
         if role == "read":
-            rec = {"result": sections.to_result(ctx.source, got), "overturns": []}
+            rec = {"result": sections.to_result(ctx.source, got, self.today, self.events_enforced), "overturns": []}
         else:
             prev = self._prev(mid, role, k) or {}
             result = copy.deepcopy(prev["result"])
-            log = sections.apply_verdicts(ctx.source, result, got.get("verdicts"), role)
+            log = sections.apply_verdicts(
+                ctx.source, result, got.get("verdicts"), role, self.today, self.events_enforced
+            )
             rec = {"result": result, "overturns": list(prev.get("overturns") or []) + log}
         dump(self._mfile(mid, batch.FILE.format(p=role, k=k)), rec)
         return True
@@ -235,8 +237,8 @@ class Discovery12Run(LitigationRun):
             model=model or self.firm.model(role),
             max_tokens=batch.MAX_TOKENS,
             batch_dir=self.data / where,
-            system=sections.system_for(role, self.today) + batch.only_by_tool(role),
-            **batch.shape(role),
+            system=sections.system_for(role, self.today, self.events_enforced) + batch.only_by_tool(role),
+            **batch.shape(role, self.events_enforced),
         )
         if summary.timed_out:
             raise LitigationFailed(

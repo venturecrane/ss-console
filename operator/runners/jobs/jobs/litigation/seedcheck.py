@@ -47,6 +47,7 @@ _GROUP_RULES = {
     "answered but no answer date": vocab.GROUP_DEFENDANTS,
     "answer date but status says no answer": vocab.GROUP_DEFENDANTS,
     "served date but status says not served": vocab.GROUP_DEFENDANTS,
+    gates.DERIVED_RULE: vocab.GROUP_DEFENDANTS,
 }
 #: Value-level gate rules: the item's second element is the value's path.
 _PATH_RULES = ("future date", "date not YYYY-MM-DD", "date without source")

@@ -12,10 +12,14 @@ changes, and the cost should follow the papers, not the size of the case:
 * **What the read sees.** The matter's current values and the arrived
   documents only. The read may still open other files through its tools when
   an arrived paper points at one; it is not handed them.
+* **What the read returns.** Only what an arrived document changes or adds
+  (``TAIL``), each with its document; ``overlay`` lays that over the current
+  values. It does not retype the list.
 * **What code checks, free.** ``guard``: a changed value must cite an arrived
   document, and a changed date must appear in that document's text. A value
   the read dropped, or changed without that citation, is put back as it was.
-  A new document cannot un-serve a defendant.
+  A new document cannot un-serve a defendant. Statuses come last, from what
+  stood (``defstatus.after_update``).
 * **Where a second read goes.** Only to the values the update changed
   (``changed_paths``), with only the arrived documents: the independent check
   is spent where a mistake would reach an attorney, nowhere else.
@@ -26,20 +30,22 @@ changes, and the cost should follow the papers, not the size of the case:
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import re
 from typing import Any
 
-from . import gates, identity, manifest, parity, vocab
+from . import answers, defstatus, gates, identity, manifest, parity, vocab
 from .tools import dump
 
 MODE = "update"
 #: The read's instruction, appended to the read pass's system prompt.
 TAIL = (
     "\n\nTHIS IS AN UPDATE. The list already holds the CURRENT VALUES below, each checked earlier against the file. "
-    "New documents have arrived; they are the files listed. Report the field groups as they stand AFTER these "
-    "documents: copy every current value exactly (same date, same doc) unless an arrived document changes it, and "
-    "cite the arrived document for any value you change or add. Do not re-derive values the arrived documents do not "
-    "touch, and do not drop a defendant or a discovery set. Then call record_result."
+    "New documents have arrived; they are the files listed. Report ONLY what an arrived document changes or adds, "
+    "each with that document: code keeps every value you leave out exactly as it is. List a defendant only for an "
+    "event an arrived document gives it, by the name the current values use, or to add one. List a discovery set only "
+    "if an arrived document changes or adds it. If an arrived document changes the court dates, court_dates is the "
+    "whole list as it now stands. Then call record_result."
 )
 
 _EMAIL_GROUPS = {
@@ -160,6 +166,109 @@ def screen(r: Any, texts_of: Any) -> None:
     dump(r.data / "plan.json", out)
 
 
+#: The read's instruction while the seat's switch observes: the values as they
+#: stand, and the dated events only as an arrived document gives them.
+TAIL_OBSERVE = (
+    "\n\nTHIS IS AN UPDATE. The list already holds the CURRENT VALUES below, each checked earlier against the file. "
+    "New documents have arrived; they are the files listed. Report the field groups as they stand AFTER these "
+    "documents: copy every current value exactly (same date, same doc) unless an arrived document changes it, and "
+    "cite the arrived document for any value you change or add. Do not re-derive values the arrived documents do not "
+    "touch, and do not drop a defendant or a discovery set. Report a dated event or a role only if an arrived document "
+    "gives it. Then call record_result."
+)
+
+
+# ---- the overlay: the read's changes laid over the current values -------------------------
+def _overlay_defendant(ctx: Any, old: dict[str, Any], raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
+    """``old`` with each value ``raw`` names replaced. A date the read did not
+    give changes nothing here, and a sent-out list keeps the most recent date
+    of what is on the list and what arrived (``answers.latest_sent``)."""
+    new = answers.defendant(ctx, raw, today)
+    out = copy.deepcopy(old)
+    for f in (*vocab.DEFENDANT_EVENTS, "out_for_service", "role"):
+        if f not in raw:
+            continue
+        if f == "sent_for_service":
+            out[f] = _later_sent(old.get(f), new.get(f))
+        elif f in new:
+            out[f] = new[f]
+    out["flags"] = list(dict.fromkeys([*(old.get("flags") or []), *new["flags"]]))
+    return out
+
+
+def _later_sent(old: Any, new: Any) -> Any:
+    new_date, old_date = (new or {}).get("date"), (old or {}).get("date")
+    if not new_date or (old_date and str(old_date) >= str(new_date)):
+        return copy.deepcopy(old) if old is not None else new
+    return new
+
+
+def _overlay_defendants(ctx: Any, prior: dict[str, Any], raw: Any, today: dt.date) -> list[dict[str, Any]]:
+    out = [copy.deepcopy(d) for d in prior.get("defendants") or []]
+    for row in raw if isinstance(raw, list) else []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "")
+        i = next((i for i, d in enumerate(out) if identity.same_person(str(d.get("name") or ""), name)), None)
+        if i is None:
+            out.append(answers.defendant(ctx, row, today))
+        else:
+            out[i] = _overlay_defendant(ctx, out[i], row, today)
+    return out
+
+
+def _overlay_rows(ctx: Any, prior: dict[str, Any], raw: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    rows = identity.split_rows(prior.get(kind))
+    index = {identity.row_key(r): i for i, r in enumerate(rows)}
+    for r in answers.discovery(ctx, raw.get(kind), kind == "discovery_served_on_client"):
+        key = identity.row_key(r)
+        if key in index:
+            rows[index[key]] = r
+        else:
+            index[key] = len(rows)
+            rows.append(r)
+    return rows
+
+
+def _overlay_case(ctx: Any, prior: dict[str, Any], raw: dict[str, Any], today: dt.date) -> dict[str, Any]:
+    out = {k: copy.deepcopy(prior.get(k)) for k in vocab.GROUP_FIELDS[vocab.GROUP_CASE]}
+    if "court_dates_read" in prior:
+        out["court_dates_read"] = copy.deepcopy(prior["court_dates_read"])
+    for k in ("case_name", "court", "case_number"):
+        if k in raw:
+            out[k] = raw[k]
+    if "firm_role" in raw:
+        out["firm_role"] = answers.firm_role(raw["firm_role"])
+    if "case_status" in raw:
+        out["case_status"] = answers.case_status(ctx, raw["case_status"])
+    if "complaint_filed" in raw:
+        out["complaint_filed"] = answers.val(ctx, raw["complaint_filed"], ("date",))
+    if "court_dates" in raw:
+        out["court_dates_read"] = answers.court_rows(ctx, raw["court_dates"])
+        out["next_court_date"] = answers.next_court(out["court_dates_read"], today)
+    return out
+
+
+def overlay(ctx: Any, prior: dict[str, Any], raw: dict[str, Any], groups: list[str], today: dt.date) -> dict[str, Any]:
+    """An update read's answer (changes only) as the groups' whole values, each
+    one it left out as the last list had it. ``guard`` then decides which of the
+    changes stand. A status it may have typed is not read."""
+    out: dict[str, Any] = {}
+    if vocab.GROUP_CASE in groups:
+        out.update(_overlay_case(ctx, prior, raw, today))
+    if vocab.GROUP_DEFENDANTS in groups:
+        out["defendants"] = _overlay_defendants(ctx, prior, raw.get("defendants"), today)
+    if vocab.GROUP_DISCOVERY in groups:
+        for kind in ("discovery_propounded", "discovery_served_on_client"):
+            out[kind] = _overlay_rows(ctx, prior, raw, kind)
+    # A flag is a finding of this read, and what the list held stays beside it.
+    new_flags = [str(x) for x in raw.get("matter_flags") or []]
+    out["matter_flags"] = list(dict.fromkeys([*(prior.get("matter_flags") or []), *new_flags]))
+    if raw.get("notes"):
+        out["notes"] = str(raw["notes"])
+    return out
+
+
 # ---- the guard: code decides which of the read's changes stand ---------------------------
 def _carried(obj: Any, trigger: set[str], texts: dict[str, str], date_key: str = "date") -> bool:
     """A changed value stands only when it cites an arrived document and, if
@@ -186,7 +295,14 @@ def _guard_case(
         else:
             ok = _carried(out[k], trigger, texts)
         _record(log, k, ok, prior, out)
+    if "next_court_date" in log["reverted"]:  # the list it was picked from goes back with it
+        if "court_dates_read" in prior:
+            out["court_dates_read"] = copy.deepcopy(prior["court_dates_read"])
+        else:
+            out.pop("court_dates_read", None)
     for k in ("case_name", "court", "case_number", "firm_role"):
+        if prior.get(k) == vocab.UNCLEAR and out.get(k) in vocab.FIRM_ROLES:
+            continue  # the side the last list could not say, now read
         if prior.get(k) not in (None, "") and out.get(k) != prior.get(k):
             out[k] = prior[k]  # identity fields are not an update's to change
             log["reverted"].append(k)
@@ -205,16 +321,35 @@ _DEF_DATES = tuple(f for f, _k in identity.DATED_FIELDS)
 
 
 def _restore(d: dict[str, Any], old: dict[str, Any], f: str) -> None:
-    """``d[f]`` put back as ``old`` had it; a sent-out date the last list did
-    not carry is removed, so it stays "Not read yet" rather than "Not in file"."""
-    if f == "sent_for_service" and f not in old:
+    """``d[f]`` put back as ``old`` had it; a value the last list did not carry
+    is removed (a sent-out date stays "Not read yet" rather than "Not in file")."""
+    if f not in old:
         d.pop(f, None)
     else:
         d[f] = copy.deepcopy(old.get(f))
 
 
+def _guard_standing(d: dict[str, Any], old: dict[str, Any], trigger: set[str], log: dict) -> None:
+    """A role or an out-for-service answer stands only on an arrived document:
+    each moves the status, and neither carries a date for ``_carried`` to check."""
+    for f in ("out_for_service", "role"):
+        if _same(old.get(f), d.get(f), "value"):
+            continue
+        if parity._src_id(d.get(f)) in trigger:
+            log["changed"].append(f"defendants[{d.get('name')}].{f}")
+        else:
+            _restore(d, old, f)
+            log["reverted"].append(f"defendants[{d.get('name')}].{f}")
+
+
 def _guard_defendants(
-    prior: dict[str, Any], out: dict[str, Any], trigger: set[str], texts: dict[str, str], log: dict
+    prior: dict[str, Any],
+    out: dict[str, Any],
+    trigger: set[str],
+    texts: dict[str, str],
+    log: dict,
+    today: dt.date,
+    enforcing: bool,
 ) -> None:
     before = {parity.party_key(str(d.get("name") or "")): d for d in prior.get("defendants") or []}
     kept: list[dict[str, Any]] = []
@@ -251,6 +386,9 @@ def _guard_defendants(
                 # there is not "Not in file", and leaving the key out does not
                 # unread one; the list keeps what it carried.
                 _restore(d, old, f)
+        if enforcing:
+            _guard_standing(d, old, trigger, log)
+            defstatus.after_update(d, old, today)
         if d.get("status") != old.get("status"):
             log["changed"].append(f"defendants[{d.get('name')}].status")  # always goes to the second read
         kept.append(d)
@@ -314,18 +452,26 @@ def _guard_discovery(
 
 
 def guard(
-    prior: dict[str, Any], fresh: dict[str, Any], groups: list[str], trigger: list[str], texts: dict[str, str]
+    prior: dict[str, Any],
+    fresh: dict[str, Any],
+    groups: list[str],
+    trigger: list[str],
+    texts: dict[str, str],
+    *,
+    today: dt.date,
+    enforcing: bool = False,
 ) -> tuple[dict[str, Any], dict[str, list[str]]]:
     """``fresh`` (the update read merged over ``prior``) with every change
-    that is not carried by an arrived document put back. Returns the result
-    and ``{"changed": [...], "reverted": [...]}``."""
+    that is not carried by an arrived document put back, and each defendant's
+    status worked out from what stood when the seat's switch enforces. Returns the result and
+    ``{"changed": [...], "reverted": [...]}``."""
     out = copy.deepcopy(fresh)
     trig = set(trigger)
     log: dict[str, list[str]] = {"changed": [], "reverted": []}
     if vocab.GROUP_CASE in groups:
         _guard_case(prior, out, trig, texts, log)
     if vocab.GROUP_DEFENDANTS in groups:
-        _guard_defendants(prior, out, trig, texts, log)
+        _guard_defendants(prior, out, trig, texts, log, today, enforcing)
     if vocab.GROUP_DISCOVERY in groups:
         _guard_discovery(prior, out, trig, texts, log)
     return out, log

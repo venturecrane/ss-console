@@ -233,6 +233,7 @@ connectors:
 #   post_record_derivation: observe   # the post record's typed fields
 #   conflict_fence: observe           # a write before the conflict check clears
 #   fixed_wording: observe            # a job reply that is not the rendered text
+#   status_from_events: observe       # a defendant's status worked out from its events
 
 # ---- SCOPE ----
 scope:

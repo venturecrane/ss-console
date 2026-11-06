@@ -30,7 +30,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from . import defstatus, vocab
+from . import defstatus, identity, vocab
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EM_DASH = "—"
@@ -56,6 +56,10 @@ TextOf = Callable[[str, str], "str | None"]
 #: (``defstatus.reconcile`` in ``run.final``); a list that still carries one is
 #: refused, never sent with the contradiction.
 NOTE_RULE = "note states a default, dismissal or answer but status says no answer"
+#: A status marked derived that its own events do not give. The run sets it from
+#: them just before the gates, so this is only a list changed by another hand
+#: (a hand finish, a stored report edited): refused, never printed.
+DERIVED_RULE = "status does not follow from its events"
 
 
 def _dated(m: dict[str, Any], discovery: bool = True) -> list[tuple[str, dict[str, Any]]]:
@@ -65,11 +69,7 @@ def _dated(m: dict[str, Any], discovery: bool = True) -> list[tuple[str, dict[st
     on one real court-only list 37 of the 48 held items were discovery."""
     out = [("complaint_filed", m.get("complaint_filed") or {}), ("next_court_date", m.get("next_court_date") or {})]
     for d in m.get("defendants") or []:
-        out += [
-            (f"{d.get('name')}: served", d.get("served") or {}),
-            (f"{d.get('name')}: answered", d.get("answered") or {}),
-            (f"{d.get('name')}: sent for service", d.get("sent_for_service") or {}),
-        ]
+        out += [(f"{d.get('name')}: {f.replace('_', ' ')}", d.get(f) or {}) for f, _k in identity.DATED_FIELDS]
     if not discovery:
         return [(p, v) for p, v in out if isinstance(v, dict)]
     for i, r in enumerate(m.get("discovery_propounded") or []):
@@ -175,11 +175,13 @@ def _date_rules(m: dict[str, Any], n: str, t: str, out: dict[str, list[Any]], di
             out["future date"].append((n, path, d))
 
 
-def _defendant_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]]) -> None:
+def _defendant_rules(m: dict[str, Any], n: str, out: dict[str, list[Any]], today: dt.date) -> None:
     for d in m.get("defendants") or []:
         st = d.get("status")
         if st not in vocab.DEFENDANT_STATUSES:
             out["defendant status not normalized"].append((n, d.get("name"), st))
+        if not defstatus.asserted(d) and st != defstatus.derive(d, today):
+            out[DERIVED_RULE].append((n, d.get("name"), st, defstatus.derive(d, today)))
         ans = (d.get("answered") or {}).get("date")
         if st in (vocab.ANSWERED, vocab.ANSWERED_ORIGINAL) and not ans:
             out["answered but no answer date"].append((n, d.get("name")))
@@ -225,6 +227,7 @@ def rule_matters(ms: list[dict[str, Any]], today: dt.date, discovery: bool = Tru
             "answer date but status says no answer",
             "served date but status says not served",
             NOTE_RULE,
+            DERIVED_RULE,
             "em dash in text",
         )
     }
@@ -234,7 +237,7 @@ def rule_matters(ms: list[dict[str, Any]], today: dt.date, discovery: bool = Tru
         seen[n] = seen.get(n, 0) + 1
         _case_rules(m, n, out)
         _date_rules(m, n, t, out, discovery)
-        _defendant_rules(m, n, out)
+        _defendant_rules(m, n, out, today)
     out["duplicate matter"] = [n for n, k in seen.items() if k > 1]
     return out
 
