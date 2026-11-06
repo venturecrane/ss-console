@@ -23,6 +23,7 @@ JOB = "01J0000000000000000000000Z"
 OTHER_JOB = "01J0000000000000000000000Y"
 WAKE = "wake-1"
 CRON = "cron_abc123def456_20261006_120000"
+DRAFTING_WORDS = "The memo for matter 900201 is filed in the matter."
 
 _SEAT_YAML = (
     "customer_id: acme\n"
@@ -61,6 +62,7 @@ class _FakeBroker:
         self.bound = True
         self.binds: list[dict] = []
         self.bound_sends: list[dict] = []
+        self.comments: list[str] = []
         self.plain_sends: list[dict] = []
 
     def bind_reply(self, req):
@@ -71,10 +73,13 @@ class _FakeBroker:
                 "bound": False,
                 "reason": "that email has already been answered from this mailbox",
             }
-        return {"ok": True, "bound": True, "sender": ADMIN, "graph_message_id": GRAPH_ID}
+        # A drafting job's bind carries its words on every seat (job_reply).
+        words = {"fixed_wording": [DRAFTING_WORDS]} if req.get("kind") == "drafting_job" else {}
+        return {"ok": True, "bound": True, "sender": ADMIN, "graph_message_id": GRAPH_ID, **words}
 
     def send_bound_reply(self, req, comment, *, html="", session_id="", matter_ref=None):
         self.bound_sends.append({"binding": req, "session_id": session_id})
+        self.comments.append(comment)
         return "<sent@firm.example>"
 
     def send_reply(self, message_id, comment, **kw):
@@ -94,6 +99,7 @@ def _clean():
         reg.clear()
     mod.binding.SESSION_BINDINGS._reset_for_tests()
     mod.binding.TURN_SOURCES._reset_for_tests()
+    mod._JOB_REPLIES._reset_for_tests()
     yield
     mod.binding.SESSION_BINDINGS._reset_for_tests()
     mod.binding.TURN_SOURCES._reset_for_tests()
@@ -535,6 +541,8 @@ def test_a_drafting_wake_replies_through_a_drafting_binding(lane) -> None:
     assert broker.bound_sends == [
         {"binding": {"kind": "drafting_job", "job_id": JOB}, "session_id": WAKE}
     ]
+    # The broker's words, not the draft's (job_reply).
+    assert broker.comments == [DRAFTING_WORDS]
     sent = [m for a, m in d1.events() if a == "REPLY_SENT"]
     assert len(sent) == 1 and sent[0]["in_reply_to"] == GRAPH_ID
 
@@ -1591,16 +1599,15 @@ _FIRM_WORDS = (
 )
 
 
-def test_a_drafting_delivery_reply_naming_the_job_is_held_for_a_redraft(lane) -> None:
-    """FALSIFIER: drop ``job_reply=_is_job_reply(bound)`` from the relay's checklist
-    call and the attorney reads "The job searched his reports"."""
+def test_a_drafting_delivery_reply_naming_the_job_never_goes_out(lane) -> None:
+    """Since 2026-11-05 a drafting job's reply is the broker's words whatever
+    the model drafts (job_reply): the attorney never reads "The job searched
+    his reports", and nothing is held for a redraft that cannot change it."""
     mod, d1, broker, _ = lane
     _drafting_wake(mod)
     _bind(mod, {"job_id": JOB})
     _draft(mod, [ADMIN], body=_JOB_WORDS)
-    assert broker.bound_sends == []
-    held = _held(d1)
-    assert held and "system_vocabulary" in json.dumps(held)
+    assert broker.comments == [DRAFTING_WORDS] and not _held(d1)
 
 
 def test_the_same_reply_in_the_firms_terms_goes(lane) -> None:

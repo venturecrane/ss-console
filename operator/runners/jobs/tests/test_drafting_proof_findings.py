@@ -1253,6 +1253,18 @@ def test_a_defined_term_after_a_modifier_or_an_indefinite_is_left_as_written():
     assert len(lines) == 2 and sets.lowercase_uses(out) == []
 
 
+def test_a_defined_term_inside_a_record_title_keeps_the_title_as_printed():
+    # 2026-11-05: "Galt Police Department CAD Incident Report" became "CAD INCIDENT Report".
+    doc = (
+        '# DEFINITIONS\n\n1. "INCIDENT" means the fall.\n\n# REQUESTS FOR PRODUCTION\n\n'
+        "REQUEST FOR PRODUCTION NO. 1\n\nThe Galt Police Department CAD Incident Report concerning the incident.\n\n"
+        "Dated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "CAD Incident Report concerning the INCIDENT." in out
+    assert len(lines) == 1 and sets.lowercase_uses(out) == []
+
+
 def test_a_definition_alias_says_also_spelled():
     out, notes = sets.alias_wording(
         '9. "YOUNG" means Charley Young, whose name also appears in the record as Charlie Young.'

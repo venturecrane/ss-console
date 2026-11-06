@@ -25,10 +25,10 @@ import io
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, NoReturn
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck, quote_end
+from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, settle as settle_mod, wording
@@ -146,54 +146,9 @@ class Finish:
         return version
 
     def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
-        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails.
-
-        Repair rounds re-audit only the requests a repair changed (the delta
-        audit, ``compose.delta``), so a round's findings are the repair's. A set
-        clean on a delta read then gets a FULL read before it passes: a defect
-        in a request no repair touched (2026-10-14: an interrogatory stating the
-        other side's information-and-belief allegation as fact, first seen on
-        the fourth read) is found there, repaired, and checked again. The
-        budget stops on non-convergence, not on a round count: a repair that
-        changes nothing, two delta rounds without fewer findings, or a full
-        read that finds no fewer than the last full read did. ``REPAIR_CEILING``
-        is the runaway guard behind those."""
-        version, full, stalled, last_full = 1, True, 0, None
-        result = d.audit(version, digest, corpus)
-
-        def left() -> int:
-            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
-
-        def fail(why: str) -> NoReturn:
-            # Counts only, never the claims or a heading (a title names the
-            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
-            raise DraftingFailed(
-                f"audit_unrepaired: {left()} audit finding(s) in the {u.label} {why}; see audit-v{version}.md"
-            )
-
-        n = left()
-        while True:
-            if n == 0 and full:
-                return version
-            if n == 0:
-                result, full = d.audit(version, digest, corpus, full=True), True
-                n = left()
-                if n and last_full is not None and n >= last_full:
-                    fail(f"on a full read after {version - 1} repair(s), no fewer than the last full read found")
-                last_full = n if n else last_full
-                continue
-            if version > REPAIR_CEILING:
-                fail(f"after {REPAIR_CEILING} repairs")
-            before = d._read(f"draft-v{version}.md")
-            if d.repair(digest, version) == before:
-                fail("that a repair could not place")
-            version += 1
-            result, full = d.audit(version, digest, corpus), False
-            m = left()
-            stalled = stalled + 1 if m >= n else 0
-            n = m
-            if stalled >= 2:
-                fail("after two repairs that did not reduce them")
+        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails
+        (``converge.served``, its rules and their history)."""
+        return converge.served(d, self.cls, u.label, digest, corpus, REPAIR_CEILING)
 
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
@@ -516,6 +471,10 @@ class Finish:
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         render_notes = [self._block_note(), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
+        # SMD's hand-written sections of the notes this replaces, carried by
+        # code: never sent to the model above, kept byte for byte (2026-11-05).
+        prior = self.data / "notes-final.md"
+        md = notes_mod.carry_smd(prior.read_text(encoding="utf-8") if prior.is_file() else None, md)
         self._atomic("notes-final.md", md)
         return md
 
@@ -636,7 +595,8 @@ class Finish:
             # A basis row the review says does not carry its request: dropped
             # and said, like a row that failed verification. No rewrite: the
             # review read the rest, and removing a row adds nothing to check.
-            notes_md, n = grounding.drop_rows(notes_md, flagged)
+            dropped, n = grounding.drop_rows(notes_mod.strip_smd(notes_md), flagged)  # never inside SMD's sections
+            notes_md = notes_mod.carry_smd(notes_md, dropped)
             self._atomic("notes-final.md", notes_md)
             self._done("basis_dropped", rows=n)
         if self._is_done("manifest"):

@@ -184,7 +184,19 @@ def _is_graph_ref(ref: str) -> bool:
 
 
 class BindingRefused(MsGraphRefused):
-    """The broker will not let a reply bind. The message is the sentence to relay."""
+    """The broker will not let a reply bind. The message is the sentence to relay.
+
+    ``code`` is a closed token for the job refusals a seat acts on in code
+    (overlay ``job_reply``, 2026-11-05): ``already_replied``, ``job_failed``,
+    ``not_ended``. "" on every other refusal."""
+
+    code = ""
+
+
+def _job_refused(message: str, code: str) -> BindingRefused:
+    exc = BindingRefused(message)
+    exc.code = code
+    return exc
 
 
 @dataclass(frozen=True)
@@ -357,9 +369,10 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
     if row["state"] == "failed":
-        raise BindingRefused(
+        raise _job_refused(
             f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone."
+            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone.",
+            "job_failed",
         )
     if kind == "medchron_job" and row["state"] == "held":
         raise BindingRefused(
@@ -367,10 +380,12 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
             "when it is delivered, and SMD has been alerted. Send nothing to anyone."
         )
     if row["state"] not in replyable_states(kind):
-        raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
+        raise _job_refused(
+            f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that", "not_ended"
+        )
     key = reply_key(kind, ident, row)
     if bound_replies.claimed(db_path, key):
-        raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+        raise _job_refused(f"{noun} job {ident} has already had its reply for this outcome", "already_replied")
     return row, key
 
 
@@ -538,7 +553,8 @@ def bind_verb(
     try:
         v = _verified_or_audited(broker, raw, "bind")
     except BindingRefused as exc:
-        return {"ok": True, "bound": False, "reason": str(exc)}
+        code = {"code": exc.code} if exc.code else {}
+        return {"ok": True, "bound": False, "reason": str(exc), **code}
     _audit(broker, "bound", raw, v=v)
     return {
         "ok": True,
