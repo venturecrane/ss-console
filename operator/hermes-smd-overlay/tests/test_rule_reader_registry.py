@@ -137,8 +137,7 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_its_two_readers():
     (``work_product/wording.json``), each through its byte twin of the overlay's
     reader. A third reader, or a reader of another file, fails here: give its
     class a letter that says what it reads, in the same PR."""
-    if not _JOBS_RUNNER.is_dir():
-        pytest.skip("jobs runner not in this checkout")
+    assert _JOBS_RUNNER.is_dir(), f"the jobs runner is not at {_JOBS_RUNNER}"
     readers = sorted(
         str(path.relative_to(_JOBS_RUNNER))
         for path in _JOBS_RUNNER.rglob("*.py")
@@ -325,8 +324,7 @@ def test_the_lane_kinds_are_exactly_the_kinds_the_job_lanes_read_rules_for():
     (a letter, a chronology) fails here."""
     from shared import wording_rules_store
 
-    if not _JOBS_RUNNER.is_dir():
-        pytest.skip("jobs runner not in this checkout")
+    assert _JOBS_RUNNER.is_dir(), f"the jobs runner is not at {_JOBS_RUNNER}"
     lanes = Path(__file__).resolve().parents[1] / "plugins" / "hermes-smd-lanes" / "drafting.py"
     found = re.search(r"DOCUMENT_CLASSES = \(([^)]*)\)", lanes.read_text("utf-8"))
     assert found is not None
