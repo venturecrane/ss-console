@@ -39,7 +39,7 @@ from . import (
 )
 from .covered import covered_sets, documents_pulled
 from ..deadline import is_transient
-from .update import outcome as update_outcome
+from .update import charged as update_charged, outcome as update_outcome
 from .update.coverage import covered_sets as update_covered
 from ..stages import prior_reading
 from ..stages.base import StageRefusal, StageRun
@@ -408,6 +408,9 @@ class Driver:
             if self.rehearse:
                 notes.append(f"rehearse {stage.name}: ok")
         pages = budget_mod.pages_read(extracted)
+        if update:
+            # Pages the delivered chronology already read are not charged again (``update/charged``).
+            pages = update_charged.charged_pages(self.slug_dir, unit.unit, pages)
         if self.dry_run or self.rehearse:
             st_outcome = "dry_run" if self.dry_run else "rehearsed"
         else:
@@ -629,7 +632,8 @@ class Driver:
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
             if outcome == dag.CURRENT:
-                done = Outcome(unit.unit, "delivered", None, stage.name, dollars, pages, notes)
+                charged = update_charged.charged_pages(self.slug_dir, unit.unit, pages)
+                done = Outcome(unit.unit, "delivered", None, stage.name, dollars, charged, notes)
                 return update_outcome.end(sr, st, stage.name, code, done)
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)
