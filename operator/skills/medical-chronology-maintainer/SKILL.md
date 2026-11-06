@@ -417,9 +417,9 @@ reported, never read.
 1. **The matter's coverage record.** `medchron_job_status(matter_id=...)` with the
    matter id you resolved on THIS turn returns `covered_document_ids` (accounted
    for in the delivered chronology: cited in it, a byte-duplicate of something
-   cited, in the billing chart, or excluded by an authored rule) and
-   `uncovered_document_ids` (read and found to carry nothing citable, contentless
-   or unreadable, retrieval failed, or a documented orphan). Ask by matter, not by
+   cited, in the billing chart, excluded by an authored rule, or read in full and
+   found to carry nothing citable) and `uncovered_document_ids` (contentless or
+   unreadable, retrieval failed, or a documented orphan). Ask by matter, not by
    job id: on an update turn you hold a matter id and no job id, and the answer
    accumulates every delivered chronology on the matter, so a matter updated twice
    does not re-read what the first chronology already covered. Pass `matter_id` or
