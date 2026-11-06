@@ -48,7 +48,9 @@ def front_keys(firm: Any) -> tuple[str, ...]:
     no variant is selected)."""
     if "_variant" not in firm.data:
         return house.FRONT_KEYS
-    return house_numbered.FRONT_KEYS if firm.variant.get("layout") == "numbered" else house.FRONT_KEYS
+    if firm.variant.get("layout") == "numbered":
+        return house_numbered.FRONT_KEYS
+    return house.front_keys(bool(firm.variant.get("re_vs")))
 
 
 def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) -> tuple[Path, str, list[str]]:
@@ -86,6 +88,7 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
             signer=who["signer"],
             initials=who["initials"],
             mail_line=v["mail_line"],
+            litigation=bool(v.get("re_vs")),
         )
     res = format_check.check(
         path,
