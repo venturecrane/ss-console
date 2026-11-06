@@ -77,8 +77,25 @@ def stop_class(row: dict[str, Any], lane: str = "") -> str:
     return state or "unknown"
 
 
-def _page_stopped(d: Any, job_id: str, kind: str, row: dict[str, Any], why: str) -> None:
+def _paged_already(lane: str, row: dict[str, Any]) -> bool:
+    """The stop already raised its own alert when it was recorded
+    (``proof/watch.settle``): a hold whose class pages under its own code
+    (``gate_held``, ``limit_held``, ...), or a reason that starts with a code
+    settle pages. One page per stop (Law 11): ``job_stopped`` is only for a
+    stop nothing else paged."""
+    from .proof import holds, watch
+
+    reason = str(row.get("reason") or "")
+    if row.get("state") == "held" and holds.classify(lane, reason)[1] is not None:
+        return True
+    return any(reason.startswith((c, f"refused: {c}")) for c in watch._REASON_CODES)
+
+
+def _page_stopped(d: Any, job_id: str, kind: str, row: dict[str, Any], why: str, recorded: dict[str, Any]) -> None:
     from .proof import watch
+
+    if _paged_already(getattr(d, "LANE", ""), {**row, **{k: v for k, v in recorded.items() if v}}):
+        return
 
     state = str(row.get("state") or "?")
     key = f"{kind}:{job_id}:{row.get('attempt') or 1}:{state}"  # broker reply_binding.reply_key
@@ -99,11 +116,13 @@ def _send_delivered(d: Any, job_id: str, kind: str, why: str) -> str:
     return str(resp.get("outcome") or FAILED)
 
 
-def tell(d: Any, job_id: str, *, why: str) -> str:
+def tell(d: Any, job_id: str, *, why: str, recorded: dict[str, Any] | None = None) -> str:
     """A stopped job (held, failed, waiting): page SMD once and send the
     requester NOTHING. A delivered job (a lost wake): have the broker send its
     reply in code. Returns the outcome (``sent``, ``already_sent``,
-    ``not_owed``, ``refused`` or ``failed``). Never raises: a lane must not lose
+    ``not_owed``, ``refused`` or ``failed``). ``recorded`` is the state and
+    reason the lane just recorded, which decide whether that stop already
+    paged under its own code (then no ``job_stopped``). Never raises: a lane must not lose
     its job to a page or a reply."""
     from .broker_client import BrokerError
     from .proof import watch
@@ -121,7 +140,7 @@ def tell(d: Any, job_id: str, *, why: str) -> str:
     if row.get("state") == "delivered":
         outcome = _send_delivered(d, job_id, kind, why) if d.LANE in CODE_SENT_LANES else NOT_OWED
     else:
-        _page_stopped(d, job_id, kind, row, why)
+        _page_stopped(d, job_id, kind, row, why, recorded or {})
         outcome = NOT_OWED
     logger.info("%s job %s: %s (%s)", d.LANE, job_id, outcome, why)
     return outcome

@@ -299,7 +299,9 @@ class LitigationLane(DraftingLane):
         if state != "delivered":
             # A held or failed list pages SMD; the firm is told nothing
             # (job_notes, Captain 2026-11-06).
-            job_notes.tell(self, job_id, why=f"the job ended {state}")
+            job_notes.tell(
+                self, job_id, why=f"the job ended {state}", recorded={"state": state, "reason": fields.get("reason")}
+            )
         self._write_state(
             job_id, wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields)}
         )
@@ -349,7 +351,9 @@ class LitigationLane(DraftingLane):
         if state != "delivered":
             # A held or failed list pages SMD; the firm is told nothing
             # (job_notes, Captain 2026-11-06).
-            job_notes.tell(self, job_id, why=f"the job ended {state}")
+            job_notes.tell(
+                self, job_id, why=f"the job ended {state}", recorded={"state": state, "reason": fields.get("reason")}
+            )
         self._write_state(
             job_id, wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields)}
         )

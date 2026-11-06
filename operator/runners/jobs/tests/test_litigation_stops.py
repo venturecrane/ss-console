@@ -78,12 +78,12 @@ def test_a_failed_list_pages_smd_once_and_sends_nothing(tmp_path):
     assert lane._daemon_state(JOB)["wake"]["pending"] is True
 
 
-def test_a_held_list_pages_smd_once(tmp_path):
+def test_a_held_list_that_paged_its_own_code_is_not_paged_twice(tmp_path):
+    """One page per stop: a parity hold already paged ``gate_held``."""
     lane, client = _lane(tmp_path, ll.HELD)
     ll._submit(lane, client)
     assert lane.tick() == "held"
-    (alert,) = _alerts(client)
-    assert alert["detail"].startswith("held (held): parity_hold: ")
+    assert _alerts(client) == [] and len(_alerts(client, "gate_held")) == 1
 
 
 def test_a_firm_question_hold_is_labelled_for_smd(tmp_path):
