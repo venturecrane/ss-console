@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
+<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" w14:paraId="0A000001" w14:textId="0A000002" w:rsidR="00A00001" w:rsidRDefault="00A00001" w:rsidP="00A00002">
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:r>
+    <w:tab/>
+  </w:r>
+  <w:hyperlink r:id="rId1" w:history="1">
+    <w:r w:rsidR="00A00003" w:rsidRPr="00A00004">
+      <w:rPr>
+        <w:rStyle w:val="Hyperlink"/>
+      </w:rPr>
+      <w:t>[[fixture.eighteen]</w:t>
+    </w:r>
+  </w:hyperlink>
+  <w:r>
+    <w:t xml:space="preserve">]</w:t>
+  </w:r>
+</w:p>
