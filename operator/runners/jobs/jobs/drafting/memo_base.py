@@ -31,7 +31,8 @@ from smokeball_connector import docgrammar as g
 
 from .. import firmbase
 from ..firmbase import FirmBase, Rows, xmlproof
-from ..firmbase.base import W, is_blank, slot_names
+from ..firmbase.base import W, is_blank
+from ..firmbase.markers import marked
 from .brief_base import _all_bold, _broken, _caption, _chart_slots, _flags, _plain, _read_back, _to_slot, _words, unfit
 from .brief_base import checked_format as _brief_checked_format
 from .revise import layout as lay
@@ -216,7 +217,7 @@ def _bold_label(line: tuple[g.Run, ...]) -> tuple[g.Run, ...]:
 
 def _labels_bold(base: FirmBase) -> bool:
     root = etree.fromstring(zipfile.ZipFile(io.BytesIO(base.bytes)).read("word/document.xml"))
-    return any(p.find(f"{W}r/{W}rPr/{W}b") is not None for p in root.iter(f"{W}p") if slot_names(p) == ["front.meta"])
+    return any(p.find(f"{W}r/{W}rPr/{W}b") is not None for p in root.iter(f"{W}p") if marked(p) == ["front.meta"])
 
 
 def split_front(blocks: list[g.Block]) -> tuple[dict[str, list[Any]], g.Table | None, list[g.Block]]:

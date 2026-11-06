@@ -2,7 +2,8 @@
 
 A slot is marked in the adopted file's own body:
 
-* ``para_proto``: a paragraph whose one run reads ``[[name]]``. It may stand several
+* ``para_proto``: a paragraph whose text reads ``[[name]]``, in one run or split across
+  runs by a save in Word (``markers`` reads it, ``merge`` joins it). It may stand several
   times; ``put`` pours lines into its instances in order, extra lines clone the
   last, spare ones go (or stay as blank lines, ``spare="blank"``, where a blank line
   holds the layout).
@@ -33,21 +34,14 @@ from typing import Any, Iterable
 from lxml import etree
 from smokeball_connector.form_docx import paragraph_text, replace_in_paragraph
 
-from . import xmlproof
+from . import markers, merge, xmlproof
+from .markers import RPR, SLOT, W
 from .xmlproof import Allow
 
-W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 DOCUMENT = "word/document.xml"
 _XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
-SLOT = re.compile(r"^\[\[([a-z0-9.]+)\]\]$")
 FIELD = re.compile(r"\{\{([a-z][a-z0-9._]*)\}\}")
 EMPHASIS = ("b", "bCs", "i", "iCs")
-RPR = (
-    "rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow",
-    "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern",
-    "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em",
-    "lang", "eastAsianLayout", "specVanish", "oMath",
-)  # fmt: skip
 
 
 class FirmBaseUnfit(RuntimeError):
@@ -104,7 +98,9 @@ class Rows:
 
 
 def slot_names(el: Any) -> list[str]:
-    """The para slots an element's own text holds, in order."""
+    """The para slots an element's own text holds, in order, one text run each: the
+    single-run reader. firmbase reads with ``markers.marked``, which also reads a
+    marker Word split and refuses structure no Word-saved fixture shows."""
     return [m.group(1) for t in el.iter(f"{W}t") for m in [SLOT.match(t.text or "")] if m]
 
 
@@ -113,13 +109,13 @@ def is_blank(el: Any) -> bool:
 
 
 def _is_table_proto(tbl: Any) -> str | None:
-    names = set(slot_names(tbl))
+    names = set(markers.marked(tbl))
     return names.pop() if len(names) == 1 and "." in next(iter(names)) and _only_cells(tbl) else None
 
 
 def _only_cells(tbl: Any) -> bool:
     """Every paragraph with words holds the slot: a table proto is all slot."""
-    return all(slot_names(p) or is_blank(p) for p in tbl.iter(f"{W}p"))
+    return all(markers.marked(p) or is_blank(p) for p in tbl.iter(f"{W}p"))
 
 
 def _is_member(name: str) -> bool:
@@ -128,7 +124,7 @@ def _is_member(name: str) -> bool:
 
 def _pour_table(tbl: Any) -> bool:
     """A table of per-column slots, poured in place: a caption."""
-    return len(set(slot_names(tbl))) > 1
+    return len(set(markers.marked(tbl))) > 1
 
 
 def scan(root: Any) -> dict[str, Slot]:
@@ -139,7 +135,7 @@ def scan(root: Any) -> dict[str, Slot]:
         if el.tag == f"{W}tbl" and _is_member(_is_table_proto(el) or ""):
             slots[_is_table_proto(el)] = Slot(_is_table_proto(el), "table_proto")  # type: ignore[arg-type]
             continue
-        for name in slot_names(el):
+        for name in markers.marked(el):
             slots[name] = Slot(name, "para_proto")
         for p in el.iter(f"{W}p"):
             for name in FIELD.findall(paragraph_text(p)):
@@ -151,7 +147,7 @@ def scan(root: Any) -> dict[str, Slot]:
 
 def region_span(kids: list[Any]) -> tuple[int, int] | None:
     """(first, last) index of the region's members and the blanks under its tables."""
-    at = [i for i, e in enumerate(kids) if any(_is_member(n) for n in slot_names(e))]
+    at = [i for i, e in enumerate(kids) if any(_is_member(n) for n in markers.marked(e))]
     if not at:
         return None
     last = at[-1]
@@ -174,6 +170,15 @@ class FirmBase:
         if not slots:
             raise FirmBaseUnfit("the file marks no slots")
         return cls(doc_class, source, blob, slots)
+
+
+def _repeated_points(body: Any) -> list[str]:
+    """A bookmark in a line the region repeats would stand once per copy, or not at all."""
+    span = region_span(list(body))
+    zone = list(body)[span[0] : span[1] + 1] if span else []
+    return [
+        "a bookmark sits in a line the Operator repeats" for el in zone if el.find(f".//{W}bookmarkStart") is not None
+    ][:1]
 
 
 def open(base: FirmBase) -> "Fill":
@@ -224,8 +229,12 @@ def _slot_run(p: Any) -> Any:
 
 def fill_para(p: Any, runs: Iterable[Any], carry: bool = False) -> None:
     """The slot run becomes these runs, each on the slot's rPr, its tabs kept on the
-    first. No runs: a blank line on the paragraph's own properties."""
-    slot = _slot_run(p)
+    first. No runs: a blank line on the paragraph's own properties. A marker Word
+    split is merged into the run holding its first character first (``merge``)."""
+    reading = markers.read(p)
+    if reading.refusal:
+        raise FirmBaseUnfit(markers.unwritable(p)[0])
+    slot = merge.collapse(p, reading) if reading.merge else _slot_run(p)
     base, tabs = slot.find(f"{W}rPr"), [copy.deepcopy(c) for c in slot if c.tag == f"{W}tab"]
     at = slot
     for n, run in enumerate(runs):
@@ -238,7 +247,7 @@ def fill_para(p: Any, runs: Iterable[Any], carry: bool = False) -> None:
         r.append(_text_el(run.text))
         at.addnext(r)
         at = r
-    p.remove(slot)
+    slot.getparent().remove(slot)
 
 
 def _column_widths(grid: list[int], n: int) -> list[int]:
@@ -367,6 +376,9 @@ class Fill:
         self.removed = 0
         self.filled: list[str] = []
         self.before = {el: xmlproof.canon(el).decode("utf-8") for el in self.body}
+        refused = markers.unwritable(self.body) + _repeated_points(self.body)
+        if refused:
+            raise FirmBaseUnfit("the file cannot be written into: " + "; ".join(refused))
 
     def top(self, el: Any) -> Any:
         while el.getparent() is not None and el.getparent() is not self.body:
@@ -376,6 +388,8 @@ class Fill:
     def _mark(self, el: Any) -> None:
         top = self.top(el)
         self.allowed.setdefault(top, []).append(Allow.TABLE_TEXT if top.tag == f"{W}tbl" else Allow.RUNS)
+        if markers.read(el).merge:
+            self.allowed[top].append(Allow.MARKER_LINE)
 
     def put(self, name: str, content: Any, *, spare: str = "remove", carry: bool = False) -> None:
         slot = self.base.slots.get(name)
@@ -392,7 +406,7 @@ class Fill:
         self.filled.append(name)
 
     def _instances(self, name: str) -> list[Any]:
-        return [p for p in self.body.iter(f"{W}p") if slot_names(p) == [name]]
+        return [p for p in self.body.iter(f"{W}p") if markers.marked(p) == [name]]
 
     def _put_lines(self, name: str, lines: list[Line], spare: str, carry: bool) -> None:
         slots = self._instances(name)
@@ -400,6 +414,8 @@ class Fill:
             raise FirmBaseUnfit(f"the base has no {name} line left")
         while len(slots) < len(lines):
             twin = copy.deepcopy(slots[-1])
+            for point in list(twin.iter(f"{W}bookmarkStart", f"{W}bookmarkEnd")):
+                point.getparent().remove(point)  # the firm's bookmark stays on its own line only
             slots[-1].addnext(twin)
             if twin.getparent() is self.body:
                 self.added.add(twin)
@@ -431,9 +447,9 @@ class Fill:
             raise FirmBaseUnfit(f"the base has no region {name}")
         first, last = span
         zone = kids[first : last + 1]
-        protos = {slot_names(e)[0]: e for e in zone if slot_names(e)}
+        protos = {markers.marked(e)[0]: e for e in zone if markers.marked(e)}
         spacer = {
-            slot_names(e)[0]: zone[i + 1]
+            markers.marked(e)[0]: zone[i + 1]
             for i, e in enumerate(zone[:-1])
             if e.tag == f"{W}tbl" and is_blank(zone[i + 1])
         }
