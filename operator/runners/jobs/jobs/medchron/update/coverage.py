@@ -8,7 +8,8 @@ uncovered, so the next update would read them all again):
     covered    cited as a new exhibit; read in full and found to record no
                visit the chronology does not already list (its pages billing,
                repeats, or a medical-legal report); byte-identical to
-               a delivered exhibit or to another pulled document; or left out
+               a delivered exhibit or to another pulled document; a re-filed
+               subset of a delivered exhibit's pages; or left out
                by one of the firm's authored rules or at the firm's direction
                (an identity decision).
     uncovered  retrieval failed; not a PDF or an image (never read); an image
@@ -62,6 +63,8 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any = None) -> dict[str, Any]:
     covered |= {str(x) for why_, ids in skipped.items() if why_.startswith(PRIOR_PREFIX) for x in ids or []}
     unread(skipped.get(PASSWORD_REASON), W.PASSWORD_PROTECTED)
     covered |= {str(x.get("id")) for x in sel.get("excluded_named") or [] if x.get("id")}
+    # A re-filed copy of delivered pages (``update/subsets``): its pages are already cited.
+    covered |= {str(x.get("id")) for x in sel.get("subsets") or [] if x.get("id")}
     for x in sel.get("exhibits") or []:
         # Only a document with NO text is read again: one whose pages are all
         # billing, repeats, or a medical-legal report was reviewed in full.

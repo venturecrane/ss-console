@@ -216,3 +216,14 @@ def test_a_stopped_matter_resumes_and_reads_the_file_again(tmp_path):
     )
     out = extract.extract_matter(tmp_path, rows, lambda png: "TRANSCRIBED PAGE")
     assert [r["ok"] for r in out] == [True, True]
+
+
+def test_a_garbled_text_layer_goes_to_vision_and_a_real_one_does_not():
+    """2026-10-29: process servers' job sheets (Type 3 fonts) read out as
+    ~1,700 control bytes or letter soup a page; length alone sent none to vision."""
+    real = "Proof of service. On the date below I served the summons and complaint on the defendant. " * 20
+    ctrl = "\x01\x02\x03\x04 ab" * 300
+    soup = "Qzx vkwp rtyl mnbq hjkd " * 80
+    assert extract.ocr_pages([ctrl]) == [0] and extract.ocr_pages([soup]) == [0]
+    assert extract.ocr_pages([real]) == [] and extract.ocr_pages(["", real]) == [0]
+    assert not extract.garbled("Case No. 24CV0001") and not extract.garbled(real)

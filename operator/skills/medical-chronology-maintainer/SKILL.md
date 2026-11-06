@@ -417,9 +417,9 @@ reported, never read.
 1. **The matter's coverage record.** `medchron_job_status(matter_id=...)` with the
    matter id you resolved on THIS turn returns `covered_document_ids` (accounted
    for in the delivered chronology: cited in it, a byte-duplicate of something
-   cited, in the billing chart, or excluded by an authored rule) and
-   `uncovered_document_ids` (read and found to carry nothing citable, contentless
-   or unreadable, retrieval failed, or a documented orphan). Ask by matter, not by
+   cited, in the billing chart, excluded by an authored rule, or read in full and
+   found to carry nothing citable) and `uncovered_document_ids` (contentless or
+   unreadable, retrieval failed, or a documented orphan). Ask by matter, not by
    job id: on an update turn you hold a matter id and no job id, and the answer
    accumulates every delivered chronology on the matter, so a matter updated twice
    does not re-read what the first chronology already covered. Pass `matter_id` or
@@ -540,7 +540,7 @@ first line is "Run the medical-chronology-maintainer skill's DELIVER mode for
 chronology job <id>." followed by `Outcome:`, `Matter number:`, the counts, and
 `Delivered folder id:` (delivered; a joint matter carries
 `Delivered folder ids (one chronology per client, <n> clients):` instead; an update that found nothing new carries
-`Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held or failed), a
+`Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held; a failed job no longer wakes this mode), a
 `Hold class: <class>` line (held: only `rerouted_to_update` ever wakes this
 mode), then `Requester:` and `Request ref:`. **That wake IS this mode's initiation**: it arrives
 through the seat's own authenticated machinery, the administrator initiated it at

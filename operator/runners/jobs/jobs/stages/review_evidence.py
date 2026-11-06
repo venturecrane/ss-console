@@ -148,23 +148,42 @@ def _provider(block: str) -> str:
     return rows[1].split("|")[0].strip().lower() if len(rows) > 1 else ""
 
 
+def _named_pages(text: str) -> list[tuple[int, int]]:
+    """Every (exhibit, page) the finding's text names with a page number."""
+    return [(int(m.group(1)), int(m.group(2))) for m in _EXHIBIT_PAGE.finditer(text) if m.group(2)]
+
+
+def _cites(block: str, exhibit: int, page: int) -> bool:
+    return any(
+        int(c.group(1)) == exhibit and page in (CL.parse_pages(c.group(2)) or [1]) for c in CL.CITE.finditer(block)
+    )
+
+
 def entry_for(md: str, text: str) -> tuple[int, int, str] | None:
-    """The one entry a finding's text names by its date (and its provider,
-    when the date has several entries); None when it names no single one."""
+    """The one entry a finding's text names by its date, then its provider
+    when the date has several entries, then the exhibit page the finding
+    cites when the same provider has several entries that day (an ED visit
+    and its admission); None when it names no single one."""
     low = text.lower()
     blocks = entry_blocks(md)
+    named = _named_pages(text)
     for d in dict.fromkeys(_DATE.findall(text)):
         same = [b for b in blocks if b[2].startswith(d)]
         if len(same) > 1:
             same = [b for b in same if _provider(b[2]) and _provider(b[2]) in low]
+        if len(same) > 1 and named:
+            same = [b for b in same if any(_cites(b[2], ex, pg) for ex, pg in named)]
         if len(same) == 1:
             return same[0]
     return None
 
 
 def cited_pages(block: str, text: str) -> list[tuple[int, int]]:
-    """The page the finding names, else every page the entry cites."""
-    m = _EXHIBIT_PAGE.search(text)
+    """The page the finding names, else every page the entry cites. A
+    finding that mentions an exhibit in passing and then cites a page
+    ("the Exhibit 3 copy omits it ... (Exhibit 1 - p. 8)") is decided on
+    the page it cites, never on the passing mention."""
+    m = next((x for x in _EXHIBIT_PAGE.finditer(text) if x.group(2)), None) or _EXHIBIT_PAGE.search(text)
     if m and m.group(2):
         return [(int(m.group(1)), int(m.group(2)))]
     out: list[tuple[int, int]] = []

@@ -42,6 +42,12 @@ nothing leaves silently. What still holds is what removal cannot answer: a
 control wrongly SUPPORTED, or a failing claim the gate cannot find in the
 document to remove.
 
+SMD'S CORRECTIONS ARE NOT RE-GRADED (2026-11-06). A claim whose text SMD
+wrote in the strip's ``citation_edits`` gets an SMD-attested SUPPORTED row
+before round 1 (``medchron/audit/authored.py``): the repair once rewrote 18 of
+133 such corrections toward the transcription they corrected, and one
+rewrite reached the firm misattributed.
+
 Exit 0 only when the final audit reports zero problems AND the coverage gate
 passes; 1 when the gate fails (the driver holds); 2 on an INVALID audit
 (control failure, no exhibit bytes) or a reconciliation mismatch; 3 at the
@@ -55,11 +61,11 @@ import re
 from typing import Callable
 
 from .. import llm
-from ..medchron.audit import claims as CL, coverage, diag, repair
+from ..medchron.audit import authored, claims as CL, coverage, diag, repair
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.audit.run import AuditPaths, Round
 from ..medchron.config import DEFAULT_AUDIT_WORKERS
-from .base import StageRun
+from .base import StageRun, read_json
 
 # Rounds converge steeply and each one is cheap: later rounds re-audit only the
 # claims whose text changed, because a repaired claim gets a new key. Live
@@ -99,6 +105,19 @@ def _rekey(sr: StageRun, paths: AuditPaths) -> None:
     rows = CL.read_rows(paths.results)
     carried = diag.rekey_rows(paths.results, rows, live, remap, doc_sha=CL.doc_sha_of(body))
     sr.log(f"rekey: carried {carried} verdict(s) across the strip's page remap")
+
+
+def _attest_authored(sr: StageRun, paths: AuditPaths) -> None:
+    """SMD's hand corrections (the strip's ``citation_edits``) attested
+    SUPPORTED before any round, so no repair rewrites them
+    (``medchron/audit/authored.py``)."""
+    name = f"drops-{sr.unit.unit}.json" if sr.job.joint else "drops.json"
+    edits = (read_json(sr.slug_dir / name, {}) or {}).get("citation_edits") or []
+    if not edits or not paths.doc.is_file():
+        return
+    keep = set(exhibit_paths(paths.out))
+    n = authored.attest(paths.results, paths.doc.read_text(encoding="utf-8"), keep, edits, f"{name} citation_edits")
+    sr.log(f"SMD's corrections: {n} claim(s) attested SUPPORTED by SMD; the audit does not re-grade them")
 
 
 def rehearse(sr: StageRun) -> list[str]:
@@ -148,6 +167,7 @@ def run(sr: StageRun) -> int:
         sr.log(f"levers.audit_mode must be image or text, not {mode!r}")
         return 2
     _rekey(sr, paths)
+    _attest_authored(sr, paths)
     workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
     sr.log(f"audit: {workers} claim(s) checked at once")
 

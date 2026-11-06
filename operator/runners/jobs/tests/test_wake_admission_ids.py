@@ -30,7 +30,7 @@ marker = jd / 'ran'
 n = int(marker.read_text()) + 1 if marker.exists() else 1
 marker.write_text(str(n))
 if n == 1:
-    sys.exit(3)  # no verdict: the job fails, and a failure wake is owed
+    sys.exit(3)  # no verdict: the job fails; SMD is paged and no wake is owed
 print(json.dumps([{"unit": "alpha", "outcome": "delivered", "reason": None, "stage": None, "dollars": 1.0,
                    "pages": 3, "documents": 1, "folder_id": "folder-9",
                    "files": [{"name": "A.docx", "sha256": "ab", "bytes": 10, "confirmed": True}],
@@ -76,23 +76,28 @@ class _AdmissionGate:
 
 
 def _failed_then_resumed_and_delivered(tmp_path):
+    """Since 2026-11-06 a failed chronology pages SMD once and posts no wake
+    (the firm is told nothing). A job that failed on an OLDER image did post
+    one, under the bare id, so the gate starts with that admission on record:
+    the resumed job's delivered wake must still be admitted beside it."""
     gate = _AdmissionGate()
     d, broker = _wake_daemon(tmp_path, gate.url, script=FAIL_THEN_DELIVER)
     _submit(d, broker, "01A")
     assert d.tick() == "failed"
-    d.tick()  # attempt 1's failure wake is admitted
-    assert gate.posts == [("medchron-01A", 202)]
+    d.tick()  # nothing is owed: a failure wakes no turn
+    assert gate.posts == []
+    assert [k.split(":")[0] for k in d._daemon_state("01A")["proof_alerts"]] == ["job_stopped"]  # SMD paged once
+    gate.admitted["medchron-01A"] = "Outcome: failed. (posted by an image before 2026-11-06)"
     (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "fixed", "redo": []}))
     assert d.tick() == "delivered"
-    d.tick()  # attempt 2's delivered wake
+    d.tick()  # the delivered wake
     return gate, d
 
 
-def test_a_resumed_jobs_delivered_wake_is_admitted_after_its_failed_wake(tmp_path):
+def test_a_resumed_jobs_delivered_wake_is_admitted_after_its_failure(tmp_path):
     gate, d = _failed_then_resumed_and_delivered(tmp_path)
     gate.close()
-    assert gate.posts == [("medchron-01A", 202), ("medchron-01A-w2", 202)]
-    assert "Outcome: failed." in gate.admitted["medchron-01A"]
+    assert gate.posts == [("medchron-01A-w2", 202)]  # the bare id would be refused: other text
     assert "Outcome: delivered." in gate.admitted["medchron-01A-w2"]
     st = d._daemon_state("01A")
     assert st["wake"]["pending"] is False and st["wake"]["outcome"] == "delivered"

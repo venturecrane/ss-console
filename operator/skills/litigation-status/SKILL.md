@@ -253,13 +253,14 @@ moved:` and `Tasks not moved:` (matter numbers, `none` when every change took),
 and `Unresolved:`. Everything below holds for it, with the message worded as in
 **delivered, a staff reassignment**.
 
-**First, the outcome decides who hears.** When the outcome is `failed` (and the job row
-agrees), the failure is SMD's, not the firm's: our own machinery stopped, and the job is
-resumable on our side. Send the client NOTHING: no reply, no bind, no message to anyone
-at the firm. Call `litigation_job_status` with the `job_id` once (that call is what
-raises SMD's shortfall alert, naming the job and its reason) and end the turn. The firm
-hears only on `delivered` or `held`; the broker refuses a binding for a failed job in
-any case.
+**First, the outcome decides who hears.** **A failed, held or waiting litigation job:
+the firm is told nothing, by you or by code** (the Captain, 2026-11-06: while the lane
+is refined and watched, SMD should know and the firm should not). SMD is already paged
+for it. Send the client NOTHING: no reply, no bind, no message to anyone at the firm.
+Call `litigation_job_status` with the `job_id` once (that call is what raises SMD's
+shortfall alert, naming the job and its reason) and end the turn. The firm hears only
+on `delivered`; the broker refuses a binding for a failed (`job_failed`), held
+(`job_held`) or waiting (`not_ended`) job in any case.
 
 1. **Bind first, for either trigger.** Call `reply_bind` with ONLY `job_id` = the id in
    the wake's first line. Never pass `internet_message_id` or `graph_message_id`. The
@@ -325,7 +326,9 @@ to move for:` had no cases that fit; and `cases_skipped` cases already had
      someone else assigned before the move, so they were left alone. When
      `cases_moved` is zero, say no case was changed and why from those same lines.
      No matter number, client or party name, task's words or date.
-   - **held**: worded by the wake's `Hold class:` line, never by the job's
+   - **held**: not sent while the lane is refined (above: the broker refuses the bind
+     with `job_held`, and you send nothing). The wording below is kept for when the
+     lane's held replies reopen. A held reply is worded by the wake's `Hold class:` line, never by the job's
      `reason`. The reason is SMD's technical record (gates, seed values, matter
      numbers, codes), and SMD already has it: every hold our side caused pages
      SMD with that reason. **Never quote, paraphrase or summarize the reason, a
@@ -411,8 +414,9 @@ is the person the broker binds.
 
 ## Escalation
 
-A held job is answered with its hold class's fixed wording (DELIVER mode), never with
-a question the firm cannot act on. A hold our side caused reaches SMD through the page
+A held job is not answered while the lane is refined (2026-11-06); when its held
+replies reopen, it is answered with its hold class's fixed wording (DELIVER mode), never
+with a question the firm cannot act on. A hold our side caused reaches SMD through the page
 the runner raises with its technical reason, never through the firm. A failed job is
 SMD's and reaches SMD through the shortfall alert, never the firm. Fail closed in every
 case: when in doubt, the firm hears the `smd_finishing` wording and nothing else.

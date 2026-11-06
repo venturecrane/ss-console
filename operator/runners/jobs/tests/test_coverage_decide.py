@@ -240,3 +240,51 @@ def test_a_cited_file_whose_files_seen_reads_entries_0_is_not_named_unused(
     )
     text = "\n".join(limitations._not_used_lines(sd, {}, "alpha", cfg))
     assert "spare intake page.pdf" in text and "clinic note.pdf" not in text
+
+
+# ---- C1 (2026-11-06): a one-page file the composer was given and never named ----
+def _silent_scene(data_root: Path, *, mapped: bool = True, pages: int = 1, cited_in_map: bool = False) -> Path:
+    """The image rode in a chunk with the cited note; the composer's map came
+    back with a FILES-SEEN line for the note and none for the image."""
+    sd = _scene(data_root)
+    rd = sd / "runs" / "alpha"
+    body = "".join(f"[p.{n}] (machine transcription)\nExample Logo Co, 100 Main St\n" for n in range(1, pages + 1))
+    (rd / "chunk-01.txt").write_text(
+        "=== FILE: clinic note.pdf (fileId f1) ===\n[p.1]\nOffice visit\n\n"
+        f"=== FILE: image001.jpg (2).jpg (fileId {IMG}) ===\n{body}\n"
+    )
+    if mapped:
+        cite = "\nLogo seen (FILE: image001.jpg (2).jpg, p. 1)\n" if cited_in_map else ""
+        (rd / "map-01.md").write_text(
+            f"## ENTRIES\nOffice visit for neck pain (FILE: clinic note.pdf, p. 1){cite}\n\n"
+            "## FILES-SEEN\n=== FILE: clinic note.pdf (fileId f1) === | entries: 1\n"
+        )
+    return sd
+
+
+def test_a_one_page_file_the_composer_answered_without_naming_is_explained_by_rule(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sd = _silent_scene(data_root)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 0, log
+    rows = {r["name"]: r for r in coverage_decide.rows(sd, "alpha")}
+    img = rows["image001.jpg (2).jpg"]
+    assert img["by"] == "rule" and img["reason"] == coverage_stage.NO_ENCOUNTER, img
+    assert "chunk-01" in img["source"]
+    rule = coverage_stage.rule_rows(sd, "alpha", config_mod.load(str(firm_config_path)))
+    assert [r["name"] for r in rule] == ["image001.jpg (2).jpg"]
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [{"mapped": False}, {"pages": 2}, {"cited_in_map": True}],
+    ids=["no-answered-piece-carried-it", "more-than-one-page", "a-map-cites-it"],
+)
+def test_a_silent_file_the_composer_may_not_have_read_still_holds(
+    job_dir: Path, firm_config_path: Path, data_root: Path, shape: dict
+) -> None:
+    sd = _silent_scene(data_root, **shape)
+    rc, log = _gate(job_dir, firm_config_path, data_root)
+    assert rc == 1 and any("COVERAGE GATE HOLD (integrity)" in line for line in log), log
+    assert json.loads((sd / "runs" / "alpha" / "coverage_unexplained.json").read_text()) == ["image001.jpg (2).jpg"]

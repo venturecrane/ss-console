@@ -274,8 +274,8 @@ def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
             encoding="utf-8",
         )
         logger.warning("%s job %s HELD: lane %s is not proven on this seat (%s)", d.LANE, job_id, key, why)
-        # A code-sent lane's waiting job pages SMD once; the requester is
-        # told nothing (job_notes, Captain 2026-11-06).
+        # A waiting job of a lane in job_notes.LANES pages SMD once; the
+        # requester is told nothing (job_notes, Captain 2026-11-06).
         from . import job_notes
 
         job_notes.tell(d, job_id, why=f"waiting on the {key} proof run")

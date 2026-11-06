@@ -202,6 +202,17 @@ def test_event_readback_flags_a_dropped_additional_data() -> None:
     assert not any("additionalData" in d for d in event_diffs(sent, {"subject": "s", **sent})[0])
 
 
+def test_event_readback_flags_a_billable_flag_the_vendor_flipped() -> None:
+    """2026-11-05: Smokeball stored three billable all-day events as
+    non-billable on a full PUT that sent ``nonBillable: false``."""
+    from smokeball_connector.readback_records import event_diffs
+
+    sent = {"subject": "s", "allDay": True, "nonBillable": False}
+    assert any("nonBillable" in d for d in event_diffs(sent, {**sent, "nonBillable": True})[0])
+    assert not any("nonBillable" in d for d in event_diffs(sent, dict(sent))[0])
+    assert not any("nonBillable" in d for d in event_diffs({"subject": "s"}, {"subject": "s", "nonBillable": True})[0])
+
+
 def test_update_event_rename_keeps_the_provenance_mark(rec: _Recorder) -> None:
     """create_event stamps "[Operator]"; a rename through update_event used to
     send the new subject bare, so staff could no longer tell the entry was

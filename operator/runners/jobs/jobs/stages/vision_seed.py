@@ -72,11 +72,16 @@ def prior_delivered(jobs: Path, matter_id: str, own_id: str) -> list[str]:
 
 def staged_fields(env: dict[str, Any], run_dir: Path, job_id: str) -> dict[str, Any]:
     """What the daemon adds to an update's job.yaml: ``prior_delivered``, from
-    ``run_dir/jobs`` (not the daemon's ``jobs``: a proof twin's live elsewhere).
-    Nothing for a run."""
+    ``run_dir/jobs`` (not the daemon's ``jobs``: a proof twin's live elsewhere),
+    and ``delivered_cited``, the delivered rows' cited sources the broker put
+    on the envelope (``workspace_broker.medchron_update.cited_block``), which
+    outlive the delivered job dirs. Nothing for a run."""
     if env.get("update") is None:
         return {}
-    return {"prior_delivered": prior_delivered(Path(run_dir) / "jobs", str(env["matter"]["id"]), job_id)}
+    out: dict[str, Any] = {"prior_delivered": prior_delivered(Path(run_dir) / "jobs", str(env["matter"]["id"]), job_id)}
+    if isinstance(env.get("delivered_cited"), dict) and env["delivered_cited"]:
+        out["delivered_cited"] = env["delivered_cited"]
+    return out
 
 
 def delivered_same_matter(job: Any, slug: str) -> list[Path]:

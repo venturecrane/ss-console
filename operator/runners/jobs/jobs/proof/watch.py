@@ -247,9 +247,16 @@ def wake_owed(d: Any, state: str, reason: Any) -> bool:
     paged at ``settle``. The one held chronology that still wakes is
     ``rerouted_to_update``, for WORK: the turn resubmits the refused RUN as the
     UPDATE and sends nothing (the broker refuses a held chronology its reply),
-    and ``check_reroutes`` pages when no UPDATE was queued. Every other lane,
-    and every other ending, is unchanged."""
-    if d.LANE != "medchron" or state != "held":
+    and ``check_reroutes`` pages when no UPDATE was queued. A FAILED
+    chronology gets no wake either (2026-11-06): its turn could only read the
+    failure and send nothing, and SMD is paged in code instead
+    (``job_notes.tell``, one ``job_stopped``). Every other lane, and every
+    other ending, is unchanged."""
+    if d.LANE != "medchron":
+        return True
+    if state == "failed":
+        return False
+    if state != "held":
         return True
     return holds.classify("medchron", reason)[0] == holds.REROUTED_TO_UPDATE
 
