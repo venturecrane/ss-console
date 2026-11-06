@@ -151,6 +151,25 @@ def test_a_firms_own_english_is_not_system_vocabulary(clean):
     assert checks.system_vocabulary(clean) == []
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        "The order lists a diagnosis by code only. (Exhibit 8 - p. 1)",
+        "The diagnosis was recorded by code alone. (Exhibit 7 - p. 2)",
+        "The form gives the procedure by code number. (Exhibit 2 - p. 4)",
+    ],
+)
+def test_a_records_own_by_code_wording_is_not_system_vocabulary(record):
+    """A form that lists a diagnosis as a bare code is described in the
+    record's own words; flagged, the review raised it on every round."""
+    assert checks.system_vocabulary(record) == []
+
+
+def test_by_code_as_the_systems_own_wording_is_still_caught():
+    assert checks.system_vocabulary("The total was set by code.") == ["by code"]
+    assert checks.system_vocabulary("Counted by code only from the record.") == ["counted by code"]
+
+
 def test_a_sentinel_line_is_caught_and_prose_is_not():
     assert checks.sentinels("Body\n=== ATTORNEY NOTES ===\nmore") == ["=== ATTORNEY NOTES ==="]
     assert checks.sentinels("Equal signs == in prose are fine.") == []
