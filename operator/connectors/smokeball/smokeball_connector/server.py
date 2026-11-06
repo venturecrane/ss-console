@@ -1342,43 +1342,56 @@ def file_attachment_to_matter(matter_id: str, download_url: str, file_name: str,
     return file_and_prove(client, matter_id, file_name, blob, folder_id=folder_id)
 
 
-def _render_with_format(markdown: str, document_class: str | None) -> tuple[bytes, dict[str, Any] | None, str | None]:
-    """Shared by both render tools. Returns ``(bytes, formatApplied, refusal)``;
-    on a refusal ``bytes`` is empty and nothing must be uploaded."""
+def _render_with_format(
+    markdown: str, document_class: str | None, matter_id: str | None = None
+) -> tuple[bytes, dict[str, Any] | None, str | None, dict[str, Any] | None]:
+    """Shared by both render tools. Returns ``(bytes, formatApplied, refusal,
+    libraryResolution)``; on a refusal ``bytes`` is empty and nothing must be
+    uploaded. ``libraryResolution`` is the accepted-file record
+    (``library_pick``), None only for a classless render."""
     from .docx_format import DOCUMENT_CLASSES, FormatRefused, FormatReport, load_firm_identity, render_document
     from .library import NotResolved, load_library_config, resolve_template
+    from .library_pick import chat_base, chat_record
     from .render import render_markdown_to_docx
 
     if not document_class:
-        return render_markdown_to_docx(markdown), None, None
+        return render_markdown_to_docx(markdown), None, None, None
     if document_class not in DOCUMENT_CLASSES:
-        return b"", None, (f"unknown document_class {document_class!r}; one of: {', '.join(DOCUMENT_CLASSES)}")
+        return b"", None, (f"unknown document_class {document_class!r}; one of: {', '.join(DOCUMENT_CLASSES)}"), None
     report = FormatReport(document_class=document_class)
     cfg = load_library_config()
     report.template_expected = cfg.authored
     report.class_template_name = cfg.template_name(document_class)
-    base: bytes | None = None
-    try:
-        resolved = resolve_template(_get_client(), cfg, document_class)
-    except Exception as exc:  # noqa: BLE001 - a found template that would not download: say so, render on the starter
-        resolved = NotResolved(f"template found but could not be downloaded: {exc.__class__.__name__}")
-    if isinstance(resolved, NotResolved):
-        report.notes.append(f"firm template not used: {resolved.reason}")
+    # The firm's accepted file when its ledger names one (library_pick); else today's lookup.
+    pick = chat_base(_get_client, cfg, document_class, matter_id)
+    if pick.refusal:
+        return b"", report.to_dict(), pick.refusal, chat_record(pick, None)
+    base: bytes | None = pick.data
+    if base is not None:
+        report.template_used = pick.template_used()
     else:
-        base = resolved.bytes
-        report.template_used = {
-            "name": resolved.name,
-            "fileId": resolved.file_id,
-            "sha256": hashlib.sha256(resolved.bytes).hexdigest(),
-        }
+        try:
+            resolved = resolve_template(_get_client(), cfg, document_class)
+        except Exception as exc:  # noqa: BLE001 - a found template that would not download: say so, render on the starter
+            resolved = NotResolved(f"template found but could not be downloaded: {exc.__class__.__name__}")
+        if isinstance(resolved, NotResolved):
+            report.notes.append(f"firm template not used: {resolved.reason}")
+        else:
+            base = resolved.bytes
+            report.template_used = {
+                "name": resolved.name,
+                "fileId": resolved.file_id,
+                "sha256": hashlib.sha256(resolved.bytes).hexdigest(),
+            }
+    library = chat_record(pick, base, (report.template_used or {}).get("name", ""))
     try:
         # The letterhead is AUTHORED config printed by code, never model text,
         # so it never meets the content gate. render_document applies it only
         # on the starter; a firm's own base keeps the header the firm built.
         data, report = render_document(markdown, document_class, base, report, firm_identity=load_firm_identity())
     except FormatRefused as exc:
-        return b"", report.to_dict(), f"format refused: {exc}"
-    return data, report.to_dict(), None
+        return b"", report.to_dict(), f"format refused: {exc}", library
+    return data, report.to_dict(), None, library
 
 
 @server.tool()
@@ -1508,7 +1521,7 @@ def render_docx_template(
             "sizeBytes": None,
             "refusals": [str(v) for v in exc.violations],
         }
-    data, format_applied, refusal = _render_with_format(skeleton_markdown, document_class)
+    data, format_applied, refusal, library = _render_with_format(skeleton_markdown, document_class)
     # A class name is a class decision (the 2026-09-21 library defect): see
     # ``library.classless_name_refusal``, which passes any call that names a
     # class. Checked after the (network-free, classless) render, before upload.
@@ -1537,6 +1550,7 @@ def render_docx_template(
             "sizeBytes": None,
             "refusals": [refusal],
             "formatApplied": format_applied,
+            **({"libraryResolution": library} if library is not None else {}),
         }
     result = add_file(
         matter_id,
@@ -1550,6 +1564,8 @@ def render_docx_template(
     out["refusals"] = []
     if format_applied is not None:
         out["formatApplied"] = format_applied
+    if library is not None:
+        out["libraryResolution"] = library
     return out
 
 
@@ -1747,7 +1763,7 @@ def render_docx_draft(
             "checkedSources": verdict.checked_sources,
         }
 
-    data, format_applied, refusal = _render_with_format(draft_markdown, document_class)
+    data, format_applied, refusal, library = _render_with_format(draft_markdown, document_class, matter_id)
     if refusal:
         return {
             "matterId": matter_id,
@@ -1757,6 +1773,7 @@ def render_docx_draft(
             "sizeBytes": None,
             "refusals": [refusal],
             "formatApplied": format_applied,
+            **({"libraryResolution": library} if library is not None else {}),
         }
     result = add_file(
         matter_id,
@@ -1770,6 +1787,8 @@ def render_docx_draft(
     out["refusals"] = []
     if format_applied is not None:
         out["formatApplied"] = format_applied
+    if library is not None:
+        out["libraryResolution"] = library
     return out
 
 

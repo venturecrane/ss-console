@@ -15,7 +15,10 @@ the list. One entry per (kind, attorney or none) slot:
     contract     "styles": page setup, header, footer and named styles, the body
                  written fresh (ADR 0083, 2026-08-19 amendment); "marked": a firm
                  document whose words were replaced by marked places
-                 (``[[name]]``, the firm-base code)
+                 (``[[name]]``, the firm-base code); "prototypes": a firm document
+                 holding one tagged prototype paragraph or table of each kind
+                 (``PROTO:<kind>``), which the demand writer clones
+                 (``jobs/demand/house.py``)
     accepted_by  who said yes
     accepted_at  when, ISO 8601 UTC
     replaces     the slot's previous accepted file (file_id, version, sha256),
@@ -66,7 +69,8 @@ MANIFEST_KEY = "library_ledger"
 
 STYLES = "styles"
 MARKED = "marked"
-CONTRACTS = (STYLES, MARKED)
+PROTOTYPES = "prototypes"
+CONTRACTS = (STYLES, MARKED, PROTOTYPES)
 
 OK = "ok"
 EMPTY = "empty"
@@ -385,6 +389,7 @@ __all__ = [
     "MANIFEST_KEY",
     "MARKED",
     "OK",
+    "PROTOTYPES",
     "SCHEMA_VERSION",
     "STYLES",
     "UNUSABLE",

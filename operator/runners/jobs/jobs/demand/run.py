@@ -61,6 +61,7 @@ from . import (
     gapaudit,
     gate,
     job as job_mod,
+    library_pick,
     preflight,
     premise,
     pull,
@@ -130,6 +131,8 @@ class DemandRun:
         self.date_stamp, self.long_date = self._frozen_dates(today())
         self.readback_pause = readback_pause
         self._repairs: dict[str, list[str]] = {}
+        #: The reference file the demand is written in (``library_pick``), set with the format.
+        self._reference: Path | None = None
         self.vendor_factory = vendor_factory or vendor.from_env
 
     # ---- plumbing ------------------------------------------------------------------
@@ -452,7 +455,7 @@ class DemandRun:
             md = (self.data / FINAL).read_text(encoding="utf-8")
             client = crosscheck.matched_client(md, self._json("facts.json"), deliver.front_keys(self.firm))
             try:
-                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
+                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client, self._reference)
             except deliver.FormatRefused as exc:
                 raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
             gap_fixes = [
@@ -597,6 +600,7 @@ class DemandRun:
                 "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
             )
         self.firm = self.firm.select(name, signs)
+        self._reference = library_pick.pick_reference(self)
 
     def run(self) -> Verdict:
         try:
