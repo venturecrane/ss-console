@@ -55,6 +55,9 @@ class FakeClient:
             return {"ok": True, "used": 0, "remaining": 5, "cents_used": 1234}
         if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
             return {"ok": True, "replies": []}
+        if a == "job_note_send":  # a held or failed job's note in code (jobs/job_notes.py)
+            row = self.rows.get(req["job_id"]) or {}
+            return {"ok": True, "outcome": "sent", "state": row.get("state", ""), "stop_class": "failed", "key": "k"}
         raise AssertionError(f"the drafting lane must speak only drafting verbs, not {a}")
 
 

@@ -62,8 +62,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
+
+from . import logic_gate, logic_in_code, outcome_ledger
+from .cited_facts import AMOUNT_LABELS, PRINTED, UNREADABLE, confirm_in_pages, confirm_in_text
+from .printed_dates import date_from_printed
 
 from .layout_shape import _items, layout_values
 from .letter_pages import FILED_DOCS
@@ -211,42 +216,160 @@ def add_medicals_row(
     the bill prints it, and the result carries ``contact_created: true``; ``link_not_visible`` (the contact link was accepted but no row
     appeared in time; nothing further was written); or ``refused`` (``reason``
     says why and NOTHING was written)."""
+    row = outcome_ledger.Outcome(outcome_ledger.MEDICALS, "", "", matter_id=_clean(matter_id))
+    with outcome_ledger.recording(row):
+        out = _add_row(
+            row,
+            _Asked(
+                matter_id,
+                source_file_id,
+                provider_name,
+                charge,
+                service_start,
+                service_end,
+                account_number,
+                claimant_index,
+                patient_name,
+                provider_address,
+            ),
+        )
+        row.status, row.detail = medicals_outcome(out)
+        return out
+
+
+@dataclass(frozen=True)
+class _Asked:
+    """One call's arguments, as passed."""
+
+    matter_id: str
+    source_file_id: str
+    provider_name: str
+    charge: str
+    service_start: str
+    service_end: str
+    account_number: str
+    claimant_index: int | None
+    patient_name: str
+    provider_address: str
+
+
+def _as_iso(raw: Any) -> Any:
+    """A date of service as ISO when it reads as one date, however it was
+    printed; otherwise unchanged, for ``_problem`` to refuse."""
+    found = date_from_printed(raw)
+    return found.isoformat() if found else raw
+
+
+def _add_row(row: outcome_ledger.Outcome, asked: _Asked) -> dict[str, Any]:
+    start, end = _as_iso(asked.service_start), _as_iso(asked.service_end)
     problem = _problem(
-        matter_id=matter_id,
-        source_file_id=source_file_id,
-        provider_name=provider_name,
-        charge=charge,
-        service_start=service_start,
-        service_end=service_end,
+        matter_id=asked.matter_id,
+        source_file_id=asked.source_file_id,
+        provider_name=asked.provider_name,
+        charge=asked.charge,
+        service_start=start,
+        service_end=end,
     )
     if problem:
         return _refused(problem)
-    if not isinstance(provider_address, str) or len(provider_address.strip()) > MAX_ADDRESS:
+    address = asked.provider_address
+    if not isinstance(address, str) or len(address.strip()) > MAX_ADDRESS:
         return _refused(f"provider_address must be the address the bill prints, up to {MAX_ADDRESS} characters")
-    matter = _clean(matter_id)
-    source = FILED_DOCS.lookup(matter, _clean(source_file_id))
+    matter = _clean(asked.matter_id)
+    source = FILED_DOCS.lookup(matter, _clean(asked.source_file_id))
     if source is None:
         return _refused(
             "source_file_id is not a document this run filed on that matter; "
             "file the bill's pages with file_attachment_pages_to_matter first and pass the fileId it returned"
         )
-    amount = parse_charge(charge)
+    row.sha256, row.message_id = str(source.get("sha256") or ""), str(source.get("message_id") or "")
+    row.first_page, row.last_page = source["first_page"], source["last_page"]
+    row.matter_number = str(source.get("matter_number") or "")
+    amount = parse_charge(asked.charge)
     assert amount is not None  # _problem checked it
+    client = _client()
+    file_id = _clean(asked.source_file_id)
+    spends = logic_gate.spends_on_a_read(logic_in_code.PRINTED_SOURCE_CHECK)
+    unprinted = _unprinted(client, matter, file_id, source, amount, start, end, spends)
+    if unprinted:
+        refusal = logic_gate.refusal(
+            logic_in_code.PRINTED_SOURCE_CHECK,
+            unprinted[1],
+            tool=outcome_ledger.MEDICALS,
+            status=unprinted[0],
+            sha256=row.sha256,
+            message_id=row.message_id,
+            first_page=row.first_page,
+            last_page=row.last_page,
+            matter_id=matter,
+        )
+        if refusal:
+            return _refused(refusal)
     bill = _Bill(
         matter=matter,
-        provider=_clean(provider_name),
+        provider=_clean(asked.provider_name),
         amount=amount,
-        start=service_start.strip(),
-        end=service_end.strip(),
-        account=_clean(account_number)[:_MAX_ACCOUNT],
+        start=start,
+        end=end,
+        account=_clean(asked.account_number)[:_MAX_ACCOUNT],
         source=source,
-        address=" ".join(_clean(provider_address).split()),
+        address=" ".join(_clean(address).split()),
     )
-    client = _client()
-    tab = _select_tab(client, matter, claimant_index, _clean(patient_name))
+    tab = _select_tab(client, matter, asked.claimant_index, _clean(asked.patient_name))
     if "status" in tab:
         return tab
     return _write_row(client, bill, tab["id"])
+
+
+def _unprinted(
+    client: Any, matter: str, file_id: str, source: dict[str, Any], amount: Decimal, start: str, end: str, spends: bool
+) -> tuple[str, str] | None:
+    """(observation status, refusal) when the bill's own pages do not print the
+    charge beside a total label or do not print both dates of service. The pages
+    are the ones this run filed, read as the bundle read them; a document whose
+    text was not held is read back from the matter (cache first, and a paid read
+    only when ``spends``)."""
+    checks: list[tuple[str, Decimal | date | None, tuple[str, ...] | None]] = [
+        (f"the charge {amount}", amount, AMOUNT_LABELS),
+        (f"the date of service {start}", date_from_printed(start), None),
+        (f"the date of service {end}", date_from_printed(end), None),
+    ]
+    for words, value, labels in checks:
+        if value is None:
+            return outcome_ledger.WOULD_REFUSE, f"{words} is not a real date"
+        text = source.get("text")
+        found = (
+            confirm_in_text(text, value, labels)
+            if text
+            else confirm_in_pages(client, matter, file_id, None, None, value, labels, allow_vision=spends)
+        )
+        if found == UNREADABLE:
+            return (
+                outcome_ledger.SOURCE_UNREADABLE,
+                "the bill's pages could not be read again to confirm its figures; nothing was written",
+            )
+        if found != PRINTED:
+            where = " beside a total, amount, balance or due label" if labels else ""
+            return (
+                outcome_ledger.WOULD_REFUSE,
+                f"{words} is not printed{where} on the bill's own pages; pass it exactly as the bill prints it",
+            )
+    return None
+
+
+#: ``add_medicals_row``'s own statuses -> the outcome row's word. The bill is on
+#: the tab (``written``), it is there but a field did not read back
+#: (``figure_not_saved``), or it is not on the tab (``tab_not_written``).
+_ON_THE_TAB = frozenset({"written", "invoice_added", "already_present"})
+
+
+def medicals_outcome(out: dict[str, Any]) -> tuple[str, str]:
+    status = str(out.get("status") or "")
+    if status in _ON_THE_TAB:
+        return "written", "this bill was already on the provider's row" if status == "already_present" else ""
+    if status == "readback_mismatch":
+        return "figure_not_saved", ", ".join(sorted(out.get("mismatch") or {})) or "a field did not read back"
+    return "tab_not_written", str(out.get("reason") or status)
 
 
 @dataclass(frozen=True)

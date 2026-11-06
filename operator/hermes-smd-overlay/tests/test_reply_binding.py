@@ -23,6 +23,7 @@ JOB = "01J0000000000000000000000Z"
 OTHER_JOB = "01J0000000000000000000000Y"
 WAKE = "wake-1"
 CRON = "cron_abc123def456_20261006_120000"
+DRAFTING_WORDS = "The memo for matter 900201 is filed in the matter."
 
 _SEAT_YAML = (
     "customer_id: acme\n"
@@ -61,6 +62,7 @@ class _FakeBroker:
         self.bound = True
         self.binds: list[dict] = []
         self.bound_sends: list[dict] = []
+        self.comments: list[str] = []
         self.plain_sends: list[dict] = []
 
     def bind_reply(self, req):
@@ -71,10 +73,13 @@ class _FakeBroker:
                 "bound": False,
                 "reason": "that email has already been answered from this mailbox",
             }
-        return {"ok": True, "bound": True, "sender": ADMIN, "graph_message_id": GRAPH_ID}
+        # A drafting job's bind carries its words on every seat (job_reply).
+        words = {"fixed_wording": [DRAFTING_WORDS]} if req.get("kind") == "drafting_job" else {}
+        return {"ok": True, "bound": True, "sender": ADMIN, "graph_message_id": GRAPH_ID, **words}
 
     def send_bound_reply(self, req, comment, *, html="", session_id="", matter_ref=None):
         self.bound_sends.append({"binding": req, "session_id": session_id})
+        self.comments.append(comment)
         return "<sent@firm.example>"
 
     def send_reply(self, message_id, comment, **kw):
@@ -94,6 +99,7 @@ def _clean():
         reg.clear()
     mod.binding.SESSION_BINDINGS._reset_for_tests()
     mod.binding.TURN_SOURCES._reset_for_tests()
+    mod._JOB_REPLIES._reset_for_tests()
     yield
     mod.binding.SESSION_BINDINGS._reset_for_tests()
     mod.binding.TURN_SOURCES._reset_for_tests()
@@ -535,6 +541,8 @@ def test_a_drafting_wake_replies_through_a_drafting_binding(lane) -> None:
     assert broker.bound_sends == [
         {"binding": {"kind": "drafting_job", "job_id": JOB}, "session_id": WAKE}
     ]
+    # The broker's words, not the draft's (job_reply).
+    assert broker.comments == [DRAFTING_WORDS]
     sent = [m for a, m in d1.events() if a == "REPLY_SENT"]
     assert len(sent) == 1 and sent[0]["in_reply_to"] == GRAPH_ID
 
@@ -1456,14 +1464,15 @@ def _held_wording_broker(mod, monkeypatch, broker) -> None:
             "bound": True,
             "sender": ADMIN,
             "graph_message_id": GRAPH_ID,
+            "fixed_wording": [HELD_TEXT],
             "held_wording": [HELD_TEXT],
         }
 
     def send_bound_reply(req, comment, *, html="", session_id="", matter_ref=None):
         if comment.strip() != HELD_TEXT:
             raise BrokerError(
-                f'held_wording: nothing was sent. Send exactly this: "{HELD_TEXT}".',
-                code="HeldWordingRefused",
+                f'fixed_wording: nothing was sent. Send exactly this: "{HELD_TEXT}".',
+                code="FixedWordingRefused",
             )
         broker.bound_sends.append({"binding": req, "session_id": session_id})
         return "<sent@firm.example>"
@@ -1485,19 +1494,50 @@ def _draft_told(mod, body: str, call: str) -> str:
     return out if isinstance(out, str) else ""
 
 
-def test_the_bind_hands_the_model_the_held_wording(lane, monkeypatch) -> None:
+def test_the_bind_hands_the_model_the_fixed_wording(lane, monkeypatch) -> None:
     mod, _d1, broker, _ = lane
     _held_wording_broker(mod, monkeypatch, broker)
     _litigation_wake(mod)
     out = _bind(mod, {"job_id": JOB})
-    assert out["bound"] is True and out["held_wording"] == [HELD_TEXT]
-    assert "exactly the held_wording text" in out["message"]
+    assert out["bound"] is True and out["fixed_wording"] == [HELD_TEXT]
+    assert out["held_wording"] == [HELD_TEXT]
+    assert "exactly the fixed_wording text" in out["message"]
+
+
+def _bind_returning(mod, monkeypatch, **keys) -> dict:
+    verdict = {"ok": True, "bound": True, "sender": ADMIN, "graph_message_id": GRAPH_ID, **keys}
+    monkeypatch.setattr(mod.msgraph_broker, "bind_reply", lambda _req: verdict)
+    _litigation_wake(mod)
+    return _bind(mod, {"job_id": JOB})
+
+
+def test_a_delivered_row_in_observe_tells_the_model_nothing_about_wording(
+    lane, monkeypatch
+) -> None:
+    """The broker sends no key on a reply it will not refuse, and the bind's
+    message then says nothing of wording: the model drafts as it does today."""
+    mod, _d1, _broker, _ = lane
+    out = _bind_returning(mod, monkeypatch)
+    assert out["bound"] is True and "fixed_wording" not in out and "held_wording" not in out
+    assert "wording" not in out["message"] and "Any other words are refused" not in out["message"]
+
+
+def test_a_held_row_in_observe_reads_as_it_always_has(lane, monkeypatch) -> None:
+    """The old key and the old sentence, for the skills deployed today."""
+    mod, _d1, _broker, _ = lane
+    out = _bind_returning(mod, monkeypatch, held_wording=[HELD_TEXT])
+    assert out["held_wording"] == [HELD_TEXT] and "fixed_wording" not in out
+    assert (
+        "This job is held: the reply's whole body must be exactly the held_wording text"
+        in out["message"]
+    )
+    assert "fixed_wording" not in out["message"]
 
 
 def test_a_refused_held_wording_is_told_with_the_exact_text_and_the_retry_goes(
     lane, monkeypatch
 ) -> None:
-    """FALSIFIER: without the HeldWordingRefused branch the refusal becomes
+    """FALSIFIER: without the FixedWordingRefused branch the refusal becomes
     send_failed ("Do not resend ... Escalate") and the quoted text is dropped."""
     mod, d1, broker, _ = lane
     _held_wording_broker(mod, monkeypatch, broker)
@@ -1507,7 +1547,7 @@ def test_a_refused_held_wording_is_told_with_the_exact_text_and_the_retry_goes(
     assert broker.bound_sends == []
     assert HELD_TEXT in told and "exactly the text below" in told
     assert "Escalate" not in told and "Do not resend" not in told
-    assert [m["reason"] for m in _held(d1)] == ["held_wording"]
+    assert [m["reason"] for m in _held(d1)] == ["fixed_wording"]
     assert [m["wake_job_id"] for m in _held(d1)] == [JOB]
     assert not [a for a, _m in d1.events() if a == "REPLY_FAILED"]
     # The retry with the exact text goes out in the same turn.
@@ -1515,11 +1555,24 @@ def test_a_refused_held_wording_is_told_with_the_exact_text_and_the_retry_goes(
     assert len(broker.bound_sends) == 1 and "NOT SENT" not in retold
 
 
+@pytest.mark.parametrize("code", ["FixedWordingRefused", "HeldWordingRefused"])
+def test_both_names_of_the_wording_refusal_are_a_redraft_never_a_failure(code: str) -> None:
+    """The broker's code is ``FixedWordingRefused`` since 2026-11-04; the old
+    name maps the same way, so neither becomes send_failed ("Escalate")."""
+    from shared.workspace_broker import BrokerError
+
+    mod = load_plugin("hermes-smd-reply")
+    got = mod.relay.reply_failure(
+        BrokerError("fixed_wording: Send exactly this.", code=code), "reply"
+    )
+    assert isinstance(got, mod.relay.FixedWordingRefused)
+
+
 def test_a_second_wording_refusal_still_names_the_text() -> None:
     mod = load_plugin("hermes-smd-reply")
     text = mod.notice.render(
         mod.notice.HoldNotice(
-            reason="held_wording",
+            reason="fixed_wording",
             recipient=ADMIN,
             message_id="m",
             attempt=3,
@@ -1546,16 +1599,15 @@ _FIRM_WORDS = (
 )
 
 
-def test_a_drafting_delivery_reply_naming_the_job_is_held_for_a_redraft(lane) -> None:
-    """FALSIFIER: drop ``job_reply=_is_job_reply(bound)`` from the relay's checklist
-    call and the attorney reads "The job searched his reports"."""
+def test_a_drafting_delivery_reply_naming_the_job_never_goes_out(lane) -> None:
+    """Since 2026-11-05 a drafting job's reply is the broker's words whatever
+    the model drafts (job_reply): the attorney never reads "The job searched
+    his reports", and nothing is held for a redraft that cannot change it."""
     mod, d1, broker, _ = lane
     _drafting_wake(mod)
     _bind(mod, {"job_id": JOB})
     _draft(mod, [ADMIN], body=_JOB_WORDS)
-    assert broker.bound_sends == []
-    held = _held(d1)
-    assert held and "system_vocabulary" in json.dumps(held)
+    assert broker.comments == [DRAFTING_WORDS] and not _held(d1)
 
 
 def test_the_same_reply_in_the_firms_terms_goes(lane) -> None:

@@ -97,3 +97,12 @@
     first draft is made in. Unset means the existing render path, so every
     drafting input staged before it still validates; no seat sets it yet;
     nothing to re-stage.
+- since: 350581cab85a5a431dac089f47a4be62659b70a6
+  lanes: [drafting]
+  date: '2026-11-05'
+  by: session firmbase-hunt-memo (ops-ashton-price-32377), for #3791
+  why: >-
+    #3791 lets format.firm_bases name a memo as well as a mediation brief, and
+    changes only comments otherwise in the schema module. It accepts every input
+    the old schema did, so every drafting input staged before it still
+    validates; no seat sets a memo base yet; nothing to re-stage.

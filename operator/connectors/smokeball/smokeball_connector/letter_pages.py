@@ -256,6 +256,35 @@ def parse_marked(text: str, page_count: int) -> list[str]:
     return pages
 
 
+def span_text(blob: bytes, first_page: int, last_page: int) -> str | None:
+    """The text of pages ``first_page``..``last_page`` (1-based, inclusive) of a
+    PDF, the way ``read_attachment_pages`` read them, at no cost: the cached
+    reading of these bytes when there is one (a transcribed bundle is cached
+    under its bytes by that read), else each page's own text layer.
+
+    None when the span cannot be read again for nothing: not a PDF, a range
+    outside the document, or a page in it that needs vision and has no cached
+    reading. The caller then says the figure could not be checked, which is a
+    different sentence from "the page does not print it"."""
+    from .extract_cache import cache_get
+
+    try:
+        pages = page_texts(blob)
+    except PageReadError:
+        return None
+    if not 1 <= first_page <= last_page <= len(pages):
+        return None
+    cached = cache_get(blob)
+    if cached is not None:
+        try:
+            pages = parse_marked(cached, len(pages))
+        except PageReadError:
+            return None
+    elif any(page_needs_vision(pages[i]) for i in range(first_page - 1, last_page)):
+        return None
+    return compose_window(pages[first_page - 1 : last_page], first_page)
+
+
 def split_range(blob: bytes, first_page: int, last_page: int) -> bytes:
     """A new PDF holding pages first..last inclusive, 1-based.
 
@@ -393,6 +422,13 @@ class FiledDocs:
 
     In-process and forgotten on restart, like ``FiledPages``: forgetting refuses
     nothing it should have allowed, because the caller re-files and re-reads.
+
+    Each record also carries where the document came from (the bundle's
+    ``sha256``, the email's ``message_id``, the matter's number the filing's
+    resolution named) and the TEXT of its pages as the bundle read them. The
+    keying tools write their outcome rows under that bundle and message
+    (``outcome_ledger``), and check a figure against that text
+    (``cited_facts.printed_in``), without the model restating either.
     """
 
     def __init__(self) -> None:
@@ -408,6 +444,10 @@ class FiledDocs:
         last_page: int,
         *,
         from_scan: bool,
+        sha256: str = "",
+        message_id: str = "",
+        matter_number: str = "",
+        text: str | None = None,
     ) -> None:
         with self._lock:
             self._docs[(matter_id, file_id)] = {
@@ -415,6 +455,10 @@ class FiledDocs:
                 "first_page": first_page,
                 "last_page": last_page,
                 "from_scan": from_scan,
+                "sha256": sha256,
+                "message_id": message_id,
+                "matter_number": matter_number,
+                "text": text,
             }
 
     def lookup(self, matter_id: str, file_id: str) -> dict[str, Any] | None:
@@ -449,5 +493,6 @@ __all__ = [
     "parse_marked",
     "safe_file_name",
     "scanned_indexes",
+    "span_text",
     "split_range",
 ]

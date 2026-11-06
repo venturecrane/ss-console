@@ -52,12 +52,16 @@ CODES = frozenset(
         "wake_lost",
         "reply_unproven",
         "reply_not_in_sent_items",
+        "rule_store_unusable",
+        "rule_value_refused",
         "gate_held",
         "update_held",
         "upload_held",
         "stage_refused",
         "limit_held",
         "identity_held",
+        "repair_unconverged",
+        "job_stopped",
     }
 )
 REPLY_KINDS = frozenset(
@@ -252,6 +256,15 @@ def reply_status_verb(
         "channel": "msgraph" if broker.msgraph is not None else "agentmail",
         "holds": holds_for(str(broker.audit_db_path), kind, ident, str(request.get("since") or "")),
     }
+    if request.get("thread") is True and out["channel"] == "msgraph":
+        # Asked by ``jobs rewake`` and the drafting DELIVER wake before they
+        # start a completion turn (2026-11-06): a reply already in the job's
+        # thread since it finished (an SMD hand release counts) means the
+        # completion would be a second email. Read from the mailbox, so it is
+        # asked for only there, never on the reply watch's every tick.
+        from . import hand_reply  # it imports reply_binding, which imports this module
+
+        out["thread"] = hand_reply.thread_status(broker, kind, ident)
     if out["channel"] == "agentmail":
         out["sends_to_requester"] = sends_to(
             str(broker.audit_db_path), str(request.get("requester") or ""), str(request.get("since") or "")

@@ -14,7 +14,7 @@
  * looked up. A hit names the file and the offset, never the token.
  */
 
-import { createHash } from 'node:crypto'
+import { hash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -194,7 +194,7 @@ const LEGACY_PROVIDER_FILES = new Set<string>([
 ])
 
 function sha(s: string): string {
-  return createHash('sha256').update(s, 'utf8').digest('hex')
+  return hash('sha256', s, 'hex')
 }
 
 function* walk(dir: string): Generator<string> {
@@ -206,31 +206,42 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-/** Candidate phrases: 1..4 consecutive word tokens, joined by single spaces. */
-export function candidates(text: string): Iterable<{ phrase: string; offset: number }> {
-  const out: { phrase: string; offset: number }[] = []
+/**
+ * Candidate phrases: 1..4 consecutive word tokens, joined by single spaces. One
+ * walk for the exported list and the scan, so the two cannot drift. The scan hashes
+ * tens of millions of phrases, so this builds no phrase by slicing and no list: on a
+ * loaded 2-CPU workspace the slower form took 2,335 s and refused clean pushes on time.
+ */
+function eachCandidate(text: string, visit: (phrase: string, offset: number) => void): void {
   const re = /[a-z0-9&.'-]+/g
   const lower = text.toLowerCase()
-  const toks: { t: string; i: number }[] = []
+  const toks: string[] = []
+  const at: number[] = []
   let m: RegExpExecArray | null
-  while ((m = re.exec(lower)) !== null) toks.push({ t: m[0], i: m.index })
+  while ((m = re.exec(lower)) !== null) {
+    toks.push(m[0])
+    at.push(m.index)
+  }
   for (let i = 0; i < toks.length; i++) {
-    for (let n = 1; n <= 4 && i + n <= toks.length; n++) {
-      const phrase = toks
-        .slice(i, i + n)
-        .map((x) => x.t)
-        .join(' ')
-      if (phrase.length >= 5) out.push({ phrase, offset: toks[i].i })
+    let phrase = ''
+    for (let n = 0; n < 4 && i + n < toks.length; n++) {
+      phrase = n === 0 ? toks[i] : `${phrase} ${toks[i + n]}`
+      if (phrase.length >= 5) visit(phrase, at[i])
     }
   }
+}
+
+export function candidates(text: string): Iterable<{ phrase: string; offset: number }> {
+  const out: { phrase: string; offset: number }[] = []
+  eachCandidate(text, (phrase, offset) => out.push({ phrase, offset }))
   return out
 }
 
 export function scan(text: string): number[] {
   const hits: number[] = []
-  for (const { phrase, offset } of candidates(text)) {
+  eachCandidate(text, (phrase, offset) => {
     if (HASHES.has(sha(phrase))) hits.push(offset)
-  }
+  })
   return hits
 }
 
@@ -261,7 +272,8 @@ describe('scrub gate: no client, provider, or matter token anywhere in this publ
     // workspace takes about 460 s (measured 458 and 485 on 2026-11-05) and a
     // loaded laptop has passed 60 s too, so 60 s refused clean pushes and
     // invited bypassing the hook. A finding still fails as an assertion above.
-  }, 900_000)
+    // Under six sessions at load 15 it took 2,335 s (2026-11-05), so the limit is an hour.
+  }, 3_600_000)
 
   it('the legacy ledger only shrinks', () => {
     // Every entry must still be dirty. When one is cleaned it leaves the set,
@@ -279,5 +291,5 @@ describe('scrub gate: no client, provider, or matter token anywhere in this publ
       cleaned,
       'these files no longer carry a denylisted token -- remove them from LEGACY_PROVIDER_FILES so the ledger keeps its new, smaller position'
     ).toEqual([])
-  }, 60_000)
+  }, 3_600_000)
 })

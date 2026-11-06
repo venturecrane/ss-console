@@ -1,5 +1,7 @@
 # Secret detection (gitleaks)
-if command -v gitleaks &> /dev/null; then
+# POSIX redirect: under sh, `&>` backgrounds the command and the test always
+# passes, so a machine without gitleaks failed every commit with exit 127.
+if command -v gitleaks >/dev/null 2>&1; then
   gitleaks protect --staged --no-banner
 fi
 

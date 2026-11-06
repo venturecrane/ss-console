@@ -15,7 +15,8 @@ The schema (the engagements author writes to exactly this)::
     firm:        {slug, display_name}
     models:      {transcription, digest, compose, audit, repair, review?}
     budget:      {per_job_cap_usd, monthly_budget_usd, usd_per_million_chars,
-                  usd_per_scanned_page, usd_drafting_fixed}
+                  usd_per_scanned_page, usd_drafting_fixed,
+                  repair_rounds?, repair_cap_usd?}
     privilege:   {firm_domains, consumer_domains}
     selection:   {doc_extensions, exclude_folder_patterns, exclude_name_patterns}
     style:       <path of the house-style markdown>
@@ -24,7 +25,7 @@ The schema (the engagements author writes to exactly this)::
                   plain_letter_paper?: bool,
                   pleading?: {lines, line_pitch_pt, margins_in: [4]},
                   limits?: {<class>: {<section title>: max pages}},
-                  firm_bases?: {mediation_brief: {path, source: {matter_id, file_id, name, sha256,
+                  firm_bases?: {mediation_brief|memo: {path, source: {matter_id, file_id, name, sha256,
                   version?, accepted?}}},
                   layout?: {<class>: {line_spacing, line_spacing_pt, justify,
                             first_line_indent_in, heading_indent_in: [3],
@@ -86,8 +87,8 @@ OPTIONAL_MODEL_KEYS = ("review",)
 PROMPT_KEYS = ("digest", "compose", "audit", "repair")
 LABEL_STYLES = ("caps_bold_underline", "all caps, bold, underlined")
 MEDIATION_SECTIONS = 11
-#: The classes whose first draft can be made in a firm's Word file (brief_base.py).
-FIRM_BASE_CLASSES = ("mediation_brief",)
+#: The classes whose first draft can be made in a firm's Word file (brief_base.py, memo_base.py).
+FIRM_BASE_CLASSES = ("mediation_brief", "memo")
 SOURCE_KEYS = ("matter_id", "file_id", "name", "sha256")
 ACCEPTANCE_KEYS = ("version", "accepted")
 #: format.layout.<class> keys and their types (closed).
@@ -141,6 +142,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         "usd_per_million_chars": ("float", True),
         "usd_per_scanned_page": ("float", True),
         "usd_drafting_fixed": ("float", True),
+        # Optional: a served set's repair budget (repair_budget.py); defaults
+        # there, 8 rounds and a quarter of per_job_cap_usd.
+        "repair_rounds": ("float", False),
+        "repair_cap_usd": ("float", False),
     },
     "privilege": {"firm_domains": ("list[str]", True), "consumer_domains": ("list[str]", True)},
     "selection": {
@@ -172,7 +177,7 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         "pleading_classes": ("list[str]", False),
         # Optional: {<class>: {path, source: {matter_id, file_id, name, sha256, version?,
         # accepted?}}}, the attorney's accepted save or a firm's past file, blanked: the
-        # Word file a first draft is made in (firmbase, brief_base.py); its
+        # Word file a first draft is made in (firmbase, brief_base.py, memo_base.py); its
         # layout outranks layout.<class>.
         "firm_bases": ("map", False),
     },
@@ -402,6 +407,13 @@ def _semantics(data: dict[str, Any]) -> list[str]:
             out.append(f"budget.{key}: must be > 0")
     if float(data["budget"]["usd_drafting_fixed"]) < 0:
         out.append("budget.usd_drafting_fixed: must be >= 0")
+    for key in ("repair_rounds", "repair_cap_usd"):
+        if key in data["budget"] and float(data["budget"][key]) <= 0:
+            out.append(f"budget.{key}: must be > 0")
+    if "repair_rounds" in data["budget"] and float(data["budget"]["repair_rounds"]) != int(
+        data["budget"]["repair_rounds"]
+    ):
+        out.append("budget.repair_rounds: a whole number")
     out += _format(data["format"])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:

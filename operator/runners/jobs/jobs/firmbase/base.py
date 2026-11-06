@@ -94,11 +94,13 @@ Line = tuple[Any, ...]
 @dataclass(frozen=True)
 class Rows:
     """A table's content. ``header``: the first row is the proto's header row.
-    ``total(row)``: the row takes the proto's total row."""
+    ``total(row)``: the row takes the proto's total row. ``narrow``: fewer columns than
+    the proto may take columns from it."""
 
     rows: tuple[tuple[Line, ...], ...]
     header: bool = False
     total: Any = None
+    narrow: bool = False
 
 
 def slot_names(el: Any) -> list[str]:
@@ -277,6 +279,25 @@ def _widen(tbl: Any, n: int, align_right: list[bool], header: bool) -> None:
                 _set_ppr(tc.find(f"{W}p"), right if align_right[c] else left)
 
 
+def _narrow(tbl: Any, n: int) -> None:
+    """Fewer columns than the proto: its width held, the columns before its last go."""
+    grid = tbl.find(f"{W}tblGrid")
+    cols = grid.findall(f"{W}gridCol")
+    widths = _column_widths([int(c.get(f"{W}w")) for c in cols], n)
+    for col in cols:
+        grid.remove(col)
+    for w in widths:
+        grid.append(etree.Element(f"{W}gridCol", {f"{W}w": str(w)}))
+    for tr in tbl.findall(f"{W}tr"):
+        tcs = tr.findall(f"{W}tc")
+        for tc in tcs[n - 1 : -1] if n > 1 else tcs[1:]:
+            tr.remove(tc)
+        for c, tc in enumerate(tr.findall(f"{W}tc")):
+            width = tc.find(f"{W}tcPr/{W}tcW")
+            if width is not None:
+                width.set(f"{W}w", str(widths[c]))
+
+
 _MONEY = re.compile(r"^\$?\s*[\d,]+(\.\d+)?$")
 
 
@@ -316,8 +337,10 @@ def make_table(proto: Any, content: Rows) -> Any:
         t.append(tr)
     n = max(len(r) for r in content.rows)
     cols = len(t.find(f"{W}tblGrid").findall(f"{W}gridCol"))
-    if n < cols:
+    if n < cols and not content.narrow:
         raise FirmBaseUnfit(f"a table of {n} columns and a proto of {cols}")
+    if n < cols:
+        _narrow(t, n)
     if n > cols:
         _widen(t, n, _money_columns(content, n), content.header)
     for tr, row in zip(made, content.rows):

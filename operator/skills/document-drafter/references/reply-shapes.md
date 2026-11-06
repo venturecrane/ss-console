@@ -21,6 +21,14 @@ redraft in the firm's terms.
   your firm, so nothing was queued."
 - **Not a Named Administrator.** A sentence naming the reservation and who at
   the firm can ask. Nothing is submitted, and no class is named as on or off.
+- **A follow-up on a draft underway.** The tool's `say`, as given, and nothing else
+  about it. Only result `applied` may say the words reached the draft. Examples:
+  "Received. We added what you wrote to the instructions for the propounded discovery
+  for matter 900201, and it will be drafted with them. We'll reply in this thread when
+  it's filed." or "Received. The propounded discovery for matter 900201 was already
+  being written when your email arrived, so what you wrote is not in this draft. We'll
+  say so again when we reply with the filed document, and you can ask for the change
+  then."
 - **Matter or class unclear.** One question, naming the candidate matters by
   number or the two classes the words could mean.
 
@@ -29,8 +37,9 @@ redraft in the firm's terms.
 - **delivered.** The file names exactly as filed and where (the client matter,
   or the firm's library matter for a rehearsal), then the `{{ATTORNEY}}`,
   `{{NOT IN RECORD}}` and `{{CLIENT}}` items grouped by kind, then each caption
-  discrepancy, then that nothing was sent outside the firm. An empty group is
-  left out.
+  discrepancy, then each of the requester's later words the job reports as
+  `additions_not_covered`, then that nothing was sent outside the firm. An empty
+  group is left out.
 - **held.** That the document is not drafted yet, and what the file or the
   request needs, in the firm's terms, from the job's reason. The reason reads
   `<code>: <sentence>`; relay the sentence after the code, never the code

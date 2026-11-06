@@ -59,7 +59,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared.layout_rules import compiled_on_seat
+from shared.layout_rules import clause_truth
 from shared.output_classes import describe as describe_output_class
 from shared.output_classes import has_live_rule_reader
 
@@ -182,19 +182,52 @@ It is in effect from now, and work of that kind is written to it.
 #: rendered by a lane that does not read the firm's rules
 #: (:data:`shared.output_classes.LIVE_RULE_READER_CLASSES`). So the letter says
 #: what is true: recorded, not yet shaping that work, handed to SMD. No date,
-#: because none has been agreed. The "will write again" line is backed by the
-#: page :func:`_page_unread_rule` raises, which is what puts it on SMD's desk.
+#: because none has been agreed. "Passed to SMD" is backed by the page
+#: :func:`_page_unread_rule` raises, which is what puts it on SMD's desk. It
+#: promises no second letter (2026-11-05): nothing would send one.
 _RECORDED_SUBJECT = "Your rule is recorded [rule {proposal_id}]"
 
 _RECORDED_BODY = """{applied_by} applied the rule you asked for:
 
 {readback}
 
-The rule is recorded, but it is not yet in effect for {work}. That work is
+We have recorded the rule, but it is not yet in effect for {work}. That work is
 produced by a part of the Operator that does not read the firm's rules yet, so
-the rule has been passed to SMD to build into it. The Operator will write to you
-again when the next one follows it.
+the rule has been passed to SMD to build into it.
 """
+
+#: A layout rule, clause by clause (:func:`shared.layout_rules.clause_truth`):
+#: what is in effect and what is recorded are said apart, from the installed file.
+_PARTLY_SUBJECT = "Your rule is partly in effect [rule {proposal_id}]"
+
+_CLAUSES_BODY = """{applied_by} applied the rule you asked for:
+
+{readback}
+
+In effect from the next document:
+
+{effect}
+{recorded}{after}"""
+
+_RECORDED_CLAUSES = """
+Recorded and passed to SMD, not yet in effect:
+
+{clauses}
+
+We have written these down and the document does not follow them yet.
+"""
+
+_RELATIVE_AFTER = """
+Where you asked for more of something without a number, we add one step, and the
+note with the document states the value we used. If you want more, say so.
+"""
+
+_BASE_OWNED_AFTER = """
+A mediation brief takes the charts from your own Word file, so for a brief we have
+recorded that part and passed it to SMD.
+"""
+
+_UNLISTED_CLAUSE = "- A part of the rule quoted by its number above"
 
 #: What :data:`_RECORDED_BODY` calls the work when the class has no plain words.
 _UNNAMED_WORK = "that kind of work"
@@ -463,20 +496,61 @@ def _installed_letter(
 ) -> tuple[str, str]:
     """Subject and body for an install, honest about whether anything reads it.
 
-    A ``work_product`` rule has a reader only when the seat compiled it to a
-    layout key the drafting lane applies (:mod:`shared.layout_rules`), and the
-    proof is the INSTALLED ``layout.json`` naming this rule, never the text.
+    A ``work_product`` rule has a reader only for the clauses the seat compiled
+    to a layout key the drafting lane applies (:mod:`shared.layout_rules`), and
+    the proof is the INSTALLED ``layout.json``, read as the lane reads it, never
+    the text.
     """
-    if has_live_rule_reader(output_class) or compiled_on_seat(proposal_id, output_class):
+    if has_live_rule_reader(output_class):
         return (
             _INSTALLED_SUBJECT.format(proposal_id=proposal_id),
             _compose(_INSTALLED_BODY, readback, tag, applied_by=by),
         )
+    truth = clause_truth(proposal_id, output_class)
+    if truth and truth["compiled"]:
+        return _clause_letter(proposal_id, readback, tag, by, output_class, truth)
     _page_unread_rule(proposal_id, output_class)
     work = describe_output_class(output_class) or _UNNAMED_WORK
     return (
         _RECORDED_SUBJECT.format(proposal_id=proposal_id),
         _compose(_RECORDED_BODY, readback, tag, applied_by=by, work=work),
+    )
+
+
+def _clause_letter(
+    proposal_id: str,
+    readback: str,
+    tag: str,
+    by: str,
+    output_class: str,
+    truth: dict[str, list[dict[str, Any]]],
+) -> tuple[str, str]:
+    """The letter for a rule the seat compiled, clause by clause. A clause the
+    outbound scan would refuse is not quoted, the same fallback as the readback."""
+    compiled, prose = truth["compiled"], truth["prose"]
+    if prose:
+        _page_unread_rule(proposal_id, output_class)
+    after = _RELATIVE_AFTER if any(c.get("relative") for c in compiled) else ""
+    after += _BASE_OWNED_AFTER if any(c.get("base_owned") for c in compiled) else ""
+    subject = _PARTLY_SUBJECT if prose else _INSTALLED_SUBJECT
+
+    def body(quoted: bool, quotation: str) -> str:
+        def lines(rows: list[dict[str, Any]]) -> str:
+            return "\n".join(f"- {r['text']}" if quoted else _UNLISTED_CLAUSE for r in rows)
+
+        recorded = _RECORDED_CLAUSES.format(clauses=lines(prose)) if prose else ""
+        return _CLAUSES_BODY.format(
+            applied_by=by,
+            readback=quotation,
+            effect=lines(compiled),
+            recorded=recorded,
+            after=after,
+        )
+
+    full = body(True, readback)
+    return (
+        subject.format(proposal_id=proposal_id),
+        full if _passes_scan(full) else body(False, tag),
     )
 
 

@@ -7,7 +7,10 @@ carried new dates, allDay, timeZone and description but no attendees 400'd
 subject, dates, description, attendees, type and timeZone but no ``matterId``
 succeeded and set the event's ``matter`` to null, so the deadline fell off the
 matter's calendar (``/events?MatterId=...``) while still reading back with the
-right date. ``merge_event_update`` builds the merged body from the event's
+right date. The same holds for ``additionalData`` (2026-11-05,
+vfy_01M6PJ8XAK8PRN52NG5ENPW3D3): omitted, it reads back empty, which on a
+LawToolBox deadline drops the key that ties the event to LawToolBox.
+``merge_event_update`` builds the merged body from the event's
 current state plus the requested changes and ``put_event_update`` sends it;
 ``server.update_event`` is the MCP tool over them.
 
@@ -84,6 +87,12 @@ def merge_event_update(
         "matterId": link,
         "attendees": people,
         "type": "Normal",
+        # Re-sent as read. The PUT clears what it omits, and additionalData is
+        # where LawToolBox keeps its own id for the deadlines it calculates
+        # (proven live 2026-11-05 on the A&P test matter: a PUT without it read
+        # back {}; one that re-sent it kept it exactly).
+        "additionalData": current.get("additionalData") or None,
+        "nonBillable": current.get("nonBillable"),
     }
     return {k: v for k, v in fields.items() if v is not None}, link
 

@@ -42,6 +42,10 @@ _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _APP = "docProps/app.xml"
 _PEOPLE = {"creator", "lastModifiedBy", "title", "subject", "description", "keywords", "category"}
 _THUMBNAIL = re.compile(r"^docProps/thumbnail\.\w+$")
+DOCUMENT_RELS = "word/_rels/document.xml.rels"
+_STORY = re.compile(r"^word/(header|footer|footnotes|endnotes|comments)\d*\.xml$")
+#: What a page number's line says: its field results and "Page 1 of 2".
+_KEEP_IN_STORY = re.compile(r"(?i)(\d+|page|of|\s)*")
 
 
 def _serial(root: etree._Element) -> bytes:
@@ -123,17 +127,60 @@ def _without_thumbnail(data: bytes) -> bytes:
     return _serial(root)
 
 
-def clean_package(blob: bytes, document: bytes | None = None) -> bytes:
+def _blank_story(data: bytes) -> bytes:
+    """A header, footer, note or comment with no words of the matter: page numbering
+    stays, whoever commented goes."""
+    root = etree.fromstring(data)
+    for t in root.iter(f"{_W}t"):
+        if not _KEEP_IN_STORY.fullmatch(t.text or ""):
+            t.text = ""
+    for el in root.iter(f"{_W}comment"):
+        for attr in ("author", "initials"):
+            if el.get(f"{_W}{attr}"):
+                el.set(f"{_W}{attr}", "")
+    return _serial(root)
+
+
+def _prune_rels(rels: bytes, document: bytes) -> tuple[bytes, set[str]]:
+    """The document's picture and link relationships it no longer uses go; returns the
+    targets dropped."""
+    root = etree.fromstring(rels)
+    gone = set()
+    for rel in list(root):
+        kind = rel.get("Type", "").rsplit("/", 1)[-1]
+        if kind in ("image", "hyperlink", "oleObject") and b'"' + rel.get("Id", "").encode() + b'"' not in document:
+            gone.add(rel.get("Target", ""))
+            root.remove(rel)
+    return _serial(root), gone
+
+
+def _dropped_media(src: zipfile.ZipFile, gone: set[str]) -> set[str]:
+    """The media parts named only by a dropped relationship."""
+    used = b"".join(src.read(n) for n in src.namelist() if n.endswith(".rels") and n != DOCUMENT_RELS)
+    return {f"word/{t}" for t in gone if t.startswith("media/") and t.encode() not in used}
+
+
+def clean_package(blob: bytes, document: bytes | None = None, stories: bool = False) -> bytes:
     """``blob`` with its identifying properties cleared, ``document`` as its
-    document part when given; every other part by its bytes."""
+    document part when given; every other part by its bytes. ``stories``: the words in
+    the headers, footers, notes and comments go too, with any picture or link the new
+    document no longer uses: a file whose every word was of one matter."""
     buf = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        rels, dropped = None, set()
+        if stories and document is not None and DOCUMENT_RELS in src.namelist():
+            rels, gone = _prune_rels(src.read(DOCUMENT_RELS), document)
+            dropped = _dropped_media(src, gone)
         for info in src.infolist():
-            if _THUMBNAIL.match(info.filename):
+            if _THUMBNAIL.match(info.filename) or info.filename in dropped:
                 continue
             raw = src.read(info.filename)
             if info.filename == "word/document.xml" and document is not None:
                 raw = document
+            elif info.filename == DOCUMENT_RELS and rels is not None:
+                raw = rels
+            elif stories and _STORY.match(info.filename):
+                raw = _blank_story(raw)
             elif info.filename == CORE:
                 raw = _blank_core(raw)
             elif info.filename == CUSTOM:

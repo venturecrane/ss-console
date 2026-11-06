@@ -530,6 +530,20 @@ def test_a_discovery_breakdowns_delivered_record_with_its_counts_lands(seat) -> 
     assert [k for k, _ in audit_rows(db)][-1] == "LITIGATION_JOB_DELIVERED"
 
 
+def test_a_lost_wake_on_a_delivered_job_is_audited_never_refused(seat) -> None:
+    """2026-10-30: the runner daemon's lost-wake note on a delivered
+    litigation job was refused ("carries only ..."), so no record of it landed."""
+    broker, db, _, _, _ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="running", fields={})
+    call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="delivered", fields={"cents": 100})
+    wake = {"wake_failed": True, "outcome": "http 503"}
+    out = call(broker, "litigation_job_record", pid=1, uid=0, job_id=job, state="delivered", fields={"wake": wake})
+    assert out["job"]["state"] == "delivered" and "wake" not in out["job"]
+    kind, meta = audit_rows(db)[-1]
+    assert kind == "LITIGATION_JOB_DELIVERED" and meta["wake"] == wake
+
+
 def test_record_refuses_an_unknown_field_and_an_illegal_move(seat) -> None:
     broker, _, _, _, _ = seat
     job = submit(broker)["job_id"]
@@ -704,7 +718,7 @@ def test_an_older_ledger_gains_the_close_columns(tmp_path) -> None:
     db = str(tmp_path / "old.db")
     old = CREATE_SQL.replace(
         "reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT, reassign_json TEXT, "
-        "over_allowance_ref TEXT)",
+        "over_allowance_ref TEXT, folder_name TEXT)",
         "reply_key TEXT)",
     )
     conn = sqlite3.connect(db)
@@ -715,5 +729,13 @@ def test_an_older_ledger_gains_the_close_columns(tmp_path) -> None:
     LitigationLedger(db, tmp_path / "q")
     conn = sqlite3.connect(db)
     have = {r[1] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
-    assert {"close_reason", "close_ref", "report", "counts_json", "reassign_json", "over_allowance_ref"} <= have
+    assert {
+        "close_reason",
+        "close_ref",
+        "report",
+        "counts_json",
+        "reassign_json",
+        "over_allowance_ref",
+        "folder_name",
+    } <= have
     conn.close()

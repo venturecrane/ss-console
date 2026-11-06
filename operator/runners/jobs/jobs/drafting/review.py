@@ -273,7 +273,7 @@ def _set_findings(where: str, text: str, digest: str, corpus: Mapping[str, str])
     ]
     out += [
         _f(NOTE, "4 defined terms", f'{where}: "{t}" is capitalized but not defined', where)
-        for t in sets.undefined_caps(text)[:12]
+        for t in sets.undefined_caps(text, corpus or ())[:12]
     ]
     return out
 

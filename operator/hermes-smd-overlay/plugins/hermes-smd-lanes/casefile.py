@@ -45,6 +45,9 @@ _STATUS_KEYS = (
     "matters_current",
     "matters_held",
     "lines_proposed",
+    # The reply the bind will enforce, rendered by the broker (fixed_wording).
+    "reply_text",
+    "reply_texts",
 )
 
 

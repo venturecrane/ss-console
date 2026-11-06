@@ -65,7 +65,7 @@ the recipient. So the broker, which the agent cannot steer, decides:
       once a delivered review's reply is sent and settled, the broker raises
       that job's numbered changes on the casework ledger, on this reply's thread
       (``casefile_casework.after_bound_reply``), so the requester can approve
-      them by number there; a held job's reply is its fixed wording (held_wording);
+      them by number there;
     - a bare message: the inbound turn that received it left an
       ``INBOUND_RECEIVED`` row and no ``REPLY_SENT`` row, it arrived within
       ``RECENCY_DAYS``, and nothing in its conversation was sent from this
@@ -95,9 +95,10 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from typing import Any
 
-from . import bound_replies, delivery_proof, msgraph_lookup
+from . import bound_replies, delivery_proof, msgraph_lookup, reply_text, stop_note
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
@@ -110,6 +111,7 @@ from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .casefile_casework import after_bound_reply, casefile_ledger_of
 from .reply_scheduled import casefile_subject as _casefile_subject, scheduled_recipient_ok as _scheduled_recipient_ok
+from .thread_answered import after_finish
 from .transmit_verbs import dispatch_transmit
 
 KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")  # fmt: skip
@@ -183,7 +185,19 @@ def _is_graph_ref(ref: str) -> bool:
 
 
 class BindingRefused(MsGraphRefused):
-    """The broker will not let a reply bind. The message is the sentence to relay."""
+    """The broker will not let a reply bind. The message is the sentence to relay.
+
+    ``code`` is a closed token for the job refusals a seat acts on in code
+    (overlay ``job_reply``, 2026-11-05): ``already_replied``, ``job_failed``,
+    ``not_ended``. "" on every other refusal."""
+
+    code = ""
+
+
+def _job_refused(message: str, code: str) -> BindingRefused:
+    exc = BindingRefused(message)
+    exc.code = code
+    return exc
 
 
 @dataclass(frozen=True)
@@ -197,8 +211,8 @@ class Verified:
     conversation_id: str
     mode: str = MODE_REPLY
     subject: str = ""
-    #: The job's ledger row as verified (job kinds only): what the held
-    #: wording check reads. Never a body, never sent.
+    #: The job's ledger row as verified (job kinds only): what the fixed
+    #: wording is rendered from. Never a body, never sent.
     row: Any = None
 
 
@@ -355,21 +369,27 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
     row = job_ledger(broker, kind).read(ident)
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
-    if row["state"] == "failed":
-        raise BindingRefused(
+    # 2026-11-06: a held, failed or waiting job of a code-sent kind is owed its
+    # one note in the broker's words (stop_note, fixed_wording.STOPPED).
+    stopped = stop_note.owed(kind, row)
+    if row["state"] == "failed" and not stopped:
+        raise _job_refused(
             f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone."
+            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone.",
+            "job_failed",
         )
     if kind == "medchron_job" and row["state"] == "held":
         raise BindingRefused(
             f"{noun} job {ident} stopped and SMD is finishing it; the requester hears about a chronology only "
             "when it is delivered, and SMD has been alerted. Send nothing to anyone."
         )
-    if row["state"] not in replyable_states(kind):
-        raise BindingRefused(f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that")
+    if row["state"] not in replyable_states(kind) and not stopped:
+        raise _job_refused(
+            f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that", "not_ended"
+        )
     key = reply_key(kind, ident, row)
     if bound_replies.claimed(db_path, key):
-        raise BindingRefused(f"{noun} job {ident} has already had its reply for this outcome")
+        raise _job_refused(f"{noun} job {ident} has already had its reply for this outcome", "already_replied")
     return row, key
 
 
@@ -467,6 +487,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     if kind in JOB_KINDS:
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
+        answered = after_finish(ops, _NOUN[kind], kind, ident, row, found["conversation_id"])
+        if answered:
+            raise _job_refused(answered, "thread_answered")
     else:
         key = _verify_bare_message(ops, db_path, found, now)
         imid, kind = found["internet_message_id"], "message"
@@ -537,7 +560,8 @@ def bind_verb(
     try:
         v = _verified_or_audited(broker, raw, "bind")
     except BindingRefused as exc:
-        return {"ok": True, "bound": False, "reason": str(exc)}
+        code = {"code": exc.code} if exc.code else {}
+        return {"ok": True, "bound": False, "reason": str(exc), **code}
     _audit(broker, "bound", raw, v=v)
     return {
         "ok": True,
@@ -556,38 +580,11 @@ def bind_verb(
         # the recipient (``sender``) and this subject; the caller sends a body.
         "mode": v.mode,
         **({"subject": v.subject} if v.subject else {}),
-        # A held litigation or chronology job: the exact texts its reply may
-        # be (held_wording). The send refuses any other words.
-        **_held_texts(v),
+        # The exact texts a reply the send holds to its words may be
+        # (fixed_wording, rendered by code from the job's row and the broker's
+        # own reads). Nothing at all on a reply the send will not refuse.
+        **reply_text.bind_keys(broker, v.kind, v.row),
     }
-
-
-def _held_texts(v: Verified) -> dict[str, Any]:
-    from . import held_wording  # held_wording imports BindingRefused from here
-
-    if v.kind not in held_wording.KIND_LANE or not v.row or v.row.get("state") != "held":
-        return {}
-    return {"held_wording": held_wording.allowed(v.kind, v.row)}
-
-
-def _check_held_wording(broker: BrokerContext, raw: Any, v: Verified, payload: dict[str, Any]) -> None:
-    """A held litigation or chronology job's reply is its fixed wording
-    (2026-10-24, job 01M5MWGB: the model sent its own words on a held job and
-    nothing checked them). Refused BEFORE the claim, so the retry with the
-    quoted text still has its one reply. The audit row names the class, never
-    the body."""
-    from . import held_wording, hold_class
-
-    if v.kind not in held_wording.KIND_LANE or not v.row:
-        return
-    raw_html = payload.get("html")
-    html = raw_html if isinstance(raw_html, str) else ""
-    try:
-        held_wording.check(v.kind, v.row, str(payload.get("comment") or ""), html)
-    except held_wording.HeldWordingRefused:
-        cls = hold_class.classify(held_wording.KIND_LANE[v.kind], v.row.get("reason"))[0]
-        _audit(broker, "send_refused", raw, v=v, reason=f"held_wording: the body is not the {cls} wording")
-        raise
 
 
 def _bound_body(v: Verified, payload: dict[str, Any], bound_ops: MsGraphOps) -> tuple[dict[str, Any], Any]:
@@ -615,40 +612,10 @@ def reply_verb(
         raise ValueError(f"{action} requires a 'payload' object")
     raw = request.get("binding")
     v = _verified_or_audited(broker, raw, "send")
-    _check_held_wording(broker, raw, v, payload)
+    reply_text.check_send(broker, v.kind, v.row, payload, partial(_audit, broker, raw=raw, v=v))
     db_path = str(broker.audit_db_path)
     session_id = str(request.get("session_id") or "").strip()
-    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
-    original = ops._request
-
-    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
-        # The claim rides the FIRST POST and nothing earlier: every GET and
-        # every refusal before it leaves the one reply unspent.
-        if method == "POST" and not state["claimed"]:
-            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
-                raise BindingRefused("that reply was already sent")
-            try:
-                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
-                    v.job_id, _outcome(v)
-                )
-            except Exception:
-                # The ledger could not be written: nothing has been sent, so
-                # the one reply is given back rather than silently spent.
-                bound_replies.release(db_path, v.key)
-                raise
-            if not marked:
-                # The ledger's own compare-and-set disagrees (this outcome was
-                # already replied to): honor it, give back the claim, send nothing.
-                bound_replies.release(db_path, v.key)
-                raise BindingRefused("the job's record shows this outcome was already replied to")
-            state["claimed"] = True
-            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return original(path, method, body, **kw)
-
-    # A per-call copy, so the claim hook never touches the shared ops object
-    # another broker thread is using.
-    bound_ops = copy.copy(ops)
-    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    bound_ops, state = _claiming_ops(broker, ops, v, session_id)
     body, transmit = _bound_body(v, payload, bound_ops)
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
@@ -695,6 +662,46 @@ def reply_verb(
         v = dataclasses.replace(v, conversation_id=str(result["conversation_id"]))
     after_bound_reply(broker, v, session_id)
     return result
+
+
+def _claiming_ops(broker: BrokerContext, ops: MsGraphOps, v: Verified, session_id: str) -> tuple[MsGraphOps, dict]:
+    """A per-call copy of ``ops`` whose FIRST POST takes ``v``'s once-only
+    claim and marks the job's ledger, and nothing earlier: every GET and every
+    refusal before it leaves the one reply unspent. ``state`` says whether the
+    claim was taken, and when."""
+    db_path = str(broker.audit_db_path)
+    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
+    original = ops._request
+
+    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
+        # The claim rides the FIRST POST and nothing earlier: every GET and
+        # every refusal before it leaves the one reply unspent.
+        if method == "POST" and not state["claimed"]:
+            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
+                raise BindingRefused("that reply was already sent")
+            try:
+                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
+                    v.job_id, _outcome(v)
+                )
+            except Exception:
+                # The ledger could not be written: nothing has been sent, so
+                # the one reply is given back rather than silently spent.
+                bound_replies.release(db_path, v.key)
+                raise
+            if not marked:
+                # The ledger's own compare-and-set disagrees (this outcome was
+                # already replied to): honor it, give back the claim, send nothing.
+                bound_replies.release(db_path, v.key)
+                raise BindingRefused("the job's record shows this outcome was already replied to")
+            state["claimed"] = True
+            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return original(path, method, body, **kw)
+
+    # A per-call copy, so the claim hook never touches the shared ops object
+    # another broker thread is using.
+    bound_ops = copy.copy(ops)
+    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    return bound_ops, state
 
 
 def _settle_sent(broker: BrokerContext, db_path: str, v: Verified, result: Any) -> None:

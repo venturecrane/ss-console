@@ -444,6 +444,34 @@ def _read_rows(target: str, columns: tuple[str, ...], where: str, params: tuple)
         conn.close()
 
 
+def read_request(
+    vendor_message_id: str, internet_message_id: str = "", *, path: str | None = None
+) -> dict | None:
+    """One indexed request by its own ids, READ-ONLY, or None. The contract of
+    :func:`read_requests`: a file that exists and cannot be read RAISES, so the
+    caller can tell "not indexed" from "could not look"."""
+    target = path or db_path()
+    if not os.path.exists(target):
+        return None
+    rows = _read_rows(
+        target,
+        _READ_COLUMNS,
+        "vendor_message_id = ? OR (internet_message_id = ? AND internet_message_id != '')",
+        (vendor_message_id, internet_message_id),
+    )
+    return rows[-1] if rows else None
+
+
+def read_thread_message_ids(thread_ref: str, *, path: str | None = None) -> list[str]:
+    """The internetMessageIds of every indexed request in one email thread,
+    READ-ONLY. Ids only; the same "could not look" contract."""
+    target = path or db_path()
+    if not thread_ref or not os.path.exists(target):
+        return []
+    rows = _read_rows(target, ("internet_message_id",), "thread_ref = ?", (thread_ref,))
+    return [r["internet_message_id"] for r in rows if r["internet_message_id"]]
+
+
 def read_requests(since: float, *, path: str | None = None) -> list[dict]:
     """Every indexed request received at or after ``since``, READ-ONLY. Two
     readers, both in other code paths than the writer: the gate's heartbeat

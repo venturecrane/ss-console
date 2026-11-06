@@ -54,7 +54,7 @@ JOURNAL_DIR_ENV = "SMD_POST_JOURNAL_DIR"
 DEFAULT_JOURNAL_DIR = "/opt/data/post-intake-journal"
 RETAIN_DAYS = 45
 #: The journal's closed vocabulary (connector post_journal.py, pinned equal by a test).
-NOT_PLACED = ("no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused")
+NOT_PLACED = ("no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused", "not_attempted")
 PLACED_CHECK = ("tab_not_written", "figure_not_saved", "possible_duplicate", "offer_not_written", "expense_not_staged")
 BUNDLE_ISSUES = ("unreadable", "partition_failed", "not_processed")
 KIND_WORDS = {
@@ -217,6 +217,8 @@ def _ask(entry: dict) -> str:
         return "the matter search could not run, so it was not filed. Which matter is it?"
     if issue == "filing_refused":
         return f"it could not be filed{because}. Which matter is it?"
+    if issue == "not_attempted":
+        return "nothing was recorded as done with it, so it was not filed. Which matter is it?"
     filed = f"filed on matter {where}"
     if issue == "tab_not_written":
         return f"{filed}, but it is not on the Medicals tab{because}."

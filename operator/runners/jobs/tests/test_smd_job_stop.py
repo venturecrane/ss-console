@@ -85,6 +85,7 @@ def test_a_child_with_no_checkpoint_is_terminated_and_recorded_stopped_by_smd(tm
     assert time.monotonic() - t0 < 30  # terminated at the grace, not left to spin
     recs = [(s, f) for j, s, f in client.records if j == jid]
     assert recs[-1][0] == "failed"
+    assert [s for s, _f in recs].count("failed") == 1, "the sweep never records the running job"
     assert recs[-1][1]["reason"] == "stopped_by_smd: by scott: duplicate job"
     st = lane._daemon_state(jid)
     assert st["state"] == smd_stop.STATE == "stopped_by_smd" and smd_stop.STATE in daemon_mod.TERMINAL
@@ -127,9 +128,11 @@ def test_a_seat_restart_before_the_stop_was_recorded_never_starts_the_job(tmp_pa
     smd_stop.request(lane.job_dir(jid), by="scott", why="stop it", at=time.time())
     _spin(lane, tmp_path)
     lane.stopping = lambda: False
-    assert lane.tick() == "interrupted"
+    # Recorded by the sweep before anything is claimed: no child, no run_job.
+    assert lane.tick() is None
     assert not (lane.job_dir(jid) / "child-ran").exists(), "a stopped job must not start again"
     assert lane._daemon_state(jid)["state"] == "stopped_by_smd"
+    assert [s for j, s, _f in client.records if j == jid][-1] == "failed"
 
 
 def test_a_machine_stop_alone_still_leaves_the_job_claimed_for_the_next_boot(tmp_path):
@@ -297,10 +300,21 @@ def test_the_cli_says_when_the_lane_has_not_recorded_it_yet(tmp_path, capsys):
     assert smd_stop.read(jd) is not None, "the request stays"
 
 
-@pytest.mark.parametrize("state", ["delivered", "failed"])
-def test_the_cli_refuses_a_job_that_already_ended(tmp_path, state):
-    jd = _job(tmp_path, state=state)
+def test_the_cli_refuses_a_job_that_was_delivered(tmp_path):
+    jd = _job(tmp_path, state="delivered")
     assert _cli(tmp_path) == 1
+    assert smd_stop.read(jd) is None
+
+
+def test_the_cli_on_a_failed_job_withdraws_its_pending_resume(tmp_path, capsys):
+    jd = _job(tmp_path, state="failed")
+    q = tmp_path / "run" / "drafting-queue"
+    q.mkdir(parents=True)
+    resume = q / f"{resume_mod.MARKER_PREFIX}01JOB.json"
+    resume.write_text(json.dumps({"job_id": "01JOB", "reason": "run it"}))
+    assert _cli(tmp_path) == 0
+    assert not resume.exists(), "an ended job must not run again on an earlier resume request"
+    assert "already ended failed" in capsys.readouterr().out
     assert smd_stop.read(jd) is None
 
 

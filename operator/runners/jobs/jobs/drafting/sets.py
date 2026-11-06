@@ -20,6 +20,7 @@ phrases a set uses that its Definitions never define, for the review.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 #: (key, label used in file names and instructions, the request's words for it).
@@ -38,7 +39,7 @@ VARIANTS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
         "requests_for_production",
         "Requests for Production",
         re.compile(
-            r"(?i)\brequests?\s+for\s+(?:the\s+)?production\b|\brequests?\s+to\s+produce\b|\brfps?\b|\brpds?\b|"
+            r"(?i)\brequests?\s+for\s+(?:the\s+)?production\b|\brequests?\s+to\s+produce\b|\brfp(?:d?s?)\b|\brpds?\b|"
             r"\bdocument\s+requests?\b|\brequests?\s+for\s+documents\b"
         ),
     ),
@@ -55,6 +56,8 @@ LABELS = {
 class Unit:
     key: str
     label: str
+    #: The party this set is served on, when the request serves several (parties.py).
+    party: str | None = None
 
     def instruction(self, others: list[str]) -> str:
         also = (
@@ -63,9 +66,17 @@ class Unit:
             if others
             else ""
         )
+        served = (
+            f" This set is served on {self.party} alone: its RESPONDING PARTY is {self.party}, its title is "
+            f'directed to {self.party}, and "YOU" and "YOUR" mean {self.party} and no other party.'
+            if self.party
+            else ""
+        )
+        what = f"{self.label} set to {self.party}" if self.party else f"{self.label} set"
         return (
-            f"THIS DOCUMENT (set by the job, from the request's own words): draft ONLY the {self.label} set, as one "
+            f"THIS DOCUMENT (set by the job, from the request's own words): draft ONLY the {what}, as one "
             f"complete paper with its own caption, identification block, Definitions, requests and signature block."
+            + served
             + also
         )
 
@@ -148,7 +159,21 @@ def _term_pattern(term: str) -> re.Pattern[str]:
 COMPOUND_HEADS = frozenset(
     "report reports date dates scene number numbers history log logs file files form forms photo photos "
     "photograph photographs video videos investigation investigations review reviews notice notices "
-    "summary summaries statement statements record records".split()
+    "summary summaries statement statements record records rating ratings index".split()
+)
+
+#: Words that may stand before a defined term when it means the defined thing:
+#: determiners, quantifiers, prepositions and conjunctions. Any OTHER lower-case
+#: word before it is a modifier making a different phrase ("pavement condition",
+#: "dangerous condition of public property"), and "a/an/another/other" point at
+#: something other than the defined one ("an incident" before or after his).
+#: 2026-11-05: the caps pass wrote "pavement CONDITION rating", "a dangerous
+#: CONDITION of the SUBJECT BIKE LANE" and "an INCIDENT", the last changing what
+#: a request asked for.
+_DETERMINERS = frozenset(
+    "the this that these those such said its their his her your our my all any each every no same subject "
+    "of in on at to for from with by about regarding concerning during after before since until "
+    "and or nor but which what whose".split()
 )
 
 
@@ -156,6 +181,32 @@ def _in_compound(seg: str, end: int) -> bool:
     """The match ending at ``end`` is followed by a compound head noun."""
     m = re.match(r"[ \t]+([A-Za-z]+)", seg[end:])
     return bool(m and m.group(1) == m.group(1).lower() and m.group(1) in COMPOUND_HEADS)
+
+
+def _modified(seg: str, start: int) -> bool:
+    """The match starting at ``start`` follows a lower-case word that is not a
+    determiner, preposition or conjunction: a modifier ("pavement", "dangerous")
+    or an indefinite pointer ("a", "an", "another", "other"), so the words name
+    something other than the defined term."""
+    m = re.search(r"([A-Za-z]+)[ \t]+$", seg[:start])
+    return bool(m and m.group(1) == m.group(1).lower() and m.group(1) not in _DETERMINERS)
+
+
+def _in_title(seg: str, m: re.Match[str]) -> bool:
+    """A Title-case match with a capitalized word beside it is part of a proper
+    name, such as a record's own title ("CAD Incident Report"); 2026-11-05 the
+    caps pass turned that title into "CAD INCIDENT Report"."""
+    word = m.group(0)
+    if not (word[:1].isupper() and word != word.upper()):
+        return False
+    before = re.search(r"([A-Za-z]+)[ \t]+$", seg[: m.start()])
+    after = re.match(r"[ \t]+([A-Za-z]+)", seg[m.end() :])
+    return any(w and w.group(1)[:1].isupper() for w in (before, after))
+
+
+def _general(seg: str, m: re.Match[str]) -> bool:
+    """A lower-case match that is part of a general phrase, not the defined term."""
+    return _in_compound(seg, m.end()) or _modified(seg, m.start()) or _in_title(seg, m)
 
 
 def enforce_caps(doc: str) -> tuple[str, list[str]]:
@@ -174,7 +225,7 @@ def enforce_caps(doc: str) -> tuple[str, list[str]]:
             pat = _term_pattern(t)
 
             def up(m: re.Match[str], t: str = t, seg: str = seg) -> str:
-                if m.group(0) == m.group(0).upper() or _in_compound(seg, m.end()):
+                if m.group(0) == m.group(0).upper() or _general(seg, m):
                     return m.group(0)
                 counts[t] = counts.get(t, 0) + 1
                 return m.group(0).upper()
@@ -201,7 +252,7 @@ def lowercase_uses(doc: str) -> list[str]:
     def scan(seg: str) -> str:
         for t in defined_terms(doc):
             for m in _term_pattern(t).finditer(seg):
-                if m.group(0) != m.group(0).upper() and not _in_compound(seg, m.end()) and t not in found:
+                if m.group(0) != m.group(0).upper() and not _general(seg, m) and t not in found:
                     found.append(t)
         return seg
 
@@ -217,10 +268,12 @@ _COMMON = {
 }  # fmt: skip
 
 
-def undefined_caps(doc: str) -> list[str]:
+def undefined_caps(doc: str, record_names: Iterable[str] = ()) -> list[str]:
     """Capitalized phrases in the requests that the Definitions never define
     (a set that defines SURVEILLANCE VIDEO and asks for SURVEILLANCE FOOTAGE).
-    Party names, labels and the common words of a set are not counted."""
+    Party names, labels and the common words of a set are not counted, nor is a
+    word the file's own document names print in capitals: the name of a record
+    ("CAD Report") is not a defined term, and no definition or lower case fixes it."""
     at, end = _region(doc)
     if at < 0:
         return []
@@ -234,6 +287,7 @@ def undefined_caps(doc: str) -> list[str]:
     # The caption, the title, the attorney block and the signature block name
     # the firm and the parties; their words are never a defined term.
     framing = {w.strip(".,;:'&") for w in re.findall(r"[A-Z][A-Z'&.,-]+", doc[: _defs_start(doc)] + doc[end:])}
+    named = {w for name in record_names for w in re.findall(r"[A-Z][A-Z'&.-]+", name)}
     body = _LABEL_LINE.sub("", doc[at:end])
     body = re.sub(r"(?m)^#{1,6}\s.*$", "", body)
     body = re.sub(r"(?m)^.*\|.*$", "", body)  # a table row is a caption or a block, never a request
@@ -242,7 +296,7 @@ def undefined_caps(doc: str) -> list[str]:
     def known(w: str) -> bool:
         w = w.strip(".,;:'&-")
         stems = {w, w[:-1] if w.endswith("S") else w, w[:-2] if w.endswith("ES") else w}
-        return bool(stems & (_COMMON | parties | term_words | framing)) or not w
+        return bool(stems & (_COMMON | parties | term_words | framing | named)) or not w
 
     def scan(seg: str) -> str:
         for m in _CAPS.finditer(seg):
@@ -359,10 +413,11 @@ def authored_head(doc: str, authored: list[str]) -> tuple[str, list[str]]:
     return doc[:start] + head + doc[at:], ["the attorney block was printed as the firm authors it"]
 
 
-def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
+def align(doc: str, canon: str, canon_label: str, keep: frozenset[str] = frozenset()) -> tuple[str, list[str]]:
     """``doc`` with the attorney block, the signature block and every shared
-    definition worded as ``canon`` words them. Returns the document and one
-    line per change."""
+    definition worded as ``canon`` words them, except the terms in ``keep``
+    (a set served on another party defines YOU as that party). Returns the
+    document and one line per change."""
     notes: list[str] = []
     start, at, lines = head_lines(doc)
     cstart, cat, clines = head_lines(canon)
@@ -370,7 +425,7 @@ def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
         doc = doc[:start] + canon[cstart:cat] + doc[at:]
         notes.append(f"attorney block worded as in the {canon_label}")
     mine, theirs = definition_texts(doc), definition_texts(canon)
-    for term in sorted(set(mine) & set(theirs), key=lambda t: -mine[t][0]):
+    for term in sorted((set(mine) & set(theirs)) - keep, key=lambda t: -mine[t][0]):
         a, b, text = mine[term]
         if _SET_NOUN.search(theirs[term][2]) or _SET_NOUN.search(text):
             continue  # worded for its own kind of set; the review reads it

@@ -45,7 +45,7 @@ from typing import Any, Callable
 from .broker_client import BrokerClient, BrokerError
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, wake_grace
+from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
 from . import resume as resume_mod, retention
 from .proof import watch as proof_watch
 
@@ -65,6 +65,10 @@ GATE_URL_ENV = "SMD_JOBS_GATE_URL"
 DEFAULT_GATE_URL = "http://127.0.0.1:8643"
 WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"
 WAKE_MAX_ATTEMPTS = 5
+#: The lanes whose DELIVER wake first asks the broker whether the job's thread
+#: already holds a reply sent after it finished (2026-11-06): the drafting
+#: lane, whose completion reply the seat sends in code whatever the turn does.
+THREAD_CHECKED_LANES = frozenset({"drafting"})
 #: ``main``'s exit when the Machine's stop signal ended the loop (128 + SIGINT,
 #: the shell's own convention). ``operator/templates/entrypoint.sh`` does not
 #: respawn on it; every other exit is a crash and is respawned.
@@ -198,6 +202,10 @@ class Daemon:
             st = self._daemon_state(d.name)
             if not (d.is_dir() and st.get("state") not in TERMINAL and st.get("claimed")):
                 continue
+            # SMD stopped it: ``smd_stop.take_unclaimed`` records it; it never
+            # starts again (a lane's run_job records ``running`` before its child).
+            if smd_stop.read(d) is not None:
+                continue
             # A runner-held job (a refusal, an unexplained file, an unmatched
             # folder) is PARKED: it needs a person, and re-running it changes
             # nothing but the audit log (live-caught 2026-08-31: a cap-refused
@@ -212,6 +220,7 @@ class Daemon:
         """Move the oldest envelope into its job dir. A file the broker has no
         row for is quarantined. An idle lane runs a requested proof first; a
         job whose kind is not proven on this seat waits (``lane_proof.py``)."""
+        smd_stop.take_unclaimed(self)
         if quiesce.active(self) or proof_run.run_pending(self):
             return None
         for env_path in self._queued():
@@ -225,7 +234,14 @@ class Daemon:
                 q = self.queue / "quarantine"
                 q.mkdir(exist_ok=True, mode=0o700)
                 env_path.replace(q / env_path.name)
+                retention.mark_set_aside(q / env_path.name)
                 logger.error("quarantined %s: the broker has no ledger row for it", job_id)
+                continue
+            # Before the lane-proof gate, which may release a hold: an ended
+            # job's envelope never runs, whenever its lane is proven.
+            why = smd_stop.stale_envelope(self, job_id, row)
+            if why is not None:
+                smd_stop.set_aside(self, env_path, job_id, why)
                 continue
             if not lane_proof.admits(self, job_id, env_path, row):
                 continue
@@ -312,6 +328,27 @@ class Daemon:
         proof_watch.check_reply_watches(self)
         proof_watch.check_reroutes(self)
 
+    def _thread_already_answered(self, job_id: str, wake: dict[str, Any]) -> bool:
+        """True when this lane's DELIVER wake must not start, because the job's
+        thread already holds a reply sent after the job finished (an SMD hand
+        release counts): the completion would be the requester's second email
+        (A&P, 2026-11-06). The wake is closed, not retried, and the daemon log
+        says why in one line. Asked once per wake; a broker that could not
+        answer lets the wake go (the broker's bind re-checks at the send)."""
+        if self.LANE not in THREAD_CHECKED_LANES or wake.get("thread_checked"):
+            return False
+        broker = getattr(self.broker, "client", self.broker)
+        seen = rewake.thread_check(broker)(rewake.reply_kind(self.LANE), job_id)
+        if seen.get("checked") and seen.get("answered"):
+            wake.update(pending=False, outcome="refused: thread_answered")
+            self._write_state(job_id, wake=wake)
+            logger.warning("%s job %s: DELIVER wake not sent: %s", self.LANE, job_id, seen["answered"])
+            return True
+        if seen.get("checked"):
+            wake["thread_checked"] = True
+            self._write_state(job_id, wake=wake)
+        return False
+
     def _dispatch_wakes(self) -> None:
         import http.client
         from urllib.parse import urlparse
@@ -321,6 +358,8 @@ class Daemon:
             if not self.wake_secret:
                 logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
                 return
+            if self._thread_already_answered(job_id, wake):
+                continue
             # Each distinct wake gets its own id and every re-post of one wake the
             # same id (`rewake.handoff_id`): the gateway drops a reused id with the
             # same text and refuses one with different text (admission_conflict).
@@ -395,7 +434,13 @@ class Daemon:
     def wipe_expired(self) -> list[str]:
         """Terminal jobs at `wipe_hours`, parked ones at `held_wipe_hours`
         (`retention.py` carries the policy and why it is two windows)."""
+        retention.prune_set_aside(self)
         return retention.wipe_expired(self, TERMINAL)
+
+    def poll_requests(self) -> None:
+        """HOOK. What a lane answers while it would otherwise only wait: called
+        once a second from the idle sleep and from a running child's wait. It
+        must not raise (``request_additions.take`` does not)."""
 
     def tick(self) -> str | None:
         """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
@@ -424,6 +469,8 @@ class Daemon:
             while slept < poll_seconds and not stop():
                 time.sleep(min(1.0, poll_seconds - slept))
                 slept += 1.0
+                smd_stop.take_unclaimed(self)
+                self.poll_requests()
 
 
 def _require(name: str) -> str:

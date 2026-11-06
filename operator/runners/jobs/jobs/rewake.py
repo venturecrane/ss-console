@@ -87,8 +87,51 @@ def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+#: The broker's socket when ``SMD_WORKSPACE_BROKER_SOCKET`` is unset (the
+#: same default ``operator/bin/medchron-backfill-covered.py`` uses).
+DEFAULT_SOCKET = "/run/smd-workspace-broker/broker.sock"
+
+#: What ``thread(kind, job_id)`` answers: the broker's ``delivery_reply_status``
+#: ``thread`` field, ``{"checked": bool, "answered": sentence}``.
+ThreadCheck = Callable[[str, str], dict[str, Any]]
+
+
+def thread_check(client: Any) -> ThreadCheck:
+    """Ask the broker whether job ``job_id``'s thread already holds a reply sent
+    after it finished (2026-11-06): an SMD hand release counts, and a
+    completion re-sent then is the requester's second email. A broker that
+    could not answer is ``checked: False``, never "nothing in the thread"."""
+
+    def ask(kind: str, ident: str) -> dict[str, Any]:
+        from .broker_client import BrokerError
+
+        try:
+            resp = client._request({"action": "delivery_reply_status", "kind": kind, "job_id": ident, "thread": True})
+        except (BrokerError, OSError, ValueError, TypeError) as exc:
+            return {"checked": False, "answered": "", "why": str(exc)[:200]}
+        thread = resp.get("thread") if isinstance(resp, dict) else None
+        if not isinstance(thread, dict):
+            return {"checked": False, "answered": "", "why": "the broker did not report on the thread"}
+        return {"checked": bool(thread.get("checked")), "answered": str(thread.get("answered") or "")}
+
+    return ask
+
+
+def reply_kind(lane: str) -> str:
+    """The bound-reply kind a lane's job replies under (``medchron`` is the
+    chronology lane's own name for its jobs)."""
+    return f"{lane}_job"
+
+
 def rewake(
-    run_dir: Path, lane: str, job_id: str, by: str, why: str, again: bool, clock: Callable[[], float] = time.time
+    run_dir: Path,
+    lane: str,
+    job_id: str,
+    by: str,
+    why: str,
+    again: bool,
+    clock: Callable[[], float] = time.time,
+    thread: ThreadCheck | None = None,
 ) -> int:
     p = run_dir / JOBS[lane] / job_id / "daemon.json"
     if not p.is_file():
@@ -111,6 +154,19 @@ def rewake(
             f"{job_id}'s reply was proven sent at {_iso(float(w['proven_at']))}; --again sends the requester a second"
         )
         return 1
+    if thread is not None:
+        # 2026-11-06 (A&P): the completion went out as an SMD hand release,
+        # outside the job's claim; a rewake here would have sent it twice.
+        seen = thread(reply_kind(lane), job_id)
+        if not seen.get("checked"):
+            print(
+                f"refused: could not ask the broker whether {job_id}'s thread already has a reply "
+                f"({seen.get('why') or 'the broker did not say'}); nothing was re-armed or sent"
+            )
+            return 1
+        if seen.get("answered"):
+            print(f"refused: {seen['answered']}")
+            return 1
     n = int(wake.get("resend") or 0) + 1
     now = clock()
     # An unnumbered (pre-count) wake keeps the number it was posted under, so
@@ -136,7 +192,25 @@ def _run(args: Any) -> int:
     if not args.by.strip() or not args.why.strip():
         print("--by and --why are required: who is re-sending, and why")
         return 2
-    return rewake(Path(args.run_dir), args.lane, args.job_id, args.by.strip(), args.why.strip(), args.again)
+    import os
+
+    from .broker_client import BrokerClient
+    from .daemon import SOCKET_ENV
+
+    # The variable is entrypoint-computed for the broker only, so a root or
+    # medchron shell on the seat (where a rewake is run) does not have it: the
+    # broker's own default path is the answer then. A socket that cannot be
+    # reached is ``thread_check``'s ``checked: False``, which re-arms nothing.
+    sock = os.environ.get(SOCKET_ENV, "").strip() or DEFAULT_SOCKET
+    return rewake(
+        Path(args.run_dir),
+        args.lane,
+        args.job_id,
+        args.by.strip(),
+        args.why.strip(),
+        args.again,
+        thread=thread_check(BrokerClient(sock)),
+    )
 
 
 def add(sub: Any) -> None:

@@ -25,9 +25,13 @@ the bottom with no cycle.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 
+from . import logic_gate, logic_in_code, outcome_ledger
+from .matter_resolution import VERDICT_UNIQUE
 from .matter_resolution import resolve_matter as _resolve
+from .printed_dates import date_from_printed
 from .vendor_invoice import read_attachment
 from .vendor_invoice import stage_vendor_invoice as _stage
 
@@ -84,6 +88,11 @@ def resolve_invoice_matter(
     date_of_birth: str | None = None,
     case_number: str | None = None,
     date_of_loss_as_printed: str | None = None,
+    date_of_birth_as_printed: str | None = None,
+    sha256: str | None = None,
+    first_page: int | None = None,
+    last_page: int | None = None,
+    message_id: str | None = None,
 ) -> Any:
     """Which matter does this invoice belong to? Searches the firm's own record
     and answers with a CLOSED verdict. Classified ``read``: nothing is written.
@@ -129,16 +138,83 @@ def resolve_invoice_matter(
     There is no argument that asserts a matter and no way to obtain a token
     except a ``unique`` verdict, so a matter you are merely confident about
     cannot be staged on."""
-    return _resolve(
-        _client(),
-        client_name=client_name,
-        matter_number=matter_number,
-        claim_number=claim_number,
-        date_of_loss=date_of_loss,
-        date_of_birth=date_of_birth,
-        case_number=case_number,
-        date_of_loss_as_printed=date_of_loss_as_printed,
+    group = (sha256, first_page, last_page, message_id)
+    given = [v not in (None, "") for v in group]
+    if any(given) and not all(given):
+        reason = "sha256, first_page, last_page and message_id go together: pass all four or none"
+        if logic_gate.refusal(
+            logic_in_code.POST_RECORD_DERIVATION,
+            reason,
+            tool=outcome_ledger.RESOLVE,
+            sha256=str(sha256 or ""),
+            message_id=str(message_id or ""),
+            first_page=_whole(first_page),
+            last_page=_whole(last_page),
+        ):
+            return {"verdict": "refused", "reason": reason}
+    facts = _Facts(client_name, matter_number, claim_number, date_of_loss, case_number, date_of_loss_as_printed)
+    birth, unread_birth = _birth_date(date_of_birth, date_of_birth_as_printed)
+    if not all(given):
+        return _resolve_with(facts, birth, unread_birth)
+    row = outcome_ledger.Outcome(
+        outcome_ledger.RESOLVE,
+        str(sha256).strip().lower(),
+        str(message_id),
+        first_page=_whole(first_page),
+        last_page=_whole(last_page),
     )
+    with outcome_ledger.recording(row):
+        out = _resolve_with(facts, birth, unread_birth)
+        row.status = str(out.get("verdict") or "unknown")
+        row.detail = str(out.get("reason") or "")
+        if out.get("verdict") == VERDICT_UNIQUE:
+            row.matter_id, row.matter_number = str(out.get("matter_id") or ""), str(out.get("matter_number") or "")
+        row.candidates = [str(c["matter_number"]) for c in out.get("candidates") or [] if c.get("matter_number")]
+        return out
+
+
+@dataclass(frozen=True)
+class _Facts:
+    """The searchable facts one resolve was handed, unchanged."""
+
+    client_name: str | None
+    matter_number: str | None
+    claim_number: str | None
+    date_of_loss: str | None
+    case_number: str | None
+    date_of_loss_as_printed: str | None
+
+
+def _whole(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _birth_date(iso: str | None, printed: str | None) -> tuple[str | None, bool]:
+    """(the ISO date of birth to search on, whether a printed one went unread).
+    The ISO argument wins when both are given; a printed one is read in code."""
+    if iso not in (None, "") or printed in (None, ""):
+        return iso, False
+    read = date_from_printed(printed, two_digit_year=False)
+    return (read.isoformat(), False) if read else (None, True)
+
+
+def _resolve_with(facts: _Facts, date_of_birth: str | None, unread_birth: bool) -> dict[str, Any]:
+    out = _resolve(
+        _client(),
+        client_name=facts.client_name,
+        matter_number=facts.matter_number,
+        claim_number=facts.claim_number,
+        date_of_loss=facts.date_of_loss,
+        date_of_birth=date_of_birth,
+        case_number=facts.case_number,
+        date_of_loss_as_printed=facts.date_of_loss_as_printed,
+    )
+    if unread_birth and isinstance(out.get("ignored"), list) and "date_of_birth" not in out["ignored"]:
+        out["ignored"].append("date_of_birth")
+    return out
 
 
 def stage_vendor_invoice(
@@ -153,6 +229,7 @@ def stage_vendor_invoice(
     amount: str,
     first_page: int | None = None,
     last_page: int | None = None,
+    message_id: str = "",
 ) -> Any:
     """Stage ONE vendor invoice as an UNFINALIZED expense on a matter and file
     the invoice PDF beside it. Classified INTERNAL_WRITE: a write into the
@@ -203,22 +280,59 @@ def stage_vendor_invoice(
     was created), or ``refused`` (``reason`` says why; nothing was created).
     Every page of the matter's expenses is read before the write, and a
     ledger that cannot be read to the end refuses."""
-    return _stage(
-        _client(),
-        matter_id=matter_id,
-        matter_resolution=matter_resolution,
-        download_url=download_url,
-        file_name=file_name,
-        sha256=sha256,
-        vendor=vendor,
-        invoice_number=invoice_number,
-        invoice_date=invoice_date,
-        amount=amount,
-        verify_reference=_verify_reference(),
-        stamp=_stamp(),
-        first_page=first_page,
-        last_page=last_page,
+    row = outcome_ledger.Outcome(
+        outcome_ledger.STAGE,
+        (sha256 or "").strip().lower(),
+        message_id,
+        first_page=_whole(first_page),
+        last_page=_whole(last_page),
+        matter_id=(matter_id or "").strip(),
     )
+
+    def heard(number: str | None) -> None:
+        row.matter_number = number or ""
+
+    with outcome_ledger.recording(row):
+        out = _stage(
+            _client(),
+            matter_id=matter_id,
+            matter_resolution=matter_resolution,
+            download_url=download_url,
+            file_name=file_name,
+            sha256=sha256,
+            vendor=vendor,
+            invoice_number=invoice_number,
+            invoice_date=invoice_date,
+            amount=amount,
+            verify_reference=_verify_reference(),
+            stamp=_stamp(),
+            first_page=first_page,
+            last_page=last_page,
+            on_resolved=heard,
+            message_id=message_id,
+        )
+        row.status, row.detail = stage_outcome(out)
+        row.returned_id = str(out.get("expense_id") or "")
+        return out
+
+
+#: A stage that wrote the expense but did not read it back whole.
+_WRITTEN_UNCONFIRMED = frozenset({"readback_mismatch", "link_not_visible"})
+
+
+def stage_outcome(out: dict[str, Any]) -> tuple[str, str]:
+    """(status, detail) for the outcome row of one stage result: ``staged``
+    keyed the expense; ``figure_not_saved`` wrote it but it did not read back;
+    ``possible_duplicate`` and ``refused`` created nothing."""
+    status = str(out.get("status") or "")
+    if status == "staged":
+        return "staged", ""
+    if status in _WRITTEN_UNCONFIRMED:
+        return "figure_not_saved", str(out.get("readback_detail") or out.get("stage_status") or status)
+    if status in ("duplicate", "possible_duplicate"):
+        named = ", ".join(str(e.get("subject") or e.get("id")) for e in out.get("existing") or [])
+        return "possible_duplicate", f"an expense already on the matter matches it ({named})" if named else ""
+    return "refused", str(out.get("reason") or status)
 
 
 def register(server: Any) -> None:

@@ -54,7 +54,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode, stop_request
+from .. import budget as budget_mod, limits as limits_mod, proof_mode, request_additions, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
@@ -69,6 +69,7 @@ from . import (
     firm_rules,
     howell,
     job as job_mod,
+    repair_guard,
     review as review_mod,
     review_first,
 )
@@ -183,6 +184,8 @@ class DraftingRun(EvidenceLane, Placing):
         self.date_stamp = self._frozen_date(today())
         self.readback_pause = readback_pause
         self.notes: list[str] = []
+        #: What the note with the document says about the rules (firm_rules.py).
+        self.rule_notes: list[str] = []
         #: The firm's installed layout rules this job follows (firm_rules.py).
         self.rule_layout = rules_for_job(self)
 
@@ -211,6 +214,12 @@ class DraftingRun(EvidenceLane, Placing):
 
     def _done(self, stage: str, **info: Any) -> None:
         self._put(stage, {"status": "done", "at": time.strftime("%Y-%m-%dT%H:%M:%S"), **info})
+
+    def _close_request(self) -> None:
+        """From here the request is read, so it stops taking additions; what was
+        added before this is in the job file (``request_additions.py``)."""
+        request_additions.close_door(self.job.job_dir)
+        self.job = job_mod.load(self.job.job_dir)
 
     def _is_done(self, stage: str) -> bool:
         return self._state().get(stage, {}).get("status") == "done"
@@ -462,6 +471,7 @@ class DraftingRun(EvidenceLane, Placing):
             # The caption is read off the court's paper; his text is placed as
             # it is (placing.py).
             self._stage("caption", self._caption)
+            self._close_request()
             self._place_finish()
             return self._file()
         self._estimate()
@@ -489,10 +499,13 @@ class DraftingRun(EvidenceLane, Placing):
         # Measured, never refused: digest cites spanning a block of pages
         # rather than the fact's own page (summarize.cite_widths).
         self._done("summarize", **summarize.cite_widths(digest))
+        # What a repair is checked against, read while no repair is waiting (repair_guard).
+        self._stage("repair_index", lambda: repair_guard.prebuild(self.data, digest, self._corpus_text(), self.log))
         if self.cls in CHARGES_CLASSES:
             self._stage("howell", self._howell)
         if self.cls in COURT_CLASSES:
             self._stage("caption", self._caption)
+        self._close_request()
         self._finish(digest)
         return self._file()
 

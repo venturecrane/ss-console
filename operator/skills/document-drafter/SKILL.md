@@ -118,6 +118,18 @@ matter file again. Acknowledge it in those terms ("Received. The changes to the
 <document> for matter <number> are being made to the filed draft; I'll reply in this
 thread when they're filed.").
 
+**A follow-up on a draft still underway.** A reply in the thread of a draft not yet filed
+that adds to or changes what it asks for ("all appropriate topics, including those
+listed", "also cover the second defendant") must reach the draft, or the requester must
+hear that it did not. Submit it exactly as any request, with the SAME class. The tool sees
+the draft underway, carries the email's own words to it, and answers with `result` and
+`say`; or call `drafting_job_add_to_request` with the `job_id` when you already hold it.
+**Reply with `say`, as given, and nothing else about it.** Only `applied` means the words
+reached the draft: never write that the direction is noted, taken, passed along or has been
+given to anyone unless the result is `applied`. When the answer instead carries
+`next: "drafting_job_submit"`, the draft is already filed: treat the email as a change to a
+filed draft, below. A reply that asks for nothing ("thanks") submits nothing.
+
 ## Who may ask
 
 Reserved to the firm's **Named Administrators** (`scope.admins`). A draft spends the
@@ -168,11 +180,11 @@ fact.
 **First, the outcome decides who hears.** When the outcome is `failed` (and the job row
 agrees), the failure is SMD's, not the firm's: our own machinery stopped (a truncated
 draft, an audit that did not finish, a gate on our own output, a render fault), and the
-job is resumable on our side. Send the client NOTHING: no reply, no bind, no message to
-anyone at the firm. Call `drafting_job_status` with the `job_id` once (that call is what
-raises SMD's shortfall alert to SMD's team, naming the job and its reason) and end the
-turn. The client hears only on `delivered` or `held`; the broker refuses a reply for a
-failed job in any case.
+job is resumable on our side. **A failed, held or waiting drafting job gets the
+code-sent note, and you send nothing of your own.** The runner has the broker send the
+requester that one fixed note in code and pages SMD; the broker refuses any other
+words. Call `drafting_job_status` with the `job_id` once (that call is what raises SMD's
+shortfall alert to SMD's team, naming the job and its reason) and end the turn.
 
 1. **Bind the reply** with `reply_bind` and ONLY `job_id` = the id in the wake's first
    line. Never pass `internet_message_id` or `graph_message_id` in this mode: the
@@ -192,9 +204,14 @@ failed job in any case.
    **Where the file is is the job row's fact.** When `file_to_matter_id` equals
    `matter_id`, it is in the client matter. When it differs, it was filed in the firm's
    library (rehearsal) matter, NOT the client matter: say exactly that.
-3. **Reply once** with `create_draft` addressed to the bound sender only (the seat sends
-   it in her original thread after the reply checks, copying the firm's people who were on the request;
-   never add anyone yourself):
+3. **Reply once** with `create_draft` addressed to the bound sender only, its body
+   exactly the `fixed_wording` text the bind returned. **The seat sends this reply
+   itself, in those words from the job's record, whatever the draft says**: a draft's
+   own words are never sent, and when the turn ends with no reply sent the seat binds
+   and sends the words on its own; anything else alerts SMD with the job. So never
+   compose, shorten or redraft the reply, and never retry a refused draft; one
+   draft and stop. The rules below are what the broker's words already say, for
+   reading the job, not for writing:
    - **delivered**: the document is filed in the matter the job row names, each file
      named exactly as filed (the draft, and the attorney notes beside it when the job
      filed them), in the firm's house style and ready for attorney review. Then
@@ -218,6 +235,13 @@ failed job in any case.
      versions stay in each file's version history). The attorney notes list each change
      asked for and whether it was made; name any the notes say were not made, as they
      state the reason. Then the markers, as for any delivered document.
+   - **in a delivered or held reply, when the job reports `additions_not_covered`**:
+     what the requester wrote after the drafting had started. For each one, with his words,
+     on a delivered document: What you wrote later in this thread is not in this document,
+     because the drafting had started when it reached us: "{words}" Reply here if you want it
+     added, and we will make the change to the filed document.
+     On a held document: What you wrote later in this thread is not covered here, because
+     the drafting had started when it reached us: "{words}"
    - **held**: say plainly that the document is not drafted yet and what the FILE or
      the REQUEST needs for it to go forward, in the firm's own terms (a pleading or a
      served set the file does not hold, a deponent the request does not name). Never
@@ -284,7 +308,8 @@ no section numbers, no rule-format strings.
   number unavailable".
 - A reply about a drafting job names no dollar figure at all.
 
-If the reply is held by a content gate: do not retry the same content and do not drop
+A DELIVER reply is never redrafted: the seat sends the job's own words (step 3).
+In REQUEST mode, if the reply is held by a content gate: do not retry the same content and do not drop
 the work. Redraft once, keeping every fact (the matter, what was filed or why not, the
 marked items, the caption discrepancies) and stripping only the flagged content. If
 refused twice, send the minimal factual note.

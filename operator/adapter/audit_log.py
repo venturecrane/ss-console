@@ -348,6 +348,7 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DRAFTING_JOB_DELIVERED",
         "DRAFTING_JOB_FAILED",
         "DRAFTING_JOB_RESUME_REQUESTED",
+        "DRAFTING_JOB_REQUEST_ADDED",
         # The litigation status job (the firm's open-matter status workbook),
         # the drafting job's shape (operator/workspace_broker/litigation_verbs.py).
         "LITIGATION_JOB_SUBMITTED",

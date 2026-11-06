@@ -374,8 +374,8 @@ SOURCE = {"matter_id": "m", "file_id": "f", "name": "n.docx", "sha256": "0" * 64
 
 def test_the_config_pins_the_base_and_names_its_class_and_source():
     data = firm_data()
-    data["format"]["firm_bases"] = {"memo": {"path": "x.docx", "source": SOURCE}}
-    assert any("format.firm_bases.memo" in e for e in firm.validate(_valid(data)))
+    data["format"]["firm_bases"] = {"depo_outline": {"path": "x.docx", "source": SOURCE}}
+    assert any("format.firm_bases.depo_outline" in e for e in firm.validate(_valid(data)))
     data["format"]["firm_bases"] = {CLS: {"path": "x.docx", "source": SOURCE}}
     assert any("format.firm_bases.mediation_brief: x.docx is not pinned" in e for e in firm.validate(_valid(data)))
     data["format"]["firm_bases"] = {CLS: {"path": "x.docx", "source": {"name": "n"}}}
