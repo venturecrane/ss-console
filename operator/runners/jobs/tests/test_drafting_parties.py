@@ -342,3 +342,58 @@ def test_the_extra_word_shape_plans_six_units_and_three_for_the_scope_line(tmp_p
     assert [u.party for u in r.units()] == [N_DISTRICT] * 3 + [N_CITY] * 3
     r = _units_for(tmp_path / "b", pricing, N_SCOPED, _cap(*N_VALUES))
     assert [u.party for u in r.units()] == [N_DISTRICT] * 3
+
+
+# ---- the firm's signature and a quoted reply are not the request (rehearsal 5) --------------
+
+SIGNED = N_TWO + "\n\nThanks,\nAlpha Example\nExample Law, 123 Main St, Northfield, CA 95555, Tel 555-555-0100"
+
+
+def test_a_signature_carrying_ca_before_the_zip_plans_six_units_and_never_stops(tmp_path, pricing):
+    assert parties.resolve(SIGNED, N_VALUES).planned == [N_DISTRICT, N_CITY]
+    r = _units_for(tmp_path, pricing, SIGNED, _cap(*N_VALUES))
+    assert [u.party for u in r.units()] == [N_DISTRICT] * 3 + [N_CITY] * 3
+
+
+def test_a_near_miss_needs_two_shared_words_and_more_than_half():
+    # one distinctive word, shared once, and the caption spelling not printed: one word is never enough
+    one_word = [*N_VALUES, "OF THE SHERIFF, a public entity"]
+    assert parties.resolve(N_TWO + " The Sheriff wrote the report.", one_word).planned == [N_DISTRICT, N_CITY]
+    # two of an unserved defendant's five words: not more than half
+    five = [*N_VALUES, "SOUTHBROOK VALLEY WATER IRRIGATION AGENCY, a public entity"]
+    assert parties.resolve(N_TWO + " See the Southbrook Valley minutes.", five).planned == [N_DISTRICT, N_CITY]
+
+
+def test_a_pure_jurisdiction_is_never_chased_as_a_near_miss():
+    values = [f"{N_DISTRICT}, {N_CITY}, STATE OF CALIFORNIA, and DOES 1-100"]
+    req = N_TWO + " It was filed in California State court."
+    assert parties.resolve(req, values).planned == [N_DISTRICT, N_CITY]
+
+
+#: A defendant the request does not serve, whose words the firm's signature shares.
+UNSERVED = "SOUTHBROOK VALLEY WATER AGENCY, a public entity"
+
+
+def test_the_signature_words_in_the_body_are_a_near_miss():  # the control: the strip is what saves the job
+    with pytest.raises(parties.PartyUnknown, match="may mean"):
+        parties.resolve(N_TWO + " Southbrook Valley Water Counsel Group asked too.", [*N_VALUES, UNSERVED])
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "\n\nThanks,\nSouthbrook Valley Water Counsel Group",  # after a sign-off
+        "\n\nAlpha Example\nSouthbrook Valley Water Counsel Group",  # after a line of only a name
+        "\n\n> Southbrook Valley Water Agency wrote: please hold",  # a quoted reply
+        "\n\nSouthbrook Valley Water Counsel Plaza, Suite 4, 95555",  # a ZIP line
+        "\n\nSouthbrook Valley Water Counsel desk (555) 555-0100",  # a phone line
+    ],
+)
+def test_signature_and_quoted_lines_are_not_read_for_near_misses(tail):
+    assert parties.resolve(N_TWO + tail, [*N_VALUES, UNSERVED]).planned == [N_DISTRICT, N_CITY]
+
+
+def test_smds_hand_line_after_a_signature_is_still_read():
+    assert parties.resolve(SIGNED + "\n\nSMD: Northfield Joint Union High School District only.", N_VALUES).planned == [
+        N_DISTRICT
+    ]

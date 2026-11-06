@@ -258,16 +258,50 @@ def near_misses(text: str, cands: list[Candidate], named: list[Candidate]) -> No
         for p in re.split(r"[.;,\n]|\band\b", rest)
     ]
     for c in cands:
-        if c.pieces > 1 or any(_related(c, n) for n in named):
-            continue
-        mine = [w for w in _words_all(c.text) if w not in _DETERMINERS]
+        if c.pieces > 1 or _JURISDICTION.match(c.text) or any(_related(c, n) for n in named):
+            continue  # a pure jurisdiction ("State of CA") qualifies a party; it is never chased
+        mine = set(_words_all(c.text)) - _DETERMINERS
         for ph in phrases:
-            if mine and 2 * sum(w in ph for w in set(mine)) >= len(set(mine)):
+            shared = sum(w in ph for w in mine)
+            if shared >= 2 and 2 * shared > len(mine):
                 raise PartyUnknown(
                     f'the request may mean "{c.text}" but does not name it as the caption does (a phrase carries '
-                    + ", ".join(sorted(w for w in set(mine) if w in ph))
+                    + ", ".join(sorted(w for w in mine if w in ph))
                     + ")"
                 )
+
+
+#: A caption piece that is a jurisdiction and nothing more ("State of CA", "County of X").
+_JURISDICTION = re.compile(r"(?i)^(?:the\s+)?(?:state|county|city|commonwealth|territory)\s+of\s+[A-Za-z.' ]{1,40}$")
+#: A sign-off line: what follows is the signature, not the request.
+_SIGN_OFF = re.compile(r"(?i)^\s*(?:thanks|thank\s+you|regards|best(?:\s+regards)?|sincerely)\b[\s,.!]*$")
+#: A line of only a person's name (one to three capitalized words, no party word).
+_NAME_LINE = re.compile(r"^\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+){0,2}\s*$")
+_ZIP = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+_PHONE = re.compile(r"(?i)\b(?:tel|phone|fax|facsimile)\b|\(?\b\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b")
+#: Words that START a new block after a signature: SMD's hand line, a requester's added words.
+_BLOCK = re.compile(r"(?i)^\s*(?:SMD\b|Added by .+ in the same email thread:)")
+
+
+def request_body(text: str) -> str:
+    """The request without its signature or quoted reply: after a sign-off line
+    (or a line of only a name) nothing is read until SMD's hand line or the
+    requester's added words begin a new block; a quoted ("> ") line, and a line
+    carrying a ZIP code or a phone or fax number, is never read. The firm's
+    address ("..., CA 95555") is not a party."""
+    out, signed = [], False
+    for ln in (text or "").splitlines():
+        if _BLOCK.match(ln):
+            signed = False
+        elif _SIGN_OFF.match(ln) or (
+            # a name alone signs off only after the request said something ("Christa" opening it does not)
+            any(x.strip() for x in out) and _NAME_LINE.match(ln) and not any(w.lower() in _ENTITY for w in ln.split())
+        ):
+            signed = True
+        if signed or ln.lstrip().startswith(">") or _ZIP.search(ln) or _PHONE.search(ln):
+            continue
+        out.append(ln)
+    return "\n".join(out)
 
 
 def _words_all(text: str) -> list[str]:
@@ -380,6 +414,7 @@ class Resolved:
 
 def resolve(request: str, values: list[str]) -> Resolved:
     """Who the request serves (module docstring, the rules in order)."""
+    request = request_body(request)
     cands = candidates(values)
     found = named_in(request, cands)
     near_misses(request, cands, found)
