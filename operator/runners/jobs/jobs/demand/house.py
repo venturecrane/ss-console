@@ -276,9 +276,21 @@ def out_name(client: str) -> str:
     return f"Demand.{safe}.docx"
 
 
+def _underline_after_tab(p_el: Any) -> None:
+    """The caption of a filed action is underlined as well as bold, as the
+    firm's own letters to defense counsel write it; "RE:" is not."""
+    seen_tab = False
+    for r in p_el.findall(_qn("w:r")):
+        if r.find(_qn("w:tab")) is not None:
+            seen_tab = True
+        elif seen_tab and r.find(_qn("w:t")) is not None:
+            u = r.find(_qn("w:rPr")).makeelement(_qn("w:u"), {_qn("w:val"): "single"})
+            r.find(_qn("w:rPr")).append(u)
+
+
 def _re_block(w: HouseWriter, front: dict[str, str], litigation: bool) -> None:
     if litigation:  # a filed action: the caption, then its court and case number
-        w.para("re_first", f"**RE:\t{front['caption']}**")
+        _underline_after_tab(w.para("re_first", f"**RE:\t{front['caption']}**"))
         w.para("re_line", f"\t{front['court']}")
         w.para("re_line", f"\tDate of Loss: {front['dol']}")
         return
@@ -335,10 +347,14 @@ class _Body:
             if title.lower() == "exhibits":
                 if not self.signed:
                     self.sign()
-                self.w.para("exh_head", title)
+                self.w.para("exh_head", f"**{title}**")
                 self.in_exhibits = True
             else:
-                self.w.para("heading", title)
+                # Bold, as every section heading in the firm's own letters is.
+                # The reference's prototype carries the rest (centered, its
+                # caps and underline); a run's weight is set here, because
+                # ``_run`` writes each run's bold from the text's own marks.
+                self.w.para("heading", f"**{title}**")
         else:
             title = line[4:].strip()
             self.w.para("totalhead" if title.startswith("Total Medical Specials") else "subhead", f"**{title}**")
