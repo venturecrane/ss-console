@@ -45,7 +45,7 @@ from typing import Any, Callable
 from .broker_client import BrokerClient, BrokerError
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, wake_grace
+from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
 from . import resume as resume_mod, retention
 from .proof import watch as proof_watch
 
@@ -198,6 +198,10 @@ class Daemon:
             st = self._daemon_state(d.name)
             if not (d.is_dir() and st.get("state") not in TERMINAL and st.get("claimed")):
                 continue
+            # SMD stopped it: ``smd_stop.take_unclaimed`` records it; it never
+            # starts again (a lane's run_job records ``running`` before its child).
+            if smd_stop.read(d) is not None:
+                continue
             # A runner-held job (a refusal, an unexplained file, an unmatched
             # folder) is PARKED: it needs a person, and re-running it changes
             # nothing but the audit log (live-caught 2026-08-31: a cap-refused
@@ -212,6 +216,7 @@ class Daemon:
         """Move the oldest envelope into its job dir. A file the broker has no
         row for is quarantined. An idle lane runs a requested proof first; a
         job whose kind is not proven on this seat waits (``lane_proof.py``)."""
+        smd_stop.take_unclaimed(self)
         if quiesce.active(self) or proof_run.run_pending(self):
             return None
         for env_path in self._queued():
@@ -226,6 +231,12 @@ class Daemon:
                 q.mkdir(exist_ok=True, mode=0o700)
                 env_path.replace(q / env_path.name)
                 logger.error("quarantined %s: the broker has no ledger row for it", job_id)
+                continue
+            # Before the lane-proof gate, which may release a hold: an ended
+            # job's envelope never runs, whenever its lane is proven.
+            why = smd_stop.stale_envelope(self, job_id, row)
+            if why is not None:
+                smd_stop.set_aside(self, env_path, job_id, why)
                 continue
             if not lane_proof.admits(self, job_id, env_path, row):
                 continue
@@ -429,6 +440,7 @@ class Daemon:
             while slept < poll_seconds and not stop():
                 time.sleep(min(1.0, poll_seconds - slept))
                 slept += 1.0
+                smd_stop.take_unclaimed(self)
                 self.poll_requests()
 
 
