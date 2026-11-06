@@ -62,6 +62,7 @@ from __future__ import annotations
 import html as html_lib
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from . import delivered_matter, delivered_wording, hold_class
@@ -180,6 +181,88 @@ KIND_LANE = {
 HELD_CLASS_LANES = frozenset(WORDING)
 _FILE_MAX = 200
 
+# -- a job that stopped: held on our side, failed, or waiting to start ---------------
+#
+# 2026-11-06, the answer key: a drafting job that held on our side
+# (``review_held``, or a reason no firm wording covers), failed
+# (``audit_unrepaired``, ``no_verdict``, a runner killed past its retries) or
+# waited on its lane's proof run (``lane_unproven``) left the attorney with
+# whatever the model chose to write, or nothing. Each such state now has ONE
+# note here, rendered by code from the row like every other reply. It says what
+# is true now, in "we" voice: no follow-up promised, no time, no vendor name,
+# and no stage, reason, date or tool (CLAUDE.md "No fabricated client-facing
+# content", Pattern A; tests/test_drafting_stopped_notes pins it).
+#
+# HOW A LANE JOINS. One entry in ``STOPPED`` (its notes, with and without a
+# matter number) and one classifier in ``STOP_CLASS`` (which note a row is
+# owed, or None to render as before), plus its kind in
+# ``reply_text.CODE_SENT_KINDS``. The bind then lets the reply bind in that state
+# (``reply_binding._verify_job``), the send refuses any other words, and the
+# runner's ``job_notes.tell`` sends the note in code and pages SMD once.
+
+#: ``{lane: {class: (wording with {number}, wording without a matter number)}}``.
+STOPPED: dict[str, dict[str, tuple[str, str]]] = {
+    "drafting": {
+        "held": (
+            "The document for matter {number} is not ready yet. We are checking it before it is filed. "
+            "Nothing is needed from you.",
+            "The document you asked for is not ready yet. We are checking it before it is filed. "
+            "Nothing is needed from you.",
+        ),
+        "failed": (
+            "The document for matter {number} is not ready yet. The drafting stopped on our side, and we are "
+            "looking into it. Nothing is needed from you.",
+            "The document you asked for is not ready yet. The drafting stopped on our side, and we are "
+            "looking into it. Nothing is needed from you.",
+        ),
+        "waiting": (
+            "We have your request for the document for matter {number}. We are checking it before the "
+            "drafting starts. Nothing is needed from you.",
+            "We have your request for the document. We are checking it before the drafting starts. "
+            "Nothing is needed from you.",
+        ),
+    },
+}
+
+#: A drafting hold whose cause is in the request or the file: the requester is
+#: told what it is (``delivered_matter.drafting``), not that we are checking.
+DRAFTING_FIRM_HOLDS = frozenset({"request_incomplete", "no_readable_documents", "record_unreadable", "gate_refused"})
+#: The note a job waiting on its lane's proof run carries (``lane_proof.HOLD_PREFIX``).
+LANE_UNPROVEN = "lane_unproven"
+
+
+#: A failed drafting job whose draft exists and SMD is checking: the review held
+#: it with nothing filed (the lane records ``failed``, since its ``held`` is final).
+DRAFTING_CHECKING = ("review_held", "refused: review_held")
+
+
+def _drafting_stop(row: dict[str, Any]) -> str | None:
+    state = row.get("state")
+    reason = str(row.get("reason") or "").strip()
+    if state == "failed":
+        return "held" if reason.startswith(DRAFTING_CHECKING) else "failed"
+    if state == "submitted" and reason.startswith(LANE_UNPROVEN):
+        return "waiting"
+    if state == "held" and not row.get("revise_of") and reason.split(":", 1)[0].strip() not in DRAFTING_FIRM_HOLDS:
+        return "held"
+    return None
+
+
+#: ``{lane: classifier}``: the ``STOPPED`` class a row is owed, or None.
+STOP_CLASS: dict[str, Callable[[dict[str, Any]], str | None]] = {"drafting": _drafting_stop}
+
+
+def stopped_class(kind: str, row: dict[str, Any] | None) -> str | None:
+    """Which ``STOPPED`` note this job's row is owed, or None."""
+    classify = STOP_CLASS.get(KIND_LANE.get(kind) or "")
+    return classify(row) if classify is not None and row else None
+
+
+def _stopped_text(lane: str, cls: str, row: dict[str, Any]) -> str:
+    with_number, bare = STOPPED[lane][cls]
+    number = str(row.get("matter_number") or "").strip()
+    return with_number.format(number=number) if number else bare
+
 
 class FixedWordingRefused(BindingRefused):
     """A job's reply carried words other than its fixed wording. The message
@@ -297,6 +380,9 @@ def render(kind: str, row: dict[str, Any], reads: dict[str, Any] | None = None) 
     lane = KIND_LANE.get(kind)
     if lane is None:
         return []
+    stopped = stopped_class(kind, row)
+    if stopped is not None:
+        return [_stopped_text(lane, stopped, row)]
     if row.get("state") == "held" and lane in HELD_CLASS_LANES:
         return allowed(kind, row)
     text = _rendered(lane, row, reads or {})
@@ -315,6 +401,7 @@ def delivered_templates() -> list[tuple[str, str, str]]:
     ]
     out += [("litigation", f"label:{key}", label) for key, label in delivered_wording.DEADLINE_LABELS]
     out += [("medchron", f"kind:{key}", phrase) for key, phrase in delivered_matter.CURRENT_KINDS.items()]
+    out += [(lane, f"stopped:{c}", t) for lane, classes in STOPPED.items() for c, pair in classes.items() for t in pair]
     return out
 
 
@@ -380,6 +467,8 @@ __all__ = [
     "HELD_CLASS_LANES",
     "KIND_LANE",
     "STAFF_WHY",
+    "STOPPED",
+    "STOP_CLASS",
     "WORDING",
     "FixedWordingRefused",
     "HeldWordingRefused",
@@ -388,5 +477,6 @@ __all__ = [
     "delivered_templates",
     "refusal",
     "render",
+    "stopped_class",
     "templates",
 ]

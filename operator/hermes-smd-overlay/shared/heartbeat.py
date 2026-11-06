@@ -805,6 +805,7 @@ DELIVERY_PROOF_CODES = frozenset(
         "limit_held",
         "identity_held",
         "repair_unconverged",
+        "job_stopped",
     }
 )
 

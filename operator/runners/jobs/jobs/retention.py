@@ -39,6 +39,7 @@ the artifacts are gone and the honest answer is the one the ledger gives.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from typing import Any
 
@@ -57,6 +58,46 @@ def _window_hours(d: Any, state: str, terminal: frozenset[str]) -> float | None:
     if state in PARKED:
         return float(getattr(d, "held_wipe_hours", DEFAULT_HELD_WIPE_HOURS))
     return None
+
+
+#: The folders a lane sets refused envelopes aside in, inside its queue: an
+#: envelope with no ledger row (``quarantine``) and one whose job had ended
+#: (``smd_stop.ENDED_DIR``). Both hold a firm's request text.
+SET_ASIDE_DIRS = ("quarantine", "ended")
+#: The lane-hold markers set aside with them, under ``lane-holds/``.
+HOLDS_SET_ASIDE = "lane-holds/ended"
+
+
+def mark_set_aside(path: Any) -> None:
+    """Stamp a just-set-aside file so its window starts now, not when the
+    broker first wrote it (a rename keeps the old mtime)."""
+    try:
+        os.utime(path)
+    except OSError as exc:
+        logger.warning("could not stamp %s: %s", path, exc)
+
+
+def prune_set_aside(d: Any) -> list[str]:
+    """Delete set-aside envelopes and holds older than the terminal window
+    (``d.wipe_hours``, the 72 h a finished job's workdir is kept). They carry a
+    firm's request text and are never read again by any lane: gone means gone.
+    Never raises; returns the names removed."""
+    removed: list[str] = []
+    cutoff = d.clock() - float(d.wipe_hours) * 3600
+    folders = [(d.queue / name, "") for name in SET_ASIDE_DIRS]
+    folders.append((d.run_dir / HOLDS_SET_ASIDE, f"{d.LANE}-"))
+    for folder, prefix in folders:
+        try:
+            entries = list(folder.glob(f"{prefix}*.json")) if folder.is_dir() else []
+            for p in entries:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink(missing_ok=True)
+                    removed.append(p.name)
+        except OSError as exc:
+            logger.warning("could not prune %s: %s", folder, exc)
+    if removed:
+        logger.info("%s lane: pruned %d set-aside file(s) past %.0f h", d.LANE, len(removed), float(d.wipe_hours))
+    return removed
 
 
 def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:

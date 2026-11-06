@@ -57,6 +57,9 @@ CODES = frozenset(
         # A served discovery set's repairs ran out and it filed with form
         # findings in the attorney notes (drafting/repair_budget.py), 2026-11-05.
         "repair_unconverged",
+        # 2026-11-06: a code-sent job held on our side, failed or waited on its
+        # lane's proof; the requester was sent its note in code (jobs/job_notes.py).
+        "job_stopped",
     }
 )
 

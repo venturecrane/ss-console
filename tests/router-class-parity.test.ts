@@ -267,7 +267,12 @@ describe('matter-inbox-router: the document drafting class', () => {
     }
     expect(skill).toContain('**This skill never drafts in the turn.**')
     expect(skill).toContain("Run the document-drafter skill's DELIVER mode for drafting job <id>.")
-    expect(skill).toContain('Send the client NOTHING')
+    // 2026-11-06: a stopped job's note is code-sent (fixed_wording.STOPPED); the
+    // model writes nothing of its own.
+    expect(skill).toContain(
+      '**A failed, held or waiting drafting job gets the code-sent note, and you send nothing of your own.**'
+    )
+    expect(skill).not.toContain('Send the client NOTHING')
     expect(skill).toContain('`reply_bind` and ONLY `job_id`')
     expect(skill).toContain('**If the bind is refused, send NOTHING to anyone.**')
     expect(skill).toContain('`{{ATTORNEY}}`')
