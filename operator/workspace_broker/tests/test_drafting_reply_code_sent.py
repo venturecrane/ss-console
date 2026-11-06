@@ -74,13 +74,14 @@ def test_other_lanes_on_an_observe_seat_are_unchanged(tmp_path: Path) -> None:
 
 def test_a_refused_bind_names_its_code(tmp_path: Path) -> None:
     """The seat acts on the code, never on the sentence: already answered is
-    done, a failed job is SMD's already, anything else is an alert."""
+    done, anything else is an alert. A failed drafting job is no longer
+    refused (2026-11-06): it binds to its one fixed note."""
     (tmp_path / "f").mkdir()
     failed = _drafting_job(tmp_path / "f", ["failed"])
     out = _call(
         _broker(tmp_path / "f", FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": failed}
     )
-    assert out["bound"] is False and out["code"] == "job_failed"
+    assert out["bound"] is True and "The drafting stopped on our side" in out["fixed_wording"][0]
 
     (tmp_path / "d").mkdir()
     job = _drafting_job(tmp_path / "d", ["running", "delivered"])

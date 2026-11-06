@@ -30,6 +30,13 @@ from tests.test_matter_file_reply import (  # noqa: F401 - the fixtures and help
 def _dirs(tmp_path, monkeypatch):
     monkeypatch.setenv(rev.REVIEW_DIR_ENV, str(tmp_path / "review"))
     monkeypatch.setenv(rev.DECISIONS_DIR_ENV, str(tmp_path / "decisions"))
+    # An approve checks the reply's thread for a finished job with no reply
+    # recorded (shared.review_job); a seat with no job ledger has none.
+    import sqlite3
+
+    sqlite3.connect(tmp_path / "audit.db").close()
+    monkeypatch.setenv("SMD_AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+    monkeypatch.setenv("SMD_REQUEST_INDEX_DB_PATH", str(tmp_path / "requests.db"))
 
 
 def _row(**over):
