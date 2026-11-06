@@ -12,6 +12,14 @@ on every set), its own rendered Word file and format check. A one-document job
 is the unit ``""``: the root data directory and the stage names it always had,
 so a job in flight across a deploy resumes unchanged.
 
+**Parties.** A request that serves its sets on more than one party
+(``parties.plan``: "RFA, RFPD and SROG to the City and the School District")
+plans one unit per (party, set), party by party, each with the party in its
+label, its file name, its identification block, its title and its definition
+of YOU (``parties.bind``). Every unit reads the same digest: the record is
+paid for once. A request served on one party plans exactly as before, and a
+plan already frozen in state.json (no ``party``) resumes as it was.
+
 **The finish, in order.** Every unit rendered and format-checked; then the
 attorney notes written from the FINAL documents (``review.final_notes``); then
 the independent pre-delivery review over the documents and the notes as they
@@ -31,7 +39,7 @@ from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
-from . import grounding, notes as notes_mod, settle as settle_mod, wording
+from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod, wording
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
@@ -47,8 +55,12 @@ WALL_GATE = "[1]"
 class Unit:
     """One document the job drafts."""
 
-    def __init__(self, key: str, label: str, variant: str | None, instruction: str | None, data: Path) -> None:
+    def __init__(
+        self, key: str, label: str, variant: str | None, instruction: str | None, data: Path, party: str | None = None
+    ) -> None:
         self.key, self.label, self.variant, self.instruction, self.data = key, label, variant, instruction, data
+        #: The party this set is served on, when the request serves several (``parties.py``).
+        self.party = party
 
     def stage(self, name: str) -> str:
         return f"{self.key}:{name}" if self.key else name
@@ -91,20 +103,26 @@ class Finish:
         plan = self._state().get("units")
         if plan is None:
             found = sets.variants(self.job.request_text) if self.cls == "discovery_set" else []
-            plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
-            if len(plan) < 2:
-                plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
+            plan = parties_mod.plan_units(found, self._served_on() if found else [])
             self._put("units", plan)
         out = []
-        labels = [p["label"] for p in plan]
-        for p in plan:
+        titles = [parties_mod.unit_title(p) for p in plan]
+        for p, title in zip(plan, titles):
             d = self.data / p["key"] if p["key"] else self.data
             d.mkdir(parents=True, exist_ok=True)
-            others = [x for x in labels if x and x != p["label"]]
-            instr = sets.Unit(p["variant"], p["label"]).instruction(others) if p["key"] else None
-            out.append(Unit(p["key"], p["label"] or self._title, p["variant"], instr, d))
+            others = [x for x in titles if x and x != title]
+            instr = sets.Unit(p["variant"], p["label"], p.get("party")).instruction(others) if p["key"] else None
+            out.append(Unit(p["key"], title or self._title, p["variant"], instr, d, p.get("party")))
         self._units = out
         return out
+
+    def _served_on(self) -> list[str]:
+        """``parties.served_on``; a name that is none of the matter's parties
+        stops the job for SMD before anything is drafted."""
+        try:
+            return parties_mod.served_on(self.data, self.job.job_dir, self.job.request_text)
+        except parties_mod.PartyUnknown as exc:
+            raise DraftingFailed(f"party_unknown: {exc}") from None
 
     def paper(self) -> str:
         """``pleading`` when the request asks for it and the firm authored its
@@ -152,21 +170,21 @@ class Finish:
 
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
-        for o in self.units():
-            if o.key and o.key != u.key and self._is_done(o.stage("gate")):
-                return o
-        return None
+        done = [o for o in self.units() if o.key and o.key != u.key and self._is_done(o.stage("gate"))]
+        same = [o for o in done if o.party == u.party]
+        return (same or done or [None])[0]
 
     def _shared(self, u: Unit) -> list[str]:
         c = self._canon(u) if u.key else None
         if c is None:
             return []
         doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
+        front, served = parties_mod.shared_front(sets.front_matter(doc), c.party, u.party)
         return [
             f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (it binds how SHARED words read: print its "
             "attorney block and signature block exactly, and define every term both sets define in the same words. "
             "It is not this set's whole list of terms: this set's own DEFINITIONS define every further term its "
-            "requests use):\n\n" + sets.front_matter(doc)
+            "requests use)." + served + "\n\n" + front
         ]
 
     def _drafter(self, u: Unit) -> compose.Drafter:
@@ -247,9 +265,10 @@ class Finish:
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
-            doc, more = sets.align(doc, canon, f"{c.label} set")
+            doc, more = sets.align(doc, canon, f"{c.label} set", keep=parties_mod.keep_terms(c.party, u.party))
             notes += more
-        return doc, notes
+        doc, bound = parties_mod.bound(doc, u.party, u.label, self.data, self.job.job_dir, self.job.request_text)
+        return doc, notes + bound
 
     def _digest_text(self) -> str:
         p = self.data / "digest.md"
@@ -316,7 +335,8 @@ class Finish:
     # ---- render once per unit -------------------------------------------------------
     def _names(self, u: Unit | None = None) -> dict[str, str]:
         base = f"{self._title} - {self.job.matter_number} - {self.date_stamp}"
-        draft = f"{self._title} - {u.label} - {self.job.matter_number} - {self.date_stamp}" if u and u.key else base
+        label = re.sub(r'[\\/:*?"<>|]', "", u.label) if u else ""
+        draft = f"{self._title} - {label} - {self.job.matter_number} - {self.date_stamp}" if u and u.key else base
         return {
             "folder": f"{self._title} {self.date_stamp} (Operator {self.job.job_id[-6:]})",
             "draft": f"{draft}.docx",

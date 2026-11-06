@@ -56,6 +56,8 @@ LABELS = {
 class Unit:
     key: str
     label: str
+    #: The party this set is served on, when the request serves several (parties.py).
+    party: str | None = None
 
     def instruction(self, others: list[str]) -> str:
         also = (
@@ -64,9 +66,17 @@ class Unit:
             if others
             else ""
         )
+        served = (
+            f" This set is served on {self.party} alone: its RESPONDING PARTY is {self.party}, its title is "
+            f'directed to {self.party}, and "YOU" and "YOUR" mean {self.party} and no other party.'
+            if self.party
+            else ""
+        )
+        what = f"{self.label} set to {self.party}" if self.party else f"{self.label} set"
         return (
-            f"THIS DOCUMENT (set by the job, from the request's own words): draft ONLY the {self.label} set, as one "
+            f"THIS DOCUMENT (set by the job, from the request's own words): draft ONLY the {what}, as one "
             f"complete paper with its own caption, identification block, Definitions, requests and signature block."
+            + served
             + also
         )
 
@@ -403,10 +413,11 @@ def authored_head(doc: str, authored: list[str]) -> tuple[str, list[str]]:
     return doc[:start] + head + doc[at:], ["the attorney block was printed as the firm authors it"]
 
 
-def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
+def align(doc: str, canon: str, canon_label: str, keep: frozenset[str] = frozenset()) -> tuple[str, list[str]]:
     """``doc`` with the attorney block, the signature block and every shared
-    definition worded as ``canon`` words them. Returns the document and one
-    line per change."""
+    definition worded as ``canon`` words them, except the terms in ``keep``
+    (a set served on another party defines YOU as that party). Returns the
+    document and one line per change."""
     notes: list[str] = []
     start, at, lines = head_lines(doc)
     cstart, cat, clines = head_lines(canon)
@@ -414,7 +425,7 @@ def align(doc: str, canon: str, canon_label: str) -> tuple[str, list[str]]:
         doc = doc[:start] + canon[cstart:cat] + doc[at:]
         notes.append(f"attorney block worded as in the {canon_label}")
     mine, theirs = definition_texts(doc), definition_texts(canon)
-    for term in sorted(set(mine) & set(theirs), key=lambda t: -mine[t][0]):
+    for term in sorted((set(mine) & set(theirs)) - keep, key=lambda t: -mine[t][0]):
         a, b, text = mine[term]
         if _SET_NOUN.search(theirs[term][2]) or _SET_NOUN.search(text):
             continue  # worded for its own kind of set; the review reads it
