@@ -8,20 +8,30 @@ import json
 import zipfile
 from pathlib import Path
 
-from operator_connector_sdk.library import STYLES, Entry, Ledger, MemoryLibrary, accept, dump_ledger
+from operator_connector_sdk.library import STYLES, Entry, Ledger, MemoryLibrary, accept, copies_dir, dump_ledger
 
 WHEN = "2026-11-01T00:00:00Z"
+#: Each entry's bytes by sha256, so ``install`` can put the seat's copy beside the ledger.
+_BYTES: dict[str, bytes] = {}
 STATES = ("absent", "manifest_only", "empty")
 
 
 def entry(lib: MemoryLibrary, file_id: str, kind: str, data: bytes, *, attorney=None, contract=STYLES) -> Entry:
     version = lib.add(file_id, f"Template - {kind}.docx", kind, data, attorney=attorney)
+    _BYTES[hashlib.sha256(data).hexdigest()] = data
     return Entry(
         kind, attorney, file_id, version, hashlib.sha256(data).hexdigest(), contract, "admin@firm.example", WHEN
     )
 
 
-def install(spec: Path, *entries: Entry) -> None:
+def install(spec: Path, *entries: Entry, copies: bool = True) -> None:
+    """The ledger, and (unless ``copies`` is False) the seat's copy of each
+    entry's file, where root installs them (``copies.copies_dir``)."""
+    if copies:
+        for e in entries:
+            copy = copies_dir(spec) / f"{e.sha256}.docx"
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            copy.write_bytes(_BYTES[e.sha256])
     ledger = Ledger()
     for e in entries:
         ledger = accept(ledger, e)
@@ -49,3 +59,8 @@ def members(data: bytes) -> dict[str, bytes]:
 
 def record(data_dir: Path) -> dict:
     return json.loads((data_dir / "library-resolution.json").read_text(encoding="utf-8"))
+
+
+def spoil_copy(spec: Path, data: bytes, other: bytes) -> None:
+    """The seat's copy of ``data`` holds ``other`` instead."""
+    (copies_dir(spec) / f"{hashlib.sha256(data).hexdigest()}.docx").write_bytes(other)

@@ -29,7 +29,10 @@ from .ledger import (
     accept,
     dump_ledger,
     parse_ledger,
+    parse_slot,
     read_installed,
+    slot_name,
+    slot_problems,
     validate_ledger,
 )
 from .memory import MemoryLibrary
@@ -102,8 +105,11 @@ __all__ = [
     "copy_rel",
     "dump_ledger",
     "parse_ledger",
+    "parse_slot",
     "read_copy",
     "read_installed",
     "resolve",
+    "slot_name",
+    "slot_problems",
     "validate_ledger",
 ]

@@ -21,7 +21,11 @@ from operator_connector_sdk.library import (
     accept,
     parse_ledger,
     dump_ledger,
+    parse_slot,
     resolve,
+    slot_name,
+    slot_problems,
+    validate_ledger,
 )
 from operator_connector_sdk.library.caller import (
     ACCEPTED,
@@ -36,7 +40,6 @@ from operator_connector_sdk.library.caller import (
     check_used,
     needs_matter_attorney,
     record_problems,
-    slot_kind,
     write_record,
 )
 
@@ -153,9 +156,34 @@ def test_the_attorney_key_folds_case_and_spacing():
     assert attorney_key(None) == ""
 
 
+REGISTRY = {"demand_letter": ("pre_suit", "litigation"), "memo": ()}
+
+
 def test_a_variant_has_its_own_slot():
-    assert slot_kind("demand_letter", "pre_suit") == "demand_letter.pre_suit"
-    assert slot_kind("memo") == "memo"
+    assert slot_name("demand_letter", "pre_suit") == "demand_letter.pre_suit"
+    assert slot_name("memo") == "memo"
+    assert parse_slot("demand_letter.litigation") == ("demand_letter", "litigation")
+    assert parse_slot("memo") == ("memo", None)
+    with pytest.raises(ValueError):
+        parse_slot("Demand Letter")
+    with pytest.raises(ValueError):
+        slot_name("memo", "a.b")
+
+
+def test_a_slot_is_checked_against_the_registrys_variants():
+    assert slot_problems("demand_letter.pre_suit", REGISTRY) == []
+    assert slot_problems("memo", REGISTRY) == []
+    assert slot_problems("demand_letter.settlement", REGISTRY) != []  # a variant the registry does not list
+    assert slot_problems("demand_letter", REGISTRY) != []  # a kind with variants names one
+    assert slot_problems("memo.pre_suit", REGISTRY) != []
+    assert slot_problems("pleading", REGISTRY) != []
+
+
+def test_the_ledger_refuses_a_kind_that_is_not_a_slot_name():
+    lib = MemoryLibrary()
+    raw = json.loads(dump_ledger(accept(Ledger(), _entry(lib))))
+    raw["entries"][0]["kind"] = "Mediation Brief"
+    assert any("not a slot kind" in p for p in validate_ledger(raw))
 
 
 def test_a_prototypes_file_is_a_contract_the_ledger_holds():

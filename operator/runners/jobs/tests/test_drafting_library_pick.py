@@ -218,12 +218,35 @@ def _stopped(r: DraftingRun, v, status: str) -> None:
     assert not (r.data / "rendered.json").exists()
 
 
-def test_an_accepted_file_whose_bytes_changed_stops_the_job(spec, tmp_path, monkeypatch, opened):
-    lib = _accept(monkeypatch, spec, _styles_file("A"))
-    lib.tamper("acc-1", "acc-1-v1", _styles_file("B"))
+def test_a_seat_copy_whose_bytes_changed_stops_the_job(spec, tmp_path, monkeypatch, opened):
+    accepted_file = _styles_file("A")
+    _accept(monkeypatch, spec, accepted_file)
+    lt.spoil_copy(spec, accepted_file, _styles_file("B"))
     r, v, _ = _run(tmp_path / "job")
     _stopped(r, v, "integrity_failure")
     assert opened == []
+
+
+def test_an_accepted_file_the_seat_holds_no_copy_of_stops_the_job(spec, tmp_path, monkeypatch, opened):
+    lib = MemoryLibrary()
+    lt.install(spec, lt.entry(lib, "acc-1", CLS, _styles_file("A")), copies=False)
+    monkeypatch.setattr(library_pick, "open_store", lambda _seat: lib)
+    r, v, _ = _run(tmp_path / "job")
+    _stopped(r, v, "copy_missing")
+    assert opened == []
+
+
+def test_the_accepted_bytes_come_from_the_seat_copy_after_the_firm_saves_again(spec, tmp_path, monkeypatch, opened):
+    accepted_file = _styles_file("ACCEPTED EXAMPLE LAW")
+    lib = _accept(monkeypatch, spec, accepted_file)
+    lib.save("acc-1", _styles_file("SAVED AGAIN"))
+    r, v, log = _run(tmp_path / "job")
+    assert v.outcome == "delivered", (v.stage, v.reason, log[-5:])
+    assert opened == [accepted_file]
+    assert lt.record(r.data)["resolution"]["newer_version"] == {
+        "accepted_version": "acc-1-v1",
+        "newest_version": "acc-1-v2",
+    }
 
 
 def test_a_seat_that_cannot_read_the_library_stops_the_job_never_the_starter(spec, tmp_path, opened):
@@ -275,3 +298,42 @@ def test_the_answer_is_asked_once_per_job_run(spec, tmp_path, monkeypatch):
     first = library_pick.pick_base(run)
     lib.save("acc-1", _styles_file("B"))  # saved again between two units
     assert library_pick.pick_base(run) is first
+
+
+# ---- a known disagreement, pinned until the piece that settles it --------------------------
+
+
+def test_marker_for_the_layout_rules_piece_firm_rules_still_decides_on_base_from_the_pinned_file(
+    spec, tmp_path, monkeypatch, tmpl
+):
+    """NOT A WISH: A MARKER. The layout-rule code (``firm_rules.start``) decides
+    whether a firm's layout rule is laid onto a firm base from the PINNED base
+    (``firm.firm_base``), not from the accepted library file this job is made
+    in. With a marked file accepted and no pin, the document is made in the
+    accepted firm base while the rules are computed as for SMD's starter. The
+    design's piece 5 (layout rules applied into the library file) settles it;
+    this test FAILS the day firm_rules reads the accepted file, and that PR
+    deletes or inverts it."""
+    seen: list[bool] = []
+    real = firm_rules.for_class
+
+    def spy(rules, cls, on_base, **kw):
+        seen.append(on_base)
+        return real(rules, cls, on_base, **kw)
+
+    monkeypatch.setattr(firm_rules, "for_class", spy)
+    _accept(monkeypatch, spec, tmpl.bytes, contract=MARKED)
+    root = tmp_path / "job"
+    root.mkdir()
+    (root / "pricing.json").write_text(json.dumps(PRICING), encoding="utf-8")
+    r = DraftingRun(
+        make_job(root / "job"),
+        inputs_dir=str(make_inputs(root / "inputs")),
+        pricing=str(root / "pricing.json"),
+        seat_factory=lambda: seat_with(standard_docs()),
+        client=ScriptedClient(),
+        log=lambda _m: None,
+        readback_pause=0.0,
+    )
+    assert library_pick.pick_base(r).held is not None  # the document is made in the accepted firm base
+    assert seen == [False]  # and the rules were decided as though it were not

@@ -15,13 +15,17 @@ format check are unchanged:
   (``ledger.PROTOTYPES``), the only shape the writer reads; any other contract
   stops the job. While a pinned reference also exists the accepted file wins,
   and the record names the pin it replaced.
-* any other answer: the job stops before anything is spent, failed for SMD
+* any other answer (``cannot_look``, ``integrity_failure``,
+  ``version_unavailable``, ``copy_missing``, ``refused``): the job stops before anything is spent, failed for SMD
   (``DemandFailed``: resumable, no client message, SMD alerted), with the
   resolver's reason. Never the pinned file in its place.
 
-A variant has its own slot in the ledger (``caller.slot_kind``):
+A variant has its own slot in the ledger (``ledger.slot_name``):
 ``demand_letter.pre_suit``, ``demand_letter.litigation``, because the two are
 written in different reference files.
+
+The accepted bytes come from the seat's own kept copy (``copies_dir``); the
+library is asked only whether a newer version exists.
 
 The record is ``library-resolution.json`` in the job's data folder.
 """
@@ -39,8 +43,10 @@ from operator_connector_sdk.library import (
     Attorney,
     LibraryStore,
     Resolution,
+    copies_dir,
     read_installed,
     resolve,
+    slot_name,
 )
 from operator_connector_sdk.library.caller import (
     ACCEPTED,
@@ -51,7 +57,6 @@ from operator_connector_sdk.library.caller import (
     LazyStore,
     attorney_key,
     build_record,
-    slot_kind,
     write_record,
 )
 from operator_connector_sdk.library.resolver import replace_status
@@ -129,12 +134,14 @@ def pick_reference(run: Any) -> Path | None:
     pinned_used = BaseUsed.of(PINNED, pinned.read_bytes(), name=pinned.name, contract=PROTOTYPES)
     matter, known = _attorneys(firm, run._json("facts.json").get("responsible_attorney"))
     store = LazyStore(lambda: open_store(run.seat))
+    spec = spec_dir()
     res = resolve(
         store,
-        read_installed(spec_dir()),
-        slot_kind(KIND, firm.variant_name),
+        read_installed(spec),
+        slot_name(KIND, firm.variant_name),
         matter_attorney=matter,
         known_attorneys=known,
+        copies_dir=copies_dir(spec),
     )
     if res.status == NONE_ACCEPTED:
         write_record(run.data, build_record(DEMAND_JOB, res, pinned_used))

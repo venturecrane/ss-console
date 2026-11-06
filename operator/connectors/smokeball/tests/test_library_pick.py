@@ -25,7 +25,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from operator_connector_sdk.library import MARKED, STYLES, Entry, Ledger, MemoryLibrary, accept, dump_ledger
+from operator_connector_sdk.library import MARKED, STYLES, Entry, Ledger, MemoryLibrary, accept, copies_dir, dump_ledger
 from operator_connector_sdk.library.caller import record_problems
 from smokeball_connector import docx_format, library, library_pick, server
 from smokeball_connector.docx_format import FormatReport, load_firm_identity, render_document
@@ -42,17 +42,26 @@ def _entry(lib: MemoryLibrary, file_id: str, data: bytes, *, attorney=None, cont
     version = lib.add(
         file_id, f"Template - Memo{' - ' + attorney if attorney else ''}.docx", KIND, data, attorney=attorney
     )
+    _BYTES[hashlib.sha256(data).hexdigest()] = data
     return Entry(
         KIND, attorney, file_id, version, hashlib.sha256(data).hexdigest(), contract, "admin@firm.example", WHEN
     )
 
 
-def _install(spec: Path, *entries: Entry) -> None:
+_BYTES: dict[str, bytes] = {}
+
+
+def _install(spec: Path, *entries: Entry, copies: bool = True) -> None:
+    """The ledger, and unless ``copies`` is False the seat's copy of each file."""
+    for e in entries if copies else ():
+        copy = copies_dir(spec) / f"{e.sha256}.docx"
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        copy.write_bytes(_BYTES[e.sha256])
     ledger = Ledger()
     for e in entries:
         ledger = accept(ledger, e)
     blob = dump_ledger(ledger)
-    (spec / "library").mkdir(parents=True)
+    (spec / "library").mkdir(parents=True, exist_ok=True)
     (spec / "library" / "accepted.json").write_bytes(blob)
     manifest = {"library_ledger": {"library/accepted.json": {"sha256": hashlib.sha256(blob).hexdigest()}}}
     (spec / "manifest.json").write_text(json.dumps(manifest))
@@ -245,12 +254,33 @@ def _refused(out: dict, captured: list[httpx.Request], status: str) -> None:
     assert rec["base"]["source"] == "not_started"
 
 
-def test_an_accepted_file_whose_bytes_changed_refuses(spec, monkeypatch, opened):
-    lib = _accepted_library(monkeypatch, spec, make_firm_template())
-    lib.tamper("acc-1", "acc-1-v1", make_firm_template(header_text="SOMETHING ELSE"))
+def test_a_seat_copy_whose_bytes_changed_refuses(spec, monkeypatch, opened):
+    accepted = make_firm_template()
+    _accepted_library(monkeypatch, spec, accepted)
+    (copies_dir(spec) / f"{hashlib.sha256(accepted).hexdigest()}.docx").write_bytes(make_firm_template(header_text="X"))
     captured: list[httpx.Request] = []
     _refused(_draft(monkeypatch, captured), captured, "integrity_failure")
     assert opened == []
+
+
+def test_an_accepted_file_the_seat_holds_no_copy_of_refuses(spec, monkeypatch, opened):
+    lib = MemoryLibrary()
+    _install(spec, _entry(lib, "acc-1", make_firm_template()), copies=False)
+    monkeypatch.setattr(library_pick, "open_store", lambda *_a: lib)
+    captured: list[httpx.Request] = []
+    out = _draft(monkeypatch, captured)
+    _refused(out, captured, "copy_missing")
+    assert "no copy" in out["refusals"][0]
+    assert opened == []
+
+
+def test_the_accepted_bytes_come_from_the_seat_copy_after_the_firm_saves_again(spec, monkeypatch, opened):
+    accepted = make_firm_template(header_text="ACCEPTED LAW")
+    lib = _accepted_library(monkeypatch, spec, accepted)
+    lib.save("acc-1", make_firm_template(header_text="SAVED AGAIN"))
+    out = _draft(monkeypatch, [])
+    assert out["refusals"] == [] and opened == [accepted]
+    assert out["libraryResolution"]["resolution"]["newer_version"]["newest_version"] == "acc-1-v2"
 
 
 def test_a_ledger_the_seat_cannot_trust_refuses(spec, monkeypatch, opened):

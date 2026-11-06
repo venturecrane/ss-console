@@ -15,10 +15,14 @@ resolver first, with the class and the matter's responsible attorney:
   (``base_lay.lay_out``'s ``held``), for a class that has a plan for one; on a
   class with no plan, or on the placing path (which lays no firm base), the job
   stops.
-* ``resolved``, any other contract, and every other answer: the job stops
+* ``resolved``, any other contract, and every other answer (``cannot_look``,
+  ``integrity_failure``, ``version_unavailable``, ``copy_missing``, ``refused``): the job stops
   (``firm_base_unfit``, the code the lane already stops with for a firm file it
   cannot use: failed, resumable, no client message, SMD alerted), with the
   resolver's reason. Never the pinned file or the starter in its place.
+
+The accepted bytes come from the seat's own kept copy (``copies_dir``); the
+library is asked only whether a newer version exists.
 
 While both an accepted file and a pinned base exist for the class, the
 accepted file wins and the record names the pin it replaced. The record is
@@ -42,6 +46,7 @@ from operator_connector_sdk.library import (
     Attorney,
     LibraryStore,
     Resolution,
+    copies_dir,
     read_installed,
     resolve,
 )
@@ -143,7 +148,10 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
         return kept
     held, pinned = _pinned(run)
     store = LazyStore(lambda: open_store(run.seat))
-    res = resolve(store, read_installed(_spec_dir()), run.cls, matter_attorney=_matter_attorney(run))
+    spec = _spec_dir()
+    res = resolve(
+        store, read_installed(spec), run.cls, matter_attorney=_matter_attorney(run), copies_dir=copies_dir(spec)
+    )
     if res.status == NONE_ACCEPTED:
         today = held if marked_ok else None
         used = pinned if today is not None and pinned is not None else BaseUsed(STARTER)

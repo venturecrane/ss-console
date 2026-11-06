@@ -123,6 +123,10 @@ def test_accepting_the_same_file_again_writes_nothing(tmp_path: Path) -> None:
     [
         (_acc(kind="settlement_brochure"), "not in the document-kind registry"),
         (_acc(contract="template"), "contract"),
+        (_acc(kind="demand_letter.settlement"), "not one the registry lists"),
+        (_acc(kind="demand_letter"), "a slot names one"),
+        (_acc(kind="memo.pre_suit"), "not one the registry lists"),
+        (_acc(contract=L.PROTOTYPES), "cannot be accepted yet"),
         (_acc(b"PK not really a docx"), "not a Word document package"),
         (_acc(docx(p("Jordan Placeholder fell at Example Mart"))), "no-client-text check"),
         (_acc(docx(creator="Pat Example")), "no-client-text check"),
@@ -220,3 +224,15 @@ def test_a_malformed_submission_is_refused(tmp_path: Path, sub: dict) -> None:
 def test_the_intake_does_not_dispatch_the_scope_yet() -> None:
     intake = (Path(LA.__file__).parent / "intake.py").read_text()
     assert "library_accept" not in intake
+
+
+def test_a_variant_slot_the_registry_lists_is_accepted(tmp_path: Path) -> None:
+    """The slot is kind, variant and attorney: a demand's variant is its own slot."""
+    _vault, target = _vault_and_seat(tmp_path)
+    result = LA.accept_file(_acc(kind="demand_letter.pre_suit"), target)
+    assert result.status == "installed", result.reasons
+
+
+def test_the_writers_registry_is_every_kind_with_its_variants() -> None:
+    assert tuple(LA.REGISTRY) == LA.DOCUMENT_CLASSES
+    assert set(LA.KIND_VARIANTS) <= set(LA.DOCUMENT_CLASSES)

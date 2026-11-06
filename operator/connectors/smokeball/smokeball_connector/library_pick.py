@@ -14,7 +14,7 @@ ask :func:`chat_base` first, before today's newest-by-name lookup
   accepted file of another contract ("marked", "prototypes") holds its look in
   its body, which this tool would throw away, so it is refused, never used
   as though it were a styles file.
-* ``cannot_look``, ``integrity_failure``, ``version_unavailable``, ``refused``:
+* ``cannot_look``, ``integrity_failure``, ``version_unavailable``, ``copy_missing``, ``refused``:
   the tool refuses in plain words and files nothing. It never falls back to the
   lookup or the starter, because that would file a document in a file the firm
   did not accept while the firm has one.
@@ -23,6 +23,9 @@ The matter's attorney is looked up only when the ledger accepts an attorney's
 own file of the kind (``caller.needs_matter_attorney``): with nothing accepted,
 the tool makes no call it does not make today. The tool has no parameter naming
 an attorney, so no requester-named attorney is passed.
+
+The accepted bytes come from the seat's own kept copy (``copies_dir``); the
+library is asked only whether a newer version exists.
 
 The record (``caller.build_record``) goes in the tool's result as
 ``libraryResolution``.
@@ -39,6 +42,7 @@ from typing import Any
 
 from operator_connector_sdk.library import (
     CANNOT_LOOK,
+    COPY_MISSING,
     NONE_ACCEPTED,
     REFUSED,
     RESOLVED,
@@ -46,6 +50,7 @@ from operator_connector_sdk.library import (
     Attorney,
     LibraryStore,
     Resolution,
+    copies_dir,
     read_installed,
     resolve,
 )
@@ -74,6 +79,7 @@ CHAT_CONTRACTS = (STYLES,)
 _WORDS = {
     CANNOT_LOOK: "the firm's document library could not be checked just now",
     "integrity_failure": "the firm's accepted file is not the file that was accepted",
+    COPY_MISSING: "the seat holds no copy of the firm's accepted file",
     "version_unavailable": "the firm's accepted file was saved again and the accepted version cannot be opened",
     REFUSED: "the firm's accepted file cannot be used for this document",
 }
@@ -143,7 +149,8 @@ def chat_base(
     spec_dir_path: str | Path | None = None,
 ) -> ChatPick:
     """The resolver's answer for a chat document of ``kind``, and the refusal, if any."""
-    ledger_read = read_installed(spec_dir_path or spec_dir())
+    spec = Path(spec_dir_path or spec_dir())
+    ledger_read = read_installed(spec)
     matter: Attorney | None = None
     if matter_id and needs_matter_attorney(ledger_read, kind):
         try:
@@ -154,7 +161,7 @@ def chat_base(
             )
             return ChatPick(res, _refusal(res))
     store = LazyStore(lambda: open_store(client_factory, cfg))
-    res = resolve(store, ledger_read, kind, matter_attorney=matter)
+    res = resolve(store, ledger_read, kind, matter_attorney=matter, copies_dir=copies_dir(spec))
     if res.status == RESOLVED and res.file is not None and res.file.contract not in CHAT_CONTRACTS:
         res = replace_status(
             res,

@@ -184,11 +184,21 @@ def _stopped(r, v, client, status: str) -> None:
     assert rec["resolution"]["status"] == status and rec["base"]["source"] == "not_started"
 
 
-def test_an_accepted_file_whose_bytes_changed_fails_the_job(spec, tmp_path, monkeypatch, opened):
-    lib = _accept(monkeypatch, spec, _reference("A"))
-    lib.tamper("acc-1", "acc-1-v1", _reference("B"))
+def test_a_seat_copy_whose_bytes_changed_fails_the_job(spec, tmp_path, monkeypatch, opened):
+    accepted = _reference("A")
+    _accept(monkeypatch, spec, accepted)
+    lt.spoil_copy(spec, accepted, _reference("B"))
     r, v, _, client = _run(tmp_path / "job")
     _stopped(r, v, client, "integrity_failure")
+    assert opened == []
+
+
+def test_an_accepted_file_the_seat_holds_no_copy_of_fails_the_job(spec, tmp_path, monkeypatch, opened):
+    lib = MemoryLibrary()
+    lt.install(spec, lt.entry(lib, "acc-1", PRE_SUIT, _reference("A"), contract=PROTOTYPES), copies=False)
+    monkeypatch.setattr(library_pick, "open_store", lambda _seat: lib)
+    r, v, _, client = _run(tmp_path / "job")
+    _stopped(r, v, client, "copy_missing")
     assert opened == []
 
 
@@ -202,3 +212,19 @@ def test_a_styles_file_is_not_a_demand_reference(spec, tmp_path, monkeypatch):
     _accept(monkeypatch, spec, _reference("A"), contract=STYLES)
     r, v, _, client = _run(tmp_path / "job")
     _stopped(r, v, client, "refused")
+
+
+def test_every_demand_variant_is_a_slot_the_registry_and_the_ledger_accept():
+    """The slot is kind, variant and attorney; the one function that builds it
+    (``library_ledger.slot_name``) and the one that checks it agree with the
+    registry for every variant the demand lane writes."""
+    import yaml
+
+    from jobs.demand.firm import VARIANTS
+    from operator_connector_sdk.library import slot_name, slot_problems
+
+    doc = yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "document-kinds.yaml").read_text())
+    registry = {k["key"]: tuple(k["variants"]) for k in doc["kinds"]}
+    for variant in VARIANTS:
+        assert slot_problems(slot_name(library_pick.KIND, variant), registry) == []
+    assert slot_problems(slot_name(library_pick.KIND, "settlement"), registry) != []

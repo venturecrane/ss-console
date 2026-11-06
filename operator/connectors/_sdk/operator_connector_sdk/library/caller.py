@@ -69,12 +69,6 @@ def attorney_key(name: str | None) -> str:
     return re.sub(r"\s+", " ", name or "").strip().casefold()
 
 
-def slot_kind(kind: str, variant: str | None = None) -> str:
-    """The ledger kind for a kind's variant (``demand_letter.pre_suit``): a
-    variant has its own file, because its layout differs. No variant: the kind."""
-    return f"{kind}.{variant}" if variant else kind
-
-
 def needs_matter_attorney(ledger_read: LedgerRead, kind: str) -> bool:
     """Whether the matter's attorney can change the answer for ``kind``: only
     when the ledger accepts an attorney's own file of that kind. A caller that
@@ -236,6 +230,5 @@ __all__ = [
     "check_used",
     "needs_matter_attorney",
     "record_problems",
-    "slot_kind",
     "write_record",
 ]
