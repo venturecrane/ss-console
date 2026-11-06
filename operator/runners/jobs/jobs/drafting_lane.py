@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import job_notes, request_additions, resume as resume_mod, verdict as verdict_mod
+from . import job_notes, request_additions, resume as resume_mod, smd_stop, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .drafting import firm_rules, repair_budget
@@ -114,6 +114,15 @@ class DraftingBroker:
             if not isinstance(v, int) or isinstance(v, bool) or v < 0:
                 raise BrokerError(f"drafting_allowance carried no {name}; the job cannot be metered")
         return int(cents), int(remaining)  # type: ignore[arg-type]
+
+
+def spent_cents(job_dir: Path, reported: int) -> int:
+    """What the job's row records: the verdict's figure, or the job's usage
+    ledgers priced by the seat's rate card when they show more. A runner killed
+    mid-job (a release's -15) writes no verdict, and a row of 0 understated the
+    firm's allowance and SMD's cost (two A&P jobs read $0 after $2.22 and $7.07,
+    2026-11-06). An unreadable price table keeps the reported figure."""
+    return max(reported, smd_stop.spend_cents(job_dir) or 0)
 
 
 def drafting_runner_cmd() -> list[str]:
@@ -211,17 +220,18 @@ class DraftingLane(Daemon):
         a job that defers every hour and tells no one."""
         first = str(exc).split(";")[0][:300]
         reason = f"config_missing: the drafting firm inputs are not usable on this seat: {first}"
+        cents = spent_cents(self.job_dir(job_id), 0)
         try:
             self.broker.record(job_id, "running", {})
             self.broker.record(
-                job_id, "failed", {"cents": 0, "reason": reason, "caption_discrepancies": [], "markers": []}
+                job_id, "failed", {"cents": cents, "reason": reason, "caption_discrepancies": [], "markers": []}
             )
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
         self._write_state(job_id, state="failed", finished_at=self.clock(), reason=reason)
         job_notes.tell(self, job_id, why="the job ended failed")
-        task = self._compose_wake(job_id, "failed", {"cents": 0, "files": []}, stage="config")
+        task = self._compose_wake(job_id, "failed", {"cents": cents, "files": []}, stage="config")
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return "failed"
 
@@ -257,7 +267,7 @@ class DraftingLane(Daemon):
             state, v = "failed", {"reason": f"no_verdict: the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
-        cents = int(round(float(v.get("dollars") or 0) * 100))
+        cents = spent_cents(self.job_dir(job_id), int(round(float(v.get("dollars") or 0) * 100)))
         fields: dict[str, Any] = {
             "cents": cents,
             "caption_discrepancies": list(v.get("caption_discrepancies") or []),
