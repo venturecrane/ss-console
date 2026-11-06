@@ -53,6 +53,16 @@ Stages, in order. Nothing paid runs before stage 3 passes.
 
 Target, to be verified on the first run of the built job: under an hour for four matters, with matters in parallel.
 
+## What a large file costs (2026-11-06)
+
+A demand's model cost follows the size of the matter file, and one file of about ten thousand pages was estimated above the per-job cap before anything was paid. Three things lower that cost without changing what the letter says:
+
+- **A page the file holds more than once is read once** (`repeats.py`). A file in suit carries the same records in several productions. Two scanned pages whose image is byte for byte the same are transcribed once, always. A text page whose words match an earlier page's is replaced, in the summarizer's input only, by one line naming where it was first read, when the firm sets `levers.fold_repeated_pages`. Every repeated page and its first location are kept in the job's `repeated-pages.json`; the extracted text files are not changed, so the quotation check and the review still read every page.
+- **A firm may send the per-page and per-chunk stages through the provider's batch queue** at half the price (`batching.py`): `levers.batch_stages` names them (`vision`, `digest`, `condense`), and `levers.batch_over_usd` limits the queue to jobs whose pre-paid estimate reaches that figure, so an ordinary demand stays as fast as it was. A round in the queue usually ends within the hour and can take a day. The cap and the month's budget are checked against each batch's projected cost before it is submitted. A batch still in the queue when the wait ends stops the job as failed and resumable; the resume collects the same batch and pays nothing twice. The drafting stages are never queued.
+- **An audit pass writes the cache of the digest once.** The first section is audited alone and the rest read its cache; before, each of the first calls in a pass wrote its own.
+
+Not adopted: a cheaper model for transcription or summarizing. A capped sample on 2026-11-06 found it equal on typed pages and worse on handwriting and forms, where no later check can catch the difference.
+
 ## Commercial shape (first firm, decided 2026-09-24, pending the firm's acceptance)
 
 Included in the monthly fee up to 25 demands per billing cycle; anything beyond that in a cycle is quoted before it starts. A coverage report counts as one. The firm's own volume, counted from its document names across all matters: about 26 a month over the last year, 16 to 35 a month. That count is an upper bound; the client file holds the detail.

@@ -14,6 +14,16 @@ three 2026-09-24 fixes built in rather than remembered:
 * Resume keys on the chunk's CONTENT: a digest is reused only when its chunk
   file's sha matches the chunk being asked for, so changed input can never
   collect the previous run's answer (the stale ``digest-07`` of that day).
+
+Two things a caller may turn on, both off unless asked (2026-11-06):
+
+* ``build_chunks(..., repeats=Repeats())`` reads a page the file holds more
+  than once only once (``repeats.py``).
+* A doorway whose ``batch_stages`` names ``digest`` or ``condense`` sends that
+  stage through the provider's batch queue: half the price, and a round takes
+  as long as the queue takes. The 2026-09-24 rule above stands for a job
+  someone is waiting on; a firm opts a large file into the queue by a lever.
+  Rounds, truncation splits and the content-keyed resume are the same.
 """
 
 from __future__ import annotations
@@ -23,7 +33,11 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
+
+from ..llm import Item
+from .repeats import Repeats
 
 TRUNCATION_MARK = "## FILES-SEEN"
 MAX_SPLITS = 2
@@ -58,9 +72,11 @@ def corpus_files(data: Path) -> list[dict[str, Any]]:
     ]
 
 
-def _pieces(f: dict[str, Any], chunk: int) -> list[tuple[str, str]]:
+def _pieces(f: dict[str, Any], chunk: int, repeats: Repeats | None = None) -> list[tuple[str, str]]:
     txt = Path(f["text_path"]).read_text(encoding="utf-8", errors="replace")
     name, folder = f["name"], f.get("folder") or "/"
+    if repeats is not None:
+        txt = repeats.fold(str(name), txt)
     if len(txt) <= chunk:
         return [(f"=== FILE: {name} (folder {folder}) ===", txt)]
     marks = [m.start() for m in re.finditer(r"\[p\.\d+\]", txt)]
@@ -74,10 +90,12 @@ def _pieces(f: dict[str, Any], chunk: int) -> list[tuple[str, str]]:
     return [(f"=== FILE: {name} [part {k}/{len(parts)}] (folder {folder}) ===", p) for k, p in enumerate(parts, 1)]
 
 
-def build_chunks(files: list[dict[str, Any]], chunk: int) -> list[str]:
+def build_chunks(files: list[dict[str, Any]], chunk: int, repeats: Repeats | None = None) -> list[str]:
+    """``repeats``: fold every page already read in an earlier file into a
+    one-line pointer (``repeats.py``); the caller keeps its record."""
     chunks, cur, size = [], [], 0
     for f in files:
-        for hdr, txt in _pieces(f, chunk):
+        for hdr, txt in _pieces(f, chunk, repeats):
             item = hdr + "\n" + txt + "\n\n"
             if size + len(item) > chunk and cur:
                 chunks.append("".join(cur))
@@ -114,16 +132,29 @@ class Summarizer:
         self.doorway, self.model, self.system = doorway, model, system
         self.max_tokens, self.workers, self.log = max_tokens, workers, log
 
-    def _one(self, stem: str, text: str) -> tuple[str, str]:
+    def _kept(self, stem: str, text: str) -> str | None:
+        """The digest already on disk for exactly this chunk, else None (and
+        the chunk file is written, so the answer that comes back is keyed)."""
         cp, op = self.dd / f"chunk-{stem}.txt", self.dd / f"digest-{stem}.md"
         same = cp.is_file() and sha(cp.read_text(encoding="utf-8")) == sha(text)
         if same and op.is_file():
-            return stem, op.read_text(encoding="utf-8")
+            return op.read_text(encoding="utf-8")
         tp = self.dd / f"truncated-{stem}.md"
         if same and tp.is_file():  # a resume: known truncated, so the caller splits it again for free
             tp.rename(op)
-            return stem, op.read_text(encoding="utf-8")
+            return op.read_text(encoding="utf-8")
         cp.write_text(text, encoding="utf-8")
+        return None
+
+    def _keep(self, stem: str, text: str, r: Any) -> str:
+        (self.dd / f"digest-{stem}.md").write_text(r.text, encoding="utf-8")
+        self.log(f"  digest {stem}: {len(text):,} in, {len(r.text):,} out, stop {r.stop_reason}")
+        return str(r.text)
+
+    def _one(self, stem: str, text: str) -> tuple[str, str]:
+        kept = self._kept(stem, text)
+        if kept is not None:
+            return stem, kept
         r = self.doorway.call(
             "digest",
             model=self.model,
@@ -133,11 +164,48 @@ class Summarizer:
             stream=True,
             custom_id=f"digest-{stem}-{sha(text)[:8]}",
         )
-        op.write_text(r.text, encoding="utf-8")
-        self.log(f"  digest {stem}: {len(text):,} in, {len(r.text):,} out, stop {r.stop_reason}")
-        return stem, r.text
+        return stem, self._keep(stem, text, r)
+
+    def _queued_round(self, todo: dict[str, str]) -> dict[str, str]:
+        """One round through the batch queue. A chunk whose answer did not
+        come back stops the job resumably: the finished ones are on disk and
+        the queue's own record lets a resume collect the rest unpaid."""
+        got: dict[str, str] = {}
+        items: dict[str, tuple[str, str]] = {}
+        for stem, text in todo.items():
+            kept = self._kept(stem, text)
+            if kept is None:
+                items[f"digest-{stem}-{sha(text)[:8]}"] = (stem, text)
+            else:
+                got[stem] = kept
+
+        def landed(it: Item, r: Any, err: str | None) -> None:
+            stem, text = items[it.custom_id]
+            if r is None and err == "refusal":  # as a live refusal reads: no digest, so the round splits it
+                r = SimpleNamespace(text="", stop_reason="refusal")
+            if r is not None:
+                got[stem] = self._keep(stem, text, r)
+
+        if items:
+            self.doorway.batch_call(
+                "digest",
+                [Item(cid, [{"role": "user", "content": text}]) for cid, (_stem, text) in items.items()],
+                landed,
+                model=self.model,
+                system=self.system,
+                max_tokens=self.max_tokens,
+                batch_dir=self.dd / "batch",
+            )
+        missing = sorted(stem for stem in todo if stem not in got)
+        if missing:
+            raise RuntimeError(
+                f"{len(missing)} digest chunk(s) are not back from the batch queue; a resume collects them"
+            )
+        return got
 
     def run_round(self, todo: dict[str, str]) -> dict[str, str]:
+        if "digest" in getattr(self.doorway, "batch_stages", ()):
+            return self._queued_round(todo)
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
             return dict(ex.map(lambda kv: self._one(*kv), todo.items()))
 
@@ -165,8 +233,49 @@ class Summarizer:
         return [final[k] for k in sorted(final)]
 
 
+CONDENSE_MAX_TOKENS = 96_000
+
+
+def _condense_queued(
+    doorway: Any, model: str, system: str, asks: list[tuple[str, str]], batch_dir: Path | None
+) -> list[str]:
+    """Every group through the batch queue, answers in group order. A group
+    that did not come back stops the job resumably: the queue's record under
+    ``batch_dir`` lets a resume collect the same answers unpaid."""
+    if batch_dir is None:
+        raise RuntimeError("condense through the batch queue needs a place to keep the queue's record")
+    got: dict[str, str] = {}
+
+    def landed(it: Item, r: Any, _err: str | None) -> None:
+        if r is not None:
+            got[it.custom_id] = str(r.text)
+
+    doorway.batch_call(
+        "condense",
+        [Item(cid, [{"role": "user", "content": user}]) for cid, user in asks],
+        landed,
+        model=model,
+        system=system,
+        max_tokens=CONDENSE_MAX_TOKENS,
+        batch_dir=batch_dir,
+    )
+    missing = [cid for cid, _ in asks if cid not in got]
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} condense group(s) are not back from the batch queue; a resume collects them"
+        )
+    return [got[cid] for cid, _ in asks]
+
+
 def condense(
-    digests: list[str], budget: int, doorway: Any, model: str, prompt: str, workers: int, log: Callable[[str], None]
+    digests: list[str],
+    budget: int,
+    doorway: Any,
+    model: str,
+    prompt: str,
+    workers: int,
+    log: Callable[[str], None],
+    batch_dir: Path | None = None,
 ) -> str:
     """Bring the digests under ``budget`` characters; concatenation when they fit."""
     joined = "\n\n".join(digests)
@@ -183,21 +292,60 @@ def condense(
     if cur:
         groups.append(cur)
 
-    def one(g: list[str]) -> str:
+    system = prompt.replace("{{WINDOW}}", "none stated")
+
+    def ask(g: list[str]) -> tuple[str, str]:
         body = "\n\n".join(g)
-        user = f"TARGET LENGTH: about {int(len(body) * ratio):,} characters.\n\n{body}"
+        return f"condense-{sha(body)[:8]}", f"TARGET LENGTH: about {int(len(body) * ratio):,} characters.\n\n{body}"
+
+    def one(g: list[str]) -> str:
+        cid, user = ask(g)
         r = doorway.call(
             "condense",
             model=model,
-            system=prompt.replace("{{WINDOW}}", "none stated"),
+            system=system,
             messages=[{"role": "user", "content": user}],
-            max_tokens=96_000,
+            max_tokens=CONDENSE_MAX_TOKENS,
             stream=True,
-            custom_id=f"condense-{sha(body)[:8]}",
+            custom_id=cid,
         )
         return r.text
 
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        out = list(ex.map(one, groups))
+    if "condense" in getattr(doorway, "batch_stages", ()):
+        out = _condense_queued(doorway, model, system, [ask(g) for g in groups], batch_dir)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            out = list(ex.map(one, groups))
     log(f"  condensed {len(joined):,} to {sum(len(o) for o in out):,} characters")
     return "\n\n".join(out)
+
+
+def digest(data: Path, doorway: Any, firm: Any, workers: int, log: Callable[[str], None]) -> str:
+    """The record's digest, made once and kept (``digest.md``): chunks, their
+    digests, and the condense when they outgrow the drafting budget. With the
+    firm's ``levers.fold_repeated_pages``, a page the file holds more than
+    once is read once and its other locations are recorded."""
+    p = data / "digest.md"
+    if p.is_file():
+        return p.read_text(encoding="utf-8")
+    levers = firm.data["levers"]
+    fold = Repeats() if levers.get("fold_repeated_pages") else None
+    chunks = build_chunks(corpus_files(data), int(levers["chunk_chars"]), fold)
+    if fold is not None:
+        fold.save(data)
+        log(f"  {len(fold.rows):,} repeated page(s) read once ({fold.chars:,} characters not summarized twice)")
+    s = Summarizer(
+        data, doorway, firm.model("digest"), firm.text("prompt_digest"), int(levers["digest_max_tokens"]), workers, log
+    )
+    out = condense(
+        s.run(chunks),
+        int(levers["digest_budget_chars"]),
+        doorway,
+        firm.model("digest"),
+        firm.text("prompt_condense"),
+        workers,
+        log,
+        batch_dir=data / "digest" / "batch-condense",
+    )
+    p.write_text(out, encoding="utf-8")
+    return out

@@ -360,8 +360,14 @@ class Drafter:
             cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
+        # The first section alone: its call writes the cache of the system
+        # block (the whole digest) that every other section then reads. All at
+        # once, each of the first ``workers`` calls found no cache and wrote
+        # its own: four writes of the digest per audit pass on a live job.
+        todo = list(enumerate(secs))
+        results = dict([one(todo[0])]) if todo else {}
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            results = dict(ex.map(one, enumerate(secs)))
+            results.update(ex.map(one, todo[1:]))
         body = "\n\n".join(results[i] for i in sorted(results))
         tallies = tally(body)
         nf = [c["quote"] for c in mech["quotes"] if not c["found"]]

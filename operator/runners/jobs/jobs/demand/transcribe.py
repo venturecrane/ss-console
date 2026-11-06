@@ -8,6 +8,12 @@ costs one page, not the file. Each page is checkpointed to
 pages not yet done, and the resume never pays for a page twice. The rendering
 and the prompt are the chronology's (``stages/vision.py``): one reader, one
 set of rules for an illegible token.
+
+Two pages whose image is byte for byte the same are read once and the reading
+is written to both (``repeats.same_images``). A doorway whose ``batch_stages``
+names ``vision`` sends the pages through the provider's batch queue at half
+the price; a page still in the queue when the wait ends stops the job
+resumably, and the resume collects it from the queue unpaid.
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
 from ..stages.pleading_margin import strip_page
 from ..stages.vision import FAILED, MAX_TOKENS, REFUSED, SYSTEM, page_item, render_page
+from . import repeats
 
 
 def _todo(extracted: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[int]]]:
@@ -62,6 +69,46 @@ def _merge(text: str, pages: dict[int, str], total: int) -> str:
     return "".join(out)
 
 
+def _queued(
+    data: Path,
+    doorway: Any,
+    model: str,
+    jobs: list[tuple[dict[str, Any], int, str]],
+    keep: Callable[[dict[str, Any], int, str], None],
+    log: Callable[[str], None],
+) -> None:
+    """Every page through the batch queue. A page that failed or was refused
+    is marked as the live path marks it; a page still in the queue is not
+    marked at all, so the stage stops and a resume collects it."""
+    by_id = {}
+    items = []
+    for r, n, b64 in jobs:
+        item = page_item(r, n, b64)
+        by_id[item.custom_id] = (r, n)
+        items.append(item)
+
+    def landed(item: Any, res: Any, err: str | None) -> None:
+        r, n = by_id[item.custom_id]
+        if res is None:
+            log(f"  {str(r['name'])[:30]} p{n}: {str(err)[:200]}")
+        keep(r, n, res.text if res is not None else (REFUSED if err == "refusal" else FAILED))
+
+    summary = doorway.batch_call(
+        "vision",
+        items,
+        landed,
+        model=model,
+        system=SYSTEM,
+        max_tokens=MAX_TOKENS,
+        effort="",
+        batch_dir=data / "batch-vision",
+    )
+    if summary.timed_out:
+        raise RuntimeError(
+            f"{len(summary.timed_out)} page(s) are still in the batch queue; a resume collects them, nothing is paid twice"
+        )
+
+
 def run(
     data: Path,
     doorway: Any,
@@ -83,7 +130,18 @@ def run(
             for n in pages:
                 if n not in have and n <= len(doc):
                     jobs.append((r, n, render_page(doc[n - 1], log, str(r["name"]), n)))
-    log(f"transcribe: {len(jobs)} page(s) to read")
+    jobs, twins = repeats.same_images(jobs)
+    repeats.save(data, "scanned", repeats.scanned_record(jobs, twins), add=True)
+    same = sum(len(v) for v in twins.values())
+    log(
+        f"transcribe: {len(jobs)} page(s) to read"
+        + (f"; {same} more carry the same image as one of them" if same else "")
+    )
+
+    def keep(r: dict[str, Any], n: int, text: str) -> None:
+        """The reading, written to the page and to every page with its image."""
+        for row, page in [(r, n), *twins.get((str(r["id"]), n), [])]:
+            append_jsonl(data / "partial" / f"{row['id']}.jsonl", {"page": page, "text": text})
 
     def one(job: tuple[dict[str, Any], int, str]) -> None:
         r, n, b64 = job
@@ -104,10 +162,13 @@ def run(
         except Exception as exc:  # noqa: BLE001 - a page that will not transcribe is marked, never dropped
             log(f"  {str(r['name'])[:30]} p{n}: {str(exc)[:200]}")
             text = FAILED
-        append_jsonl(data / "partial" / f"{r['id']}.jsonl", {"page": n, "text": text})
+        keep(r, n, text)
 
-    with ThreadPoolExecutor(max_workers=concurrency) as ex:
-        list(ex.map(one, jobs))
+    if "vision" in getattr(doorway, "batch_stages", ()):
+        _queued(data, doorway, model, jobs, keep, log)
+    else:
+        with ThreadPoolExecutor(max_workers=concurrency) as ex:
+            list(ex.map(one, jobs))
     machine = []
     for r, pages in _todo(rows):
         have = _done(data, r["id"])
