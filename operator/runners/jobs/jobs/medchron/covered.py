@@ -369,10 +369,26 @@ def delivery_fields(worst: dict[str, Any], outcomes: list[dict[str, Any]]) -> di
         # An update that found nothing new filed nothing: the record says so,
         # with the counts per reason (``update/outcome.summary``).
         fields["delivery"]["already_current"] = dict(worst["current"])
+    cited = delivered_cited(outcomes)
+    if cited:
+        fields["delivery"]["cited_sources"] = cited
     merged = merge_covered(outcomes)
     if merged is not None:
         fields["covered"] = merged
     return fields
+
+
+def delivered_cited(outcomes: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    """``{unit: {file id: sha256}}``: each delivered unit's cited source files
+    (``prior_reading.cited_by_id``). The record a later update reads once this
+    job's dir is wiped, 72 hours after delivery: without it an update
+    recognised a re-pulled cited file only while the dir was on the volume."""
+    out: dict[str, dict[str, str]] = {}
+    for o in outcomes:
+        cited = o.get("cited_sources") if isinstance(o, dict) and o.get("outcome") == "delivered" else None
+        if isinstance(cited, dict) and cited and o.get("unit"):
+            out[str(o["unit"])] = {str(k): str(v) for k, v in cited.items()}
+    return out
 
 
 def documents_pulled(slug_dir: Path) -> int:

@@ -41,6 +41,7 @@ from .covered import covered_sets, documents_pulled
 from ..deadline import is_transient
 from .update import outcome as update_outcome
 from .update.coverage import covered_sets as update_covered
+from ..stages import prior_reading
 from ..stages.base import StageRefusal, StageRun
 from .state import RunState, state_path
 
@@ -92,6 +93,11 @@ class Outcome:
     # (pages, remaining, over, projected_cents) for SMD's alert and the approve
     # command's default (``allowance.py``). Never in ``reason``.
     allowance: dict[str, int] | None = None
+    # 2026-11-06: ``{file id: sha256}`` of each source file this unit's
+    # chronology cites (``prior_reading.cited_by_id``), kept in the delivered
+    # job's ledger record so a later update recognises a re-pulled cited file
+    # after this job's dir is wiped. None on every outcome but a delivery.
+    cited_sources: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -654,6 +660,7 @@ class Driver:
                     o.covered = (update_covered if self.job.update else covered_sets)(
                         self.slug_dir, unit.unit, self.cfg
                     )
+                    o.cited_sources = prior_reading.cited_by_id(self.slug_dir, unit.unit)
                 except (OSError, ValueError, KeyError) as exc:
                     # A coverage record we could not derive is reported absent,
                     # never approximated: an over-inclusive covered set drops
