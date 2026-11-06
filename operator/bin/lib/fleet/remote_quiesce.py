@@ -7,7 +7,7 @@ ARGS["prefix"], if any fleet run wrote it; a marker the seat's own supervisor
 wrote is never removed from here).
 
 The marker is the contract the runner lanes honor (WS3): a root-owned
-/run/smd-medchron/quiesce {"until": epoch, "by", "reason"}; while it exists and
+/run/smd-jobs/quiesce {"until": epoch, "by", "reason"}; while it exists and
 ``until`` is in the future, no lane claims new work. An expired marker is
 ignored by the lanes, so a laptop that dies mid-rollout never starves a queue
 for longer than the expiry. Written atomically (temp + rename), 0644 root:root.
@@ -17,7 +17,12 @@ import json
 import os
 import time
 
-RUN = "/run/smd-medchron"
+RUN = "/run/smd-jobs"
+# ADR 0103 R2: a seat still on the image before the volume move has the old run
+# dir only, and its lanes read the marker there (remote_busy_probe.py, same rule).
+RUN_BEFORE_R2 = "/run/smd-medchron"
+if not os.path.isdir(RUN) and os.path.isdir(RUN_BEFORE_R2):
+    RUN = RUN_BEFORE_R2
 MARK = RUN + "/quiesce"
 
 ARGS = globals().get("ARGS") or {}

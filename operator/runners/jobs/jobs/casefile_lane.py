@@ -144,7 +144,7 @@ def read_verdict(job_dir: Path, out: str) -> dict[str, Any] | None:
 
 @dataclass
 class CasefileLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/casefile-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/casefile-queue"))
     inputs_dir: str | None = None
     state_dir: str | None = None
     textcache_dir: str | None = None

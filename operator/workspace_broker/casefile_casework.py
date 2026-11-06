@@ -65,7 +65,7 @@ def casework_event(line: dict[str, Any], event: str, **extra: Any) -> dict[str, 
 
 def casefile_ledger_of(broker: BrokerContext) -> CasefileLedger:
     """The ledger the reply binding reads (a read: the queue dir is never written)."""
-    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-medchron/casefile-queue"
+    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-jobs/casefile-queue"
     return CasefileLedger(str(broker.audit_db_path), queue)
 
 

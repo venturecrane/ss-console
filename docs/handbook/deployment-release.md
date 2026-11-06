@@ -364,7 +364,7 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   lives, a managed cron firing within 6 minutes (or fired within the last 2),
   or a store the probe could not read means busy
   (`operator/bin/lib/fleet/busy.py`; the cron window is that narrow so a seat
-  with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-medchron/quiesce`, root-owned,
+  with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-jobs/quiesce`, root-owned,
   expires on its own) so no new job is claimed, and waits for idle, up to
   `--max-idle-wait` (30 minutes). Still busy: the seat is skipped as
   `waiting_idle`, never deployed mid-job. Queued work is not busy; the queue is
@@ -770,10 +770,31 @@ the same way instead of rolling back onto an epoch-1 image, and R2 can roll in
 rings like any release, without holds or a hand `--only` per seat. The recovery is by hand:
 `fleet hold` the seat; start a Machine on the previous image with the
 entrypoint overridden and run `mv /opt/data/jobs /opt/data/medchron` before
-the old image's boot sweep runs (an old image booting over the moved tree
-would chown it to the agent uid); restore the bundle pointer; or restore the
-volume snapshot. Rehearse it once on smd-staging before R2 reaches any other
-seat.
+the old image boots (the R1 image leaves the moved tree alone, but it makes a
+fresh, empty `/opt/data/medchron` and runs every lane on that, with no queue,
+state or cache; an image older than R1 would also chown the moved tree to the
+agent uid); restore the bundle pointer; or restore the volume snapshot. There
+is no separate rehearsal: smd-staging takes R2 first, and a halt there stops
+the release before any client seat, which is where this recovery would first
+be used.
+
+What the R2 image does at boot, and what holds it afterwards
+(`operator/templates/entrypoint-lanes.sh`, the `jobs-volume` block): it renames
+the tree once, binds it at `/run/smd-jobs` and, for one release, at
+`/run/smd-medchron`, and writes the regular-file count before and after the
+move to `/opt/data/jobs/volume-epoch.state`. When both names exist it never
+merges them. An old tree that holds directories only (what an R1 boot leaves
+when its lanes never started) is removed with `rmdir` and the boot goes on; an
+old tree that holds any file means no job lane boots, one `JOBS VOLUME REFUSED`
+line is logged, and the self-test fails until a root hand leaves exactly one
+tree. The self-test asserts the result at every boot and every hour
+(`operator/templates/seat-checks.sh`): `jobs-volume-old-tree-holds-no-files`,
+`jobs-volume-tree-present`, `jobs-volume-run-dirs-bound` and
+`jobs-volume-move-counts-equal`. `tests/jobs-volume-old-path-allowlist.test.ts`
+fails the build when a file outside its short list names the old tree again.
+Until every seat is moved, the busy probe, the quiesce writer and
+`lane-proof.sh pull` read `/run/smd-jobs` and, where a seat does not have it
+yet, `/run/smd-medchron` (`operator/bin/lib/fleet/remote_busy_probe.py`).
 
 The release controller steps bundle releases after skills, ring by ring with
 the same bake, holds, halt and lease, but only on the seats whose
@@ -927,7 +948,7 @@ seam over HTTPS, and test a change by deploying it - never by hand-poking the li
 box. The `fleet` busy probe and quiesce writer are the sanctioned exceptions:
 each is a stdlib-only program fed to the image's system `python3 -I -` on
 stdin (no overlay import, no `__pycache__` written), the probe only reads, and
-the writer touches only the root-owned `/run/smd-medchron/quiesce` marker. A handler also cannot prove its own non-execution by inspection; verify
+the writer touches only the root-owned `/run/smd-jobs/quiesce` marker. A handler also cannot prove its own non-execution by inspection; verify
 against the running Machine.
 
 ## What the verify step checks

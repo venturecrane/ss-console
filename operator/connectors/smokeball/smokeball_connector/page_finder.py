@@ -55,7 +55,7 @@ file, :data:`BATCH_PAGES` pages per request. Pages go as header and footer strip
 
 RUNTIME LAYER. The index holds what page headers say (dates, providers,
 headings) for a firm's files: client content on the seat volume. The records
-lane keeps it at ``/opt/data/medchron/page-index/`` (``SMOKEBALL_PAGE_INDEX_DIR``,
+lane keeps it at ``/opt/data/jobs/page-index/`` (``SMOKEBALL_PAGE_INDEX_DIR``,
 entrypoint-records.sh moved the older ``/opt/data/smokeball-page-index/`` there);
 the CLI default is the old path. Purge with
 ``python -m smokeball_connector.page_finder purge --matter <id>`` (or ``--all``).
