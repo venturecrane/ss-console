@@ -211,3 +211,12 @@ def test_seed_counts_and_a_second_seed_finds_it_already(tmp_path, capsys):
     assert c.text_for({"id": "f1", "modified": "2026-03-01T00:00:00", "size": 100}) == ("1" * 64, "Complaint text")
     assert textcache.main(args) == 0
     assert json.loads(capsys.readouterr().out)["already"] == 1
+
+
+def test_a_cached_text_with_a_garbled_page_is_read_again_and_no_other(tmp_path):
+    c = _cache(tmp_path / "tc")
+    good = "===== page 1 =====\nThe defendant was served on the date of the court order."
+    bad = good + "\n===== page 2 =====\n" + "\x01\x02\x03\x04 ab" * 300
+    assert c.put_text("a" * 64, good, scanned_pages=0, matter_id=M1)
+    assert c.put_text("b" * 64, bad, scanned_pages=0, matter_id=M1)
+    assert c.get_text("a" * 64) == good and c.get_text("b" * 64) is None
