@@ -28,10 +28,11 @@ than adding a third.
 Unusable drafting inputs (no ``drafting-firm.yaml`` on the seat, or a schema
 miss) defer a job once; on the next attempt it is recorded ``failed``
 (``config_missing``: our cause, resumable, SMD alerted) instead of looping
-silently. A failed job (our machinery) wakes DELIVER too: the skill's status
-read raises SMD's shortfall alert, and the broker refuses any reply to the
-client. There is no re-run verb for drafting, so nothing is seeded from a
-superseded job.
+silently. A held or failed job's note is sent in code before its wake
+(``job_notes.tell``: the broker's fixed words, and one ``job_stopped`` page to
+SMD); the DELIVER turn it wakes finds the reply already sent, and its status
+read still raises SMD's shortfall alert. There is no re-run verb for drafting,
+so nothing is seeded from a superseded job.
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import request_additions, resume as resume_mod, verdict as verdict_mod
+from . import job_notes, request_additions, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .drafting import firm_rules
@@ -218,6 +219,7 @@ class DraftingLane(Daemon):
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
         self._write_state(job_id, state="failed", finished_at=self.clock(), reason=reason)
+        job_notes.tell(self, job_id, why="the job ended failed")
         task = self._compose_wake(job_id, "failed", {"cents": 0, "files": []}, stage="config")
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return "failed"
@@ -279,6 +281,10 @@ class DraftingLane(Daemon):
         except BrokerError as exc:
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get("reason"))
+        if state != "delivered":
+            # A held or failed job's note goes in code before the wake: the
+            # DELIVER turn then finds it answered (job_notes, 2026-11-06).
+            job_notes.tell(self, job_id, why=f"the job ended {state}")
         task = self._compose_wake(job_id, state, {**fields, "files": v.get("files") or []}, stage=v.get("stage"))
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return state
