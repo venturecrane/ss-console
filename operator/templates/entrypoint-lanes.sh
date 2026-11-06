@@ -66,26 +66,36 @@ _r2() { AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" AWS_SECRET_ACCESS_KEY="${R2_SE
 # it alongside the connector; the connector preserves that mode on rotation.
 #
 # >>> jobs-volume (tests/operator-entrypoint.test.ts runs this block as written)
-# ADR 0103: the volume tree's NAME, behind one constant. Epoch 1 (R1, today):
-# /opt/data/medchron bound at /run/smd-medchron, nothing moves. Epoch 2 (R2
-# flips the constant): once, /opt/data/medchron is RENAMED to /opt/data/jobs
-# (same filesystem: one rename, no copy), then bound at /run/smd-jobs AND at
+# ADR 0103: the volume tree's NAME, behind one constant. Epoch 1 was R1:
+# /opt/data/medchron bound at /run/smd-medchron, nothing moved. Epoch 2 (R2,
+# this image): once, /opt/data/medchron is RENAMED to /opt/data/jobs (same
+# filesystem: one rename, no copy), then bound at /run/smd-jobs AND at
 # /run/smd-medchron, the second for the jobs held across the release, whose
 # envelopes store that path. Idempotent: a later boot finds only the new name.
-# Never merged: when both names exist the lanes do not boot at all (one loud
-# line; a root hand decides which tree is the seat's). Never a symlink under
-# /opt/data, which the agent uid owns: it could re-point one at anything. The
-# chown sweep in entrypoint.sh runs BEFORE this file and prunes BOTH names, so
-# neither tree is ever handed to the agent, whatever the epoch.
+# Never merged: when both names exist and the old one holds anything but
+# directories, the lanes do not boot at all (one loud line, and the self-test's
+# jobs-volume checks fail; a root hand decides which tree is the seat's). An old
+# tree holding directories only is what an older image's boot leaves after a
+# rollback (its install -d lines): it is removed with rmdir alone, which cannot
+# delete a file, and the boot goes on. Never a symlink under /opt/data, which
+# the agent uid owns: it could re-point one at anything. The chown sweep in
+# entrypoint.sh runs BEFORE this file and prunes BOTH names, so neither tree is
+# ever handed to the agent, whatever the epoch.
+# THE RECORD: the boot that moves the tree writes the regular-file count before
+# and after to <tree>/volume-epoch.state (root-owned, on the volume), and seat-checks.sh
+# fails the self-test when the two differ. A seat that had no old tree to move
+# records outcome=none with the count it booted with.
 # SMD_JOBS_VOLUME_ROOT is a test seam only (like entrypoint-bundles.sh's
 # SMD_BUNDLE_TARGET_ROOT): empty on a seat.
-JOBS_VOLUME_EPOCH=1
+JOBS_VOLUME_EPOCH=2
 _SMD_JV="${SMD_JOBS_VOLUME_ROOT:-}"
 JOBS_RUN_DIR="${_SMD_JV}/run/smd-medchron"
 _smd_jobs_run_dirs=("${JOBS_RUN_DIR}")
+_jv_refused="" _jv_outcome="" _jv_before="" _jv_after=""
 if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
-  _jv_old="${_SMD_JV}/opt/data/medchron" _jv_new="${_SMD_JV}/opt/data/jobs" _jv_refused=""
-  _jv_count() { find "$1" 2>/dev/null | wc -l | tr -d ' '; }
+  _jv_old="${_SMD_JV}/opt/data/medchron" _jv_new="${_SMD_JV}/opt/data/jobs"
+  _jv_files() { find "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
+  _jv_held() { find "$1" ! -type d 2>/dev/null | wc -l | tr -d ' '; }
   if [ -L "${_jv_old}" ] || [ -L "${_jv_new}" ]; then
     _jv_refused="a symlink stands at ${_jv_old} or ${_jv_new}"
   elif [ -e "${_jv_old}" ] && [ ! -d "${_jv_old}" ]; then
@@ -93,11 +103,27 @@ if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
   elif [ -e "${_jv_new}" ] && [ ! -d "${_jv_new}" ]; then
     _jv_refused="${_jv_new} is not a directory"
   elif [ -d "${_jv_old}" ] && [ -e "${_jv_new}" ]; then
-    _jv_refused="both ${_jv_old} and ${_jv_new} exist; the two trees are never merged"
+    _jv_n="$(_jv_held "${_jv_old}")"
+    if [ "${_jv_n}" != 0 ]; then
+      _jv_refused="both ${_jv_old} and ${_jv_new} exist and ${_jv_old} holds ${_jv_n} file(s); the two trees are never merged"
+    else
+      find "${_jv_old}" -depth -type d -exec rmdir {} \; 2>/dev/null || true
+      if [ -e "${_jv_old}" ]; then
+        _jv_refused="both ${_jv_old} and ${_jv_new} exist and the empty ${_jv_old} could not be removed"
+      else
+        _jv_outcome="old-empty-removed"
+        log "jobs volume: removed ${_jv_old}, which held directories only and no file; ${_jv_new} is the seat's tree"
+      fi
+    fi
   elif [ -d "${_jv_old}" ]; then
-    _jv_before="$(_jv_count "${_jv_old}")"
+    _jv_before="$(_jv_files "${_jv_old}")"
     if mv "${_jv_old}" "${_jv_new}"; then
-      log "jobs volume: moved ${_jv_old} to ${_jv_new} (${_jv_before} entries before, $(_jv_count "${_jv_new}") after)"
+      _jv_after="$(_jv_files "${_jv_new}")"
+      _jv_outcome="moved"
+      log "jobs volume: moved ${_jv_old} to ${_jv_new} (${_jv_before} files before, ${_jv_after} after)"
+      if [ "${_jv_before}" != "${_jv_after}" ]; then
+        log "JOBS VOLUME COUNT MISMATCH: ${_jv_before} files before the move, ${_jv_after} after; the self-test fails on it"
+      fi
     else
       _jv_refused="mv ${_jv_old} ${_jv_new} failed"
     fi
@@ -107,12 +133,10 @@ if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
     SMD_AUTHORED_LANES=""
     export SMD_AUTHORED_LANES
   else
-    JOBS_DATA_DIR="${_jv_new}"
+    export JOBS_DATA_DIR="${_jv_new}"
     JOBS_RUN_DIR="${_SMD_JV}/run/smd-jobs"
     _smd_jobs_run_dirs=("${JOBS_RUN_DIR}" "${_SMD_JV}/run/smd-medchron")
   fi
-  unset -f _jv_count
-  unset _jv_old _jv_new _jv_refused _jv_before
 fi
 # ADR 0100: the lane tree exists only on a seat that authors a lane.
 if [ -n "${SMD_AUTHORED_LANES//,/}" ]; then
@@ -124,7 +148,27 @@ for _rd in "${_smd_jobs_run_dirs[@]}"; do
     || { log "FATAL: could not bind-mount ${JOBS_DATA_DIR} -> ${_rd}"; exit 1; }
 done
 fi
-unset _rd _smd_jobs_run_dirs _SMD_JV
+# The move's record: written by the boot that moved the tree (again, if a hand
+# rollback put it back and a later boot moved it once more), or once on a seat
+# that had nothing to move. Every other boot finds it and leaves it alone.
+_jv_state="${JOBS_DATA_DIR}/volume-epoch.state"
+# A record that outlived a second move would vouch for a move it never saw.
+if [ "${_jv_outcome}" = moved ]; then rm -f "${_jv_state}"; fi
+if [ "${JOBS_VOLUME_EPOCH}" = 2 ] && [ -z "${_jv_refused}" ] && [ -d "${JOBS_DATA_DIR}" ] && [ ! -e "${_jv_state}" ]; then
+  if [ -z "${_jv_before}" ]; then
+    _jv_before="$(_jv_files "${JOBS_DATA_DIR}")"
+    _jv_after="${_jv_before}"
+  fi
+  if printf 'epoch=2\noutcome=%s\nfiles_before=%s\nfiles_after=%s\nrecorded_at=%s\n' \
+       "${_jv_outcome:-none}" "${_jv_before}" "${_jv_after}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${_jv_state}.tmp" \
+     && mv "${_jv_state}.tmp" "${_jv_state}"; then
+    log "jobs volume: recorded ${_jv_state} (outcome ${_jv_outcome:-none}, ${_jv_before} files before, ${_jv_after} after)"
+  else
+    log "WARN: could not write ${_jv_state}; the self-test's jobs-volume-move-counts-equal check fails on a seat that authors a lane"
+  fi
+fi
+unset -f _jv_files _jv_held
+unset _rd _smd_jobs_run_dirs _SMD_JV _jv_old _jv_new _jv_refused _jv_outcome _jv_before _jv_after _jv_n _jv_state
 # <<< jobs-volume
 if lane_on medchron; then
 install -d -o root -g workspace-broker -m 0770 "${JOBS_DATA_DIR}/queue"

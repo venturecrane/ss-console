@@ -35,7 +35,7 @@ from . import own_writes
 
 ENV = "JOBS_CASEFILE_STATE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/medchron"
+DEFAULT_DATA_DIR = "/opt/data/jobs"
 
 
 def state_dir(explicit: str | Path | None = None) -> Path:

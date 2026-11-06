@@ -132,7 +132,7 @@ def drafting_runner_cmd() -> list[str]:
 
 @dataclass
 class DraftingLane(Daemon):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/drafting-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/drafting-queue"))
     inputs_dir: str | None = None
     LANE = "drafting"
     HEARTBEAT = "drafting-heartbeat"

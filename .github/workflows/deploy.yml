@@ -407,6 +407,8 @@ jobs:
             | python3 -c 'import json,sys; rows=json.load(sys.stdin); print(next((r["ss_console_sha"] for r in rows if r.get("kind")=="image" and r.get("ss_console_sha")), ""))' \
             || true)
           echo "last built commit: ${base:-none}"
+          # Handed to the build step, which compares the volume epoch at that commit.
+          echo "last_built=${base}" >> "$GITHUB_OUTPUT"
           # --image: the image path list, from the one definition the release
           # controller's ordering rule (base(S)) also reads.
           python3 operator/bin/substrate-paths-changed.py \
@@ -418,14 +420,37 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           FLY_REGISTRY_TOKEN: ${{ secrets.FLY_REGISTRY_TOKEN }}
+          LAST_BUILT: ${{ steps.changes.outputs.last_built }}
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
           source scripts/lib/r2-creds.sh
           derive_r2_creds
           export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          # ADR 0103: an image that moves the seat volume's tree is built
+          # not-volume-forward-compatible, so a failing seat halts for a hand
+          # instead of rolling back onto the moved tree. The move is
+          # operator/fleet/volume-epoch (mirrored by JOBS_VOLUME_EPOCH in
+          # entrypoint-lanes.sh; tests/operator-entrypoint.test.ts pins the pair),
+          # compared with the LAST BUILT commit's, not this merge's parent: a merge
+          # whose own build was skipped (main moved, exit 4 below) is built by a
+          # later merge, whose parent already carries the new epoch. No file at
+          # that commit is epoch 1. No readable last build cannot be compared, and
+          # is built not-forward-compatible too.
+          this_epoch="$(tr -d '[:space:]' < operator/fleet/volume-epoch)"
+          prior_epoch=""
+          if [ -n "${LAST_BUILT}" ]; then
+            prior_epoch="$(git show "${LAST_BUILT}:operator/fleet/volume-epoch" 2>/dev/null | tr -d '[:space:]' || true)"
+            prior_epoch="${prior_epoch:-1}"
+          fi
+          volume_flag=""
+          if [ "${prior_epoch}" != "${this_epoch}" ]; then
+            volume_flag="--not-volume-forward-compatible"
+            echo "::notice::volume epoch ${prior_epoch:-unreadable} at the last built commit, ${this_epoch} here: building not-volume-forward-compatible"
+          fi
           set +e
-          operator/bin/fleet build --notes "merge ${GITHUB_SHA::8} (CI)"
+          # shellcheck disable=SC2086 # one flag or nothing, word-split on purpose
+          operator/bin/fleet build --notes "merge ${GITHUB_SHA::8} (CI)" ${volume_flag}
           rc=$?
           set -e
           if [ "$rc" -eq 4 ]; then

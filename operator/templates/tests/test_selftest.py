@@ -19,6 +19,10 @@ Falsifiers carried, one per behaviour the plan requires:
   cleanly empty vault is not authored   demand-firm-inputs-absent (state absent)
   unreachable vault still fails         demand-firm-inputs-present (state unreachable)
   busy lane warns hourly, fails at boot jobs-daemon-idle
+  a file at the old jobs tree name      jobs-volume-old-tree-holds-no-files
+  a run dir bound to another directory  jobs-volume-run-dirs-bound
+  move counts that differ, or no record jobs-volume-move-counts-equal
+  the tree a symlink                    jobs-volume-tree-present
   vendor probe failure warns hourly     agentmail-webhook-secret-matches-vendor
   schema, atomic 0644 write             results.json
   crash counter                         selftest-crashlooping
@@ -66,8 +70,17 @@ def group(g):
     except KeyError:
         return str(g)
 out = (fmt.replace("%U", user(st.st_uid)).replace("%G", group(st.st_gid))
-       .replace("%a", format(stat.S_IMODE(st.st_mode), "o")).replace("%Y", str(int(st.st_mtime))))
+       .replace("%a", format(stat.S_IMODE(st.st_mode), "o")).replace("%Y", str(int(st.st_mtime)))
+       .replace("%d", str(st.st_dev)).replace("%i", str(st.st_ino)))
 print(out)
+"""
+
+# ``mountpoint -q <dir>`` for the jobs-volume checks: in this fixture a bind mount
+# is planted as a symlink to its source, which the stat shim follows, so a bound
+# run dir has the tree's own device and inode exactly as a real bind does.
+MOUNTPOINT_SHIM = """#!/bin/sh
+[ "$1" = -q ] && shift
+[ -L "$1" ]
 """
 
 SETPRIV_SHIM = """#!/bin/sh
@@ -360,11 +373,82 @@ def test_unreadable_customer_yaml_reads_as_authored_never_as_absent(seat: dict[s
 def test_busy_lane_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:
     _write(seat["root"] / "var/lib/smd-config/customer.yaml", _customer_yaml(["medical-chronology-maintainer"]))
     assert _check(_once(seat, "boot"), "jobs-daemon-idle")["ok"] is True
-    _write(seat["root"] / "run/smd-medchron/child.pid", "4242\n")
+    _write(seat["root"] / "run/smd-jobs/child.pid", "4242\n")
     boot = _check(_once(seat, "boot"), "jobs-daemon-idle")
     assert boot["ok"] is False and boot["warn"] is False
     hourly = _check(_once(seat, "hourly"), "jobs-daemon-idle")
     assert hourly["ok"] is False and hourly["warn"] is True
+
+
+JOBS_VOLUME_CHECKS = (
+    "jobs-volume-old-tree-holds-no-files",
+    "jobs-volume-tree-present",
+    "jobs-volume-run-dirs-bound",
+    "jobs-volume-move-counts-equal",
+)
+
+
+def _volume_state(tree: Path, before: int, after: int) -> None:
+    """What entrypoint-lanes.sh records once, at the boot that moved the tree."""
+    _write(
+        tree / "volume-epoch.state",
+        f"epoch=2\noutcome=moved\nfiles_before={before}\nfiles_after={after}\nrecorded_at=2026-11-06T00:00:00Z\n",
+    )
+
+
+def _moved_seat(seat: dict[str, Path]) -> Path:
+    """A seat after the ADR 0103 R2 boot: the tree at /opt/data/jobs, both run dirs bound to it."""
+    root = seat["root"]
+    _write(seat["shims"] / "mountpoint", MOUNTPOINT_SHIM, 0o755)
+    _write(root / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    tree = root / "opt/data/jobs"
+    _volume_state(tree, 3, 3)
+    for name in ("smd-jobs", "smd-medchron"):
+        (root / "run" / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / "run" / name).symlink_to(tree)
+    return tree
+
+
+# ADR 0103 R2 (2026-11-06): the four checks that hold the volume move, each made to fail.
+def test_a_moved_jobs_tree_passes_the_volume_checks_and_each_one_can_fail(seat: dict[str, Path]) -> None:
+    root, tree = seat["root"], _moved_seat(seat)
+    # An old tree of directories only is not a second tree (the boot removes it).
+    (root / "opt/data/medchron/queue").mkdir(parents=True)
+    clean = _once(seat, "boot")
+    assert {c: _check(clean, c)["ok"] for c in JOBS_VOLUME_CHECKS} == dict.fromkeys(JOBS_VOLUME_CHECKS, True)
+
+    _write(root / "opt/data/medchron/queue/late.json", "{}")
+    _volume_state(tree, 3, 2)
+    (root / "run/smd-medchron").unlink()
+    (root / "opt/data/elsewhere").mkdir()
+    (root / "run/smd-medchron").symlink_to(root / "opt/data/elsewhere")
+    planted = _once(seat, "hourly")
+    assert _check(planted, "jobs-volume-old-tree-holds-no-files")["ok"] is False
+    assert _check(planted, "jobs-volume-run-dirs-bound")["ok"] is False
+    counts = _check(planted, "jobs-volume-move-counts-equal")
+    assert counts["ok"] is False and counts["warn"] is False
+    assert "files_before=3 files_after=2" in counts["detail"]
+    assert _check(planted, "jobs-volume-tree-present")["ok"] is True
+
+
+def test_a_lane_seat_with_no_move_record_or_a_linked_tree_fails_the_volume_checks(seat: dict[str, Path]) -> None:
+    root, tree = seat["root"], _moved_seat(seat)
+    (tree / "volume-epoch.state").unlink()
+    tree.rename(root / "opt/data/real")
+    tree.symlink_to(root / "opt/data/real")
+    doc = _once(seat, "boot")
+    assert _check(doc, "jobs-volume-move-counts-equal")["ok"] is False
+    assert _check(doc, "jobs-volume-tree-present")["ok"] is False
+
+
+def test_a_seat_with_no_lane_runs_only_the_volume_checks_that_need_no_tree(seat: dict[str, Path]) -> None:
+    doc = _once(seat, "hourly")
+    ran = _ran(doc) & set(JOBS_VOLUME_CHECKS)
+    assert ran == {"jobs-volume-old-tree-holds-no-files", "jobs-volume-move-counts-equal"}
+    assert all(_check(doc, c)["ok"] for c in ran)
+    # A tree an earlier boot moved keeps its record, and the record is still judged.
+    _volume_state(seat["root"] / "opt/data/jobs", 5, 4)
+    assert _check(_once(seat, "hourly"), "jobs-volume-move-counts-equal")["ok"] is False
 
 
 def test_vendor_probe_failure_fails_at_boot_and_warns_hourly(seat: dict[str, Path]) -> None:

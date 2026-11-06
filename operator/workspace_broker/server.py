@@ -267,7 +267,7 @@ class Broker:
         # Matter records by email (a staff member's named records, found, cut and
         # held for SMD review): its own tables on the same DB file, its own queue
         # dir (SMD_RECORDS_QUEUE_DIR), the firm's monthly budget read from
-        # SMD_RECORDS_FIRM_CONFIG. Unset, the queue is /opt/data/medchron/records-queue;
+        # SMD_RECORDS_FIRM_CONFIG. Unset, the queue is /opt/data/jobs/records-queue;
         # a seat that does not list the skill refuses every submit regardless.
         self.records = RecordsVerbs.build(self, audit_db_path=audit_db_path, queue_dir=records_queue_dir())
         # ss#2258: AgentMail transmit moves behind this uid boundary. The gateway

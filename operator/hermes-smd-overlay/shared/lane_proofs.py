@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DIR = "/run/smd-medchron"
+DEFAULT_DIR = "/run/smd-jobs"
 DIR_ENV = "SMD_LANE_PROOFS_DIR"
 AUTHORED_NAME = "lane-proofs.yaml"
 RUNTIME_NAME = "lane-proofs.runtime.json"

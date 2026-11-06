@@ -41,7 +41,8 @@ if [[ ! "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
 fi
 APP="hermes-${SLUG}"
 JOBS="/opt/jobs/.venv/bin/jobs"
-RUN_DIR="/run/smd-medchron"
+RUN_DIR="/run/smd-jobs"
+RUN_DIR_BEFORE_R2="/run/smd-medchron"
 
 on_seat() {
   local quoted=""
@@ -63,7 +64,9 @@ case "${ACTION}" in
       exit 2
     fi
     # The newest twin of that job, whichever lane ran it.
-    TWIN="$(on_seat sh -c "ls -1d ${RUN_DIR}/lane-proofs/*/*/${JOB} 2>/dev/null | sort | tail -1")"
+    # Both run dirs: a seat whose image predates the ADR 0103 volume move has the
+    # old one only, and a moved seat binds one tree at both (the same twin, listed twice).
+    TWIN="$(on_seat sh -c "ls -1d ${RUN_DIR}/lane-proofs/*/*/${JOB} ${RUN_DIR_BEFORE_R2}/lane-proofs/*/*/${JOB} 2>/dev/null | sort | tail -1")"
     [ -n "${TWIN}" ] || { echo "no proof run of ${JOB} on ${SLUG}" >&2; exit 1; }
     on_seat tar -C "$(dirname "${TWIN}")" -czf - --exclude "${JOB}/data/raw" --exclude "${JOB}/data/*/raw" \
       "${JOB}" proof.json 2>/dev/null >"${DEST}/twin.tgz" || true
