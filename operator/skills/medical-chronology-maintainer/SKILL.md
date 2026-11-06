@@ -540,7 +540,7 @@ first line is "Run the medical-chronology-maintainer skill's DELIVER mode for
 chronology job <id>." followed by `Outcome:`, `Matter number:`, the counts, and
 `Delivered folder id:` (delivered; a joint matter carries
 `Delivered folder ids (one chronology per client, <n> clients):` instead; an update that found nothing new carries
-`Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held or failed), a
+`Update outcome: already_current.` and a counts line instead) or `Held at: <stage>` (held; a failed job no longer wakes this mode), a
 `Hold class: <class>` line (held: only `rerouted_to_update` ever wakes this
 mode), then `Requester:` and `Request ref:`. **That wake IS this mode's initiation**: it arrives
 through the seat's own authenticated machinery, the administrator initiated it at
