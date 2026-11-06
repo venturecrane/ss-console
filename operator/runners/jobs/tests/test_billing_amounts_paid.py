@@ -1,0 +1,88 @@
+"""Amounts paid on the billing worksheet, only where a bill prints them.
+
+The billing transcription copied charges and printed totals and nothing a bill
+says was paid, so a firm asking for the amounts paid got a worksheet with none
+(the answer key's O1). The transcription now asks for every printed payment,
+and the worksheet lists each one by the bill's provider, document and page. A
+bill that prints no payment adds nothing; no payment is ever added up, taken
+from a total, or invented.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from jobs.stages import billing, billing_chart, billing_docx
+from test_finish_doc import _doc, _sr
+from test_review_billing_findings import TWO_PROVIDERS, _extract, _ledger, _worksheet_text
+
+HEADING = "Amounts Paid, as Printed on the Bills"
+
+
+def _paid_ledger(provider: str, amount: str, payments: list[dict]) -> dict:
+    rec = _ledger(provider, amount)
+    rec["chunks"][0]["printed_payments"] = payments
+    return rec
+
+
+def _run(sr) -> str:
+    assert billing_chart.run(sr) == 0
+    assert billing_docx.run(sr) == 0
+    return _worksheet_text(sr)
+
+
+def test_the_transcription_asks_for_printed_payments():
+    assert '"printed_payments"' in billing.SCHEMA_NOTE
+    assert "If\n  no payment is printed, printed_payments is []." in billing.SCHEMA_NOTE
+    assert "printed payments" in billing.TOTALS_ONLY
+
+
+def test_a_payment_the_bill_prints_is_on_the_worksheet(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    _doc(sr, TWO_PROVIDERS)
+    pay = [
+        {"label": "Insurance payment", "amount": "$612.40", "date": "02/10/2026", "page": 1},
+        {"label": "Patient payment", "amount": "$25.00", "date": None, "page": 1},
+    ]
+    _extract(sr, _paid_ledger("Example Clinic", "$1,800.00", pay))
+    text = _run(sr)
+    assert HEADING in text
+    tail = text[text.index(HEADING) :]
+    for want in ("Example Clinic", "Example Clinic ledger", "p. 1", "Insurance payment", "$612.40", "02/10/2026"):
+        assert want in tail, want
+    assert "Patient payment" in tail and "$25.00" in tail
+    chart = json.loads((sr.slug_dir / "billing_chart.json").read_text())
+    assert chart["grand_total"] == 1800.0, "a payment is never taken from the billed total"
+    assert "$637.40" not in text and "$1,187.60" not in text, "payments are never added up or subtracted"
+
+
+def test_a_bill_that_prints_no_payment_renders_nothing(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    _doc(sr, TWO_PROVIDERS)
+    _extract(sr, _ledger("Example Clinic", "$1,800.00"), _paid_ledger("Other Ortho", "$900.00", []))
+    text = _run(sr)
+    assert HEADING not in text and "Amount Paid" not in text
+
+
+def test_an_unreadable_payment_or_a_vendors_is_left_out(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    _doc(sr, TWO_PROVIDERS)
+    vendor = {
+        "file": "records vendor invoice",
+        "pages": 1,
+        "failures": [],
+        "chunks": [
+            {
+                "doc_type": "VENDOR_INVOICE",
+                "provider": "Example Copy Service",
+                "printed_totals": [],
+                "printed_payments": [{"label": "Paid by firm", "amount": "$75.00", "page": 1}],
+            }
+        ],
+    }
+    blurred = [{"label": "Payment", "amount": "$1,?00.00", "page": 1}]
+    _extract(sr, _paid_ledger("Example Clinic", "$1,800.00", blurred), vendor)
+    text = _run(sr)
+    assert HEADING not in text
+    assert "$75.00" not in text and "Paid by firm" not in text
