@@ -393,6 +393,16 @@ def test_signature_and_quoted_lines_are_not_read_for_near_misses(tail):
     assert parties.resolve(N_TWO + tail, [*N_VALUES, UNSERVED]).planned == [N_DISTRICT, N_CITY]
 
 
+def test_a_case_number_line_naming_the_parties_is_still_read():
+    req = (
+        "Case No. 34567, please propound discovery to Northfield Joint Union High School District and to City of "
+        "Northfield. We need RFA, RFPD and SROG, set one."
+    )
+    assert parties.resolve(req, N_VALUES).planned == [N_DISTRICT, N_CITY]
+    # an address is still skipped: a ZIP after a state, or a street word with a five-digit number
+    assert parties.request_body("Example Law, Northfield, CA 95555\n123 Main St 95555\nkeep") == "keep"
+
+
 def test_smds_hand_line_after_a_signature_is_still_read():
     assert parties.resolve(SIGNED + "\n\nSMD: Northfield Joint Union High School District only.", N_VALUES).planned == [
         N_DISTRICT

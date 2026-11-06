@@ -277,7 +277,28 @@ _JURISDICTION = re.compile(r"(?i)^(?:the\s+)?(?:state|county|city|commonwealth|t
 _SIGN_OFF = re.compile(r"(?i)^\s*(?:thanks|thank\s+you|regards|best(?:\s+regards)?|sincerely)\b[\s,.!]*$")
 #: A line of only a person's name (one to three capitalized words, no party word).
 _NAME_LINE = re.compile(r"^\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+){0,2}\s*$")
-_ZIP = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+_STATES = (
+    "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK "
+    "OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split()
+)
+_STATE_NAMES = (
+    "Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|"
+    "Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|"
+    "Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|"
+    "Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|"
+    "West Virginia|Wisconsin|Wyoming"
+)
+#: An address line: a ZIP after a state ("CA 95555", "California 95555"), or a street word and a
+#: five-digit number on one line. A bare five-digit number ("Case No. 34567") is not an address.
+_ZIP = re.compile(r"\b(?:" + "|".join(_STATES) + "|" + _STATE_NAMES + r")\.?,?\s+\d{5}(?:-\d{4})?\b")
+_STREET = re.compile(r"(?i)\b(?:st|ave|blvd|rd|suite|ste)\b\.?")
+_FIVE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+
+
+def _address(ln: str) -> bool:
+    return bool(_ZIP.search(ln) or (_STREET.search(ln) and _FIVE.search(ln)))
+
+
 _PHONE = re.compile(r"(?i)\b(?:tel|phone|fax|facsimile)\b|\(?\b\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b")
 #: Words that START a new block after a signature: SMD's hand line, a requester's added words.
 _BLOCK = re.compile(r"(?i)^\s*(?:SMD\b|Added by .+ in the same email thread:)")
@@ -298,7 +319,7 @@ def request_body(text: str) -> str:
             any(x.strip() for x in out) and _NAME_LINE.match(ln) and not any(w.lower() in _ENTITY for w in ln.split())
         ):
             signed = True
-        if signed or ln.lstrip().startswith(">") or _ZIP.search(ln) or _PHONE.search(ln):
+        if signed or ln.lstrip().startswith(">") or _address(ln) or _PHONE.search(ln):
             continue
         out.append(ln)
     return "\n".join(out)
