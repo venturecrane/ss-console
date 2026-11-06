@@ -65,6 +65,11 @@ REASON_CODES = (
     "firm_base_unfit",
     # A brief in the firm's own file (firmbase): more than its slots differ: failed, nothing filed.
     "firm_base_lost",
+    # The request serves a set on a name that is none of the matter's parties, or two of them (parties.py):
+    # failed before any compose, SMD alerted; never a guess.
+    "party_unknown",
+    # A set served on one party still defines YOU as another after code bound it (parties.bind): failed.
+    "party_mismatch",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
