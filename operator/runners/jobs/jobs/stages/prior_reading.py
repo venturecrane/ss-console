@@ -104,7 +104,9 @@ def cited_sources(sr: StageRun) -> set[str]:
     after delivery (``retention.py``), and an update requested later found no
     cited source at all: on a client seat 0 of 3 re-pulled cited files were
     recognised. The ledger row outlives the dir."""
-    unit = sr.unit.unit
+    unit = getattr(getattr(sr, "unit", None), "unit", None)
+    if not unit:
+        return set()  # no unit: nothing delivered can be cited for it
     out: set[str] = set()
     for src in delivered_same_matter(getattr(sr, "job", None), sr.slug_dir.name):
         out |= set(cited_by_id(src, unit).values())
