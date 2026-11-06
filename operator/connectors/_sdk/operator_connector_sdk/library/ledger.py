@@ -27,14 +27,18 @@ before" without a second store.
 WHERE IT LIVES ON A SEAT, and what writes it. In the seat's root-owned spec
 store, beside ``layout.json``: ``<SMD_SPEC_DIR>/library/accepted.json``
 (``/var/lib/smd-config/specs/library/accepted.json``), its sha256 recorded by
-root in ``manifest.json`` under ``library_ledger``. The writer is wired in a
-later PR and goes through the existing root-owned spec install path: the
-root-side establishment intake merge-writes the new ledger (the output of
-:func:`accept`) into the seat's vault object, and the spec applier installs it
-and records its digest in the manifest, the same commit order as a layout rule.
-Nothing on the agent side writes it. This module holds the format, a pure
-parser and validator, the pure acceptance function, and the one read-only
-reader of an installed ledger.
+root in ``manifest.json`` under ``library_ledger``. The writer goes through the
+existing root-owned spec install path: the root-side establishment intake
+(``establish_intake/library_accept.py``) writes the new ledger (the output of
+:func:`accept`) to the firm's own vault object ``vaults/<slug>/library/accepted.json``,
+each accepted file's bytes beside it at ``vaults/<slug>/library/files/<sha256>.docx``,
+and the spec applier (``spec_applier/library.py``) installs both and records
+their digests in the manifest. Nothing on the agent side writes it. This module
+holds the format, a pure parser and validator, the pure acceptance function, and
+the one read-only reader of an installed ledger. The overlay keeps a byte-equal
+copy at ``operator/hermes-smd-overlay/shared/library_ledger.py``, because the
+overlay does not install this package; ``tests/test_library_seat_copy.py`` in
+the overlay fails if the two differ.
 
 "CANNOT LOOK" IS NEVER "NONE". :func:`read_installed` answers one of three:
 ``EMPTY`` (no ledger installed: an ordinary seat with nothing accepted yet),
@@ -71,7 +75,17 @@ UNUSABLE = "unusable"
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _WHEN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 _ENTRY_KEYS = frozenset(
-    {"kind", "attorney", "file_id", "version", "sha256", "contract", "accepted_by", "accepted_at", "replaces"}
+    {
+        "kind",
+        "attorney",
+        "file_id",
+        "version",
+        "sha256",
+        "contract",
+        "accepted_by",
+        "accepted_at",
+        "replaces",
+    }
 )
 _REPLACED_KEYS = frozenset({"file_id", "version", "sha256"})
 _TOP_KEYS = frozenset({"schema_version", "entries", "superseded"})
@@ -165,7 +179,11 @@ def _entry_problems(where: str, raw: Any) -> list[str]:
     if set(raw) != _ENTRY_KEYS:
         missing, extra = sorted(_ENTRY_KEYS - set(raw)), sorted(set(raw) - _ENTRY_KEYS)
         return [f"{where} has missing keys {missing} or unknown keys {extra}"]
-    out = [f"{where}.{k} is empty" for k in ("kind", "file_id", "version", "accepted_by") if not _text(raw[k])]
+    out = [
+        f"{where}.{k} is empty"
+        for k in ("kind", "file_id", "version", "accepted_by")
+        if not _text(raw[k])
+    ]
     if raw["attorney"] is not None and not _text(raw["attorney"]):
         out.append(f"{where}.attorney must be null or an attorney key")
     if not isinstance(raw["sha256"], str) or not _SHA.match(raw["sha256"]):
@@ -232,7 +250,9 @@ def _entry_json(entry: Entry) -> dict[str, Any]:
         "contract": entry.contract,
         "accepted_by": entry.accepted_by,
         "accepted_at": entry.accepted_at,
-        "replaces": {"file_id": rep.file_id, "version": rep.version, "sha256": rep.sha256} if rep else None,
+        "replaces": {"file_id": rep.file_id, "version": rep.version, "sha256": rep.sha256}
+        if rep
+        else None,
     }
 
 
@@ -279,7 +299,12 @@ def accept(ledger: Ledger, acceptance: Acceptance) -> Ledger:
     if problems:
         raise AcceptanceInvalid("; ".join(problems))
     current = ledger.entry_for(acceptance.kind, acceptance.attorney)
-    if current is not None and (current.file_id, current.version, current.sha256, current.contract) == (
+    if current is not None and (
+        current.file_id,
+        current.version,
+        current.sha256,
+        current.contract,
+    ) == (
         acceptance.file_id,
         acceptance.version,
         acceptance.sha256,
@@ -302,7 +327,9 @@ def _unusable(reason: str) -> LedgerRead:
     return LedgerRead(UNUSABLE, None, reason)
 
 
-def _manifest_entry(root: Path, ledger_exists: bool) -> tuple[dict[str, Any] | None, LedgerRead | None]:
+def _manifest_entry(
+    root: Path, ledger_exists: bool
+) -> tuple[dict[str, Any] | None, LedgerRead | None]:
     """The manifest's record of the ledger, or the read that ends the lookup."""
     try:
         manifest = json.loads((root / MANIFEST).read_text("utf-8"))
@@ -331,7 +358,11 @@ def read_installed(spec_dir: str | Path) -> LedgerRead:
     if done is not None:
         return done
     if not exists:
-        return _unusable("the manifest names the ledger and it is gone") if entry else LedgerRead(EMPTY, Ledger())
+        return (
+            _unusable("the manifest names the ledger and it is gone")
+            if entry
+            else LedgerRead(EMPTY, Ledger())
+        )
     if entry is None:
         return _unusable("the ledger is present and the manifest does not name it")
     try:

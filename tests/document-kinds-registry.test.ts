@@ -121,6 +121,11 @@ describe('every copy of the kind list agrees with the registry', () => {
     }
   })
 
+  it("the library acceptance writer's DOCUMENT_CLASSES is the registry, in its order", () => {
+    const ACCEPT = 'operator/hermes-smd-overlay/establish_intake/library_accept.py'
+    expect(disagreement(members(ACCEPT, PY_DOCUMENT_CLASSES, DQ), KINDS, 'ordered')).toBeNull()
+  })
+
   it('every kind is made by the chat tool, which accepts the renderer list', () => {
     expect(disagreement(byProducer('chat_tool'), KINDS, 'equal')).toBeNull()
   })
