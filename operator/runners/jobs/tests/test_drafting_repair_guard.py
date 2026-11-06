@@ -631,3 +631,28 @@ def test_the_index_and_its_word_stream_live_in_the_jobs_data_dir_and_nowhere_els
         with pytest.raises(ValueError, match="only in a job's data directory"):
             newfacts.index(lambda: read.append(1) or (SOURCE,), shared)
         assert read == [] and not list(shared.glob("known-index-*"))
+
+
+def test_the_replay_reads_the_same_cached_index_the_job_built(tmp_path):
+    """The seat builds the index from the digest and the record text as one
+    string (``prebuild``); a replay over the job's own files must land on the
+    same key, so it reads that index instead of building a second one."""
+    data = _data(tmp_path)
+    (data / "digest.md").write_text("## MEDICAL | ER record | 01/15/2026\nOfficer Smith noted the spill.\n")
+    rows, texts = [], []
+    for i in range(3):
+        f = data / "text" / f"doc{i}.txt"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text(f"Record {i} signed by Quill Example.")
+        rows.append(json.dumps({"name": f"d{i}", "text_path": str(f)}))
+        texts.append(f.read_text())
+    empty = data / "text" / "empty.txt"
+    empty.write_text("")
+    rows.append(json.dumps({"name": "scan", "text_path": str(empty)}))  # not in the corpus: empty
+    (data / "extracted.jsonl").write_text("\n".join(rows) + "\n")
+    newfacts._MEMO.clear()
+    repair_guard.prebuild(data, (data / "digest.md").read_text(), "\n".join(texts))
+    built = sorted(data.glob("known-index-*"))
+    newfacts._MEMO.clear()
+    repair_guard.replay(data)
+    assert sorted(data.glob("known-index-*")) == built  # no second index
