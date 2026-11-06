@@ -57,6 +57,15 @@ suite('pr-watch: what a PR shows', () => {
     expect(describe(pr())).toBe('open | green, not queued')
   })
 
+  it('says BLOCKED when every reported check passed but a required one has not started', () => {
+    // 2026-11-06: Verify sat waiting for a runner, absent from the rollup, and the line read "green".
+    const checks = [{ name: 'substrate', state: 'pass' as const }]
+    expect(describe(pr({ checks, mergeState: 'BLOCKED' }))).toBe(
+      'open | green, not queued (BLOCKED)'
+    )
+    expect(describe(pr({ checks, mergeState: 'UNKNOWN' }))).toBe('open | green, not queued')
+  })
+
   it('does not change its line as running checks finish one by one, only when one fails', () => {
     const three = pr({
       checks: ['a', 'b', 'c'].map((name) => ({ name, state: 'running' as const })),

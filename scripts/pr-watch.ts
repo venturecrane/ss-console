@@ -31,6 +31,9 @@ export interface PrSnapshot {
   isDraft: boolean
   queue: { position: number; state: string } | null
   checks: { name: string; state: CheckState }[]
+  /** GitHub's mergeStateStatus (CLEAN, BLOCKED, BEHIND, DIRTY, ...). A required check
+   *  that has not started yet is absent from `checks`, so "green" alone can mislead. */
+  mergeState?: string
 }
 
 const FAIL = new Set([
@@ -79,7 +82,10 @@ export function describe(pr: PrSnapshot): string {
   // No count: a line per finished check would wake a Monitor every minute for nothing.
   if (running) parts.push('checks running')
   if (pr.queue) parts.push(`queued #${pr.queue.position} ${pr.queue.state}`)
-  else if (!failing.length && !running) parts.push(pr.isDraft ? 'green' : 'green, not queued')
+  else if (!failing.length && !running) {
+    const state = pr.mergeState && pr.mergeState !== 'UNKNOWN' ? ` (${pr.mergeState})` : ''
+    parts.push(pr.isDraft ? 'green' : `green, not queued${state}`)
+  }
   return parts.join(' | ')
 }
 
@@ -92,7 +98,7 @@ const QUERY = (numbers: number[]): string =>
   `{repository(owner:"venturecrane",name:"ss-console"){${numbers
     .map(
       (n) =>
-        `p${n}:pullRequest(number:${n}){number state isDraft mergeQueueEntry{position state} ` +
+        `p${n}:pullRequest(number:${n}){number state isDraft mergeStateStatus mergeQueueEntry{position state} ` +
         `commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename ` +
         `... on CheckRun{name status conclusion} ... on StatusContext{context state}}}}}}}}`
     )
@@ -102,6 +108,7 @@ interface RawPr {
   number: number
   state: PrSnapshot['state']
   isDraft: boolean
+  mergeStateStatus?: string
   mergeQueueEntry: { position: number; state: string } | null
   commits: {
     nodes: { commit: { statusCheckRollup: { contexts: { nodes: RawContext[] } } | null } }[]
@@ -121,6 +128,7 @@ export function parse(json: string, numbers: number[]): PrSnapshot[] {
       number: raw.number,
       state: raw.state,
       isDraft: raw.isDraft,
+      mergeState: raw.mergeStateStatus,
       queue: raw.mergeQueueEntry,
       checks: nodes.map((c) => ({ name: c.name ?? c.context ?? '?', state: checkState(c) })),
     }
