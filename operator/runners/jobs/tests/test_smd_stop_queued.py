@@ -174,7 +174,10 @@ def test_the_lane_records_a_stop_from_its_idle_wait(tmp_path):
     smd_stop.stop_queued(lane.queue, lane.job_dir(jid), by="scott", why="dup", at=1.0)
     lane.tick = lambda: None  # only the wait between ticks runs
     deadline = time.monotonic() + 15
-    done = lambda: lane._daemon_state(jid).get("state") == "stopped_by_smd" or time.monotonic() > deadline  # noqa: E731
+
+    def done() -> bool:
+        return lane._daemon_state(jid).get("state") == "stopped_by_smd" or time.monotonic() > deadline
+
     lane.run_forever(done, poll_seconds=3)
     assert lane._daemon_state(jid)["state"] == "stopped_by_smd"
     assert _records(client, jid) == ["failed"]
