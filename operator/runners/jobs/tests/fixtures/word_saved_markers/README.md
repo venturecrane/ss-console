@@ -88,6 +88,7 @@ The made-up values it allows:
 | `eighteen-hyperlink-on-part.xml`     | A `w:hyperlink` wrapper around part of the line                             | Microsoft Office Word 16.0000         |
 | `nineteen-field-on-part.xml`         | A field (`w:fldChar` begin, instruction, separate, end) on part of the line | Microsoft Office Word 16.0000         |
 | `twenty-content-control-on-part.xml` | A content control (`w:sdt`) around part of the line                         | Microsoft Office Word 16.0000         |
+| `twentyone-identical-runs.xml`       | Adjacent runs with the same format, no revision ids and nothing between     | Microsoft Macintosh Word 14.0000      |
 
 Application strings seen across the source files: Microsoft Office Word
 16.0000, Microsoft Office Word 15.0000, Microsoft Office Word 12.0000 and

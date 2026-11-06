@@ -48,6 +48,7 @@ CAUSES = (
     "hyperlink-on-part",
     "field-on-part",
     "content-control-on-part",
+    "identical-runs",
 )
 
 

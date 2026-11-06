@@ -41,14 +41,14 @@ NAMESPACES = {W_NS: "w", W14_NS: "w14", R_NS: "r", XML_NS: "xml"}
 
 NUMBER_WORDS = (
     "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
-    "seventeen eighteen nineteen twenty"
+    "seventeen eighteen nineteen twenty twentyone"
 ).split()
 
 # The words a fixture's file name may hold after its number word.
 LABEL_WORDS = frozenset(
     "proof mark spelling grammar revision id run format bold underline superscript on part bookmark start end "
     "rendered page break tab in line two texts one no hyphen smart tag tracked insertion deletion hyperlink "
-    "field content control".split()
+    "field content control identical runs".split()
 )
 
 # --- the fixed made-up values (the allow-list) ------------------------------
