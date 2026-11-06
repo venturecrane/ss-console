@@ -403,6 +403,11 @@ def test_a_case_number_line_naming_the_parties_is_still_read():
     assert parties.request_body("Example Law, Northfield, CA 95555\n123 Main St 95555\nkeep") == "keep"
 
 
+def test_a_bracketed_smd_scope_note_after_a_signature_narrows_to_one_party():
+    note = "\n\n[SMD, at the firm's direction: to Northfield Joint Union High School District only.]"
+    assert parties.resolve(SIGNED + note, N_VALUES).planned == [N_DISTRICT]
+
+
 def test_smds_hand_line_after_a_signature_is_still_read():
     assert parties.resolve(SIGNED + "\n\nSMD: Northfield Joint Union High School District only.", N_VALUES).planned == [
         N_DISTRICT

@@ -301,7 +301,7 @@ def _address(ln: str) -> bool:
 
 _PHONE = re.compile(r"(?i)\b(?:tel|phone|fax|facsimile)\b|\(?\b\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b")
 #: Words that START a new block after a signature: SMD's hand line, a requester's added words.
-_BLOCK = re.compile(r"(?i)^\s*(?:SMD\b|Added by .+ in the same email thread:)")
+_BLOCK = re.compile(r"(?i)^\s*[\[(]?\s*(?:SMD\b|Added by .+ in the same email thread:)")
 
 
 def request_body(text: str) -> str:
