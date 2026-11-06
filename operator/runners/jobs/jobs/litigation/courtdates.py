@@ -220,8 +220,7 @@ def _dates_on(events: list[dict[str, Any]]) -> set[str]:
     return {
         d.isoformat()
         for e in events
-        if (kind(e) in (*COURT, "mediation") or _headed_event(e) or _timed_named(e))
-        and (d := _day(e)) is not None
+        if (kind(e) in (*COURT, "mediation") or _headed_event(e) or _timed_named(e)) and (d := _day(e)) is not None
     }
 
 
