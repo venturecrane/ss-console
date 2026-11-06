@@ -62,7 +62,7 @@ KINDS: tuple[str, ...] = (
 #: The kinds a queued job makes and reads these rules for. ``letter`` is not one:
 #: nothing that makes a letter reads this file, so a rule for letters alone is
 #: never called in effect.
-LANE_KINDS: frozenset[str] = frozenset(KINDS) - {"letter"}
+LANE_KINDS: frozenset[str] = frozenset(k for k in KINDS if k != "letter")
 
 #: How each kind is said to a person, singular and plural.
 KIND_WORDS: dict[str, tuple[str, str]] = {
