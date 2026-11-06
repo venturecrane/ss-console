@@ -815,3 +815,18 @@ def test_a_reuse_check_with_nothing_saved_reports_no_case_reused(tmp_path):
     rc = json.loads(report.read_text())["reuse_check"]
     assert rc["reused"] == 0 and rc["row_digest"] == {}
     assert [w["number"] for w in rc["would_read"]] == ["100001"]
+
+
+def test_the_seed_saves_a_corrected_record_with_an_em_dash_the_printer_cleans(tmp_path):
+    """2026-10-30: 28 hand-corrected cases were refused as internal text for an
+    em dash the printer writes as ", "; a real leak is still refused."""
+    from jobs.litigation.discovery12 import carry
+
+    r1 = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    assert r1.run().verdict == "delivered"
+    carry.purge(tmp_path / "state", M1)
+    good = json.loads((r1.data / "final.json").read_text())[0]
+    good["sections"]["frogs"][0]["notes"] = "Served by mail \u2014 verified"
+    assert carry.problems({**good, "provenance": "hand read"}) is None
+    good["sections"]["frogs"][0]["notes"] = "Served by mail \u2014 see read2"
+    assert "internal text" in (carry.problems({**good, "provenance": "hand read"}) or "")

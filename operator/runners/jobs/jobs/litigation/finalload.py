@@ -65,6 +65,13 @@ def _norm(obj: Any, n: list[int]) -> Any:
     return obj
 
 
+def dashless(obj: Any) -> Any:
+    """``obj`` with every em dash outside a ``source`` made ", ", as the loader
+    does: a read's value never reaches the gates with one (2026-10-23: a court
+    field written "A — B" held the list)."""
+    return _norm(obj, [0])
+
+
 def _cited(v: Any) -> str | None:
     """None when a dated value is fit to store, else the refusal's reason."""
     if not isinstance(v, dict):

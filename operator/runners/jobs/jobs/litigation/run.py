@@ -37,7 +37,7 @@ from . import (
     inventory,
     job as job_mod,
 )
-from . import carry, defstatus, manifest, parity, passes, read, seedcheck, textcache, update, vocab
+from . import carry, defstatus, finalload, manifest, parity, passes, read, seedcheck, textcache, update, vocab
 from .progress import Progress
 from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported for tests and callers that import these from run
 from .runbase import RunBase
@@ -336,6 +336,7 @@ class LitigationRun(BookStages, RunBase):
         # A no-answer status beside a note stating a default, dismissal or
         # answer prints the note's status (``defstatus``, 2026-11-02).
         log = [*log, *defstatus.reconcile(result)]
+        result = finalload.dashless(result)
         out = {
             **result,
             "matter_id": mid,
