@@ -18,7 +18,8 @@ an undelivered reply. Kept out of ``reply_binding.py``, which sits at its
 module size ceiling.
 
 HOW A KIND LEAVES. Remove it from ``SILENT_KINDS`` and its held reply binds as
-it did before 2026-11-06 (``delivered_matter.drafting``'s held words); failed
+it did before 2026-11-06 (drafting: ``delivered_matter.drafting``'s held words;
+litigation: its hold class's fixed wording); failed
 and waiting jobs were never replied on before #3816 either way.
 """
 
@@ -27,7 +28,10 @@ from __future__ import annotations
 from typing import Any
 
 #: The job kinds whose stopped states the requester is told nothing about.
-SILENT_KINDS = frozenset({"drafting_job"})
+#: Litigation joined the same day (the Captain's same words), its held
+#: replies included: until then a held list was replied on in its hold
+#: class's fixed wording.
+SILENT_KINDS = frozenset({"drafting_job", "litigation_job"})
 
 #: A drafting hold whose cause is in the request or the file: SMD's page says
 #: so, because the firm would have been asked for it (``delivered_matter.drafting``).
@@ -53,12 +57,36 @@ def _drafting(row: dict[str, Any]) -> str | None:
     return None
 
 
+#: A litigation hold whose class is the firm's answer (``hold_class``): which
+#: staff, whose files, or a scope with no case. SMD's page says so, because the
+#: firm was asked for it before 2026-11-06 and is not now.
+LITIGATION_FIRM_HOLDS = frozenset({"nothing_in_scope", "staff_unresolved", "requester_unresolved"})
+
+
+def _litigation(row: dict[str, Any]) -> str | None:
+    from . import hold_class
+
+    state = row.get("state")
+    reason = str(row.get("reason") or "").strip()
+    if state == "failed":
+        return "failed"
+    if state == "submitted" and reason.startswith(LANE_UNPROVEN):
+        return "waiting"
+    if state == "held":
+        cls = hold_class.classify("litigation", reason)[0]
+        return "held_firm_cause" if cls in LITIGATION_FIRM_HOLDS else "held"
+    return None
+
+
+_CLASSIFIERS = {"drafting_job": _drafting, "litigation_job": _litigation}
+
+
 def stop_class(kind: str, row: dict[str, Any] | None) -> str | None:
     """The class SMD's page names for a silent kind's stopped job, or None
     (the job has not stopped, or its kind is not silent)."""
     if kind not in SILENT_KINDS or not row:
         return None
-    return _drafting(row) if kind == "drafting_job" else None
+    return _CLASSIFIERS[kind](row)
 
 
 def held_silent(kind: str, row: dict[str, Any]) -> bool:
@@ -89,6 +117,7 @@ __all__ = [
     "DRAFTING_CHECKING",
     "DRAFTING_FIRM_HOLDS",
     "LANE_UNPROVEN",
+    "LITIGATION_FIRM_HOLDS",
     "SILENT_KINDS",
     "held_silent",
     "refusal",
