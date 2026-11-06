@@ -13,7 +13,7 @@ THE RULES, each with the mutation that breaks it:
    (``fixed_wording.STOPPED`` + ``STOP_CLASS``). Mutation: drop the drafting
    classifier and every one of these renders the old words, or nothing.
 2. The bind lets that state bind, and the send refuses any other words.
-   Mutation: drop ``_stopped_note_owed`` from ``reply_binding._verify_job`` and
+   Mutation: make ``stop_note.owed`` return False in ``reply_binding._verify_job`` and
    a failed or waiting job is refused its bind again.
 3. Once per ``attempt:state``: a second send for the same key is
    ``already_sent`` and nothing goes twice. Mutation: skip the claim check in
@@ -188,11 +188,17 @@ def test_a_resumed_job_that_ends_again_is_owed_its_new_reply(tmp_path: Path) -> 
     job = _job(tmp_path, [("running", ""), ("failed", "no_verdict: x")])
     box = _box()
     assert _note(_broker(tmp_path, box), job)["outcome"] == "sent"
+    # The note went before the resume. The fake stamps every send at its fixed
+    # NOW, which can fall after the ledger's real clock; put it where it was, or
+    # the thread_answered guard (#3813) reads it as a reply after the finish.
+    for sent in box.sent:
+        sent["sentDateTime"] = "2000-01-01T00:00:00Z"
     ledger = DraftingLedger(str(tmp_path / "audit.db"), tmp_path / "dq")
     ledger.record(job, "running", {})
     ledger.record(job, "delivered", {})
     out = _note(_broker(tmp_path, box), job)
-    assert out["outcome"] == "sent" and out["stop_class"] == "" and len(box.replies()) == 2
+    assert out["outcome"] == "sent", out.get("why")
+    assert out["stop_class"] == "" and len(box.replies()) == 2
 
 
 def test_a_running_job_is_owed_nothing(tmp_path: Path) -> None:

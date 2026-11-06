@@ -98,7 +98,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Any
 
-from . import bound_replies, delivery_proof, msgraph_lookup, reply_text
+from . import bound_replies, delivery_proof, msgraph_lookup, reply_text, stop_note
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
@@ -363,27 +363,16 @@ def reply_key(kind: str, ident: str, row: dict[str, Any]) -> str:
     return f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
 
 
-def _stopped_note_owed(kind: str, row: dict[str, Any]) -> bool:
-    """A code-sent kind's job in a state ``fixed_wording.STOPPED`` words."""
-    from . import fixed_wording
-
-    return kind in reply_text.CODE_SENT_KINDS and fixed_wording.stopped_class(kind, row) is not None
-
-
 def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
     """A job binding's ledger checks: (the row, its reply key), or refused."""
     noun = _NOUN[kind]
     row = job_ledger(broker, kind).read(ident)
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
-    if _stopped_note_owed(kind, row):
-        # 2026-11-06: a held, failed or waiting job of a code-sent kind is owed
-        # its one note in the broker's words (fixed_wording.STOPPED).
-        key = reply_key(kind, ident, row)
-        if bound_replies.claimed(db_path, key):
-            raise _job_refused(f"{noun} job {ident} has already had its reply for this outcome", "already_replied")
-        return row, key
-    if row["state"] == "failed":
+    # 2026-11-06: a held, failed or waiting job of a code-sent kind is owed its
+    # one note in the broker's words (stop_note, fixed_wording.STOPPED).
+    stopped = stop_note.owed(kind, row)
+    if row["state"] == "failed" and not stopped:
         raise _job_refused(
             f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
             f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone.",
@@ -394,7 +383,7 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
             f"{noun} job {ident} stopped and SMD is finishing it; the requester hears about a chronology only "
             "when it is delivered, and SMD has been alerted. Send nothing to anyone."
         )
-    if row["state"] not in replyable_states(kind):
+    if row["state"] not in replyable_states(kind) and not stopped:
         raise _job_refused(
             f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that", "not_ended"
         )
