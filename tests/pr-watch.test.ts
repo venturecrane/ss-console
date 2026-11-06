@@ -28,6 +28,7 @@ const body = (n: number, state: string, queued: boolean, checks: object[] = []) 
           number: n,
           state,
           isDraft: false,
+          mergeStateStatus: queued ? 'QUEUED' : 'BLOCKED',
           mergeQueueEntry: queued ? { position: 1, state: 'AWAITING_CHECKS' } : null,
           commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: checks } } } }] },
         },
@@ -104,6 +105,7 @@ suite('pr-watch: what a PR shows', () => {
       { name: 'overlay', state: 'fail' },
       { name: 'legacy', state: 'pass' },
     ])
+    expect(parse(json, [7])[0].mergeState).toBe('BLOCKED')
     expect(() => parse(json, [8])).toThrow('PR #8 not found')
   })
 })
@@ -150,8 +152,8 @@ suite('pr-watch: the command', () => {
       ['5', '--interval', '0.05', '--stall-minutes', '0.001', '--max-hours', '0.0002'],
       [body(5, 'OPEN', false)]
     )
-    expect(r.stdout).toMatch(/#5 open \| green, not queued/)
-    expect(r.stdout).toMatch(/#5 STALLED \d+ min: open \| green, not queued/)
+    expect(r.stdout).toMatch(/#5 open \| green, not queued \(BLOCKED\)/)
+    expect(r.stdout).toMatch(/#5 STALLED \d+ min: open \| green, not queued \(BLOCKED\)/)
     expect(r.stdout.match(/STALLED/g)).toHaveLength(1)
     expect(r.stdout).toMatch(/STILL OPEN #5/)
     expect(r.status).toBe(1)
