@@ -14,7 +14,12 @@ a caption's segmentation on its own. It cuts every caption value into pieces
 at commas, semicolons and "and", and takes each piece and each run of up to
 three adjacent pieces, as printed, as a CANDIDATE name. A party is a candidate
 the attorney's request prints (case-insensitive, whole words; the longest
-wins). So the request decides the split: "City of X" named in the request is
+wins). A single piece also matches when the request's spelling carries up to
+two extra words among its words, in order ("Northfield Joint Union High
+School District" names the caption's "Northfield Joint Union School
+District"); one phrase that could be two caption parties stops. A capitalized
+phrase carrying half or more of an unnamed party's words is a near miss and
+stops, quoting both spellings: a party is never dropped silently. So the request decides the split: "City of X" named in the request is
 its own party even inside the District's value.
 
 * Two or more distinct names in the request: one unit per (named party, set).
@@ -43,7 +48,6 @@ nothing, writes nothing): ``python -m jobs.drafting.parties <job_dir>``.
 
 from __future__ import annotations
 
-import difflib
 import json
 import re
 import sys
@@ -67,6 +71,8 @@ _EVERY = re.compile(
 _ONLY = re.compile(
     r"(?i)\bto\s+(?P<a>(?:[^.;\n]|\.(?=\S)|\.(?=\s+only\b))+?)\s+only\b|\bonly\s+(?:to|on|upon)\s+(?P<b>[^.;\n]+)"
 )
+#: "<party> only", the clause before it (SMD's hand line: "SMD: <party> only").
+_BARE_ONLY = re.compile(r"(?P<c>[^.;:\n]+?)\s+only\b", re.I)
 #: "DOES 1 through 50", "Does 1 - 100", "ROES 1 to 10": fictitious defendants, never a party served.
 _FICTITIOUS = re.compile(r"(?i)^(?:and\s+)?(?:does?|roes?)\s+\d+\s*(?:-|–|to|through|thru)\s*\d+\b")
 #: What a caption prints after a name, describing it ("a public entity", "inclusive").
@@ -83,6 +89,9 @@ _ENTITY = frozenset(
 )
 _SEP = re.compile(r"[;,]|\band\b", re.I)
 _RUN = 3  # a candidate spans at most this many adjacent pieces
+_EXTRA = 2  # words a request's spelling of a name may carry that the caption's lacks
+#: Words a near miss never counts ("the City of", "and").
+_DETERMINERS = frozenset("the of a an and to for at in on by".split())
 
 
 class PartyUnknown(ValueError):
@@ -97,9 +106,34 @@ def _words(s: str) -> list[str]:
     return [w for w in re.findall(r"[a-z0-9]+", str(s).lower()) if w not in _STOP]
 
 
+def _within(inner: list[str], outer: list[str]) -> tuple[int, int] | None:
+    """Where ``inner``'s words all appear in order inside ``outer`` with at most
+    ``_EXTRA`` extra words among them ("Northfield Joint Union School District"
+    inside "Northfield Joint Union High School District"): (first, last) index
+    in ``outer``, or None."""
+    if not inner:
+        return None
+    for i, w in enumerate(outer):
+        if w != inner[0]:
+            continue
+        k, extra, j = 1, 0, i
+        while k < len(inner) and extra <= _EXTRA:
+            j += 1
+            if j >= len(outer):
+                break
+            if outer[j] == inner[k]:
+                k += 1
+            else:
+                extra += 1
+        if k == len(inner) and extra <= _EXTRA:
+            return i, j
+    return None
+
+
 def same(a: str, b: str) -> bool:
-    x, y = " ".join(_words(a)), " ".join(_words(b))
-    return bool(x and y) and (x == y or difflib.SequenceMatcher(None, x, y).ratio() >= 0.9)
+    """One party in two spellings: one's words inside the other's (``_within``)."""
+    x, y = _words(a), _words(b)
+    return bool(x and y) and (_within(x, y) is not None or _within(y, x) is not None)
 
 
 def _entity(piece: str) -> bool:
@@ -125,6 +159,7 @@ class Candidate:
     start: int  # its span in that value
     end: int
     text: str  # as printed
+    pieces: int = 1  # adjacent pieces it spans: a run is matched exactly, a piece by ``_within``
 
 
 def _pieces(value: str) -> list[tuple[int, int]]:
@@ -152,7 +187,7 @@ def candidates(values: list[str]) -> list[Candidate]:
                 text = v[a:b]
                 if any(_noise(v[x:y]) for x, y in (sp[i], sp[j])) or not _entity(text):
                     continue
-                out.append(Candidate(vi, a, b, text))
+                out.append(Candidate(vi, a, b, text, j - i + 1))
     return out
 
 
@@ -161,20 +196,82 @@ def _pattern(text: str) -> re.Pattern[str]:
     return re.compile(r"(?<![A-Za-z0-9])" + r"\s+".join(words) + r"(?![A-Za-z0-9])", re.I)
 
 
+def _tokens(text: str) -> list[tuple[str, int, int]]:
+    return [(m.group(0).lower(), m.start(), m.end()) for m in re.finditer(r"[A-Za-z0-9']+", text or "")]
+
+
+def _hits(text: str, c: Candidate) -> list[tuple[int, int, Candidate]]:
+    """Where ``text`` names ``c``: a run of pieces word for word, a single piece
+    also with up to ``_EXTRA`` extra words in the request's spelling."""
+    if c.pieces > 1:
+        return [(m.start(), m.end(), c) for m in _pattern(c.text).finditer(text or "")]
+    toks, mine, out = _tokens(text), [t for t, _a, _b in _tokens(c.text)], []
+    words = [t for t, _a, _b in toks]
+    at = 0
+    while at < len(words):
+        got = _within(mine, words[at:])
+        if got is None:
+            break
+        i, j = at + got[0], at + got[1]
+        out.append((toks[i][1], toks[j][2], c))
+        at = j + 1
+    return out
+
+
+def _related(a: Candidate, b: Candidate) -> bool:
+    return a.value == b.value and a.start < b.end and b.start < a.end
+
+
 def named_in(text: str, cands: list[Candidate]) -> list[Candidate]:
-    """The candidates ``text`` prints, longest first where they overlap, in
-    the order the text names them; one per span of the text."""
-    hits = [(m.start(), m.end(), c) for c in cands for m in _pattern(c.text).finditer(text or "")]
+    """The candidates ``text`` names, longest first where they overlap, in
+    the order the text names them; one per span of the text. One phrase of
+    the text naming two unrelated candidates stops (``PartyUnknown``)."""
+    hits = [h for c in cands for h in _hits(text, c)]
     hits.sort(key=lambda h: (-(h[1] - h[0]), h[0]))
     taken: list[tuple[int, int, Candidate]] = []
     for h in hits:
-        if not any(h[0] < t[1] and t[0] < h[1] for t in taken):
+        over = [t for t in taken if h[0] < t[1] and t[0] < h[1]]
+        if over and not all(_related(h[2], t[2]) for t in over):
+            raise PartyUnknown(
+                f'the request\'s "{text[h[0] : h[1]][:80]}" could be "{h[2].text}" or "{over[0][2].text}" on the caption'
+            )
+        if not over:
             taken.append(h)
     out: list[Candidate] = []
     for _s, _e, c in sorted(taken, key=lambda h: h[0]):
         if not any(o.text.lower() == c.text.lower() for o in out):
             out.append(c)
     return out
+
+
+def near_misses(text: str, cands: list[Candidate], named: list[Candidate]) -> None:
+    """``PartyUnknown`` when a phrase of ``text`` outside every name found
+    carries half or more of a caption party's distinctive words without naming
+    it: a spelling code could not match, never planned around (2026-11-05)."""
+    rest = text or ""
+    for c in named:
+        for a, b, _c in _hits(rest, c):
+            rest = rest[:a] + " " * (b - a) + rest[b:]
+    # A phrase's capitalized words: a name is capitalized; "the city's records" is not one.
+    phrases = [
+        {m.group(0).lower() for m in re.finditer(r"\b[A-Z0-9][A-Za-z0-9']*", p)}
+        for p in re.split(r"[.;,\n]|\band\b", rest)
+    ]
+    for c in cands:
+        if c.pieces > 1 or any(_related(c, n) for n in named):
+            continue
+        mine = [w for w in _words_all(c.text) if w not in _DETERMINERS]
+        for ph in phrases:
+            if mine and 2 * sum(w in ph for w in set(mine)) >= len(set(mine)):
+                raise PartyUnknown(
+                    f'the request may mean "{c.text}" but does not name it as the caption does (a phrase carries '
+                    + ", ".join(sorted(w for w in set(mine) if w in ph))
+                    + ")"
+                )
+
+
+def _words_all(text: str) -> list[str]:
+    return [t for t, _a, _b in _tokens(text)]
 
 
 def _distinct(names: list[Candidate]) -> list[str]:
@@ -269,6 +366,9 @@ def _scope(request: str, cands: list[Candidate]) -> list[Candidate] | None:
                 f'the request limits its sets to "{chunk.strip()[:80]}", which is no party on the caption'
             )
         got += [c for c in found if c not in got]
+    # "<party> only" with no "to": a scope only when it names a caption party.
+    for m in _BARE_ONLY.finditer(request or ""):
+        got += [c for c in named_in(m.group("c"), cands) if c not in got]
     return got or None
 
 
@@ -281,7 +381,9 @@ class Resolved:
 def resolve(request: str, values: list[str]) -> Resolved:
     """Who the request serves (module docstring, the rules in order)."""
     cands = candidates(values)
-    named = _distinct(named_in(request, cands))
+    found = named_in(request, cands)
+    near_misses(request, cands, found)
+    named = _distinct(found)
     scoped = _scope(request, cands)
     if scoped is not None:
         return Resolved(_distinct(scoped), named)

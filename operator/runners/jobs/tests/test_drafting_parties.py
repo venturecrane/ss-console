@@ -302,3 +302,43 @@ def test_a_plan_frozen_before_parties_resumes_unchanged(tmp_path, pricing):
     r._put("units", frozen)
     assert [(u.key, u.label, u.party) for u in r.units()] == [(p["key"], p["label"], None) for p in frozen]
     assert json.loads((r.data / "state.json").read_text())["units"] == frozen
+
+
+# ---- a request spelling with an extra word (rehearsal 4) -----------------------------------
+
+N_DISTRICT, N_CITY = "NORTHFIELD JOINT UNION SCHOOL DISTRICT", "CITY OF NORTHFIELD"
+N_VALUES = [f"{N_DISTRICT}, {N_CITY}, STATE OF CA, and DOES 1-100"]
+N_TWO = (
+    "Please propound discovery to Northfield Joint Union High School District and to City of Northfield. "
+    "We need RFA, RFPD and SROG, set one."
+)
+N_SCOPED = N_TWO + "\n\nSMD: Northfield Joint Union High School District only."
+
+
+def test_a_request_spelling_with_an_extra_word_names_the_caption_party():
+    assert parties.resolve(N_TWO, N_VALUES).planned == [N_DISTRICT, N_CITY]
+    assert parties.same("Northfield Joint Union School District", "Northfield Joint Union High School District")
+    assert not parties.same("Northfield School District", "Northfield Joint Union High School District")
+
+
+def test_the_scope_line_in_the_requests_spelling_narrows_to_that_party():
+    assert parties.resolve(N_SCOPED, N_VALUES).planned == [N_DISTRICT]
+
+
+def test_a_near_miss_spelling_stops_quoting_both_never_drops_the_party():
+    req = N_TWO.replace("Northfield Joint Union High School District", "Northfield Union School District")
+    with pytest.raises(parties.PartyUnknown, match=f'may mean "{N_DISTRICT}"'):
+        parties.resolve(req, N_VALUES)
+
+
+def test_one_request_name_inside_two_caption_parties_stops():
+    values = ["NORTHFIELD SCHOOL DISTRICT", "NORTHFIELD HIGH SCHOOL DISTRICT", N_CITY]
+    with pytest.raises(parties.PartyUnknown, match="could be"):
+        parties.resolve("Propound discovery to Northfield High School District and to City of Northfield.", values)
+
+
+def test_the_extra_word_shape_plans_six_units_and_three_for_the_scope_line(tmp_path, pricing):
+    r = _units_for(tmp_path / "a", pricing, N_TWO, _cap(*N_VALUES))
+    assert [u.party for u in r.units()] == [N_DISTRICT] * 3 + [N_CITY] * 3
+    r = _units_for(tmp_path / "b", pricing, N_SCOPED, _cap(*N_VALUES))
+    assert [u.party for u in r.units()] == [N_DISTRICT] * 3
