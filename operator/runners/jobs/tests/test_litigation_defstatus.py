@@ -146,11 +146,32 @@ def test_reconcile_prints_the_notes_status_and_the_gate_then_passes() -> None:
 
 
 def test_reconcile_never_prints_answered_without_an_answer_date() -> None:
-    m = matter(defendant(vocab.SERVED_NO_ANSWER, ["Defendant filed an answer per counsel's email."]))
+    m = matter(defendant(vocab.SERVED_NO_ANSWER, ["Defendant filed an answer 2026-03-02 per counsel's email."]))
     defstatus.reconcile(m)
     assert m["defendants"][0]["status"] == vocab.D_UNCLEAR
     out = gates.rule_matters([m], TODAY)
     assert out[gates.NOTE_RULE] == [] and out["answered but no answer date"] == []
+
+
+@pytest.mark.parametrize(
+    "status,note",
+    [
+        # 2026-11-06, one real list: six notes that name a state they do not find.
+        (vocab.APPEARED_NO_ANSWER, "No default entry was found either, so the answered date stays null."),
+        (vocab.SERVED_NO_ANSWER, "The claims administrator asked in August 2026 that the County be dismissed."),
+        (vocab.NOT_SERVED, "The CMC form checks the box saying all parties were served, appeared or were dismissed."),
+        (
+            vocab.NOT_SERVED,
+            "She was never served as an individual; her Estate (DOE 1) was served and answered instead.",
+        ),
+        (vocab.APPEARED_NO_ANSWER, "The plaintiff's own statement lists her as answered, but no answer supports it."),
+        (vocab.APPEARED_NO_ANSWER, "Defense propounded discovery, which plaintiff answered on 2026-10-18."),
+    ],
+)
+def test_a_note_that_names_a_state_without_finding_it_changes_nothing(status: str, note: str) -> None:
+    m = matter(defendant(status, [note]))
+    assert defstatus.reconcile(m) == [] and m["defendants"][0]["status"] == status
+    assert gates.rule_matters([m], TODAY)[gates.NOTE_RULE] == []
 
 
 # ---- parity: the corrected status is explained, not held -----------------------------------
