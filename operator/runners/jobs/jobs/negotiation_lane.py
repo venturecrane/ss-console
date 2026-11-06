@@ -136,7 +136,7 @@ def wake_task(job_id: str, outcome: str, stage: str = "") -> str:
 
 @dataclass
 class NegotiationLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/negotiation-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/negotiation-queue"))
     state_dir: str | None = None
     heartbeat_seconds: float = HEARTBEAT_SECONDS
     LANE = "negotiation"

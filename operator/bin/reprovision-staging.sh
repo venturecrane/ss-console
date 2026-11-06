@@ -67,7 +67,7 @@ elif ! "${HERE}/fleet" busy "${SLUG}" --wait; then
 fi
 
 # The busy gate above may have left a quiesce marker, and it lives on the volume
-# (/run/smd-medchron is a bind mount), so the new boot would claim no new work
+# (/run/smd-jobs is a bind mount), so the new boot would claim no new work
 # until it expired. Clear it once provisioning is done, whatever the outcome.
 rc=0
 infisical run --env=prod --path=/ss --silent -- bash -c '

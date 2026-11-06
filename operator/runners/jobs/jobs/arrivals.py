@@ -35,7 +35,7 @@ PAGE = 500
 MAX_ROWS = 50_000
 LIST_PAUSE_SECONDS = 0.3
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/medchron"
+DEFAULT_DATA_DIR = "/opt/data/jobs"
 _LANE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 _MATTER = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 

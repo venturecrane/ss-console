@@ -329,7 +329,7 @@ class ImageRollout:
                 else self._verify(seat, plan, since)
             )
         finally:
-            # The marker lives on the volume (/run/smd-medchron is a bind mount),
+            # The marker lives on the volume (/run/smd-jobs is a bind mount),
             # so the new boot inherits it until it expires: clear it now.
             self.gate.clear(seat)
         if check.cls == "pass":

@@ -46,7 +46,7 @@ from . import extract as extract_mod
 
 ENV = "JOBS_LITIGATION_TEXTCACHE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/medchron"
+DEFAULT_DATA_DIR = "/opt/data/jobs"
 #: The rehearsal's counting OCR stub marks every page it did not transcribe
 #: with this; such text is never cached or seeded.
 REHEARSAL_MARK = "[rehearsal OCR stub:"

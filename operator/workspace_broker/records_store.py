@@ -31,7 +31,7 @@ from .records_ledger import (
 )
 
 QUEUE_DIR_ENV = "SMD_RECORDS_QUEUE_DIR"
-DEFAULT_QUEUE_DIR = "/opt/data/medchron/records-queue"
+DEFAULT_QUEUE_DIR = "/opt/data/jobs/records-queue"
 #: The open SMD review cards: a job whose reply row waits in the review dir.
 #: The overlay's ``request_cards`` reads the same statement (it cannot import
 #: this module); a card closes when the row leaves ``review``.

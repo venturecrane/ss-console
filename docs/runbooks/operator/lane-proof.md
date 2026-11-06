@@ -84,7 +84,7 @@ straight through.
 dir goes 72 h after it ends. While its lane is still being fixed, keep its
 envelope: `operator/bin/lane-proof.sh <slug> keep <job_id>` copies the request
 (never the records: a proof run pulls the matter afresh) to
-`/run/smd-medchron/proof-envelopes/<lane>/`, root-only, for 14 days, and
+`/run/smd-jobs/proof-envelopes/<lane>/`, root-only, for 14 days, and
 `dry-run` finds it there after the job dir is gone.
 
 ## Undoing a proof

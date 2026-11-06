@@ -33,7 +33,7 @@ PARSE_VERSION = 2
 MAX_ITEMS = 20
 MAX_TOKENS = 4000
 STATE_ENV = "JOBS_RECORDS_STATE_DIR"
-DEFAULT_STATE_DIR = "/opt/data/medchron/records-state"
+DEFAULT_STATE_DIR = "/opt/data/jobs/records-state"
 
 INSTRUCTION = (
     "A colleague at a law firm emailed asking for records from one of the firm's matters. "

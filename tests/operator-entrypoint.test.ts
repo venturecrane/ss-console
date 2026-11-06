@@ -25,6 +25,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
@@ -194,10 +195,14 @@ describe('entrypoint.sh: the chronology runner daemon (ss#2614)', () => {
     )
     // Every run dir of the epoch (the jobs-volume block, driven below).
     expect(BOOT_CODE).toMatch(/mount --bind "\$\{JOBS_DATA_DIR\}" "\$\{_rd\}"/)
-    // Pruned from the hermes chown sweep like the audit subtree.
+    // Pruned from the hermes chown sweep like the audit subtree: the tree at
+    // its name (ADR 0103 R2) and the old name beside it.
+    expect(BOOT_CODE).toMatch(/^export JOBS_DATA_DIR="\/opt\/data\/jobs"$/m)
     expect(BOOT_CODE).toMatch(
-      /-o -path "\$\{JOBS_DATA_DIR\}" -o -path \/opt\/data\/jobs (-o -path [^ ]+ )?\\\) -prune/
+      /-o -path "\$\{JOBS_DATA_DIR\}" -o -path \/opt\/data\/medchron (-o -path [^ ]+ )?\\\) -prune/
     )
+    // The broker and the daemon are told the run dir of the epoch.
+    expect(BOOT_CODE.match(/SMD_JOBS_RUN_DIR="\$\{JOBS_RUN_DIR\}"/g)).toHaveLength(2)
   })
 
   it('carries the queue path into the broker env allowlist', () => {
@@ -758,8 +763,9 @@ SMD_AUTHORED_LANES=records SMD_BUNDLE_STATE_DIR="${dir}/state" SMD_BUNDLE_PYTHON
  * mount/install stubbed and a fake root for /opt/data and /run, across two boots
  * of the same volume (a fresh /run each time). The falsifiers: a move that
  * merges into an existing tree (`mv a b` with b a directory nests a inside b),
- * a second boot that moves again, a link planted under /opt/data, and a held
- * job's /run/smd-medchron path left unbound.
+ * a second boot that moves again, a link planted under /opt/data, a held
+ * job's /run/smd-medchron path left unbound, an old tree with a file in it
+ * removed as if it were empty, and a move whose file counts are not recorded.
  */
 describe('entrypoint-lanes: the jobs volume epoch (ADR 0103)', () => {
   const LANES_RAW = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
@@ -767,16 +773,35 @@ describe('entrypoint-lanes: the jobs volume epoch (ADR 0103)', () => {
   const end = LANES_RAW.indexOf('# <<< jobs-volume')
   const BLOCK = LANES_RAW.slice(start, end)
 
-  it('ships at epoch 1 (R2 flips it)', () => {
+  it('ships at epoch 2 (R2), and operator/fleet/volume-epoch says the same', () => {
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
-    expect(BLOCK.match(/^JOBS_VOLUME_EPOCH=\d+$/gm)).toEqual(['JOBS_VOLUME_EPOCH=1'])
+    expect(BLOCK.match(/^JOBS_VOLUME_EPOCH=\d+$/gm)).toEqual(['JOBS_VOLUME_EPOCH=2'])
+    // deploy.yml builds the image not-volume-forward-compatible when this file
+    // differs from the last built commit's: the file and the constant move together.
+    expect(readFileSync(resolve('operator/fleet/volume-epoch'), 'utf8')).toBe('2\n')
+  })
+
+  it('CI builds an epoch change not-volume-forward-compatible, judged against the last BUILT commit', () => {
+    const deploy = readFileSync(resolve('.github/workflows/deploy.yml'), 'utf8')
+    // The detect step hands on the commit the last image was built from.
+    expect(deploy).toMatch(/echo "last_built=\$\{base\}" >> "\$GITHUB_OUTPUT"/)
+    expect(deploy).toMatch(/LAST_BUILT: \$\{\{ steps\.changes\.outputs\.last_built \}\}/)
+    // The epoch at that commit against this tree's, never HEAD~1: a merge whose
+    // own build was skipped is built by a later merge, whose parent already
+    // carries the new epoch.
+    expect(deploy).toMatch(/git show "\$\{LAST_BUILT\}:operator\/fleet\/volume-epoch"/)
+    expect(deploy).not.toMatch(/GITHUB_SHA\}~1/)
+    expect(deploy).toMatch(/volume_flag="--not-volume-forward-compatible"/)
+    expect(deploy).toMatch(
+      /fleet build --notes "merge \$\{GITHUB_SHA::8\} \(CI\)" \$\{volume_flag\}/
+    )
   })
 
   const boot = (root: string, epoch: number, lanes = 'medchron,records') => {
     const run = mkdtempSync(join(tmpdir(), 'jobs-volume-run-'))
     const calls = join(run, 'calls')
-    const block = BLOCK.replace(/^JOBS_VOLUME_EPOCH=1$/m, `JOBS_VOLUME_EPOCH=${epoch}`)
+    const block = BLOCK.replace(/^JOBS_VOLUME_EPOCH=\d+$/m, `JOBS_VOLUME_EPOCH=${epoch}`)
     const driver = join(run, 'driver.sh')
     writeFileSync(
       driver,
@@ -786,7 +811,7 @@ install() { mkdir -p "\${@: -1}"; }
 mountpoint() { [ -f "${run}/m\${2//\\//_}" ]; }
 mount() { echo "mount $*" >> "${calls}"; touch "${run}/m\${3//\\//_}"; }
 SMD_AUTHORED_LANES="${lanes}"
-JOBS_DATA_DIR="${root}/opt/data/medchron"
+JOBS_DATA_DIR="${root}/opt/data/${epoch === 1 ? 'medchron' : 'jobs'}"
 SMD_JOBS_VOLUME_ROOT="${root}"
 ${block}
 echo "DATA=\${JOBS_DATA_DIR}" >> "${calls}"
@@ -810,6 +835,13 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
     readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((p) =>
       lstatSync(join(dir, p)).isSymbolicLink()
     )
+  const state = (root: string): Record<string, string> =>
+    Object.fromEntries(
+      readFileSync(join(root, 'opt/data/jobs/volume-epoch.state'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => l.split('=') as [string, string])
+    )
   const HELD = ['opt/data/medchron/queue/q1.json', 'opt/data/medchron/jobs/j1/job.yaml']
 
   it('epoch 1 changes nothing: the old name, bound at /run/smd-medchron', () => {
@@ -828,7 +860,7 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
     const root = volume(HELD)
     const log = boot(root, 2)
     expect(log).toContain(
-      `jobs volume: moved ${root}/opt/data/medchron to ${root}/opt/data/jobs (6 entries before, 6 after)`
+      `jobs volume: moved ${root}/opt/data/medchron to ${root}/opt/data/jobs (2 files before, 2 after)`
     )
     expect(existsSync(join(root, 'opt/data/medchron'))).toBe(false)
     expect(readFileSync(join(root, 'opt/data/jobs/jobs/j1/job.yaml'), 'utf8')).toBe('x')
@@ -839,6 +871,38 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
       `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
     ])
     expect(links(join(root, 'opt/data'))).toEqual([])
+    expect(log).not.toMatch(/MISMATCH/)
+  })
+
+  it('epoch 2 records the file count before and after the move, once', () => {
+    const root = volume(HELD)
+    boot(root, 2)
+    const first = state(root)
+    expect(first).toMatchObject({
+      epoch: '2',
+      outcome: 'moved',
+      files_before: '2',
+      files_after: '2',
+    })
+    expect(first.recorded_at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/)
+    // A later boot, with more files on the volume by then, leaves the record alone.
+    writeFileSync(join(root, 'opt/data/jobs/queue/q2.json'), 'x')
+    const raw = readFileSync(join(root, 'opt/data/jobs/volume-epoch.state'), 'utf8')
+    const log = boot(root, 2)
+    expect(readFileSync(join(root, 'opt/data/jobs/volume-epoch.state'), 'utf8')).toBe(raw)
+    expect(log).not.toMatch(/recorded/)
+  })
+
+  it('epoch 2 records a second move afresh (a hand rollback put the tree back, with its old record inside)', () => {
+    const root = volume(HELD)
+    boot(root, 2)
+    // The hand rollback of the handbook, then one more file written under the old image.
+    renameSync(join(root, 'opt/data/jobs'), join(root, 'opt/data/medchron'))
+    writeFileSync(join(root, 'opt/data/medchron/queue/q2.json'), 'x')
+    const log = boot(root, 2)
+    // Three job files and the first record, which rode back with the tree.
+    expect(log).toContain('(4 files before, 4 after)')
+    expect(state(root)).toMatchObject({ outcome: 'moved', files_before: '4', files_after: '4' })
   })
 
   it('epoch 2, second boot: nothing moves, the same binds', () => {
@@ -850,7 +914,11 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
       `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
       `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
     ])
-    expect(readdirSync(join(root, 'opt/data/jobs')).sort()).toEqual(['jobs', 'queue'])
+    expect(readdirSync(join(root, 'opt/data/jobs')).sort()).toEqual([
+      'jobs',
+      'queue',
+      'volume-epoch.state',
+    ])
     expect(links(join(root, 'opt/data'))).toEqual([])
   })
 
@@ -858,14 +926,60 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
     const root = volume([...HELD, 'opt/data/jobs/queue/other.json'])
     const log = boot(root, 2)
     expect(log).toMatch(
-      /JOBS VOLUME REFUSED: both \S+ and \S+ exist; the two trees are never merged/
+      /JOBS VOLUME REFUSED: both \S+ and \S+ exist and \S+ holds 2 file\(s\); the two trees are never merged/
     )
     expect(log).toContain('LANES=\n')
     expect(log).not.toMatch(/^mount /m)
     expect(readFileSync(join(root, HELD[1]), 'utf8')).toBe('x')
     expect(readdirSync(join(root, 'opt/data/jobs/queue'))).toEqual(['other.json'])
     expect(existsSync(join(root, 'opt/data/jobs/medchron'))).toBe(false)
+    // A refused boot writes no record: there was no move to describe.
+    expect(existsSync(join(root, 'opt/data/jobs/volume-epoch.state'))).toBe(false)
   })
+
+  it('epoch 2 removes an old tree of empty directories (an older image booted after a rollback) and goes on', () => {
+    const root = volume(HELD)
+    boot(root, 2)
+    const raw = readFileSync(join(root, 'opt/data/jobs/volume-epoch.state'), 'utf8')
+    // What an R1 boot leaves on a moved volume: its install -d lines, no file.
+    mkdirSync(join(root, 'opt/data/medchron/litigation/state'), { recursive: true })
+    mkdirSync(join(root, 'opt/data/medchron/queue'), { recursive: true })
+    const log = boot(root, 2)
+    expect(log).toMatch(
+      /jobs volume: removed \S+\/opt\/data\/medchron, which held directories only/
+    )
+    expect(log).not.toMatch(/REFUSED|: moved/)
+    expect(existsSync(join(root, 'opt/data/medchron'))).toBe(false)
+    expect(log).toContain(`LANES=medchron,records\n`)
+    expect(log.match(/^mount .*$/gm)).toEqual([
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-jobs`,
+      `mount --bind ${root}/opt/data/jobs ${root}/run/smd-medchron`,
+    ])
+    expect(readFileSync(join(root, 'opt/data/jobs/jobs/j1/job.yaml'), 'utf8')).toBe('x')
+    // The first move's record stands.
+    expect(readFileSync(join(root, 'opt/data/jobs/volume-epoch.state'), 'utf8')).toBe(raw)
+  })
+
+  it.each([
+    ['one regular file', 'file'],
+    ['one symlink', 'link'],
+  ])(
+    'epoch 2 refuses an old tree that holds %s beside the new one, and removes nothing',
+    (_name, kind) => {
+      const root = volume(HELD)
+      boot(root, 2)
+      mkdirSync(join(root, 'opt/data/medchron/queue'), { recursive: true })
+      const planted = join(root, 'opt/data/medchron/queue/late.json')
+      if (kind === 'file') writeFileSync(planted, 'x')
+      else expect(spawnSync('ln', ['-s', '/etc/hosts', planted]).status).toBe(0)
+      const log = boot(root, 2)
+      expect(log).toMatch(/JOBS VOLUME REFUSED: both .* holds 1 file\(s\)/)
+      expect(log).toContain('LANES=\n')
+      expect(log).not.toMatch(/^mount /m)
+      expect(lstatSync(planted)).toBeTruthy()
+      expect(readFileSync(join(root, 'opt/data/jobs/jobs/j1/job.yaml'), 'utf8')).toBe('x')
+    }
+  )
 
   it('epoch 2 refuses a link at either name', () => {
     const root = volume(['opt/data/elsewhere/x'])
@@ -881,12 +995,20 @@ echo "LANES=\${SMD_AUTHORED_LANES}" >> "${calls}"
     expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
   })
 
-  it('epoch 2 on a seat with neither tree binds the new name', () => {
+  it('epoch 2 on a seat with neither tree binds the new name and records that nothing moved', () => {
     const root = volume([])
     const log = boot(root, 2)
     expect(log).not.toMatch(/moved|REFUSED/)
     expect(log).toContain(`DATA=${root}/opt/data/jobs\n`)
     expect(existsSync(join(root, 'opt/data/jobs'))).toBe(true)
+    expect(state(root)).toMatchObject({ outcome: 'none', files_before: '0', files_after: '0' })
+  })
+
+  it('epoch 2 on a seat with no lane and no tree makes neither a tree nor a record', () => {
+    const root = volume([])
+    const log = boot(root, 2, '')
+    expect(log).not.toMatch(/^mount /m)
+    expect(existsSync(join(root, 'opt/data/jobs'))).toBe(false)
   })
 })
 
