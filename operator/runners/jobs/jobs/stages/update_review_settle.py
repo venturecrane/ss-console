@@ -24,6 +24,15 @@ shape they read:
   page: two pages of the record disagree. It becomes a check 2 finding naming
   both pages, and ``disclose_differ`` discloses it (both sides confirmed) or
   flags it for the attorney.
+* class 1 or 8 on its claim's own page when that page is a flowsheet's time
+  grid (2026-11-06, ``medchron/flowsheet_grid``): code reads which time row
+  heads which values from the page and its neighbours, and sets the claim's
+  stated span of each value to the page's. The review's finding stands, the
+  corrected sentence is attested by the grid (an audit row, ``mode: grid``),
+  and the values it took out are named for proof 10. The same check keeps a
+  finisher edit the grid confirms that the audit would revert
+  (``grid_confirmed``): a drafter and an audit read one page's time rows
+  backwards, and the job held until SMD corrected it by hand (2026-10-29).
 
 A finding no rule settles still holds, as before. Every settled finding is
 recorded in the review record (``settled_by_rule``) and written to
@@ -35,15 +44,18 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
+from ..medchron import flowsheet_grid as FG
 from ..medchron.audit import claims as CL
 from ..proof import review
 from ..medchron.update import review_repair as RR, values as V
 from . import review_policy, review_settle
 from .base import StageRun, read_json
 from .update_base import headings
+from .update_review_io import page_text
 
 SETTLED = "update-review-settled.json"
 NOTES_HEADING = "Independent review of the update"
@@ -114,6 +126,69 @@ def _differ(f: RR.Finding, e: RR.Entry | None, confirmed: list[tuple[str, dict[s
     return review.Finding(review.MUST, "2 entries that contradict each other", text, f"entry {when}", "model")
 
 
+GRID_NOTE = "the times were corrected to the flowsheet on the cited page"
+
+
+def attest(sr: StageRun, claims: list[dict[str, Any]], md: str, why: str) -> None:
+    """One SUPPORTED audit row per claim, attested by the flowsheet grid
+    (``mode: grid``): the verdict gate and the update proofs read it like any
+    other, and the row says whose verdict it is."""
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    results = sr.slug_dir / "out" / sr.unit.unit / "audit-results.jsonl"
+    for c in claims:
+        row = {"key": c["key"], "kind": "real", "exhibit": c["exhibit"], "page_spec": c["page_spec"]}
+        row |= {"pages": CL.parse_pages(c["page_spec"]) or [1], "claim": c["claim"][:500], "verdict": "SUPPORTED"}
+        row |= {"note": why[:500], "mode": "grid", "doc_sha": CL.doc_sha_of(CL.body_of(md)), "ts": at}
+        CL.append_row(results, row)
+
+
+def _one_page(c: dict[str, Any]) -> int | None:
+    pages = CL.parse_pages(c.get("page_spec"))
+    return pages[0] if len(pages) == 1 else None
+
+
+def grid_confirmed(sr: StageRun, unsupported: list[dict[str, Any]], md: str, ev: RR.Evidence) -> list:
+    """The finisher's sentences the audit did not support, less those the
+    cited page's flowsheet grid confirms (each attested, so it is kept)."""
+    ok = [
+        c
+        for c in unsupported
+        if (p := _one_page(c)) is not None and FG.agrees(str(c.get("claim") or ""), ev, int(c["exhibit"]), p)
+    ]
+    if ok:
+        attest(sr, ok, md, f"attested by code: {GRID_NOTE}, whose time rows were read from the page and its neighbours")
+        sr.log(f"  {len(ok)} finisher sentence(s) the flowsheet grid on the cited page confirms: kept, not reverted")
+    return [c for c in unsupported if c not in ok]
+
+
+def _grid(sr: StageRun, doc: Path, f: RR.Finding, e: RR.Entry | None, ev: RR.Evidence, rec: dict) -> Any:
+    """A wrong value on a claim's own flowsheet page: the claim's stated spans
+    set to the page's table, attested by the grid, as a NOTE for the attorney."""
+    if e is None or _no(f) not in ("1", "8") or not f.exhibit or not f.page:
+        return None
+    claim = next((c for c in e.claims if c.anchor == f.anchor), None)
+    if claim is None or claim.exhibit != f.exhibit or f.page not in claim.pages:
+        return None
+    new = FG.check(claim.text, ev, f.exhibit, f.page)
+    md = doc.read_text(encoding="utf-8")
+    if new is None or md.count(claim.text) != 1:
+        return None
+    after, keep = md.replace(claim.text, new), _keep(sr)
+    old = {c["key"] for c in CL.extract_claims(CL.body_of(md), keep)}
+    doc.write_text(after, encoding="utf-8")
+    side = sr.slug_dir / "runs" / sr.unit.unit / "entries_scoped_final.md"  # best effort, as the scrub does
+    if side.is_file() and side.read_text(encoding="utf-8").count(claim.text) == 1:
+        side.write_text(side.read_text(encoding="utf-8").replace(claim.text, new), encoding="utf-8")
+    rows_are = (
+        "head the values printed below" if FG.reading(ev, f.exhibit, f.page) else "follow the values printed above"
+    )
+    note = f"Exhibit {f.exhibit} p. {f.page} is a flowsheet whose time rows {rows_are} them"
+    attest(sr, [c for c in CL.extract_claims(CL.body_of(after), keep) if c["key"] not in old], after, note)
+    done = {**f.as_dict(), "outcome": "applied", "removed": V.lost(claim.text, new)}
+    rec["rounds"] = list(rec.get("rounds") or []) + [{"round": "grid", "kind": "flowsheet_grid", "findings": [done]}]
+    return review.Finding(review.NOTE, "1 a wrong value", f"{note}; {GRID_NOTE}", f"entry {_date(e)}", "code")
+
+
 def _scrub_one(sr: StageRun, doc: Path, g: review.Finding) -> review.Finding | None:
     """``scrub_system`` on a scratch copy for one finding; the copy replaces
     the document only when the scrub settled it and every claim left is one
@@ -156,6 +231,11 @@ def settle(sr: StageRun, doc: Path, open_: list[RR.Finding], rec: dict[str, Any]
         note = _scrub_one(sr, doc, g) if g is not None else None
         if note is not None:
             done[i] = note
+    ents, ev = _entries(sr, doc), page_text(sr)
+    for i, f in enumerate(open_):
+        g = None if i in done else _grid(sr, doc, f, ents.get(f.anchor.split(".")[0]), ev, rec)
+        if g is not None:
+            done[i] = g
     ents = _entries(sr, doc)
     confirmed = review_settle.confirmed_claims(sr, doc.read_text(encoding="utf-8"))
     cand = {
@@ -175,7 +255,10 @@ def settle(sr: StageRun, doc: Path, open_: list[RR.Finding], rec: dict[str, Any]
     rec["settled_by_rule"] = list(rec.get("settled_by_rule") or []) + rows
     out_dir = sr.slug_dir / "out" / sr.unit.unit
     (out_dir / SETTLED).write_text(json.dumps(rec["settled_by_rule"], indent=1), encoding="utf-8")
-    sr.log(f"update review: {len(done)} must-fix settled by the chronology review's rules (scrubbed or disclosed)")
+    sr.log(
+        f"update review: {len(done)} must-fix settled by the chronology review's rules "
+        "(scrubbed, disclosed, or corrected to the page's flowsheet grid)"
+    )
     return [f for i, f in enumerate(open_) if i not in done]
 
 
@@ -205,4 +288,4 @@ def notes(out_dir: Path) -> list[str]:
     ]
 
 
-__all__ = ["SETTLED", "hold_line", "notes", "plain", "resume_held", "settle"]
+__all__ = ["SETTLED", "attest", "grid_confirmed", "hold_line", "notes", "plain", "resume_held", "settle"]

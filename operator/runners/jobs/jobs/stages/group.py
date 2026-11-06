@@ -206,8 +206,27 @@ PLACEHOLDER = re.compile(r"(?i)not identified|not stated|unknown provider|unattr
 BRAND_FLOOR = 0.25
 
 
+def facility_stem(label: str) -> str:
+    """The facility a variant label names, without what the row said about it.
+
+    WHY (2026-11-06). One hospital's rows came back as name variants: the name
+    followed by a lowercase staff descriptor ("... nursing and respiratory care
+    staff") and the name followed by a placeholder parenthetical ("... (provider
+    not stated in the record)"). Each variant voted alone, so the exhibit was
+    titled after whichever descriptor held the most rows. The stem drops a
+    placeholder parenthetical and a trailing run of lowercase words, and is
+    kept only when what is left still carries a facility word."""
+    s = re.sub(r"\s*\(([^()]*)\)", lambda m: "" if PLACEHOLDER.search(m.group(1)) else m.group(0), label).strip()
+    words = s.split()
+    while words and words[-1][:1].islower():
+        words.pop()
+    stem = " ".join(words).strip(" -,")
+    return stem if stem and FACILITY_WORD.search(stem) else label
+
+
 def _dominant_facility(named: list[str], branded: list[str], canon: Canon) -> list[str]:
-    """The unlisted facility's rows when it, not the brand, is the file.
+    """The unlisted facility, one entry per row it holds, when it, not the
+    brand, is the file.
 
     WHY (2026-10-29). A 400-page hospital records set carried a few ambulance
     run-sheet rows; the ambulance company is on the firm's brand list and the
@@ -215,20 +234,23 @@ def _dominant_facility(named: list[str], branded: list[str], canon: Canon) -> li
     exhibit after the ambulance. A brand still beats a bare clinician (the
     reason for the rule: a hospital file's rows mostly name doctors), so only an
     unlisted name carrying a facility word, outvoting the brand while the brand
-    holds under ``BRAND_FLOOR`` of the named rows, takes the file. [] otherwise."""
+    holds under ``BRAND_FLOOR`` of the named rows, takes the file. Its variants
+    vote together under their ``facility_stem``, and the stem is what is
+    returned, so a staff descriptor never titles the exhibit. [] otherwise."""
     if not branded or len(branded) >= BRAND_FLOOR * len(named):
         return []
-    votes: dict[str, list[str]] = {}
+    votes: dict[str, int] = {}
     for p in named:
         if canon.brand(p):
             continue
         c = canon(p)
         if FACILITY_WORD.search(c):
-            votes.setdefault(c, []).append(p)
+            stem = facility_stem(c)
+            votes[stem] = votes.get(stem, 0) + 1
     if not votes:
         return []
-    top = max(votes.values(), key=len)  # dict order is first-seen: a tie keeps the earlier
-    return top if len(top) > len(branded) else []
+    top = max(votes, key=lambda k: votes[k])  # dict order is first-seen: a tie keeps the earlier
+    return [top] * votes[top] if votes[top] > len(branded) else []
 
 
 def lane_name(provs: list[str], canon: Canon) -> str:

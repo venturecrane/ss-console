@@ -190,9 +190,15 @@ def test_a_renderer_fault_never_stops_a_reply_in_observe(tmp_path: Path, monkeyp
 
 
 @pytest.mark.parametrize("yaml_extra", ["", ENFORCE], ids=["observe", "enforce"])
-def test_a_held_litigation_reply_refuses_other_words_either_way(tmp_path: Path, yaml_extra: str) -> None:
+def test_a_held_litigation_reply_refuses_other_words_either_way(
+    tmp_path: Path, yaml_extra: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The 2026-10-24 incident: observing must not reopen it. FALSIFIER: make
-    ``reply_text.refused_today`` answer False."""
+    ``reply_text.refused_today`` answer False. Run with litigation's held
+    replies reopened (``stop_note.SILENT_KINDS``, silent since 2026-11-06)."""
+    from workspace_broker import stop_note
+
+    monkeypatch.setattr(stop_note, "SILENT_KINDS", stop_note.SILENT_KINDS - {"litigation_job"})
     job = _lit(tmp_path, "held", "gate_refused: x")
     box = _box()
     binding = {"kind": "litigation_job", "job_id": job}

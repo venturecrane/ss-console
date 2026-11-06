@@ -14,6 +14,12 @@ retry succeeds in one step.
 A held CHRONOLOGY has no wording at all since 2026-10-24 (the Captain: the
 firm hears about a chronology only when it is delivered): its bind and its
 send are refused whatever the words, before any wording check.
+
+A held LITIGATION job is not replied on either since 2026-11-06 (the Captain:
+SMD should know, the firm should not; ``stop_note.SILENT_KINDS``). The wording
+and its enforcement stay for when the lane's held replies reopen, so this file
+runs with litigation taken out of the silent set (``_reopened``); the default,
+silent behaviour is pinned in ``test_litigation_stopped_notes``.
 """
 
 from __future__ import annotations
@@ -41,6 +47,14 @@ from test_reply_binding import (
 from workspace_broker.litigation_ledger import LitigationLedger
 from workspace_broker.medchron_ledger import MedchronLedger
 from workspace_broker.reply_binding import BindingRefused
+
+
+@pytest.fixture(autouse=True)
+def _reopened(monkeypatch: pytest.MonkeyPatch) -> None:
+    from workspace_broker import stop_note
+
+    monkeypatch.setattr(stop_note, "SILENT_KINDS", stop_note.SILENT_KINDS - {"litigation_job"})
+
 
 IMPROVISED = (
     "The litigation status list was not produced. Decision for you: tell me if you want the run "

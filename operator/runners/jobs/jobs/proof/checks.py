@@ -44,8 +44,23 @@ _SYSTEM = re.compile(
 #: litigation lanes share that list, and a demand may properly speak of a
 #: deposition's transcription. The citation tail ", machine transcription"
 #: never matches: every phrase here needs its own article or noun.
+#: The second group is what a client chronology's hand edits removed on four
+#: review rounds (2026-11-06): the text layer's damage ("substituted
+#: characters", "character encoding", "the extracted record text", "as
+#: legible", "as transcribed"), what the reader could not see on a page ("no
+#: result appears on these pages", "not named in this sentence", "at the foot
+#: of this page", "reported in the index"), the reader's own bookkeeping
+#: ("10/20/2022 entries:", "entries complete") and its "other:" bucket label.
+#: A record's own "printed on this page" and "continues as follows" stay
+#: unflagged: both are in correctly delivered chronologies.
 _EXTRACTION = re.compile(
-    r"(?i)\b(in the transcription|the transcription|transcribed text|text on the following page|the image carries no)\b"
+    r"(?im)\b(in the transcription|the transcription|transcribed text|text on the following page|the image carries no"
+    r"|substituted[- ]characters?|(?:unreadable|garbled) character encoding|(?:the )?extracted (?:record )?text"
+    r"|as legible(?!\s+as\b)|as transcribed|not named in (?:this|that|the) (?:passage|sentence)"
+    r"|(?:no|not)\b[^.\n]{0,40}?\b(?:appears?|printed|shown) on (?:this|these) pages?"
+    r"|at the (?:foot|top|bottom|head) of this page|reported in the index|does not attribute each (?:line|entry)"
+    r"|entries complete|^\d{1,2}/\d{1,2}/\d{2,4}(?:\s+and\s+\d{1,2}/\d{1,2}/\d{2,4})?\s+entries(?=:))\b"
+    r"|^[ \t]*[-*][ \t]+(?-i:other):"
 )
 _SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
 _MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
