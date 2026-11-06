@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from textwrap import dedent
+from types import SimpleNamespace
 
 import pytest
 
@@ -722,13 +723,20 @@ def _leg(ledger, poster, *, now=NOW, clock=None, store=None):
 
 
 def _index(n: int, minutes_ago: float = 60) -> None:
-    for i in range(n):
-        ri.record_inbound(
-            vendor_message_id=f"m{i:02d}",
-            sender="p@firm.example",
-            subject=f"r{i}",
-            received_at=_epoch(minutes_ago) + i,
-        )
+    # record_inbound runs the index's custody (delete rows past ROW_RETENTION_DAYS)
+    # against the wall clock, and these requests are dated from the fixed NOW. On
+    # 2026-11-06, thirty days after NOW, every insert began deleting the one before
+    # and main's overlay suite went red. The index's clock is pinned to NOW here, so
+    # the dates in these tests never age.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ri, "time", SimpleNamespace(time=lambda: NOW.timestamp()))
+        for i in range(n):
+            ri.record_inbound(
+                vendor_message_id=f"m{i:02d}",
+                sender="p@firm.example",
+                subject=f"r{i}",
+                received_at=_epoch(minutes_ago) + i,
+            )
 
 
 def test_card_url_is_the_heartbeats_console() -> None:
