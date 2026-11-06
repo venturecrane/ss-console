@@ -25,7 +25,7 @@ import re
 import pytest
 
 from jobs.drafting import converge, notes as notes_mod
-from test_drafting_proof_findings import AuditClient, _drafts, pricing  # noqa: F401  (pytest fixture)
+from test_drafting_proof_findings import AuditClient, _drafts, pricing  # noqa: F401 - pricing is a pytest fixture, used by name
 from test_drafting_review import KINDS, _run
 
 RFA = "Requests for Admission"
