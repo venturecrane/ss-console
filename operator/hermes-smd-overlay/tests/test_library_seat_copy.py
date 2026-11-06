@@ -231,3 +231,33 @@ def test_the_poll_tick_applies_the_library_and_caches_only_a_handled_signature(
     assert loop._run_library_once() is None  # a fault: signature not cached
     vault.fail.clear()
     assert loop._run_library_once() is SpecApplyOutcome.UNCHANGED
+
+
+def test_removing_an_installed_library_pages_smd_once_and_the_idle_tick_never_does(
+    tmp_path: Path, monkeypatch
+) -> None:
+    pages: list[tuple[str, int]] = []
+    monkeypatch.setattr(
+        lib, "_page_library_removed", lambda slug, copies: pages.append((slug, copies))
+    )
+    empty = FakeVault()
+    for _ in range(3):  # the ordinary seat: no ledger, every tick
+        _apply(empty, tmp_path)
+    assert pages == []
+    vault = _vault((_entry("memo", A), A), (_entry("letter", B), B))
+    _apply(vault, tmp_path)
+    vault.objects.clear()
+    _apply(vault, tmp_path)
+    _apply(vault, tmp_path)
+    assert pages == [(SLUG, 2)]
+
+
+def test_the_removal_page_logs_a_warning_with_the_count(tmp_path: Path, caplog) -> None:
+    vault = _vault((_entry("memo", A), A))
+    _apply(vault, tmp_path)
+    vault.objects.clear()
+    with caplog.at_level("WARNING", logger="spec_applier.library"):
+        _apply(vault, tmp_path)
+    assert any(
+        "removed the installed library and 1 accepted copy" in r.message for r in caplog.records
+    )

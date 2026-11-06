@@ -81,8 +81,12 @@ FILES_KEY = "library_files"
 SOURCE_KEY = "library_source_digest"
 OWNED_KEYS = (LEDGER_KEY, FILES_KEY, SOURCE_KEY)
 
-#: A Word form is tens of KB; past this it is a mistake, refused, never cut.
-MAX_COPY_BYTES = 16 * 1024 * 1024
+#: A Word form is tens of KB; past this it is a mistake, refused, never cut. The
+#: writer's package bound (``establish_intake/safe_package.py``) is the same, so
+#: no accepted copy can exceed it. The applier hashes a copy and never opens it.
+MAX_COPY_BYTES = 4 * 1024 * 1024
+#: The Sentry message a removed library pages SMD with.
+LIBRARY_REMOVED_PAGE = "library: the accepted library was removed from the seat"
 _SLUG = re.compile(r"\A[a-z0-9][a-z0-9-]{0,63}\Z")
 
 
@@ -300,6 +304,39 @@ def _install(
     )
 
 
+def _page_library_removed(slug: str, copies: int) -> None:
+    """The ledger left the vault and the seat removed an installed library.
+
+    Rare and serious: every document of the firm's then falls back to a plain
+    base. A warning, and a page to SMD the way the root boot pages one
+    (``bootstrap/translate.py``: ``sentry_init.init_sentry`` then a constant
+    message, tags only, never text). The root pollers do not hold Sentry open,
+    so this initializes it here; off a seat ``init_sentry`` is a no-op. Never
+    raises: a monitoring fault must not undo the removal.
+    """
+    logger.warning(
+        "spec_applier(library): the ledger is gone from the vault; removed the installed "
+        "library and %d accepted cop%s for %s",
+        copies,
+        "y" if copies == 1 else "ies",
+        slug,
+    )
+    try:
+        from shared import sentry_init
+
+        if not sentry_init.init_sentry("spec_applier"):
+            return
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("reason", "library_removed")
+            scope.set_tag("customer", slug)
+            scope.set_tag("copies_removed", str(copies))
+            sentry_sdk.capture_message(LIBRARY_REMOVED_PAGE, level="error")
+    except Exception as exc:  # noqa: BLE001 (monitoring never undoes the removal)
+        logger.debug("spec_applier(library): removal page skipped (%s)", exc)
+
+
 def _remove_all(spec_dir: Path, manifest: dict | None, slug: str) -> SpecApplyResult:
     """No ledger in the vault: the manifest stops naming the library, then the files go."""
     ledger_path = spec_dir / LEDGER_REL
@@ -318,6 +355,8 @@ def _remove_all(spec_dir: Path, manifest: dict | None, slug: str) -> SpecApplyRe
             empty.rmdir()
         except OSError:
             pass  # not empty (a stray file outside this module's scope) or already gone
+    copies = sum(1 for rel in pruned if rel.startswith(f"{COPIES_REL}/"))
+    _page_library_removed(slug, copies)
     return SpecApplyResult(
         outcome=SpecApplyOutcome.APPLIED, pruned=tuple(pruned), metadata={"copies": 0}
     )

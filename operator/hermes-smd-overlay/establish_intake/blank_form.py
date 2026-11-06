@@ -47,18 +47,20 @@ WHAT IT CANNOT PROVE:
   the firm's: that is the firm-base proof's job, not this one.
 
 STANDARD LIBRARY ONLY: the intake runs as root in the overlay's environment.
+The package is opened through ``safe_package.py``: a zip bounded on its
+directory before any part is read, and an XML parser that refuses any DTD or
+entity rather than expanding or fetching it; a refused part is a problem here.
 Problems name the part and the place, never the text found there, because a
 refusal's reasons travel back to the agent.
 """
 
 from __future__ import annotations
 
-import io
 import re
-import zipfile
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from xml.etree import ElementTree as ET
+
+from establish_intake.safe_package import Node, Package, PackageRefused, open_package, parse_xml
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -76,9 +78,6 @@ DOCUMENT = "word/document.xml"
 CORE = "docProps/core.xml"
 CUSTOM = "docProps/custom.xml"
 APP = "docProps/app.xml"
-
-MAX_PARTS = 2000
-MAX_UNCOMPRESSED = 64 * 1024 * 1024
 
 #: A marked place, read inside a paragraph's whole text: ``[[name]]`` (the
 #: firm-base slot) or ``{{name}}`` (its field form).
@@ -155,35 +154,30 @@ def _local(tag: object) -> str:
 # ---- the package -------------------------------------------------------------------
 
 
-def _open(blob: bytes) -> tuple[zipfile.ZipFile | None, list[str]]:
-    if not isinstance(blob, (bytes, bytearray)) or not blob:
-        return None, ["the file is empty"]
+def _open(blob: bytes) -> tuple[Package | None, list[str]]:
     try:
-        z = zipfile.ZipFile(io.BytesIO(bytes(blob)))
-    except zipfile.BadZipFile:
-        return None, ["the file is not a Word package (not a zip)"]
-    infos = z.infolist()
-    if len(infos) > MAX_PARTS:
-        return None, [f"the package has {len(infos)} parts, over {MAX_PARTS}"]
-    if sum(i.file_size for i in infos) > MAX_UNCOMPRESSED:
-        return None, ["the package expands past the size this check reads"]
-    names = set(z.namelist())
-    if "[Content_Types].xml" not in names or DOCUMENT not in names:
+        z = open_package(blob)
+    except PackageRefused as exc:
+        return None, [str(exc)]
+    if "[Content_Types].xml" not in z.names or DOCUMENT not in z.names:
         return None, ["the file is not a Word package (no content types or no document part)"]
     return z, []
 
 
-def _parse(z: zipfile.ZipFile, name: str) -> ET.Element | None:
+def _parse(z: Package, name: str, problems: list[str]) -> Node | None:
+    """The part's tree, or None with the reason appended to ``problems``."""
     try:
-        return ET.fromstring(z.read(name))
-    except (ET.ParseError, KeyError, zipfile.BadZipFile, RuntimeError):
+        return parse_xml(z.read(name))
+    except PackageRefused as exc:
+        problems.append(f"{name}: {exc}")
         return None
 
 
-def _main_type_problems(z: zipfile.ZipFile) -> list[str]:
-    root = _parse(z, "[Content_Types].xml")
+def _main_type_problems(z: Package) -> list[str]:
+    problems: list[str] = []
+    root = _parse(z, "[Content_Types].xml", problems)
     if root is None:
-        return ["the package's content types cannot be read"]
+        return problems
     main = [
         o.get("ContentType", "")
         for o in root.iter(f"{_CT}Override")
@@ -214,18 +208,18 @@ def _structure_problems(names: Iterable[str]) -> list[str]:
 # ---- text ---------------------------------------------------------------------------
 
 
-def _paragraph_texts(root: ET.Element) -> Iterator[str]:
+def _paragraph_texts(root: Node) -> Iterator[str]:
     """Each paragraph's own text with its runs joined; a text run outside any
     paragraph is a text of its own."""
-    parent: dict[ET.Element, ET.Element] = {c: p for p in root.iter() for c in p}
+    parent: dict[Node, Node] = {c: p for p in root.iter() for c in p}
 
-    def owner(el: ET.Element) -> ET.Element | None:
+    def owner(el: Node) -> Node | None:
         node = parent.get(el)
         while node is not None and node.tag != f"{_W}p":
             node = parent.get(node)
         return node
 
-    joined: dict[ET.Element, list[str]] = {}
+    joined: dict[Node, list[str]] = {}
     loose: list[str] = []
     for t in root.iter(f"{_W}t"):
         p = owner(t)
@@ -249,7 +243,7 @@ def _segment_ok(segment: str, fixed: frozenset[str], page_story: bool, used: set
 
 
 def _text_problems(
-    name: str, root: ET.Element, fixed: frozenset[str], used: set[str], marks: list[str]
+    name: str, root: Node, fixed: frozenset[str], used: set[str], marks: list[str]
 ) -> list[str]:
     page_story = bool(_STORY_WITH_PAGES.match(name))
     out: list[str] = []
@@ -266,7 +260,7 @@ def _text_problems(
     return out
 
 
-def _field_problems(name: str, root: ET.Element) -> list[str]:
+def _field_problems(name: str, root: Node) -> list[str]:
     codes = [el.get(f"{_W}instr", "") for el in root.iter(f"{_W}fldSimple")]
     current: list[str] = []
     for el in root.iter():
@@ -289,7 +283,7 @@ def _field_problems(name: str, root: ET.Element) -> list[str]:
     return out
 
 
-def _element_problems(name: str, root: ET.Element, fixed: frozenset[str]) -> list[str]:
+def _element_problems(name: str, root: Node, fixed: frozenset[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
 
@@ -327,13 +321,11 @@ def _element_problems(name: str, root: ET.Element, fixed: frozenset[str]) -> lis
 # ---- properties and relationships ----------------------------------------------------
 
 
-def _property_problems(z: zipfile.ZipFile, names: set[str]) -> list[str]:
+def _property_problems(z: Package, names: set[str]) -> list[str]:
     out: list[str] = []
     if CORE in names:
-        core = _parse(z, CORE)
-        if core is None:
-            out.append(f"{CORE}: cannot be read")
-        else:
+        core = _parse(z, CORE, out)
+        if core is not None:
             filled = sorted(
                 {
                     _local(e.tag)
@@ -343,16 +335,14 @@ def _property_problems(z: zipfile.ZipFile, names: set[str]) -> list[str]:
             )
             out += [f"{CORE}: {k} is not empty (it can name a person or a matter)" for k in filled]
     if CUSTOM in names:
-        custom = _parse(z, CUSTOM)
-        if custom is None or len(list(custom)):
+        custom = _parse(z, CUSTOM, out)
+        if custom is not None and len(custom):
             out.append(
                 f"{CUSTOM}: carries custom properties (a document system's matter and file ids)"
             )
     if APP in names:
-        app = _parse(z, APP)
-        if app is None:
-            out.append(f"{APP}: cannot be read")
-        else:
+        app = _parse(z, APP, out)
+        if app is not None:
             for el in app.iter():
                 local = _local(el.tag)
                 if local == "Manager" and _fold(el.text or ""):
@@ -364,12 +354,11 @@ def _property_problems(z: zipfile.ZipFile, names: set[str]) -> list[str]:
     return out
 
 
-def _relationship_problems(z: zipfile.ZipFile, names: set[str]) -> list[str]:
+def _relationship_problems(z: Package, names: set[str]) -> list[str]:
     out: list[str] = []
     for name in sorted(n for n in names if n.endswith(".rels")):
-        root = _parse(z, name)
+        root = _parse(z, name, out)
         if root is None:
-            out.append(f"{name}: cannot be read")
             continue
         if any(r.get("TargetMode") == "External" for r in root.iter(f"{_REL}Relationship")):
             out.append(f"{name}: an external link (a hyperlink, linked picture or template)")
@@ -398,9 +387,8 @@ def check(blob: bytes, fixed_strings: Iterable[str] = ()) -> BlankCheck:
         for n in names
         if n.endswith(".xml") and not n.lower().startswith(("docprops/", "customxml/"))
     ):
-        root = _parse(z, name)
+        root = _parse(z, name, problems)
         if root is None:
-            problems.append(f"{name}: cannot be read")
             continue
         read += 1
         problems += _element_problems(name, root, fixed)
