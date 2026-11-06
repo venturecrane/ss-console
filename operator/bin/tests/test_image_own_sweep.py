@@ -88,7 +88,7 @@ def test_the_closing_sweep_leaves_the_modes_chmod_R_a_plus_rX_leaves(tmp_path: P
     probe = shlex.split(
         mode_cmd.replace("/opt/hermes /app", shlex.quote(str(b)), 1).replace("-exec chmod a+rX {} +", "-print")
     )
-    assert subprocess.run(probe, check=True, capture_output=True, text=True).stdout == ""  # noqa: S603
+    assert subprocess.run(probe, check=True, capture_output=True, text=True).stdout == ""  # noqa: S603 - the Dockerfile's own find with -print, on a temp tree
 
 
 def test_the_closing_sweep_owns_the_same_trees_the_recursive_chown_did() -> None:
