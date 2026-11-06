@@ -289,7 +289,8 @@ def _record_files(job_data: Path) -> tuple[list[Path], int]:
             for n in names:
                 by_name.setdefault(n, Path(root) / n)
     found = [p if p.is_file() else by_name.get(p.name) for p in paths]
-    return [p for p in found if p is not None and p.is_file()], len(paths)
+    # A row whose file is missing or empty is not in the job's corpus (``summarize.corpus_files``).
+    return [p for p in found if p is not None and p.is_file() and p.stat().st_size], len(paths)
 
 
 def replay(job_data: Path, show: bool = False) -> list[str]:
@@ -298,13 +299,12 @@ def replay(job_data: Path, show: bool = False) -> list[str]:
     only with ``show``. Reads files one at a time; calls no model."""
     digest = (job_data / "digest.md").read_text(encoding="utf-8") if (job_data / "digest.md").is_file() else ""
     files, listed = _record_files(job_data)
-
-    def chunks():
-        yield digest
-        for f in files:
-            yield f.read_text(encoding="utf-8", errors="replace")
-
-    base = newfacts.index(chunks, job_data)
+    # ONE chunk, joined exactly as the seat joins it (``run.prebuild``: the
+    # digest, then ``finish._corpus_text``'s non-empty record files in their
+    # listed order), so the replay reads and writes the SAME cached index the
+    # job built, never a second one under another key (2026-11-06).
+    text = sources_text(digest, "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in files))
+    base = newfacts.index(lambda: (text,), job_data)
     size = sum(f.stat().st_size for f in files)
     out = [f"sources: digest {len(digest):,} chars; record text {len(files)} of {listed} files, {size:,} bytes"]
     units = sorted(p for p in job_data.glob("set-*") if p.is_dir()) or [job_data]
