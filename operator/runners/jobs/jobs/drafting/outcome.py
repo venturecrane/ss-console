@@ -25,7 +25,8 @@ REASON_CODES = (
     "format_check",
     "record_unreadable",
     "audit_unsettled",
-    # A served paper's audit finding survived its repairs (compose.STRICT_CLASSES): failed, nothing filed.
+    # A served paper's audit finding survived its repairs (compose.STRICT_CLASSES) and is of a kind that
+    # changes what a request asks or states (repair_budget.HOLD_KINDS): failed, nothing filed, SMD alerted.
     "audit_unrepaired",
     # The attorney notes still carry the system's words, a hedge or an empty line after one rewrite (wording.py).
     "notes_unclean",

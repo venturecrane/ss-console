@@ -54,6 +54,9 @@ CODES = frozenset(
         "stage_refused",  # a stage refused its own input
         "limit_held",  # a cost cap, budget or page allowance held it
         "identity_held",  # a record names another person; the firm is asked
+        # A served discovery set's repairs ran out and it filed with form
+        # findings in the attorney notes (drafting/repair_budget.py), 2026-11-05.
+        "repair_unconverged",
     }
 )
 

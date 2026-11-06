@@ -32,12 +32,13 @@ from . import caption_stage, citefix, compose, converge, format_check, gate, nes
 from . import base_lay, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, settle as settle_mod, wording
+from . import repair_budget, repair_guard
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
-#: The runaway guard on a served set's repairs; ``Finish._converge`` stops on
-#: non-convergence well before it in practice.
+#: A served set's repair rounds when the firm authors no ``budget.repair_rounds``
+#: (``repair_budget``); ``Finish._converge`` stops on non-convergence well before it in practice.
 REPAIR_CEILING = 8
 FINAL = "draft-final.md"
 CONCURRENCY = 4
@@ -140,15 +141,15 @@ class Finish:
         version = 1
         result = d.audit(version, digest, corpus)
         while compose.blocking_findings(result, self.cls) and version <= MAX_REPAIRS:
-            d.repair(digest, version)
+            repair_guard.repaired(d, digest, version, repair_guard.Guard(d.data, digest + "\n" + corpus))
             version += 1
             result = d.audit(version, digest, corpus)
         return version
 
     def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
-        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails
-        (``converge.served``, its rules and their history)."""
-        return converge.served(d, self.cls, u.label, digest, corpus, REPAIR_CEILING)
+        """A served set (``compose.STRICT_CLASSES``) is clean, files with open
+        items, or holds (``converge.served``, its rules and their history)."""
+        return converge.served(d, self.cls, u.label, digest, corpus, repair_budget.plan(self, u, REPAIR_CEILING))
 
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
@@ -356,6 +357,7 @@ class Finish:
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)
             fixed = self._drafter(u).repair_format(model_doc, res.content)
+            fixed = repair_guard.vet_format(u.data, model_doc, fixed, digest + "\n" + self._corpus_text())
             self._uatomic(
                 u, FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n")
             )
