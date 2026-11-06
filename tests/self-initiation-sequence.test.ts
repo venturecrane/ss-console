@@ -58,6 +58,7 @@ const DOCUMENT_CLASSES = [
   'demand_letter',
   'mediation_brief',
   'memo',
+  'depo_outline',
   'letter',
 ] as const
 
