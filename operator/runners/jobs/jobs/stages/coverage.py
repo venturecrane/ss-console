@@ -36,6 +36,11 @@ opposites and only one of them is a question:
   carried, so the file is explained by rule with that factual reason and
   named in Limitations, never held (2026-10-24: a joint matter's shared intake
   form, stripped as the co-plaintiff's, held a finished chronology).
+* no FILES-SEEN line for a one-page file the composer was given whole in a
+  piece it answered, and no line of any map cites it (``silent_reads``): it
+  drew no entry from it, which is what ``entries: 0`` says, so it is
+  explained by the same rule (2026-11-06: an emailed signature graphic held
+  a finished chronology and SMD accounted for it by hand).
 * ``entries: N`` above zero otherwise, or no FILES-SEEN line at all: the
   composer drew entries from it (or never accounted for it) and the document
   cites none. That is pipeline LOSS, never a disclosure (the 08-27 rule: no
@@ -56,6 +61,7 @@ from typing import Any
 
 from ..medchron import coverage_decide
 from .base import StageRun, read_json, read_jsonl
+from .chunking import pieces_pages
 from .units import billing_stem
 
 EXT_OK = {".pdf", ".docx", ".doc", ".tif", ".tiff", ".jpg", ".jpeg", ".png"}
@@ -185,6 +191,46 @@ def entry_counts(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, i
     return out
 
 
+#: The recorded source of a rule row for a file the composer read and left unnamed.
+SILENT_SOURCE = (
+    "coverage_gate: the file's whole text, one page, was in a piece the composer answered "
+    "({piece}); no line of any map names it, so it drew no entry from it"
+)
+
+
+def silent_reads(run_dir: Path, unit_files: list[dict[str, Any]]) -> dict[str, str]:
+    """``{file_key: piece}`` for each one-page file the composer was given
+    whole and answered without a word about: the file's header, with its
+    fileId and no part label, sits in a ``chunk-*.txt`` whose ``map-*.md``
+    came back, no FILES-SEEN line accounts for it, and no line of any map
+    cites it. The map is the composer's whole answer to the piece, so a file
+    it never cites drew no entry, which is what ``entries: 0`` says.
+
+    WHY (2026-10-22, a client seat): an emailed one-page image, a signature
+    graphic too large for the tiny-image rule, held a finished chronology
+    because the composer wrote lines for its siblings and none for it, and
+    SMD had to account for it by hand. Not this rule, and still held: a file
+    no answered piece carried (never read), a file split into parts or of
+    more than one page (a reader skipping a record is the loss this gate
+    exists for), and a file any map cites (a source, uncited, is loss)."""
+    by_id = {str(f.get("id")): file_key(f) for f in unit_files}
+    maps = sorted(run_dir.glob("map-*.md"))
+    answers = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in maps)
+    accounted = {by_id.get(m.group("id") or "", m.group("name").strip()) for m in SEEN_LINE.finditer(answers)}
+    out: dict[str, str] = {}
+    for mp in maps:
+        chunk = mp.with_name("chunk-" + mp.name[len("map-") :]).with_suffix(".txt")
+        if not chunk.is_file():
+            continue
+        for piece in pieces_pages(chunk.read_text(encoding="utf-8", errors="replace")):
+            name = by_id.get(str(piece.get("file_id")))
+            if not name or name in accounted or name in out or piece["pages"] is None or len(piece["pages"]) != 1:
+                continue
+            if not re.search(rf"FILE:\s*{re.escape(name)}\s*[,)]", answers):
+                out[name] = chunk.stem
+    return out
+
+
 def _tiny_image(raw_by_id: dict[str, dict[str, Any]], f: dict[str, Any]) -> str | None:
     """The orphans decision's measured-size rule, applied to a unit file: an
     image under 8 KB is an email signature or spacer graphic. Curtis held at
@@ -242,6 +288,7 @@ def rule_rows(slug_dir: Path, unit: str, cfg: Any) -> list[dict[str, str]]:
     rd = slug_dir / "runs" / unit
     counts = entry_counts(rd, unit_files)
     omitted = omitted_by_rule(rd)
+    silent = silent_reads(rd, unit_files)
     said = {**composer_dispositions(rd, unit_files), **coverage_decide.reasons(slug_dir, unit, by_rule=False)}
     rules, billing = exclusions(cfg), _billing_names(slug_dir)
     # A file the document cites is never "no entry is drawn from it", whatever
@@ -253,7 +300,7 @@ def rule_rows(slug_dir: Path, unit: str, cfg: Any) -> list[dict[str, str]]:
         name = file_key(f)
         if name in cited or _settled(name, f, billing, rules, said):
             continue
-        why = NO_ENCOUNTER if counts.get(name) == 0 else omitted.get(name)
+        why = NO_ENCOUNTER if counts.get(name) == 0 or name in silent else omitted.get(name)
         if why:
             out.append({"id": str(f.get("id") or ""), "name": name, "reason": why})
     return out
@@ -408,6 +455,7 @@ def _account(
     in_unit = {file_key(f): f for f in unit_files}
     counts = entry_counts(sr.slug_dir / "runs" / sr.unit.unit, unit_files)
     omitted = omitted_by_rule(sr.slug_dir / "runs" / sr.unit.unit)
+    silent = silent_reads(sr.slug_dir / "runs" / sr.unit.unit, unit_files)
     unexplained: list[str] = []
     explained: list[tuple[str, str]] = []
     by_rule: list[dict[str, str]] = []
@@ -418,6 +466,10 @@ def _account(
             # The composer read it and drew no entry: the record's own account.
             reason = NO_ENCOUNTER
             by_rule.append({"id": str(f.get("id") or ""), "name": name, "reason": reason})
+        elif reason is None and name in silent:
+            reason = NO_ENCOUNTER
+            source = SILENT_SOURCE.format(piece=silent[name])
+            by_rule.append({"id": str(f.get("id") or ""), "name": name, "reason": reason, "source": source})
         elif reason is None and name in omitted:
             # Every entry drawn from it left with a block a filter rule removed.
             reason = omitted[name]
