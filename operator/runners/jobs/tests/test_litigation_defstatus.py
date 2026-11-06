@@ -160,7 +160,10 @@ def test_reconcile_never_prints_answered_without_an_answer_date() -> None:
         (vocab.APPEARED_NO_ANSWER, "No default entry was found either, so the answered date stays null."),
         (vocab.SERVED_NO_ANSWER, "The claims administrator asked in August 2026 that the County be dismissed."),
         (vocab.NOT_SERVED, "The CMC form checks the box saying all parties were served, appeared or were dismissed."),
-        (vocab.NOT_SERVED, "She was never served as an individual; her Estate (DOE 1) was served and answered instead."),
+        (
+            vocab.NOT_SERVED,
+            "She was never served as an individual; her Estate (DOE 1) was served and answered instead.",
+        ),
         (vocab.APPEARED_NO_ANSWER, "The plaintiff's own statement lists her as answered, but no answer supports it."),
         (vocab.APPEARED_NO_ANSWER, "Defense propounded discovery, which plaintiff answered on 2026-10-18."),
     ],
