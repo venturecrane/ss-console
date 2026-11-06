@@ -1,0 +1,15 @@
+{
+  "about": "Made-up layout rules. main_compiled.json is what origin/main's shared/layout_rules.compile_adjustments made of these at 5b033c35a, unchanged since #3796 (generated once from that file, never by this branch's code); with the switch off this branch must make the same bytes, reach fields or not.",
+  "adjustments": [
+    {"id": "a0000001", "text": "Double space the headings.", "at": "2026-12-01T00:00:00Z"},
+    {"id": "a0000002", "text": "In every mediation brief, two blank lines before the court name.", "at": "2026-12-01T00:00:00Z"},
+    {"id": "a0000003", "text": "Memos and depo outlines: single spaced signature block.", "at": "2026-12-01T00:00:00Z"},
+    {"id": "a0000004", "text": "Never use the word plainly; three blank lines before the caption.", "at": "2026-12-01T00:00:00Z"},
+    {"id": "a0000005", "text": "Leave extra space between the court name and the caption.", "at": "2026-11-01T00:00:00Z"},
+    {"id": "a0000006", "text": "Charts in 12 point in our briefs.", "at": "2026-12-01T00:00:00Z"},
+    {"id": "a0000007", "text": "Put the date beside the by line.", "at": "2026-12-01T00:00:00Z", "doc_kinds": ["memo"]},
+    {"id": "a0000008", "text": "Discovery responses: 6 pt before each heading.", "at": "2026-12-01T00:00:00Z", "doc_kinds": ["discovery_response", "mediation_brief"]},
+    {"id": "a0000009", "text": "Two blank lines before the court name.", "at": "2026-12-01T00:00:00Z", "doc_kinds": ["demand_letter"], "attorney": "Dana Whitlock"},
+    {"id": "a0000010", "text": "If it is a long brief, double spaced throughout.", "at": "2026-12-01T00:00:00Z"}
+  ]
+}

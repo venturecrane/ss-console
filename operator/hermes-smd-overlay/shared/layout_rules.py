@@ -484,7 +484,7 @@ def _compile_clause(
     return layout, relative, ""
 
 
-def compile_rule(text: str, at: str = "") -> dict[str, Any]:
+def compile_rule(text: str, at: str = "", doc_classes: list[str] | None = None) -> dict[str, Any]:
     """One rule's words: ``{doc_classes, compiled: [...], prose: [...]}``.
 
     A compiled clause is ``{text, layout, relative, base_owned, carried}``: its
@@ -492,10 +492,13 @@ def compile_rule(text: str, at: str = "") -> dict[str, Any]:
     a mediation brief (in effect everywhere else, and the letter says so), and
     whether a relative ask predates :data:`RELATIVE_FROM`. A prose clause is
     ``{text, reason}``. ``doc_classes`` is the kinds the rule names, whole rule,
-    or ``[]`` for all of them. ``at`` is when the rule was installed.
+    or ``[]`` for all of them; a caller that recorded the rule's kinds when it was
+    confirmed passes them instead (``shared/layout_reach.py``). ``at`` is when the
+    rule was installed.
     """
     whole = normalize(text)
-    doc_classes = [cls for cls, pattern in _DOC_CLASS_WORDS if pattern.search(whole)]
+    if doc_classes is None:
+        doc_classes = [cls for cls, pattern in _DOC_CLASS_WORDS if pattern.search(whole)]
     compiled: list[dict[str, Any]] = []
     prose: list[dict[str, str]] = []
     for wrote, words in clauses(text):

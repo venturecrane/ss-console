@@ -151,6 +151,21 @@ def switched_on(path: str | None = None) -> bool:
     return logic_in_code.load_switch(SWITCH, path).enforcing
 
 
+def reach_required(output_class: str, adjustment: dict[str, Any] | None) -> list[str]:
+    """Why a confirmed rule may not install, switched on: a rule about the firm's
+    documents that records no kinds would otherwise compile for every kind, the
+    widening the reach rule ends (``shared/rule_reach.py``). Off, ``[]`` always,
+    so a seat installs exactly as before."""
+    if adjustment is None or output_class != RULE_CLASS or not switched_on():
+        return []
+    if adjustment.get("doc_kinds"):
+        return []
+    return [
+        "a rule about the firm's documents must name the kinds of document it covers; "
+        "ask the person which documents it is for, then propose it again"
+    ]
+
+
 def lane_truth(
     rule_id: str, output_class: str, spec_dir: str | Path | None = None
 ) -> dict[str, Any] | None:
@@ -192,6 +207,7 @@ __all__ = [
     "compile_adjustments",
     "lane_truth",
     "reach_fields",
+    "reach_required",
     "render",
     "switched_on",
 ]

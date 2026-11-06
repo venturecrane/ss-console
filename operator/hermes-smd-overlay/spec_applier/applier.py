@@ -68,7 +68,7 @@ from pathlib import Path
 from typing import Any
 
 from config_applier.applier import atomic_write
-from shared import layout_rules, wording_rules, wording_rules_store
+from shared import layout_reach, layout_rules, wording_rules, wording_rules_store
 from shared.ids import iso_utc, sha256
 
 logger = logging.getLogger(__name__)
@@ -665,7 +665,8 @@ def _install(
             "assertions": spec.assertions,
         }
 
-    layouts = _install_layouts(spec_dir, specs)
+    reach_on = wording_rules.switched_on()
+    layouts = _install_layouts(spec_dir, specs, reach_on)
     wordings = _install_wordings(spec_dir, specs)
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -679,6 +680,9 @@ def _install(
         # recompiles on its next poll instead of waiting for a new rule.
         "layouts": layouts,
         "layout_schema": layout_rules.SCHEMA_VERSION,
+        # Whether layout.json was compiled with each rule's recorded kinds
+        # (``shared/layout_reach.py``), so flipping the switch recompiles.
+        layout_reach.MANIFEST_KEY: reach_on,
         # The confirmed wording rules the job lanes read, by kind and attorney
         # (``shared/wording_rules.py``), committed the same way.
         wording_rules_store.MANIFEST_KEY: wordings,
@@ -700,7 +704,9 @@ def _install(
     return tuple(installed), pruned
 
 
-def _install_layouts(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[str, Any]]:
+def _install_layouts(
+    spec_dir: Path, specs: list[ParsedSpec], reach_on: bool
+) -> dict[str, dict[str, Any]]:
     """Compile each layout class's confirmed rules and write ``layout.json``.
 
     Written for every class in :data:`shared.layout_rules.LAYOUT_RULE_CLASSES`
@@ -717,7 +723,7 @@ def _install_layouts(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[
             continue
         if not spec.adjustments:
             continue
-        doc = layout_rules.compile_adjustments(spec.adjustments)
+        doc = layout_reach.compile_adjustments(spec.adjustments, reach_on)
         blob = json.dumps(doc, indent=2, sort_keys=True).encode("utf-8") + b"\n"
         rel = layout_rules.layout_rel_path(spec.output_class)
         target = spec_dir / rel
@@ -811,6 +817,7 @@ def apply(
         installed_manifest.get("source_digest") == source_digest
         and source_digest
         and installed_manifest.get("layout_schema") == layout_rules.SCHEMA_VERSION
+        and layout_reach.compiled_as_switch(installed_manifest)
         # Absent reads as the first schema: a seat installed before wording.json
         # existed holds no rule with a recorded reach, so it has nothing to write.
         and installed_manifest.get("wording_schema", 1) == wording_rules_store.SCHEMA_VERSION
