@@ -65,6 +65,10 @@ GATE_URL_ENV = "SMD_JOBS_GATE_URL"
 DEFAULT_GATE_URL = "http://127.0.0.1:8643"
 WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"
 WAKE_MAX_ATTEMPTS = 5
+#: The lanes whose DELIVER wake first asks the broker whether the job's thread
+#: already holds a reply sent after it finished (2026-11-06): the drafting
+#: lane, whose completion reply the seat sends in code whatever the turn does.
+THREAD_CHECKED_LANES = frozenset({"drafting"})
 #: ``main``'s exit when the Machine's stop signal ended the loop (128 + SIGINT,
 #: the shell's own convention). ``operator/templates/entrypoint.sh`` does not
 #: respawn on it; every other exit is a crash and is respawned.
@@ -312,6 +316,27 @@ class Daemon:
         proof_watch.check_reply_watches(self)
         proof_watch.check_reroutes(self)
 
+    def _thread_already_answered(self, job_id: str, wake: dict[str, Any]) -> bool:
+        """True when this lane's DELIVER wake must not start, because the job's
+        thread already holds a reply sent after the job finished (an SMD hand
+        release counts): the completion would be the requester's second email
+        (A&P, 2026-11-06). The wake is closed, not retried, and the daemon log
+        says why in one line. Asked once per wake; a broker that could not
+        answer lets the wake go (the broker's bind re-checks at the send)."""
+        if self.LANE not in THREAD_CHECKED_LANES or wake.get("thread_checked"):
+            return False
+        broker = getattr(self.broker, "client", self.broker)
+        seen = rewake.thread_check(broker)(rewake.reply_kind(self.LANE), job_id)
+        if seen.get("checked") and seen.get("answered"):
+            wake.update(pending=False, outcome="refused: thread_answered")
+            self._write_state(job_id, wake=wake)
+            logger.warning("%s job %s: DELIVER wake not sent: %s", self.LANE, job_id, seen["answered"])
+            return True
+        if seen.get("checked"):
+            wake["thread_checked"] = True
+            self._write_state(job_id, wake=wake)
+        return False
+
     def _dispatch_wakes(self) -> None:
         import http.client
         from urllib.parse import urlparse
@@ -321,6 +346,8 @@ class Daemon:
             if not self.wake_secret:
                 logger.warning("no %s in the daemon env; wake for %s stays pending", WAKE_SECRET_ENV, job_id)
                 return
+            if self._thread_already_answered(job_id, wake):
+                continue
             # Each distinct wake gets its own id and every re-post of one wake the
             # same id (`rewake.handoff_id`): the gateway drops a reused id with the
             # same text and refuses one with different text (admission_conflict).

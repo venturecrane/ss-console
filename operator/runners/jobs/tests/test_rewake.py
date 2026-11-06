@@ -113,3 +113,131 @@ def test_an_unknown_job_or_one_without_a_task_is_refused(tmp_path):
     d, broker = _wake_daemon(tmp_path, gate.url)
     gate.close()
     assert rewake.rewake(d.run_dir, "medchron", "nope", "scott", "x", False) == 2
+
+
+# -- 2026-11-06: a thread SMD already answered gets no second completion ------
+
+ANSWERED = (
+    "drafting job 01A's thread already holds a reply sent from this mailbox after the job finished "
+    "(an SMD hand reply counts); a second completion reply is refused and nothing was sent."
+)
+
+
+class _Thread:
+    def __init__(self, answer):
+        self.answer, self.asked = answer, []
+
+    def __call__(self, kind, ident):
+        self.asked.append((kind, ident))
+        return self.answer
+
+
+def test_a_rewake_after_an_smd_reply_in_the_thread_is_refused_in_one_line(tmp_path, capsys):
+    """FALSIFIER: on origin/main the rewake re-arms, and #3810's code-written
+    completion goes to the attorney a second time."""
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    thread = _Thread({"checked": True, "answered": ANSWERED})
+    assert rewake.rewake(d.run_dir, "medchron", "01A", "scott", "why", False, clock=d.clock, thread=thread) == 1
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out == [f"refused: {ANSWERED}"]
+    assert thread.asked == [("medchron_job", "01A")]
+    assert d._daemon_state("01A")["wake"].get("resend") is None and "rewakes" not in d._daemon_state("01A")
+
+
+def test_a_rewake_that_could_not_check_the_thread_re_arms_nothing(tmp_path, capsys):
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    thread = _Thread({"checked": False, "answered": "", "why": "broker down"})
+    assert rewake.rewake(d.run_dir, "medchron", "01A", "scott", "why", False, clock=d.clock, thread=thread) == 1
+    assert "could not check" in capsys.readouterr().out
+    assert d._daemon_state("01A")["wake"].get("resend") is None
+
+
+def test_a_rewake_in_a_clear_thread_still_re_arms(tmp_path):
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    thread = _Thread({"checked": True, "answered": ""})
+    assert rewake.rewake(d.run_dir, "medchron", "01A", "scott", "why", False, clock=d.clock, thread=thread) == 0
+
+
+def test_the_cli_asks_the_broker_about_the_thread(tmp_path, monkeypatch, capsys):
+    """``_run`` always checks: no broker socket is a refusal, never a skip."""
+    from types import SimpleNamespace
+
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    args = SimpleNamespace(run_dir=str(d.run_dir), lane="medchron", job_id="01A", by="scott", why="why", again=False)
+    monkeypatch.delenv("SMD_WORKSPACE_BROKER_SOCKET", raising=False)
+    assert rewake._run(args) == 2
+    asked = []
+
+    class Client:
+        def __init__(self, sock):
+            pass
+
+        def _request(self, req):
+            asked.append(req)
+            return {"ok": True, "thread": {"checked": True, "answered": ANSWERED}}
+
+    monkeypatch.setenv("SMD_WORKSPACE_BROKER_SOCKET", "/tmp/sock")
+    monkeypatch.setattr("jobs.broker_client.BrokerClient", Client)
+    assert rewake._run(args) == 1
+    assert asked == [{"action": "delivery_reply_status", "kind": "medchron_job", "job_id": "01A", "thread": True}]
+
+
+def _drafting_like(tmp_path, gate, answer):
+    """A daemon whose lane is drafting, so its DELIVER wake asks first."""
+    d, broker = _wake_daemon(tmp_path, gate.url)
+    d.LANE = "drafting"
+    calls = []
+
+    def _request(req):
+        broker.proof_requests.append(req)
+        if req.get("thread"):
+            calls.append(req)
+            return {"ok": True, "replies": [], "thread": answer}
+        return {"ok": True, "replies": []}
+
+    broker._request = _request
+    return d, broker, calls
+
+
+def test_a_drafting_deliver_wake_into_an_answered_thread_is_not_sent(tmp_path, caplog):
+    """FALSIFIER: on origin/main the wake is posted and the completion turn
+    sends the job's reply after SMD's."""
+    gate = _FakeGate()
+    d, broker, calls = _drafting_like(tmp_path, gate, {"checked": True, "answered": ANSWERED})
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()
+    d.tick()
+    gate.close()
+    assert gate.requests == []
+    assert [c["kind"] for c in calls] == ["drafting_job"]  # asked once, then closed
+    wake = d._daemon_state("01A")["wake"]
+    assert wake["pending"] is False and wake["outcome"] == "refused: thread_answered"
+    assert any("DELIVER wake not sent" in r.getMessage() for r in caplog.records)
+
+
+def test_a_drafting_deliver_wake_into_a_clear_thread_goes_and_asks_once(tmp_path):
+    gate = _FakeGate()
+    d, broker, calls = _drafting_like(tmp_path, gate, {"checked": True, "answered": ""})
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()
+    gate.close()
+    assert [r["body"]["handoff_id"] for r in gate.requests] == ["drafting-01A"]
+    assert len(calls) == 1
+
+
+def test_a_drafting_wake_goes_when_the_broker_could_not_check(tmp_path):
+    """The broker's bind re-checks the thread at the send; an unanswered
+    check never holds the completion back."""
+    gate = _FakeGate()
+    d, broker, _calls = _drafting_like(tmp_path, gate, {"checked": False, "answered": ""})
+    _submit(d, broker, "01A")
+    d.tick()
+    d.tick()
+    gate.close()
+    assert len(gate.requests) == 1

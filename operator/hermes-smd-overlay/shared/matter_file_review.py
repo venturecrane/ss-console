@@ -17,7 +17,7 @@ for a row that changed after SMD read it matches nothing.
 USAGE, as root on the seat::
 
     python -m shared.matter_file_review list
-    python -m shared.matter_file_review approve <id> <digest>
+    python -m shared.matter_file_review approve <id> <digest> [--job <id> | --no-job]
     python -m shared.matter_file_review reject <id> <digest>
     python -m shared.matter_file_review history           (every row, read-only)
     python -m shared.matter_file_review mark-smd <id>     (a hand reply SMD wrote)
@@ -25,6 +25,14 @@ USAGE, as root on the seat::
 A reply SMD writes by hand is held with ``hold(..., author="smd")``: its
 release is SMD's own, so it never spends one of the Operator's
 ``matter_file_delivery.review_first`` releases.
+
+WHICH JOB A RELEASE ANSWERS (2026-11-06). A reply that is a job's reply (a
+completion SMD sends by hand) is recorded as that job's bound reply when it is
+sent, so a later ``jobs rewake`` cannot email the requester a second
+completion: hold it with ``job=`` or approve it with ``--job <id>``. An approve
+of SMD's own reply that says neither ``--job`` nor ``--no-job`` is refused, and
+so is any unmarked approve in a thread with a finished job whose reply is not
+recorded (``shared.review_job``).
 
 The gateway's held-reply sweeper thread acts on a decision within a minute.
 A held row expires after :data:`TTL_SECONDS` (the broker spool keeps the files
@@ -53,6 +61,7 @@ from records_contract.review_row import (
     DIGEST_RE,
     HOLD_REASON,
     ID_RE,
+    JOB_NONE,
     REVIEW_DIR_ENV,
     STATUS_EXPIRED,
     STATUS_FAILED,
@@ -70,9 +79,12 @@ from records_contract.review_row import (
     read_rows,
     released_count,
     review_dir,
+    row_job,
     smd_authored,
     write_row,
 )
+
+from shared import review_job
 
 __all__ = [
     "AUTHOR_SMD",
@@ -80,6 +92,7 @@ __all__ = [
     "DEFAULT_DECISIONS_DIR",
     "DEFAULT_REVIEW_DIR",
     "HOLD_REASON",
+    "JOB_NONE",
     "REVIEW_DIR_ENV",
     "STATUS_EXPIRED",
     "STATUS_FAILED",
@@ -100,6 +113,7 @@ __all__ = [
     "mark_smd",
     "released_count",
     "review_dir",
+    "row_job",
     "rows",
 ]
 
@@ -118,6 +132,7 @@ def hold(
     now: float | None = None,
     directory: Path | None = None,
     author: str = "",
+    job: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Write one held reply for review; return the row (with ``id`` and ``digest``).
 
@@ -128,7 +143,9 @@ def hold(
     ``redirect`` means ``to`` is a device's authored person, not the email's
     sender: the release aims the reply there (and the broker re-checks it).
     ``author="smd"`` marks a reply SMD wrote by hand: its release is not one of
-    the Operator's ``review_first`` releases."""
+    the Operator's ``review_first`` releases. ``job`` (``{"kind", "job_id"}``)
+    marks the reply as that job's reply: the release records it as the job's
+    bound reply, atomically with the send (2026-11-06)."""
     row = hold_row(
         message_id=message_id,
         to=to,
@@ -141,6 +158,7 @@ def hold(
         redirect=redirect,
         now=now,
         author=author,
+        job=job,
     )
     write_row(row, directory or review_dir())
     return row
@@ -224,6 +242,13 @@ def describe(row: dict[str, Any]) -> str:
             else []
         ),
         *([f"held because: {row.get('reason')}"] if row.get("reason") else []),
+        *(
+            [
+                f"job:      the reply of {review_job.named(row_job(row) or {})} (recorded as its reply)"
+            ]
+            if row_job(row)
+            else []
+        ),
         "words (sent exactly as below):",
         "-" * 60,
         str(row.get("text") or "").rstrip("\n"),
@@ -243,10 +268,73 @@ def describe(row: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _rewrite(row: dict[str, Any], base: Path) -> dict[str, Any]:
+    """Root rewrites a held row in place, keeping the file's owner and mode so
+    the gateway (the agent uid) still reads it."""
+    path = base / f"{row['id']}.json"
+    st = os.stat(path)
+    write_row(row, base)
+    if os.geteuid() == 0:
+        os.chown(path, st.st_uid, st.st_gid)
+    os.chmod(path, st.st_mode & 0o777)
+    return row
+
+
+def _with_job(
+    row: dict[str, Any], job: dict[str, str] | None, no_job: bool, base: Path
+) -> dict[str, Any]:
+    """The row an approve releases, with which job it is the reply of settled
+    (2026-11-06; ``shared.review_job`` says why). Refused when that is unknown."""
+    if job is not None and no_job:
+        raise ReviewError("--job and --no-job are two different answers; give one")
+    current = row_job(row)
+    if current is not None:
+        if no_job or (job is not None and job != current):
+            raise ReviewError(
+                f"this reply is already held as the reply of {review_job.named(current)}"
+            )
+        return row
+    if job is not None:
+        if len(row.get("batches") or []) > 1:
+            raise ReviewError(
+                "a reply sent in several parts cannot be recorded as one job's reply; "
+                "hold it again with its files in one part"
+            )
+        new = {**row, "job": dict(job)}
+        new["digest"] = digest(new)
+        return _rewrite(new, base)
+    if no_job:
+        return _rewrite({**row, "job": JOB_NONE}, base)
+    if smd_authored(row):
+        raise ReviewError(
+            "this is SMD's own reply: say which job it answers (--job <id>) or that it answers none (--no-job)"
+        )
+    owed = review_job.unreplied_jobs(str(row.get("message_id") or ""))
+    if owed:
+        names = ", ".join(f"{review_job.named(j)} ({j['state']})" for j in owed)
+        raise ReviewError(
+            f"this reply's thread has a finished job with no reply recorded: {names}. "
+            "If this is its reply, approve with --job <id>; if not, with --no-job"
+        )
+    return row
+
+
 def decide(
-    row_id: str, word: str, dig: str, *, directory: Path | None = None, reviews: Path | None = None
+    row_id: str,
+    word: str,
+    dig: str,
+    *,
+    directory: Path | None = None,
+    reviews: Path | None = None,
+    job: dict[str, str] | None = None,
+    no_job: bool = False,
 ) -> Path:
-    """Root writes the decision file the gateway acts on."""
+    """Root writes the decision file the gateway acts on.
+
+    An approve settles which job the reply is the reply of first
+    (:func:`_with_job`): ``job`` records it as that job's reply when it is sent;
+    ``no_job`` says it answers none. Naming a job changes the row's digest (the
+    job is digested), so the decision names the new one."""
     if word not in DECISIONS:
         raise ReviewError("the decision is approve or reject")
     if not ID_RE.fullmatch(row_id or "") or not DIGEST_RE.fullmatch(dig or ""):
@@ -260,6 +348,9 @@ def decide(
         raise ReviewError(
             "that reply has expired (its files are gone from the broker's spool); nothing was sent"
         )
+    if word == "approve":
+        row = _with_job(row, job, no_job, reviews or review_dir())
+        dig = str(row["digest"])
     return decision_file(directory, row_id, dig, word)
 
 
@@ -276,6 +367,14 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(word)
         p.add_argument("row_id")
         p.add_argument("digest")
+        if word == "approve":
+            p.add_argument(
+                "--job",
+                default="",
+                help="the job this reply is the reply of (<kind>:<id>, or the bare id): "
+                "recorded as its reply when sent",
+            )
+            p.add_argument("--no-job", action="store_true", help="this reply answers no job")
     args = parser.parse_args(argv)
     if args.cmd == "list":
         waiting = [r for r in rows() if r.get("status") == STATUS_REVIEW]
@@ -311,7 +410,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     try:
-        path = decide(args.row_id, args.cmd, args.digest)
+        job_text = str(getattr(args, "job", "") or "").strip()
+        path = decide(
+            args.row_id,
+            args.cmd,
+            args.digest,
+            job=review_job.resolve_job(job_text) if job_text else None,
+            no_job=bool(getattr(args, "no_job", False)),
+        )
     except (ReviewError, OSError) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2

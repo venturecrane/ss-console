@@ -445,6 +445,61 @@ def _verify_bare_message(ops: MsGraphOps, db_path: str, found: dict[str, Any], n
     return key
 
 
+def _thread_answered_after_finish(
+    ops: MsGraphOps, kind: str, ident: str, row: dict[str, Any] | None, conversation_id: str
+) -> str:
+    """The refusal sentence when this job's thread already holds a reply sent
+    from this mailbox after the job finished, else "".
+
+    WHY (A&P, 2026-11-06). A drafting job's completion reply went out as an SMD
+    hand release (``shared.matter_file_review``), a plain reply outside this
+    binding, so the job's claim was never taken and its ``reply_sent_at`` stayed
+    empty. A ``jobs rewake`` would then have sent the code-written completion a
+    SECOND time. The claim cannot see a reply it never took; the mailbox can.
+    Anything this mailbox sent in the job's thread after the job's last state
+    change (its finish) is an answer this binding did not make, so the reply is
+    refused and a person decides. An SMD note is SMD's own words, recorded once,
+    and never checked here."""
+    finished = str((row or {}).get("updated_at") or "")
+    if kind == "note_job" or not finished:
+        return ""
+    if not msgraph_lookup.sent_in_conversation_since(ops, conversation_id, finished):
+        return ""
+    return (
+        f"{_NOUN[kind]} job {ident}'s thread already holds a reply sent from this mailbox after the job finished "
+        "(an SMD hand reply counts); a second completion reply is refused and nothing was sent."
+    )
+
+
+def thread_status(broker: BrokerContext, kind: str, ident: str) -> dict[str, Any]:
+    """Whether job ``ident``'s completion reply may still be sent, for the
+    runner's ``rewake`` and DELIVER wake (2026-11-06): ``{"checked": bool,
+    "answered": sentence}``. ``answered`` is "" when nothing stands in the way;
+    ``checked`` is False when the mailbox or the ledger could not be read, which
+    is never "nothing stands in the way" (the bind re-checks at the send)."""
+    try:
+        v = verify(broker, {"kind": kind, "job_id": ident})
+    except BindingRefused as exc:
+        if exc.code in ("already_replied", "thread_answered"):
+            return {"checked": True, "answered": str(exc)}
+        # Every other refusal (not ended, failed, no such job) is the bind's own
+        # to say at the send; it is not a reply already in the thread.
+        return {"checked": True, "answered": ""}
+    except (MsGraphRefused, MsGraphTransportError, OSError, sqlite3.Error, ValueError) as exc:
+        logger.warning("thread_status: could not check %s %s: %s", kind, ident, exc)
+        return {"checked": False, "answered": ""}
+    row = v.row if isinstance(v.row, dict) else {}
+    # The ledger's mark for THIS outcome (a resumed job's earlier held reply
+    # carries an older key and owes nothing now).
+    if row.get("reply_sent_at") and row.get("reply_key") == _outcome(v):
+        return {
+            "checked": True,
+            "answered": f"{_NOUN[kind]} job {ident}'s reply is already recorded as sent at {row['reply_sent_at']}; "
+            "nothing was sent.",
+        }
+    return {"checked": True, "answered": ""}
+
+
 def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> Verified:
     """Every check, fresh, from the mailbox, the ledgers and the live customer.yaml."""
     ops = _ops(broker)
@@ -483,6 +538,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     if kind in JOB_KINDS:
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
+        answered = _thread_answered_after_finish(ops, kind, ident, row, found["conversation_id"])
+        if answered:
+            raise _job_refused(answered, "thread_answered")
     else:
         key = _verify_bare_message(ops, db_path, found, now)
         imid, kind = found["internet_message_id"], "message"
@@ -608,37 +666,7 @@ def reply_verb(
     reply_text.check_send(broker, v.kind, v.row, payload, partial(_audit, broker, raw=raw, v=v))
     db_path = str(broker.audit_db_path)
     session_id = str(request.get("session_id") or "").strip()
-    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
-    original = ops._request
-
-    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
-        # The claim rides the FIRST POST and nothing earlier: every GET and
-        # every refusal before it leaves the one reply unspent.
-        if method == "POST" and not state["claimed"]:
-            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
-                raise BindingRefused("that reply was already sent")
-            try:
-                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
-                    v.job_id, _outcome(v)
-                )
-            except Exception:
-                # The ledger could not be written: nothing has been sent, so
-                # the one reply is given back rather than silently spent.
-                bound_replies.release(db_path, v.key)
-                raise
-            if not marked:
-                # The ledger's own compare-and-set disagrees (this outcome was
-                # already replied to): honor it, give back the claim, send nothing.
-                bound_replies.release(db_path, v.key)
-                raise BindingRefused("the job's record shows this outcome was already replied to")
-            state["claimed"] = True
-            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return original(path, method, body, **kw)
-
-    # A per-call copy, so the claim hook never touches the shared ops object
-    # another broker thread is using.
-    bound_ops = copy.copy(ops)
-    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    bound_ops, state = _claiming_ops(broker, ops, v, session_id)
     body, transmit = _bound_body(v, payload, bound_ops)
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
@@ -684,6 +712,108 @@ def reply_verb(
         # case file lines are raised on that thread, the one a reply arrives in.
         v = dataclasses.replace(v, conversation_id=str(result["conversation_id"]))
     after_bound_reply(broker, v, session_id)
+    return result
+
+
+def _claiming_ops(
+    broker: BrokerContext, ops: MsGraphOps, v: Verified, session_id: str
+) -> tuple[MsGraphOps, dict[str, Any]]:
+    """A per-call copy of ``ops`` whose FIRST POST takes ``v``'s once-only
+    claim and marks the job's ledger, and nothing earlier: every GET and every
+    refusal before it leaves the one reply unspent. ``state`` says whether the
+    claim was taken, and when."""
+    db_path = str(broker.audit_db_path)
+    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
+    original = ops._request
+
+    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
+        # The claim rides the FIRST POST and nothing earlier: every GET and
+        # every refusal before it leaves the one reply unspent.
+        if method == "POST" and not state["claimed"]:
+            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
+                raise BindingRefused("that reply was already sent")
+            try:
+                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
+                    v.job_id, _outcome(v)
+                )
+            except Exception:
+                # The ledger could not be written: nothing has been sent, so
+                # the one reply is given back rather than silently spent.
+                bound_replies.release(db_path, v.key)
+                raise
+            if not marked:
+                # The ledger's own compare-and-set disagrees (this outcome was
+                # already replied to): honor it, give back the claim, send nothing.
+                bound_replies.release(db_path, v.key)
+                raise BindingRefused("the job's record shows this outcome was already replied to")
+            state["claimed"] = True
+            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return original(path, method, body, **kw)
+
+    # A per-call copy, so the claim hook never touches the shared ops object
+    # another broker thread is using.
+    bound_ops = copy.copy(ops)
+    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    return bound_ops, state
+
+
+def hand_reply(broker: BrokerContext, action: str, request: dict[str, Any]) -> dict[str, Any]:
+    """An ordinary ``msgraph_reply`` that IS a job's reply (``for_job``), sent
+    from SMD's review release (overlay ``shared.matter_file_review approve
+    --job``), recorded exactly as the bound reply would have been: the job's
+    once-only claim and its ledger mark are taken AT the POST, so a later
+    ``jobs rewake`` or DELIVER wake finds the job answered and sends nothing.
+
+    WHY (A&P, 2026-11-06): a hand release went out as a plain reply, the claim
+    was never taken, and a rewake would have emailed the attorney a second
+    completion. The words are SMD's, root-approved, so the job's fixed wording
+    is not held to here; everything else is the bound reply's: the job must be
+    replyable and unanswered (the same ``verify``), and the email this replies to
+    must be in the job's own thread."""
+    if action != "msgraph_reply":
+        raise BindingRefused("only a reply in the job's thread can be recorded as the job's reply")
+    ops = _ops(broker)
+    payload = request.get("payload")
+    if not isinstance(payload, dict):
+        raise ValueError(f"{action} requires a 'payload' object")
+    raw = request.get("for_job")
+    if not isinstance(raw, dict) or raw.get("kind") not in JOB_KINDS:
+        raise BindingRefused("for_job names a job: {kind, job_id}")
+    v = _verified_or_audited(broker, raw, "hand")
+    if v.mode != MODE_REPLY:
+        raise BindingRefused(f"{_NOUN[v.kind]} job {v.job_id} has no request email to reply in")
+    target = str(payload.get("message_id") or "").strip()
+    if target != v.graph_message_id:
+        found = msgraph_lookup.received_by_graph_id(ops, target) if _GRAPH_ID.match(target) else None
+        if found is None or not v.conversation_id or found["conversation_id"] != v.conversation_id:
+            _audit(broker, "hand_refused", raw, v=v, reason="not in the job's thread")
+            raise BindingRefused(
+                f"that email is not in {_NOUN[v.kind]} job {v.job_id}'s thread; it cannot be recorded as its reply"
+            )
+    db_path = str(broker.audit_db_path)
+    if bound_replies.claimed_for_graph_id(db_path, target):
+        raise BindingRefused("that email has already had its bound reply; this reply would answer it twice")
+    session_id = str(request.get("session_id") or "").strip()
+    bound_ops, state = _claiming_ops(broker, ops, v, session_id)
+    _audit(broker, "hand_bound", raw, v=v)
+    try:
+        result = dispatch_transmit(
+            broker,
+            action,
+            request,
+            send=ops.send,
+            reply=bound_ops.reply,
+            refused=MsGraphRefused,
+            transport=MsGraphTransportError,
+            attempted_for_send=lambda _payload: [v.sender],
+            identity_key="mailbox",
+            channel="msgraph",
+        )
+    except Exception as exc:
+        if state["claimed"]:
+            _settle_failed_post(broker, ops, v, raw, exc, str(state["claimed_at"]))
+        raise
+    _settle_sent(broker, db_path, v, result)
     return result
 
 
@@ -754,8 +884,10 @@ __all__ = [
     "BindingRefused",
     "Verified",
     "bind_verb",
+    "hand_reply",
     "job_ledger",
     "reply_verb",
     "scheduled_subject",
+    "thread_status",
     "verify",
 ]
