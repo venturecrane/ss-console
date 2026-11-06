@@ -40,6 +40,13 @@ def _checker(monkeypatch):
     monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(CHECKER))
 
 
+def _data(tmp_path: Path) -> Path:
+    """A job's data directory, the only place the repair index may live."""
+    d = tmp_path / "job" / "data"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _base() -> newfacts.Known:
     return newfacts.known(SOURCE).plus(BEFORE)
 
@@ -169,7 +176,7 @@ def _audit(rows: str) -> str:
 def test_running_out_on_form_findings_files_them_as_open_items_and_records_one_alert(tmp_path):
     p = _plan(tmp_path, {"per_job_cap_usd": 40.0}, [0.0])
     p.begin()
-    g = repair_guard.Guard(tmp_path, SOURCE)
+    g = repair_guard.Guard(_data(tmp_path), SOURCE)
     draft = _doc({1: "Admit that YOU owned and swept the store."})
     audit = _audit("- `RFA 1: owned and swept` | COMPOUND | two facts in one request")
     assert p.close(g, audit, draft, 2, "after 8 repairs") == 2
@@ -196,7 +203,7 @@ def test_running_out_on_form_findings_files_them_as_open_items_and_records_one_a
 
 def test_running_out_on_a_finding_that_changes_what_a_request_asks_holds_with_the_kinds(tmp_path):
     p = _plan(tmp_path, {"per_job_cap_usd": 40.0}, [0.0])
-    g = repair_guard.Guard(tmp_path, SOURCE)
+    g = repair_guard.Guard(_data(tmp_path), SOURCE)
     audit = _audit("- `RFA 1: owned` | DRIFTS | the file says otherwise\n- `RFA 1: owned` | COMPOUND | two")
     with pytest.raises(DraftingFailed) as e:
         p.close(g, audit, _doc({1: "Admit that YOU owned the store."}), 3, "after 8 repairs")
@@ -445,32 +452,32 @@ def test_the_job_index_is_built_once_cached_by_sha_and_holds_no_text(tmp_path, m
 
     monkeypatch.setattr(newfacts.Builder, "feed", counting)
     newfacts._MEMO.clear()
-    k = newfacts.index(lambda: (SOURCE,), tmp_path)
+    k = newfacts.index(lambda: (SOURCE,), _data(tmp_path))
     assert built and k.flat is None  # the record's text is never kept
     assert k.has_quote(newfacts._flat("the floor was wet near aisle 4")) and not k.has_quote("the floor was slick")
-    cached = list(tmp_path.glob("known-index-*"))
+    cached = list(_data(tmp_path).glob("known-index-*"))
     assert sorted(p.suffix for p in cached) == [".json", ".stream"]  # the phrase stream, built at the first quotation
     assert b'"' not in cached[0].with_suffix(".stream").read_bytes()  # words only, no punctuation
     newfacts._MEMO.clear()
     built.clear()
-    again = newfacts.index(lambda: (SOURCE,), tmp_path)
+    again = newfacts.index(lambda: (SOURCE,), _data(tmp_path))
     assert built == [] and again.words == k.words  # read from the cache, not rebuilt
     streamed = []
     real_stream = newfacts._stream_of
     monkeypatch.setattr(newfacts, "_stream_of", lambda t: streamed.append(1) or real_stream(t))
     assert again.has_quote(newfacts._flat("the floor was wet near aisle 4")) and streamed == []  # from its file
     built.clear()
-    newfacts.index(lambda: (SOURCE + " more",), tmp_path)
+    newfacts.index(lambda: (SOURCE + " more",), _data(tmp_path))
     assert built  # another corpus, another key
 
 
 def test_a_guard_given_text_uses_the_jobs_cached_index(tmp_path):
     newfacts._MEMO.clear()
-    (tmp_path / "set-1").mkdir()
-    g = repair_guard.Guard(tmp_path / "set-1", SOURCE)
+    (_data(tmp_path) / "set-1").mkdir()
+    g = repair_guard.Guard(_data(tmp_path) / "set-1", SOURCE)
     assert isinstance(g.sources, newfacts.Known)
-    assert list(tmp_path.glob("known-index-*.json"))  # in the job's data dir, not the set's
-    assert repair_guard.Guard(tmp_path / "set-1", SOURCE).sources is g.sources
+    assert list(_data(tmp_path).glob("known-index-*.json"))  # in the job's data dir, not the set's
+    assert repair_guard.Guard(_data(tmp_path) / "set-1", SOURCE).sources is g.sources
 
 
 def test_the_replay_lists_the_copy_once_and_never_searches_per_file(tmp_path, monkeypatch):
@@ -495,7 +502,7 @@ def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_line_is_still_
     monkeypatch.setattr(newfacts.Builder, "SLICE", 16)
     newfacts._MEMO.clear()
     text = "alpha bravo charlie\ndelta echo foxtrot\ngolf hotel india\n"
-    k = newfacts.index(lambda: (text, "juliet kilo"), tmp_path)
+    k = newfacts.index(lambda: (text, "juliet kilo"), _data(tmp_path))
     assert k.has_quote("bravo charlie delta echo") and k.has_quote("foxtrot golf hotel india")
     assert k.has_quote("echo") and not k.has_quote("ech") and not k.has_quote("bravo charlie echo delta")
     assert not k.has_quote("india juliet")  # never across two documents
@@ -570,7 +577,7 @@ def test_a_name_with_a_letter_outside_ascii_is_known_when_the_record_prints_it(t
     from datetime import date
 
     newfacts._MEMO.clear()
-    k = newfacts.index(lambda: ("Seen by Dr. Muñoz and Nurse O'Neil on 1/2/24-1/9/24.",), tmp_path)
+    k = newfacts.index(lambda: ("Seen by Dr. Muñoz and Nurse O'Neil on 1/2/24-1/9/24.",), _data(tmp_path))
     assert k.has_word("muñoz") and k.has_word("o'neil") and not k.has_word("munoz")
     assert k.has_date(date(2024, 1, 9)) and k.has_number("24")
 
@@ -605,3 +612,22 @@ def test_the_index_is_built_after_the_digest_so_a_repair_only_loads_it(tmp_path,
     assert seen["on_disk"] == [".json", ".stream"] and r._is_done("repair_index")
     assert seen["saves"] == 1
     assert v.outcome == "failed" and "refused for adding a fact" in v.reason  # the guard still judged the repair
+
+
+def test_the_index_and_its_word_stream_live_in_the_jobs_data_dir_and_nowhere_else(tmp_path):
+    """Decision 2026-11-06: the stream of the record's words is kept only
+    beside the record text it is made from, and goes with it. A shared cache
+    path is refused before anything is read or written."""
+    newfacts._MEMO.clear()
+    data = _data(tmp_path)
+    k = newfacts.index(lambda: (SOURCE,), data)
+    assert k.has_quote(newfacts._flat("the floor was wet near aisle 4"))
+    written = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_file())
+    assert written and all(p.parent == Path("job/data") for p in written), written
+    assert {p.suffix for p in written} == {".json", ".stream"}
+    for shared in (tmp_path / "smokeball-extract-cache", tmp_path / "cache", tmp_path / "job"):
+        shared.mkdir(exist_ok=True)
+        read = []
+        with pytest.raises(ValueError, match="only in a job's data directory"):
+            newfacts.index(lambda: read.append(1) or (SOURCE,), shared)
+        assert read == [] and not list(shared.glob("known-index-*"))

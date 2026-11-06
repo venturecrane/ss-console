@@ -506,9 +506,22 @@ def known(text: str) -> Known:
 _MEMO: dict[str, Known] = {}
 
 
+#: Where the index and its quotation stream may be written: a job's own data
+#: directory (``job.Job.data``, ``<job dir>/data``) and nowhere else. The
+#: stream holds the record's words, derived from record text that sits in
+#: the same directory and is wiped with it (decision 2026-11-06: no new
+#: retention class). A shared cache path, one that outlives a job or serves
+#: several (``/opt/data/smokeball-extract-cache/``), would be one.
+JOB_DATA_DIR = "data"
+
+
 def index(chunks: Callable[[], Iterable[str]], cache_dir: Path) -> Known:
     """The job's sources, read once: ``chunks()`` yields them a piece at a
-    time (it is called twice: once for the key, once to build on a miss)."""
+    time (it is called twice: once for the key, once to build on a miss).
+    ``cache_dir`` must be a job's data directory: anything else is refused
+    before anything is read or written."""
+    if cache_dir.name != JOB_DATA_DIR:
+        raise ValueError(f"the repair index is cached only in a job's data directory, not {cache_dir.name!r}")
     h = hashlib.sha256()
     for c in chunks():
         h.update(c.encode("utf-8", "replace"))
