@@ -15,7 +15,8 @@ The schema (the engagements author writes to exactly this)::
     firm:        {slug, display_name}
     models:      {transcription, digest, compose, audit, repair, review?}
     budget:      {per_job_cap_usd, monthly_budget_usd, usd_per_million_chars,
-                  usd_per_scanned_page, usd_drafting_fixed}
+                  usd_per_scanned_page, usd_drafting_fixed,
+                  repair_rounds?, repair_cap_usd?}
     privilege:   {firm_domains, consumer_domains}
     selection:   {doc_extensions, exclude_folder_patterns, exclude_name_patterns}
     style:       <path of the house-style markdown>
@@ -141,6 +142,10 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
         "usd_per_million_chars": ("float", True),
         "usd_per_scanned_page": ("float", True),
         "usd_drafting_fixed": ("float", True),
+        # Optional: a served set's repair budget (repair_budget.py); defaults
+        # there, 8 rounds and a quarter of per_job_cap_usd.
+        "repair_rounds": ("float", False),
+        "repair_cap_usd": ("float", False),
     },
     "privilege": {"firm_domains": ("list[str]", True), "consumer_domains": ("list[str]", True)},
     "selection": {
@@ -402,6 +407,13 @@ def _semantics(data: dict[str, Any]) -> list[str]:
             out.append(f"budget.{key}: must be > 0")
     if float(data["budget"]["usd_drafting_fixed"]) < 0:
         out.append("budget.usd_drafting_fixed: must be >= 0")
+    for key in ("repair_rounds", "repair_cap_usd"):
+        if key in data["budget"] and float(data["budget"][key]) <= 0:
+            out.append(f"budget.{key}: must be > 0")
+    if "repair_rounds" in data["budget"] and float(data["budget"]["repair_rounds"]) != int(
+        data["budget"]["repair_rounds"]
+    ):
+        out.append("budget.repair_rounds: a whole number")
     out += _format(data["format"])
     out += _models(data["models"])
     for p in data["selection"]["exclude_folder_patterns"] + data["selection"]["exclude_name_patterns"]:

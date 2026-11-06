@@ -69,6 +69,7 @@ from . import (
     firm_rules,
     howell,
     job as job_mod,
+    repair_guard,
     review as review_mod,
     review_first,
 )
@@ -498,6 +499,8 @@ class DraftingRun(EvidenceLane, Placing):
         # Measured, never refused: digest cites spanning a block of pages
         # rather than the fact's own page (summarize.cite_widths).
         self._done("summarize", **summarize.cite_widths(digest))
+        # What a repair is checked against, read while no repair is waiting (repair_guard).
+        self._stage("repair_index", lambda: repair_guard.prebuild(self.data, digest, self._corpus_text(), self.log))
         if self.cls in CHARGES_CLASSES:
             self._stage("howell", self._howell)
         if self.cls in COURT_CLASSES:

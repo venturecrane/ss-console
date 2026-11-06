@@ -49,7 +49,7 @@ from typing import Any, Callable
 from . import job_notes, request_additions, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
-from .drafting import firm_rules
+from .drafting import firm_rules, repair_budget
 from .firm_inputs import pin_env
 from .proof import watch as proof_watch
 from .skill_load import load_line
@@ -200,6 +200,7 @@ class DraftingLane(Daemon):
             )
         self.jobs_run += 1
         firm_rules.alert_refused(self, job_id)
+        repair_budget.alert_exhausted(self, job_id)
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
         return self._report(job_id, code, out)
