@@ -220,8 +220,27 @@ def _dates_on(events: list[dict[str, Any]]) -> set[str]:
     return {
         d.isoformat()
         for e in events
-        if (kind(e) in (*COURT, "mediation") or _headed_event(e)) and (d := _day(e)) is not None
+        if (kind(e) in (*COURT, "mediation") or _headed_event(e) or _timed_named(e))
+        and (d := _day(e)) is not None
     }
+
+
+#: The words that make an entry naming a court date a task about it: the
+#: paper due, filed or served before it, or a staff last-day.
+_TASK = re.compile(r"\b(due|file[ds]?|filing|serve[ds]?|service)\b|\bL/?D\b", re.I)
+
+
+def _timed_named(e: dict[str, Any]) -> bool:
+    """A timed entry that names a court date, with no due, file, serve or
+    last-day word, is that court date on that day. The deadline words that keep
+    it out of ``kind`` ("CMC Statement", "DEADLINE - CMC DEPT 28") do not make
+    a set time a deadline (2026-11-02: two false "calendar does not have it"
+    flags). It counts only as agreement with the papers; the picker never
+    takes it."""
+    subj = str(e.get("subject") or "")
+    if e.get("isDeleted") or not _time(e) or _SKIP.search(subj) or _TASK.search(subj):
+        return False
+    return any(k in COURT and rx.search(subj) for k, rx in _RULES)
 
 
 def _headed_event(e: dict[str, Any]) -> bool:
