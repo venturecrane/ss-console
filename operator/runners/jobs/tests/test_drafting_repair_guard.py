@@ -494,3 +494,57 @@ def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_cut_is_still_k
     k = newfacts.index(lambda: (text,), tmp_path)
     assert k.has_quote("bravo charlie delta echo") and k.has_quote("foxtrot golf hotel india")
     assert not k.has_quote("bravo charlie echo delta")
+
+
+# ---- every read is linear in what it reads (rehearsal 2, 2026-11-06: a 359 s cold index) -----
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        ",".join(f"{i % 1000:03d}" if i % 3 else str(i % 10) for i in range(50_000)),  # a ledger read across
+        "{{ 12 34 " * 20_000,  # unclosed braces in a scan's text
+        "1," * 100_000,
+    ],
+    ids=["ledger", "unclosed-braces", "comma-digits"],
+)
+def test_a_scan_shaped_text_is_indexed_in_linear_time(text):
+    """Each took tens of seconds or more before: the two-decimal figure could
+    start after every comma, and a marker scanned to the end per ``{{``."""
+    import time
+
+    t0 = time.perf_counter()
+    b = newfacts.Builder()
+    b.feed(text)
+    b.done()
+    assert time.perf_counter() - t0 < 2.0, len(text)
+
+
+def test_a_caption_tables_row_before_a_name_reads_in_linear_time():
+    import time
+
+    t0 = time.perf_counter()
+    got = newfacts.read("| --- " * 400 + "| Name Example")
+    assert time.perf_counter() - t0 < 0.5 and [w for w, _ in got.names] == ["example"]
+
+
+def test_the_draft_being_repaired_is_read_only_where_it_changed_and_only_when_needed(monkeypatch):
+    """A round reads only the requests that changed since an earlier round
+    (each piece is read once and kept), and none at all when the record
+    already holds every fact the repair states."""
+    fed = []
+    real = newfacts.Builder.feed
+    monkeypatch.setattr(newfacts.Builder, "feed", lambda self, t: fed.append(t) or real(self, t))
+    newfacts._piece.cache_clear()
+    base = newfacts.known(SOURCE + " Request for admission no.")  # the label's words
+    fed.clear()
+    one, three = "Admit that YOU owned the store.", "Admit it."
+    v1 = _doc({1: one, 2: "Admit that YOU swept it.", 3: three})
+    repair_guard.vet(v1, _doc({1: one, 2: "Admit that Officer Smith swept aisle 4.", 3: three}), base, set())
+    assert fed == []  # "aisle 4" is in the record: the draft is never read
+    repair_guard.vet(v1, _doc({1: one, 2: "Admit that Quill swept it.", 3: three}), base, set())
+    assert len(fed) > 1  # "Quill" is not: the draft is read, a piece at a time
+    fed.clear()
+    v2 = _doc({1: one, 2: "Admit that Officer Smith swept aisle 4.", 3: three})
+    repair_guard.vet(v2, _doc({1: one, 2: "Admit that Officer Quill swept aisle 4.", 3: three}), base, set())
+    assert fed == ["REQUEST FOR ADMISSION NO. 2\n\nAdmit that Officer Smith swept aisle 4."]  # only what changed

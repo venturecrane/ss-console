@@ -7,8 +7,9 @@ on a 2 GB seat. This builds a synthetic job of that shape (524 files, 11 MB,
 6 sets of 3 to 5 draft versions each, every name and number invented), then,
 in a fresh process, measures the job index build and a full replay.
 
-    python tests/bench_repair_guard.py            # prints the numbers
-    python tests/bench_repair_guard.py --check    # exits 1 over the targets
+    python tests/bench_repair_guard.py                # short clean lines, 11 MB
+    python tests/bench_repair_guard.py --ocr          # the real job's shape (below)
+    python tests/bench_repair_guard.py --ocr --check  # exits 1 over the targets
 
 Targets: under 300 MB peak RSS and under 30 s, on a laptop. Not collected by
 pytest (it takes seconds and writes 11 MB); ``test_drafting_repair_guard``
@@ -25,7 +26,21 @@ import tempfile
 import time
 from pathlib import Path
 
-FILES, TOTAL_BYTES, SETS = 524, 11 * 1024 * 1024, 6
+FILES, SETS = 524, 6
+#: Two shapes. ``plain``: short lines, clean text (the first bench). ``ocr``:
+#: the District job's measured shape (rehearsal 2, 2026-11-06: 524 files,
+#: 8.9 MB of record text, a 1.19M-character digest) with what transcribed
+#: scans carry: lines of thousands of characters with few breaks, runs of
+#: comma-separated digits (table cells read across), and stray braces.
+SHAPES = {
+    "plain": {"bytes": 11 * 1024 * 1024, "digest": 61_000, "line": 1, "noise": 0.0},
+    "ocr": {
+        "bytes": int(7.3 * 1024 * 1024),  # plus 27 ledgers of 60,000 chars: 8.9 MB
+        "digest": 1_190_000,
+        "line": 400,
+        "noise": 0.004,
+    },
+}
 PEAK_MB, WALL_S = 300, 30
 _MONTHS = "January February March April May June July August September October November December".split()
 
@@ -62,8 +77,41 @@ def _doc(items: dict[int, str]) -> str:
     return f'# DEFINITIONS\n\n1. "PREMISES" means the store.\n\n# REQUESTS FOR ADMISSION\n\n{body}\n'
 
 
-def build(root: Path, seed: int = 11) -> Path:
+def _noise(rng: random.Random) -> str:
+    roll = rng.random()
+    if roll < 0.5:  # a table row read across: "0,1,0,2,0,..."
+        return ",".join(str(rng.randint(0, 9)) for _ in range(rng.randint(200, 1500)))
+    if roll < 0.8:
+        return "{{" + " ".join(str(rng.randint(0, 99)) for _ in range(rng.randint(5, 30)))
+    return "-" * rng.randint(50, 400) + " | " + "_" * rng.randint(20, 200)
+
+
+def _ledger(rng: random.Random) -> str:
+    """A scanned ledger or spreadsheet read across: tens of thousands of
+    characters of grouped figures and cells, on one line."""
+    cells, n = [], 0
+    while n < 60_000:
+        cells.append(f"{rng.randint(0, 999):03d}" if rng.random() < 0.7 else str(rng.randint(0, 9)))
+        n += len(cells[-1]) + 1
+    return ",".join(cells)
+
+
+def _text(rng: random.Random, vocab: list[str], names: list[str], size: int, line: int, noise: float) -> str:
+    out, n, cur = [], 0, []
+    while n < size:
+        s = _noise(rng) if rng.random() < noise else _sentence(rng, vocab, names)
+        cur.append(s)
+        n += len(s) + 1
+        if len(cur) >= line:
+            out.append(" ".join(cur))
+            cur = []
+    out.append(" ".join(cur))
+    return "\n".join(out)
+
+
+def build(root: Path, seed: int = 11, shape: str = "plain") -> Path:
     """The synthetic job's copy under ``root``: ``root/copy/data`` (written a file at a time)."""
+    sh = SHAPES[shape]
     rng = random.Random(seed)
     vocab = _vocab(rng)
     names = [rng.choice(vocab).title() + " " + rng.choice(vocab).title() for _ in range(2_000)]
@@ -71,23 +119,23 @@ def build(root: Path, seed: int = 11) -> Path:
     texts = root / "copy" / "text"
     texts.mkdir(parents=True)
     rows = []
-    per = TOTAL_BYTES // FILES
+    per = sh["bytes"] // FILES
     for i in range(FILES):
-        out, size = [], 0
-        while size < per:
-            s = _sentence(rng, vocab, names)
-            out.append(s)
-            size += len(s) + 1
         p = texts / f"doc-{i:04d}.txt"
-        p.write_text("\n".join(out), encoding="utf-8")
+        body = _text(rng, vocab, names, per, sh["line"], sh["noise"])
+        if sh["noise"] and i % 20 == 0:
+            body += " " + _ledger(rng)  # one file in twenty is a billing ledger read across
+        p.write_text(body, encoding="utf-8")
         # The seat's path: a copy resolves it by file name.
         rows.append(json.dumps({"name": f"doc {i}", "text_path": f"/opt/data/jobs/J/data/text/{p.name}"}))
     rows += [json.dumps({"name": "scan a", "text_path": ""}), json.dumps({"name": "scan b"})]
     data.mkdir(parents=True)
     (data / "extracted.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
-    (data / "digest.md").write_text(
-        "\n".join(f"## RECORD | doc {i} | {_sentence(rng, vocab, names)}" for i in range(400)), encoding="utf-8"
-    )
+    digest, i, n = [], 0, 0
+    while n < sh["digest"]:
+        digest.append(f"## RECORD | doc {i} | {_sentence(rng, vocab, names)} (FILE: doc {i}, p. 1)")
+        n, i = n + len(digest[-1]) + 1, i + 1
+    (data / "digest.md").write_text("\n".join(digest), encoding="utf-8")
     for k in range(1, SETS + 1):
         u = data / f"set-{k}"
         u.mkdir()
@@ -160,11 +208,17 @@ def measure(data: Path) -> dict:
 
 
 def main(argv: list[str]) -> int:
+    shape = "ocr" if "--ocr" in argv else "plain"
     with tempfile.TemporaryDirectory() as tmp:
         t = time.perf_counter()
-        data = build(Path(tmp))
+        data = build(Path(tmp), shape=shape)
         size = sum(p.stat().st_size for p in (Path(tmp) / "copy" / "text").iterdir())
-        got = {"corpus_bytes": size, "build_corpus_s": round(time.perf_counter() - t, 2), **measure(data)}
+        got = {
+            "shape": shape,
+            "corpus_bytes": size,
+            "build_corpus_s": round(time.perf_counter() - t, 2),
+            **measure(data),
+        }
     got["total_s"] = round(got["index_s"] + got["replay_warm_s"], 2)
     print(json.dumps(got, indent=1))
     over = max(got["peak_rss_mb"], got["live_peak_rss_mb"]) >= PEAK_MB

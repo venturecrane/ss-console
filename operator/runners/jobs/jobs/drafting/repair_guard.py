@@ -84,6 +84,16 @@ def unit_text(doc: str, key: Key) -> str:
     return ""
 
 
+def pieces(doc: str) -> list[str]:
+    """``doc`` as the pieces a repair changes: each request of a requests
+    section (and the text before its first), each other section whole."""
+    out: list[str] = []
+    for _h, body in d.sections(doc):
+        pre, items = compose.split_items(body)
+        out += [pre, *items.values()] if items else [body]
+    return out
+
+
 @dataclass
 class Rejection:
     key: Key
@@ -96,7 +106,7 @@ def vet(before: str, after: str, base: newfacts.Known | newfacts.Both, frozen: s
     back as it was in ``before``, and every change to a frozen one undone."""
     bdoc, after_doc = before.partition(NOTES)[0], after.partition(NOTES)
     adoc, sep, tail = after_doc
-    known = base.plus(bdoc)
+    known = newfacts.Both(base, newfacts.Doc(pieces(bdoc), bdoc))
     old = dict(reversed(d.sections(bdoc)))  # the first section of a heading wins
     out: list[str] = []
     rejected: list[Rejection] = []

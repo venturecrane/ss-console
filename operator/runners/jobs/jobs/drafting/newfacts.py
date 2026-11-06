@@ -46,19 +46,30 @@ from typing import Callable, Iterable
 from . import howell, sets
 from .evidence import verify
 
-_MARKER = re.compile(r"\{\{.*?\}\}", re.S)
+#: A marker never holds a brace (``outcome.MARKERS``): an unclosed ``{{`` in
+#: a scan's text then costs one scan to the next brace, never one to the end.
+_MARKER = re.compile(r"\{\{[^{}]*\}\}")
 _MONTH = (
     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|"
     r"Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 )
 _LONG_DATE = re.compile(rf"\b({_MONTH})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:,?\s+(\d{{4}})\b)?")
 _NUM_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}[/-](?:\d{4}|\d{2})\b")
-_MONEY = re.compile(r"\$\s?\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*\.\d{2}\b")
+#: A two-decimal figure starts only where a run of digits and commas starts:
+#: with ``\b`` it could start after every comma, and on a scanned ledger read
+#: across (tens of thousands of characters of comma-separated cells) each
+#: start scanned the rest of the run. 6.1 s for one 85,000-character ledger;
+#: the District job's cold index took 359 s (rehearsal 2, 2026-11-06).
+_MONEY = re.compile(r"\$\s?\d[\d,]*(?:\.\d{1,2})?|(?<![\w,.])\d[\d,]*\.\d{2}\b")
 _NUMBER = re.compile(r"(?<![\w$])\d[\d,]*(?:\.\d+)?(?!\w)")
 _LABEL_NO = re.compile(r"(?i)\bnos?\.?\s*\d+(?:\s*(?:-|through|to|and|,)\s*\d+)*")
 _QUOTE = re.compile(r"\"([^\"\n]{2,}?)\"|“([^”\n]{2,}?)”")
 _WORD = re.compile(r"[A-Za-z][A-Za-z'’]*")
-_LINE_LEAD = re.compile(r"(?:^|\n)[ \t]*(?:[-*+>#|]+[ \t]*|\d+[.)][ \t]*|\(?[a-z0-9]{1,3}\)[ \t]*)*$")
+#: One word of a line's lead-in: list and table markup, "3." / "3)", "(a)" / "a)".
+#: Each piece is read one way only: the earlier pattern let "| --- | --- |..."
+#: be split many ways, and a caption table row before a name took seconds per
+#: extra column (exponential backtracking, found 2026-11-06).
+_LEAD_WORD = re.compile(r"(?:[-*+>#|]|\d+[.)]|\([a-z0-9]{1,3}\)|[a-z][a-z0-9]{0,2}\))+")
 _MONTHS = {m: i for i, m in enumerate(("jan feb mar apr may jun jul aug sep oct nov dec").split(), 1)}
 
 
@@ -85,7 +96,7 @@ def _initial(text: str, start: int) -> bool:
     line = text[text.rfind("\n", 0, start) + 1 : start].rstrip(" \t\"“'‘([*_")
     if not line or line.endswith((".", "!", "?", ":", ";")):
         return True
-    return bool(_LINE_LEAD.search(line))
+    return all(_LEAD_WORD.fullmatch(w) for w in line.split())
 
 
 def _md(month: str, day: str) -> tuple[int, int] | None:
@@ -304,10 +315,54 @@ class Known:
         )
 
 
+@lru_cache(maxsize=4096)
+def _piece(text: str) -> Known:
+    b = Builder()
+    b.feed(text)
+    return b.done(flat=None)
+
+
+class Doc:
+    """A draft read as a source a request (or section) at a time, and only
+    when a fact is not in the record: a piece unchanged since the last round
+    is never read again (``_piece``). Quotations are matched in the whole
+    draft as written."""
+
+    def __init__(self, pieces: list[str], text: str) -> None:
+        self._src, self._text = pieces, text
+        self._known: list[Known] | None = None
+        self._flat: str | None = None
+
+    def _all(self) -> list[Known]:
+        if self._known is None:
+            self._known = [_piece(p) for p in self._src if p.strip()]
+        return self._known
+
+    def has_date(self, d: date) -> bool:
+        return any(k.has_date(d) for k in self._all())
+
+    def has_month_day(self, md: tuple[int, int]) -> bool:
+        return any(k.has_month_day(md) for k in self._all())
+
+    def has_money(self, v: Decimal) -> bool:
+        return any(k.has_money(v) for k in self._all())
+
+    def has_number(self, n: str) -> bool:
+        return any(k.has_number(n) for k in self._all())
+
+    def has_word(self, w: str) -> bool:
+        return any(k.has_word(w) for k in self._all())
+
+    def has_quote(self, q: str) -> bool:
+        if self._flat is None:
+            self._flat = _flat(_strip(self._text))
+        return q in self._flat
+
+
 class Both:
     """Two ``Known`` read as one, without copying either."""
 
-    def __init__(self, a: Known | Both, b: Known) -> None:
+    def __init__(self, a: Known | Both, b: Known | Doc) -> None:
         self.a, self.b = a, b
 
     def __getattr__(self, name: str):  # the has_* lookups
@@ -426,4 +481,4 @@ def new_facts(text: str, base: Known | Both) -> list[tuple[str, str]]:
     return list(dict.fromkeys(out))
 
 
-__all__ = ["Both", "Builder", "Found", "Known", "index", "known", "new_facts", "read"]
+__all__ = ["Both", "Builder", "Doc", "Found", "Known", "index", "known", "new_facts", "read"]
