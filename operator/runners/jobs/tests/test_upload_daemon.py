@@ -354,9 +354,12 @@ class FakeBroker:
         return {"ok": True}
 
     def _request(self, req):
-        """The daemon's proven-delivery verbs (proof/watch.py) ride the raw client."""
-        assert req["action"].startswith("delivery_"), req
+        """The daemon's proven-delivery verbs (proof/watch.py) and the dead-hold
+        sweep's job list (retention.close_dead_holds) ride the raw client."""
+        assert req["action"].startswith("delivery_") or req["action"] == "medchron_job_list", req
         self.proof_requests.append(req)
+        if req["action"] == "medchron_job_list":
+            return {"ok": True, "jobs": [{"id": k, **v} for k, v in self.rows.items()]}
         return {"ok": True, "replies": []}
 
 
@@ -583,6 +586,55 @@ def test_a_parked_job_is_wiped_after_its_own_longer_window(tmp_path):
     assert d.wipe_expired() == [] and (d.jobs / "01A").exists(), "a hold gets longer than the terminal window"
     d._now["t"] += 4 * 24 * 3600
     assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+
+
+def test_wiping_a_held_chronology_closes_its_ledger_row_and_pages_once(tmp_path):
+    """A hold on a client seat: its workdir was wiped, its row stayed `held`
+    for three weeks until SMD closed it by hand. The wipe now closes the row
+    with a reason that says it expired unattended, and pages SMD once under the
+    hold's own code. Falsifier: a row the broker no longer has held (a delivery
+    closed it) is neither re-recorded nor paged."""
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
+    _parked(d, broker, "01A")
+    _parked(d, broker, "01B")
+    broker.rows["01A"].update(state="held", reason="upload: held")
+    broker.rows["01B"]["state"] = "failed"
+    broker.records.clear()
+    broker.proof_requests.clear()
+    d._now["t"] += 8 * 24 * 3600
+    assert sorted(d.wipe_expired()) == ["01A", "01B"]
+    assert broker.rows["01A"]["state"] == "failed"
+    assert [(j, s) for j, s, _ in broker.records] == [("01A", "failed")]
+    reason = broker.records[0][2]["reason"]
+    assert reason.startswith("expired: held past the retention window") and reason.endswith("(held: upload: held)")
+    pages = [r for r in broker.proof_requests if r["action"] == "delivery_proof_alert"]
+    assert [(r["job_id"], r["code"]) for r in pages] == [("01A", "upload_held")]
+
+
+def test_a_hold_wiped_before_its_row_could_close_is_closed_by_the_sweep(tmp_path):
+    """The rows already dead on a seat: held, no workdir, no queue entry, held
+    longer than the parked window. One sweep closes each once. Falsifiers: a
+    recent hold, a hold whose workdir is still there and a delivered row are
+    left alone, and a second tick inside the hour lists nothing."""
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
+    d._now["t"] = 1_790_000_000.0  # 2026-09, between the two dates below
+    d.jobs.mkdir(parents=True, exist_ok=True)
+    (d.jobs / "01LIVE").mkdir()
+    old, recent = "2000-01-01T00:00:00.000Z", "2999-01-01T00:00:00.000Z"
+    broker.rows.update(
+        {
+            "01DEAD": {"state": "held", "reason": "gate: x", "updated_at": old},
+            "01NEW": {"state": "held", "reason": "gate: x", "updated_at": recent},
+            "01LIVE": {"state": "held", "reason": "gate: x", "updated_at": old},
+            "01DONE": {"state": "delivered", "reason": None, "updated_at": old},
+        }
+    )
+    d.wipe_expired()
+    d.wipe_expired()
+    assert [(j, s) for j, s, _ in broker.records] == [("01DEAD", "failed")]
+    assert [r["action"] for r in broker.proof_requests].count("medchron_job_list") == 1
+    pages = [r for r in broker.proof_requests if r["action"] == "delivery_proof_alert"]
+    assert [(r["job_id"], r["code"]) for r in pages] == [("01DEAD", "gate_held")]
 
 
 def test_wiping_a_parked_job_takes_its_queue_entry_too(tmp_path):
