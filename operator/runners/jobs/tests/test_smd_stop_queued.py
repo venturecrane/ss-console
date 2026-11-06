@@ -123,8 +123,11 @@ def test_a_claim_racing_the_stop_still_finds_the_stop(tmp_path):
     assert not (lane.job_dir(jid) / "child-ran").exists()
     assert lane._daemon_state(jid)["state"] == "stopped_by_smd"
     assert smd_stop.read(lane.job_dir(jid))["at"] == 1.0
-    smd_stop.stop_queued(lane.queue, lane.job_dir(jid), by="other", why="again", at=2.0)
+    lane.queue.joinpath(f"{jid}.json").write_text("{}")
+    assert smd_stop.stop_queued(lane.queue, lane.job_dir(jid), by="other", why="again", at=2.0) is True
     assert smd_stop.read(lane.job_dir(jid))["by"] == "scott", "a second stop keeps the first request"
+    assert lane._daemon_state(jid)["state"] == "stopped_by_smd", "a second stop never reopens an ended one"
+    assert not (lane.queue / f"{jid}.json").exists()
 
 
 def test_stop_ends_a_parked_job_that_the_lane_would_never_reach(tmp_path, capsys):
@@ -189,12 +192,14 @@ def test_the_lane_records_a_stop_beside_another_jobs_running_child(tmp_path, mon
 
     def go() -> None:
         deadline = time.monotonic() + 20
-        while not (lane.job_dir(a) / "child-ran").is_file() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        smd_stop.stop_queued(lane.queue, lane.job_dir(b), by="scott", why="dup", at=1.0)
-        while lane._daemon_state(b).get("state") != "stopped_by_smd" and time.monotonic() < deadline:
-            time.sleep(0.05)
-        smd_stop.request(lane.job_dir(a), by="scott", why="end the test", at=1.0)
+        try:
+            while not (lane.job_dir(a) / "child-ran").is_file() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            smd_stop.stop_queued(lane.queue, lane.job_dir(b), by="scott", why="dup", at=1.0)
+            while lane._daemon_state(b).get("state") != "stopped_by_smd" and time.monotonic() < deadline:
+                time.sleep(0.05)
+        finally:  # always end the spinning child, whatever the code under test did
+            smd_stop.request(lane.job_dir(a), by="scott", why="end the test", at=1.0)
 
     t = threading.Thread(target=go, daemon=True)
     t.start()
@@ -228,10 +233,20 @@ def test_claim_sets_aside_an_envelope_whose_ledger_row_ended(tmp_path, real_lane
 
 
 def test_claim_sets_aside_an_envelope_whose_job_dir_carries_a_stop(tmp_path):
+    """Even while the broker cannot record the stop (the row still looks live)."""
     lane, client, jid, _key = _drafting(tmp_path)
+    real = client._request
+
+    def no_record(req: dict) -> dict:
+        if req["action"] == "drafting_job_record":
+            raise BrokerError("broker refused: busy: db locked")
+        return real(req)
+
+    client._request = no_record
     lane.job_dir(jid).mkdir(parents=True)
     smd_stop.request(lane.job_dir(jid), by="scott", why="dup", at=1.0)
     assert lane.claim_next() is None
+    assert client.rows[jid]["state"] == "submitted"
     assert (lane.queue / smd_stop.ENDED_DIR / f"{jid}.json").is_file()
 
 

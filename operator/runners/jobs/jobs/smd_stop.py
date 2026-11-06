@@ -252,7 +252,8 @@ def stop_queued(queue: Path | str, job_dir: Path | str, *, by: str, why: str, at
     st = st if isinstance(st, dict) else {}
     # Unclaimed and not ended, so the lane's sweep records it whatever the job
     # was before (a resumed failure is re-queued with its old state).
-    st.update(claimed=False, state="submitted", stop_queued_at=round(float(at), 3))
+    if st.get("state") != STATE:  # an ended stop stays ended
+        st.update(claimed=False, state="submitted", stop_queued_at=round(float(at), 3))
     _write_json(st_path, st)
     try:
         env.replace(jd / ENVELOPE)
