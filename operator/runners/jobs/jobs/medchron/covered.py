@@ -21,12 +21,13 @@ artifacts and reports the same two sets, keyed by document id:
 
     covered    cited in the delivered document, a byte-duplicate of something
                cited, in the authored billing-chart set, excluded by an
-               authored name rule, or withheld by an identity decision (the
-               firm's direction or the rule's): accounted for, and an update skips it.
-    uncovered  the composer read it and found nothing citable, the unit marked
-               it `compose_skip` (a contentless or unreadable scan), retrieval
-               failed, or it is a documented orphan: NOT in the delivered
-               record, so an update reads it again by default.
+               authored name rule, withheld by an identity decision (the
+               firm's direction or the rule's), or read in full by the composer,
+               which said why nothing in it is citable (since 2026-11-06, as an
+               update already counted it): accounted for, and an update skips it.
+    uncovered  the unit marked it `compose_skip` (a contentless or unreadable
+               scan), retrieval failed, or it is a documented orphan: NOT in
+               the delivered record, so an update reads it again by default.
 
 An id in neither set would be an unexplained loss, which the coverage gate
 itself refuses to ship, so the two sets sum to every pulled document and the
@@ -166,11 +167,19 @@ def covered_sets(slug_dir: Path, unit: str, cfg: Any) -> dict[str, Any]:
         if classify_name(key, rules) or (pulled.get(key, {}).get("ext") or "").lower() not in EXT_OK:
             covered.add(key)
             continue
-        # The composer read it and found nothing citable (``composer:``), or the
-        # delivered document neither cites nor explains it, which the coverage
-        # gate holds, so reaching here means the gate was bypassed. Either way
-        # it is uncovered and an update re-reads it; neither is a reason the
-        # record words for a reader.
+        if key in said:
+            # The composer read it in full and said why nothing in it is
+            # citable (``nothing extractable: ...``, billing dates only), and
+            # the coverage gate accepted that account: the delivered document
+            # accounts for it. 2026-11-06: recorded uncovered as NOT EXPLAINED, on a
+            # client seat 198 of 222 uncovered files were such reads, and the
+            # next update requested them all again; an update already counts
+            # the same finding covered (``update/coverage.py``, PRIOR_PREFIX).
+            covered.add(key)
+            continue
+        # The delivered document neither cites nor explains it, which the
+        # coverage gate holds, so reaching here means the gate was bypassed:
+        # uncovered, and an update re-reads it.
         uncovered.add(key)
         why[key] = W.NOT_EXPLAINED
 
