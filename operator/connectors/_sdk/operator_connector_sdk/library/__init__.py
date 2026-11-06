@@ -1,5 +1,5 @@
 """A firm's document library: the storage interface, the accepted-file ledger,
-and the resolver that answers "which Word file is this document made in, and
+the seat's kept copies of accepted files (``copies.py``), and the resolver that answers "which Word file is this document made in, and
 whose name goes on it" (design 2026-11-06, piece 2).
 
 Standard library only, and no case-system import (``tests/test_library_stdlib_only.py``).
@@ -8,6 +8,7 @@ Nothing on a production path calls it yet; the callers are wired in a later PR.
 
 from __future__ import annotations
 
+from .copies import COPIES_REL, CopyRead, copies_dir, copy_rel, read_copy
 from .ledger import (
     CONTRACTS,
     EMPTY,
@@ -33,6 +34,7 @@ from .ledger import (
 from .memory import MemoryLibrary
 from .resolver import (
     CANNOT_LOOK,
+    COPY_MISSING,
     INTEGRITY_FAILURE,
     NONE_ACCEPTED,
     REFUSED,
@@ -57,7 +59,9 @@ from .store import (
 
 __all__ = [
     "CANNOT_LOOK",
+    "COPIES_REL",
     "CONTRACTS",
+    "COPY_MISSING",
     "EMPTY",
     "INTEGRITY_FAILURE",
     "LEDGER_REL",
@@ -73,6 +77,7 @@ __all__ = [
     "Acceptance",
     "AcceptanceInvalid",
     "Attorney",
+    "CopyRead",
     "Entry",
     "FileVersion",
     "FiledVersion",
@@ -91,8 +96,11 @@ __all__ = [
     "UsedFile",
     "VersionListing",
     "accept",
+    "copies_dir",
+    "copy_rel",
     "dump_ledger",
     "parse_ledger",
+    "read_copy",
     "read_installed",
     "resolve",
     "validate_ledger",

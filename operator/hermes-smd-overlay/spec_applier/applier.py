@@ -672,6 +672,13 @@ def _install(
         "layouts": layouts,
         "layout_schema": layout_rules.SCHEMA_VERSION,
     }
+    # The firm's accepted library files are recorded in this manifest too, by
+    # ``spec_applier.library``; a spec install keeps that record as it stands.
+    from spec_applier.library import (
+        carried_keys,  # noqa: PLC0415, the library module imports this one
+    )
+
+    manifest.update(carried_keys(_read_installed_manifest(spec_dir)))
     manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8") + b"\n"
     manifest_path = spec_dir / MANIFEST_NAME
     atomic_write(manifest_path, manifest_bytes)

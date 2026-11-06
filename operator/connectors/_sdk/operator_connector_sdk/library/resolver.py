@@ -22,6 +22,13 @@ THE RULES, each a branch below and a test in ``tests/test_library_resolver.py``:
 * The accepted version's bytes must match the ledger's sha256; a mismatch is an
   integrity failure, never a silent fallback to another file.
 * A ledger the seat cannot read is "cannot look", never "none accepted".
+* With ``copies_dir`` (the seat's kept copies, ``copies.py``), the accepted
+  bytes come from the seat's own copy, checked against the ledger's sha256
+  there, and the library is asked only for the file's versions, never for
+  bytes. A copy that is not installed (``COPY_MISSING``), one whose bytes do not
+  match (``INTEGRITY_FAILURE``) and one the seat cannot read (``CANNOT_LOOK``)
+  are three answers, and none falls back to the library. Without it, every rule
+  above holds exactly as it did before the seat kept copies.
 
 No model call, no case-system import. STANDARD LIBRARY ONLY.
 """
@@ -32,8 +39,10 @@ import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from . import copies
 from .ledger import UNUSABLE, Entry, LedgerRead
 from .store import LibraryStore, LibraryUnavailable, NotSupportedYet
 
@@ -48,6 +57,9 @@ CANNOT_LOOK = "cannot_look"
 #: system fetches only the current version, so a file saved again after it was
 #: accepted lands here). Named, so it is never read as "none accepted".
 VERSION_UNAVAILABLE = "version_unavailable"
+#: The ledger names an accepted file and the seat holds no copy of it. Only
+#: when the caller passed ``copies_dir``; never answered by the library instead.
+COPY_MISSING = "copy_missing"
 
 FROM_MATTER = "matter"
 FROM_REQUEST = "named"
@@ -157,7 +169,28 @@ def _used(entry: Entry, scope: str) -> UsedFile:
     )
 
 
-def _check(store: LibraryStore, kind: str, signer: Signer | None, entry: Entry, scope: str) -> Resolution:
+def _from_copy(base: Resolution, entry: Entry, copies_dir: str | Path) -> Resolution:
+    """The accepted bytes from the seat's own copy, checked against the ledger."""
+    read = copies.read_copy(copies_dir, entry.sha256)
+    if read.status == copies.NOT_INSTALLED:
+        return replace_status(base, COPY_MISSING, f"the accepted file: {read.reason}")
+    if read.status == copies.MISMATCH:
+        return replace_status(base, INTEGRITY_FAILURE, f"the accepted file: {read.reason}")
+    if read.status != copies.PRESENT or read.data is None:
+        return replace_status(base, CANNOT_LOOK, f"the accepted file: {read.reason}")
+    return Resolution(
+        status=RESOLVED, kind=base.kind, signer=base.signer, file=base.file, newer=base.newer, data=read.data
+    )
+
+
+def _check(
+    store: LibraryStore,
+    kind: str,
+    signer: Signer | None,
+    entry: Entry,
+    scope: str,
+    copies_dir: str | Path | None = None,
+) -> Resolution:
     """The accepted entry, verified against the library as it stands now."""
     base = Resolution(status=RESOLVED, kind=kind, signer=signer, file=_used(entry, scope))
     try:
@@ -171,6 +204,8 @@ def _check(store: LibraryStore, kind: str, signer: Signer | None, entry: Entry, 
         return replace_status(base, INTEGRITY_FAILURE, "the accepted version is not in the file's history")
     newer = NewerVersion(entry.version, newest.version) if newest.version != entry.version else None
     base = Resolution(status=RESOLVED, kind=kind, signer=signer, file=base.file, newer=newer)
+    if copies_dir is not None:
+        return _from_copy(base, entry, copies_dir)
     try:
         blob = store.fetch_version(entry.file_id, entry.version)
     except NotSupportedYet as exc:
@@ -200,8 +235,14 @@ def resolve(
     matter_attorney: Attorney | None,
     named_attorney: str | None = None,
     known_attorneys: Sequence[Attorney] = (),
+    copies_dir: str | Path | None = None,
 ) -> Resolution:
-    """The accepted file a document of ``kind`` is made in, and whose name goes on it."""
+    """The accepted file a document of ``kind`` is made in, and whose name goes on it.
+
+    ``copies_dir``: the seat's kept copies (``copies.copies_dir(spec_dir)``).
+    Given, the bytes come from there and the library is asked only for versions;
+    omitted, the library is asked for the bytes, as before copies existed.
+    """
     signer, refused = choose_signer(matter_attorney, named_attorney, known_attorneys)
     if refused:
         return Resolution(status=REFUSED, kind=kind, reason=refused)
@@ -212,16 +253,17 @@ def resolve(
     if signer is not None:
         own = ledger.entry_for(kind, signer.key)
         if own is not None:
-            return _check(store, kind, signer, own, ATTORNEY_FILE)
+            return _check(store, kind, signer, own, ATTORNEY_FILE, copies_dir)
     firm = ledger.entry_for(kind, None)
     if firm is not None:
-        return _check(store, kind, signer, firm, FIRM_FILE)
+        return _check(store, kind, signer, firm, FIRM_FILE, copies_dir)
     return Resolution(status=NONE_ACCEPTED, kind=kind, reason=f"no file is accepted for {kind}", signer=signer)
 
 
 __all__ = [
     "ATTORNEY_FILE",
     "CANNOT_LOOK",
+    "COPY_MISSING",
     "FIRM_FILE",
     "FROM_MATTER",
     "FROM_REQUEST",
