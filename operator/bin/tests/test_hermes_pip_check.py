@@ -86,13 +86,14 @@ def test_the_tolerated_table_is_exactly_the_overrides_that_break_a_hermes_pin() 
     """A TOLERATED row exists only for an override that breaks an exact pin
     (brotlicffi: hermes-agent pins 1.2.0.2; pyasn1: it pins 0.6.4). An override inside its requirer's
     range needs none: tornado 6.6 satisfies python-telegram-bot 22.8's
-    ``tornado~=6.5``, so ``uv pip check`` reports nothing for it."""
+    ``tornado~=6.5``, so ``uv pip check`` reports nothing for it; oauthlib 4.0.1
+    satisfies requests-oauthlib's unranged ``oauthlib`` requirement."""
     names = {
         check._norm(line.split("==", 1)[0])
         for line in (REQUIREMENTS / "hermes-security.txt").read_text(encoding="utf-8").splitlines()
         if line and line[0].isalnum()
     }
-    assert set(check.TOLERATED) == names - {"tornado"}
+    assert set(check.TOLERATED) == names - {"tornado", "oauthlib"}
     assert set(check.TOLERATED) == {"brotlicffi", "pyasn1"}
 
 
