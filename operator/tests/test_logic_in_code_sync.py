@@ -25,7 +25,7 @@ _COPIES = [
     OPERATOR_ROOT / "workspace_broker" / "logic_in_code.py",
 ]
 _ALL = [_CANONICAL, *_COPIES]
-_FOUR = ("printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording")
+_FOUR = ("printed_source_check", "post_record_derivation", "conflict_fence", "fixed_wording", "wording_rules")
 
 
 def _load(path: Path) -> ModuleType:

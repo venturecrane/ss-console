@@ -237,6 +237,11 @@ def request_block(request: str) -> str:
 
 
 class Drafter:
+    #: The firm's confirmed wording rules for this job's kind and attorney
+    #: (``jobs/firm_wording.py``), set by the lane after construction; ``""``
+    #: sends the model exactly what it was sent before the rules were read.
+    wording: str = ""
+
     def __init__(
         self,
         data: Path,
@@ -313,6 +318,7 @@ class Drafter:
     def compose_system(self) -> str:
         blocks = [
             "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
+            *([self.wording] if self.wording else []),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + self.skeleton(),
             self.firm.prompt(self.cls, "compose"),
         ]

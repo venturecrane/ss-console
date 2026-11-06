@@ -28,6 +28,13 @@ _ROW = re.compile(r"^\s*\|(.+)\|\s*$")
 OVER_CAP = "not looked up (over the cap)"
 
 
+def from_env() -> Any:
+    """The seat's records-vendor client, from its environment (the run's default)."""
+    from smokeball_connector.records_vendor import client_from_env
+
+    return client_from_env()
+
+
 def missing_providers(gap_md: str) -> list[str]:
     """The provider column of the gap audit's item tables (each table whose
     header names Provider, What's missing and Priority; gapaudit.render leads

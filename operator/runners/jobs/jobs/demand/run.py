@@ -44,7 +44,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode
+from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
 from ..proof import review as proof_review
@@ -75,12 +75,6 @@ from .outcome import DemandFailed, DemandHold, GateQuotesLeft, Verdict
 
 MAX_REPAIRS = 2
 FINAL = "draft-final.md"  # the letter after the final audit pass; what is gated and rendered
-
-
-def _vendor_from_env() -> Any:
-    from smokeball_connector.records_vendor import client_from_env
-
-    return client_from_env()
 
 
 #: The drafting gate's privilege-and-wall gate. A refusal there means text from
@@ -136,7 +130,7 @@ class DemandRun:
         self.date_stamp, self.long_date = self._frozen_dates(today())
         self.readback_pause = readback_pause
         self._repairs: dict[str, list[str]] = {}
-        self.vendor_factory = vendor_factory or _vendor_from_env
+        self.vendor_factory = vendor_factory or vendor.from_env
 
     # ---- plumbing ------------------------------------------------------------------
     @property
@@ -527,7 +521,7 @@ class DemandRun:
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.firm, client, self.log))
         digest = self._digest()
         self._done("summarize")
-        d = self._drafter()
+        d = firm_wording.attach(self._drafter(), self.data)
         pre = self._json("preflight.json")
         walled = len(self._json("walled.json"))
         machine = self._json("transcribed.json") if (self.data / "transcribed.json").is_file() else []
@@ -556,6 +550,7 @@ class DemandRun:
         self._stage("facts", self._facts)
         self._check_facts()
         self._stage("destination", self._destination)
+        firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job), self._json("facts.json"), DemandHold)
         self._stage("pull", self._pull)
         self._stage("preflight", lambda: preflight.run(self.data, self.firm, self._json("facts.json"), self.log))
         self._estimate()

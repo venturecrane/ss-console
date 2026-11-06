@@ -68,7 +68,7 @@ from pathlib import Path
 from typing import Any
 
 from config_applier.applier import atomic_write
-from shared import layout_rules
+from shared import layout_rules, wording_rules, wording_rules_store
 from shared.ids import iso_utc, sha256
 
 logger = logging.getLogger(__name__)
@@ -429,6 +429,13 @@ def _parse_adjustments(path: str, raw: Any) -> tuple[tuple[dict, ...], list[str]
         }
         if applied_by:
             entry["applied_by"] = applied_by
+        # The document kinds and attorney the rule covers, recorded at proposal
+        # and carried here only when present (``shared/wording_rules.py``).
+        reach, reach_errors = wording_rules.reach_fields(item, where)
+        if reach_errors:
+            errors.extend(reach_errors)
+            continue
+        entry.update(reach)
         parsed.append(entry)
     if errors:
         return (), errors
@@ -659,6 +666,7 @@ def _install(
         }
 
     layouts = _install_layouts(spec_dir, specs)
+    wordings = _install_wordings(spec_dir, specs)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "customer": slug,
@@ -671,6 +679,10 @@ def _install(
         # recompiles on its next poll instead of waiting for a new rule.
         "layouts": layouts,
         "layout_schema": layout_rules.SCHEMA_VERSION,
+        # The confirmed wording rules the job lanes read, by kind and attorney
+        # (``shared/wording_rules.py``), committed the same way.
+        wording_rules_store.MANIFEST_KEY: wordings,
+        "wording_schema": wording_rules_store.SCHEMA_VERSION,
     }
     # The firm's accepted library files are recorded in this manifest too, by
     # ``spec_applier.library``; a spec install keeps that record as it stands.
@@ -684,7 +696,7 @@ def _install(
     atomic_write(manifest_path, manifest_bytes)
     _harden(manifest_path, _FILE_MODE)
 
-    pruned = _prune(spec_dir, set(entries), set(layouts))
+    pruned = _prune(spec_dir, set(entries), set(layouts) | set(wordings))
     return tuple(installed), pruned
 
 
@@ -716,6 +728,26 @@ def _install_layouts(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[
     return out
 
 
+def _install_wordings(spec_dir: Path, specs: list[ParsedSpec]) -> dict[str, dict[str, Any]]:
+    """Write ``wording.json`` from the lanes' class's adjustments that carry a
+    reach, BEFORE the manifest, the same commit argument as ``layout.json``."""
+    by_property = {
+        spec.prop: spec.adjustments
+        for spec in specs
+        if spec.output_class == wording_rules.RULE_CLASS
+    }
+    doc = wording_rules.compile_adjustments(by_property)
+    if doc is None:
+        return {}
+    blob = wording_rules.render(doc)
+    target = spec_dir / wording_rules_store.WORDING_REL
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _harden_ancestors(spec_dir, target.parent)
+    atomic_write(target, blob)
+    _harden(target, _FILE_MODE)
+    return {wording_rules_store.WORDING_REL: {"sha256": sha256(blob), "bytes": len(blob)}}
+
+
 def _prune(
     spec_dir: Path, keep: set[str], keep_layouts: frozenset[str] | set[str] = frozenset()
 ) -> tuple[str, ...]:
@@ -730,7 +762,11 @@ def _prune(
     if not root.is_dir():
         return ()
     pruned: list[str] = []
-    stale = [*sorted(root.rglob("*.md")), *sorted(root.rglob(layout_rules.LAYOUT_NAME))]
+    stale = [
+        *sorted(root.rglob("*.md")),
+        *sorted(root.rglob(layout_rules.LAYOUT_NAME)),
+        *sorted(root.rglob(wording_rules_store.WORDING_NAME)),
+    ]
     for path in stale:
         rel = path.relative_to(spec_dir).as_posix()
         if rel in keep or rel in keep_layouts:
@@ -775,6 +811,9 @@ def apply(
         installed_manifest.get("source_digest") == source_digest
         and source_digest
         and installed_manifest.get("layout_schema") == layout_rules.SCHEMA_VERSION
+        # Absent reads as the first schema: a seat installed before wording.json
+        # existed holds no rule with a recorded reach, so it has nothing to write.
+        and installed_manifest.get("wording_schema", 1) == wording_rules_store.SCHEMA_VERSION
     ):
         return SpecApplyResult(
             outcome=SpecApplyOutcome.UNCHANGED,

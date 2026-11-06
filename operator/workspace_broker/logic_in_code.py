@@ -6,6 +6,7 @@ customer.yaml on every call (ADR 0104).
       post_record_derivation: observe # or enforce
       conflict_fence: observe         # or enforce
       fixed_wording: observe          # or enforce
+      wording_rules: observe          # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -35,7 +36,8 @@ byte for byte in three places:
     operator/workspace_broker/logic_in_code.py
 
 ``operator/tests/test_logic_in_code_sync.py`` fails on any difference. Edit the
-canonical and copy it over the other two.
+canonical and copy it over the other two. The jobs runner installs the connector,
+so it reads the connector's copy (``jobs/firm_wording.py``) and needs no fourth.
 """
 
 from __future__ import annotations
@@ -53,7 +55,11 @@ PRINTED_SOURCE_CHECK = "printed_source_check"
 POST_RECORD_DERIVATION = "post_record_derivation"
 CONFLICT_FENCE = "conflict_fence"
 FIXED_WORDING = "fixed_wording"
-KEYS = (PRINTED_SOURCE_CHECK, POST_RECORD_DERIVATION, CONFLICT_FENCE, FIXED_WORDING)
+#: Whether the job lanes put a firm's confirmed wording rules into what they send
+#: the model, and the install letter calls such a rule in effect
+#: (``shared/wording_rules.py``). Observe: neither, exactly as before.
+WORDING_RULES = "wording_rules"
+KEYS = (PRINTED_SOURCE_CHECK, POST_RECORD_DERIVATION, CONFLICT_FENCE, FIXED_WORDING, WORDING_RULES)
 
 #: The same file by either name: the entrypoint exports both, the gateway and
 #: its children read the first, the broker's clean environment carries the
@@ -138,6 +144,7 @@ __all__ = [
     "POST_RECORD_DERIVATION",
     "PRINTED_SOURCE_CHECK",
     "Switch",
+    "WORDING_RULES",
     "live_path",
     "load_switch",
     "parse_switch",

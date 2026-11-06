@@ -33,6 +33,7 @@ from .establishment_validation import (
     readback_for,
     require_address,
 )
+from .rule_reach import reach_of
 
 
 class RuleProposals(ProposalLifecycle):
@@ -87,6 +88,7 @@ class RuleProposals(ProposalLifecycle):
             subject = {
                 "output_class": _require_class_slug(subject_raw.get("output_class")),
                 "property": _require_property(subject_raw.get("property")),
+                **reach_of(subject_raw),
             }
 
         text = normalize_rule_text(request.get("text"))

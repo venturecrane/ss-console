@@ -54,7 +54,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode, request_additions, stop_request
+from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode, request_additions, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from ..ledger import Ledger
@@ -459,6 +459,7 @@ class DraftingRun(EvidenceLane, Placing):
         self._check_facts()
         self._stage("destination", self._destination)
         f = self._json("facts.json")
+        firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)  # before anything is paid
         self._stage(
             "pull",
             lambda: pull.run(

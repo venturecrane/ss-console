@@ -34,7 +34,7 @@ _JOBS_RUNNER = Path(__file__).resolve().parents[2] / "runners" / "jobs"
 #: Anything that would mean a lane reads the installed spec store.
 _SPEC_STORE_READS = re.compile(
     r"spec_manifest|spec_stamp|SMD_SPEC_DIR|specs/classes|output-classes\.json|"
-    r"ADJUSTMENTS_HEADING|entries_for_class|smd-config/specs|layout\.json"
+    r"ADJUSTMENTS_HEADING|entries_for_class|smd-config/specs|layout\.json|wording\.json"
 )
 
 #: The spec applier's install dir (``spec_applier/__main__.py``).
@@ -128,13 +128,15 @@ def test_lane_document_classes_are_not_in_the_registry():
     assert not output_classes.has_live_rule_reader("record")
 
 
-def test_the_jobs_runner_reads_the_spec_store_only_through_the_layout_reader():
+def test_the_jobs_runner_reads_the_spec_store_only_through_its_two_readers():
     """The other half of the parity (rewritten 2026-11-05, when the drafting
-    lane gained its first reader). The ONLY jobs-runner module that reads the
-    installed spec store is ``drafting/firm_rules.py``, and it reads exactly
-    the ``layout.json`` of each class :data:`shared.layout_rules.
-    LAYOUT_RULE_CLASSES` names. A second reader, or a reader of another file,
-    fails here: give its class a letter that says what it reads, in the same PR."""
+    lane gained its first reader, and 2026-11-06, when the job lanes gained the
+    wording reader). The ONLY jobs-runner modules that read the installed spec
+    store are ``drafting/firm_rules.py`` (the ``layout.json`` of each class
+    :data:`shared.layout_rules.LAYOUT_RULE_CLASSES` names) and ``firm_wording.py``
+    (``work_product/wording.json``), each through its byte twin of the overlay's
+    reader. A third reader, or a reader of another file, fails here: give its
+    class a letter that says what it reads, in the same PR."""
     if not _JOBS_RUNNER.is_dir():
         pytest.skip("jobs runner not in this checkout")
     readers = sorted(
@@ -147,7 +149,17 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_the_layout_reader():
     assert readers == [
         "jobs/drafting/firm_rules.py",
         "jobs/drafting/layout_store.py",
+        "jobs/firm_wording.py",
+        "jobs/wording_rules_store.py",
     ], f"spec store readers: {readers}"
+    wording = (_JOBS_RUNNER / "jobs" / "firm_wording.py").read_text("utf-8")
+    assert f'DEFAULT_DIR = "{_SPEC_DIR_DEFAULT}"' in wording
+    assert "wording_rules_store.read(_spec_dir())" in wording
+    twin = (_JOBS_RUNNER / "jobs" / "wording_rules_store.py").read_bytes()
+    assert (
+        twin
+        == (Path(__file__).resolve().parents[1] / "shared" / "wording_rules_store.py").read_bytes()
+    )
     reader = (_JOBS_RUNNER / readers[0]).read_text("utf-8")
     for output_class in layout_rules.LAYOUT_RULE_CLASSES:
         assert f'RULE_CLASS = "{output_class}"' in reader
@@ -302,6 +314,44 @@ def test_a_damaged_store_is_recorded_not_in_effect(tmp_path, monkeypatch, pages)
         output_class="work_product",
     )
     assert send.calls[0]["subject"] == f"Your rule is recorded [rule {RULE}]"
+
+
+# ---- a wording rule is "in effect" only for a kind a job lane reads it for (2026-11-06) ------
+def test_the_lane_kinds_are_exactly_the_kinds_the_job_lanes_read_rules_for():
+    """PARITY, the wording half. :data:`shared.wording_rules_store.LANE_KINDS` is
+    what the install letter may call in effect. It must be the drafting lane's
+    classes plus the demand lane's kind, and both lanes must freeze rules on
+    their way to compose, so a kind added to the set with no lane reading it
+    (a letter, a chronology) fails here."""
+    from shared import wording_rules_store
+
+    if not _JOBS_RUNNER.is_dir():
+        pytest.skip("jobs runner not in this checkout")
+    lanes = Path(__file__).resolve().parents[1] / "plugins" / "hermes-smd-lanes" / "drafting.py"
+    found = re.search(r"DOCUMENT_CLASSES = \(([^)]*)\)", lanes.read_text("utf-8"))
+    assert found is not None
+    drafting = set(re.findall(r'"([a-z_]+)"', found.group(1)))
+    firm_wording = (_JOBS_RUNNER / "jobs" / "firm_wording.py").read_text("utf-8")
+    demand = set(re.findall(r'^DEMAND_KIND = "([a-z_]+)"$', firm_wording, re.M))
+    assert wording_rules_store.LANE_KINDS == frozenset(drafting | demand)
+    demand_run = (_JOBS_RUNNER / "jobs" / "demand" / "run.py").read_text("utf-8")
+    assert (
+        "firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job)," in demand_run
+    )
+    drafting_run = (_JOBS_RUNNER / "jobs" / "drafting" / "run.py").read_text("utf-8")
+    assert "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)" in drafting_run
+    # ...and each lane hands the frozen rules to every drafter it builds.
+    for rel in ("drafting/finish.py", "drafting/evidence_lane.py", "demand/run.py"):
+        text = (_JOBS_RUNNER / "jobs" / rel).read_text("utf-8")
+        assert "firm_wording.attach(" in text, rel
+
+
+def test_record_products_and_letters_are_no_lane_kind():
+    from shared import wording_rules_store
+
+    assert "letter" not in wording_rules_store.LANE_KINDS
+    assert wording_rules_store.LANE_KINDS < frozenset(wording_rules_store.KINDS)
+    assert not output_classes.has_live_rule_reader("record")
 
 
 @pytest.mark.parametrize("output_class", ["work_product", "record"])

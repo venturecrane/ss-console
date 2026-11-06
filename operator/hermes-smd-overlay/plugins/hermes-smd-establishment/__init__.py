@@ -279,8 +279,10 @@ from shared import (
     read_capture,
     rule_confirm,
     rule_dispatch,
+    rule_reach,
     send_anchor,
     send_dispatch,
+    wording_rules,
     work_claims,
 )
 from shared import (
@@ -302,6 +304,8 @@ from shared.pending_acts import PENDING_ACTS, ConfirmedAct
 from shared.pending_send import PENDING_SEND
 from shared.result_unwrap import peel_envelopes
 from shared.tool_registration import register_wrapped_tool
+from shared.wording_rules_store import KINDS as WORDING_KINDS
+from shared.wording_rules_store import READERS as WORDING_READERS
 
 from . import sweeper as lapse_sweeper
 
@@ -739,6 +743,23 @@ _CLASS_CHOICE_MAP = (
     "classes and a rule attached to one binds to nothing."
 )
 
+#: The reach of a firm rule about the firm's documents (shared/rule_reach.py).
+_DOC_KINDS_HELP = (
+    "For a work_product rule: the kinds of document it covers, ONLY the kinds the "
+    "person's own message names (or every kind when they say all of the firm's "
+    "documents). The seat checks this against their words and refuses more."
+)
+_ATTORNEY_HELP = (
+    "For a work_product rule limited to one attorney's documents: that attorney's "
+    "full name. Only when the person is that attorney or names them; otherwise null."
+)
+
+_READER_HELP = (
+    "For a work_product rule limited to documents written to one reader: that "
+    "reader. Only when the person's own message says so; otherwise null, which "
+    "covers every reader."
+)
+
 _PROPOSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -765,6 +786,17 @@ _PROPOSE_SCHEMA: dict[str, Any] = {
                     "description": _CLASS_CHOICE_MAP,
                 },
                 "property": {"type": ["string", "null"], "enum": [*SPEC_PROPERTIES, None]},
+                "doc_kinds": {
+                    "type": ["array", "null"],
+                    "items": {"type": "string", "enum": list(WORDING_KINDS)},
+                    "description": _DOC_KINDS_HELP,
+                },
+                "attorney": {"type": ["string", "null"], "description": _ATTORNEY_HELP},
+                "reader": {
+                    "type": ["string", "null"],
+                    "enum": [*WORDING_READERS, None],
+                    "description": _READER_HELP,
+                },
             },
         },
         "text": {
@@ -2227,11 +2259,16 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
     records the readback against the session, so :func:`_containment_gate`
     can hold the reply to it (critique point 1).
     """
+    reach_on = wording_rules.switched_on()
+    stash_key = provenance.resolve_session(kwargs.get("session_id"))
+    subject = rule_reach.subject_for_broker(
+        args, _ADMIN_STASH.get(stash_key) if stash_key else None, _load_config(), reach_on
+    )
     response = _broker_request(
         {
             "action": TOOL_PROPOSE,
             "scope": args.get("scope"),
-            "subject": args.get("subject"),
+            "subject": subject,
             "text": args.get("text"),
             "instructed_by": args.get("instructed_by"),
             "source_ref": args.get("source_ref"),
@@ -2246,7 +2283,12 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
         return _OLD_BROKER_MESSAGE
     if isinstance(response, dict) and response.get("ok"):
         session_id = provenance.resolve_session(kwargs.get("session_id"))
-        _remember_readback(session_id, str(response.get("readback") or ""))
+        readback = rule_reach.readback_with_reach(
+            str(response.get("readback") or ""), response.get("subject"), reach_on
+        )
+        if readback and readback != response.get("readback"):
+            response = {**response, "readback": readback}
+        _remember_readback(session_id, readback)
         notes: list[str] = []
         # ss-console#2546. The request goes NOW, from here, on the seat's own
         # authority. Two conditions and no others: the rule waits on an
@@ -5159,6 +5201,11 @@ def _rule_gate(
     refused = _output_class_gate(subject.get("output_class"))
     if refused is not None:
         return refused
+    # A rule about the firm's documents reaches only as far as the person's own
+    # words (shared/rule_reach.py): code decides, the model only proposes.
+    reach_refusal = rule_reach.gate(args, entry, _load_config(), wording_rules.switched_on())
+    if reach_refusal:
+        return {"action": "block", "message": reach_refusal}
     # Anyone may STATE one; only an admin may state one that does
     # not wait for an admin. The seat decides that rather than the model,
     # because "am I an admin" is precisely the question a hostile instruction
