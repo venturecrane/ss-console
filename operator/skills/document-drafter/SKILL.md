@@ -204,9 +204,14 @@ failed job in any case.
    **Where the file is is the job row's fact.** When `file_to_matter_id` equals
    `matter_id`, it is in the client matter. When it differs, it was filed in the firm's
    library (rehearsal) matter, NOT the client matter: say exactly that.
-3. **Reply once** with `create_draft` addressed to the bound sender only (the seat sends
-   it in her original thread after the reply checks, copying the firm's people who were on the request;
-   never add anyone yourself):
+3. **Reply once** with `create_draft` addressed to the bound sender only, its body
+   exactly the `fixed_wording` text the bind returned. **The seat sends this reply
+   itself, in those words from the job's record, whatever the draft says**: a draft's
+   own words are never sent, and when the turn ends with no reply sent the seat binds
+   and sends the words on its own; anything else alerts SMD with the job. So never
+   compose, shorten or redraft the reply, and never retry a refused draft; one
+   draft and stop. The rules below are what the broker's words already say, for
+   reading the job, not for writing:
    - **delivered**: the document is filed in the matter the job row names, each file
      named exactly as filed (the draft, and the attorney notes beside it when the job
      filed them), in the firm's house style and ready for attorney review. Then
@@ -303,7 +308,8 @@ no section numbers, no rule-format strings.
   number unavailable".
 - A reply about a drafting job names no dollar figure at all.
 
-If the reply is held by a content gate: do not retry the same content and do not drop
+A DELIVER reply is never redrafted: the seat sends the job's own words (step 3).
+In REQUEST mode, if the reply is held by a content gate: do not retry the same content and do not drop
 the work. Redraft once, keeping every fact (the matter, what was filed or why not, the
 marked items, the caption discrepancies) and stripping only the flagged content. If
 refused twice, send the minimal factual note.

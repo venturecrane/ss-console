@@ -201,9 +201,12 @@ def _call(broker: Broker, action: str, binding: dict, **extra) -> dict:
 def _body_for(broker: Broker, binding: dict) -> str:
     """ "Received.", or for a HELD litigation/chronology job its fixed wording
     (held_wording refuses any other words there; test_held_wording)."""
-    from workspace_broker import fixed_wording, reply_binding
+    from workspace_broker import fixed_wording, reply_binding, reply_text
 
     kind = binding.get("kind")
+    if kind in reply_text.CODE_SENT_KINDS:
+        # Its words on every seat (2026-11-05, test_drafting_reply_code_sent).
+        return (reply_text.texts_for(broker, kind, binding["job_id"]) or ["Received."])[0]
     if fixed_wording.KIND_LANE.get(kind) not in fixed_wording.HELD_CLASS_LANES:
         return "Received."
     row = reply_binding.job_ledger(broker, kind).read(binding["job_id"])

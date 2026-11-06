@@ -124,6 +124,7 @@ from . import (
     act_delivery,
     binding,
     held_store,
+    job_reply,
     notice,
     relay,  # noqa: F401 - surface for tests
     sweeper,
@@ -1420,6 +1421,12 @@ def _relay_draft(**kwargs: Any) -> None:
             # an answer the person has, not something left for review.
             _discard_drafts([draft_id])
             return
+        if bound is not None and bound.as_request().get("kind") in job_reply.CODE_SENT_KINDS:
+            # (0c) A drafting job's reply is the broker's words, never this
+            # draft's (job_reply, A&P 2026-11-05): the seat sends them now.
+            _WORKING_DRAFTS.track(session_id, reply_key, draft_id)
+            _deliver_job_reply(session_id)
+            return
 
         # (a) Roster authorization — the Operator replies autonomously only to a
         # colleague on the organization roster (ADR 0055). A verified inbound
@@ -2269,6 +2276,96 @@ _ACT_BODIES = act_delivery.TransmittedBodies()
 _UNSET: Any = object()
 
 
+# A drafting job's reply, sent by the seat in the broker's words (job_reply).
+_JOB_REPLIES = job_reply.JobReplies()
+
+
+def _job_reply_sent(session_id: str, out: job_reply.Outcome, text: str, sent_id: str) -> None:
+    bound = binding.SESSION_BINDINGS.get(session_id)
+    if bound is not None:
+        # The model's working drafts of this reply are copies of what went out.
+        key = _reply_guard_key(session_id, bound, bound.origin())
+        _commit_reply(key, bound.origin())
+        _discard_drafts(_WORKING_DRAFTS.take(session_id, key))
+    if out.graph_message_id:
+        _REPLIED.commit(out.graph_message_id)  # the email is answered, as any bound send
+    request_index.record_reply_opening(out.graph_message_id, text, sent_message_id=sent_id)
+    _emit_reply_event(
+        action_type="REPLY_SENT",
+        metadata={
+            "adapter": _ADAPTER_MSGRAPH,
+            "in_reply_to": out.graph_message_id,
+            "sent_message_id": sent_id,
+            "body_digest": inbound.content_digest(text),
+            "seat_delivered_job": out.job_id,
+        },
+        session_id=session_id,
+    )
+
+
+def _job_reply_failed(session_id: str, kind: str, out: job_reply.Outcome) -> None:
+    _emit_reply_event(
+        action_type="REPLY_FAILED",
+        metadata={
+            "reason": f"{job_reply.UNDELIVERED}: {out.why}",
+            "adapter": _ADAPTER_MSGRAPH,
+            "message_id": out.graph_message_id,
+            "wake_kind": kind,
+            "wake_job_id": out.job_id,
+        },
+        session_id=session_id,
+    )
+    logger.error("hermes-smd-reply: %s %s reply was not sent: %s", kind, out.job_id, out.why)
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("reason", job_reply.UNDELIVERED)
+            scope.set_tag("job_id", out.job_id)
+            sentry_sdk.capture_message(job_reply.UNDELIVERED, level="error")
+    except Exception as exc:  # noqa: BLE001 - monitoring must never break the hook
+        logger.debug("hermes-smd-reply: job reply page skipped (%s)", exc)
+
+
+def _deliver_job_reply(session_id: str) -> str:
+    """Send a code-sent job's reply in the broker's words, once per job, on a
+    Graph seat (the only one with a bound reply). ``none`` when this turn owes
+    none. Never raises."""
+    sources = binding.TURN_SOURCES
+    wake = job_reply.owed(sources.wake_job(session_id), sources.scheduled(session_id))
+    if wake is None or _JOB_REPLIES.settled(wake[1]):
+        return "none"
+    try:
+        try:
+            adapter = _email_adapter(CustomerConfig.from_volume(str(_YAML_PATH)))
+        except (CustomerConfigError, OSError):
+            adapter = _ADAPTER_MSGRAPH  # could not read is never "not owed"
+        if adapter != _ADAPTER_MSGRAPH:
+            return "none"
+
+        def send(request: dict[str, str], sender: str, graph_id: str, text: str) -> str:
+            pinned = binding.Binding(sender, tuple(sorted(request.items())), graph_id)
+            return _send_bound_reply(
+                pinned, text, job_reply.plain_html(text), session_id=session_id
+            )
+
+        out = job_reply.deliver(
+            wake,
+            bind=msgraph_broker.bind_reply,
+            send=send,
+            on_sent=lambda o, text, sent_id: _job_reply_sent(session_id, o, text, sent_id),
+            on_failed=lambda o: _job_reply_failed(session_id, wake[0], o),
+        )
+        _JOB_REPLIES.settle(wake[1], out.word)
+        return out.word
+    except Exception as exc:  # noqa: BLE001 - never raises out of a hook
+        logger.error("hermes-smd-reply: job reply delivery failed", exc_info=True)
+        _JOB_REPLIES.settle(wake[1], "failed")
+        why = f"the seat's delivery raised {type(exc).__name__}"
+        _job_reply_failed(session_id, wake[0], job_reply.Outcome("failed", wake[1], why=why))
+        return "failed"
+
+
 def _deliver_owed_act(session_id: str, *, pending: Any = _UNSET, origin: Any = _UNSET) -> str:
     """End of turn: send an act line the model proposed and did not send.
 
@@ -2434,7 +2531,10 @@ def _text_reply_lost(session_id: str, origin: Any, attempted: bool, status: dict
 def _end_of_turn_text(
     session_id: str, response: Any, origin: Any, attempted: bool, pending: Any
 ) -> None:
-    """Worker: ``post_llm_call``'s work: an owed act line, else the text reply."""
+    """Worker: ``post_llm_call``'s work: a drafting job's reply, an owed act
+    line, else the text reply."""
+    if _deliver_job_reply(session_id) != "none":
+        return
     if origin is not None and getattr(origin, "message_id", ""):
         _TEXT_SEEN.claim(origin.message_id)
     try:
@@ -2453,8 +2553,10 @@ def _end_of_turn_text(
 def _end_of_turn_settle(
     session_id: str, origin: Any, attempted: bool, pending: Any, status: dict
 ) -> None:
-    """Worker: ``on_session_end``'s work: an owed act line; with none owed, a
-    rostered email whose text never arrived is made loud."""
+    """Worker: ``on_session_end``'s work: a drafting job's reply; an owed act
+    line; with none owed, a rostered email whose text never arrived is made loud."""
+    if _deliver_job_reply(session_id) != "none":
+        return
     try:
         _deliver_owed_act(session_id, pending=pending, origin=origin)
     except Exception as exc:  # noqa: BLE001

@@ -25,6 +25,14 @@ reading rule is ``logic_in_code``'s, and it is read fresh on every call).
   model's words and records whether they differed. The one exception is what refused before this
   switch existed: a held litigation or case file reply has been refused other
   words since the 2026-10-24 incident, and observing must not reopen that.
+
+A DRAFTING JOB'S REPLY IS SENT IN CODE ON EVERY SEAT (2026-11-05, A&P,
+discovery_set). On an observe seat the completion turn wrote its own words; the
+identifier check refused them twice, the content check held three drafts, and
+the attorney heard nothing until SMD sent a reply by hand. So for the kinds in
+``CODE_SENT_KINDS`` the switch does not decide: the bind always carries the
+rendered text under ``fixed_wording``, the overlay's ``job_reply`` sends exactly
+it, and the send refuses any other words.
 """
 
 from __future__ import annotations
@@ -41,6 +49,11 @@ logger = logging.getLogger(__name__)
 
 
 Handler = Callable[[BrokerContext, str, dict[str, Any], int, "int | None"], dict[str, Any]]
+
+
+#: The job kinds whose reply the seat sends in the broker's words whatever the
+#: seat's switch says (the module docstring, 2026-11-05).
+CODE_SENT_KINDS = frozenset({"drafting_job"})
 
 
 def wording_reads(broker: BrokerContext, kind: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -78,7 +91,7 @@ def refused_today(kind: str, row: dict[str, Any] | None) -> bool:
 
 def refuses(broker: BrokerContext, kind: str, row: dict[str, Any] | None) -> bool:
     """Whether this job's send refuses words other than its fixed wording."""
-    return worded(kind, row) and (refused_today(kind, row) or enforcing(broker))
+    return worded(kind, row) and (kind in CODE_SENT_KINDS or refused_today(kind, row) or enforcing(broker))
 
 
 def worded(kind: str, row: dict[str, Any] | None) -> bool:
@@ -117,7 +130,8 @@ def bind_keys(broker: BrokerContext, kind: str, row: dict[str, Any] | None) -> d
         return {}
     texts = fixed_texts(broker, kind, row)
     held = {"held_wording": texts} if refused_today(kind, row) else {}
-    return {**held, **({"fixed_wording": texts} if enforcing(broker) else {})}
+    given = kind in CODE_SENT_KINDS or enforcing(broker)
+    return {**held, **({"fixed_wording": texts} if given else {})}
 
 
 def _observe_send(
@@ -213,6 +227,7 @@ def with_reply_text(kind: str, handler: Handler) -> Handler:
 
 
 __all__ = [
+    "CODE_SENT_KINDS",
     "bind_keys",
     "check_send",
     "enforcing",
