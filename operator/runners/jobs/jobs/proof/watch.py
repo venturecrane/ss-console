@@ -435,9 +435,10 @@ def check_reply_watches(d: Any) -> None:
 
 
 def wake_lost(d: Any, job_id: str, outcome: str) -> None:
-    """The DELIVER turn could not be started. A code-sent lane's reply does not
-    need that turn: the broker sends its words itself (``job_notes``), and the
-    page says whether the requester heard."""
+    """The DELIVER turn could not be started. A code-sent lane's delivered
+    reply does not need that turn: the broker sends its words itself
+    (``job_notes``). A stopped job's requester is told nothing (2026-11-06), so
+    for one the page says nobody was told."""
     from .. import job_notes
 
     told = job_notes.tell(d, job_id, why="the DELIVER wake was lost")

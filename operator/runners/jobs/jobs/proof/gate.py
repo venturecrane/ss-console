@@ -58,7 +58,7 @@ CODES = frozenset(
         # findings in the attorney notes (drafting/repair_budget.py), 2026-11-05.
         "repair_unconverged",
         # 2026-11-06: a code-sent job held on our side, failed or waited on its
-        # lane's proof; the requester was sent its note in code (jobs/job_notes.py).
+        # lane's proof; SMD only, the requester is told nothing (jobs/job_notes.py).
         "job_stopped",
     }
 )
