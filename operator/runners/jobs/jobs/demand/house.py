@@ -18,6 +18,13 @@ claim, dol, banner, expires, salutation, signer), then ``## Section``,
 paragraphs. ``## Exhibits`` starts the exhibit list and the signature block is
 inserted before it. Everything after ``=== ATTORNEY NOTES ===`` goes to a
 separate notes text, never into the demand.
+
+A demand in a filed action (the ``litigation`` variant, ``re_vs`` in the firm's
+config) goes to defense counsel, and its RE block is the action's caption over
+its court and case number, not a carrier's insured and claim number. Its front
+matter carries ``caption`` and ``court`` in place of ``insured`` and ``claim``
+(``LITIGATION_FRONT_KEYS``). Read 2026-11-06 off a firm's own letters to
+defense counsel: everything below the RE block is the same house letter.
 """
 
 from __future__ import annotations
@@ -52,6 +59,26 @@ KINDS = (
 )
 NOTES_MARK = "=== ATTORNEY NOTES ==="
 FRONT_KEYS = ("date", "attn", "client", "insured", "claim", "dol", "banner", "expires", "salutation", "signer")
+#: The litigation variant's front matter: the caption ("<plaintiff> vs.
+#: <defendant>, et al.,") and the court line under it ("<County> County Superior
+#: Court Case No. <number>"). ``client`` and ``dol`` stay: the cross-check reads
+#: both against the matter record, and the client names the file.
+LITIGATION_FRONT_KEYS = (
+    "date",
+    "attn",
+    "client",
+    "caption",
+    "court",
+    "dol",
+    "banner",
+    "expires",
+    "salutation",
+    "signer",
+)
+
+
+def front_keys(litigation: bool = False) -> tuple[str, ...]:
+    return LITIGATION_FRONT_KEYS if litigation else FRONT_KEYS
 
 
 class RenderError(ValueError):
@@ -249,7 +276,19 @@ def out_name(client: str) -> str:
     return f"Demand.{safe}.docx"
 
 
-def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "") -> None:
+def _re_block(w: HouseWriter, front: dict[str, str], litigation: bool) -> None:
+    if litigation:  # a filed action: the caption, then its court and case number
+        w.para("re_first", f"**RE:\t{front['caption']}**")
+        w.para("re_line", f"\t{front['court']}")
+        w.para("re_line", f"\tDate of Loss: {front['dol']}")
+        return
+    w.para("re_first", f"**RE:\tOur Client:\t{front['client']}**")
+    w.para("re_line", f"\tYour Insured:\t{front['insured']}")
+    w.para("re_line", f"\tClaim Number:\t{front['claim']}")
+    w.para("re_line", f"\tDate of Loss:\t{front['dol']}")
+
+
+def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "", litigation: bool = False) -> None:
     w.para("blank")
     w.para("blank")
     w.para("date", front["date"])
@@ -259,10 +298,7 @@ def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "") -> None:
     for line in front["attn"].split("|"):
         w.para("attn", line.strip())
     w.para("blank")
-    w.para("re_first", f"**RE:\tOur Client:\t{front['client']}**")
-    w.para("re_line", f"\tYour Insured:\t{front['insured']}")
-    w.para("re_line", f"\tClaim Number:\t{front['claim']}")
-    w.para("re_line", f"\tDate of Loss:\t{front['dol']}")
+    _re_block(w, front, litigation)
     w.para("blank")
     w.banner(front["banner"], front["expires"])
     w.para("blank")
@@ -367,14 +403,16 @@ def render(
     signer: str = "",
     initials: str = "",
     mail_line: str = "",
+    litigation: bool = False,
 ) -> tuple[Path, str]:
     """``(the demand file, the attorney notes text)``. ``client_label`` names
     the file: on the seat it is the matter record's client name, read by code,
     so no model-written string becomes a file name (review of #3074); the
-    laptop tool's behavior (the letter's own client line) is the fallback."""
-    front, body, notes = parse(md)
+    laptop tool's behavior (the letter's own client line) is the fallback.
+    ``litigation``: the RE block is the action's caption and court."""
+    front, body, notes = parse(md, front_keys(litigation))
     w = HouseWriter(reference)
-    _header(w, front, mail_line)
+    _header(w, front, mail_line, litigation)
     _Body(w, front, signature, signer_title, signer, initials).feed(body.strip("\n").splitlines())
     out_dir.mkdir(parents=True, exist_ok=True)
     name = out_name(client_label or front["client"])
