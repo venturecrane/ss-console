@@ -267,7 +267,7 @@ class Finish:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
             doc, more = sets.align(doc, canon, f"{c.label} set", keep=parties_mod.keep_terms(c.party, u.party))
             notes += more
-        doc, bound = parties_mod.bound(doc, u.party, u.label, self.data)
+        doc, bound = parties_mod.bound(doc, u.party, u.label, self.data, self.job.job_dir, self.job.request_text)
         return doc, notes + bound
 
     def _digest_text(self) -> str:

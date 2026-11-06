@@ -2,14 +2,15 @@
 email drafted to one of them, and SMD submitted, seeded and fixed a second job
 by hand.
 
-Each rule here fails on the code before ``parties.py``: the planner plans one
-unit per (party, set); a name that is none of the matter's parties stops the
-job for SMD; each set carries its own party in its identification block, its
-title, its definition of YOU and its file name; sets to different parties share
-one paid read of the record; a request to one party, and a plan already frozen
-in an in-flight job, run exactly as before.
+The design (``parties.py``): the request names the parties, the caption
+verifies them. Every rule here fails on the code before it: one unit per
+(named party, set); the caption is cut where the request's names fall, never
+by a grammar; a scope line narrows; "all defendants" uses the caption only
+when it splits cleanly; anything code cannot settle stops for SMD; each set
+carries its own party in its identification block, title, YOU and file name;
+one paid read of the record; one-party requests and frozen plans run as before.
 
-Every name and sentence is invented (Example / Exampletown).
+The caption shapes are the real ones, de-identified (Example / Exampletown).
 """
 
 from __future__ import annotations
@@ -23,9 +24,17 @@ from jobs.drafting import parties, render, sets
 from test_drafting_review import KINDS, Client, _run, docs_with_note, one_set
 
 RFA, RFP, SROG = "Requests for Admission", "Requests for Production", "Special Interrogatories"
-CITY, DISTRICT = "CITY OF EXAMPLETOWN", "EXAMPLETOWN UNIFIED SCHOOL DISTRICT"
-THEIRS, OURS = [CITY, DISTRICT], ["GAMMA EXAMPLE"]
-TWO = "Please draft plaintiff's RFA, RFPD and SROG set one to the City of Exampletown and Exampletown Unified School District."
+DISTRICT, CITY = "EXAMPLETOWN UNIFIED SCHOOL DISTRICT", "CITY OF EXAMPLETOWN"
+#: The 11-05 caption's shape: the District, the City and the State in one value, then an agency.
+V1 = f"{DISTRICT}, {CITY}, STATE OF CA, and DOES 1 - 100"
+V2 = "EXAMPLETOWN SHERIFF'S DEPARTMENT, County of Exampletown, State of CA - Department of Example Services"
+VALUES = [V1, V2]
+#: The parties named after "propound discovery to A and to B", the set words in the next sentence.
+TWO = (
+    "Please propound discovery to Exampletown Unified School District and to City of Exampletown. "
+    "We need RFA, RFPD and SROG, set one."
+)
+SCOPED = TWO + "\n\nSMD, re-submitted: to Exampletown Unified School District only."
 
 
 @pytest.fixture(autouse=True)
@@ -44,177 +53,100 @@ def pricing(tmp_path):
     return p
 
 
-# ---- who the request serves ------------------------------------------------------------
+def _cap(*values: str) -> dict:
+    return {"fields": {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": v} for v in values]}}
 
 
-@pytest.mark.parametrize(
-    "request_text, want",
-    [
-        (TWO, [CITY, DISTRICT]),
-        ("SROGs set one to the School District and RFAs to the City.", [DISTRICT, CITY]),
-        ("Draft RFAs set one to both defendants.", [CITY, DISTRICT]),
-        ("Draft RFAs set one to defendants.", [CITY, DISTRICT]),
-        ("Draft RFAs set one to Defendant City of Exampletown.", []),  # one party: as before
-        ("Draft RFAs set one to the defendant.", []),
-    ],
-)
-def test_the_parties_are_read_from_the_request_and_the_matter(request_text, want):
-    assert parties.plan(request_text, THEIRS, OURS) == want
+# ---- the request names the parties, the caption verifies them --------------------------
 
 
-@pytest.mark.parametrize(
-    "request_text",
-    [
-        "Draft RFAs and SROGs to the City and Acme Paving Inc.",  # none of the matter's parties
-        "Draft RFAs to Exampletown and the City.",  # "Exampletown" could be either
-    ],
-)
-def test_a_name_that_is_not_one_party_of_the_matter_stops_rather_than_guesses(request_text):
-    with pytest.raises(parties.PartyUnknown):
-        parties.plan(request_text, THEIRS, OURS)
+def test_the_request_names_split_the_caption_where_they_fall():
+    # "City of X" inside the District's value is its own party because the request names it.
+    assert parties.resolve(TWO, VALUES).planned == [DISTRICT, CITY]
+    assert sets.variants(TWO) and len(sets.variants(TWO)) == 3
 
 
-def test_a_matter_with_one_other_side_party_plans_no_parties_for_a_request_to_one():
-    assert parties.plan("Draft RFAs to Defendant City of Exampletown.", [CITY], OURS) == []
-    assert parties.plan("Draft RFAs to the defendant.", [CITY], OURS) == []
+def test_names_in_the_request_win_over_every_defendant_words_on_a_caption_that_does_not_split():
+    assert parties.resolve(TWO + " Serve both defendants.", VALUES).planned == [DISTRICT, CITY]
 
 
-# ---- the 11-05 caption: one string, two public entities and a Does entry ------------------
+def test_a_scope_line_narrows_to_the_names_it_carries():
+    assert parties.resolve(SCOPED, VALUES).planned == [DISTRICT]
+    assert parties.resolve(SCOPED, VALUES).known == [DISTRICT, CITY]
+    with pytest.raises(parties.PartyUnknown, match="limits its sets"):
+        parties.resolve(TWO + "\n\nSMD: to Acme Paving Inc. only.", VALUES)
 
-ONE_STRING = (
-    "CITY OF EXAMPLETOWN, a public entity; EXAMPLETOWN UNIFIED SCHOOL DISTRICT, a public entity; "
-    "and DOES 1 through 50, inclusive"
-)
+
+def test_all_defendants_on_a_caption_that_does_not_split_cleanly_stops_quoting_it():
+    with pytest.raises(parties.PartyUnknown, match="CITY OF EXAMPLETOWN"):
+        parties.resolve("Draft RFAs set one to all defendants.", VALUES)
+
+
+def test_all_defendants_on_a_caption_that_splits_cleanly_is_every_party():
+    clean = f"{CITY}, a public entity; {DISTRICT}, a public entity; and DOES 1 through 50, inclusive"
+    assert parties.resolve("Draft RFAs set one to all defendants.", [clean]).planned == [CITY, DISTRICT]
+    with pytest.raises(parties.PartyUnknown, match="names 1"):
+        parties.resolve("Draft RFAs set one to both defendants.", ["DELTA EXAMPLE, an individual"])
+
+
+def test_two_request_names_that_are_one_caption_span_stop():
+    req = f"Propound discovery to {DISTRICT}, {CITY} and to {CITY}. RFAs set one."
+    with pytest.raises(parties.PartyUnknown, match="one party on the caption"):
+        parties.resolve(req, VALUES)
+
+
+def test_a_request_naming_none_of_several_defendants_stops():
+    with pytest.raises(parties.PartyUnknown, match="names none"):
+        parties.resolve("Draft RFAs set one to the defendant.", VALUES)
+
+
+def test_one_name_binds_that_party_when_there_are_several_and_nothing_when_there_is_one():
+    assert parties.resolve("Draft RFAs to City of Exampletown.", VALUES).planned == [CITY]
+    assert parties.resolve("Draft RFAs to Delta Example.", ["DELTA EXAMPLE, an individual"]).planned == []
+    assert parties.resolve("Draft RFAs to the defendant.", ["DELTA EXAMPLE"]).planned == []
 
 
 @pytest.mark.parametrize(
     "value, want",
     [
-        (ONE_STRING, [CITY, DISTRICT]),
-        ("CITY OF EXAMPLETOWN, EXAMPLETOWN UNIFIED SCHOOL DISTRICT, and Does 1-50", [CITY, DISTRICT]),
-        ("CITY OF EXAMPLETOWN and EXAMPLETOWN UNIFIED SCHOOL DISTRICT", [CITY, DISTRICT]),
+        (f"{CITY}, a public entity; {DISTRICT}, a public entity; and DOES 1 through 50", [CITY, DISTRICT]),
         ("SMITH AND SONS, INC., a California corporation; and DOES 1 to 25", ["SMITH AND SONS, INC."]),
         ("BOARD OF TRUSTEES OF ALPHA AND BETA, a public entity", ["BOARD OF TRUSTEES OF ALPHA AND BETA"]),
         ("DELTA EXAMPLE", ["DELTA EXAMPLE"]),
     ],
 )
-def test_a_caption_value_is_split_into_its_entities_as_printed(value, want):
+def test_a_clean_caption_value_splits_into_whole_parties_as_printed(value, want):
     assert parties.entities(value) == want
 
 
-AGENCY = "EXAMPLETOWN SHERIFF'S DEPARTMENT, County of Exampletown, State of CA - Department of Example Services"
-THREE = (
-    "CITY OF EXAMPLETOWN, a public entity; EXAMPLETOWN UNIFIED SCHOOL DISTRICT, a public entity; "
-    f"{AGENCY}; and DOES 1 through 50, inclusive"
-)
-
-
-@pytest.mark.parametrize(
-    "value, want",
-    [
-        (THREE, [CITY, DISTRICT, AGENCY]),
-        (
-            f"CITY OF EXAMPLETOWN, EXAMPLETOWN UNIFIED SCHOOL DISTRICT, {AGENCY}, and DOES 1-50",
-            [CITY, DISTRICT, AGENCY],
-        ),
-        # a qualified name is never split at its own "and"
-        (
-            "EXAMPLE CLINIC, State of CA - Department of Health and Human Services",
-            ["EXAMPLE CLINIC, State of CA - Department of Health and Human Services"],
-        ),
-        # a semicolon, "and" or a description ends a party: what follows is its own
-        (
-            "EXAMPLETOWN SHERIFF'S DEPARTMENT; COUNTY OF EXAMPLETOWN",
-            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
-        ),
-        (
-            "EXAMPLETOWN SHERIFF'S DEPARTMENT, and COUNTY OF EXAMPLETOWN",
-            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
-        ),
-        (
-            "EXAMPLETOWN SHERIFF'S DEPARTMENT, a public entity, COUNTY OF EXAMPLETOWN, a public entity",
-            ["EXAMPLETOWN SHERIFF'S DEPARTMENT", "COUNTY OF EXAMPLETOWN"],
-        ),
-    ],
-)
-def test_a_jurisdiction_qualifier_belongs_to_the_party_before_it(value, want):
-    assert parties.entities(value) == want
-
-
-def test_all_defendants_on_a_qualified_agency_caption_is_exactly_three_parties():
-    ours, theirs = parties.matter_parties(_one_string_cap(THREE), {})
-    assert parties.plan("Draft RFAs and SROGs set one to all defendants.", theirs, ours) == [CITY, DISTRICT, AGENCY]
-    assert parties.plan("Draft RFAs set one to each defendant.", theirs, ours) == [CITY, DISTRICT, AGENCY]
-
-
-def test_a_qualifier_after_a_jurisdiction_name_is_undecided_and_the_stop_quotes_it():
-    value = "CITY OF EXAMPLETOWN, COUNTY OF EXAMPLETOWN, and DOES 1-10"  # two parties, or one qualified?
+@pytest.mark.parametrize("value", [V1, V2, "CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10"])
+def test_a_qualifier_after_a_name_or_a_stray_word_is_never_a_clean_split(value):
     with pytest.raises(parties.Undecided):
         parties.entities(value)
-    cap = _one_string_cap(value)
-    ours, theirs = parties.matter_parties(cap, {})
-    with pytest.raises(parties.PartyUnknown, match="COUNTY OF EXAMPLETOWN"):
-        parties.plan("Draft RFAs to all defendants.", theirs, ours, parties.undecided(cap))
-
-
-def test_a_caption_value_code_cannot_split_is_undecided_never_guessed():
-    with pytest.raises(parties.Undecided):
-        parties.entities("CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10")
-
-
-def _one_string_cap(value=ONE_STRING):
-    return {"fields": {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": value}]}}
-
-
-def test_the_one_string_caption_is_two_parties_and_six_units(tmp_path, capsys):
-    assert parties.matter_parties(_one_string_cap(), {}) == (["GAMMA EXAMPLE"], THEIRS)
-    (tmp_path / "data").mkdir()
-    (tmp_path / "job.json").write_text(json.dumps({"request_text": TWO}))
-    (tmp_path / "data" / "caption.json").write_text(json.dumps(_one_string_cap()))
-    assert parties.main([str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "units (6):" in out and f"set-6: Special Interrogatories to {DISTRICT}" in out
-
-
-@pytest.mark.parametrize(
-    "request_text",
-    ["Draft RFAs set one to both defendants.", TWO, "Draft RFAs to each defendant."],
-)
-def test_a_request_to_several_parties_never_falls_back_to_one(request_text):
-    cap = _one_string_cap("CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10")  # code cannot split it
-    ours, theirs = parties.matter_parties(cap, {})
-    assert len(theirs) == 1
-    with pytest.raises(parties.PartyUnknown, match="resolve to 1"):
-        parties.plan(request_text, theirs, ours, parties.undecided(cap))
-
-
-def test_two_names_for_the_same_party_stop():
-    with pytest.raises(parties.PartyUnknown, match="same party"):
-        parties.plan("Draft RFAs to the City of Exampletown and the City.", THEIRS, OURS)
-
-
-def test_the_client_named_as_the_one_who_serves_is_not_a_party_served():
-    req = "Draft RFAs on behalf of Gamma Example, served on the City and the School District."
-    assert parties.plan(req, THEIRS, OURS) == [CITY, DISTRICT]
 
 
 def test_smd_may_name_the_parties_by_hand_and_each_is_checked(tmp_path):
     (tmp_path / parties.OVERRIDE).write_text(json.dumps({"parties": ["City of Exampletown"]}))
-    assert parties.override(tmp_path, THEIRS) == [CITY]
+    assert parties.override(tmp_path, VALUES) == [CITY]
     (tmp_path / parties.OVERRIDE).write_text(json.dumps({"parties": ["Acme Paving"]}))
     with pytest.raises(parties.PartyUnknown):
-        parties.override(tmp_path, THEIRS)
-    assert parties.override(tmp_path / "none", THEIRS) is None
+        parties.override(tmp_path, VALUES)
+    assert parties.override(tmp_path / "none", VALUES) is None
 
 
-def test_the_matter_parties_are_the_courts_caption_and_fall_back_to_the_record():
-    fields = {
-        "plaintiffs": [{"value": "GAMMA EXAMPLE"}],
-        "defendants": [{"value": CITY + " and DOES 1-25"}, {"value": DISTRICT}],
-    }
+def test_the_other_side_is_the_courts_caption_and_falls_back_to_the_record():
     record = [{"side": "client", "name": "Gamma Example"}, {"side": "other", "name": "City of Exampletown"}]
-    assert parties.matter_parties({"fields": fields, "parties": record}, {}) == (["GAMMA EXAMPLE"], THEIRS)
-    assert parties.matter_parties({"fields": {}, "parties": record}, {})[1] == ["City of Exampletown"]
+    assert parties.other_values({**_cap(V1, V2), "parties": record}, {}) == VALUES
+    assert parties.other_values({"fields": {}, "parties": record}, {}) == ["City of Exampletown"]
+
+
+def test_the_rehearsal_prints_six_units_for_the_real_shape(tmp_path, capsys):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "job.json").write_text(json.dumps({"request_text": TWO}))
+    (tmp_path / "data" / "caption.json").write_text(json.dumps(_cap(V1, V2)))
+    assert parties.main([str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "units (6):" in out and f"set-6: Special Interrogatories to {CITY}" in out
 
 
 # ---- the party written into the set ------------------------------------------------------
@@ -226,19 +158,19 @@ def _to(label: str, party: str) -> str:
 
 def test_the_unit_party_is_written_into_its_identification_block_title_and_you():
     doc = _to(RFA, CITY).split("=== ATTORNEY")[0]
-    out, notes, problems = parties.bind(doc, DISTRICT, THEIRS)
+    out, notes, problems = parties.bind(doc, DISTRICT, [DISTRICT, CITY])
     assert render.party(out, "RESPONDING PARTY") == DISTRICT
     assert f"TO DEFENDANT {DISTRICT}, SET ONE" in out
     assert sets.definition_texts(out)["YOU"][2] == f'"YOU" means {DISTRICT}.'
     assert notes and problems == []
-    again, none, _ = parties.bind(out, DISTRICT, THEIRS)
+    again, none, _ = parties.bind(out, DISTRICT, [DISTRICT, CITY])
     assert again == out and none == []
 
 
 def test_a_definition_of_you_still_naming_another_party_is_a_problem():
     # Markup inside the name: the swap cannot reach it, the check still reads it.
     doc = _to(RFA, DISTRICT).replace(f'"YOU" means {DISTRICT}.', '"YOU" means **CITY** OF EXAMPLETOWN.')
-    _out, _notes, problems = parties.bind(doc, DISTRICT, THEIRS)
+    _out, _notes, problems = parties.bind(doc, DISTRICT, [DISTRICT, CITY])
     assert problems == ['"YOU" is defined as another party, not ' + DISTRICT]
 
 
@@ -250,7 +182,7 @@ def test_a_set_to_another_party_keeps_its_own_you_when_aligned():
     assert "YOU" not in parties.drop_party_terms(sets.front_matter(canon))
 
 
-# ---- end to end: the 11-05 request ---------------------------------------------------------
+# ---- end to end -------------------------------------------------------------------------
 
 
 class PartyClient(Client):
@@ -270,8 +202,8 @@ class PartyClient(Client):
         return super()._answer(params)
 
 
-def _two_defendants():
-    cap = {**CAPTION, "defendants": [ONE_STRING]}  # as the 11-05 complaint's caption reads
+def _seat_and_caption():
+    cap = {**CAPTION, "defendants": VALUES}  # as the 11-05 complaint's caption reads
     record = {
         "case_number": "CV-0001",
         "court": "Superior Court",
@@ -286,98 +218,55 @@ def _two_defendants():
     return json.dumps(cap), seat_with(docs_with_note(), record=record)
 
 
-def test_two_defendants_get_every_set_each_in_one_job_and_one_delivery(tmp_path, pricing):
-    cap, seat = _two_defendants()
-    drafts = {(label, p): _to(label, p) for label in KINDS for p in THEIRS}
-    drafts[(RFA, DISTRICT)] = _to(RFA, CITY)  # the model wrote the wrong party: code binds the right one
+def test_two_named_parties_get_every_set_each_in_one_job_and_one_delivery(tmp_path, pricing):
+    cap, seat = _seat_and_caption()
+    drafts = {(label, p): _to(label, p) for label in KINDS for p in (DISTRICT, CITY)}
+    drafts[(RFA, CITY)] = _to(RFA, DISTRICT)  # the model wrote the wrong party: code binds the right one
     client = PartyClient(caption=[cap], by_party=drafts)
     r, v, seat = _run(tmp_path, pricing, client, request=TWO, seat=seat)
     assert v.outcome == "delivered", (v.stage, v.reason)
     plan = json.loads((r.data / "state.json").read_text())["units"]
-    assert [(p["label"], p["party"]) for p in plan] == [(k, p) for p in THEIRS for k in (RFA, RFP, SROG)]
+    assert [(p["label"], p["party"]) for p in plan] == [(k, p) for p in (DISTRICT, CITY) for k in (RFA, RFP, SROG)]
     drafts_filed = [f["name"] for f in v.files if f["role"] == "draft"]
     assert len(drafts_filed) == 6
-    for p in THEIRS:
+    for p in (DISTRICT, CITY):
         assert sum(f" to {p} " in n for n in drafts_filed) == 3, drafts_filed
     for i, p in enumerate(plan, 1):
         final = (r.data / f"set-{i}" / "draft-final.md").read_text()
         assert render.party(final, "RESPONDING PARTY") == p["party"], i
         assert sets.definition_texts(final)["YOU"][2] == f'"YOU" means {p["party"]}.', i
-        assert len(sets.kinds_in(final.split("=== ATTORNEY")[0])) == 1
-    # one paid read of the record, shared by all six sets
-    assert client.count("DIGEST-PROMPT") == 1
+    assert client.count("DIGEST-PROMPT") == 1  # one paid read of the record for all six
     assert [f["role"] for f in v.files].count("attorney_notes") == 1
 
 
-def test_a_request_to_a_party_the_matter_does_not_list_fails_before_any_compose(tmp_path, pricing):
-    cap, seat = _two_defendants()
+def test_the_scope_line_drafts_three_sets_to_the_district_whose_you_never_names_the_city(tmp_path, pricing):
+    cap, seat = _seat_and_caption()
+    drafts = {(label, DISTRICT): _to(label, CITY) for label in KINDS}  # every compose wrote the City
+    client = PartyClient(caption=[cap], by_party=drafts)
+    r, v, _ = _run(tmp_path, pricing, client, request=SCOPED, seat=seat)
+    assert v.outcome == "delivered", (v.stage, v.reason)
+    plan = json.loads((r.data / "state.json").read_text())["units"]
+    assert [p["party"] for p in plan] == [DISTRICT] * 3
+    for i in (1, 2, 3):
+        final = (r.data / f"set-{i}" / "draft-final.md").read_text()
+        you = sets.definition_texts(final)["YOU"][2]
+        assert DISTRICT in you and CITY not in you.upper()
+        assert render.party(final, "RESPONDING PARTY") == DISTRICT
+
+
+def test_a_request_naming_no_party_of_several_fails_before_any_compose(tmp_path, pricing):
+    cap, seat = _seat_and_caption()
     client = PartyClient(caption=[cap], by_party={})
-    req = "Please draft RFAs set one to the City of Exampletown and to Acme Paving Inc."
-    _r, v, seat = _run(tmp_path, pricing, client, request=req, seat=seat)
+    _r, v, seat = _run(tmp_path, pricing, client, request="Please draft RFAs set one to the defendant.", seat=seat)
     assert v.outcome == "failed" and v.reason.startswith("party_unknown: "), (v.stage, v.reason)
     assert client.count("COMPOSE-PROMPT") == 0 and seat.created == []
 
 
-def test_a_request_to_one_party_plans_exactly_as_before(tmp_path, pricing):
-    cap, seat = _two_defendants()
-    client = Client(caption=[cap], drafts={label: one_set(label) for label in KINDS})
-    req = "Please draft RFAs set one and SROGs set one to Defendant City of Exampletown."
-    r, v, _ = _run(tmp_path, pricing, client, request=req, seat=seat)
-    assert v.outcome == "delivered", (v.stage, v.reason)
-    plan = json.loads((r.data / "state.json").read_text())["units"]
-    assert plan == [
-        {"key": "set-1", "variant": "requests_for_admission", "label": RFA},
-        {"key": "set-2", "variant": "special_interrogatories", "label": SROG},
-    ]
-
-
-def test_a_plan_frozen_before_parties_resumes_unchanged(tmp_path, pricing):
+def _units_for(tmp_path, pricing, request_text, cap=None):
     from drafting_testkit import make_inputs, make_job
     from jobs.drafting.run import DraftingRun
 
-    _cap, seat = _two_defendants()
-    make_inputs(tmp_path / "inputs")
-    jd = make_job(tmp_path / "job", cls="discovery_set")
-    doc = json.loads((jd / "job.json").read_text())
-    doc["request_text"] = TWO
-    (jd / "job.json").write_text(json.dumps(doc))
-    r = DraftingRun(
-        jd,
-        inputs_dir=str(tmp_path / "inputs"),
-        pricing=str(pricing),
-        seat_factory=lambda: seat,
-        client=Client(),
-        log=lambda _m: None,
-    )
-    frozen = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(sets.variants(TWO), 1)]
-    # The caption names both defendants: a fresh plan would be six units with parties.
-    fields = {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": CITY}, {"value": DISTRICT}]}
-    (r.data / "caption.json").write_text(json.dumps({"fields": fields}))
-    r._put("units", frozen)
-    assert [(u.key, u.label, u.party) for u in r.units()] == [(p["key"], p["label"], None) for p in frozen]
-    assert json.loads((r.data / "state.json").read_text())["units"] == frozen
-
-
-# ---- SMD's scope line on a re-submitted job ------------------------------------------------
-#
-# The envelope's only free text is request_text (drafting_ledger.validate_envelope);
-# SMD's hand line on a re-submitted job ("to <party> only") is read from it by code.
-
-SCOPED = TWO + "\n\nSMD, re-submitted: to Exampletown Unified School District only."
-
-
-def test_a_scope_line_limits_the_plan_to_the_parties_it_names():
-    assert parties.plan(SCOPED, THEIRS, OURS) == [DISTRICT]
-    assert parties.plan("Draft RFAs only to the City and the School District.", THEIRS, OURS) == [CITY, DISTRICT]
-    with pytest.raises(parties.PartyUnknown, match="limits its sets"):
-        parties.plan(TWO + "\n\nSMD: to Acme Paving Inc. only.", THEIRS, OURS)
-
-
-def _units_for(tmp_path, pricing, request_text):
-    from drafting_testkit import make_inputs, make_job
-    from jobs.drafting.run import DraftingRun
-
-    _cap, seat = _two_defendants()
+    _c, seat = _seat_and_caption()
     make_inputs(tmp_path / "inputs")
     jd = make_job(tmp_path / "job", cls="discovery_set")
     doc = json.loads((jd / "job.json").read_text())
@@ -391,13 +280,25 @@ def _units_for(tmp_path, pricing, request_text):
         client=Client(),
         log=lambda _m: None,
     )
-    (r.data / "caption.json").write_text(json.dumps(_one_string_cap()))
-    return [(u.key, u.label, u.party) for u in r.units()]
+    (r.data / "caption.json").write_text(json.dumps(cap or _cap(V1, V2)))
+    return r
 
 
-def test_a_scoped_resubmission_drafts_only_the_scoped_partys_sets(tmp_path, pricing):
-    got = _units_for(tmp_path / "a", pricing, SCOPED)
-    assert [(label, p) for _k, label, p in got] == [(f"{k} to {DISTRICT}", DISTRICT) for k in (RFA, RFP, SROG)]
-    # one set to one scoped party is still bound to that party, never the unbound default
-    one = "Draft RFAs set one to the City and the School District.\n\nSMD: to the City of Exampletown only."
-    assert [(k, p) for k, _l, p in _units_for(tmp_path / "b", pricing, one)] == [("set-1", CITY)]
+def test_one_set_to_one_scoped_party_keeps_its_party(tmp_path, pricing):
+    r = _units_for(
+        tmp_path, pricing, TWO.replace("RFA, RFPD and SROG", "RFAs") + "\n\nSMD: to City of Exampletown only."
+    )
+    assert [(u.key, u.party) for u in r.units()] == [("set-1", CITY)]
+
+
+def test_a_request_to_one_party_of_one_plans_exactly_as_before(tmp_path, pricing):
+    r = _units_for(tmp_path, pricing, "Draft RFAs set one and SROGs set one to Delta Example.", _cap("DELTA EXAMPLE"))
+    assert [(u.key, u.label, u.party) for u in r.units()] == [("set-1", RFA, None), ("set-2", SROG, None)]
+
+
+def test_a_plan_frozen_before_parties_resumes_unchanged(tmp_path, pricing):
+    r = _units_for(tmp_path, pricing, TWO)  # a fresh plan here would be six units with parties
+    frozen = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(sets.variants(TWO), 1)]
+    r._put("units", frozen)
+    assert [(u.key, u.label, u.party) for u in r.units()] == [(p["key"], p["label"], None) for p in frozen]
+    assert json.loads((r.data / "state.json").read_text())["units"] == frozen
