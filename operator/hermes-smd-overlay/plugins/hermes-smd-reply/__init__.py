@@ -275,6 +275,7 @@ def _send_msgraph_reply(
     matter_ref: str | None = None,
     to: str | None = None,
     attachments: list[dict[str, str]] | None = None,
+    for_job: dict[str, str] | None = None,
 ) -> str:
     """Reply in-thread via Microsoft Graph, keyed on the recorded message id.
 
@@ -345,6 +346,9 @@ def _send_msgraph_reply(
             # exactly the call it made before device senders existed.
             **({"to": to} if to else {}),
             **({"attachments": attachments} if attachments else {}),
+            # Only an SMD review release of a job's reply (2026-11-06): the
+            # broker records it as that job's bound reply, with the send.
+            **({"for_job": for_job} if for_job else {}),
             # The participant fence: a reply's anchor is the email it answers,
             # which every caller took from a verified origin (never a guess).
             anchor={"kind": "graph_message", "graph_message_id": graph_message_id},
@@ -1273,6 +1277,11 @@ def _review_one(row: dict[str, Any]) -> None:
             matter_ref=matter_ref,
             to=str(row.get("to") or "") if row.get("redirect") else None,
             attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
+            # The job this release IS the reply of (``approve --job``): the
+            # broker records it as that job's bound reply, atomically with the
+            # send, so a later rewake cannot send a second completion (A&P,
+            # 2026-11-06).
+            for_job=matter_file_review.row_job(row),
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)

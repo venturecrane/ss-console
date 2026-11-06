@@ -111,6 +111,7 @@ from .msgraph_ops import MsGraphOps, MsGraphRefused, MsGraphTransportError
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .casefile_casework import after_bound_reply, casefile_ledger_of
 from .reply_scheduled import casefile_subject as _casefile_subject, scheduled_recipient_ok as _scheduled_recipient_ok
+from .thread_answered import after_finish
 from .transmit_verbs import dispatch_transmit
 
 KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job", "message")  # fmt: skip
@@ -483,6 +484,9 @@ def verify(broker: BrokerContext, raw: Any, *, now: datetime | None = None) -> V
     if kind in JOB_KINDS:
         if sender != normalize_address(expected_sender):
             raise BindingRefused("that email's sender is not the person who requested the job")
+        answered = after_finish(ops, _NOUN[kind], kind, ident, row, found["conversation_id"])
+        if answered:
+            raise _job_refused(answered, "thread_answered")
     else:
         key = _verify_bare_message(ops, db_path, found, now)
         imid, kind = found["internet_message_id"], "message"
@@ -608,37 +612,7 @@ def reply_verb(
     reply_text.check_send(broker, v.kind, v.row, payload, partial(_audit, broker, raw=raw, v=v))
     db_path = str(broker.audit_db_path)
     session_id = str(request.get("session_id") or "").strip()
-    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
-    original = ops._request
-
-    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
-        # The claim rides the FIRST POST and nothing earlier: every GET and
-        # every refusal before it leaves the one reply unspent.
-        if method == "POST" and not state["claimed"]:
-            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
-                raise BindingRefused("that reply was already sent")
-            try:
-                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
-                    v.job_id, _outcome(v)
-                )
-            except Exception:
-                # The ledger could not be written: nothing has been sent, so
-                # the one reply is given back rather than silently spent.
-                bound_replies.release(db_path, v.key)
-                raise
-            if not marked:
-                # The ledger's own compare-and-set disagrees (this outcome was
-                # already replied to): honor it, give back the claim, send nothing.
-                bound_replies.release(db_path, v.key)
-                raise BindingRefused("the job's record shows this outcome was already replied to")
-            state["claimed"] = True
-            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return original(path, method, body, **kw)
-
-    # A per-call copy, so the claim hook never touches the shared ops object
-    # another broker thread is using.
-    bound_ops = copy.copy(ops)
-    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    bound_ops, state = _claiming_ops(broker, ops, v, session_id)
     body, transmit = _bound_body(v, payload, bound_ops)
     extra = request.get("audit_extra")
     audit_extra = dict(extra) if isinstance(extra, dict) else {}
@@ -685,6 +659,46 @@ def reply_verb(
         v = dataclasses.replace(v, conversation_id=str(result["conversation_id"]))
     after_bound_reply(broker, v, session_id)
     return result
+
+
+def _claiming_ops(broker: BrokerContext, ops: MsGraphOps, v: Verified, session_id: str) -> tuple[MsGraphOps, dict]:
+    """A per-call copy of ``ops`` whose FIRST POST takes ``v``'s once-only
+    claim and marks the job's ledger, and nothing earlier: every GET and every
+    refusal before it leaves the one reply unspent. ``state`` says whether the
+    claim was taken, and when."""
+    db_path = str(broker.audit_db_path)
+    state: dict[str, Any] = {"claimed": False, "claimed_at": ""}
+    original = ops._request
+
+    def claiming_request(path: str, method: str, body: Any, **kw: Any) -> dict[str, Any]:
+        # The claim rides the FIRST POST and nothing earlier: every GET and
+        # every refusal before it leaves the one reply unspent.
+        if method == "POST" and not state["claimed"]:
+            if not bound_replies.claim(db_path, v.key, v.graph_message_id, v.internet_message_id, session_id):
+                raise BindingRefused("that reply was already sent")
+            try:
+                marked = v.kind not in _LEDGER_MARKED_KINDS or _marking_ledger(broker, v.kind).mark_replied(
+                    v.job_id, _outcome(v)
+                )
+            except Exception:
+                # The ledger could not be written: nothing has been sent, so
+                # the one reply is given back rather than silently spent.
+                bound_replies.release(db_path, v.key)
+                raise
+            if not marked:
+                # The ledger's own compare-and-set disagrees (this outcome was
+                # already replied to): honor it, give back the claim, send nothing.
+                bound_replies.release(db_path, v.key)
+                raise BindingRefused("the job's record shows this outcome was already replied to")
+            state["claimed"] = True
+            state["claimed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return original(path, method, body, **kw)
+
+    # A per-call copy, so the claim hook never touches the shared ops object
+    # another broker thread is using.
+    bound_ops = copy.copy(ops)
+    bound_ops._request = claiming_request  # type: ignore[method-assign]
+    return bound_ops, state
 
 
 def _settle_sent(broker: BrokerContext, db_path: str, v: Verified, result: Any) -> None:
