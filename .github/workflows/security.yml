@@ -398,6 +398,21 @@ jobs:
       - name: Audit the pinned seat-image requirements and the Hermes venv
         run: python3 operator/bin/pip_audit_gate.py
 
+      # The one test that proves, against the live lock at the pin, that the
+      # Hermes security override still closes a real advisory. Until
+      # 2026-11-06 it ran nowhere: it sits behind PIP_AUDIT_LIVE and no
+      # workflow set the switch, so its claim was checked by nobody. Daily and
+      # on demand only: it needs the network, and a pull request must not go
+      # red on a rate limit. A failure here means the override no longer does
+      # what its name says (the advisory moved, or the pin did).
+      - name: The Hermes override still closes a live advisory (daily)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          PIP_AUDIT_LIVE: '1'
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest operator/bin/tests/test_pip_audit_gate.py -q -rs -k live_hermes_lock
+
   summary:
     name: Security Summary
     runs-on: ubuntu-latest
