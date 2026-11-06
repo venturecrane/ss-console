@@ -65,6 +65,35 @@ def test_an_update_records_a_password_protected_file_as_such(tmp_path: Path) -> 
     assert "Hospital Encounters" not in json.dumps(sets)
 
 
+def test_an_update_counts_a_refiled_subset_as_covered(tmp_path: Path) -> None:
+    """A re-filed copy of delivered pages is covered, never in neither set.
+
+    A client seat's update pulled six files: four exhibit rows and two
+    re-filed subsets of a delivered exhibit. The record said covered 4 of 6;
+    the two subsets were in neither set, so the record did not account for
+    every file it pulled.
+    """
+    ud = tmp_path / "runs" / "alpha" / "update"
+    ud.mkdir(parents=True)
+    _jsonl(tmp_path / "raw_manifest.jsonl", [{"id": i, "ok": True} for i in ("cited", "sub1", "sub2")])
+    (ud / "selection.json").write_text(
+        json.dumps(
+            {
+                "exhibits": [{"id": "cited", "read": True}],
+                "skipped": {},
+                "subsets": [
+                    {"id": "sub1", "subset_of": {"exhibit": 3}},
+                    {"id": "sub2", "subset_of": {"exhibit": 3}},
+                ],
+            }
+        )
+    )
+    sets = UCov.covered_sets(tmp_path, "alpha")
+    assert sets["covered"] == ["cited", "sub1", "sub2"]
+    assert sets["uncovered"] == []
+    assert sets["pulled"] == 3
+
+
 def _seed_run(d: Path) -> None:
     (d / "units").mkdir(parents=True)
     (d / "units" / "alpha.json").write_text(
