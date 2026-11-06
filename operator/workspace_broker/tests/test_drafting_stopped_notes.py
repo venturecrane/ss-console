@@ -39,16 +39,16 @@ from workspace_broker.reply_binding import BindingRefused
 ROOT_PID = 4242
 
 HELD = (
-    "The document for matter 900201 is not ready yet: we are checking it before it is filed. Nothing is needed "
-    "from you, and SMD will follow up with you."
+    "The document for matter 900201 is not ready yet. We are checking it before it is filed. Nothing is needed "
+    "from you."
 )
 FAILED = (
-    "The document for matter 900201 is not ready yet: the drafting stopped on our side, and we are looking at "
-    "why. Nothing is needed from you, and SMD will follow up with you."
+    "The document for matter 900201 is not ready yet. The drafting stopped on our side, and we are looking into "
+    "it. Nothing is needed from you."
 )
 WAITING = (
-    "We have your request for the document for matter 900201, and we are checking it before the drafting starts. "
-    "Nothing is needed from you, and SMD will follow up with you."
+    "We have your request for the document for matter 900201. We are checking it before the drafting starts. "
+    "Nothing is needed from you."
 )
 
 
@@ -133,8 +133,25 @@ def test_the_notes_are_plain_we_voice_with_no_date_reason_or_tool() -> None:
             assert "\N{EM DASH}" not in text and "\N{EN DASH}" not in text, text
             for word in (" job", "pipeline", "model", "audit", "verdict", "runner", "broker", " i ", "lane", "proof"):
                 assert word not in f" {low} ", (word, text)
-            assert "SMD will follow up" in text and ("we are" in low or "we have" in low)
+            assert "we are" in low or "we have" in low, text
             assert not any(ch.isdigit() for ch in text.replace("{number}", "")), text
+
+
+#: What a stopped note must never say (CLAUDE.md "No fabricated client-facing
+#: content", Pattern A): a promised follow-up or next message, a time, or a name
+#: other than "we" (the firm hears from us, never from a vendor name).
+PROMISES = ("follow up", "follow-up", "get back", "reach out", "will ", "we'll", "next message", "shortly", "soon")
+TIMES = ("today", "tomorrow", "tonight", "hour", "minute", "day", "week", "business", "monday", "friday", "by ")
+NAMES = ("smd", "operator", "claude", "anthropic", "smokeball", "microsoft", "outlook", "scott")
+
+
+def test_no_stopped_note_promises_a_follow_up_a_time_or_a_vendor_name() -> None:
+    """FALSIFIER: put "and SMD will follow up with you" back and this fails three ways."""
+    for pair in fixed_wording.STOPPED["drafting"].values():
+        for text in pair:
+            low = f" {text.lower()} "
+            for phrase in (*PROMISES, *TIMES, *NAMES):
+                assert phrase not in low, (phrase, text)
 
 
 @pytest.mark.parametrize(("name", "path", "cls", "text"), CASES, ids=[c[0] for c in CASES])

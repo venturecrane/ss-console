@@ -81,7 +81,7 @@ def test_a_refused_bind_names_its_code(tmp_path: Path) -> None:
     out = _call(
         _broker(tmp_path / "f", FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": failed}
     )
-    assert out["bound"] is True and "the drafting stopped on our side" in out["fixed_wording"][0]
+    assert out["bound"] is True and "The drafting stopped on our side" in out["fixed_wording"][0]
 
     (tmp_path / "d").mkdir()
     job = _drafting_job(tmp_path / "d", ["running", "delivered"])

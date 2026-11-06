@@ -658,8 +658,8 @@ def test_a_failed_drafting_job_replies_only_its_fixed_note_once(tmp_path: Path) 
     _ack_in_thread(box)
     out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
     assert out["bound"] is True and out["fixed_wording"] == [
-        "The document for matter 900201 is not ready yet: the drafting stopped on our side, and we are looking at "
-        "why. Nothing is needed from you, and SMD will follow up with you."
+        "The document for matter 900201 is not ready yet. The drafting stopped on our side, and we are looking into "
+        "it. Nothing is needed from you."
     ]
     with pytest.raises(BindingRefused):
         _call(

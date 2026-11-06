@@ -272,8 +272,8 @@ def test_a_held_demand_or_document_never_relays_the_reason() -> None:
     # A hold on our side (2026-11-06): the checking note, never the reason.
     ours = {**held, "reason": "destination_mismatch: the matter id does not carry matter number 900201"}
     assert fixed_wording.render("drafting_job", ours) == [
-        "The document for matter 900201 is not ready yet: we are checking it before it is filed. Nothing is "
-        "needed from you, and SMD will follow up with you."
+        "The document for matter 900201 is not ready yet. We are checking it before it is filed. Nothing is "
+        "needed from you."
     ]
 
 

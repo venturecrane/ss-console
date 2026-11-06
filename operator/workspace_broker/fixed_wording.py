@@ -189,7 +189,9 @@ _FILE_MAX = 200
 # waited on its lane's proof run (``lane_unproven``) left the attorney with
 # whatever the model chose to write, or nothing. Each such state now has ONE
 # note here, rendered by code from the row like every other reply. It says what
-# we have and that SMD will follow up; it names no stage, reason, date or tool.
+# is true now, in "we" voice: no follow-up promised, no time, no vendor name,
+# and no stage, reason, date or tool (CLAUDE.md "No fabricated client-facing
+# content", Pattern A; tests/test_drafting_stopped_notes pins it).
 #
 # HOW A LANE JOINS. One entry in ``STOPPED`` (its notes, with and without a
 # matter number) and one classifier in ``STOP_CLASS`` (which note a row is
@@ -202,22 +204,22 @@ _FILE_MAX = 200
 STOPPED: dict[str, dict[str, tuple[str, str]]] = {
     "drafting": {
         "held": (
-            "The document for matter {number} is not ready yet: we are checking it before it is filed. "
-            "Nothing is needed from you, and SMD will follow up with you.",
-            "The document you asked for is not ready yet: we are checking it before it is filed. "
-            "Nothing is needed from you, and SMD will follow up with you.",
+            "The document for matter {number} is not ready yet. We are checking it before it is filed. "
+            "Nothing is needed from you.",
+            "The document you asked for is not ready yet. We are checking it before it is filed. "
+            "Nothing is needed from you.",
         ),
         "failed": (
-            "The document for matter {number} is not ready yet: the drafting stopped on our side, and we are "
-            "looking at why. Nothing is needed from you, and SMD will follow up with you.",
-            "The document you asked for is not ready yet: the drafting stopped on our side, and we are "
-            "looking at why. Nothing is needed from you, and SMD will follow up with you.",
+            "The document for matter {number} is not ready yet. The drafting stopped on our side, and we are "
+            "looking into it. Nothing is needed from you.",
+            "The document you asked for is not ready yet. The drafting stopped on our side, and we are "
+            "looking into it. Nothing is needed from you.",
         ),
         "waiting": (
-            "We have your request for the document for matter {number}, and we are checking it before the "
-            "drafting starts. Nothing is needed from you, and SMD will follow up with you.",
-            "We have your request for the document, and we are checking it before the drafting starts. "
-            "Nothing is needed from you, and SMD will follow up with you.",
+            "We have your request for the document for matter {number}. We are checking it before the "
+            "drafting starts. Nothing is needed from you.",
+            "We have your request for the document. We are checking it before the drafting starts. "
+            "Nothing is needed from you.",
         ),
     },
 }
