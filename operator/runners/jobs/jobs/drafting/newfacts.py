@@ -98,33 +98,44 @@ class Found:
     quotes: list[tuple[str, str]] = field(default_factory=list)
 
 
-def read(text: str) -> Found:
-    """Every fact ``text`` states (``Known`` reads sources the same way)."""
-    t = _strip(text)
-    out = Found()
+def _blank(text: str, spans: list[tuple[int, int]]) -> str:
+    """``text`` with each span replaced by spaces (positions kept)."""
+    for a, b in sorted(spans, reverse=True):
+        text = text[:a] + " " * (b - a) + text[b:]
+    return text
+
+
+def _long_date(m: re.Match[str]) -> date | None:
+    for month in (m.group(1), m.group(1)[:3]):
+        got = verify.parse_date(f"{month} {int(m.group(2))}, {m.group(3)}")
+        if got is not None:
+            return got
+    return None
+
+
+def _dates(t: str, out: Found) -> list[tuple[int, int]]:
+    """The dates ``t`` states, into ``out``; the spans they occupy."""
     spans: list[tuple[int, int]] = []
     for m in _LONG_DATE.finditer(t):
         md = _md(m.group(1), m.group(2))
         if md is None:
             continue
         spans.append(m.span())
-        if m.group(3):
-            got = verify.parse_date(f"{m.group(1)} {int(m.group(2))}, {m.group(3)}")
-            if got is None:
-                got = verify.parse_date(f"{m.group(1)[:3]} {int(m.group(2))}, {m.group(3)}")
-            if got is not None:
-                out.dates.append((got, m.group(0)))
-                continue
-        out.month_days.append((md, m.group(0)))
+        got = _long_date(m) if m.group(3) else None
+        if got is not None:
+            out.dates.append((got, m.group(0)))
+        else:
+            out.month_days.append((md, m.group(0)))
     for m in _NUM_DATE.finditer(t):
         got = howell.parse_date(m.group(0))
         if got is not None:
             spans.append(m.span())
             out.dates.append((got, m.group(0)))
-    rest = t
-    for a, b in sorted(spans, reverse=True):
-        rest = rest[:a] + " " * (b - a) + rest[b:]
-    nodates = rest  # a month's name is the date's, never a name
+    return spans
+
+
+def _figures(rest: str, out: Found) -> None:
+    """The dollar figures, then every other number, of ``rest`` (dates blanked)."""
     rest = _LABEL_NO.sub(lambda m: " " * len(m.group(0)), rest)
     taken: list[tuple[int, int]] = []
     for m in _MONEY.finditer(rest):
@@ -132,19 +143,38 @@ def read(text: str) -> Found:
         if v is not None:
             out.money.append((v, m.group(0)))
             taken.append(m.span())
-    for a, b in sorted(taken, reverse=True):
-        rest = rest[:a] + " " * (b - a) + rest[b:]
-    out.numbers = [(_digits(m.group(0)), m.group(0)) for m in _NUMBER.finditer(rest)]
+    out.numbers = [(_digits(m.group(0)), m.group(0)) for m in _NUMBER.finditer(_blank(rest, taken))]
+
+
+def _quotes(t: str) -> list[tuple[str, str]]:
+    out = []
     for m in _QUOTE.finditer(t):
         q = m.group(1) or m.group(2) or ""
         if sets._TERM.fullmatch(m.group(0).replace("“", '"').replace("”", '"')):
-            continue  # a defined-term label; its words are read as names below
+            continue  # a defined-term label; its words are read as names
         if q.strip():
-            out.quotes.append((_flat(q), q))
+            out.append((_flat(q), q))
+    return out
+
+
+def _names(nodates: str, t: str) -> list[tuple[str, str]]:
+    """Capitalized words not starting a sentence or a line (a month's name is the date's)."""
+    out = []
     for m in _WORD.finditer(nodates):
         w = m.group(0)
         if len(w) >= 2 and w[0].isupper() and not _initial(t, m.start()):
-            out.names.append((_word(w), w))
+            out.append((_word(w), w))
+    return out
+
+
+def read(text: str) -> Found:
+    """Every fact ``text`` states (``Known`` reads sources the same way)."""
+    t = _strip(text)
+    out = Found()
+    nodates = _blank(t, _dates(t, out))
+    _figures(nodates, out)
+    out.quotes = _quotes(t)
+    out.names = _names(nodates, t)
     return out
 
 
