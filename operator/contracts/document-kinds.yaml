@@ -1,0 +1,70 @@
+# ============================================================================
+# Document-kind registry: the one declaration of the kinds of document the
+# Operator makes in a firm's Word files, and which path makes each today.
+#
+# WHY THIS EXISTS (design 2026-11-06, docs/plans/document-library). The same
+# list was written in five places and they disagreed: seven kinds in the
+# connector's renderer, five in the drafting lane, six in a test, the drafting
+# discipline and the library establishment skill. A kind added in one place and
+# not another is a kind a firm can ask for and not get. This file is the list;
+# tests/document-kinds-registry.test.ts fails when any copy disagrees with it.
+#
+# PER KIND:
+#   key            the document_class value every path uses
+#   library_title  the library file title: "Template - <library_title>.docx"
+#                  (smokeball_connector/library.py CLASS_TITLES)
+#   variants       the kind's named variants, [] for none. A demand letter has a
+#                  pre-suit and a litigation variant (jobs/demand/firm.py VARIANTS)
+#   produced_by    the paths that make it today:
+#                    chat_tool     render_docx_draft in a chat turn
+#                                  (smokeball_connector/server.py), every kind
+#                    drafting_job  the queued drafting lane
+#                                  (workspace_broker/drafting_ledger.py)
+#                    demand_job    the queued demand lane (jobs/demand/)
+#
+# NOT HERE, deliberately: the firm's fill-in forms (rep letters, fax covers, DMV
+# forms). A form's library file name is authored per firm in customer.yaml
+# (self_initiation.document_library.templates), so it has no fixed title to
+# declare; the forms path reads it from there. Nor a reader or audience per
+# kind: the piece that first reads one adds it.
+#
+# Order is the renderer's (docx_format.py DOCUMENT_CLASSES).
+# ============================================================================
+
+version: 1
+
+kinds:
+  - key: discovery_set
+    library_title: Discovery Set
+    variants: []
+    produced_by: [drafting_job, chat_tool]
+
+  - key: discovery_response
+    library_title: Discovery Response
+    variants: []
+    produced_by: [drafting_job, chat_tool]
+
+  - key: demand_letter
+    library_title: Demand Letter
+    variants: [pre_suit, litigation]
+    produced_by: [demand_job, chat_tool]
+
+  - key: mediation_brief
+    library_title: Mediation Brief
+    variants: []
+    produced_by: [drafting_job, chat_tool]
+
+  - key: memo
+    library_title: Memo
+    variants: []
+    produced_by: [drafting_job, chat_tool]
+
+  - key: depo_outline
+    library_title: Deposition Outline
+    variants: []
+    produced_by: [drafting_job, chat_tool]
+
+  - key: letter
+    library_title: Letter
+    variants: []
+    produced_by: [chat_tool]

@@ -4,7 +4,7 @@ description: >-
   Establishes the firm's DOCUMENT LIBRARY of templates. On an Operator admin's instruction, it
   hunts the firm's own documents in the case system for an exemplar of EVERY document class the
   drafting renderer knows (discovery set, discovery response, demand letter, mediation brief,
-  memo, letter), and proposes a library that reports each class: exemplar found (named, with its
+  memo, deposition outline, letter), and proposes a library that reports each class: exemplar found (named, with its
   matter), not found (with where it looked), or not applicable (only on the admin's word), plus
   any additional firm document worth keeping as a reference template, and a storage location it
   proposes and the admin fixes. It stops there and creates nothing until the admin blesses the

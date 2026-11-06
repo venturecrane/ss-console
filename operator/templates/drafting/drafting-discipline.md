@@ -279,7 +279,7 @@ class uses its default and says so in the delivery note.
 
 A draft is filed as a real Word document through `mcp_smokeball_render_docx_draft`
 with a `document_class` (`discovery_set`, `discovery_response`, `demand_letter`,
-`mediation_brief`, `memo`, `letter`). The tool renders your content INTO the
+`mediation_brief`, `memo`, `depo_outline`, `letter`). The tool renders your content INTO the
 firm's own Word template for that class when one is authored in the firm's
 Document Library (it resolves the template itself, the same way every time; you
 never pick one), else onto the SMD starter base. The firm's template carries the
