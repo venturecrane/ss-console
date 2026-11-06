@@ -815,3 +815,23 @@ def test_a_reuse_check_with_nothing_saved_reports_no_case_reused(tmp_path):
     rc = json.loads(report.read_text())["reuse_check"]
     assert rc["reused"] == 0 and rc["row_digest"] == {}
     assert [w["number"] for w in rc["would_read"]] == ["100001"]
+
+
+def test_the_printout_prints_a_defaulted_defendant_as_its_note_states(tmp_path):
+    """2026-11-02: the print-out printed saved status values as stored, and
+    three defaulted defendants read "Served, no answer in file" beside their
+    own "default entered" notes."""
+    from jobs.litigation import vocab
+
+    p = tmp_path / "state" / "matters" / f"{M1}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    d = {"name": "Delta", "status": vocab.SERVED_NO_ANSWER, "served": {"date": "2017-10-01"},
+         "answered": {"date": None, "source": None}, "flags": ["Default entered 2018-01-05."]}  # fmt: skip
+    p.write_text(json.dumps({"defendants": [d], "discovery_propounded": [], "discovery_served_on_client": []}))
+    r = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    f = {"matter_id": M1, "number": "100001", "title": "A v. B", "responsible": "Lee", "read": True}
+    shown = r._status_values([f])
+    assert shown[0]["defendants"][0]["status"] == vocab.DEFAULT
+    out = tmp_path / "x.pdf"
+    printout.build(shown, out, TODAY)
+    assert "no answer in file" not in "\n".join(printout.text_of(out))

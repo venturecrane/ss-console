@@ -395,3 +395,15 @@ def test_a_run_shows_the_calendar_date_in_every_file_and_stores_only_the_papers(
     assert any("2027-03-01" in str(c) for row in notes[1:] for c in row)
     stored = manifest.load_prior(tmp_path / "state", M1)
     assert "2027-03-01" not in str(stored.get("next_court_date"))
+
+
+def test_the_cover_says_when_the_case_values_were_read_never_only_todays_date(tmp_path: Path):
+    # 2026-10-30: values read 10-23 printed under "as of 2026-10-30".
+    old = _matter("m1", "1001", "A v. B", "Lee", provenance={"job_id": "j", "read_at": "2026-10-23"})
+    out = tmp_path / "x.pdf"
+    printout.build(cd.shown([old], {"m1": CAL}, TODAY), out, TODAY)
+    text = " ".join(" ".join(printout.text_of(out)).split())
+    assert "Litigation status as read 2026-10-23, court dates as of 2026-10-29" in text
+    same = _matter("m1", "1001", "A v. B", "Lee", provenance={"job_id": "j", "read_at": "2026-10-29"})
+    printout.build(cd.shown([same], {"m1": CAL}, TODAY), out, TODAY)
+    assert "Litigation status, court dates, as of 2026-10-29" in " ".join(" ".join(printout.text_of(out)).split())

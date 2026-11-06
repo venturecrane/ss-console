@@ -32,7 +32,7 @@ from typing import Any
 
 from ... import proof_mode
 from ...llm import Item, Result
-from .. import courtdates, deliver, gates, inventory, manifest, passes, printout
+from .. import courtdates, defstatus, deliver, gates, inventory, manifest, passes, printout
 from ..outcome import LitigationFailed, LitigationHold, Verdict
 from ..run import STAGES, LitigationRun
 from ..tools import dump
@@ -438,7 +438,11 @@ class Discovery12Run(LitigationRun):
         twelve sections attached, and the calendar's court dates merged."""
         out = []
         for f in finals:
-            prior = manifest.load_prior(self.state, f["matter_id"]) or {}
+            prior = copy.deepcopy(manifest.load_prior(self.state, f["matter_id"]) or {})
+            # A no-answer status beside its own note stating a default prints
+            # the note's status, as the status list does (2026-11-02: three
+            # defaulted defendants printed "Served, no answer in file").
+            defstatus.reconcile(prior)
             out.append(
                 {
                     **prior,
