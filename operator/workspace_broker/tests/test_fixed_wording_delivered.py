@@ -269,8 +269,12 @@ def test_a_held_demand_or_document_never_relays_the_reason() -> None:
         "The document for matter 900201 is not drafted yet. The request is missing what the draft needs: the "
         "deponent's name."
     ]
+    # A hold on our side (2026-11-06): the checking note, never the reason.
     ours = {**held, "reason": "destination_mismatch: the matter id does not carry matter number 900201"}
-    assert fixed_wording.render("drafting_job", ours)[0].endswith("not drafted yet. Nothing is needed from you.")
+    assert fixed_wording.render("drafting_job", ours) == [
+        "The document for matter 900201 is not ready yet: we are checking it before it is filed. Nothing is "
+        "needed from you, and SMD will follow up with you."
+    ]
 
 
 def test_a_drafted_document_lists_its_markers_and_caption_findings_as_recorded() -> None:
@@ -312,7 +316,10 @@ def test_a_notice_and_a_note_are_their_recorded_words_and_the_sign_off() -> None
 def test_a_failed_or_unfinished_row_renders_nothing() -> None:
     for kind in fixed_wording.KIND_LANE:
         for state in ("failed", "running", "queued"):
-            if kind not in ("note_job",):
+            if kind == "drafting_job" and state == "failed":
+                # The one exception (2026-11-06): its note, fixed_wording.STOPPED.
+                assert fixed_wording.render(kind, {"state": state}) == [fixed_wording.STOPPED["drafting"]["failed"][1]]
+            elif kind not in ("note_job",):
                 assert fixed_wording.render(kind, {"state": state, "text": "x"}) == [], (kind, state)
 
 

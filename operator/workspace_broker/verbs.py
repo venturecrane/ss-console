@@ -53,6 +53,7 @@ from . import (
     casefile_verbs,
     delivery_proof,
     help_signals,
+    job_notes,
     msgraph_drafts,
     note_verbs,
     records_order_acts,
@@ -266,6 +267,10 @@ VERBS: tuple[Verb, ...] = (
     Verb("delivery_proof_alert", _only(ROOT), delivery_proof.alert_verb),
     Verb("delivery_proof_record", _only(ROOT), delivery_proof.record_verb),
     Verb("delivery_reply_status", _only(ROOT), delivery_proof.reply_status_verb),
+    # A code-sent job's reply sent by the broker itself (job_notes.py,
+    # 2026-11-06): a held, failed or waiting drafting job's note, or any reply
+    # whose DELIVER wake was lost. Root only: the runner daemon, never a turn.
+    Verb("job_note_send", _only(ROOT), job_notes.send_verb),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),

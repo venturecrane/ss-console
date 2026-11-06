@@ -363,12 +363,26 @@ def reply_key(kind: str, ident: str, row: dict[str, Any]) -> str:
     return f"{kind}:{ident}:{row.get('attempt') or 1}:{row['state']}"
 
 
+def _stopped_note_owed(kind: str, row: dict[str, Any]) -> bool:
+    """A code-sent kind's job in a state ``fixed_wording.STOPPED`` words."""
+    from . import fixed_wording
+
+    return kind in reply_text.CODE_SENT_KINDS and fixed_wording.stopped_class(kind, row) is not None
+
+
 def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> tuple[dict[str, Any], str]:
     """A job binding's ledger checks: (the row, its reply key), or refused."""
     noun = _NOUN[kind]
     row = job_ledger(broker, kind).read(ident)
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
+    if _stopped_note_owed(kind, row):
+        # 2026-11-06: a held, failed or waiting job of a code-sent kind is owed
+        # its one note in the broker's words (fixed_wording.STOPPED).
+        key = reply_key(kind, ident, row)
+        if bound_replies.claimed(db_path, key):
+            raise _job_refused(f"{noun} job {ident} has already had its reply for this outcome", "already_replied")
+        return row, key
     if row["state"] == "failed":
         raise _job_refused(
             f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "

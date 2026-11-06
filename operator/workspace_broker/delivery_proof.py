@@ -60,6 +60,7 @@ CODES = frozenset(
         "stage_refused",
         "limit_held",
         "identity_held",
+        "job_stopped",
     }
 )
 REPLY_KINDS = frozenset(

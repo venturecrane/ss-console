@@ -54,6 +54,9 @@ CODES = frozenset(
         "stage_refused",  # a stage refused its own input
         "limit_held",  # a cost cap, budget or page allowance held it
         "identity_held",  # a record names another person; the firm is asked
+        # 2026-11-06: a code-sent job held on our side, failed or waited on its
+        # lane's proof; the requester was sent its note in code (jobs/job_notes.py).
+        "job_stopped",
     }
 )
 

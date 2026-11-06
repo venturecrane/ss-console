@@ -649,15 +649,30 @@ def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path, e
     assert len(box.replies()) == 1
 
 
-def test_a_failed_drafting_job_never_replies_to_the_client(tmp_path: Path) -> None:
-    """FALSIFIER: let failed bind for drafting_job and the firm hears about our own fault."""
+def test_a_failed_drafting_job_replies_only_its_fixed_note_once(tmp_path: Path) -> None:
+    """2026-11-06: a failed drafting job is owed one note in the broker's words
+    (fixed_wording.STOPPED). It never says why; the model's words are refused.
+    FALSIFIER: refuse failed again and the attorney hears nothing."""
     job = _drafting_job(tmp_path, ["failed"])
     box = FakeMailbox()
+    _ack_in_thread(box)
     out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
-    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    assert out["bound"] is True and out["fixed_wording"] == [
+        "The document for matter 900201 is not ready yet: the drafting stopped on our side, and we are looking at "
+        "why. Nothing is needed from you, and SMD will follow up with you."
+    ]
+    with pytest.raises(BindingRefused):
+        _call(
+            _broker(tmp_path, box),
+            "msgraph_reply_bound",
+            {"kind": "drafting_job", "job_id": job},
+            payload={"comment": "Our pipeline failed at the audit stage; please resend."},
+            session_id="s",
+        )
+    _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
-    assert box.replies() == []
+    assert len(box.replies()) == 1
 
 
 @pytest.mark.parametrize("path", [[], ["running"]])
