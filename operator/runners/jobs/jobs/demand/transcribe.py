@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
+from ..stages.pleading_margin import strip_page
 from ..stages.vision import FAILED, MAX_TOKENS, REFUSED, SYSTEM, page_item, render_page
 
 
@@ -40,7 +41,11 @@ def _done(data: Path, rid: str) -> dict[int, str]:
 
 def _merge(text: str, pages: dict[int, str], total: int) -> str:
     """Put each transcription under its own ``[p.N]`` marker, marked as a
-    machine's reading. An image (no markers yet) becomes page 1."""
+    machine's reading. An image (no markers yet) becomes page 1. A scanned
+    pleading's margin line numbers are removed here, as ``extract`` removes a
+    text layer's (``stages/pleading_margin``): 2026-11-05 a served set quoted a
+    scanned answer with them inside its sentences."""
+    pages = {n: strip_page(t) for n, t in pages.items()}
     if "[p." not in text:
         return "\n".join(f"[p.{n}] (machine transcription)\n{pages.get(n, FAILED)}" for n in range(1, total + 1))
     parts = re.split(r"(\[p\.\d+\]\n)", text)
