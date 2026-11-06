@@ -14,6 +14,9 @@ words; a label naming a payment alone ("You Paid", "Amount Paid", "Total
 Payments") is shown as its own row, marked as a printed total, unless an
 itemized payment on the same document and page prints the same label and the
 same amount string, in which case it is that row and is not shown twice.
+The combined rule applies to an itemized payment line too: one whose label
+names payments and adjustments together ("Insurance Pymts/Adjstmts") is kept
+apart under its own words; any other payment line stays a payment row.
 Nothing here is summed.
 """
 
@@ -34,7 +37,12 @@ OTHER = "OTHER"
 
 _DUE = re.compile(r"balance|\bdue\b|payable|\bowed?\b|\bowing\b|responsib|unpaid|not\s+paid", re.I)
 _PAY = re.compile(r"\bpaid\b|\bpayments?\b|\bpmts?\b|\bpymts?\b", re.I)
-_ADJ = re.compile(r"adjust|write.?off|contractual|disallow|discount|refund", re.I)
+#: Adjustment words, with the abbreviations bills print ("Adjstmts", "Adjs",
+#: "Adj.", "Adjmt", "w/o", "Writeoff", "Contr Adj"). Anchored at a word start
+#: so "Adjacent" cannot match.
+_ADJ = re.compile(
+    r"\badj(?:ust|st|s\b|m|\.|\b)|\bw/o\b|write.?offs?\b|\bcontractual|\bdisallow|\bdiscount|\brefund", re.I
+)
 
 #: Bills whose payments are not this worksheet's: a vendor's invoice to the
 #: firm, a page with no charges, and a health plan's claim (its own section).
@@ -102,12 +110,13 @@ def _chunk(rd: _Reader, file: str, c: dict[str, Any], itemized: set, paid: list,
     ``itemized`` holds every payment line the document prints."""
     for t in c.get("printed_payments") or []:
         if isinstance(t, dict) and rd.readable(file, _page(t.get("page")), t.get("amount")):
-            paid.append(_row(c, file, t, PAYMENT_LINE))
+            both = classify(t.get("label")) == PAYMENTS_AND_ADJUSTMENTS
+            (combined if both else paid).append(_row(c, file, t, PAYMENT_LINE))
     for t in c.get("printed_totals") or []:
         if not isinstance(t, dict) or not rd.readable(file, _page(t.get("page")), t.get("amount")):
             continue
         kind = classify(t.get("label"))
-        if kind == PAYMENTS_AND_ADJUSTMENTS:
+        if kind == PAYMENTS_AND_ADJUSTMENTS and _key(t) not in itemized:
             combined.append(_row(c, file, t, PRINTED_TOTAL))
         elif kind == PAID and _key(t) not in itemized:
             paid.append(_row(c, file, t, PRINTED_TOTAL))

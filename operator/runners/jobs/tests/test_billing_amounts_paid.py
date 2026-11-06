@@ -169,3 +169,43 @@ def test_a_balance_due_total_is_not_in_the_section(job_dir: Path, firm_config_pa
     lines = _tail(sr, pay, totals=due)
     for gone in ("Balance Due", "$333.00", "Payment Due", "$444.00"):
         assert gone not in lines
+
+
+# ---- the label rule reads a bill's abbreviations, and applies to payment lines too --
+def test_the_label_rule_reads_the_abbreviations_bills_print():
+    from jobs.stages import billing_paid as BP
+
+    want = {
+        BP.PAYMENTS_AND_ADJUSTMENTS: (
+            "Insurance Pymts/Adjstmts",
+            "Patient Pymts/Adjstmts",
+            "Payments/Adjustments",
+            "Total: Payments/Adjustments",
+            "Pmts & Adjs",
+            "Payment Adj.",
+            "Ins Pmt/Adjmt",
+            "Payments and w/o",
+            "Pymts/Writeoff",
+            "Pmt Contr Adj",
+        ),
+        BP.PAID: ("Grand Total: You paid", "Amount Paid", "Pmt", "Ins Pymt", "Adjacent Clinic payment"),
+        BP.ADJUSTMENT: ("Adjustment", "Adj.", "Adjs", "Adjmt", "W/O", "Writeoff", "Contr Adj"),
+        BP.BALANCE_DUE: ("Balance Due", "Payment Due", "Patient Responsibility"),
+        BP.OTHER: ("Total Charges", "Adjacent services", ""),
+    }
+    for kind, labels in want.items():
+        for label in labels:
+            assert BP.classify(label) == kind, (label, BP.classify(label), kind)
+
+
+def test_a_payment_line_naming_payments_and_adjustments_is_under_its_own_words(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pay = {"label": "Patient payment", "amount": "$25.00", "date": "02/10/2026", "page": 1}
+    both = {"label": "Insurance Pymts/Adjstmts", "amount": "$410.00", "date": "02/12/2026", "page": 1}
+    lines = _tail(sr, pay, both)
+    sub = 'Printed as "Insurance Pymts/Adjstmts"'
+    assert sub in lines
+    assert lines.count("$410.00") == 1 and lines.index("$410.00") > lines.index(sub) > lines.index("$25.00")
+    assert lines.count("Insurance Pymts/Adjstmts") == 0, "the label is the sub-heading, not a payment row"
