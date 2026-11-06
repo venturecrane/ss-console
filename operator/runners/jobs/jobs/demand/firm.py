@@ -233,6 +233,21 @@ def _shape(data: Any) -> list[str]:
     return out
 
 
+def _batch_levers(levers: dict[str, Any]) -> list[str]:
+    """The batch-queue levers: only batchable stages, and a line only where a
+    stage is named for it to apply to."""
+    out = [
+        f"levers.batch_stages: `{stage}` is not a batchable stage {list(BATCHABLE_STAGES)}"
+        for stage in levers.get("batch_stages") or []
+        if stage not in BATCHABLE_STAGES
+    ]
+    if float(levers.get("batch_over_usd") or 0) < 0:
+        out.append("levers.batch_over_usd: must be >= 0")
+    if "batch_over_usd" in levers and not levers.get("batch_stages"):
+        out.append("levers.batch_over_usd: names a line for the batch queue, but levers.batch_stages names no stage")
+    return out
+
+
 def _semantics(data: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for key in ("per_job_cap_usd", "monthly_budget_usd", "usd_per_million_chars", "usd_per_scanned_page"):
@@ -245,13 +260,7 @@ def _semantics(data: dict[str, Any]) -> list[str]:
         out.append("levers.chunk_chars: expected 20000..200000 (dense records truncate above about 120K)")
     if not 1 <= levers["concurrency"] <= 8:
         out.append("levers.concurrency: expected 1..8")
-    for stage in levers.get("batch_stages") or []:
-        if stage not in BATCHABLE_STAGES:
-            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {list(BATCHABLE_STAGES)}")
-    if float(levers.get("batch_over_usd") or 0) < 0:
-        out.append("levers.batch_over_usd: must be >= 0")
-    if "batch_over_usd" in levers and not levers.get("batch_stages"):
-        out.append("levers.batch_over_usd: names a line for the batch queue, but levers.batch_stages names no stage")
+    out += _batch_levers(levers)
     scan = data["premise"]["scan"]
     for cls, pats in scan.items():
         if not (isinstance(pats, list) and pats and all(isinstance(p, str) for p in pats)):
