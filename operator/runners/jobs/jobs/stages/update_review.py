@@ -400,7 +400,10 @@ def finish(c: Ctx, md: str, found: list[RR.Finding], base: list[str], doc: Path)
     # The moved duplicate paragraphs keep their citations and are graded with
     # the finisher's sentences; one the audit does not support is the audit
     # loop's to repair (it is no finisher edit to revert).
-    bad, untraced = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
+    # A sentence the cited page's flowsheet grid confirms is kept over the
+    # audit's reading of that grid (``update_review_settle.grid_confirmed``).
+    unsupported = URS.grid_confirmed(c.sr, c.verify(md, new_md), new_md, c.evidence) if new_md != md else []
+    bad, untraced = FN.failed(edits, unsupported)
     if bad:
         ids = {id(e) for e in bad}
         for e in edits:
