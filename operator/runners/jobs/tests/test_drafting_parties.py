@@ -74,8 +74,68 @@ def test_a_name_that_is_not_one_party_of_the_matter_stops_rather_than_guesses(re
         parties.plan(request_text, THEIRS, OURS)
 
 
-def test_a_matter_with_one_other_side_party_never_plans_parties():
-    assert parties.plan("Draft RFAs to the City and Acme Paving Inc.", [CITY], OURS) == []
+def test_a_matter_with_one_other_side_party_plans_no_parties_for_a_request_to_one():
+    assert parties.plan("Draft RFAs to Defendant City of Exampletown.", [CITY], OURS) == []
+    assert parties.plan("Draft RFAs to the defendant.", [CITY], OURS) == []
+
+
+# ---- the 11-05 caption: one string, two public entities and a Does entry ------------------
+
+ONE_STRING = (
+    "CITY OF EXAMPLETOWN, a public entity; EXAMPLETOWN UNIFIED SCHOOL DISTRICT, a public entity; "
+    "and DOES 1 through 50, inclusive"
+)
+
+
+@pytest.mark.parametrize(
+    "value, want",
+    [
+        (ONE_STRING, [CITY, DISTRICT]),
+        ("CITY OF EXAMPLETOWN, EXAMPLETOWN UNIFIED SCHOOL DISTRICT, and Does 1-50", [CITY, DISTRICT]),
+        ("CITY OF EXAMPLETOWN and EXAMPLETOWN UNIFIED SCHOOL DISTRICT", [CITY, DISTRICT]),
+        ("SMITH AND SONS, INC., a California corporation; and DOES 1 to 25", ["SMITH AND SONS, INC."]),
+        ("BOARD OF TRUSTEES OF ALPHA AND BETA, a public entity", ["BOARD OF TRUSTEES OF ALPHA AND BETA"]),
+        ("DELTA EXAMPLE", ["DELTA EXAMPLE"]),
+    ],
+)
+def test_a_caption_value_is_split_into_its_entities_as_printed(value, want):
+    assert parties.entities(value) == want
+
+
+def test_a_caption_value_code_cannot_split_is_undecided_never_guessed():
+    with pytest.raises(parties.Undecided):
+        parties.entities("CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10")
+
+
+def _one_string_cap(value=ONE_STRING):
+    return {"fields": {"plaintiffs": [{"value": "GAMMA EXAMPLE"}], "defendants": [{"value": value}]}}
+
+
+def test_the_one_string_caption_is_two_parties_and_six_units(tmp_path, capsys):
+    assert parties.matter_parties(_one_string_cap(), {}) == (["GAMMA EXAMPLE"], THEIRS)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "job.json").write_text(json.dumps({"request_text": TWO}))
+    (tmp_path / "data" / "caption.json").write_text(json.dumps(_one_string_cap()))
+    assert parties.main([str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "units (6):" in out and f"set-6: Special Interrogatories to {DISTRICT}" in out
+
+
+@pytest.mark.parametrize(
+    "request_text",
+    ["Draft RFAs set one to both defendants.", TWO, "Draft RFAs to each defendant."],
+)
+def test_a_request_to_several_parties_never_falls_back_to_one(request_text):
+    cap = _one_string_cap("CITY OF EXAMPLETOWN, Exampletown, and DOES 1-10")  # code cannot split it
+    ours, theirs = parties.matter_parties(cap, {})
+    assert len(theirs) == 1
+    with pytest.raises(parties.PartyUnknown, match="resolve to 1"):
+        parties.plan(request_text, theirs, ours, parties.undecided(cap))
+
+
+def test_two_names_for_the_same_party_stop():
+    with pytest.raises(parties.PartyUnknown, match="same party"):
+        parties.plan("Draft RFAs to the City of Exampletown and the City.", THEIRS, OURS)
 
 
 def test_the_client_named_as_the_one_who_serves_is_not_a_party_served():
@@ -156,7 +216,7 @@ class PartyClient(Client):
 
 
 def _two_defendants():
-    cap = {**CAPTION, "defendants": [CITY, DISTRICT]}
+    cap = {**CAPTION, "defendants": [ONE_STRING]}  # as the 11-05 complaint's caption reads
     record = {
         "case_number": "CV-0001",
         "court": "Superior Court",

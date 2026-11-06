@@ -14,8 +14,19 @@ carries ("the City"). A request that says "both defendants" (or each, all,
 set on that is none of the matter's parties, or that could be two of them,
 stops the job for SMD (``party_unknown``): it never guesses.
 
-A request served on ONE party (or a matter with one other-side party) plans no
-parties at all, so it drafts exactly as before. SMD may name the parties by
+**The caption's own shape.** A court's caption often prints every defendant
+in one string ("CITY OF X, a public entity; X SCHOOL DISTRICT, a public
+entity; and DOES 1 through 50, inclusive"); the 11-05 rehearsal planned one
+party from it. ``entities`` splits each value into the names it prints,
+exactly as printed, drops the fictitious defendants and the descriptions, and
+splits at "and" only between whole names ("Smith and Sons, Inc." stays one).
+A value it cannot split is kept whole and named in the stop.
+
+A request that serves every defendant, or names two or more parties, is never
+planned as one party: when the matter resolves to fewer, or two of its names
+are one party, it stops (``party_unknown``) and says why. A request served on
+ONE party (or a matter with one other-side party) plans no parties at all, so
+it drafts exactly as before. SMD may name the parties by
 hand in the job directory's ``parties.json`` (``{"parties": [...]}``); each name
 is still checked against the matter's parties.
 
@@ -46,10 +57,12 @@ _NON_ID = frozenset(
     "defendant defendants plaintiff plaintiffs cross complainant complainants respondent respondents party parties "
     "set sets one two three four five".split()
 )
-_ALL = re.compile(
+#: Every defendant, in so many words: never planned as one party.
+_BOTH = re.compile(
     r"(?i)\b(?:both|all|each|every)\s+(?:of\s+the\s+)?(?:named\s+)?(?:defendants?|responding\s+parties|parties)\b"
-    r"|\b(?:to|on|upon)\s+(?:the\s+)?defendants\b"
 )
+#: "to defendants": every defendant when the matter has several.
+_PLURAL = re.compile(r"(?i)\b(?:to|on|upon)\s+(?:the\s+)?defendants\b")
 _SET_WORDS = "|".join(p.pattern.removeprefix("(?i)") for _k, _l, p in sets.VARIANTS)
 #: A set word, then the parties it is served on ("RFAs ... to the City and the District").
 _SERVED = re.compile(
@@ -78,6 +91,64 @@ def same(a: str, b: str) -> bool:
     return bool(x and y) and (x == y or difflib.SequenceMatcher(None, x, y).ratio() >= 0.9)
 
 
+#: "DOES 1 through 50", "Does 1-50", "ROES 1 to 10": fictitious defendants, never a party served.
+_FICTITIOUS = re.compile(r"(?i)^(?:and\s+)?(?:does?|roes?)\s+\d+\s*(?:-|–|to|through|thru)\s*\d+\b")
+#: What a caption prints after a name, describing it ("a public entity", "inclusive").
+_DESCRIBES = re.compile(r"(?i)^(?:an?\s|inclusive\b|et\s+al\b|individually\b|jointly\b|erroneously\b|sued\s+as\b)")
+#: A corporate suffix printed after a comma ("Smith and Sons, Inc."): part of the name before it.
+_SUFFIX = re.compile(r"(?i)^(?:inc|llc|l\.l\.c|corp|corporation|co|ltd|lp|llp|pc|p\.c|n\.a)\.?$")
+#: Words that make one word, or one phrase, a whole entity name.
+_ENTITY = frozenset(
+    "city county district state department board authority agency commission school college university hospital "
+    "inc llc corporation corp company association trust regents trustees bank group partners partnership services "
+    "center clinic church police sheriff transit".split()
+)
+
+
+class Undecided(ValueError):
+    """A caption value code cannot split into entities with confidence."""
+
+
+def _entity(piece: str) -> bool:
+    """A piece that reads as a whole party name on its own."""
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'.&-]*", piece)
+    caps = [w for w in words if w[:1].isupper() or w[:1].isdigit()]
+    if not caps or not piece.strip()[:1].isalnum():
+        return False
+    return len(caps) >= 2 or any(w.lower().strip(".") in _ENTITY for w in words)
+
+
+def entities(value: str) -> list[str]:
+    """The parties one caption value names, each exactly as printed: split at
+    commas and semicolons, then at "and" only where every piece is a whole
+    name ("Smith and Sons, Inc." stays one). Fictitious defendants and
+    descriptions are dropped. ``Undecided`` when a piece is neither a name, a
+    description, a suffix nor a fictitious entry."""
+    pieces: list[str] = []
+    for raw in re.split(r"[;,]", str(value or "")):
+        p = raw.strip()
+        if not p or _DESCRIBES.match(p):
+            continue
+        if _SUFFIX.match(p) and pieces:
+            pieces[-1] = f"{pieces[-1]}, {p}"
+            continue
+        p = re.sub(r"(?i)^and\s+", "", p).strip()
+        if _FICTITIOUS.match(p) or _DESCRIBES.match(p):
+            continue
+        pieces.append(p)
+    out: list[str] = []
+    for p in pieces:
+        parts = [x.strip() for x in re.split(r"(?i)\s+and\s+", p)]
+        parts = [x for x in parts if x and not _FICTITIOUS.match(x)]
+        if len(parts) > 1 and all(_entity(x) for x in parts):
+            out += parts
+        elif _entity(p) or len(pieces) == 1:
+            out.append(p)
+        else:
+            raise Undecided(f'"{p[:80]}" in the caption\'s "{str(value)[:120]}"')
+    return out
+
+
 def _dedupe(names: list[str]) -> list[str]:
     out: list[str] = []
     for n in names:
@@ -85,6 +156,27 @@ def _dedupe(names: list[str]) -> list[str]:
         if _words(n) and not any(same(n, o) for o in out):
             out.append(n)
     return out
+
+
+def _split(values: list[str]) -> tuple[list[str], list[str]]:
+    """(the entities the caption values name, the values code could not split:
+    each kept whole, so a request serving several parties stops on it)."""
+    out: list[str] = []
+    undecided: list[str] = []
+    for v in values:
+        try:
+            out += entities(v)
+        except Undecided as exc:
+            out.append(clean(v))
+            undecided.append(str(exc))
+    return out, undecided
+
+
+def undecided(cap: dict[str, Any]) -> list[str]:
+    """Every caption party value code could not split into entities."""
+    fields = cap.get("fields") or {}
+    vals = [v["value"] for s in ("plaintiffs", "defendants") for v in fields.get(s) or [] if isinstance(v, dict)]
+    return _split(vals)[1]
 
 
 def matter_parties(cap: dict[str, Any], facts: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -98,8 +190,8 @@ def matter_parties(cap: dict[str, Any], facts: dict[str, Any]) -> tuple[list[str
         record = {"plaintiffs": list(facts.get("client_names") or []), "defendants": []}
     side = caption_mod.client_side(fields, record) if (fields.get("plaintiffs") or fields.get("defendants")) else ""
     other = {"plaintiffs": "defendants", "defendants": "plaintiffs"}.get(side, "")
-    ours = [v["value"] for v in fields.get(side) or [] if isinstance(v, dict)] if side else []
-    theirs = [v["value"] for v in fields.get(other) or [] if isinstance(v, dict)] if other else []
+    ours = _split([v["value"] for v in fields.get(side) or [] if isinstance(v, dict)])[0] if side else []
+    theirs = _split([v["value"] for v in fields.get(other) or [] if isinstance(v, dict)])[0] if other else []
     ours += [p["name"] for p in rows if p.get("side") == "client"] + list(facts.get("client_names") or [])
     if not theirs:
         theirs = [p["name"] for p in rows if p.get("side") == "other"]
@@ -146,27 +238,43 @@ def _claims(request: str) -> list[str]:
     return out
 
 
-def plan(request: str, theirs: list[str], ours: list[str]) -> list[str]:
+def plan(request: str, theirs: list[str], ours: list[str], unsplit: list[str] | None = None) -> list[str]:
     """The parties the request serves its sets on, in the order it names them;
-    [] when it serves one party (the job drafts as it always did)."""
+    [] when it serves one party (the job drafts as it always did).
+
+    A request that serves every defendant, or names two or more parties, is
+    never planned as one party: when the matter resolves to fewer, or two of
+    its names resolve to the same party, it stops (``PartyUnknown``)."""
+    request = request or ""
+    claims = [c for c in _claims(request) if not any(_named_at(c, o, ours, []) is not None for o in ours)]
+    every = bool(_BOTH.search(request))
+    why = f"; the caption could not be split: {'; '.join(unsplit)}" if unsplit else ""
+    listed = "; ".join(theirs) or "none"
     if len(theirs) < 2:
+        if every or len(claims) >= 2:
+            asked = "every defendant" if every else f"{len(claims)} parties ({'; '.join(c[:60] for c in claims)})"
+            raise PartyUnknown(
+                f"the request serves {asked}, but the matter's other-side parties resolve to {len(theirs)} "
+                f"({listed}){why}"
+            )
         return []
-    for c in _claims(request):
-        if any(_named_at(c, o, ours, []) is not None for o in ours):
-            continue  # the client, named as the one who serves
+    resolved: dict[str, str] = {}
+    for c in claims:
         got = [t for t in theirs if _named_at(c, t, theirs, ours) is not None]
         if len(got) != 1:
             raise PartyUnknown(
                 f'the request serves a set on "{c[:80]}", which is '
                 + ("none" if not got else "more than one")
-                + " of the matter's parties ("
-                + "; ".join(theirs)
-                + ")"
+                + f" of the matter's parties ({listed}){why}"
             )
-    at = {t: _named_at(request or "", t, theirs, ours) for t in theirs}
+        prior = next((k for k, v in resolved.items() if v == got[0]), None)
+        if prior is not None:
+            raise PartyUnknown(f'the request names "{prior[:60]}" and "{c[:60]}", which are the same party ({got[0]})')
+        resolved[c] = got[0]
+    at = {t: _named_at(request, t, theirs, ours) for t in theirs}
     named = sorted((p for p, pos in at.items() if pos is not None), key=lambda p: at[p] or 0)
-    if not named and _ALL.search(request or ""):
-        named = list(theirs)
+    if every or (not named and _PLURAL.search(request)):
+        named += [t for t in theirs if t not in named]  # every party: those named first, in their order
     return named if len(named) >= 2 else []
 
 
@@ -275,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"client side: {ours}")
     print(f"other side:  {theirs}")
     try:
-        who = override(jd, theirs) or plan(request, theirs, ours)
+        who = override(jd, theirs) or plan(request, theirs, ours, undecided(cap))
     except PartyUnknown as exc:
         print(f"party_unknown: {exc}")
         return 1

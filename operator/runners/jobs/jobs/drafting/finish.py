@@ -143,9 +143,11 @@ class Finish:
         (``parties.plan``); a name that is none of the matter's parties stops
         the job for SMD before anything is drafted."""
         ours, theirs = self._matter_parties()
+        cp = self.data / "caption.json"
+        unsplit = parties_mod.undecided(json.loads(cp.read_text(encoding="utf-8"))) if cp.is_file() else []
         try:
             got = parties_mod.override(self.job.job_dir, theirs)
-            return got if got is not None else parties_mod.plan(self.job.request_text, theirs, ours)
+            return got if got is not None else parties_mod.plan(self.job.request_text, theirs, ours, unsplit)
         except parties_mod.PartyUnknown as exc:
             raise DraftingFailed(f"party_unknown: {exc}") from None
 
