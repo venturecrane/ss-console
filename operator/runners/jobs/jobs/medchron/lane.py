@@ -37,7 +37,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import child as child_mod, daemon as daemon_mod, requeue, resume as resume_mod, verdict as verdict_mod
+from .. import (
+    child as child_mod,
+    daemon as daemon_mod,
+    job_notes,
+    requeue,
+    resume as resume_mod,
+    verdict as verdict_mod,
+)
 from ..broker_client import BrokerError
 from ..daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
 from ..proof import holds as proof_holds, watch as proof_watch
@@ -230,6 +237,7 @@ class MedchronLane(Daemon):
             return "requeued"
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
+        paged_before = dict(self._daemon_state(job_id).get("proof_alerts") or {})
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
         try:
             self.broker.record(job_id, state, fields)
@@ -237,6 +245,11 @@ class MedchronLane(Daemon):
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
+        if state == "failed" and (self._daemon_state(job_id).get("proof_alerts") or {}) == paged_before:
+            # A failure settle did not page (a lost verdict, a crashed stage,
+            # retries spent) pages SMD here, once; the firm is told nothing and
+            # no wake follows (job_notes, watch.wake_owed, 2026-11-06).
+            job_notes.tell(self, job_id, why=str(fields.get("reason") or "the job ended failed"))
         if finished is not None and proof_watch.wake_owed(self, state, fields.get("reason")):
             self._write_state(
                 job_id,

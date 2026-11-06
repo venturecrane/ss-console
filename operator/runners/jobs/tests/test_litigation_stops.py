@@ -12,7 +12,7 @@ THE RULES, each with the mutation that breaks it:
    the firm by hand.
 3. A delivered list is not paged, and a lost wake on one sends nothing in
    code: litigation's delivered reply stays the DELIVER turn's. Mutation: add
-   ``litigation`` to ``job_notes.CODE_SENT_LANES`` and ``job_note_send`` is asked.
+   ``litigation`` to ``job_notes.DELIVERED_IN_CODE`` and ``job_note_send`` is asked.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def test_a_firm_question_hold_is_labelled_for_smd(tmp_path):
 
 def test_a_delivered_list_is_not_paged_and_a_lost_wake_sends_nothing(tmp_path):
     """Rule 3."""
-    assert "litigation" not in job_notes.CODE_SENT_LANES
+    assert "litigation" not in job_notes.DELIVERED_IN_CODE
     lane, client = _lane(tmp_path, ll.RUNNER)
     ll._submit(lane, client)
     assert lane.tick() == "delivered"

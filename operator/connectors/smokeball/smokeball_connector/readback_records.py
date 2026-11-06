@@ -82,6 +82,11 @@ def event_diffs(want: dict[str, Any], got: Any) -> tuple[list[str], list[str]]:
             diffs.append(f"{key} reads {got.get(key)!r} (local), sent {want[key]!r}")
     if "allDay" in want and bool(got.get("allDay")) != all_day:
         diffs.append(f"allDay reads {got.get('allDay')!r}, sent {want['allDay']!r}")
+    # Smokeball stores an all-day event as non-billable whatever is sent
+    # (2026-11-05: three billable entries flipped on a calendar cleanup, caught
+    # only by the script's own read-back). A flip is a difference, never silent.
+    if "nonBillable" in want and bool(got.get("nonBillable")) != bool(want["nonBillable"]):
+        diffs.append(f"nonBillable reads {got.get('nonBillable')!r}, sent {want['nonBillable']!r}")
     if want.get("timeZone") and str(got.get("timeZone") or "") != str(want["timeZone"]):
         diffs.append(f"timeZone reads {got.get('timeZone')!r}, sent {want['timeZone']!r}")
     if "matterId" in want and _link(got, "matter") != str(want["matterId"] or ""):

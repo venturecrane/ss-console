@@ -177,11 +177,31 @@ def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
         texts[i] = ocr(png)
         scanned += 1
     for i, t in enumerate(texts):
-        if len(t.strip()) < SCAN_FLOOR and i not in picks:
+        if _no_text(t) and i not in picks:
             texts[i] = DEFERRED.format(n=i + 1)
         else:
             texts[i] = strip_page(t)  # pleading paper's margin numbers are not its words
     return _pages(texts), scanned
+
+
+#: Common words a real text layer carries; a long page with none is garbled.
+_REAL_WORD = re.compile(r"(?i)\b(the|and|of|to|for|in|on|by|or|is|at|with|this|that|from|be|was|date|court|case)\b")
+
+
+def garbled(t: str) -> bool:
+    """A text layer that is not the page's words: a Type 3 font's glyph codes
+    read out as control bytes, or a long run with no common word (2026-10-29:
+    process servers' job sheets carried ~1,700 such characters a page, so the
+    date of service never reached a read and seven values held a list)."""
+    s = t.strip()
+    if len(s) < SCAN_FLOOR:
+        return False
+    ctrl = sum(1 for c in s if ord(c) < 32 and c not in "\n\r\t")
+    return ctrl > 0.10 * len(s) or (len(s) >= 300 and not _REAL_WORD.search(s))
+
+
+def _no_text(t: str) -> bool:
+    return len(t.strip()) < SCAN_FLOOR or garbled(t)
 
 
 def ocr_pages(texts: list[str]) -> list[int]:
@@ -191,7 +211,7 @@ def ocr_pages(texts: list[str]) -> list[int]:
     proof of service). The rest are read on demand: ``view_page``."""
     n = len(texts)
     keep = set(range(n)) if n <= HEAD + TAIL else set(range(HEAD)) | set(range(n - TAIL, n))
-    return [i for i in sorted(keep) if len(texts[i].strip()) < SCAN_FLOOR and not texts[i].startswith("[scanned page")]
+    return [i for i in sorted(keep) if _no_text(texts[i]) and not texts[i].startswith("[scanned page")]
 
 
 def docx_text(data: bytes) -> str:

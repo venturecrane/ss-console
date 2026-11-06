@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# pr-watch -- watch PRs until they merge; print every state change and every stall.
+#
+#   .claude/bin/pr-watch <pr> [<pr> ...] [--interval 60] [--max-hours 4] [--stall-minutes 30]
+#
+# Made for a Monitor: each line is an event. It says a failing check, checks
+# running, the merge-queue position (read from mergeQueueEntry, because a
+# queued PR here has no autoMergeRequest), "green, not queued", and STALLED
+# when nothing has moved for --stall-minutes. Exits 0 when all are merged or
+# closed, 1 when --max-hours runs out, 2 on bad arguments.
+#
+# Runs scripts/pr-watch.ts under the repo's pinned tsx, resolved from the
+# checkout this script lives in, never an `npx` download.
+set -u
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TSX="$ROOT/node_modules/.bin/tsx"
+if [ ! -x "$TSX" ]; then
+  echo "pr-watch: $TSX is missing; run \`npm ci\` in this checkout first." >&2
+  exit 1
+fi
+exec "$TSX" "$ROOT/scripts/pr-watch.ts" "$@"

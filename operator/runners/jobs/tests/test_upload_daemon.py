@@ -1094,11 +1094,15 @@ def test_a_held_chronology_writes_no_wake_and_its_task_would_never_carry_the_rea
     assert "Example Clinic" not in task and "Alpha" not in task and ".pdf" not in task and "Reason:" not in task
 
 
-def test_a_runner_with_no_verdict_wakes_without_a_stage(tmp_path):
+def test_a_runner_with_no_verdict_pages_smd_and_wakes_nothing(tmp_path):
+    """2026-11-06: a failed chronology gets no wake (its turn could only send
+    nothing); SMD gets one ``job_stopped`` page (test_chronology_stops.py)."""
     d, broker = _wake_daemon(tmp_path, "http://127.0.0.1:1", script="import sys\nsys.exit(3)\n")
     _submit(d, broker, "01C")
     assert d.tick() == "failed"
-    task = d._daemon_state("01C")["wake"]["task"]
+    assert "wake" not in d._daemon_state("01C")
+    assert [r["code"] for r in broker.proof_requests if r["action"] == "delivery_proof_alert"] == ["job_stopped"]
+    task = d._compose_wake("01C", "failed", broker.records[-1][2])
     assert "Outcome: failed." in task and "Held at: runner (no verdict)." in task and "exited 3" not in task
 
 
