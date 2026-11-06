@@ -82,8 +82,9 @@ def _attempt(d: Any, job_id: str) -> int:
         return 1
 
 
-def alert(d: Any, job_id: str, code: str, detail: str = "") -> bool:
-    """One proof alert, de-duplicated per (code, attempt) within a day.
+def alert(d: Any, job_id: str, code: str, detail: str = "", *, unit: str = "") -> bool:
+    """One proof alert, de-duplicated per (code, attempt) within a day, or per
+    (code, ``unit``) when one is named (a reply key: one alert per job state).
     Returns whether a row was written. Never raises: an alert that cannot be
     written is logged at ERROR and retried on the next occasion."""
     from ..broker_client import BrokerError
@@ -95,7 +96,7 @@ def alert(d: Any, job_id: str, code: str, detail: str = "") -> bool:
     attempt = _attempt(d, job_id)
     st = d._daemon_state(job_id)
     sent = dict(st.get("proof_alerts") or {})
-    key = f"{code}:{attempt}"
+    key = f"{code}:{unit}" if unit else f"{code}:{attempt}"
     now = d.clock()
     if key in sent and now - float(sent[key]) < REALERT_SECONDS:
         return False
@@ -434,7 +435,15 @@ def check_reply_watches(d: Any) -> None:
 
 
 def wake_lost(d: Any, job_id: str, outcome: str) -> None:
-    alert(d, job_id, "wake_lost", f"the DELIVER wake failed every attempt ({outcome}); nobody was told")
+    """The DELIVER turn could not be started. A code-sent lane's reply does not
+    need that turn: the broker sends its words itself (``job_notes``), and the
+    page says whether the requester heard."""
+    from .. import job_notes
+
+    told = job_notes.tell(d, job_id, why="the DELIVER wake was lost")
+    heard = {"sent": "the requester was sent the reply in code", "already_sent": "the requester already had it"}
+    said = heard.get(told, "nobody was told")
+    alert(d, job_id, "wake_lost", f"the DELIVER wake failed every attempt ({outcome}); {said}")
 
 
 __all__ = [

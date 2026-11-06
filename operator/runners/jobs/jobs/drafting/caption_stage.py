@@ -124,6 +124,13 @@ def run(
         "restore_incomplete": alarms,
         "compared": compared,
         "none_because": why,
+        # The matter record's parties, by side (names only): which parties a
+        # request serves its sets on is checked against them (parties.py).
+        "parties": [
+            {"side": p.get("side"), "name": p.get("name")}
+            for p in record.get("parties") or []
+            if isinstance(p, dict) and p.get("name")
+        ],
         # The firm's authored attorney block for this job: the responsible
         # attorney's, else the requester's, else none (attorneys.py).
         "attorney_block": attorneys.pick(firm.attorneys, record.get("attorney_email"), requester),

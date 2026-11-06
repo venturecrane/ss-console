@@ -620,12 +620,14 @@ def test_a_contradicted_rfa_matter_is_repaired_to_the_source_and_never_dropped(t
     client = AuditClient(
         drafts=_drafts(**{RFA: bad}),
         audit_fn=_audit_flagging("Exampel"),
-        repair_fix=("Charlie Exampel", "Charley Example"),
+        # Corrected to the name the complaint prints: a repair may correct to
+        # the source, never to a name no source holds (repair_guard).
+        repair_fix=("Charlie Exampel", "Delta Example"),
     )
     r, v, _ = _run(tmp_path, pricing, client)
     assert v.outcome == "delivered", (v.stage, v.reason)
     final = (r.data / "set-1" / "draft-final.md").read_text()
-    assert final.count("Admit that Charley Example cleaned the PREMISES.") == 3  # every request kept, corrected
+    assert final.count("Admit that Delta Example cleaned the PREMISES.") == 3  # every request kept, corrected
 
 
 def test_a_contradicted_rfa_matter_the_repairs_never_clear_fails_and_keeps_every_request(tmp_path, pricing):
