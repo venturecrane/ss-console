@@ -153,36 +153,55 @@ import json, resource, sys, time
 from pathlib import Path
 from jobs.drafting import newfacts, repair_guard
 data = Path(sys.argv[1])
-t0 = time.perf_counter()
 files, listed = repair_guard._record_files(data)
-def chunks():
-    yield (data / "digest.md").read_text(encoding="utf-8")
-    for f in files:
-        yield f.read_text(encoding="utf-8", errors="replace")
-newfacts.index(chunks, data)
+texts = [(data / "digest.md").read_text(encoding="utf-8")]
+texts += [f.read_text(encoding="utf-8", errors="replace") for f in files]
+t0 = time.perf_counter()
+k = newfacts.index(lambda: texts, data)  # the record already read, as the extract stage holds it
 t1 = time.perf_counter()
-out = repair_guard.replay(data)
+k.stream()
 t2 = time.perf_counter()
+out = repair_guard.replay(data)
+t3 = time.perf_counter()
 newfacts._MEMO.clear()
 repair_guard.replay(data)
-t3 = time.perf_counter()
+t4 = time.perf_counter()
 peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 peak_mb = peak / (1024 * 1024) if sys.platform == "darwin" else peak / 1024
 print(json.dumps({"files": len(files), "listed": listed, "index_s": round(t1 - t0, 2),
-    "replay_warm_s": round(t2 - t1, 2), "replay_from_cache_s": round(t3 - t2, 2),
-    "peak_rss_mb": round(peak_mb, 1), "rounds": len(out) - 1, "first": out[0]}))
+    "quote_stream_s": round(t2 - t1, 2), "replay_warm_s": round(t3 - t2, 2),
+    "replay_from_cache_files_s": round(t4 - t3, 2), "peak_rss_mb": round(peak_mb, 1),
+    "rounds": len(out) - 1, "first": out[0]}))
 """
 
 
-#: The live job's path: the record text is already one string in the job
-#: (``finish._corpus_text``), handed to the guard with the digest.
+#: The live job's path: ``prebuild`` after the digest (the record text already
+#: one string, ``finish._corpus_text``), then a repair in a FRESH process,
+#: which only loads the cached files.
 _LIVE = """
+import json, resource, subprocess, sys, time
+from pathlib import Path
+from jobs.drafting import repair_guard
+data = Path(sys.argv[1])
+files, _ = repair_guard._record_files(data)
+digest = (data / "digest.md").read_text()
+corpus = "\\n".join(f.read_text() for f in files)
+t0 = time.perf_counter()
+repair_guard.prebuild(data, digest, corpus)
+t1 = time.perf_counter()
+peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+mb = (lambda x: x / (1024 * 1024)) if sys.platform == "darwin" else (lambda x: x / 1024)
+print(json.dumps({"prebuild_s": round(t1 - t0, 2), "prebuild_peak_rss_mb": round(mb(peak), 1)}))
+"""
+
+#: The repair, in a process of its own: the guard loads the index and checks.
+_REPAIR = """
 import json, resource, sys, time
 from pathlib import Path
 from jobs.drafting import repair_guard
 data = Path(sys.argv[1])
 files, _ = repair_guard._record_files(data)
-text = (data / "digest.md").read_text() + "\\n" + "\\n\\n".join(f.read_text() for f in files)
+text = repair_guard.sources_text((data / "digest.md").read_text(), "\\n".join(f.read_text() for f in files))
 base = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 t0 = time.perf_counter()
 g = repair_guard.Guard(data / "set-1", text)
@@ -191,19 +210,26 @@ _, refused = g.check(v1, v2, "", "bench")
 t1 = time.perf_counter()
 peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 mb = (lambda x: x / (1024 * 1024)) if sys.platform == "darwin" else (lambda x: x / 1024)
-print(json.dumps({"live_index_and_check_s": round(t1 - t0, 2), "live_peak_rss_mb": round(mb(peak), 1),
-    "live_rss_before_guard_mb": round(mb(base), 1), "live_refused": len(refused)}))
+print(json.dumps({"repair_load_and_check_s": round(t1 - t0, 2), "repair_peak_rss_mb": round(mb(peak), 1),
+    "repair_rss_before_guard_mb": round(mb(base), 1), "repair_refused": len(refused)}))
 """
+
+
+def _child(script: str, data: Path) -> dict:
+    argv = [sys.executable, "-c", script, str(data)]  # this module's own script, no shell
+    r = subprocess.run(argv, capture_output=True, text=True, check=True)  # noqa: S603 - argv is literal here
+    return json.loads(r.stdout.strip().splitlines()[-1])
 
 
 def measure(data: Path) -> dict:
     out = {}
-    for script in (_MEASURE, _LIVE):
-        for f in data.glob("known-index-*"):
-            f.unlink()  # each measurement builds the index cold
-        argv = [sys.executable, "-c", script, str(data)]  # this module's own script, no shell
-        r = subprocess.run(argv, capture_output=True, text=True, check=True)  # noqa: S603 - argv is literal here
-        out.update(json.loads(r.stdout.strip().splitlines()[-1]))
+    for f in data.glob("known-index-*"):
+        f.unlink()  # built cold
+    out.update(_child(_MEASURE, data))
+    for f in data.glob("known-index-*"):
+        f.unlink()
+    out.update(_child(_LIVE, data))
+    out.update(_child(_REPAIR, data))  # the files prebuild left
     return out
 
 
@@ -219,10 +245,10 @@ def main(argv: list[str]) -> int:
             "build_corpus_s": round(time.perf_counter() - t, 2),
             **measure(data),
         }
-    got["total_s"] = round(got["index_s"] + got["replay_warm_s"], 2)
+    got["total_s"] = round(got["index_s"] + got["quote_stream_s"] + got["replay_warm_s"], 2)
     print(json.dumps(got, indent=1))
-    over = max(got["peak_rss_mb"], got["live_peak_rss_mb"]) >= PEAK_MB
-    if "--check" in argv and (over or got["total_s"] >= WALL_S or got["live_index_and_check_s"] >= WALL_S):
+    over = max(got["peak_rss_mb"], got["prebuild_peak_rss_mb"], got["repair_peak_rss_mb"]) >= PEAK_MB
+    if "--check" in argv and (over or got["total_s"] >= WALL_S or got["repair_load_and_check_s"] >= WALL_S):
         return 1
     return 0
 

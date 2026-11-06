@@ -76,7 +76,7 @@ def served(dr: Drafter, cls: str, label: str, digest: str, corpus: str, plan: re
     with the items in the attorney notes and one alert to SMD."""
     version, full, stalled = 1, True, 0
     dr.audit(version, digest, corpus)
-    guard = repair_guard.Guard(dr.data, digest + "\n" + corpus)
+    guard = repair_guard.Guard(dr.data, repair_guard.sources_text(digest, corpus))
     plan.begin()
 
     def audit_md() -> str:

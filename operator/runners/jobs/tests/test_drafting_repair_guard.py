@@ -449,12 +449,16 @@ def test_the_job_index_is_built_once_cached_by_sha_and_holds_no_text(tmp_path, m
     assert built and k.flat is None  # the record's text is never kept
     assert k.has_quote(newfacts._flat("the floor was wet near aisle 4")) and not k.has_quote("the floor was slick")
     cached = list(tmp_path.glob("known-index-*"))
-    assert sorted(p.suffix for p in cached) == [".bin", ".json"]
-    assert SOURCE.split()[3] not in cached[0].with_suffix(".bin").read_bytes().decode("latin-1")
+    assert sorted(p.suffix for p in cached) == [".json", ".stream"]  # the phrase stream, built at the first quotation
+    assert b'"' not in cached[0].with_suffix(".stream").read_bytes()  # words only, no punctuation
     newfacts._MEMO.clear()
     built.clear()
     again = newfacts.index(lambda: (SOURCE,), tmp_path)
     assert built == [] and again.words == k.words  # read from the cache, not rebuilt
+    streamed = []
+    real_stream = newfacts._stream_of
+    monkeypatch.setattr(newfacts, "_stream_of", lambda t: streamed.append(1) or real_stream(t))
+    assert again.has_quote(newfacts._flat("the floor was wet near aisle 4")) and streamed == []  # from its file
     built.clear()
     newfacts.index(lambda: (SOURCE + " more",), tmp_path)
     assert built  # another corpus, another key
@@ -487,13 +491,14 @@ def test_the_replay_lists_the_copy_once_and_never_searches_per_file(tmp_path, mo
     assert (len(files), listed, len(walks)) == (30, 30, 1)
 
 
-def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_cut_is_still_known(tmp_path, monkeypatch):
+def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_line_is_still_known(tmp_path, monkeypatch):
     monkeypatch.setattr(newfacts.Builder, "SLICE", 16)
     newfacts._MEMO.clear()
     text = "alpha bravo charlie\ndelta echo foxtrot\ngolf hotel india\n"
-    k = newfacts.index(lambda: (text,), tmp_path)
+    k = newfacts.index(lambda: (text, "juliet kilo"), tmp_path)
     assert k.has_quote("bravo charlie delta echo") and k.has_quote("foxtrot golf hotel india")
-    assert not k.has_quote("bravo charlie echo delta")
+    assert k.has_quote("echo") and not k.has_quote("ech") and not k.has_quote("bravo charlie echo delta")
+    assert not k.has_quote("india juliet")  # never across two documents
 
 
 # ---- every read is linear in what it reads (rehearsal 2, 2026-11-06: a 359 s cold index) -----
@@ -505,8 +510,9 @@ def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_cut_is_still_k
         ",".join(f"{i % 1000:03d}" if i % 3 else str(i % 10) for i in range(50_000)),  # a ledger read across
         "{{ 12 34 " * 20_000,  # unclosed braces in a scan's text
         "1," * 100_000,
+        "7" * 200_000 + " end",  # one figure the width of a scan line
     ],
-    ids=["ledger", "unclosed-braces", "comma-digits"],
+    ids=["ledger", "unclosed-braces", "comma-digits", "long-digits"],
 )
 def test_a_scan_shaped_text_is_indexed_in_linear_time(text):
     """Each took tens of seconds or more before: the two-decimal figure could
@@ -518,6 +524,16 @@ def test_a_scan_shaped_text_is_indexed_in_linear_time(text):
     b.feed(text)
     b.done()
     assert time.perf_counter() - t0 < 2.0, len(text)
+
+
+def test_a_repairs_own_text_is_read_in_linear_time_too():
+    """A repair's text goes through ``read``, whose patterns are not the
+    index's: a ledger pasted into a request must not stall the check."""
+    import time
+
+    t0 = time.perf_counter()
+    newfacts.read(",".join(f"{i % 1000:03d}" for i in range(30_000)) + " {{ x " * 5_000)
+    assert time.perf_counter() - t0 < 2.0
 
 
 def test_a_caption_tables_row_before_a_name_reads_in_linear_time():
@@ -548,3 +564,44 @@ def test_the_draft_being_repaired_is_read_only_where_it_changed_and_only_when_ne
     v2 = _doc({1: one, 2: "Admit that Officer Smith swept aisle 4.", 3: three})
     repair_guard.vet(v2, _doc({1: one, 2: "Admit that Officer Quill swept aisle 4.", 3: three}), base, set())
     assert fed == ["REQUEST FOR ADMISSION NO. 2\n\nAdmit that Officer Smith swept aisle 4."]  # only what changed
+
+
+def test_a_name_with_a_letter_outside_ascii_is_known_when_the_record_prints_it(tmp_path):
+    from datetime import date
+
+    newfacts._MEMO.clear()
+    k = newfacts.index(lambda: ("Seen by Dr. Muñoz and Nurse O'Neil on 1/2/24-1/9/24.",), tmp_path)
+    assert k.has_word("muñoz") and k.has_word("o'neil") and not k.has_word("munoz")
+    assert k.has_date(date(2024, 1, 9)) and k.has_number("24")
+
+
+def test_the_index_is_built_after_the_digest_so_a_repair_only_loads_it(tmp_path, pricing, monkeypatch):
+    """Rehearsal 3 (2026-11-06): a cold build inside a repair took 238 s at
+    seat speed. The extract stage builds the index and its quotation stream: both are
+    on disk before the first document is composed, and nothing builds them
+    again (one save, for the whole job)."""
+    from jobs.drafting import compose
+
+    seen: dict = {"saves": 0}
+    real_compose, real_save = compose.Drafter.compose, newfacts.Known.save
+
+    def compose_(self, digest):
+        seen.setdefault("on_disk", sorted(p.suffix for p in self.data.parent.glob("known-index-*")))
+        return real_compose(self, digest)
+
+    def save(self, path):
+        seen["saves"] += 1
+        return real_save(self, path)
+
+    monkeypatch.setattr(compose.Drafter, "compose", compose_)
+    monkeypatch.setattr(newfacts.Known, "save", save)
+    newfacts._MEMO.clear()
+    client = AuditClient(
+        drafts=_drafts(**{RFA: _with_request_2("Admit that YOU owned the WRONGSTORE.")}),
+        audit_fn=_flag("WRONGSTORE", "DRIFTS"),
+        repair_fix=("YOU owned the WRONGSTORE.", "YOU met Officer Diaz on April 9, 2026 about the PREMISES."),
+    )
+    r, v, _ = _run(tmp_path, pricing, client)
+    assert seen["on_disk"] == [".json", ".stream"] and r._is_done("repair_index")
+    assert seen["saves"] == 1
+    assert v.outcome == "failed" and "refused for adding a fact" in v.reason  # the guard still judged the repair

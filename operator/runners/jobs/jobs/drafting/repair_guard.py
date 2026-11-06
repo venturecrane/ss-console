@@ -33,7 +33,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..demand import draft as d
 from . import compose, newfacts
@@ -246,6 +246,22 @@ def repaired(dr: Drafter, digest: str, version: int, guard: Guard) -> tuple[str,
 def job_root(data: Path) -> Path:
     """A unit's job data directory (``data/set-<k>`` belongs to ``data``)."""
     return data.parent if data.name.startswith("set-") else data
+
+
+def sources_text(digest: str, corpus: str) -> str:
+    """What a repair is checked against, as every call site passes it."""
+    return digest + "\n" + corpus
+
+
+def prebuild(data: Path, digest: str, corpus: str, log: Callable[[str], None] = print) -> None:
+    """The job index and its quotation stream, built right after the digest
+    (rehearsal 3, 2026-11-06: a cold build took 238 s on a box as slow as a
+    seat, inside a repair). A repair then only loads the cached files. A
+    failure here costs nothing but time: the repair builds what is missing."""
+    try:
+        newfacts.index(lambda: (sources_text(digest, corpus),), data).stream()
+    except (OSError, ValueError, UnicodeError) as exc:
+        log(f"  repair guard index not built ahead ({type(exc).__name__}); a repair builds it")
 
 
 def vet_format(data: Path, before: str, after: str, sources: str | newfacts.Known) -> str:
