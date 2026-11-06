@@ -9,7 +9,7 @@ completion a SECOND time.
 
 So an approve says which job the reply is the reply of, and the release
 records it as that job's reply atomically with the send (the broker's
-``reply_binding.hand_reply``). This module answers the two questions the
+``workspace_broker/hand_reply.py``). This module answers the two questions the
 approve asks before it writes a decision:
 
 * :func:`resolve_job`: what ``--job <id>`` names (``<kind>:<id>``, or a bare

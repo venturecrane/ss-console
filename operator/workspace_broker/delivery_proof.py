@@ -260,9 +260,9 @@ def reply_status_verb(
         # thread since it finished (an SMD hand release counts) means the
         # completion would be a second email. Read from the mailbox, so it is
         # asked for only there, never on the reply watch's every tick.
-        from . import reply_binding  # reply_binding imports this module
+        from . import hand_reply  # it imports reply_binding, which imports this module
 
-        out["thread"] = reply_binding.thread_status(broker, kind, ident)
+        out["thread"] = hand_reply.thread_status(broker, kind, ident)
     if out["channel"] == "agentmail":
         out["sends_to_requester"] = sends_to(
             str(broker.audit_db_path), str(request.get("requester") or ""), str(request.get("since") or "")
