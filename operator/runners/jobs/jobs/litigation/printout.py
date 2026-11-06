@@ -257,7 +257,20 @@ def _cover(ms: list[dict[str, Any]], as_of: dt.date, discovery_note: str) -> str
             "a section with nothing found reads None in file."
         )
     body = "".join(f"<p>{_e(x)}</p>" for x in lines)
-    return f"<body><h1>Litigation status, court dates, as of {_e(as_of.isoformat())}</h1>{body}</body>"
+    return f"<body><h1>{_e(_heading(ms, as_of))}</h1>{body}</body>"
+
+
+def _heading(ms: list[dict[str, Any]], as_of: dt.date) -> str:
+    """The cover's title. Case and defendant values read on an earlier day say
+    that day; only the court dates are as of ``as_of`` (2026-10-30: values read
+    10-23 printed under "as of 2026-10-30")."""
+    read = sorted(
+        {str(p.get("read_at"))[:10] for m in ms if isinstance(p := m.get("provenance"), dict) and p.get("read_at")}
+    )
+    if not read or read == [as_of.isoformat()]:
+        return f"Litigation status, court dates, as of {as_of.isoformat()}"
+    when = read[0] if len(read) == 1 else f"{read[0]} to {read[-1]}"
+    return f"Litigation status as read {when}, court dates as of {as_of.isoformat()}"
 
 
 #: Points taken off the bottom of the frame, tried in turn until a case lays
