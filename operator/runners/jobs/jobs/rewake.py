@@ -87,6 +87,10 @@ def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+#: The broker's socket when ``SMD_WORKSPACE_BROKER_SOCKET`` is unset (the
+#: same default ``operator/bin/medchron-backfill-covered.py`` uses).
+DEFAULT_SOCKET = "/run/smd-workspace-broker/broker.sock"
+
 #: What ``thread(kind, job_id)`` answers: the broker's ``delivery_reply_status``
 #: ``thread`` field, ``{"checked": bool, "answered": sentence}``.
 ThreadCheck = Callable[[str, str], dict[str, Any]]
@@ -156,8 +160,8 @@ def rewake(
         seen = thread(reply_kind(lane), job_id)
         if not seen.get("checked"):
             print(
-                f"{job_id}: could not check whether its thread already has a reply "
-                f"({seen.get('why') or 'the broker did not say'}); nothing was re-armed"
+                f"refused: could not ask the broker whether {job_id}'s thread already has a reply "
+                f"({seen.get('why') or 'the broker did not say'}); nothing was re-armed or sent"
             )
             return 1
         if seen.get("answered"):
@@ -193,10 +197,11 @@ def _run(args: Any) -> int:
     from .broker_client import BrokerClient
     from .daemon import SOCKET_ENV
 
-    sock = os.environ.get(SOCKET_ENV, "").strip()
-    if not sock:
-        print(f"refused: {SOCKET_ENV} is not set; run this as root in the daemon's environment")
-        return 2
+    # The variable is entrypoint-computed for the broker only, so a root or
+    # medchron shell on the seat (where a rewake is run) does not have it: the
+    # broker's own default path is the answer then. A socket that cannot be
+    # reached is ``thread_check``'s ``checked: False``, which re-arms nothing.
+    sock = os.environ.get(SOCKET_ENV, "").strip() or DEFAULT_SOCKET
     return rewake(
         Path(args.run_dir),
         args.lane,

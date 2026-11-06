@@ -150,7 +150,7 @@ def test_a_rewake_that_could_not_check_the_thread_re_arms_nothing(tmp_path, caps
     gate.close()
     thread = _Thread({"checked": False, "answered": "", "why": "broker down"})
     assert rewake.rewake(d.run_dir, "medchron", "01A", "scott", "why", False, clock=d.clock, thread=thread) == 1
-    assert "could not check" in capsys.readouterr().out
+    assert "could not ask the broker" in capsys.readouterr().out
     assert d._daemon_state("01A")["wake"].get("resend") is None
 
 
@@ -161,20 +161,20 @@ def test_a_rewake_in_a_clear_thread_still_re_arms(tmp_path):
     assert rewake.rewake(d.run_dir, "medchron", "01A", "scott", "why", False, clock=d.clock, thread=thread) == 0
 
 
-def test_the_cli_asks_the_broker_about_the_thread(tmp_path, monkeypatch, capsys):
-    """``_run`` always checks: no broker socket is a refusal, never a skip."""
+def _cli_args(d):
     from types import SimpleNamespace
 
+    return SimpleNamespace(run_dir=str(d.run_dir), lane="medchron", job_id="01A", by="scott", why="why", again=False)
+
+
+def test_the_cli_asks_the_broker_about_the_thread(tmp_path, monkeypatch):
     gate, d, _broker, _now = _stopped(tmp_path)
     gate.close()
-    args = SimpleNamespace(run_dir=str(d.run_dir), lane="medchron", job_id="01A", by="scott", why="why", again=False)
-    monkeypatch.delenv("SMD_WORKSPACE_BROKER_SOCKET", raising=False)
-    assert rewake._run(args) == 2
     asked = []
 
     class Client:
         def __init__(self, sock):
-            pass
+            asked.append(sock)
 
         def _request(self, req):
             asked.append(req)
@@ -182,8 +182,46 @@ def test_the_cli_asks_the_broker_about_the_thread(tmp_path, monkeypatch, capsys)
 
     monkeypatch.setenv("SMD_WORKSPACE_BROKER_SOCKET", "/tmp/sock")
     monkeypatch.setattr("jobs.broker_client.BrokerClient", Client)
-    assert rewake._run(args) == 1
-    assert asked == [{"action": "delivery_reply_status", "kind": "medchron_job", "job_id": "01A", "thread": True}]
+    assert rewake._run(_cli_args(d)) == 1
+    assert asked == [
+        "/tmp/sock",
+        {"action": "delivery_reply_status", "kind": "medchron_job", "job_id": "01A", "thread": True},
+    ]
+
+
+def test_the_cli_without_the_socket_env_uses_the_brokers_default_path(tmp_path, monkeypatch):
+    """The variable is entrypoint-computed for the broker only
+    (contracts/env-consumption.yaml): a root or medchron shell on the seat has
+    no SMD_WORKSPACE_BROKER_SOCKET, and a rewake there must still work."""
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    socks = []
+
+    class Client:
+        def __init__(self, sock):
+            socks.append(sock)
+
+        def _request(self, req):
+            return {"ok": True, "thread": {"checked": True, "answered": ""}}
+
+    monkeypatch.delenv("SMD_WORKSPACE_BROKER_SOCKET", raising=False)
+    monkeypatch.setattr("jobs.broker_client.BrokerClient", Client)
+    assert rewake._run(_cli_args(d)) == 0
+    assert socks == [rewake.DEFAULT_SOCKET] == ["/run/smd-workspace-broker/broker.sock"]
+    assert d._daemon_state("01A")["wake"]["pending"] is True
+
+
+def test_the_cli_refuses_in_one_line_when_the_socket_cannot_be_reached(tmp_path, monkeypatch, capsys):
+    """A real client on a path with no broker: the check is unanswerable, so
+    nothing is re-armed and nothing is sent."""
+    gate, d, _broker, _now = _stopped(tmp_path)
+    gate.close()
+    monkeypatch.setenv("SMD_WORKSPACE_BROKER_SOCKET", str(tmp_path / "no-broker.sock"))
+    assert rewake._run(_cli_args(d)) == 1
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 1 and out[0].startswith("refused: could not ask the broker")
+    st = d._daemon_state("01A")
+    assert st["wake"].get("resend") is None and st["wake"].get("pending") is not True and "rewakes" not in st
 
 
 def _drafting_like(tmp_path, gate, answer):
