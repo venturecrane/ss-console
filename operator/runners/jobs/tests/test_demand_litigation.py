@@ -188,3 +188,24 @@ def test_a_pre_suit_draft_on_a_filed_action_is_refused_before_filing(tmp_path, p
     )
     v = run.run()
     assert v.outcome != "delivered" and seat.sent == []
+
+
+def _runs(path: Path, text: str) -> list[tuple[str, bool, bool]]:
+    import docx
+
+    p = next(p for p in docx.Document(str(path)).paragraphs if p.text.strip() == text or p.text.startswith(text))
+    return [(r.text, bool(r.bold), bool(r.underline)) for r in p.runs if r.text.strip()]
+
+
+def test_section_headings_are_bold_in_both_variants_and_only_the_caption_is_underlined(tmp_path):
+    (tmp_path / "lit").mkdir()
+    (tmp_path / "pre").mkdir()
+    lit, _ = _render(tmp_path / "lit", LIT_DRAFT, litigation=True)
+    pre, _ = _render(tmp_path / "pre", DRAFT, mail_line="CERTIFIED MAIL")
+    for path in (lit, pre):
+        for head in ("Summary of Injuries", "Liability", "Damages", "Demand", "Exhibits"):
+            assert [bold for _t, bold, _u in _runs(path, head)] == [True], head
+    assert _runs(lit, "RE:") == [("RE:", True, False), ("Alpha Example vs. Beta Driver, et al.,", True, True)]
+    assert all(not underlined for _t, _b, underlined in _runs(pre, "RE:"))
+    body = _runs(lit, "This letter is submitted")
+    assert body and not any(bold for _t, bold, _u in body)  # a body paragraph is as it was
