@@ -138,6 +138,9 @@ const EXPECTED_VERBS = [
   'job_idem_complete',
   'job_list',
   'job_list_claimable',
+  // A code-sent job's reply sent by the broker for the runner daemon
+  // (job_notes.py): a held, failed or waiting drafting job's note. Root only.
+  'job_note_send',
   'job_read',
   'job_record',
   // The litigation status job's request edge (litigation_verbs.py): submit's

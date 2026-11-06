@@ -465,6 +465,13 @@ def msgraph(broker: BrokerContext, action: str, request: dict[str, Any], _pid: i
         raise ValueError(
             "msgraph transmit is not configured on this broker (needs SMD_MSGRAPH_CREDENTIAL_PATH and an audit ledger)"
         )
+    if request.get("for_job") is not None:
+        # SMD's review release of a reply that IS a job's reply (2026-11-06):
+        # recorded as that job's bound reply, atomically with the send.
+        # Imported here: reply_binding imports this module.
+        from . import hand_reply
+
+        return hand_reply.hand_reply(broker, action, request)
     ops = broker.msgraph
     db_path = broker.audit_db_path
 

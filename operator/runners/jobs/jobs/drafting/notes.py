@@ -146,7 +146,27 @@ def attorney_notes(
         )
     review = _once(review, [label for label, _d in units or []])
     tail = ["", "## Request basis, record gaps and your decisions", "", end_tables] if end_tables else []
-    return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"
+    left = open_lines(data, units)
+    unresolved = ["", f"## {OPEN_ITEMS_HEADING}", "", *[f"- {x}" for x in left]] if left else []
+    return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + unresolved + tail) + "\n"
+
+
+#: Code's heading for what a set filed unresolved when its repairs ran out
+#: (``repair_budget``): each item's own words and what the audit found in it.
+OPEN_ITEMS_HEADING = "Open items: left as drafted, for your decision before service"
+
+
+def open_lines(data: Path, units: list[tuple[str, Path]] | None) -> list[str]:
+    from .repair_budget import open_items
+
+    out = []
+    for label, d in units or [("", data)]:
+        pre = f"{label}, " if label else ""
+        for it in open_items(d):
+            words = f' reads "{it["text"]}"' if it.get("text") else ""
+            why = f" ({it['finding']})" if it.get("finding") else ""
+            out.append(f"{pre}{it['where']}{words}. It {it['kind']}{why}.")
+    return out
 
 
 # ---- SMD's own sections, carried through every rewrite ------------------------------
@@ -168,6 +188,7 @@ CODE_HEADINGS = (
     "Caption: source",
     "For review",
     "Request basis, record gaps and your decisions",
+    "Open items: left as drafted",
 )
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 

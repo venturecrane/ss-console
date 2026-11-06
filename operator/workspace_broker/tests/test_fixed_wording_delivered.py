@@ -269,6 +269,8 @@ def test_a_held_demand_or_document_never_relays_the_reason() -> None:
         "The document for matter 900201 is not drafted yet. The request is missing what the draft needs: the "
         "deponent's name."
     ]
+    # The held words still render; since 2026-11-06 the bind refuses a held
+    # drafting job before they could be sent (stop_note, Captain).
     ours = {**held, "reason": "destination_mismatch: the matter id does not carry matter number 900201"}
     assert fixed_wording.render("drafting_job", ours)[0].endswith("not drafted yet. Nothing is needed from you.")
 

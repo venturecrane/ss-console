@@ -180,11 +180,13 @@ fact.
 **First, the outcome decides who hears.** When the outcome is `failed` (and the job row
 agrees), the failure is SMD's, not the firm's: our own machinery stopped (a truncated
 draft, an audit that did not finish, a gate on our own output, a render fault), and the
-job is resumable on our side. Send the client NOTHING: no reply, no bind, no message to
-anyone at the firm. Call `drafting_job_status` with the `job_id` once (that call is what
-raises SMD's shortfall alert to SMD's team, naming the job and its reason) and end the
-turn. The client hears only on `delivered` or `held`; the broker refuses a reply for a
-failed job in any case.
+job is resumable on our side. **A failed, held or waiting drafting job: the firm is
+told nothing, by you or by code.** SMD is paged instead (the runner's `job_stopped`
+alert), and the broker refuses the bind for those states. Do not bind, do not draft.
+Call `drafting_job_status` with the `job_id` once (that call is what raises SMD's
+shortfall alert to SMD's team, naming the job and its reason) and end the turn. Only a
+`delivered` job is replied on; the held guidance below applies only if SMD reopens held
+replies.
 
 1. **Bind the reply** with `reply_bind` and ONLY `job_id` = the id in the wake's first
    line. Never pass `internet_message_id` or `graph_message_id` in this mode: the

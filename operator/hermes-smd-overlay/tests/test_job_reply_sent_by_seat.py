@@ -188,9 +188,11 @@ def test_a_broker_that_cannot_be_reached_alerts_smd(seat, monkeypatch) -> None:
     assert broker.sends == [] and len(_alerts(d1)) == 1
 
 
-@pytest.mark.parametrize("code", ["already_replied", "job_failed"])
+@pytest.mark.parametrize("code", ["already_replied", "job_failed", "job_held"])
 def test_a_reply_already_sent_or_a_failed_job_is_not_a_new_alert(seat, code) -> None:
-    """Already sent is the success; a failed job is SMD's through its own alert."""
+    """Already sent is the success; a failed or held job is SMD's through its
+    own ``job_stopped`` alert, and the firm is told nothing (2026-11-06).
+    FALSIFIER for ``job_held``: on the parent commit it writes a REPLY_FAILED row."""
     mod, d1, broker = seat
     broker.verdict = {"ok": True, "bound": False, "code": code, "reason": "refused"}
     _drafting_wake(mod)

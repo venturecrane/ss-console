@@ -180,6 +180,12 @@ KIND_LANE = {
 HELD_CLASS_LANES = frozenset(WORDING)
 _FILE_MAX = 200
 
+# A drafting job that held, failed or waited on its lane's proof run has no
+# wording here: its requester is told nothing and SMD is paged (Captain,
+# 2026-11-06; ``stop_note``, which ``reply_binding`` refuses those binds by).
+# The fixed "we are checking it" notes #3816 added the same morning are gone
+# with it, so no code path can send them.
+
 
 class FixedWordingRefused(BindingRefused):
     """A job's reply carried words other than its fixed wording. The message

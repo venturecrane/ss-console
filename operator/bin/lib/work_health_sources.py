@@ -561,6 +561,7 @@ _PROOF_WORDS = {
     "stage_refused": "a stage refused its own input",
     "limit_held": "a cost cap, budget or page allowance held it",
     "identity_held": "a record in the file names another person; the firm was asked",
+    "job_stopped": "it held, failed or is waiting on its lane's proof; the requester was told nothing, by design",
 }
 
 

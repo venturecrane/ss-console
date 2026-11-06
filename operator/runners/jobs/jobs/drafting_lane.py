@@ -28,10 +28,11 @@ than adding a third.
 Unusable drafting inputs (no ``drafting-firm.yaml`` on the seat, or a schema
 miss) defer a job once; on the next attempt it is recorded ``failed``
 (``config_missing``: our cause, resumable, SMD alerted) instead of looping
-silently. A failed job (our machinery) wakes DELIVER too: the skill's status
-read raises SMD's shortfall alert, and the broker refuses any reply to the
-client. There is no re-run verb for drafting, so nothing is seeded from a
-superseded job.
+silently. A held or failed job pages SMD once before its wake
+(``job_notes.tell``: one ``job_stopped`` page) and its requester is told
+nothing (Captain, 2026-11-06): the DELIVER turn it wakes is refused its bind,
+and its status read still raises SMD's shortfall alert. There is no re-run verb for drafting,
+so nothing is seeded from a superseded job.
 """
 
 from __future__ import annotations
@@ -45,10 +46,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import request_additions, resume as resume_mod, verdict as verdict_mod
+from . import job_notes, request_additions, resume as resume_mod, smd_stop, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
-from .drafting import firm_rules
+from .drafting import firm_rules, repair_budget
 from .firm_inputs import pin_env
 from .proof import watch as proof_watch
 from .skill_load import load_line
@@ -113,6 +114,15 @@ class DraftingBroker:
             if not isinstance(v, int) or isinstance(v, bool) or v < 0:
                 raise BrokerError(f"drafting_allowance carried no {name}; the job cannot be metered")
         return int(cents), int(remaining)  # type: ignore[arg-type]
+
+
+def spent_cents(job_dir: Path, reported: int) -> int:
+    """What the job's row records: the verdict's figure, or the job's usage
+    ledgers priced by the seat's rate card when they show more. A runner killed
+    mid-job (a release's -15) writes no verdict, and a row of 0 understated the
+    firm's allowance and SMD's cost (two A&P jobs read $0 after $2.22 and $7.07,
+    2026-11-06). An unreadable price table keeps the reported figure."""
+    return max(reported, smd_stop.spend_cents(job_dir) or 0)
 
 
 def drafting_runner_cmd() -> list[str]:
@@ -199,6 +209,7 @@ class DraftingLane(Daemon):
             )
         self.jobs_run += 1
         firm_rules.alert_refused(self, job_id)
+        repair_budget.alert_exhausted(self, job_id)
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
             return "interrupted"
         return self._report(job_id, code, out)
@@ -209,16 +220,18 @@ class DraftingLane(Daemon):
         a job that defers every hour and tells no one."""
         first = str(exc).split(";")[0][:300]
         reason = f"config_missing: the drafting firm inputs are not usable on this seat: {first}"
+        cents = spent_cents(self.job_dir(job_id), 0)
         try:
             self.broker.record(job_id, "running", {})
             self.broker.record(
-                job_id, "failed", {"cents": 0, "reason": reason, "caption_discrepancies": [], "markers": []}
+                job_id, "failed", {"cents": cents, "reason": reason, "caption_discrepancies": [], "markers": []}
             )
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
         self._write_state(job_id, state="failed", finished_at=self.clock(), reason=reason)
-        task = self._compose_wake(job_id, "failed", {"cents": 0, "files": []}, stage="config")
+        job_notes.tell(self, job_id, why="the job ended failed")
+        task = self._compose_wake(job_id, "failed", {"cents": cents, "files": []}, stage="config")
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return "failed"
 
@@ -254,7 +267,7 @@ class DraftingLane(Daemon):
             state, v = "failed", {"reason": f"no_verdict: the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
-        cents = int(round(float(v.get("dollars") or 0) * 100))
+        cents = spent_cents(self.job_dir(job_id), int(round(float(v.get("dollars") or 0) * 100)))
         fields: dict[str, Any] = {
             "cents": cents,
             "caption_discrepancies": list(v.get("caption_discrepancies") or []),
@@ -279,6 +292,10 @@ class DraftingLane(Daemon):
         except BrokerError as exc:
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get("reason"))
+        if state != "delivered":
+            # A held or failed job pages SMD; the firm is told nothing
+            # (job_notes, Captain 2026-11-06).
+            job_notes.tell(self, job_id, why=f"the job ended {state}")
         task = self._compose_wake(job_id, state, {**fields, "files": v.get("files") or []}, stage=v.get("stage"))
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return state

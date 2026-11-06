@@ -123,6 +123,7 @@ def run_child(
             except subprocess.TimeoutExpired:
                 pass
             lane.poll_requests()
+            smd_stop.take_unclaimed(lane, running=job_id)
             if smd_at is None and smd_stop.read(cwd) is not None:
                 smd_at = time.monotonic()
                 logger.warning("%s job %s: stopped by SMD; the child stops at its next model call", lane.LANE, job_id)

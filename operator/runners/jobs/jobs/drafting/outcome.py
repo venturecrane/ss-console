@@ -25,7 +25,8 @@ REASON_CODES = (
     "format_check",
     "record_unreadable",
     "audit_unsettled",
-    # A served paper's audit finding survived its repairs (compose.STRICT_CLASSES): failed, nothing filed.
+    # A served paper's audit finding survived its repairs (compose.STRICT_CLASSES) and is of a kind that
+    # changes what a request asks or states (repair_budget.HOLD_KINDS): failed, nothing filed, SMD alerted.
     "audit_unrepaired",
     # The attorney notes still carry the system's words, a hedge or an empty line after one rewrite (wording.py).
     "notes_unclean",
@@ -65,6 +66,11 @@ REASON_CODES = (
     "firm_base_unfit",
     # A brief in the firm's own file (firmbase): more than its slots differ: failed, nothing filed.
     "firm_base_lost",
+    # The request serves a set on a name that is none of the matter's parties, or two of them (parties.py):
+    # failed before any compose, SMD alerted; never a guess.
+    "party_unknown",
+    # A set served on one party still defines YOU as another after code bound it (parties.bind): failed.
+    "party_mismatch",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
