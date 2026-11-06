@@ -240,3 +240,47 @@ def test_the_policy_record_is_written_on_a_clean_review(job_dir, firm_config_pat
     pol = json.loads((sr.slug_dir / "runs" / "alpha" / review_policy.POLICY_RECORD).read_text())
     assert pol["must_fix_left"] == 0 and pol["repair_residual_by_check"] == {}
     assert TODAY.year == 2026
+
+
+# ---- check 1: a tie on date and provider is decided by the page the finding cites ----
+TIED = """# Medical Chronology
+
+## Medical Chronology
+
+03/30/2026
+Example Hospital | Emergency Department
+Seen in the ED for neck pain. (Exhibit 1 - p. 4)
+Discharged home. (Exhibit 1 - p. 5-6)
+
+03/30/2026
+Example Hospital | Admission
+Admitted overnight for observation. (Exhibit 2 - p. 7)
+Imaging reviewed. (Exhibit 1 - p. 9)
+
+## Exhibit List
+"""
+TIED_FINDING = (
+    "The ED entry quotes a discharge line naming someone else; the Exhibit 2 copy of the line omits the name. "
+    "03/30/2026, Example Hospital, Emergency Department (Exhibit 1 - p. 5)"
+)
+
+
+def test_a_check1_tied_on_date_and_provider_is_settled_on_the_entry_citing_its_page():
+    """A client seat, 2026-11-06: two entries on one date from one provider
+    (an ED visit and its admission) left entry_for with no single entry, so
+    a check-1 false alarm held the review for SMD. The page the finding
+    cites names the entry; a passing mention of another exhibit without a
+    page never chooses the page the finding is decided on."""
+    block = review_evidence.entry_for(TIED, TIED_FINDING)
+    assert block is not None, "the cited page breaks the tie"
+    assert "Seen in the ED" in block[2] and "Admitted overnight" not in block[2]
+    assert review_evidence.cited_pages(block[2], TIED_FINDING) == [(1, 5)]
+
+
+def test_a_check1_tie_the_cited_page_does_not_break_names_no_entry():
+    """Both entries cite the page, or neither does: still no single entry,
+    so nothing is decided and nothing is left out on a guess."""
+    both = TIED.replace("(Exhibit 1 - p. 9)", "(Exhibit 1 - p. 5)")
+    assert review_evidence.entry_for(both, TIED_FINDING) is None
+    neither = TIED_FINDING.replace("p. 5)", "p. 40)")
+    assert review_evidence.entry_for(TIED, neither) is None
