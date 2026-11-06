@@ -24,8 +24,6 @@ from .establishment_constants import (
 from .establishment_lifecycle import ProposalLifecycle
 from .establishment_validation import (
     EstablishmentValidationError,
-    _require_class_slug,
-    _require_property,
     _require_proposal_id,
     _require_text,
     normalize_rule_text,
@@ -33,7 +31,7 @@ from .establishment_validation import (
     readback_for,
     require_address,
 )
-from .rule_reach import reach_of
+from .rule_reach import firm_subject
 
 
 class RuleProposals(ProposalLifecycle):
@@ -85,11 +83,7 @@ class RuleProposals(ProposalLifecycle):
                 )
             subject: dict[str, Any] = {"person": person}
         else:
-            subject = {
-                "output_class": _require_class_slug(subject_raw.get("output_class")),
-                "property": _require_property(subject_raw.get("property")),
-                **reach_of(subject_raw),
-            }
+            subject = firm_subject(subject_raw)
 
         text = normalize_rule_text(request.get("text"))
         # ss-console#2546: the same person, the same sentence, already waiting.

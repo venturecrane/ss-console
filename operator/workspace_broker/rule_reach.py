@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .establishment_validation import EstablishmentValidationError
+from .establishment_validation import EstablishmentValidationError, _require_class_slug, _require_property
 
 _KIND = re.compile(r"\A[a-z0-9_]{1,40}\Z")
 MAX_KINDS = 10
@@ -61,6 +61,15 @@ def reach_of(subject_raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def firm_subject(subject_raw: dict[str, Any]) -> dict[str, Any]:
+    """A firm rule's subject: its class and property, and its reach when given."""
+    return {
+        "output_class": _require_class_slug(subject_raw.get("output_class")),
+        "property": _require_property(subject_raw.get("property")),
+        **reach_of(subject_raw),
+    }
+
+
 def adjustment_for(row: dict[str, Any], applied_by: str, at: str) -> dict[str, Any]:
     """The committed adjustment for a confirmed rule row. The reach the person was
     shown and confirmed is carried from the row unchanged; absent on a rule without."""
@@ -76,4 +85,4 @@ def adjustment_for(row: dict[str, Any], applied_by: str, at: str) -> dict[str, A
     }
 
 
-__all__ = ["MAX_ATTORNEY_CHARS", "MAX_KINDS", "adjustment_for", "reach_of"]
+__all__ = ["MAX_ATTORNEY_CHARS", "MAX_KINDS", "adjustment_for", "firm_subject", "reach_of"]
