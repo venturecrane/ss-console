@@ -195,6 +195,27 @@ def test_a_minority_brand_never_names_a_record_set_another_facility_dominates() 
     assert group_stage.lane_name(["EAR"] * 10 + ["Example Valley Hospital"] * 20, canon) == "EAR"
 
 
+def test_a_facility_split_into_variants_is_titled_by_its_name_never_a_staff_descriptor() -> None:
+    """2026-11-06: one hospital's rows came back as name variants, the name with
+    a lowercase staff descriptor and the name with a placeholder parenthetical,
+    beside a minority brand and many clinician rows. The descriptor variant held
+    the most rows and titled the exhibit."""
+    canon = group_stage.Canon(_BrandCfg())
+    rows = (
+        ["EAR"]
+        + ["Jane Doe, MD"] * 30
+        + ["Example Valley Medical Center nursing and respiratory care staff"] * 2
+        + ["Example Valley Medical Center (department not stated)"]
+        + ["Example Valley Medical Center, John Roe, MD"]
+    )
+    assert canon(group_stage.lane_name(rows, canon)) == "Example Valley Medical Center"
+    # the result does not depend on which variant comes first
+    assert canon(group_stage.lane_name(list(reversed(rows)), canon)) == "Example Valley Medical Center"
+    # a capitalised department name is a name, not a descriptor
+    assert group_stage.facility_stem("Example Valley Physical Therapy") == "Example Valley Physical Therapy"
+    assert group_stage.facility_stem("Jane Doe nursing staff") == "Jane Doe nursing staff"
+
+
 def test_a_lane_is_never_named_by_the_composers_placeholder_and_a_tie_goes_to_the_first_row(
     job_dir: Path, firm: Path, data_root: Path
 ) -> None:
