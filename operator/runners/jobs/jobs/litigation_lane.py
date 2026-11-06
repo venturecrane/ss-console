@@ -17,9 +17,13 @@ the loop, the held-is-final rule, the back-off and the cgroup join):
 * the billing cycle's status-list allowance (2026-10-24), read when a status
   list starts, before anything is spent (the chronology page allowance's
   moment): a list past the cycle's included lists is held ``list_allowance:``
-  without starting the child, SMD is paged ``limit_held`` to quote it, and the
-  firm hears the fixed ``smd_finishing`` wording. A deadlines report, a staff
-  reassignment and a proof run's twin are never held by it.
+  without starting the child and SMD is paged ``limit_held`` to quote it. A
+  deadlines report, a staff reassignment and a proof run's twin are never held
+  by it;
+* its stops (Captain, 2026-11-06): a held, failed or waiting list pages SMD
+  once (``job_notes.tell``, ``job_stopped``) and the firm is told nothing; the
+  DELIVER turn it wakes is refused its bind (broker ``stop_note``). A delivered
+  list is replied on by that turn, in the skill's words, as before.
 
 Memory: the child joins the DEMAND lane's memory cgroup and waits while a
 demand OR a drafting child is live, so the Machine's caps do not grow by a
@@ -39,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import job_notes, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -274,8 +278,9 @@ class LitigationLane(DraftingLane):
     def _allowance_hold(self, job_id: str) -> str | None:
         """Hold a status list past the cycle's allowance before anything runs:
         ``running -> held`` with nothing spent, SMD paged (``proof/watch.settle``
-        pages ``limit_held`` for a ``list_allowance:`` reason), and the DELIVER
-        wake carrying the hold class, so the firm hears the fixed wording."""
+        pages ``limit_held`` for a ``list_allowance:`` reason, and
+        ``job_notes`` its one ``job_stopped``). The firm is told nothing
+        (Captain, 2026-11-06): the DELIVER turn it wakes is refused its bind."""
         try:
             reason = self._allowance_reason(job_id)
             if reason is None:
@@ -291,6 +296,10 @@ class LitigationLane(DraftingLane):
         except BrokerError as exc:
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get("reason"))
+        if state != "delivered":
+            # A held or failed list pages SMD; the firm is told nothing
+            # (job_notes, Captain 2026-11-06).
+            job_notes.tell(self, job_id, why=f"the job ended {state}")
         self._write_state(
             job_id, wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields)}
         )
@@ -307,6 +316,7 @@ class LitigationLane(DraftingLane):
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
         self._write_state(job_id, state="failed", finished_at=self.clock(), reason=reason)
+        job_notes.tell(self, job_id, why="the job ended failed")
         task = self._compose_wake(job_id, "failed", {"stage": "config"})
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return "failed"
@@ -336,6 +346,10 @@ class LitigationLane(DraftingLane):
         except BrokerError as exc:
             logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
         self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get("reason"))
+        if state != "delivered":
+            # A held or failed list pages SMD; the firm is told nothing
+            # (job_notes, Captain 2026-11-06).
+            job_notes.tell(self, job_id, why=f"the job ended {state}")
         self._write_state(
             job_id, wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields)}
         )

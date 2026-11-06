@@ -159,8 +159,10 @@ def test_no_stopped_wording_is_left_to_send() -> None:
 
 
 def test_other_lanes_are_untouched() -> None:
-    assert stop_note.SILENT_KINDS == {"drafting_job"} <= reply_text.CODE_SENT_KINDS
-    for kind in ("demand_job", "litigation_job", "medchron_job", "casefile_job"):
+    # Litigation joined the silent set for its stops only (test_litigation_stopped_notes).
+    assert stop_note.SILENT_KINDS == {"drafting_job", "litigation_job"}
+    assert reply_text.CODE_SENT_KINDS == {"drafting_job"}
+    for kind in ("demand_job", "medchron_job", "casefile_job"):
         assert stop_note.stop_class(kind, {"state": "held", "reason": "x"}) is None
 
 

@@ -271,8 +271,15 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       expect(text).not.toContain('with `smd_send_message` to the')
     })
 
-    it('tells the firm nothing about a failed job', () => {
+    it('tells the firm nothing about a failed, held or waiting job', () => {
+      // 2026-11-06 (Captain): a stopped litigation job pages SMD and the firm is
+      // told nothing (workspace_broker/stop_note.py SILENT_KINDS).
       const text = flat('litigation-status')
+      expect(text).toContain(
+        '**A failed, held or waiting litigation job: the firm is told nothing, by you or by code**'
+      )
+      expect(text).toContain('The firm hears only on `delivered`;')
+      expect(text).not.toContain('The firm hears only on `delivered` or `held`')
       expect(text).toContain('Send the client NOTHING')
       expect(text).toContain('**If the bind is refused, send NOTHING to anyone.**')
       expect(text).toContain("worded by the wake's `Hold class:` line, never by the job's")

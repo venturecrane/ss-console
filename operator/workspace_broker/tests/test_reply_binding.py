@@ -893,9 +893,15 @@ def _sendmails(box: FakeMailbox) -> list[str]:
 
 
 @pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_a_requested_litigation_job_replies_in_thread_only(tmp_path: Path, ending: str) -> None:
+def test_a_requested_litigation_job_replies_in_thread_only(
+    tmp_path: Path, ending: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """FALSIFIER: let a requested job take the new-message path and the message
-    leaves the requester's thread."""
+    leaves the requester's thread. (A held list is silent since 2026-11-06,
+    ``stop_note.SILENT_KINDS``; the held case runs with its replies reopened.)"""
+    from workspace_broker import stop_note
+
+    monkeypatch.setattr(stop_note, "SILENT_KINDS", stop_note.SILENT_KINDS - {"litigation_job"})
     job = _litigation_job(tmp_path, ["running", ending])
     box = FakeMailbox()
     _ack_in_thread(box)

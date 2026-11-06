@@ -1,7 +1,7 @@
 """SMD's one page for a code-sent job that stopped, and a lost wake's reply.
 
 STOPPED: SMD KNOWS, THE FIRM DOES NOT (Captain, 2026-11-06). When the daemon
-records a drafting job held, failed or waiting on its lane's proof run, it
+records a drafting or litigation job held, failed or waiting on its lane's proof run, it
 reads the job's row and raises ONE ``job_stopped`` alert naming the job, its
 state, its stop class and its reason, saying the requester was not told, by
 design. It never asks the broker to send anything for such a job; the broker
@@ -20,8 +20,11 @@ ONCE PER STATE. The alert is de-duplicated on the broker's reply key
 job already paged does not page ``job_stopped`` twice, and a resumed job that
 stops again pages again.
 
-WHICH LANES. ``LANES`` mirrors the broker's ``reply_text.CODE_SENT_KINDS``. A
-lane added there adds its kind here; every other lane is untouched.
+WHICH LANES. ``LANES`` mirrors the broker's ``stop_note.SILENT_KINDS`` (a lane
+added there adds its kind here), and ``CODE_SENT_LANES`` its
+``reply_text.CODE_SENT_KINDS``; every other lane is untouched. Litigation
+joined on 2026-11-06 for its stops only: a held, failed or waiting list pages
+SMD and the firm hears nothing; a delivered list is replied on as before.
 """
 
 from __future__ import annotations
@@ -31,9 +34,17 @@ from typing import Any
 
 logger = logging.getLogger("jobs.daemon")
 
-#: Each code-sent lane: its reply kind (broker ``reply_text.CODE_SENT_KINDS``)
-#: and the verb that reads its job row.
-LANES = {"drafting": ("drafting_job", "drafting_job_status")}
+#: Each lane whose stops page SMD only (broker ``stop_note.SILENT_KINDS``):
+#: its reply kind and the verb that reads its job row.
+LANES = {
+    "drafting": ("drafting_job", "drafting_job_status"),
+    "litigation": ("litigation_job", "litigation_job_status"),
+}
+#: The lanes whose DELIVERED reply the broker sends in code after a lost wake
+#: (broker ``reply_text.CODE_SENT_KINDS``). Litigation is not one: its
+#: delivered reply stays the DELIVER turn's (Captain, 2026-11-06), so a lost
+#: wake on a delivered list pages ``wake_lost`` saying nobody was told.
+CODE_SENT_LANES = frozenset({"drafting"})
 #: What ``tell`` returns besides the broker's own outcomes.
 NOT_OWED = "not_owed"
 FAILED = "failed"
@@ -42,11 +53,21 @@ NOT_TOLD = "the requester was not told (by design: SMD only, while the lane is r
 REASON_MAX = 300
 
 
-def stop_class(row: dict[str, Any]) -> str:
+#: A litigation hold the firm was asked about before 2026-11-06 (broker
+#: ``stop_note.LITIGATION_FIRM_HOLDS``): SMD now asks it by hand.
+LITIGATION_FIRM_HOLDS = frozenset({"nothing_in_scope", "staff_unresolved", "requester_unresolved"})
+
+
+def stop_class(row: dict[str, Any], lane: str = "") -> str:
     """The class the page names (mirrors broker ``stop_note``; the broker's own
     answer is the rule for what is sent, this only labels the page)."""
     state = str(row.get("state") or "")
     reason = str(row.get("reason") or "")
+    if state == "held" and lane == "litigation":
+        from .proof import holds
+
+        cls = holds.classify(lane, reason)[0]
+        return f"held_firm_cause, {cls}" if cls in LITIGATION_FIRM_HOLDS else "held"
     if state == "failed":
         return "review_held" if reason.startswith(("review_held", "refused: review_held")) else "failed"
     if state == "submitted":
@@ -62,7 +83,7 @@ def _page_stopped(d: Any, job_id: str, kind: str, row: dict[str, Any], why: str)
     state = str(row.get("state") or "?")
     key = f"{kind}:{job_id}:{row.get('attempt') or 1}:{state}"  # broker reply_binding.reply_key
     reason = str(row.get("reason") or why)[:REASON_MAX]
-    watch.alert(d, job_id, "job_stopped", f"{state} ({stop_class(row)}): {reason}; {NOT_TOLD}", unit=key)
+    watch.alert(d, job_id, "job_stopped", f"{state} ({stop_class(row, d.LANE)}): {reason}; {NOT_TOLD}", unit=key)
 
 
 def _send_delivered(d: Any, job_id: str, kind: str, why: str) -> str:
@@ -98,7 +119,7 @@ def tell(d: Any, job_id: str, *, why: str) -> str:
         watch.alert(d, job_id, "job_stopped", f"{why}; the job could not be read; nothing was sent: {exc}")
         return FAILED
     if row.get("state") == "delivered":
-        outcome = _send_delivered(d, job_id, kind, why)
+        outcome = _send_delivered(d, job_id, kind, why) if d.LANE in CODE_SENT_LANES else NOT_OWED
     else:
         _page_stopped(d, job_id, kind, row, why)
         outcome = NOT_OWED
@@ -106,4 +127,4 @@ def tell(d: Any, job_id: str, *, why: str) -> str:
     return outcome
 
 
-__all__ = ["LANES", "NOT_TOLD", "stop_class", "tell"]
+__all__ = ["CODE_SENT_LANES", "LANES", "NOT_TOLD", "stop_class", "tell"]
