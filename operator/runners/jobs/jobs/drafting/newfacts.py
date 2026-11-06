@@ -21,7 +21,7 @@ What counts as each kind, read with the parsers the lane already trusts:
   known when the word appears anywhere known, in any case: a name recombined
   from known words is not caught here, an invented one is;
 * a **quoted string**: known when it appears in the known text (case and
-  whitespace loosened). A quoted defined-term label (``sets._TERM``: "INCIDENT")
+  whitespace loosened; in the job's record, every four-word run of it). A quoted defined-term label (``sets._TERM``: "INCIDENT")
   is a label, not a quotation; its words are names like any other.
 
 Text inside a ``{{...}}`` marker states nothing: a repair that removes a fact
@@ -30,11 +30,18 @@ and leaves a marker for the attorney adds no fact.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import zlib
+from array import array
+from bisect import bisect_left
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
+from typing import Callable, Iterable
 
 from . import howell, sets
 from .evidence import verify
@@ -74,10 +81,11 @@ def _digits(s: str) -> str:
 
 def _initial(text: str, start: int) -> bool:
     """The word at ``start`` begins a sentence, a line, a list item or a quotation."""
-    before = text[:start].rstrip(" \t\"“'‘([*_")
-    if not before or before.endswith(("\n", ".", "!", "?", ":", ";")):
+    # Only the word's own line is read: the text before it is never copied.
+    line = text[text.rfind("\n", 0, start) + 1 : start].rstrip(" \t\"“'‘([*_")
+    if not line or line.endswith((".", "!", "?", ":", ";")):
         return True
-    return bool(_LINE_LEAD.search(text[:start].rstrip(" \t\"“'‘([*_")))
+    return bool(_LINE_LEAD.search(line))
 
 
 def _md(month: str, day: str) -> tuple[int, int] | None:
@@ -100,9 +108,15 @@ class Found:
 
 def _blank(text: str, spans: list[tuple[int, int]]) -> str:
     """``text`` with each span replaced by spaces (positions kept)."""
-    for a, b in sorted(spans, reverse=True):
-        text = text[:a] + " " * (b - a) + text[b:]
-    return text
+    out, at = [], 0
+    for a, b in sorted(spans):
+        if a < at:
+            a = at
+        if a < b:
+            out += [text[at:a], " " * (b - a)]
+            at = b
+    out.append(text[at:])
+    return "".join(out)
 
 
 def _long_date(m: re.Match[str]) -> date | None:
@@ -178,57 +192,238 @@ def read(text: str) -> Found:
     return out
 
 
-@dataclass
+# ---- what is known: an index built once per job, then set lookups -------------------------
+#
+# WHY (2026-11-05, the rehearsal on the District job). The first version read
+# the whole record text as one string, through the same reader a repair goes
+# through: its blanking and its sentence-start test copy the text once per
+# date and per capitalized word, and a 524-file, 11 MB record ran past two
+# minutes and out of memory on a 3.9 GB box. A source is now read once per
+# job, a file at a time, into sets of normalized tokens (and its quotations
+# as hashed four-word shingles); a repair's check is then a lookup of the few
+# facts the repair states. The index is cached in the job's data directory,
+# keyed by the sha256 of what it was read from.
+
+#: Words per quotation shingle: a quotation of this many words or more is
+#: known when every run of this many consecutive words is in a source.
+SHINGLE = 4
+_TOK = re.compile(r"[a-z0-9]+")
+_GROUPED = re.compile(r"\b\d{1,3}(?:,\d{3})+\b")
+CACHE = "known-index-{key}"
+
+
+def _h(gram: str) -> int:
+    b = gram.encode("utf-8")
+    return zlib.crc32(b) | (zlib.crc32(b, 0x9E3779B9) << 32)
+
+
 class Known:
-    """What the job's sources and the text being repaired already hold."""
+    """What a source holds, by kind: normalized tokens, never its text (a
+    small text, a draft being repaired, also keeps its flattened text)."""
 
-    dates: set[date]
-    month_days: set[tuple[int, int]]
-    money: set[Decimal]
-    numbers: set[str]
-    words: set[str]
-    flat: str
+    def __init__(
+        self,
+        dates: set[date],
+        month_days: set[tuple[int, int]],
+        money: set[Decimal],
+        numbers: set[str],
+        words: set[str],
+        tokens: set[str],
+        shingles: array,
+        flat: str | None = None,
+    ) -> None:
+        self.dates, self.month_days, self.money, self.numbers = dates, month_days, money, numbers
+        self.words, self.tokens, self.shingles, self.flat = words, tokens, shingles, flat
 
-    def plus(self, text: str) -> "Known":
-        other = known(text)
-        return Known(
-            self.dates | other.dates,
-            self.month_days | other.month_days,
-            self.money | other.money,
-            self.numbers | other.numbers,
-            self.words | other.words,
-            self.flat + " \n " + other.flat,
+    def has_date(self, d: date) -> bool:
+        return d in self.dates
+
+    def has_month_day(self, md: tuple[int, int]) -> bool:
+        return md in self.month_days
+
+    def has_money(self, v: Decimal) -> bool:
+        return v in self.money
+
+    def has_number(self, n: str) -> bool:
+        return n in self.numbers
+
+    def has_word(self, w: str) -> bool:
+        return w in self.words
+
+    def has_quote(self, q: str) -> bool:
+        """``q`` (flattened) is in the source: as written in a small text;
+        in a large one, every four-word run of it (a shorter one, every word)."""
+        if self.flat is not None:
+            return q in self.flat
+        toks = _TOK.findall(q)
+        if len(toks) < SHINGLE:
+            return bool(toks) and all(t in self.tokens for t in toks)
+        s = self.shingles
+        for i in range(len(toks) - SHINGLE + 1):
+            g = _h(" ".join(toks[i : i + SHINGLE]))
+            j = bisect_left(s, g)
+            if j == len(s) or s[j] != g:
+                return False
+        return True
+
+    def plus(self, text: str) -> "Both":
+        return Both(self, known(text))
+
+    # ---- the cache -------------------------------------------------------------------
+    def save(self, path: Path) -> None:
+        doc = {
+            "dates": sorted(d.isoformat() for d in self.dates),
+            "month_days": sorted(list(md) for md in self.month_days),
+            "money": sorted(str(v) for v in self.money),
+            "numbers": sorted(self.numbers),
+            "words": sorted(self.words),
+            "tokens": sorted(self.tokens),
+        }
+        tmp = path.with_name(f".{path.name}.tmp")
+        tmp.write_text(json.dumps(doc), encoding="utf-8")
+        tmp.replace(path.with_suffix(".json"))
+        tmp.write_bytes(self.shingles.tobytes())
+        tmp.replace(path.with_suffix(".bin"))
+
+    @classmethod
+    def load(cls, path: Path) -> "Known | None":
+        js, bn = path.with_suffix(".json"), path.with_suffix(".bin")
+        if not (js.is_file() and bn.is_file()):
+            return None
+        doc = json.loads(js.read_text(encoding="utf-8"))
+        sh = array("Q")
+        sh.frombytes(bn.read_bytes())
+        return cls(
+            {date.fromisoformat(x) for x in doc["dates"]},
+            {(int(a), int(b)) for a, b in doc["month_days"]},
+            {Decimal(x) for x in doc["money"]},
+            set(doc["numbers"]),
+            set(doc["words"]),
+            set(doc["tokens"]),
+            sh,
         )
 
 
-@lru_cache(maxsize=4)
+class Both:
+    """Two ``Known`` read as one, without copying either."""
+
+    def __init__(self, a: Known | Both, b: Known) -> None:
+        self.a, self.b = a, b
+
+    def __getattr__(self, name: str):  # the has_* lookups
+        fa, fb = getattr(self.a, name), getattr(self.b, name)
+        return lambda x: fa(x) or fb(x)
+
+    def plus(self, text: str) -> "Both":
+        return Both(self, known(text))
+
+
+class Builder:
+    """A source read a piece at a time; only normalized tokens are kept."""
+
+    def __init__(self) -> None:
+        self.dates: set[date] = set()
+        self.month_days: set[tuple[int, int]] = set()
+        self.money: set[Decimal] = set()
+        self.numbers: set[str] = set()
+        self.words: set[str] = set()
+        self.tokens: set[str] = set()
+        self.shingles = array("Q")
+
+    #: A piece longer than this is read in slices cut at a line break: the live
+    #: job passes its whole record text as one string, and every list a read
+    #: makes (tokens, matches) is of one slice, never of the whole record.
+    SLICE = 256 * 1024
+
+    def feed(self, text: str) -> None:
+        carry: list[str] = []  # a slice's last words, so a shingle spans the cut
+        at = 0
+        while at < len(text):
+            end = len(text) if len(text) - at <= self.SLICE else text.find("\n", at + self.SLICE)
+            end = len(text) if end < 0 else end + 1
+            carry = self._piece(text[at:end], carry)
+            at = end
+
+    def _piece(self, text: str, carry: list[str]) -> list[str]:
+        t = _strip(text)
+        f = Found()
+        _dates(t, f)
+        self.dates |= {d for d, _ in f.dates}
+        self.month_days |= {md for md, _ in f.month_days} | {(d.month, d.day) for d, _ in f.dates}
+        # Every figure a source prints is a known number, including a date's or
+        # an amount's own parts ("2024", "1500"): the comparison is with what is new.
+        self.numbers |= {_digits(m.group(0)) for m in _NUMBER.finditer(t)}
+        for rx in (_MONEY, _GROUPED):
+            for m in rx.finditer(t):
+                v = howell.money(m.group(0))
+                if v is not None:
+                    self.money.add(v)
+        self.words |= {_word(m.group(0)) for m in _WORD.finditer(t)}
+        toks = carry + _TOK.findall(_flat(t))
+        self.tokens.update(toks)
+        self.shingles.extend(_h(" ".join(toks[i : i + SHINGLE])) for i in range(len(toks) - SHINGLE + 1))
+        return toks[-(SHINGLE - 1) :]
+
+    def done(self, flat: str | None = None) -> Known:
+        # Sorted then de-duplicated in one pass: a set of every shingle would
+        # cost several times the array (measured, tests/bench_repair_guard.py).
+        ordered, self.shingles = sorted(self.shingles), array("Q")
+        sh, last = array("Q"), -1
+        for g in ordered:
+            if g != last:
+                sh.append(g)
+                last = g
+        del ordered
+        return Known(self.dates, self.month_days, self.money, self.numbers, self.words, self.tokens, sh, flat)
+
+
+@lru_cache(maxsize=8)
 def known(text: str) -> Known:
-    """``text`` read as a source: every fact it holds, for ``new_facts``."""
-    f = read(text)
-    t = _strip(text)
-    dates = {d for d, _ in f.dates}
-    mds = {md for md, _ in f.month_days} | {(d.month, d.day) for d in dates}
-    # Every figure a source prints is a known number, including a date's or an
-    # amount's own parts ("2024", "1500"): the comparison is with what is new.
-    numbers = {_digits(m.group(0)) for m in _NUMBER.finditer(t)} | {n for n, _ in f.numbers}
-    money = {v for v, _ in f.money}
-    grouped = (howell.money(m.group(0)) for m in re.finditer(r"\b\d{1,3}(?:,\d{3})+\b", t))
-    money |= {v for v in grouped if v is not None}
-    words = {_word(m.group(0)) for m in _WORD.finditer(t)}
-    return Known(dates, mds, money, numbers, words, _flat(t))
+    """A small text (a draft, a test's source) read as a source; it keeps its
+    flattened text, so a quotation of it is matched as written."""
+    b = Builder()
+    b.feed(text)
+    return b.done(flat=_flat(_strip(text)))
 
 
-def new_facts(text: str, base: Known) -> list[tuple[str, str]]:
+#: The job index in this process, by key: a repair round reads it, never builds it.
+_MEMO: dict[str, Known] = {}
+
+
+def index(chunks: Callable[[], Iterable[str]], cache_dir: Path) -> Known:
+    """The job's sources, read once: ``chunks()`` yields them a piece at a
+    time (it is called twice: once for the key, once to build on a miss)."""
+    h = hashlib.sha256()
+    for c in chunks():
+        h.update(c.encode("utf-8", "replace"))
+        h.update(b"\0")
+    key = h.hexdigest()[:24]
+    if key in _MEMO:
+        return _MEMO[key]
+    path = cache_dir / CACHE.format(key=key)
+    got = Known.load(path)
+    if got is None:
+        b = Builder()
+        for c in chunks():
+            b.feed(c)
+        got = b.done()
+        got.save(path)
+    _MEMO.clear()  # one job's index at a time
+    _MEMO[key] = got
+    return got
+
+
+def new_facts(text: str, base: Known | Both) -> list[tuple[str, str]]:
     """(kind, as printed) for every fact ``text`` states that ``base`` does not hold."""
     f = read(text)
     out: list[tuple[str, str]] = []
-    out += [("date", raw) for d, raw in f.dates if d not in base.dates]
-    out += [("date", raw) for md, raw in f.month_days if md not in base.month_days]
-    out += [("dollar figure", raw) for v, raw in f.money if v not in base.money]
-    out += [("number", raw) for n, raw in f.numbers if n not in base.numbers]
-    out += [("name", raw) for w, raw in f.names if w not in base.words]
-    out += [("quoted string", raw) for q, raw in f.quotes if q not in base.flat]
+    out += [("date", raw) for d, raw in f.dates if not base.has_date(d)]
+    out += [("date", raw) for md, raw in f.month_days if not base.has_month_day(md)]
+    out += [("dollar figure", raw) for v, raw in f.money if not base.has_money(v)]
+    out += [("number", raw) for n, raw in f.numbers if not base.has_number(n)]
+    out += [("name", raw) for w, raw in f.names if not base.has_word(w)]
+    out += [("quoted string", raw) for q, raw in f.quotes if not base.has_quote(q)]
     return list(dict.fromkeys(out))
 
 
-__all__ = ["Found", "Known", "known", "new_facts", "read"]
+__all__ = ["Both", "Builder", "Found", "Known", "index", "known", "new_facts", "read"]

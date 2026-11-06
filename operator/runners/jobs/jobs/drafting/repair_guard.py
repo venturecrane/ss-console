@@ -28,6 +28,7 @@ a finished or preserved job's own rounds, at no cost: no model is called.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -90,7 +91,7 @@ class Rejection:
     facts: list[tuple[str, str]]  # (kind, as printed): kept on the seat, never in an alert
 
 
-def vet(before: str, after: str, base: newfacts.Known, frozen: set[Key]) -> tuple[str, list[Rejection]]:
+def vet(before: str, after: str, base: newfacts.Known | newfacts.Both, frozen: set[Key]) -> tuple[str, list[Rejection]]:
     """``after`` with every request or section whose change adds a fact put
     back as it was in ``before``, and every change to a frozen one undone."""
     bdoc, after_doc = before.partition(NOTES)[0], after.partition(NOTES)
@@ -150,7 +151,12 @@ def vet(before: str, after: str, base: newfacts.Known, frozen: set[Key]) -> tupl
 class Guard:
     """One unit's frozen requests and the findings parked on them."""
 
-    def __init__(self, data: Path, sources: str) -> None:
+    def __init__(self, data: Path, sources: str | newfacts.Known) -> None:
+        """``sources``: the job's index, or the text to index (the digest and
+        the record text, read once per job and cached: ``newfacts.index``)."""
+        if isinstance(sources, str):
+            text = sources
+            sources = newfacts.index(lambda: (text,), job_root(data))
         self.data, self.sources = data, sources
         p = data / STATE
         st = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
@@ -168,7 +174,7 @@ class Guard:
     def check(self, before: str, after: str, audit_md: str, where: str) -> tuple[str, list[Rejection]]:
         """The repair ``after`` of ``before``, vetted; rejections recorded
         (with the findings ``audit_md`` had on each) BEFORE the caller commits."""
-        vetted, rejected = vet(before, after, newfacts.known(self.sources), self.frozen)
+        vetted, rejected = vet(before, after, self.sources, self.frozen)
         if rejected:
             found = rows(audit_md)
             for r in rejected:
@@ -227,42 +233,55 @@ def repaired(dr: Drafter, digest: str, version: int, guard: Guard) -> tuple[str,
     return vetted, rejected
 
 
-def vet_format(data: Path, before: str, after: str, sources: str) -> str:
+def job_root(data: Path) -> Path:
+    """A unit's job data directory (``data/set-<k>`` belongs to ``data``)."""
+    return data.parent if data.name.startswith("set-") else data
+
+
+def vet_format(data: Path, before: str, after: str, sources: str | newfacts.Known) -> str:
     """The format check's one repair, kept only where it adds no fact."""
     vetted, _ = Guard(data, sources).check(before, after, "", "format")
     return vetted
 
 
 # ---- the $0 replay over a job's own rounds ---------------------------------------------------
-def _record_text(job_data: Path) -> tuple[str, int, int]:
-    """The record text the job read: (text, files found, files listed). A
-    copied job's ``text_path`` names the seat's path; the file is looked for
-    under the copy by its name when that path is not here."""
+def _record_files(job_data: Path) -> tuple[list[Path], int]:
+    """The record text files the job read, and how many it listed. A copied
+    job's ``text_path`` names the seat's path: the copy is listed ONCE, and a
+    path not here is found by its file name in that listing."""
     listed = job_data / "extracted.jsonl"
-    lines = listed.read_text(encoding="utf-8").splitlines() if listed.is_file() else []
-    rows = [json.loads(ln) for ln in lines if ln.strip()]
-    texts = []
-    for r in rows:
-        tp = str(r.get("text_path") or "")
-        if not tp:
-            continue
-        p = Path(tp)
-        if not p.is_file():
-            p = next(iter(sorted(job_data.parent.rglob(p.name))), p)
-        if p.is_file():
-            texts.append(p.read_text(encoding="utf-8", errors="replace"))
-    return "\n\n".join(texts), len(texts), sum(1 for r in rows if r.get("text_path"))
+    paths = []
+    with listed.open(encoding="utf-8") if listed.is_file() else open(os.devnull, encoding="utf-8") as fh:
+        for ln in fh:
+            if ln.strip():
+                tp = str(json.loads(ln).get("text_path") or "")
+                if tp:
+                    paths.append(Path(tp))
+    by_name: dict[str, Path] = {}
+    if any(not p.is_file() for p in paths):
+        for root, _dirs, names in os.walk(job_data.parent):
+            for n in names:
+                by_name.setdefault(n, Path(root) / n)
+    found = [p if p.is_file() else by_name.get(p.name) for p in paths]
+    return [p for p in found if p is not None and p.is_file()], len(paths)
 
 
 def replay(job_data: Path, show: bool = False) -> list[str]:
     """Each repair round of each unit of a job, as this guard would have
     judged it: the request or section and the new facts by kind; their words
-    only with ``show``. Reads files; calls no model."""
+    only with ``show``. Reads files one at a time; calls no model."""
     digest = (job_data / "digest.md").read_text(encoding="utf-8") if (job_data / "digest.md").is_file() else ""
-    corpus, found, listed = _record_text(job_data)
-    base = newfacts.known(digest + "\n" + corpus)
+    files, listed = _record_files(job_data)
+
+    def chunks():
+        yield digest
+        for f in files:
+            yield f.read_text(encoding="utf-8", errors="replace")
+
+    base = newfacts.index(chunks, job_data)
+    size = sum(f.stat().st_size for f in files)
+    out = [f"sources: digest {len(digest):,} chars; record text {len(files)} of {listed} files, {size:,} bytes"]
     units = sorted(p for p in job_data.glob("set-*") if p.is_dir()) or [job_data]
-    out = [f"sources: digest {len(digest):,} chars; record text {found} of {listed} files, {len(corpus):,} chars"]
     for u in units:
         frozen: set[Key] = set()
         v = 1

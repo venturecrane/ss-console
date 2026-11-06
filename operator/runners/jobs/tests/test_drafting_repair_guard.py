@@ -430,3 +430,67 @@ def test_the_replay_judges_a_finished_jobs_own_rounds_at_no_cost(tmp_path):
     assert out[1] == "set-1 repair v1->v2: REFUSED 1 (REQUESTS FOR ADMISSION No. 2); new facts by kind {'name': 1}"
     assert out[2] == "set-1 repair v2->v3: kept"
     assert "Diaz" not in "\n".join(out) and "Diaz" in "\n".join(repair_guard.replay(data, show=True))
+
+
+# ---- the job index: read once, cached, a lookup per repair (the 11-05 rehearsal) -------------
+
+
+def test_the_job_index_is_built_once_cached_by_sha_and_holds_no_text(tmp_path, monkeypatch):
+    built = []
+    real = newfacts.Builder.feed
+
+    def counting(self, text):
+        built.append(len(text))
+        return real(self, text)
+
+    monkeypatch.setattr(newfacts.Builder, "feed", counting)
+    newfacts._MEMO.clear()
+    k = newfacts.index(lambda: (SOURCE,), tmp_path)
+    assert built and k.flat is None  # the record's text is never kept
+    assert k.has_quote(newfacts._flat("the floor was wet near aisle 4")) and not k.has_quote("the floor was slick")
+    cached = list(tmp_path.glob("known-index-*"))
+    assert sorted(p.suffix for p in cached) == [".bin", ".json"]
+    assert SOURCE.split()[3] not in cached[0].with_suffix(".bin").read_bytes().decode("latin-1")
+    newfacts._MEMO.clear()
+    built.clear()
+    again = newfacts.index(lambda: (SOURCE,), tmp_path)
+    assert built == [] and again.words == k.words  # read from the cache, not rebuilt
+    built.clear()
+    newfacts.index(lambda: (SOURCE + " more",), tmp_path)
+    assert built  # another corpus, another key
+
+
+def test_a_guard_given_text_uses_the_jobs_cached_index(tmp_path):
+    newfacts._MEMO.clear()
+    (tmp_path / "set-1").mkdir()
+    g = repair_guard.Guard(tmp_path / "set-1", SOURCE)
+    assert isinstance(g.sources, newfacts.Known)
+    assert list(tmp_path.glob("known-index-*.json"))  # in the job's data dir, not the set's
+    assert repair_guard.Guard(tmp_path / "set-1", SOURCE).sources is g.sources
+
+
+def test_the_replay_lists_the_copy_once_and_never_searches_per_file(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    (data / "set-1").mkdir(parents=True)
+    rows = []
+    for i in range(30):
+        f = tmp_path / "texts" / f"doc{i}.txt"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text(f"Record {i} signed by Quill Example.")
+        rows.append(json.dumps({"name": f"d{i}", "text_path": f"/opt/data/jobs/x/doc{i}.txt"}))
+    (data / "extracted.jsonl").write_text("\n".join(rows) + "\n")
+    walks = []
+    real_walk = repair_guard.os.walk
+    monkeypatch.setattr(repair_guard.os, "walk", lambda p: walks.append(p) or real_walk(p))
+    monkeypatch.setattr(Path, "rglob", lambda *a, **k: (_ for _ in ()).throw(AssertionError("rglob per row")))
+    files, listed = repair_guard._record_files(data)
+    assert (len(files), listed, len(walks)) == (30, 30, 1)
+
+
+def test_a_long_source_is_read_in_slices_and_a_quotation_across_a_cut_is_still_known(tmp_path, monkeypatch):
+    monkeypatch.setattr(newfacts.Builder, "SLICE", 16)
+    newfacts._MEMO.clear()
+    text = "alpha bravo charlie\ndelta echo foxtrot\ngolf hotel india\n"
+    k = newfacts.index(lambda: (text,), tmp_path)
+    assert k.has_quote("bravo charlie delta echo") and k.has_quote("foxtrot golf hotel india")
+    assert not k.has_quote("bravo charlie echo delta")
