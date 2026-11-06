@@ -57,6 +57,28 @@ suite('pr-watch: what a PR shows', () => {
     expect(describe(pr())).toBe('open | green, not queued')
   })
 
+  it('does not change its line as running checks finish one by one, only when one fails', () => {
+    const three = pr({
+      checks: ['a', 'b', 'c'].map((name) => ({ name, state: 'running' as const })),
+    })
+    const one = pr({
+      checks: [
+        { name: 'a', state: 'pass' },
+        { name: 'b', state: 'pass' },
+        { name: 'c', state: 'running' },
+      ],
+    })
+    expect(describe(three)).toBe(describe(one))
+    expect(describe(three)).toBe('open | checks running')
+    const failed = pr({
+      checks: [
+        { name: 'a', state: 'fail' },
+        { name: 'c', state: 'running' },
+      ],
+    })
+    expect(describe(failed)).toBe('open | FAILING a | checks running')
+  })
+
   it('is idle only when nothing is running and it is not in the queue', () => {
     expect(idle(pr())).toBe(true)
     expect(idle(pr({ checks: [{ name: 'x', state: 'running' }] }))).toBe(false)

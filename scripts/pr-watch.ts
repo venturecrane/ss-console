@@ -76,7 +76,8 @@ export function describe(pr: PrSnapshot): string {
   const running = pr.checks.filter((c) => c.state === 'running').length
   const parts: string[] = [pr.isDraft ? 'draft' : 'open']
   if (failing.length) parts.push(`FAILING ${failing.join(', ')}`)
-  if (running) parts.push(`${running} check(s) running`)
+  // No count: a line per finished check would wake a Monitor every minute for nothing.
+  if (running) parts.push('checks running')
   if (pr.queue) parts.push(`queued #${pr.queue.position} ${pr.queue.state}`)
   else if (!failing.length && !running) parts.push(pr.isDraft ? 'green' : 'green, not queued')
   return parts.join(' | ')
