@@ -32,8 +32,9 @@ can claim and cannot run. Non-terminal wipes take both.
 
 WHAT SURVIVES. The ledger row -- the record of what was asked for and what
 happened. Only the working copy goes. A chronology hold's row moves to
-``failed`` with a reason starting ``superseded`` (``close_wiped_hold``), since
-a hold with no workdir can never resume and must not read as waiting. A resume
+``failed``, its reason saying it expired unattended (``close_wiped_hold``),
+since a hold with no workdir can never resume and must not read as waiting;
+SMD is paged once and the firm is sent nothing. A resume
 request for a wiped job already refuses cleanly and says so (`resume.py`):
 the artifacts are gone and the honest answer is the one the ledger gives.
 """
@@ -43,6 +44,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger("jobs.daemon")
@@ -130,30 +132,84 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
         wiped.append(path.name)
         if state in PARKED:
             close_wiped_hold(d, path.name)
+    close_dead_holds(d)
     return wiped
 
 
 #: The lanes whose ledger row a wiped hold closes. The chronology's ledger
-#: allows ``held -> failed``, and a failed chronology whose reason starts with
-#: ``superseded`` is owed no note; other lanes' ledgers and notes differ.
+#: allows ``held -> failed`` and sends the firm nothing for a failed job (it
+#: hears only of a delivered one); other lanes' ledgers and notes differ.
 CLOSES_WIPED_HOLDS = frozenset({"medchron"})
-#: Starts with ``superseded``: the fixed wording keys on that word.
-WIPED_HOLD_REASON = "superseded: held past the retention window, workdir wiped"
+#: The reason a closed dead hold carries, followed by the hold's own reason.
+WIPED_HOLD_REASON = "expired: held past the retention window with nobody clearing it; workdir wiped"
+#: How often the lane looks for holds wiped before their rows could close.
+DEAD_HOLD_SWEEP_SECONDS = 3600
 
 
-def close_wiped_hold(d: Any, job_id: str) -> None:
-    """Close the ledger row of a hold whose workdir just went.
+def close_wiped_hold(d: Any, job_id: str, row: dict[str, Any] | None = None) -> bool:
+    """Close the ledger row of a hold whose workdir is gone, and page SMD once.
 
     A wiped hold can never resume (``resume.py`` refuses it), yet its row
-    stayed ``held`` for good: a 09-23 chronology hold on a client seat sat
-    held for three weeks until SMD closed it by hand on 10-13. Only a row the
-    broker still has ``held`` moves; one a later delivery already closed is
-    left as it is. Never raises: the wipe has happened either way."""
+    stayed ``held`` for good: a chronology hold on a client seat sat held for
+    three weeks until SMD closed it by hand. Only a row the broker still has
+    ``held`` moves. The record goes straight to the broker, so no DELIVER turn
+    wakes and the firm hears nothing. The page uses the code the hold paged
+    under (``proof/holds.classify``), keyed to this close. Returns whether the
+    row closed; never raises, the wipe has happened either way."""
     if d.LANE not in CLOSES_WIPED_HOLDS:
-        return
+        return False
+    from .proof import holds, watch
+
+    if watch.in_proof_run(d):
+        return False
     try:
-        row = d.broker.status(job_id)
-        if row and row.get("state") == "held":
-            d.broker.record(job_id, "failed", {"reason": WIPED_HOLD_REASON})
+        row = row if row is not None else d.broker.status(job_id)
+        if not row or row.get("state") != "held":
+            return False
+        was = str(row.get("reason") or "no reason recorded")
+        d.broker.record(job_id, "failed", {"reason": f"{WIPED_HOLD_REASON} (held: {was})"[:500]})
     except Exception as exc:  # noqa: BLE001 - a broker error must not stop the wipe loop
         logger.warning("could not close the wiped hold %s: %s", job_id, exc)
+        return False
+    code = holds.classify(d.LANE, was)[1] or "gate_held"
+    watch.alert(d, job_id, code, f"{WIPED_HOLD_REASON}; row closed failed; nothing was sent", unit=f"wiped:{job_id}")
+    return True
+
+
+def _iso_epoch(value: Any) -> float | None:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def close_dead_holds(d: Any) -> list[str]:
+    """Close every ``held`` row whose workdir and queue entry are already gone
+    and whose hold is older than the parked window: holds wiped before
+    ``close_wiped_hold`` existed, or whose close the broker missed. Runs at
+    most once an hour per lane. Returns the ids closed; never raises."""
+    if d.LANE not in CLOSES_WIPED_HOLDS:
+        return []
+    now = d.clock()
+    if now - float(getattr(d, "_dead_holds_swept_at", 0.0)) < DEAD_HOLD_SWEEP_SECONDS:
+        return []
+    d._dead_holds_swept_at = now
+    from .proof import watch
+
+    try:
+        rows = watch._client(d)._request({"action": "medchron_job_list"}).get("jobs") or []
+    except Exception as exc:  # noqa: BLE001 - a broker error must not stop the tick
+        logger.warning("could not list chronology jobs for dead holds: %s", exc)
+        return []
+    cutoff = now - float(getattr(d, "held_wipe_hours", DEFAULT_HELD_WIPE_HOURS)) * 3600
+    closed: list[str] = []
+    for row in rows:
+        job_id = str(row.get("id") or "")
+        held_at = _iso_epoch(row.get("updated_at"))
+        if not job_id or row.get("state") != "held" or held_at is None or held_at >= cutoff:
+            continue
+        if (d.jobs / job_id).exists() or (d.queue / f"{job_id}.json").exists():
+            continue
+        if close_wiped_hold(d, job_id, row):
+            closed.append(job_id)
+    return closed
