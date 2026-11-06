@@ -354,9 +354,13 @@ def set_aside(d: Any, env_path: Path, job_id: str, why: str) -> None:
 
     aside = Path(env_path).parent / ENDED_DIR
     aside.mkdir(exist_ok=True, mode=0o700)
+    from . import retention
+
     Path(env_path).replace(aside / Path(env_path).name)
+    retention.mark_set_aside(aside / Path(env_path).name)
     holds_aside = Path(d.run_dir) / lane_proof.HOLDS_DIR / ENDED_DIR / f"{d.LANE}-{job_id}.json"
-    lane_proof.set_aside_hold(d, job_id, holds_aside)
+    if lane_proof.set_aside_hold(d, job_id, holds_aside):
+        retention.mark_set_aside(holds_aside)
     logger.warning("%s job %s not claimed: %s; its envelope is set aside in %s", d.LANE, job_id, why, aside)
 
 

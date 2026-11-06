@@ -230,6 +230,7 @@ class Daemon:
                 q = self.queue / "quarantine"
                 q.mkdir(exist_ok=True, mode=0o700)
                 env_path.replace(q / env_path.name)
+                retention.mark_set_aside(q / env_path.name)
                 logger.error("quarantined %s: the broker has no ledger row for it", job_id)
                 continue
             # Before the lane-proof gate, which may release a hold: an ended
@@ -406,6 +407,7 @@ class Daemon:
     def wipe_expired(self) -> list[str]:
         """Terminal jobs at `wipe_hours`, parked ones at `held_wipe_hours`
         (`retention.py` carries the policy and why it is two windows)."""
+        retention.prune_set_aside(self)
         return retention.wipe_expired(self, TERMINAL)
 
     def poll_requests(self) -> None:

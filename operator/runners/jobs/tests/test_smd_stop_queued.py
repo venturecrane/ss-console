@@ -272,6 +272,39 @@ def test_a_resume_of_a_stopped_job_is_refused_by_the_ledger_rule_once_it_has_end
     assert (lane.queue / smd_stop.ENDED_DIR / f"{jid}.json").is_file()
 
 
+def test_set_aside_envelopes_and_holds_are_pruned_after_the_terminal_window(tmp_path, real_lane_gate):
+    """They hold a firm's request text: gone means gone. The window is the
+    terminal workdir's (``wipe_hours``) and starts when the file is set aside."""
+    from jobs import retention
+
+    lane, client, jid, key = _drafting(tmp_path)
+    now = time.time()
+    lane.clock = lambda: now
+    _hold(lane, client, jid, key)
+    client.rows[jid]["state"] = "failed"
+    _prove(lane, key)
+    assert lane.tick() is None
+    ended = lane.queue / smd_stop.ENDED_DIR / f"{jid}.json"
+    hold = lane.run_dir / retention.HOLDS_SET_ASIDE / f"drafting-{jid}.json"
+    assert ended.is_file() and hold.is_file()
+    (lane.queue / "q1.json").write_text("{}")  # no ledger row: quarantined
+    assert lane.tick() is None
+    quarantined = lane.queue / "quarantine" / "q1.json"
+    assert quarantined.is_file()
+    other = lane.run_dir / retention.HOLDS_SET_ASIDE / "demand-01X.json"  # another lane's, not ours to prune
+    other.write_text("{}")
+    lane.wipe_expired()
+    assert ended.is_file() and hold.is_file() and quarantined.is_file(), "inside the window: kept"
+    old = now - lane.wipe_hours * 3600 - 60
+    for p in (ended, hold, quarantined, other):
+        os.utime(p, (old, old))
+    lane.wipe_expired()
+    assert not ended.exists() and not hold.exists() and not quarantined.exists()
+    assert other.exists()
+    assert retention.HOLDS_SET_ASIDE == f"{lane_proof.HOLDS_DIR}/{smd_stop.ENDED_DIR}"
+    assert smd_stop.ENDED_DIR in retention.SET_ASIDE_DIRS
+
+
 def test_the_sweep_and_the_daemon_agree_on_what_has_ended():
     assert smd_stop._ended_states() == daemon_mod.TERMINAL
     assert smd_stop.STATE in daemon_mod.TERMINAL
