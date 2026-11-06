@@ -209,3 +209,56 @@ def test_a_payment_line_naming_payments_and_adjustments_is_under_its_own_words(
     assert sub in lines
     assert lines.count("$410.00") == 1 and lines.index("$410.00") > lines.index(sub) > lines.index("$25.00")
     assert lines.count("Insurance Pymts/Adjstmts") == 0, "the label is the sub-heading, not a payment row"
+
+
+# ---- a figure the same page prints as payments-and-adjustments is not a payment ----
+def _combined_page(bare_page: int = 1, bare_amount: str = "1,200.00") -> list[dict]:
+    return [
+        {"label": "Payments", "amount": bare_amount, "date": None, "page": bare_page},
+        {"label": "Insurance Pymts/Adjstmts", "amount": "1,200.00", "date": None, "page": 1},
+        {"label": "Patient Pymts/Adjstmts", "amount": "50.00", "date": None, "page": 1},
+    ]
+
+
+def _payment_rows(lines: list[str]) -> list[str]:
+    """The payments table's lines: from its header to the first sub-heading."""
+    start = lines.index("Printed As")
+    end = next((i for i, x in enumerate(lines) if x.startswith('Printed as "')), len(lines))
+    return lines[start:end] if start < end else []
+
+
+def test_a_payment_line_repeating_a_combined_figure_on_its_page_is_not_a_payment(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pay = {"label": "Patient payment", "amount": "$25.00", "date": "02/10/2026", "page": 1}
+    lines = _tail(sr, pay, *_combined_page())
+    assert "Payments" not in _payment_rows(lines) and "Patient payment" in _payment_rows(lines)
+    assert lines.count("1,200.00") == 1 and lines.index("1,200.00") > lines.index(
+        'Printed as "Insurance Pymts/Adjstmts"'
+    )
+    assert lines.index("50.00") > lines.index('Printed as "Patient Pymts/Adjstmts"')
+
+
+def test_the_same_figure_on_another_page_stays_a_payment(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    lines = _tail(sr, *_combined_page(bare_page=2))
+    rows = _payment_rows(lines)
+    assert "Payments" in rows and "1,200.00" in rows and lines.count("1,200.00") == 2
+
+
+def test_a_differently_printed_figure_stays_a_payment(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    lines = _tail(sr, *_combined_page(bare_amount="1200.00"))
+    rows = _payment_rows(lines)
+    assert "Payments" in rows and "1200.00" in rows and lines.count("1,200.00") == 1
+
+
+def test_a_document_with_no_combined_line_keeps_its_payments(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    lines = _tail(sr, {"label": "Payments", "amount": "1,200.00", "date": None, "page": 1})
+    assert (
+        "Payments" in _payment_rows(lines)
+        and "1,200.00" in lines
+        and not any(x.startswith('Printed as "') for x in lines)
+    )

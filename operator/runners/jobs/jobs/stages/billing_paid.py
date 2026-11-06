@@ -16,7 +16,9 @@ itemized payment on the same document and page prints the same label and the
 same amount string, in which case it is that row and is not shown twice.
 The combined rule applies to an itemized payment line too: one whose label
 names payments and adjustments together ("Insurance Pymts/Adjstmts") is kept
-apart under its own words; any other payment line stays a payment row.
+apart under its own words; any other payment line stays a payment row. On
+one page of one document, a payment row whose amount text is also printed
+under a payments-and-adjustments label is not shown among the payments.
 Nothing here is summed.
 """
 
@@ -105,7 +107,7 @@ def _key(t: dict[str, Any]) -> tuple[int, str, str]:
     return _page(t.get("page")), str(t.get("amount") or ""), str(t.get("label") or "")
 
 
-def _chunk(rd: _Reader, file: str, c: dict[str, Any], itemized: set, paid: list, combined: list) -> None:
+def _chunk(rd: _Reader, file: str, c: dict[str, Any], itemized: set, paid: list, *, combined: list) -> None:
     """One chunk's payments, then its printed totals that name a payment;
     ``itemized`` holds every payment line the document prints."""
     for t in c.get("printed_payments") or []:
@@ -132,6 +134,20 @@ def gather(sr: StageRun, patient: str | None) -> tuple[list[dict[str, Any]], lis
         chunks = [c for c in r.get("chunks") or [] if isinstance(c, dict)]
         keep = [c for c in chunks if c.get("doc_type") not in PAID_SKIP | {None} and not quarantined(c, patient)]
         itemized = {_key(t) for c in keep for t in c.get("printed_payments") or [] if isinstance(t, dict)}
+        doc_paid: list[dict[str, Any]] = []
+        doc_combined: list[dict[str, Any]] = []
         for c in keep:
-            _chunk(rd, str(r.get("file")), c, itemized, paid, combined)
+            _chunk(rd, str(r.get("file")), c, itemized, doc_paid, combined=doc_combined)
+        paid += _not_combined(doc_paid, doc_combined)
+        combined += doc_combined
     return paid, combined
+
+
+def _not_combined(paid: list[dict[str, Any]], combined: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One document's payment rows, less any whose page shows the same printed
+    amount under a payments-and-adjustments label: that figure is not shown
+    as paid, and stays visible once under its own words. Amount text is
+    compared after trimming whitespace only; a row with no page named is not
+    matched, and a combined row is never dropped."""
+    both = {(x["page"], x["amount"].strip()) for x in combined if x["page"] != "-"}
+    return [x for x in paid if (x["page"], x["amount"].strip()) not in both]
