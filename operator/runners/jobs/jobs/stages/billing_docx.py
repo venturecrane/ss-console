@@ -22,6 +22,7 @@ from datetime import date
 from typing import Any
 
 from ..medchron import docx_style as S
+from . import billing_paid as BP
 from .base import StageRun, read_json
 from .billing_chart import NO_BILL
 
@@ -123,6 +124,49 @@ def _as_printed(doc: Any, data: dict[str, Any]) -> None:
         else ["SUBTOTAL, INCOMPLETE (not in the grand total)", "", money(data.get("as_printed_subtotal") or 0.0)],
         right_cols=(2,),
     )
+
+
+_PAID_HEAD = ["Provider (as printed on the bill)", "Source Document", "Page", "Printed As", "Line", "Amount", "Date"]
+_PAID_WIDTHS = [1.3, 1.5, 0.5, 1.7, 0.75, 0.8, 0.75]
+
+
+def _paid(doc: Any, sr: StageRun, patient: str | None) -> None:
+    """Amounts paid, only as printed: absent when no bill prints a payment.
+    Every cell is the transcription's own text; nothing is cut or re-rendered."""
+    paid, combined = BP.gather(sr, patient)
+    if not paid and not combined:
+        return
+    doc.add_paragraph("Amounts Paid, as Printed on the Bills", style="Heading 1")
+    para(
+        doc,
+        "Each payment below is copied from the bill named, with the words and the amount exactly as printed. A row "
+        f'marked "{BP.PRINTED_TOTAL}" is a total the bill prints under words naming a payment. These figures are not '
+        "added together and are not taken from any total above. A bill that prints no payment does not appear here.",
+    )
+    if paid:
+        cells = [[x["provider"], x["file"], x["page"], x["label"], x["kind"], x["amount"], x["date"]] for x in paid]
+        table(doc, _PAID_HEAD, cells, _PAID_WIDTHS, right_cols=(5,))
+    _combined(doc, combined)
+
+
+def _combined(doc: Any, rows: list[dict[str, Any]]) -> None:
+    """Totals whose printed words name payments and adjustments together: not
+    payments, each under a sub-heading carrying the bill's own words."""
+    for label in dict.fromkeys(x["label"] for x in rows):
+        doc.add_paragraph(f'Printed as "{label}"', style="Heading 2")
+        para(
+            doc,
+            "The bills below print this figure under the words above, which name payments and adjustments together. "
+            "It is shown as printed and is not listed among the payments.",
+        )
+        cells = [[x["provider"], x["file"], x["page"], x["amount"]] for x in rows if x["label"] == label]
+        table(
+            doc,
+            ["Provider (as printed on the bill)", "Source Document", "Page", "Amount"],
+            cells,
+            [2.4, 3.0, 0.7, 1.2],
+            right_cols=(3,),
+        )
 
 
 def _disagree(doc: Any, rows: list[dict[str, Any]]) -> None:
@@ -261,8 +305,7 @@ def run(sr: StageRun) -> int:
     from docx import Document
     from docx.shared import Inches
 
-    d = sr.slug_dir
-    unit = sr.unit.unit
+    d, unit = sr.slug_dir, sr.unit.unit
     sfx = f"-{unit}" if sr.job.joint else ""
     data = read_json(d / f"billing_chart{sfx}.json", None)
     refused = _refusal(sr, data)
@@ -323,6 +366,7 @@ def run(sr: StageRun) -> int:
             size=9,
         )
     _as_printed(doc, data)
+    _paid(doc, sr, data.get("patient_filter"))
     _disagree(doc, rows)
     _excluded(doc, data)
     _not_in_total(doc, data, gaps)
