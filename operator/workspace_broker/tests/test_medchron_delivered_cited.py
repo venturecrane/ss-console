@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from workspace_broker.medchron_ledger import work_digest
 
-from test_medchron_identity import ROOT, call, run_envelope, update_envelope, verbs  # noqa: F401 - fixture
+from test_medchron_identity import ROOT, call, run_envelope, update_envelope, verbs  # noqa: F401 - verbs is a pytest fixture, used by name
 
 SHA_A = "a" * 64
 SHA_B = "b" * 64
