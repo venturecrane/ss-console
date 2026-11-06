@@ -109,6 +109,11 @@ class Job:
     # The child's uid cannot list the jobs dir (0710), only enter a job dir it
     # is named; ``vision_seed`` and ``email_parents`` read these by path.
     prior_delivered: list[str] = field(default_factory=list)
+    # 2026-11-06: ``{unit: {file id: sha256}}``, the source files the delivered
+    # chronologies on this matter cite, from their ledger rows (the broker
+    # stamps them on an update's envelope). A delivered job dir is wiped 72
+    # hours after delivery; this record is not (``prior_reading.cited_sources``).
+    delivered_cited: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def joint(self) -> bool:
@@ -297,7 +302,23 @@ def parse(data: Any, *, path: Path) -> Job:
         request_ref=data.get("request_ref"),
         update=parse_update(data, units),
         prior_delivered=[str(x) for x in data.get("prior_delivered") or [] if _JOB_ID.match(str(x))],
+        delivered_cited=_delivered_cited(data.get("delivered_cited")),
     )
+
+
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _delivered_cited(raw: Any) -> dict[str, dict[str, str]]:
+    """``delivered_cited`` as the broker wrote it; anything not a
+    ``{unit: {id: sha256}}`` pair is dropped (a source not proven the same is
+    read, never assumed)."""
+    out: dict[str, dict[str, str]] = {}
+    for unit, files in (raw if isinstance(raw, dict) else {}).items():
+        kept = {str(k): str(v) for k, v in (files if isinstance(files, dict) else {}).items() if _SHA256.match(str(v))}
+        if kept:
+            out[str(unit)] = kept
+    return out
 
 
 _JOB_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")

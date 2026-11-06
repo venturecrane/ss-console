@@ -137,3 +137,51 @@ def delivered_count(ledger: Any, matter_id: str, clients: list[str]) -> int:
         conn.close()
     wanted = set(clients)
     return sum(1 for (raw,) in rows if raw is None or wanted & set(json.loads(raw)))
+
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def delivered_cited(ledger: Any, matter_id: str) -> dict[str, dict[str, str]]:
+    """``{unit: {file id: sha256}}``: every source file a delivered chronology
+    on the matter cites, from each delivered row's ``delivery.cited_sources``
+    (``jobs.medchron.covered.delivered_cited``), oldest row first so a newer
+    hash for the same id wins. Ids and hashes only, never a document.
+
+    WHY (2026-11-06). An update recognised a cited source the firm already
+    holds by reading the delivered job's dir, and retention wipes that dir 72
+    hours after delivery: on a client seat an update requested later
+    recognised none of the cited files it re-pulled, and would have filed
+    them again as new exhibits. The ledger row outlives the dir, so the
+    broker hands its record to the update (``cited_block``)."""
+    conn = ledger._connect()
+    try:
+        rows = conn.execute(
+            "SELECT delivery_json FROM medchron_jobs WHERE matter_id=? AND state='delivered' ORDER BY created_at ASC",
+            (str(matter_id),),
+        ).fetchall()
+    finally:
+        conn.close()
+    out: dict[str, dict[str, str]] = {}
+    for (raw,) in rows:
+        try:
+            delivery = json.loads(raw) if raw else None
+        except ValueError:
+            continue
+        cited = delivery.get("cited_sources") if isinstance(delivery, dict) else None
+        for unit, files in (cited if isinstance(cited, dict) else {}).items():
+            if isinstance(files, dict):
+                kept = {str(k): str(v) for k, v in files.items() if _SHA256_RE.match(str(v))}
+                out.setdefault(str(unit), {}).update(kept)
+    return {u: f for u, f in out.items() if f}
+
+
+def cited_block(ledger: Any, env: dict[str, Any]) -> dict[str, Any]:
+    """``{"delivered_cited": ...}`` for an UPDATE envelope whose matter has a
+    delivered row recording its cited sources, ``{}`` otherwise. Outside the
+    work digest (``medchron_ledger._WORK_KEYS``): it is what the broker knew
+    when it queued the work, not the work asked for."""
+    if "update" not in env:
+        return {}
+    cited = delivered_cited(ledger, env["matter"]["id"])
+    return {"delivered_cited": cited} if cited else {}

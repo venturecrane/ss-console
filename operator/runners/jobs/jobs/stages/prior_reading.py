@@ -70,9 +70,25 @@ def decided(sr: StageRun, ids: set[str]) -> dict[str, str]:
     return out
 
 
+def cited_by_id(slug_dir: Any, unit: str) -> dict[str, str]:
+    """``{file id: sha256}`` of every SOURCE file the chronology in this job's
+    ``slug_dir`` cites for ``unit``: the unit file rows its page map names,
+    hashed by its own manifest. What a delivered job records in its ledger row
+    (``covered.delivery_fields``, ``delivery.cited_sources``) and what
+    ``cited_sources`` reads back from a delivered job dir still on the volume."""
+    unit_files = read_json(slug_dir / "units" / f"{unit}.json", []) or []
+    if not isinstance(unit_files, list):
+        return {}
+    cited = cited_names(slug_dir, unit, slug_dir / "runs" / unit)
+    ids = {str(f["id"]) for f in unit_files if isinstance(f, dict) and f.get("id") and file_key(f) in cited}
+    return {rid: sha for rid, sha in _hashes(read_jsonl(slug_dir / "raw_manifest.jsonl")).items() if rid in ids}
+
+
 def cited_sources(sr: StageRun) -> set[str]:
     """The sha256 of every SOURCE file a delivered chronology on this matter
-    cites for this unit (``vision_seed.delivered_same_matter``).
+    cites for this unit: read from each delivered job dir still on the volume
+    (``vision_seed.delivered_same_matter``), and from the delivered jobs'
+    ledger records the broker stamped on the update (``job.delivered_cited``).
 
     WHY (2026-10-28). An update skipped a candidate only when its bytes
     matched a delivered EXHIBIT PDF, and an exhibit is a rewritten copy of
@@ -82,17 +98,18 @@ def cited_sources(sr: StageRun) -> set[str]:
     firm already had was filed again as a new exhibit. The delivered job's
     own manifest holds each source's hash, and its page map names the files
     it cited, so a byte-identical source is recognised before any picture
-    is compared."""
+    is compared.
+
+    WHY THE RECORD TOO (2026-11-06). A delivered job dir is wiped 72 hours
+    after delivery (``retention.py``), and an update requested later found no
+    cited source at all: on a client seat 0 of 3 re-pulled cited files were
+    recognised. The ledger row outlives the dir."""
+    unit = sr.unit.unit
     out: set[str] = set()
     for src in delivered_same_matter(getattr(sr, "job", None), sr.slug_dir.name):
-        unit = sr.unit.unit
-        unit_files = read_json(src / "units" / f"{unit}.json", []) or []
-        if not isinstance(unit_files, list):
-            continue
-        cited = cited_names(src, unit, src / "runs" / unit)
-        ids = {str(f["id"]) for f in unit_files if isinstance(f, dict) and f.get("id") and file_key(f) in cited}
-        out |= {sha for rid, sha in _hashes(read_jsonl(src / "raw_manifest.jsonl")).items() if rid in ids}
-    return out
+        out |= set(cited_by_id(src, unit).values())
+    recorded = (getattr(getattr(sr, "job", None), "delivered_cited", None) or {}).get(unit) or {}
+    return out | {str(sha) for sha in recorded.values()}
 
 
 def _orphans(src: Any) -> list[dict[str, Any]]:
