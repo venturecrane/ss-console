@@ -198,7 +198,7 @@ jobs:
         # per-connector venv conformance step further down.
         # bin/tests/test_ci_coverage_conformance.py asserts this invocation
         # covers every test_*.py under operator/ (connectors excepted).
-        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q
+        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q -rs
 
       # (The SEC-32 "fetch the overlay at its pin and hash the runtime twins" step
       # that stood here until 2026-10-22 is gone with the pin: the overlay is
@@ -257,12 +257,12 @@ jobs:
           # SDK unit tests once, in their own venv.
           uv venv /tmp/sdkv
           uv pip install --python /tmp/sdkv/bin/python ./_sdk pytest
-          /tmp/sdkv/bin/python -m pytest _sdk/tests -q
+          /tmp/sdkv/bin/python -m pytest _sdk/tests -q -rs
           # The records contract (ADR 0102) once, in a bare venv: stdlib only, so
           # its install with no requirements file is itself part of the proof.
           uv venv --python 3.13 /tmp/contractv
           uv pip install --python /tmp/contractv/bin/python ./_contract pytest
-          (cd _contract && /tmp/contractv/bin/python -m pytest -q)
+          (cd _contract && /tmp/contractv/bin/python -m pytest -q -rs)
           # Each connector: its own venv built exactly as the image builds it
           # (seat interpreter, its hash-locked requirements file, then the SDK
           # and the connector --no-deps), so the tests run against the pinned
@@ -279,7 +279,7 @@ jobs:
             uv pip install --python "$venv/bin/python" --no-config --require-hashes -r "../requirements/connector-${name}.txt"
             uv pip install --python "$venv/bin/python" --no-deps ./_sdk "$cdir"
             uv pip install --python "$venv/bin/python" pytest
-            PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q
+            PATH="$venv/bin:$PATH" "$venv/bin/python" -m pytest "${cdir}tests" -q -rs
           done
 
       - name: No substrate paths changed
@@ -329,7 +329,7 @@ jobs:
           # suite is tmp_path-isolated, so parallel files share nothing; this
           # step was 13:36 of the substrate job's 21 min serial on 2026-11-04,
           # and a four-worker probe passed 3544/3544, the serial count, in 356 s vs 735 s.
-          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q --numprocesses=4 --dist=loadfile
+          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q -rs --numprocesses=4 --dist=loadfile
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
@@ -408,7 +408,7 @@ jobs:
       - name: Overlay pytest
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator/hermes-smd-overlay
-        run: /tmp/overlayv/bin/python -m pytest -q
+        run: /tmp/overlayv/bin/python -m pytest -q -rs
 
       # A dependency the overlay declares must have its hash-locked pin in
       # operator/requirements/hermes-overlay.txt before it merges, or the image
@@ -526,7 +526,7 @@ jobs:
         working-directory: operator/hermes-smd-overlay
         env:
           E2E_SUMMARY_PATH: ${{ runner.temp }}/e2e-summary.json
-        run: /tmp/e2ev/bin/python -m pytest tests_e2e -x -q --timeout=240
+        run: /tmp/e2ev/bin/python -m pytest tests_e2e -x -q -rs --timeout=240
 
       # Always, when the harness ran: a promotion PR cites what this run covered
       # and, as plainly, what it did not.

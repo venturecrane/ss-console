@@ -90,6 +90,11 @@ a detect step decides from `.github/operator-substrate-paths.txt` whether the
 suites need to run. A `customer.yaml` change with a new top-level block can pass
 `npm run verify` and still fail `substrate` - so Operator config changes get the
 pytest suite run locally before merge (`cd operator && python3 -m pytest ...`).
+A guard in `operator/bin/tests` (the function-size ratchet, the voice-spec checks
+on the committed corpus) now fails rather than skips when its tool or file is
+missing, and the failure names the command that provides it (for ruff, the
+substrate job's pinned `python3 -m pip install ruff==0.15.17`); setting
+`SMD_ALLOW_GUARD_SKIPS=1` skips them on purpose, and no workflow sets it.
 
 The Operator tree is one Python project (`operator/pyproject.toml`). Its CLIs
 (`operator/bin/*.py`, `operator/rehearsal/run.py`) import `bin.lib.*`,

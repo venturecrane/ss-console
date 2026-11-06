@@ -20,8 +20,16 @@ from pathlib import Path
 
 import pytest
 
+from bin.tests.guard_needs import require_path
+
 _BIN = Path(__file__).resolve().parents[1]
 _SEED = _BIN.parents[1] / "operator" / "customers" / "pilot-smokeball" / "seed" / "voice"
+
+
+@pytest.fixture
+def seed_corpus() -> None:
+    """The committed rehearsal corpus these checks run against; absent fails, never skips."""
+    require_path(_SEED)
 
 
 def _load():
@@ -152,7 +160,7 @@ def test_identifier_shapes_are_refused(text):
 # --------------------------------------------------------- the real artifacts
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_repos_own_production_rule_spec_leaks():
     """The empirical case for a compiler over an instruction.
 
@@ -166,7 +174,7 @@ def test_the_repos_own_production_rule_spec_leaks():
     assert any(f.kind == "containment" for f in report.findings)
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_exemplar_profile_leaks_far_more_than_the_rule_spec():
     """The ratio should track how much each artifact actually copied."""
     corpus = {p.name: p.read_text() for p in sorted(_SEED.glob("*.md")) if p.name[0].isdigit()}
