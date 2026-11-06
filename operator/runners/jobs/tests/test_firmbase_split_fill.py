@@ -356,3 +356,51 @@ def test_a_one_run_brief_and_memo_base_fill_byte_for_byte_as_before(monkeypatch,
     for make in (brief, memo):
         new, old = _both_ways(monkeypatch, make)
         assert new == old
+
+
+# ---- a file that is no base, through the lane's own entry ------------------------------
+def _no_markers() -> bytes:
+    d = docx.Document()
+    d.add_paragraph("The firm's own fixed line")
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _every_marker_tab_split() -> bytes:
+    d = docx.Document()
+    d.add_paragraph("The firm's own fixed line")
+    d.element.body.find(f"{W}sectPr").addprevious(_fixture("eleven-tab-in-line"))
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("make", [_no_markers, _every_marker_tab_split], ids=["no markers", "every marker tab-split"])
+def test_a_file_that_is_no_base_ends_the_brief_job_as_firm_base_unfit(make, tmp_path, monkeypatch):
+    import json
+
+    import test_drafting_brief_base as tb
+    from drafting_testkit import ScriptedClient, make_inputs, make_job, seat_with, standard_docs
+    from jobs_testkit import PRICING
+
+    from jobs.drafting.run import DraftingRun
+
+    monkeypatch.setenv("SMD_DRAFTING_GATE_CHECK", str(tb.CHECKER))
+    pricing = tmp_path / "pricing.json"
+    pricing.write_text(json.dumps(PRICING), encoding="utf-8")
+    inputs = tmp_path / "inputs"
+    make_inputs(inputs)
+    tb._with_base(inputs, make())
+    run = DraftingRun(
+        make_job(tmp_path / "job"),
+        inputs_dir=str(inputs),
+        pricing=str(pricing),
+        seat_factory=lambda: seat_with(standard_docs()),
+        client=ScriptedClient(draft=tb._job_brief()),
+        log=lambda _line: None,
+        readback_pause=0.0,
+    )
+    verdict = run.run()
+    assert (verdict.outcome, verdict.stage) == ("failed", "rendered")
+    assert verdict.reason == "firm_base_unfit: the file marks no slots; nothing was filed", verdict.reason

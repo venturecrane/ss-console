@@ -425,7 +425,12 @@ def fill(base: FirmBase, md: str) -> tuple[bytes, firmbase.Proof]:
 
 
 def load_base(path: Path, source: dict[str, str], cls: str = CLS) -> FirmBase:
-    return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    """The class's base, any class's (a memo's too): a file that is no base surfaces as
+    ``firm_base_unfit``, the way an unfit fill does in ``render_into``."""
+    try:
+        return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    except FirmBaseUnfit as exc:
+        raise unfit(str(exc)) from exc
 
 
 def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None) -> tuple[Path, dict[str, Any]]:
