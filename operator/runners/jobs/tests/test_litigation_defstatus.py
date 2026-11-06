@@ -205,3 +205,33 @@ def test_the_run_prints_the_notes_status_before_the_gates(tmp_path, pricing_path
     assert out["defendants"][0]["flags"] == ["Default entered 2026-06-01."]
     assert [o["pass"] for o in out["overturns"]] == ["status-note"]
     assert gates.rule_matters([out], TODAY)[gates.NOTE_RULE] == []
+
+
+def test_a_read_value_with_an_em_dash_reaches_the_gates_without_one(tmp_path, pricing_path):
+    """2026-10-23: a court field written "A \u2014 B" held a whole list on the em
+    dash rule, though the loader would have written ", "."""
+    import json
+
+    from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
+    from jobs.litigation import manifest
+    from jobs.litigation.run import LitigationRun
+
+    (tmp_path / "pricing.json").write_text(pricing_path.read_text())
+    r = LitigationRun(
+        make_job(tmp_path / "job"),
+        inputs_dir=str(make_inputs(tmp_path / "inputs")),
+        pricing=str(tmp_path / "pricing.json"),
+        state_dir=tmp_path / "state",
+        seat_factory=lambda: LitSeat({M1: matter_docs()}),
+        client=ScriptedLit(),
+        log=lambda m: None,
+        today=lambda: dt.date(2026, 10, 7),
+        readback_pause=0.0,
+    )
+    assert r.run().verdict == "delivered"
+    res = copy.deepcopy(manifest.load_prior(tmp_path / "state", M1))
+    res["court"] = "Superior Court \u2014 Example County"
+    r._mfile(M1, "read3.json").write_text(json.dumps({"result": res, "overturns": []}))
+    out = r.final(next(x for x in r._matters() if x["id"] == M1))
+    assert out["court"] == "Superior Court, Example County"
+    assert gates.rule_matters([out], TODAY)["em dash in text"] == []
