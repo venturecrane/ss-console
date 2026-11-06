@@ -36,11 +36,11 @@ def _box() -> FakeMailbox:
     return box
 
 
-@pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_an_observe_seat_binds_a_drafting_job_with_its_words(tmp_path: Path, ending: str) -> None:
+def test_an_observe_seat_binds_a_drafting_job_with_its_words(tmp_path: Path) -> None:
     """FALSIFIER: on the parent commit an observe seat's bind carries no
-    ``fixed_wording`` for a drafting job, so nothing could send the words."""
-    job = _drafting_job(tmp_path, ["running", ending])
+    ``fixed_wording`` for a drafting job, so nothing could send the words. (A
+    held one is refused its bind since 2026-11-06: stop_note.)"""
+    job = _drafting_job(tmp_path, ["running", "delivered"])
     broker = _broker(tmp_path, _box())
     assert reply_text.enforcing(broker) is False
     out = _call(broker, "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
@@ -74,14 +74,14 @@ def test_other_lanes_on_an_observe_seat_are_unchanged(tmp_path: Path) -> None:
 
 def test_a_refused_bind_names_its_code(tmp_path: Path) -> None:
     """The seat acts on the code, never on the sentence: already answered is
-    done, anything else is an alert. A failed drafting job is no longer
-    refused (2026-11-06): it binds to its one fixed note."""
+    done, a failed or held job is SMD's already (2026-11-06: the firm is
+    told nothing), anything else is an alert."""
     (tmp_path / "f").mkdir()
     failed = _drafting_job(tmp_path / "f", ["failed"])
     out = _call(
         _broker(tmp_path / "f", FakeMailbox()), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": failed}
     )
-    assert out["bound"] is True and "The drafting stopped on our side" in out["fixed_wording"][0]
+    assert out["bound"] is False and out["code"] == "job_failed"
 
     (tmp_path / "d").mkdir()
     job = _drafting_job(tmp_path / "d", ["running", "delivered"])

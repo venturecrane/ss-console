@@ -50,14 +50,16 @@ class FakeClient:
         if a == "drafting_job_record":
             self.records.append((req["job_id"], req["state"], req["fields"]))
             self.rows[req["job_id"]]["state"] = req["state"]
+            if "reason" in (req["fields"] or {}):  # the ledger keeps it (jobs/job_notes.py reads it)
+                self.rows[req["job_id"]]["reason"] = req["fields"]["reason"]
             return {"ok": True}
         if a == "drafting_allowance":
             return {"ok": True, "used": 0, "remaining": 5, "cents_used": 1234}
         if a.startswith("delivery_"):  # the daemon's proven-delivery verbs (proof/watch.py)
             return {"ok": True, "replies": []}
-        if a == "job_note_send":  # a held or failed job's note in code (jobs/job_notes.py)
+        if a == "job_note_send":  # a delivered job's lost-wake reply in code (jobs/job_notes.py)
             row = self.rows.get(req["job_id"]) or {}
-            return {"ok": True, "outcome": "sent", "state": row.get("state", ""), "stop_class": "failed", "key": "k"}
+            return {"ok": True, "outcome": "sent", "state": row.get("state", ""), "stop_class": "", "key": "k"}
         raise AssertionError(f"the drafting lane must speak only drafting verbs, not {a}")
 
 

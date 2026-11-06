@@ -29,8 +29,9 @@ own ledger row, the recipient is the broker's, and the broker checks the words
 again at the send.
 
 ANY OTHER ENDING IS AN ALERT. A bind the broker refused (other than "already
-answered", which is the success, and "failed on SMD's side", which already
-pages through the job's own failure), no single wording, a broker that could
+answered", which is the success, and "failed" or "held" on SMD's side, which
+already page SMD through the runner's ``job_stopped`` alert and send the firm
+nothing), no single wording, a broker that could
 not be reached, or a send that failed: each writes one ``REPLY_FAILED`` row
 (``job_reply_undelivered: ...``) naming the job, which the heartbeat pages as
 a shortfall (``reply_failed:job_reply_undelivered``), and an error-level
@@ -51,7 +52,9 @@ CODE_SENT_KINDS = frozenset({"drafting_job"})
 UNDELIVERED = "job_reply_undelivered"
 #: Broker refusal codes that are not an alert (reply_binding.BindingRefused).
 _DONE_CODES = frozenset({"already_replied"})
-_SMDS_ALREADY = frozenset({"job_failed"})
+#: A failed or held job: SMD is paged and the requester is told nothing
+#: (ss-console ``workspace_broker/stop_note``, 2026-11-06), so no alert here.
+_SMDS_ALREADY = frozenset({"job_failed", "job_held"})
 
 
 @dataclass(frozen=True)

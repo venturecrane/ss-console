@@ -1,27 +1,27 @@
 """``job_note_send``: the runner daemon has the broker send a job's reply in the
 broker's own words, with no model and no gateway turn.
 
-WHY (2026-11-06, the answer key). When an A&P drafting job held on our side,
-failed, or waited on its lane's proof run, what the attorney heard was the
-model's own words or nothing: a failed job's DELIVER turn was told to send the
-firm nothing, a job waiting on its lane's proof run has no turn at all, and a
-lost DELIVER wake leaves no turn to send anything. So the note is code's
-(``fixed_wording.STOPPED``) and so is the send.
+WHY. A lost DELIVER wake leaves no turn to send a delivered job's reply, so the
+broker sends it itself (2026-11-06). The same verb answers what the daemon
+needs for SMD's ``job_stopped`` page (``jobs/job_notes.py``): the job's state,
+its stop class and its reason.
 
-WHAT IT DOES. Root only (the runner daemon). For a kind in
+A STOPPED JOB IS TOLD NOTHING (Captain, 2026-11-06, ``stop_note``). For a job
+that held, failed or waited on its lane's proof run this verb sends nothing to
+anyone and answers ``not_owed`` with the class, before the binding is even
+read; the binding refuses those states as well, so a gateway turn cannot send
+one either. (#3816 had this verb send a fixed "we are checking it" note; that
+note is gone.)
+
+WHAT IT DOES otherwise. Root only (the runner daemon). For a kind in
 ``reply_text.CODE_SENT_KINDS``: verify the job's binding exactly as the
 gateway's bind does (``reply_binding.verify``: the requester's own email in
 this seat's Inbox, the sender check, once per ``attempt:state``), render the
 job's one text (``reply_text.fixed_texts``), and send it through the same bound
 reply verb the gateway uses, so the send check, the claim, the participant
 fence, the audit row and the Sent Items proof are the same ones. A reply
-already sent for that key (by the gateway's turn or an earlier call) is
-``already_sent``; nothing goes twice.
-
-It answers what the daemon needs for SMD's one alert (``jobs/job_notes.py``):
-the outcome, the reply key, the job's state, the ``STOPPED`` class (empty for a
-delivered or firm-worded reply) and the job's own reason. It writes no alert
-itself: the daemon owns the alert path and its de-duplication.
+already sent for that key is ``already_sent``; nothing goes twice. It writes no
+alert itself: the daemon owns the alert path and its de-duplication.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from . import fixed_wording, reply_binding, reply_text
+from . import reply_binding, reply_text, stop_note
 from .broker_context import BrokerContext
 from .msgraph_ops import MsGraphRefused, MsGraphTransportError
 
@@ -60,7 +60,7 @@ def send_verb(
     row = _row(broker, kind, job_id)
     about = {
         "state": str((row or {}).get("state") or ""),
-        "stop_class": fixed_wording.stopped_class(kind, row) or "",
+        "stop_class": stop_note.stop_class(kind, row) or "",
         "job_reason": str((row or {}).get("reason") or "")[:REASON_MAX],
         "key": reply_binding.reply_key(kind, job_id, row) if row else "",
     }
@@ -68,12 +68,14 @@ def send_verb(
     def answer(outcome: str, why: str = "") -> dict[str, Any]:
         return {"ok": True, "outcome": outcome, **about, **({"why": why[:REASON_MAX]} if why else {})}
 
+    if about["stop_class"]:
+        return answer("not_owed", "a stopped job's requester is told nothing; SMD is paged")
     try:
         v = reply_binding.verify(broker, binding)
     except reply_binding.BindingRefused as exc:
         if exc.code == "already_replied":
             return answer("already_sent")
-        if exc.code in ("job_failed", "not_ended"):
+        if exc.code in ("job_failed", "job_held", "not_ended"):
             return answer("not_owed", str(exc))
         return answer("refused", str(exc))
     except (MsGraphRefused, MsGraphTransportError, ValueError) as exc:

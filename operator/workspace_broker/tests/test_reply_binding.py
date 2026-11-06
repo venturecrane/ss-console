@@ -634,45 +634,33 @@ def _drafting_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> st
     return job
 
 
-@pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path, ending: str) -> None:
+def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path) -> None:
     from workspace_broker.drafting_ledger import DraftingLedger
 
-    job = _drafting_job(tmp_path, ["running", ending])
+    job = _drafting_job(tmp_path, ["running", "delivered"])
     box = FakeMailbox()
     _ack_in_thread(box)
     broker = _broker(tmp_path, box)
     assert _send(broker, {"kind": "drafting_job", "job_id": job})["recipients"] == [ADMIN]
-    assert DraftingLedger(broker.audit_db_path, tmp_path / "dq").read(job)["reply_key"] == f"1:{ending}"
+    assert DraftingLedger(broker.audit_db_path, tmp_path / "dq").read(job)["reply_key"] == "1:delivered"
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
     assert len(box.replies()) == 1
 
 
-def test_a_failed_drafting_job_replies_only_its_fixed_note_once(tmp_path: Path) -> None:
-    """2026-11-06: a failed drafting job is owed one note in the broker's words
-    (fixed_wording.STOPPED). It never says why; the model's words are refused.
-    FALSIFIER: refuse failed again and the attorney hears nothing."""
-    job = _drafting_job(tmp_path, ["failed"])
+@pytest.mark.parametrize(("ending", "code"), [("failed", "job_failed"), ("held", "job_held")])
+def test_a_stopped_drafting_job_never_replies_to_the_client(tmp_path: Path, ending: str, code: str) -> None:
+    """Captain, 2026-11-06: SMD knows, the firm does not (stop_note).
+    FALSIFIER: on the parent commit both bind and the firm gets a note."""
+    path = ["failed"] if ending == "failed" else ["running", "held"]
+    job = _drafting_job(tmp_path, path)
     box = FakeMailbox()
     _ack_in_thread(box)
     out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
-    assert out["bound"] is True and out["fixed_wording"] == [
-        "The document for matter 900201 is not ready yet. The drafting stopped on our side, and we are looking into "
-        "it. Nothing is needed from you."
-    ]
-    with pytest.raises(BindingRefused):
-        _call(
-            _broker(tmp_path, box),
-            "msgraph_reply_bound",
-            {"kind": "drafting_job", "job_id": job},
-            payload={"comment": "Our pipeline failed at the audit stage; please resend."},
-            session_id="s",
-        )
-    _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
+    assert out["bound"] is False and out["code"] == code and "Send nothing to anyone" in out["reason"]
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
-    assert len(box.replies()) == 1
+    assert box.replies() == []
 
 
 @pytest.mark.parametrize("path", [[], ["running"]])

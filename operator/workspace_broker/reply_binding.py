@@ -369,21 +369,15 @@ def _verify_job(broker: BrokerContext, kind: str, ident: str, db_path: str) -> t
     row = job_ledger(broker, kind).read(ident)
     if row is None:
         raise BindingRefused(f"there is no {noun} job with that id")
-    # 2026-11-06: a held, failed or waiting job of a code-sent kind is owed its
-    # one note in the broker's words (stop_note, fixed_wording.STOPPED).
-    stopped = stop_note.owed(kind, row)
-    if row["state"] == "failed" and not stopped:
-        raise _job_refused(
-            f"{noun} job {ident} failed on SMD's side; the requester is told nothing until it is "
-            f"{' or '.join(sorted(replyable_states(kind)))}, and SMD has been alerted. Send nothing to anyone.",
-            "job_failed",
-        )
+    refused = stop_note.refusal(kind, noun, ident, row, replyable_states(kind))
+    if refused is not None:  # failed, or a silent kind's hold: SMD is told, the firm is not
+        raise _job_refused(*refused)
     if kind == "medchron_job" and row["state"] == "held":
         raise BindingRefused(
             f"{noun} job {ident} stopped and SMD is finishing it; the requester hears about a chronology only "
             "when it is delivered, and SMD has been alerted. Send nothing to anyone."
         )
-    if row["state"] not in replyable_states(kind) and not stopped:
+    if row["state"] not in replyable_states(kind):
         raise _job_refused(
             f"{noun} job {ident} has not ended (it is {row['state']}); its reply waits for that", "not_ended"
         )
