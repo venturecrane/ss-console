@@ -22,9 +22,9 @@ from datetime import date
 from typing import Any
 
 from ..medchron import docx_style as S
-from .base import StageRun, read_json, read_jsonl
-from .billing_chart import NO_BILL, NON_PROVIDER, PageText, quarantined
-from .billing_chart import money as parse_money
+from . import billing_paid as BP
+from .base import StageRun, read_json
+from .billing_chart import NO_BILL
 
 
 def money(v: float | None) -> str:
@@ -126,61 +126,47 @@ def _as_printed(doc: Any, data: dict[str, Any]) -> None:
     )
 
 
-#: Bills whose payments are not this worksheet's: a vendor's invoice to the
-#: firm, a page with no charges, and a health plan's claim (its own section).
-PAID_SKIP = NON_PROVIDER | {"LIEN_SUBROGATION"}
+_PAID_HEAD = ["Provider (as printed on the bill)", "Source Document", "Page", "Printed As", "Line", "Amount", "Date"]
+_PAID_WIDTHS = [1.3, 1.5, 0.5, 1.7, 0.75, 0.8, 0.75]
 
 
-def paid_rows(sr: StageRun, patient: str | None) -> list[list[str]]:
-    """Every payment a provider's bill prints, as [provider as printed,
-    document, page, words beside it, amount, date], in file order. Nothing is
-    computed: a figure that does not parse is left out, and one at the
-    suspect line stays only when its page prints it with its decimal point."""
-    suspect_at = int(sr.cfg.get("billing", "suspect_amount_cents") or 50_000_000) / 100.0
-    pages = PageText(sr.slug_dir)
-    out: list[list[str]] = []
-    for r in read_jsonl(sr.slug_dir / "billing_extract.jsonl"):
-        for c in r.get("chunks") or []:
-            if not isinstance(c, dict) or c.get("doc_type") in PAID_SKIP | {None} or quarantined(c, patient):
-                continue
-            for t in c.get("printed_payments") or []:
-                if not isinstance(t, dict):
-                    continue
-                flagged: list[tuple[str, float]] = []
-                v = parse_money(t.get("amount"), flagged, suspect_at)
-                page = int(t["page"]) if str(t.get("page") or "").isdigit() else 0
-                if v is None or (flagged and not pages.prints(str(r.get("file")), page, v)[0]):
-                    continue
-                out.append(
-                    [
-                        str(c.get("provider") or "(no provider printed on the bill)"),
-                        str(r.get("file")),
-                        f"p. {page}" if page else "-",
-                        str(t.get("label") or ""),
-                        f"${v:,.2f}",
-                        str(t.get("date") or "-"),
-                    ]
-                )
-    return _dedup(out, lambda x: tuple(x))
-
-
-def _paid(doc: Any, rows: list[list[str]]) -> None:
-    """Amounts paid, only as printed: absent when no bill prints a payment."""
-    if not rows:
+def _paid(doc: Any, sr: StageRun, patient: str | None) -> None:
+    """Amounts paid, only as printed: absent when no bill prints a payment.
+    Every cell is the transcription's own text; nothing is cut or re-rendered."""
+    paid, combined = BP.gather(sr, patient)
+    if not paid and not combined:
         return
     doc.add_paragraph("Amounts Paid, as Printed on the Bills", style="Heading 1")
     para(
         doc,
-        "Each payment below is copied from the bill named, with the words printed beside it. These figures are not "
+        "Each payment below is copied from the bill named, with the words and the amount exactly as printed. A row "
+        f'marked "{BP.PRINTED_TOTAL}" is a total the bill prints under words naming a payment. These figures are not '
         "added together and are not taken from any total above. A bill that prints no payment does not appear here.",
     )
-    table(
-        doc,
-        ["Provider (as printed on the bill)", "Source Document", "Page", "Printed As", "Amount Paid", "Date"],
-        [[x[0][:36], x[1][:40], x[2], x[3][:28], x[4], x[5]] for x in rows],
-        [1.6, 2.0, 0.55, 1.35, 0.95, 0.85],
-        right_cols=(4,),
-    )
+    if paid:
+        cells = [[x["provider"], x["file"], x["page"], x["label"], x["kind"], x["amount"], x["date"]] for x in paid]
+        table(doc, _PAID_HEAD, cells, _PAID_WIDTHS, right_cols=(5,))
+    _combined(doc, combined)
+
+
+def _combined(doc: Any, rows: list[dict[str, Any]]) -> None:
+    """Totals whose printed words name payments and adjustments together: not
+    payments, each under a sub-heading carrying the bill's own words."""
+    for label in dict.fromkeys(x["label"] for x in rows):
+        doc.add_paragraph(f'Printed as "{label}"', style="Heading 2")
+        para(
+            doc,
+            "The bills below print this figure under the words above, which name payments and adjustments together. "
+            "It is shown as printed and is not listed among the payments.",
+        )
+        cells = [[x["provider"], x["file"], x["page"], x["amount"]] for x in rows if x["label"] == label]
+        table(
+            doc,
+            ["Provider (as printed on the bill)", "Source Document", "Page", "Amount"],
+            cells,
+            [2.4, 3.0, 0.7, 1.2],
+            right_cols=(3,),
+        )
 
 
 def _disagree(doc: Any, rows: list[dict[str, Any]]) -> None:
@@ -380,7 +366,7 @@ def run(sr: StageRun) -> int:
             size=9,
         )
     _as_printed(doc, data)
-    _paid(doc, paid_rows(sr, data.get("patient_filter")))
+    _paid(doc, sr, data.get("patient_filter"))
     _disagree(doc, rows)
     _excluded(doc, data)
     _not_in_total(doc, data, gaps)

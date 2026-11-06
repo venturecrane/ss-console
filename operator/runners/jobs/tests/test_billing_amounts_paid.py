@@ -6,6 +6,11 @@ says was paid, so a firm asking for the amounts paid got a worksheet with none
 and the worksheet lists each one by the bill's provider, document and page. A
 bill that prints no payment adds nothing; no payment is ever added up, taken
 from a total, or invented.
+
+A test on real billing pages (2026-11-06) found the transcription exact and the
+worksheet not: it re-rendered amounts, cut the printed words at 28 characters,
+collapsed identical payment lines, and never showed a payment-labelled printed
+total. The tests below pin each of those (jobs/stages/billing_paid.py).
 """
 
 from __future__ import annotations
@@ -86,3 +91,81 @@ def test_an_unreadable_payment_or_a_vendors_is_left_out(job_dir: Path, firm_conf
     text = _run(sr)
     assert HEADING not in text
     assert "$75.00" not in text and "Paid by firm" not in text
+
+
+# ---- the worksheet prints each payment exactly as the bill prints it ---------------
+def _tail(sr, *payments: dict, totals: tuple[dict, ...] = ()) -> list[str]:
+    """The worksheet's lines from the payments heading on, after one Example
+    Clinic ledger carrying these payments and extra printed totals."""
+    _doc(sr, TWO_PROVIDERS)
+    rec = _paid_ledger("Example Clinic", "$1,800.00", list(payments))
+    rec["chunks"][0]["printed_totals"] += list(totals)
+    _extract(sr, rec)
+    text = _run(sr)
+    assert HEADING in text
+    return text[text.index(HEADING) :].splitlines()
+
+
+def test_each_amount_is_printed_character_for_character(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    amounts = ("-$25.00", "$-25.00", "25.00", "(25.00)", "$0.00")
+    pay = [{"label": f"Payment line {i}", "amount": a, "date": "02/10/2026", "page": 1} for i, a in enumerate(amounts)]
+    lines = _tail(sr, *pay)
+    for a in amounts:
+        assert a in lines, f"{a!r} is not on the worksheet as printed"
+
+
+def test_the_printed_words_are_never_cut(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    label = "Insurance payment received from Example Mutual Casualty Company, claim reference"
+    assert len(label) > 60
+    lines = _tail(sr, {"label": label, "amount": "$40.00", "date": None, "page": 1})
+    assert label in lines
+
+
+def test_three_identical_payment_lines_are_three_rows(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    same = {"label": "Patient payment", "amount": "$0.00", "date": "02/10/2026", "page": 1}
+    lines = _tail(sr, dict(same), dict(same), dict(same))
+    assert lines.count("Patient payment") == 3
+
+
+def test_a_you_paid_printed_total_is_one_printed_total_row(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    lines = _tail(sr, totals=({"label": "You Paid", "amount": "$0.00", "page": 1},))
+    assert lines.count("You Paid") == 1
+    i = lines.index("You Paid")
+    assert "Printed total" in lines[i : i + 4] and "$0.00" in lines[i : i + 4]
+
+
+def test_a_printed_total_matching_a_payment_line_is_not_shown_twice(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pay = {"label": "Amount paid by patient", "amount": "$75.00", "date": "02/10/2026", "page": 1}
+    lines = _tail(sr, pay, totals=({"label": "Amount paid by patient", "amount": "$75.00", "page": 1},))
+    assert lines.count("Amount paid by patient") == 1 and "Printed total" not in lines
+
+
+def test_payments_and_adjustments_together_have_their_own_sub_heading(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pay = {"label": "Patient payment", "amount": "$25.00", "date": "02/10/2026", "page": 1}
+    lines = _tail(sr, pay, totals=({"label": "Payments/Adjustments", "amount": "$140.00", "page": 1},))
+    sub = 'Printed as "Payments/Adjustments"'
+    assert sub in lines
+    assert lines.index("$140.00") > lines.index(sub) > lines.index("$25.00")
+    assert lines.count("$140.00") == 1 and "Printed total" not in lines
+
+
+def test_a_balance_due_total_is_not_in_the_section(job_dir: Path, firm_config_path: Path, data_root: Path):
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pay = {"label": "Patient payment", "amount": "$25.00", "date": "02/10/2026", "page": 1}
+    due = (
+        {"label": "Balance Due", "amount": "$333.00", "page": 1},
+        {"label": "Payment Due", "amount": "$444.00", "page": 1},
+    )
+    lines = _tail(sr, pay, totals=due)
+    for gone in ("Balance Due", "$333.00", "Payment Due", "$444.00"):
+        assert gone not in lines
