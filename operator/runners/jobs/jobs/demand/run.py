@@ -49,6 +49,7 @@ from ..ledger import Ledger
 from ..llm import Doorway
 from ..proof import review as proof_review
 from . import (
+    batching,
     crosscheck,
     deliver,
     draft,
@@ -126,6 +127,7 @@ class DemandRun:
             client=client,
             log=log,
             before_request=lambda stage: self.limits.check_each_call(self.budget.refresh(), stage),
+            before_batch=self._before_batch,
         )
         self._seat_factory = seat_factory
         self._seat: Any = None
@@ -256,33 +258,19 @@ class DemandRun:
             ) from None
 
     # ---- paid stages -----------------------------------------------------------------
+    def _batching(self) -> None:
+        """The firm's batch-queue levers against this job's estimate (``batching.py``)."""
+        est = float(self._json("preflight.json")["estimate"]["usd"])
+        self.doorway.batch_stages = batching.stages(self.firm.data["levers"], est)
+        if self.doorway.batch_stages:
+            self.log(f"batch queue for {', '.join(sorted(self.doorway.batch_stages))}: half price, each round waits")
+
+    def _before_batch(self, stage: str, items: int, chars: int) -> None:
+        cost = batching.projected_usd(self.firm.data["budget"], self.pricing.batch_multiplier, stage, items, chars)
+        self.limits.check_before_paid(projected_usd=cost, spent_usd=self.budget.refresh(), stage=stage, batch=True)
+
     def _digest(self) -> str:
-        p = self.data / "digest.md"
-        if p.is_file():
-            return p.read_text(encoding="utf-8")
-        files = summarize.corpus_files(self.data)
-        chunks = summarize.build_chunks(files, int(self.firm.get("levers", "chunk_chars")))
-        s = summarize.Summarizer(
-            self.data,
-            self.doorway,
-            self.firm.model("digest"),
-            self.firm.text("prompt_digest"),
-            int(self.firm.get("levers", "digest_max_tokens")),
-            self._workers,
-            self.log,
-        )
-        digests = s.run(chunks)
-        out = summarize.condense(
-            digests,
-            int(self.firm.get("levers", "digest_budget_chars")),
-            self.doorway,
-            self.firm.model("digest"),
-            self.firm.text("prompt_condense"),
-            self._workers,
-            self.log,
-        )
-        p.write_text(out, encoding="utf-8")
-        return out
+        return summarize.digest(self.data, self.doorway, self.firm, self._workers, self.log)
 
     def _matter_fields(self) -> list[str]:
         f = self._json("facts.json")
@@ -514,6 +502,7 @@ class DemandRun:
         return self._file()
 
     def _paid(self) -> Verdict:
+        self._batching()
         self._stage(
             "transcribe",
             lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, self._workers),

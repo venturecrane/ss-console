@@ -133,6 +133,17 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]] | None] = {
         # Records-vendor directory lookups for the gap audit's missing
         # providers: about 23 s each, run one at a time, at most this many.
         "vendor_lookup_cap": ("int", True),
+        # Optional, each off when absent (2026-11-06). A page the file holds
+        # more than once is summarized once (repeats.py).
+        "fold_repeated_pages": ("bool", False),
+        # The stages sent through the provider's batch queue: half the price,
+        # and each round takes as long as the queue takes (usually under an
+        # hour, at most a day). From BATCHABLE_STAGES.
+        "batch_stages": ("list[str]", False),
+        # The queue is used only for a job whose pre-paid estimate is at least
+        # this many dollars, so an ordinary demand stays as fast as it was and
+        # a very large file costs half. Absent: every job of the firm's.
+        "batch_over_usd": ("float", False),
     },
     "inputs": None,  # {key: {path, sha256}}: INPUT_KEYS plus each variant's files
     # Optional. {format name: {pre_suit: {...}, litigation: {...}}}: an
@@ -163,6 +174,10 @@ OPTIONAL_VARIANT_KEYS = {
     "footer_markers": "list[str]",
     "required_leads": "list[str]",
 }
+#: The stages a firm may batch. Transcription and the two summary stages are
+#: one independent call per page or chunk; the drafting stages read each
+#: other's output and the audit's cache design needs live calls.
+BATCHABLE_STAGES = ("vision", "digest", "condense")
 LAYOUTS = ("house", "numbered")
 VARIANTS = ("pre_suit", "litigation")
 ATTORNEY_KEYS = ("signer", "title", "initials")
@@ -230,6 +245,13 @@ def _semantics(data: dict[str, Any]) -> list[str]:
         out.append("levers.chunk_chars: expected 20000..200000 (dense records truncate above about 120K)")
     if not 1 <= levers["concurrency"] <= 8:
         out.append("levers.concurrency: expected 1..8")
+    for stage in levers.get("batch_stages") or []:
+        if stage not in BATCHABLE_STAGES:
+            out.append(f"levers.batch_stages: `{stage}` is not a batchable stage {list(BATCHABLE_STAGES)}")
+    if float(levers.get("batch_over_usd") or 0) < 0:
+        out.append("levers.batch_over_usd: must be >= 0")
+    if "batch_over_usd" in levers and not levers.get("batch_stages"):
+        out.append("levers.batch_over_usd: names a line for the batch queue, but levers.batch_stages names no stage")
     scan = data["premise"]["scan"]
     for cls, pats in scan.items():
         if not (isinstance(pats, list) and pats and all(isinstance(p, str) for p in pats)):
