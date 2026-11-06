@@ -67,6 +67,38 @@ def test_a_deposition_page_keeps_its_line_numbers() -> None:
     assert pm.strip_page(page + "\n26") == page + "\n26"
 
 
+def _transcribed(lines: list[str], dropped: set[int]) -> str:
+    """A machine transcription's shape: each margin number on its own line,
+    blank lines between, some numbers missing (2026-11-05: 1, 5, 6 ... 28)."""
+    return "\n\n".join(t if n in dropped else (f"{n}\n\n{t}" if t else str(n)) for n, t in enumerate(lines, 1))
+
+
+def test_a_transcribed_scan_with_dropped_margin_numbers_is_cleaned() -> None:
+    page = _transcribed(BODY, {2, 3, 4})
+    assert len(pm._strict(page.split("\n"))) < pm.MIN_RUN  # the strict run alone left it as it was
+    _clean(page)
+
+
+def test_a_deposition_page_with_no_question_labels_keeps_its_line_numbers() -> None:
+    # A transcript runs 25 lines: a gapped run that never passes 25 is not pleading paper.
+    page = "\n".join(f"{n}  colloquy on the record, line {n} of the page" for n in range(1, 26) if n not in (3, 9))
+    assert pm.strip_page(page) == page
+
+
+def test_a_rising_number_column_that_starts_late_is_untouched() -> None:
+    page = "\n".join(f"{n}\nitem" for n in range(8, 29))
+    assert pm.strip_page(page) == page
+
+
+def test_the_transcription_stage_writes_a_scanned_answer_without_its_margin_numbers() -> None:
+    from jobs.demand import transcribe
+
+    merged = transcribe._merge("[p.1]\n\x01\x02\n", {1: _transcribed(BODY, {2, 3, 4})}, 1)
+    assert merged.startswith("[p.1] (machine transcription)\n")
+    assert all(q in _flat(merged) for q in QUOTES), merged
+    assert not re.search(r"(?m)^\s*\d{1,2}\s*$", merged)
+
+
 def test_a_page_that_is_not_pleading_paper_is_untouched() -> None:
     page = "1 cup flour\n2 eggs\n3 Mix well.\nServes 4"
     assert pm.strip_page(page) == page
