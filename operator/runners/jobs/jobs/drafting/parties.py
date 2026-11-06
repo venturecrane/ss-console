@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from . import caption as caption_mod, sets
+from .outcome import DraftingFailed
 
 OVERRIDE = "parties.json"
 
@@ -346,6 +347,43 @@ def plan(request: str, theirs: list[str], ours: list[str], unsplit: list[str] | 
     return named if len(named) >= 2 else []
 
 
+def _read(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def other_parties(data: Path) -> list[str]:
+    """The matter's other-side parties, from a job's data directory."""
+    return matter_parties(_read(data / "caption.json"), _read(data / "facts.json"))[1]
+
+
+def served_on(data: Path, job_dir: Path, request: str) -> list[str]:
+    """The parties a job's request serves its sets on (``override``, else
+    ``plan``), from its data directory; ``PartyUnknown`` stops it."""
+    cap = _read(data / "caption.json")
+    ours, theirs = matter_parties(cap, _read(data / "facts.json"))
+    got = override(job_dir, theirs)
+    return got if got is not None else plan(request, theirs, ours, undecided(cap))
+
+
+def unit_title(p: dict[str, Any]) -> str:
+    """A planned unit's label, with its party when it has one."""
+    return f"{p['label']} to {p['party']}" if p.get("party") else p["label"]
+
+
+def plan_units(found: list[Any], who: list[str]) -> list[dict[str, Any]]:
+    """The frozen unit plan: one per (party, set) when parties were planned,
+    else one per set; a single set with no party is the root unit ``""``."""
+    if who:
+        pairs = [(p, u) for p in who for u in found]
+        return [
+            {"key": f"set-{i}", "variant": u.key, "label": u.label, "party": p} for i, (p, u) in enumerate(pairs, 1)
+        ]
+    plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
+    if len(plan) < 2:
+        plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
+    return plan
+
+
 def override(job_dir: Path, theirs: list[str]) -> list[str] | None:
     """SMD's hand-named parties (``parties.json``), each one of the matter's, or None."""
     p = Path(job_dir) / OVERRIDE
@@ -422,6 +460,32 @@ def bind(doc: str, party: str, theirs: list[str]) -> tuple[str, list[str], list[
         if term in ("YOU", "YOUR") and not _names(new, party) and any(_names(new, o) for o in others):
             problems.append(f'"{term}" is defined as another party, not {party}')
     return doc, notes, problems
+
+
+def bound(doc: str, party: str | None, label: str, data: Path) -> tuple[str, list[str]]:
+    """``bind`` for a unit served on ``party`` (none: unchanged); a definition
+    of YOU still naming another party fails the job (``party_mismatch``)."""
+    if not party:
+        return doc, []
+    doc, notes, problems = bind(doc, party, other_parties(data))
+    if problems:
+        raise DraftingFailed(f"party_mismatch: {label}: " + "; ".join(problems))
+    return doc, notes
+
+
+def keep_terms(canon_party: str | None, party: str | None) -> frozenset[str]:
+    """The terms a set keeps when aligned to another: its own YOU when the
+    other is served on someone else."""
+    return PARTY_TERMS if canon_party != party else frozenset()
+
+
+def shared_front(front: str, canon_party: str | None, party: str | None) -> tuple[str, str]:
+    """Another set's front matter as this set's compose is told it, and the
+    sentence saying whom each is served on when they differ."""
+    if canon_party == party:
+        return front, ""
+    said = f' That set is served on {canon_party}; this one is served on {party}, and "YOU" means {party}.'
+    return drop_party_terms(front), said
 
 
 def drop_party_terms(front: str) -> str:

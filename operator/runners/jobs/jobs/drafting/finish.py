@@ -103,20 +103,10 @@ class Finish:
         plan = self._state().get("units")
         if plan is None:
             found = sets.variants(self.job.request_text) if self.cls == "discovery_set" else []
-            who = self._served_on() if found else []
-            if who:
-                pairs = [(p, u) for p in who for u in found]
-                plan = [
-                    {"key": f"set-{i}", "variant": u.key, "label": u.label, "party": p}
-                    for i, (p, u) in enumerate(pairs, 1)
-                ]
-            else:
-                plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
-            if len(plan) < 2 and not who:  # one set to a scoped party keeps its party
-                plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
+            plan = parties_mod.plan_units(found, self._served_on() if found else [])
             self._put("units", plan)
         out = []
-        titles = [self._unit_title(p) for p in plan]
+        titles = [parties_mod.unit_title(p) for p in plan]
         for p, title in zip(plan, titles):
             d = self.data / p["key"] if p["key"] else self.data
             d.mkdir(parents=True, exist_ok=True)
@@ -126,28 +116,11 @@ class Finish:
         self._units = out
         return out
 
-    @staticmethod
-    def _unit_title(p: dict[str, Any]) -> str:
-        return f"{p['label']} to {p['party']}" if p.get("party") else p["label"]
-
-    def _matter_parties(self) -> tuple[list[str], list[str]]:
-        """(the client's side, the other side): ``parties.matter_parties``."""
-        cp = self.data / "caption.json"
-        cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else {}
-        fp = self.data / "facts.json"
-        facts = json.loads(fp.read_text(encoding="utf-8")) if fp.is_file() else {}
-        return parties_mod.matter_parties(cap, facts)
-
     def _served_on(self) -> list[str]:
-        """The parties the request serves its sets on, when more than one
-        (``parties.plan``); a name that is none of the matter's parties stops
-        the job for SMD before anything is drafted."""
-        ours, theirs = self._matter_parties()
-        cp = self.data / "caption.json"
-        unsplit = parties_mod.undecided(json.loads(cp.read_text(encoding="utf-8"))) if cp.is_file() else []
+        """``parties.served_on``; a name that is none of the matter's parties
+        stops the job for SMD before anything is drafted."""
         try:
-            got = parties_mod.override(self.job.job_dir, theirs)
-            return got if got is not None else parties_mod.plan(self.job.request_text, theirs, ours, unsplit)
+            return parties_mod.served_on(self.data, self.job.job_dir, self.job.request_text)
         except parties_mod.PartyUnknown as exc:
             raise DraftingFailed(f"party_unknown: {exc}") from None
 
@@ -206,12 +179,7 @@ class Finish:
         if c is None:
             return []
         doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
-        front = sets.front_matter(doc)
-        served = ""
-        if c.party != u.party:
-            # Served on another party: its YOU is not this set's (parties.py).
-            front = parties_mod.drop_party_terms(front)
-            served = f' That set is served on {c.party}; this one is served on {u.party}, and "YOU" means {u.party}.'
+        front, served = parties_mod.shared_front(sets.front_matter(doc), c.party, u.party)
         return [
             f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (it binds how SHARED words read: print its "
             "attorney block and signature block exactly, and define every term both sets define in the same words. "
@@ -297,15 +265,10 @@ class Finish:
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
-            keep = parties_mod.PARTY_TERMS if c.party != u.party else frozenset()
-            doc, more = sets.align(doc, canon, f"{c.label} set", keep=keep)
+            doc, more = sets.align(doc, canon, f"{c.label} set", keep=parties_mod.keep_terms(c.party, u.party))
             notes += more
-        if u.party:
-            doc, bound, problems = parties_mod.bind(doc, u.party, self._matter_parties()[1])
-            notes += bound
-            if problems:
-                raise DraftingFailed(f"party_mismatch: {u.label}: " + "; ".join(problems))
-        return doc, notes
+        doc, bound = parties_mod.bound(doc, u.party, u.label, self.data)
+        return doc, notes + bound
 
     def _digest_text(self) -> str:
         p = self.data / "digest.md"
