@@ -589,11 +589,12 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // python-telegram-bot's `tornado~=6.5` range, so no pip-check exception.
     // pyasn1 0.6.5 (2026-10-30): four advisories on 0.6.4, past hermes-agent's
     // exact floor pin, so tolerated in hermes_pip_check.py like brotlicffi.
-    expect(names, 'hermes-security.txt overrides only brotlicffi, pyasn1 and tornado').toEqual([
-      'brotlicffi',
-      'pyasn1',
-      'tornado',
-    ])
+    // oauthlib 4.0.1 (2026-11-05): CVE-2026-49272 on 4.0.0; only
+    // requests-oauthlib requires it, unranged, so no pip-check exception.
+    expect(
+      names,
+      'hermes-security.txt overrides only brotlicffi, oauthlib, pyasn1 and tornado'
+    ).toEqual(['brotlicffi', 'oauthlib', 'pyasn1', 'tornado'])
   })
 
   it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {
