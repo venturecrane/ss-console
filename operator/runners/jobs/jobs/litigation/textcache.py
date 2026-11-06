@@ -34,6 +34,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
 import os
 import sys
 import threading
@@ -126,6 +127,10 @@ class TextCache:
         try:
             text = (self.root / f"{sha}.txt").read_text(encoding="utf-8")
         except OSError:
+            return None
+        # A text cached with a garbled page (before extract sent those to
+        # vision) is read again; nothing else is (``extract.garbled``).
+        if any(extract_mod.garbled(p) for p in re.split(r"(?m)^===== page \d+ =====$", text)):
             return None
         # A text cached before extract removed pleading paper's margin numbers
         # is read as extract now writes it (``stages/pleading_margin``): no re-read is paid.
