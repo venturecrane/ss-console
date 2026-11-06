@@ -677,6 +677,14 @@ class MedchronVerbs:
                 if isinstance(f, dict)
             ][:50]
         self._audit(AUDIT_TYPE[state], meta, row["matter_id"])
+        if state == "delivered":
+            for held_id in self._db.supersede_held(job_id):
+                old = self._db.read(held_id) or {}
+                self._audit(
+                    AUDIT_TYPE["failed"],
+                    {"job_id": held_id, "state": "failed", "reason": old.get("reason"), "superseded_by": job_id},
+                    row["matter_id"],
+                )
         return {"ok": True, "job": self._db.project(row)}
 
     def _backfill(self, request: dict[str, Any]) -> dict[str, Any]:

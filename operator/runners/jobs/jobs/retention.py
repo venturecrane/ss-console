@@ -30,8 +30,10 @@ leaves it QUEUED, on purpose, so it runs when the stop clears. Removing the
 workdir and leaving the envelope in `queue/` would hand the daemon a job it
 can claim and cannot run. Non-terminal wipes take both.
 
-WHAT SURVIVES. The ledger row, with its state and its reason -- the record of
-what was asked for and what happened. Only the working copy goes. A resume
+WHAT SURVIVES. The ledger row -- the record of what was asked for and what
+happened. Only the working copy goes. A chronology hold's row moves to
+``failed`` with a reason starting ``superseded`` (``close_wiped_hold``), since
+a hold with no workdir can never resume and must not read as waiting. A resume
 request for a wiped job already refuses cleanly and says so (`resume.py`):
 the artifacts are gone and the honest answer is the one the ledger gives.
 """
@@ -126,4 +128,32 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
             (d.queue / f"{path.name}.json").unlink(missing_ok=True)
         shutil.rmtree(path, ignore_errors=True)
         wiped.append(path.name)
+        if state in PARKED:
+            close_wiped_hold(d, path.name)
     return wiped
+
+
+#: The lanes whose ledger row a wiped hold closes. The chronology's ledger
+#: allows ``held -> failed``, and a failed chronology whose reason starts with
+#: ``superseded`` is owed no note; other lanes' ledgers and notes differ.
+CLOSES_WIPED_HOLDS = frozenset({"medchron"})
+#: Starts with ``superseded``: the fixed wording keys on that word.
+WIPED_HOLD_REASON = "superseded: held past the retention window, workdir wiped"
+
+
+def close_wiped_hold(d: Any, job_id: str) -> None:
+    """Close the ledger row of a hold whose workdir just went.
+
+    A wiped hold can never resume (``resume.py`` refuses it), yet its row
+    stayed ``held`` for good: a 09-23 chronology hold on a client seat sat
+    held for three weeks until SMD closed it by hand on 10-13. Only a row the
+    broker still has ``held`` moves; one a later delivery already closed is
+    left as it is. Never raises: the wipe has happened either way."""
+    if d.LANE not in CLOSES_WIPED_HOLDS:
+        return
+    try:
+        row = d.broker.status(job_id)
+        if row and row.get("state") == "held":
+            d.broker.record(job_id, "failed", {"reason": WIPED_HOLD_REASON})
+    except Exception as exc:  # noqa: BLE001 - a broker error must not stop the wipe loop
+        logger.warning("could not close the wiped hold %s: %s", job_id, exc)

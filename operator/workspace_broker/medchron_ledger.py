@@ -153,6 +153,14 @@ _ACTIVE_TWIN_SQL = (
     "ORDER BY j.created_at DESC LIMIT 1"
 )
 
+#: The held rows a delivery supersedes: the same matter, created before the
+#: delivered row (the matching rule of `_ACTIVE_TWIN_SQL`'s EXISTS clause).
+_SUPERSEDED_HELD_SQL = (
+    "SELECT j.id FROM medchron_jobs j, medchron_jobs d "
+    "WHERE d.id = ? AND j.id != d.id AND j.matter_id = d.matter_id "
+    "AND j.state = 'held' AND j.created_at < d.created_at ORDER BY j.created_at ASC"
+)
+
 #: The runner wipes a held job's workdir AND its queue file after this long
 #: (`jobs/retention.py` DEFAULT_HELD_WIPE_HOURS, one working week). A hold
 #: past it cannot resume, so it is not work a resubmission would duplicate.
@@ -748,6 +756,30 @@ class MedchronLedger(medchron_credits.CreditLedger):
         try:
             row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED, stale_before)).fetchone()
             return (str(row["id"]), str(row["state"])) if row is not None else None
+        finally:
+            conn.close()
+
+    def supersede_held(self, delivered_id: str) -> list[str]:
+        """Close every earlier hold on the delivered job's matter. Returns the
+        ids moved ``held -> failed``, each with reason ``superseded by <id>``.
+
+        A hold a later delivery replaced is dead: `_ACTIVE_TWIN_SQL` already
+        stops it blocking a resubmission, but the row itself stayed ``held``
+        for good, so every reader saw work waiting that nobody was waiting on
+        (a 09-23 chronology hold on a client seat, closed by hand on 10-13).
+        The reason starts with ``superseded``, the word the fixed wording
+        treats as owed no note."""
+        conn = self._connect()
+        try:
+            ids = [str(r["id"]) for r in conn.execute(_SUPERSEDED_HELD_SQL, (delivered_id,))]
+            reason = f"superseded by {delivered_id}"
+            for held_id in ids:
+                conn.execute(
+                    "UPDATE medchron_jobs SET state='failed', updated_at=?, reason=? WHERE id=? AND state='held'",
+                    (_iso_utc(), reason, held_id),
+                )
+            conn.commit()
+            return ids
         finally:
             conn.close()
 

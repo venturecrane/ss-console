@@ -585,6 +585,25 @@ def test_a_parked_job_is_wiped_after_its_own_longer_window(tmp_path):
     assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
 
 
+def test_wiping_a_held_chronology_closes_its_ledger_row(tmp_path):
+    """A 09-23 hold on a client seat: its workdir was wiped, its row stayed
+    `held` for three weeks until SMD closed it by hand. The wipe now closes the
+    row, with a reason the fixed wording treats as owed no note. Falsifier: a
+    row the broker no longer has held (a delivery closed it) is not re-recorded."""
+    d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
+    _parked(d, broker, "01A")
+    _parked(d, broker, "01B")
+    broker.rows["01A"]["state"] = "held"
+    broker.rows["01B"]["state"] = "failed"
+    broker.records.clear()
+    d._now["t"] += 8 * 24 * 3600
+    assert sorted(d.wipe_expired()) == ["01A", "01B"]
+    assert broker.rows["01A"]["state"] == "failed"
+    assert broker.records == [
+        ("01A", "failed", {"reason": "superseded: held past the retention window, workdir wiped"})
+    ]
+
+
 def test_wiping_a_parked_job_takes_its_queue_entry_too(tmp_path):
     """A hard-stopped seat records a job `held` and leaves it QUEUED on purpose.
     Removing the workdir alone would hand the daemon a job it can claim and
