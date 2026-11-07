@@ -385,12 +385,14 @@ class _BuildFly:
     def __init__(self, *results: Result) -> None:
         self.results = list(results)
         self.pushes: list[tuple[str, str, str]] = []
+        self.floors: list[tuple[str, int]] = []
 
     def app_exists(self, app: str) -> bool:
         return True
 
-    def build_push(self, config_path: str, label: str, ss_sha: str) -> Result:
+    def build_push(self, config_path: str, label: str, ss_sha: str, floor: tuple[str, int]) -> Result:
         self.pushes.append((config_path, label, ss_sha))
+        self.floors.append(floor)
         return self.results.pop(0)
 
 
@@ -422,8 +424,23 @@ def _retry_builder(
     )
     return Builder(
         _build_repo(tmp_path), runner, fly, store, r2, _BuildExtractor("sha256:" + "d" * 64), logged.append,  # type: ignore[arg-type]
-        sleep=slept.append,
+        sleep=slept.append, floor=lambda sha: (_FLOOR_SHA, 2680) if sha == _SS_SHA else ("", 0),
     )  # fmt: skip
+
+
+_FLOOR_SHA = "f" * 40
+
+
+def test_a_build_passes_the_bundle_floor_of_its_own_commit_to_the_image(tmp_path: Path) -> None:
+    """The image bakes it for jobs-bundle-built-for-image (2026-11-07).
+
+    FALSIFIER: pass another commit's floor, or none, and the pushed floor differs.
+    """
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_PUSHED), FakeStore(), FakeR2()
+    _retry_builder(tmp_path, fly, store, r2, [], []).build(BuildOptions())
+    assert fly.floors == [(_FLOOR_SHA, 2680)]
 
 
 def test_a_build_records_the_merge_commits_time_in_utc(tmp_path: Path) -> None:

@@ -37,7 +37,10 @@ the step is done once a fresh beat still reports the version; nothing on the
 seat changes, so no busy gate and no self-test.
 
 ORDER. A bundle published at S reaches a seat only once that seat's image
-descends from base(S) (ordering.py), as skills do.
+descends from base(S) (ordering.py), as skills do. Since 2026-11-07 the IMAGE
+step writes the pointer at the bundle a new image needs before it reboots the
+seat (bundle_align.py), so this step usually finds the seat already reporting
+the version and points it with no restart.
 """
 
 from __future__ import annotations
@@ -152,6 +155,25 @@ def deferrals(
 
 
 # -- one seat --------------------------------------------------------------------------
+def load_manifest(r2: R2, name: str, version: str) -> tuple[dict[str, Any], str, str]:
+    """The manifest CI published, its key and sha256. Refused unless its tarball is there too.
+
+    Shared by this step and the image step's pointer write (bundle_align.py).
+    """
+    key = bundle_manifest_key(name, version)
+    raw = r2.get_bytes(key)
+    if raw is None:
+        raise ToolingError(f"no bundle manifest at {key} (has CI published {name} {version}?)")
+    manifest = json.loads(raw)
+    if manifest.get("name") != name or manifest.get("version") != version:
+        raise ToolingError(f"{key} names {manifest.get('name')!r} {manifest.get('version')!r}, not {name} {version}")
+    if not isinstance(manifest.get("sha256"), str) or len(manifest["sha256"]) != 64:
+        raise ToolingError(f"{key} carries no tarball sha256")
+    if r2.head(bundle_tarball_key(name, version)) is None:
+        raise ToolingError(f"{key} is published but its tarball is not")
+    return manifest, key, hashlib.sha256(raw).hexdigest()
+
+
 class BundleRollout:
     def __init__(
         self,
@@ -168,21 +190,7 @@ class BundleRollout:
         self.log, self.sleep, self.clock, self.max_idle_wait = log, sleep, clock, max_idle_wait
 
     def load_manifest(self, name: str, version: str) -> tuple[dict[str, Any], str, str]:
-        """The manifest CI published, its key and sha256. Refused unless its tarball is there too."""
-        key = bundle_manifest_key(name, version)
-        raw = self.r2.get_bytes(key)
-        if raw is None:
-            raise ToolingError(f"no bundle manifest at {key} (has CI published {name} {version}?)")
-        manifest = json.loads(raw)
-        if manifest.get("name") != name or manifest.get("version") != version:
-            raise ToolingError(
-                f"{key} names {manifest.get('name')!r} {manifest.get('version')!r}, not {name} {version}"
-            )
-        if not isinstance(manifest.get("sha256"), str) or len(manifest["sha256"]) != 64:
-            raise ToolingError(f"{key} carries no tarball sha256")
-        if self.r2.head(bundle_tarball_key(name, version)) is None:
-            raise ToolingError(f"{key} is published but its tarball is not")
-        return manifest, key, hashlib.sha256(raw).hexdigest()
+        return load_manifest(self.r2, name, version)
 
     def run(self, seat: str, ring: int, release: dict[str, Any], manifest: dict[str, Any], key: str, sha: str,
             dry_run: bool) -> SeatOutcome:  # fmt: skip

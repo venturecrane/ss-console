@@ -128,3 +128,61 @@ def deferrals(
                 f"need an image at or after {base[:8]}"
             )
     return out
+
+
+# -- the bundle floor (2026-11-07) ----------------------------------------------------------
+# What an IMAGE needs of a jobs bundle, the mirror of base(S) above: floor(X) is
+# the last commit at or before X that changed a bundle path. A bundle built at S
+# carries everything X's bundle paths say once S is floor(X) or descends from it.
+# The seat image bakes floor(X) and its commit number (Dockerfile
+# SMD_BUNDLE_FLOOR_*), the bundle manifest carries its own number
+# (scripts/ci-publish-bundle.sh ss_console_seq), and the seat's self-test compares
+# the two (operator/templates/jobs-bundle-commit-probe.py). The release tick uses
+# floor(X) to point a seat at its bundle before the image boots (bundle_align.py).
+BUNDLE_PATHS = ".github/operator-bundle-paths.txt"
+
+
+def bundle_pathspecs(repo: Path) -> list[str]:
+    """The jobs bundle's path list as git pathspecs, read from ``repo``'s own list."""
+    detect = _detect(str(repo))
+    return detect.git_pathspecs(detect.load_patterns(repo / BUNDLE_PATHS))
+
+
+def bundle_floor(runner: Runner, repo: Path, sha: str) -> str | None:
+    """floor(X): the last commit at or before ``sha`` touching a bundle path, or None.
+
+    None when this clone does not hold ``sha`` or no commit at or before it
+    touched a bundle path; any other git failure is a tooling error.
+    """
+    if not ids.SHA_RE.match(sha or ""):
+        return None
+    present = runner.run(["git", "-C", str(repo), "cat-file", "-e", f"{sha}^{{commit}}"], timeout=60)
+    if present.rc != 0:
+        return None
+    res = runner.run(
+        ["git", "-C", str(repo), "log", "-1", "--format=%H", sha, "--", *bundle_pathspecs(repo)], timeout=60
+    )
+    if not res.ok:
+        raise ToolingError(f"git log for floor({sha[:8]}) failed (rc={res.rc}): {res.text.strip()[-300:]}")
+    found = res.stdout.strip()
+    return found if ids.SHA_RE.match(found) else None
+
+
+def commit_seq(runner: Runner, repo: Path, sha: str) -> int:
+    """How many commits ``sha`` has, itself included: a number that grows along every ancestry line.
+
+    A descendant always counts more than its ancestor, so on main's single line
+    two commits compare by it without git, which is how a seat (no git) orders
+    its bundle against its image. A shallow clone counts only what it fetched, so
+    it is refused rather than answered low.
+    """
+    if not ids.SHA_RE.match(sha or ""):
+        raise ToolingError(f"commit_seq needs a 40-hex commit, not {sha!r}")
+    shallow = runner.run(["git", "-C", str(repo), "rev-parse", "--is-shallow-repository"], timeout=60)
+    if not shallow.ok or shallow.stdout.strip() != "false":
+        raise ToolingError(f"{repo} is a shallow clone (or unreadable): it cannot count {sha[:8]}'s history")
+    res = runner.run(["git", "-C", str(repo), "rev-list", "--count", sha], timeout=60)
+    count = res.stdout.strip()
+    if not res.ok or not count.isdigit() or int(count) < 1:
+        raise ToolingError(f"git rev-list --count {sha[:8]} failed (rc={res.rc}): {res.text.strip()[-300:]}")
+    return int(count)

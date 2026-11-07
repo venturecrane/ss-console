@@ -1123,7 +1123,12 @@ if [ "${BUILD_FROM_SOURCE}" = 1 ]; then
   # tree and the heartbeat reports this sha), so a checkout that cannot name it
   # cannot build a seat image. The Dockerfile refuses anything but 40 hex too.
   build_sha="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null)" || die "--build needs a git checkout at ${REPO_ROOT}: the image's SS_CONSOLE_SHA is its version"
-  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --build-arg SS_CONSOLE_SHA="${build_sha}")
+  # The jobs bundle floor the image's self-test compares its bundle with (the
+  # Dockerfile refuses a build without it); a shallow checkout is refused there.
+  read -r floor_sha floor_seq < <(cd "${REPO_ROOT}" && "${BIN_DIR}/fleet" bundle-floor --sha "${build_sha}") \
+    || die "--build could not compute the jobs bundle floor of ${build_sha} (fleet bundle-floor, above)"
+  (cd "${REPO_ROOT}" && fly deploy --config "${RENDERED_DIR}/fly.toml" --build-arg SS_CONSOLE_SHA="${build_sha}" \
+    --build-arg SMD_BUNDLE_FLOOR_SHA="${floor_sha}" --build-arg SMD_BUNDLE_FLOOR_SEQ="${floor_seq}")
 else
   source "${BIN_DIR}/lib/select-release-image.sh"
   RELEASE_IMAGE="$(select_release_image "${BIN_DIR}" "${SLUG}")" || die "no image to deploy for ${APP_NAME} (reason above)"

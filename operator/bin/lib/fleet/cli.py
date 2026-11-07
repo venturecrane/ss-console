@@ -70,6 +70,7 @@ from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use 
     _bundles_defer,
     _bundles_in_flight,
     _bundles_tick,
+    bundle_align_for,
     bundle_release_named,
     bundle_rings,
     bundle_seat_runner,
@@ -79,7 +80,9 @@ from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use 
     _skills_in_flight,
     _skills_tick,
     cmd_bundle_base,
+    cmd_bundle_floor,
     cmd_bundle_record,
+    cmd_commit_seq,
 )
 from .build import BuildOptions, Builder, ImageExtractor
 from .busy import BusyGate
@@ -226,6 +229,9 @@ def _add_seat_parsers(sub: Any) -> None:
 def _add_ci_parsers(sub: Any) -> None:
     bb = sub.add_parser("bundle-base", help="the image a bundle built at SHA is built inside (CI)")
     bb.add_argument("--sha", required=True)
+    for name, what in (("bundle-floor", "the jobs bundle floor of SHA and its commit number (image build)"),
+                       ("commit-seq", "SHA's commit number (CI, a bundle manifest)")):  # fmt: skip
+        sub.add_parser(name, help=what).add_argument("--sha", required=True)
     br = sub.add_parser("bundle-record", help="record a published jobs bundle in fleet_releases (CI)")
     br.add_argument("--version", required=True)
     br.add_argument("--sha", required=True)
@@ -315,7 +321,7 @@ def _image_rollout(ctx: Ctx, holder: str) -> ImageRollout:
     return ImageRollout(
         ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker.for_ctx(ctx),
         SmokeRunner(ctx.runner, str(ctx.repo)), ctx.render, ctx.log, ctx.sleep, ctx.clock,
-        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger,
+        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger, bundle_align_for(ctx),
     )  # fmt: skip
 
 
@@ -363,6 +369,8 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace, hold_ring: int | None = None) -
         ctx.log("tick: the seat's self-test decides every seat (no ssh boot smoke in a tick)")
     holder = holder_id()
     roll = _image_rollout(ctx, holder)
+    seats = [seat for ring in ctx.rings() for seat in ring.seats]
+    align = roll.align
 
     def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
         rel_meta = meta if rel["release_id"] == release["release_id"] else (
@@ -380,6 +388,8 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace, hold_ring: int | None = None) -
         retriable=lambda rel, seat, row: roll.preflight.refusal_now_declared(
             seat, rel, row.get("detail"), roll.current_sha(seat)
         ),
+        # A lane seat waits while the jobs bundle its new image needs is still being published (bundle_align.py).
+        defer=(lambda rel: align.deferrals(rel, seats)) if align else None,
     )
     if a.release_id == "latest":
         return ticker.run_promoting(
@@ -627,6 +637,8 @@ COMMANDS: dict[str, Callable[[Ctx, argparse.Namespace], int]] = {
     "with-seat-lease": cmd_with_seat_lease,
     "bundle-base": cmd_bundle_base,
     "bundle-record": cmd_bundle_record,
+    "bundle-floor": cmd_bundle_floor,
+    "commit-seq": cmd_commit_seq,
     "latest-image": cmd_latest_image,
 }
 

@@ -287,10 +287,12 @@ class Fly:
         return self._fly("machine", "restart", self.machine_id(app), "-a", app, timeout=600)
 
     # -- build -------------------------------------------------------------------------
-    def build_push(self, config_path: str, label: str, ss_sha: str) -> Result:
+    def build_push(self, config_path: str, label: str, ss_sha: str, floor: tuple[str, int]) -> Result:
+        """``floor`` is the image's jobs bundle floor and its commit number (ordering.bundle_floor)."""
         return self._fly(
             "deploy", "--build-only", "--push", "--remote-only", "-a", ids.FLEET_REGISTRY_APP,
             "--config", config_path, "--image-label", label, "--build-arg", f"SS_CONSOLE_SHA={ss_sha}",
+            "--build-arg", f"SMD_BUNDLE_FLOOR_SHA={floor[0]}", "--build-arg", f"SMD_BUNDLE_FLOOR_SEQ={floor[1]}",
             timeout=3600,
         )  # fmt: skip
 
