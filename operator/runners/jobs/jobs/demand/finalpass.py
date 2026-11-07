@@ -14,8 +14,8 @@ attorney:
   claim would put it back in the letter. The claim itself goes to the
   attorney notes;
 * an ARITHMETIC finding's figure is removed and replaced with
-  ``[CONFIRM the arithmetic (<the stated discrepancy>) BEFORE TRANSMITTAL]``
-  (curly: ``{{ATTORNEY: verify arithmetic: ...}}``); a row whose own detail
+  ``[CONFIRM this figure (<the reason, short and whole>) BEFORE TRANSMITTAL]``
+  (curly: ``{{ATTORNEY: verify this figure ...}}``); a row whose own detail
   says the arithmetic is correct is not a discrepancy (the check sometimes
   files one it passed under ARITHMETIC) and is left as written, noted for the
   attorney;
@@ -205,12 +205,39 @@ def _match(body: str, claim: str) -> tuple[tuple[int, int] | None, float]:
 
 
 #: The words code writes, one place: the markers by dialect and the notes.
+#: ``{why}`` is ``marker_why``'s: short and whole, or empty (then the marker
+#: stands without a reason; the attorney notes carry the whole of it).
 MARK = {
-    (SQUARE, "INVENTED"): "[TO BE SUPPLIED: a statement here is not supported by the file ({why})]",
-    (CURLY, "INVENTED"): "{{{{NOT IN RECORD: a statement here is not supported by the file ({why})}}}}",
-    (SQUARE, "ARITHMETIC"): "[CONFIRM the arithmetic ({why}) BEFORE TRANSMITTAL]",
-    (CURLY, "ARITHMETIC"): "{{{{ATTORNEY: verify arithmetic: {why}}}}}",
+    (SQUARE, "INVENTED"): "[TO BE SUPPLIED: a statement here is not supported by the file{why}]",
+    (CURLY, "INVENTED"): "{{{{NOT IN RECORD: a statement here is not supported by the file{why}}}}}",
+    (SQUARE, "ARITHMETIC"): "[CONFIRM this figure{why} BEFORE TRANSMITTAL]",
+    (CURLY, "ARITHMETIC"): "{{{{ATTORNEY: verify this figure{why}}}}}",
 }
+#: The most a marker says about why. On 2026-11-07 the review held a demand
+#: whose closing paragraph carried a marker with the check's whole reason cut
+#: at 220 characters: a document's name and a sentence of a chart note, both
+#: broken mid-word, inside the letter. A marker never carries a cut-off
+#: sentence, a quotation or a parenthetical cite; what does not fit whole is
+#: left to the attorney notes.
+MARKER_WHY_MAX = 120
+_PAREN = re.compile(r"\s*\([^()]*\)")
+
+
+def marker_why(detail: str, claim: str = "") -> str:
+    """The reason a marker states, as " (<reason>)": the check's reason with
+    its quotations and parenthetical cites taken out when that fits whole in
+    ``MARKER_WHY_MAX``; else its first clause when that fits; else nothing."""
+    s = _QUOTED.sub("", detail or claim or "")
+    while _PAREN.search(s):
+        s = _PAREN.sub("", s)
+    s = _clean(s, 10**6).strip(" ,;:")
+    if not s:
+        return ""
+    if len(s) > MARKER_WHY_MAX:
+        s = re.split(r";\s|(?<=[a-z)])\.\s", s, maxsplit=1)[0].strip(" ,;:.")
+    return f" ({s})" if s and len(s) <= MARKER_WHY_MAX else ""
+
+
 NOTE_REMOVED = "{head}: taken out, the file does not support it: {claim} ({why})"
 NOTE_FLAGGED = "{head}: figure marked for the attorney to confirm: {claim} ({why})"
 NOTE_KEPT = (
@@ -278,7 +305,7 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
         if head not in heads:
             raise Unlocated(f"the final audit names section {head[:60]!r}, which the letter does not have")
         if verdict == "ARITHMETIC" and self_cleared(detail):
-            notes.append(NOTE_CLEARED.format(head=head, claim=_clean(claim, 120)))
+            notes.append(NOTE_CLEARED.format(head=head, claim=_clean(claim, 10**6)))
             continue
         idx, span = _place(heads, bodies, head, claim, verdict)
         if span is None:
@@ -289,7 +316,7 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
         if verdict == "INVENTED":
             # The marker says WHY, never what was claimed: restating the claim
             # would put the invented statement back in the letter.
-            edited = body[:a] + MARK[(dialect, verdict)].format(why=_clean(detail, 160)) + body[b:]
+            edited = body[:a] + MARK[(dialect, verdict)].format(why=marker_why(detail)) + body[b:]
             left = remaining(claim, edited)
             if left is None:
                 raise Unlocated(
@@ -299,12 +326,12 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
                 # A list of items spread through the section (2026-10-15: six
                 # exhibit cites, one cell replaced, the note said all six went).
                 # Removing every one rewrites the letter; the attorney decides.
-                notes.append(NOTE_KEPT.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
+                notes.append(NOTE_KEPT.format(head=head, claim=_clean(claim, 10**6), why=_clean(detail, 10**6)))
                 continue
             body = edited
-            notes.append(NOTE_REMOVED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
+            notes.append(NOTE_REMOVED.format(head=head, claim=_clean(claim, 10**6), why=_clean(detail, 10**6)))
         else:
-            mark = MARK[(dialect, verdict)].format(why=_clean(detail or claim))
+            mark = MARK[(dialect, verdict)].format(why=marker_why(detail, claim))
             figs = [f for f in _FIG.findall(claim) if f in unit and re.search(r"\d", f)]
             if figs:
                 fig = figs[-1]
@@ -316,7 +343,7 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
             if mark not in edited or edited.count(mark) != body.count(mark) + 1:
                 raise Unlocated(f"a final-audit ARITHMETIC finding in {head[:60]!r} could not be marked")
             body = edited
-            notes.append(NOTE_FLAGGED.format(head=head, claim=_clean(claim, 160), why=_clean(detail, 160)))
+            notes.append(NOTE_FLAGGED.format(head=head, claim=_clean(claim, 10**6), why=_clean(detail, 10**6)))
         bodies[idx] = body
     out = "\n".join(bodies)
     return out + ("\n" if draft_md.endswith("\n") else ""), notes

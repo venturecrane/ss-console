@@ -355,9 +355,12 @@ class Drafter:
             cache = self.data / "audit" / f"v{version}-{dsha}-{i:02d}.md"
             if cache.is_file():
                 return i, cache.read_text(encoding="utf-8")
-            text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
             cache.parent.mkdir(exist_ok=True)
-            cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
+            kept = self._prior_audit(version, head, body)
+            if kept is None:
+                text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
+                kept = f"## AUDIT: {head}\n\n{text}\n"
+            cache.write_text(kept, encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
         # The first section alone: its call writes the cache of the system
@@ -385,6 +388,25 @@ class Drafter:
         }
         self._write(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out
+
+    def _prior_audit(self, version: int, head: str, body: str) -> str | None:
+        """An earlier version's audit of this very section, when the section
+        is unchanged since: the same heading and the same text. A repair
+        rewrites only the sections with findings, so most of a letter is
+        audited once however many drafts it goes through (2026-11-07: a
+        23-section letter repaired in four sections after a review hold)."""
+        for v in range(version - 1, 0, -1):
+            p = self.data / f"draft-v{v}.md"
+            if not p.is_file():
+                continue
+            prev = p.read_text(encoding="utf-8")
+            psha = sha(prev)[:8]
+            for j, (h, b) in enumerate(auditable(sections(prev))):
+                if h == head and b == body:
+                    c = self.data / "audit" / f"v{v}-{psha}-{j:02d}.md"
+                    if c.is_file():
+                        return c.read_text(encoding="utf-8")
+        return None
 
     def _audit_part(self, system: str, key: str, head: str, body: str) -> str:
         """One section's audit, complete. The ceiling is the audit model's own
@@ -426,12 +448,15 @@ class Drafter:
         tmp.write_text(text, encoding="utf-8")
         tmp.replace(self.data / name)
 
-    def repair(self, digest: str, version: int = 1) -> str:
-        """draft-v<version+1> from draft-v<version> and its audit."""
+    def repair(self, digest: str, version: int = 1, audit_md: str | None = None) -> str:
+        """draft-v<version+1> from draft-v<version> and its audit, or from
+        ``audit_md`` when given (SMD's findings after a review hold, in the
+        audit's shape; ``run._asked_repair``)."""
         out = f"draft-v{version + 1}.md"
         if (self.data / out).is_file():
             return self._read(out)
-        draft, audit = self._read(f"draft-v{version}.md"), self._read(f"audit-v{version}.md")
+        draft = self._read(f"draft-v{version}.md")
+        audit = audit_md if audit_md is not None else self._read(f"audit-v{version}.md")
         flagged, digest_part = repair_scope(draft, audit, digest)
         if not flagged:
             self._commit(out, draft)

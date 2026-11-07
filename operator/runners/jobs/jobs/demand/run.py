@@ -49,6 +49,7 @@ from ..ledger import Ledger
 from ..llm import Doorway
 from ..proof import review as proof_review
 from . import (
+    asked,
     batching,
     crosscheck,
     deliver,
@@ -153,9 +154,10 @@ class DemandRun:
         p = self.data / "state.json"
         return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
 
-    def _put(self, key: str, value: Any) -> None:
+    def _put(self, key: str, value: Any, *, drop: bool = False) -> None:
+        """Set a mark, or with ``drop`` forget it so the stage runs again on its new input."""
         st = self._state()
-        st[key] = value
+        st.pop(key, None) if drop else st.__setitem__(key, value)
         tmp = self.data / "state.json.tmp"
         tmp.write_text(json.dumps(st, indent=1), encoding="utf-8")
         tmp.replace(self.data / "state.json")
@@ -317,7 +319,7 @@ class DemandRun:
             d.repair(digest, version)
             version += 1
             result = d.audit(version, digest, corpus)
-        return version, result
+        return asked.apply(d, self.data, digest, corpus, version, result, self.log)
 
     def _demand_checks(self, version: int, result: dict[str, Any]) -> list[str]:
         """Every check between the final audit and the render. Findings the
@@ -344,8 +346,12 @@ class DemandRun:
         """``draft-final.md`` from the last draft and its audit, once: a resume
         (or the gate's quote repair, which rewrites it) keeps the same file."""
         out, rec = self.data / FINAL, self.data / "final-pass.json"
-        if out.is_file() and rec.is_file():
+        if out.is_file() and rec.is_file() and int(self._json("final-pass.json").get("version") or 0) == version:
             return out.read_text(encoding="utf-8"), list(self._json("final-pass.json")["notes"])
+        if rec.is_file():
+            # a later draft (an asked repair): the letter is settled and gated again
+            self.log(f"  final pass: draft v{version} replaces v{self._json('final-pass.json').get('version')}")
+            self._put("gate.json", None, drop=True)
         md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
@@ -373,7 +379,10 @@ class DemandRun:
         lines = ["| Document | Why it was held out |", "|---|---|"]
         lines += [f"| {str(w['name']).replace('|', '/')} | {w['reason']} |" for w in rows]
         return (
-            head + "Never read by a model; clear any of them and ask again to include it.\n\n" + "\n".join(lines) + "\n"
+            head
+            + "Not read for this demand; clear any of them and ask again to include it.\n\n"
+            + "\n".join(lines)
+            + "\n"
         )
 
     def _gate(self, name: str, md: str, path: Path | None = None) -> tuple[dict[str, Any], str]:

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -256,6 +257,79 @@ def parse(md: str, keys: tuple[str, ...] = FRONT_KEYS) -> tuple[dict[str, str], 
     if missing:
         raise RenderError(f"front matter missing: {missing}")
     return front, md[m.end() :], notes.strip()
+
+
+#: A long date as the letter writes it, with or without its weekday.
+_LONG_DATE = re.compile(
+    r"(?:(?P<wd>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+)?"
+    r"(?P<mon>January|February|March|April|May|June|July|August|September|October|November|December)"
+    r"\s+(?P<day>\d{1,2}),\s+(?P<year>\d{4})"
+)
+
+
+def _long(d: date) -> str:
+    return f"{d:%A}, {d:%B} {d.day}, {d.year}"
+
+
+def business_day_expiry(md: str) -> tuple[str, list[str]]:
+    """The demand's expiry on a business day. The drafter sets it thirty days
+    out and a Saturday or Sunday comes up one week in three; on 2026-11-07 the
+    review flagged a Sunday, a day the firm's and the carrier's offices are
+    closed. The banner's date moves to the Monday, every statement of the same
+    date in the letter moves with it, and a weekday word that disagrees with
+    its date is corrected. Public holidays are not known here: a Monday that
+    is one is the attorney's to move, and the note says so. Returns the letter
+    and the attorney-notes lines (none when nothing changed)."""
+    m = re.search(r"(?m)^expires:\s*(.*)$", md)
+    if not m:
+        return md, []
+    hit = _LONG_DATE.search(m.group(1))
+    if not hit:
+        return md, []
+    try:
+        d = date(int(hit["year"]), _MONTHS[hit["mon"]], int(hit["day"]))
+    except (KeyError, ValueError):
+        return md, []
+    moved = d
+    while moved.weekday() >= 5:
+        moved += timedelta(days=1)
+    was, now = hit.group(0), _long(moved)
+    if was == now:
+        return md, []
+    out = md.replace(was, now)
+    bare = f"{d:%B} {d.day}, {d.year}"
+    if moved != d:
+        # the same date written without its weekday, in the body's closing sentence
+        out = re.sub(rf"(?<![A-Za-z], ){re.escape(bare)}", f"{moved:%B} {moved.day}, {moved.year}", out)
+        note = (
+            f"The demand's expiry fell on a {d:%A} ({bare}); it is written as {now}, the next business day. "
+            "Public holidays are not checked: move it again if that Monday is one."
+        )
+    else:
+        note = f"The expiry's weekday was corrected to {now} (the letter had {was})."
+    return out, [note]
+
+
+_MONTHS = {
+    m: i
+    for i, m in enumerate(
+        (
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ),
+        start=1,
+    )
+}
 
 
 def table_kind(header: list[str]) -> str:
