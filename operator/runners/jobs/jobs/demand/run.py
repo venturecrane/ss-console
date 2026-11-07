@@ -57,6 +57,7 @@ from . import (
     finalpass,
     firm as firm_mod,
     format_check,
+    gapaudit,
     gate,
     job as job_mod,
     preflight,
@@ -427,6 +428,9 @@ class DemandRun:
         if self.job.wants("gap_audit"):
             gap = (self.data / "gap-audit.md").read_text(encoding="utf-8")
             gg, gap = self._gate("gate-gap-audit.json", gap, self.data / "gap-audit.md")
+            # The firm's words, again, on the text as it is filed: a list
+            # cached before the rule (2026-11-06) is scrubbed here, not re-bought.
+            gap = gapaudit.firm_words(gap)
             if gg.get("repairs"):  # code-authored, so a changed quotation is visible
                 gap += (
                     "\n\n## Quotations repaired before filing\n\n" + "\n".join(f"- {x}" for x in gg["repairs"]) + "\n"

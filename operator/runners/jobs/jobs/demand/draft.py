@@ -284,8 +284,8 @@ class Drafter:
             [
                 self.firm.text("prompt_gap_audit"),
                 self.brief,
-                "THE FREE PREFLIGHT (mechanical; cite it as 'preflight' only for the bill reconciliation):\n"
-                + json.dumps(free, indent=1),
+                "THE FREE BILL RECONCILIATION (mechanical, by code; cite it as 'the bill reconciliation', and only "
+                "for its own rows):\n" + json.dumps(free, indent=1),
                 "THE RECORD DIGEST:\n\n" + digest,
                 gapaudit.CONTRACT,
             ]
@@ -475,16 +475,12 @@ def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
 _LABEL = re.compile(r"\b(SUPPORTED|DRIFTS|INVENTED|ARITHMETIC)\b")
 
 
-#: The check's reasons say "digest" for the record (its own word: the record
-#: digest it reads). Carried into a marker, that word reached the LETTER on the
-#: 2026-10-15 re-run ("no cite in digest"); the firm calls it the record.
-_DIGEST = re.compile(r"\b(?:record )?digest(?:'s)?\b", re.I)
-
-
 def firm_reason(s: str) -> str:
-    """A check's stated reason in the firm's words: the record, not the digest,
-    and no em dash."""
-    return _DIGEST.sub("record", s).replace("\u2014", ",").replace("\u2013", "-")
+    """A check's stated reason in the firm's words: the record, not the digest
+    (``gapaudit.firm_words``: the check's own word for the record digest it
+    reads, which reached the LETTER on the 2026-10-15 re-run as "no cite in
+    digest"), and no em dash."""
+    return gapaudit.firm_words(s).replace("\u2014", ",").replace("\u2013", "-")
 
 
 def finding_text(audit_md: str, kinds: tuple[str, ...]) -> list[str]:

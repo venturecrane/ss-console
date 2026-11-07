@@ -72,7 +72,48 @@ exactly `{SENTINEL}`:
   missing states the two dates, the number of days and any reason the records give, Basis `Referenced in record`.
 - Keep each cell short: a few words, plus the citation in the Where column. Never put a pipe character in a cell.
 - If nothing in your scope is missing, write the header, the separator and the sentinel only.
+- The firm reads every cell. Write in the firm's words, never in the words of the system that produced it: the
+  record digest is your reading aid, so call its source the record, the file, or the document by name, never
+  "the digest" or "in digest"; the free bill reconciliation is "the bill reconciliation", never "preflight"; and
+  never name a job, a pipeline, a model, a batch, a chunk, a gate, a check or a stage.
 """
+
+#: The system's words for its own inputs, which the firm never uses: the
+#: record digest (the summaries the model reads for the file) and the
+#: preflight (code's bill reconciliation). On 2026-11-06 the pre-delivery
+#: review held a 10,590-page demand on five of these in the gap audit
+#: ("digest shows", "the digest", "in digest", "not in digest"), every one in
+#: a cell the model wrote; the letter, whose repairs already pass through
+#: ``draft.firm_reason``, carried none. The contract above asks for the firm's
+#: words; this rewrite is the guarantee, applied to every cell in ``render``
+#: and again to the list as it is filed (``run._build_deliverables``), so a
+#: list cached before the rule reaches the firm in the firm's words too.
+#: Never "digestive", never "digestion": the word boundary ends at "digest".
+_THE_DIGEST = re.compile(r"\b(?:the|this|its|our) (?:record )?digest\b", re.I)
+_DIGEST = re.compile(r"\b(?:record )?digest\b", re.I)
+#: Never a record's own "preflight inspection" (the same exclusion the review's
+#: ``FIRM_BANNED`` makes, so the two agree on every text).
+_PREFLIGHT = re.compile(
+    r"\b(?:the )?(?:free )?preflight\b(?!\s+(?:inspection|check|checklist|briefing|procedure)s?\b)", re.I
+)
+
+
+def _firm(word: str) -> Callable[[re.Match[str]], str]:
+    def sub(m: re.Match[str]) -> str:
+        return ("The " if m.group(0)[0].isupper() else "the ") + word
+
+    return sub
+
+
+def firm_words(text: str) -> str:
+    """``text`` with the system's names for its inputs in the firm's words:
+    "the record" for the digest (keeping a possessive: "the record's"), "the
+    bill reconciliation" for the preflight; a capital kept at a sentence's
+    start. Idempotent, so a list scrubbed at render and again at filing
+    reads the same."""
+    out = _THE_DIGEST.sub(_firm("record"), text or "")
+    out = _DIGEST.sub(_firm("record"), out)
+    return _PREFLIGHT.sub(_firm("bill reconciliation"), out)
 
 
 class GapAuditError(RuntimeError):
@@ -182,6 +223,7 @@ def _sec_key(label: str) -> str:
 def render(merged: list[list[str]], free: dict[str, Any]) -> str:
     """The deliverable: the brief's sections as tables of numbered items, the
     possible list, and the readiness summary, all from the rows."""
+    merged = [[firm_words(c) for c in r] for r in merged]
     possible = [r for r in merged if "possible" in r[0].lower()]
     items = [r for r in merged if "possible" not in r[0].lower()]
     order: dict[str, str] = {}
