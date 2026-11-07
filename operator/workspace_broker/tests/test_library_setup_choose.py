@@ -11,7 +11,6 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -215,23 +214,25 @@ def _accept_running(broker) -> str:
     return jid
 
 
-def _store(tmp_path: Path):
-    runs, results = tmp_path / "spool" / "runs", tmp_path / "spool" / "results"
-    runs.mkdir(parents=True)
-    results.mkdir(parents=True)
+def _store(tmp_path: Path, broker):
+    """The REAL establishment spool (its status read is the one the lane polls)."""
+    from workspace_broker.establishment_store import EstablishmentStore
 
-    def status(req):
-        p = results / f"{req['run_id']}.json"
-        if p.is_file():
-            return {"ok": True, "status": "complete", "result": json.loads(p.read_text())}
-        return {"ok": True, "status": "pending"}
+    root = tmp_path / "spool"
+    for d in ("runs", "results", "staging"):
+        (root / d).mkdir(parents=True)
+    return EstablishmentStore(root, broker.ledger)
 
-    return SimpleNamespace(runs_dir=runs, results_dir=results, status=status)
+
+def _intake_answers(store, run_id: str, status: str) -> None:
+    """What the root intake writes when a run ends (``EstablishIntake._write_result``)."""
+    result = {"schema_version": 1, "run_id": run_id, "phase": "install", "status": status, "reasons": []}
+    (store.results_dir / f"{run_id}.json").write_text(json.dumps(result))
 
 
 def test_the_made_file_is_spooled_in_the_writers_shape(live, tmp_path):
     broker, *_ = live
-    broker.establishment = _store(tmp_path)
+    broker.establishment = _store(tmp_path, broker)
     jid = _accept_running(broker)
     data = b"made file bytes"
     filed = {"file_id": "lib-1", "version": "v1", "sha256": hashlib.sha256(data).hexdigest()}
@@ -248,11 +249,14 @@ def test_the_made_file_is_spooled_in_the_writers_shape(live, tmp_path):
         "memo", "lib-1", "v1", "marked", ADMIN)  # fmt: skip
     pending = call(broker, "library_setup_accept_status", pid=1, uid=0, job_id=jid)
     assert pending["status"] == "pending"
+    _intake_answers(broker.establishment, out["run_id"], "installed")
+    done = call(broker, "library_setup_accept_status", pid=1, uid=0, job_id=jid)
+    assert done["status"] == "complete" and done["result"]["status"] == "installed"
 
 
 def test_bytes_that_are_not_the_filed_ones_are_refused(live, tmp_path):
     broker, *_ = live
-    broker.establishment = _store(tmp_path)
+    broker.establishment = _store(tmp_path, broker)
     jid = _accept_running(broker)
     with pytest.raises(Exception):
         call(broker, "library_setup_accept_submit", pid=1, uid=0, job_id=jid, data_b64=base64.b64encode(b"x").decode(),
@@ -262,7 +266,7 @@ def test_bytes_that_are_not_the_filed_ones_are_refused(live, tmp_path):
 
 def test_only_root_may_hand_off(live, tmp_path):
     broker, *_ = live
-    broker.establishment = _store(tmp_path)
+    broker.establishment = _store(tmp_path, broker)
     jid = _accept_running(broker)
     with pytest.raises(Exception):
         call(broker, "library_setup_accept_submit", job_id=jid, data_b64="", filed={}, fixed_strings=[], replaces=None)

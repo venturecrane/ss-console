@@ -106,3 +106,19 @@ def test_accept_dry_runs_the_accept_checks_files_nothing_and_prints_counts_only(
     }
     assert "Other Client" not in out and "made" not in report
     assert not any(c.startswith(("add_", "POST")) for c in client.calls)
+
+
+@pytest.mark.parametrize("extra", [["--attorney", "Alex"], ["--accept-dry"], ["--attorney", "Alex", "--accept-dry"]])
+def test_the_rehearsal_runs_on_real_drafting_inputs(tmp_path, monkeypatch, capsys, extra):
+    """Regression (the 2026-11-07 client-workspace rehearsal): on a firm's real
+    drafting inputs both ``--attorney`` and ``--accept-dry`` exited 2 with
+    TypeError, because the roster and the allow list called the loader's
+    ``attorneys`` property. These go through the real loader and the real
+    seat-config reader."""
+    import library_setup_testkit as kit
+
+    kit.customer_yaml(tmp_path / "customer.yaml", monkeypatch)
+    inputs = kit.drafting_inputs(tmp_path / "inputs", "alex@firm.example")
+    assert _tool().main(["--kind", "memo", "--inputs", inputs, *extra], client=_client()) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert "error" not in report and "stopped" not in report, report

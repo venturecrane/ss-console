@@ -111,6 +111,18 @@ def test_the_schema_has_no_requester_field_and_the_tool_is_an_internal_write(set
     assert classify_tool("library_setup_submit").action_class is ActionClass.INTERNAL_WRITE
 
 
+def test_the_fake_clients_methods_are_the_real_clients():
+    """The fakes below stand in for ``JobsBrokerClient``: a method they have and
+    it lacks would pass here and raise on a seat (the 2026-11-07 lesson)."""
+    import inspect
+
+    from shared.jobs_client import JobsBrokerClient
+
+    for name in ("library_setup_submit", "library_setup_choose"):
+        real = inspect.signature(getattr(JobsBrokerClient, name))
+        assert list(real.parameters) == ["self", "envelope"], (name, real)
+
+
 class _ChooseClient(_Client):
     def library_setup_choose(self, envelope):
         self.envelopes.append(envelope)

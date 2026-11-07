@@ -64,7 +64,7 @@ def identity(inputs_dir: str | None) -> list[str]:
     from .job import _inputs
 
     inputs = _inputs(inputs_dir)
-    blocks = [a.get("block") or [] for a in (inputs.attorneys() if inputs is not None else [])]
+    blocks = [a.get("block") or [] for a in (inputs.attorneys if inputs is not None else [])]
     return make_mod.identity_pieces(load_firm_identity(), blocks)
 
 

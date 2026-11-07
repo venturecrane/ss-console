@@ -13,13 +13,13 @@ import json
 import re
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
 
 import docx
 import pytest
 
+import library_setup_testkit as kit
 import library_testkit as lt
-from operator_connector_sdk.library import MARKED, LibraryFile, MemoryLibrary
+from operator_connector_sdk.library import MARKED, MemoryLibrary
 from jobs import firmbase, library_setup_handoff as H
 from jobs.drafting import brief_base, library_pick
 from jobs.library_setup import accept as A, file as F, make as M
@@ -143,101 +143,65 @@ def test_identity_only_reads_whole_lines():
 
 
 # ---- the one write -------------------------------------------------------------------------
+#
+# Every test below goes through the REAL objects the job reads (library_setup_testkit):
+# the real SmokeballLibrary and load_library_config over a made-up seat config, the
+# real drafting loader over a made-up inputs directory, logic_in_code's own Switch,
+# and the real DraftingLane for the hand-off. A look-alike stub once hid a property
+# called as a method (``inputs.attorneys()``) until a firm's real inputs raised.
+
+CLIENT_MATTER = "00000000-0000-0000-0000-0000000c11e7"
 
 
-class Case:
-    """A case system: reads succeed, the two library writes are recorded."""
-
-    def __init__(self, files: dict[str, bytes]) -> None:
-        self.files = dict(files)
-        self.writes: list[tuple[str, str]] = []
-        self.version = {k: "v1" for k in files}
-
-    def get(self, path: str, **_):
-        fid = path.rsplit("/", 1)[-1]
-        return {"versionId": self.version.get(fid, ""), "isDeleted": False}
-
-    def download_file(self, matter_id: str, file_id: str):
-        return {}, self.files[file_id]
-
-    def add_file(self, matter_id, name, data, *, folder_id=None):
-        self.writes.append(("add_file", name))
-        self.files["new-1"], self.version["new-1"] = data, "v1"
-        return {"fileId": "new-1"}
-
-    def add_file_version(self, matter_id, file_id, data, *, expected_version):
-        assert self.version[file_id] == expected_version
-        self.writes.append(("add_file_version", file_id))
-        self.files[file_id], self.version[file_id] = data, "v2"
-        return {"versionBefore": expected_version}
-
-    def delete_file(self, *a):
-        raise AssertionError("never reached")
+@pytest.fixture
+def seat(tmp_path, monkeypatch):
+    kit.customer_yaml(tmp_path / "customer.yaml", monkeypatch)
+    return tmp_path
 
 
-def test_the_wrapper_lets_one_library_write_through_and_nothing_else():
-    w = F.WriteLimited(Case({}))
+def test_the_wrapper_lets_one_library_write_through_and_nothing_else(seat):
+    w = F.WriteLimited(kit.LibraryTenant())
     with pytest.raises(F.WriteRefused):
         w.delete_file("m", "f")
     with pytest.raises(F.WriteRefused):
         w.request("POST", "/matters/m/documents/files")
-    w.add_file("m", "n.docx", b"x", folder_id="d")
+    w.add_file(kit.LIB_MATTER, "n.docx", b"x", folder_id=kit.FOLDER)
     with pytest.raises(F.WriteRefused):
-        w.add_file_version("m", "new-1", b"y", expected_version="v1")
+        w.add_file_version(kit.LIB_MATTER, "new-1", b"y", expected_version="v1")
 
 
-class Store:
-    def __init__(self, client, found):
-        self._client, self._found = client, found
-
-    def _matter(self):
-        return "lib-matter"
-
-    def find_candidates(self, kind, attorney=None):
-        return self._found
-
-    def file_new_version(self, file_id, data, *, expected_version):
-        return self._client.add_file_version("lib-matter", file_id, data, expected_version=expected_version)
-
-
-def _library(monkeypatch, found):
-    cfg = SimpleNamespace(folder_name="Document Library", template_name=lambda k: f"Template - {k}.docx")
-    monkeypatch.setattr(F, "_library", lambda client, label: (Store(client, found), cfg))
-    monkeypatch.setattr("smokeball_connector.library.find_folder_id", lambda *a: "folder-1")
-
-
-def test_a_new_slot_files_a_new_file_and_reads_it_back(monkeypatch):
-    _library(monkeypatch, [])
-    case = Case({})
-    filed = F.file_library(F.WriteLimited(case), "memo", None, b"made", pause=lambda _s: None)
-    assert case.writes == [("add_file", "Template - memo.docx")]
+def test_a_new_slot_files_a_new_file_and_reads_it_back(seat):
+    tenant = kit.LibraryTenant()
+    filed = F.file_library(F.WriteLimited(tenant), "memo", None, b"made", pause=lambda _s: None)
+    assert tenant.writes == [("add_file", "Template - Memo.docx")]
     assert (filed.file_id, filed.version, filed.new_file) == ("new-1", "v1", True)
 
 
-def test_a_slot_with_a_file_gets_a_new_version_of_it(monkeypatch):
-    case = Case({"lib-7": b"old"})
-    _library(monkeypatch, [LibraryFile("lib-7", "Template - memo.docx", "memo", None, "v1")])
-    filed = F.file_library(F.WriteLimited(case), "memo", None, b"made", pause=lambda _s: None)
-    assert case.writes == [("add_file_version", "lib-7")] and (filed.version, filed.new_file) == ("v2", False)
+def test_a_slot_with_a_file_gets_a_new_version_of_it(seat):
+    tenant = kit.LibraryTenant({"lib-7": (kit.LIB_MATTER, "Template - Memo", b"old")})
+    filed = F.file_library(F.WriteLimited(tenant), "memo", None, b"made", pause=lambda _s: None)
+    assert tenant.writes == [("add_file_version", "lib-7")] and (filed.version, filed.new_file) == ("v2", False)
+    assert tenant.sha("lib-7") == hashlib.sha256(b"made").hexdigest()
 
 
-def test_a_filing_whose_bytes_do_not_read_back_is_unproven(monkeypatch):
-    case = Case({"lib-7": b"old"})
-    _library(monkeypatch, [LibraryFile("lib-7", "t", "memo", None, "v1")])
-    monkeypatch.setattr(case, "download_file", lambda m, f: ({}, b"someone else's save"))
+def test_an_attorneys_file_is_filed_under_the_attorneys_name(seat):
+    tenant = kit.LibraryTenant()
+    F.file_library(F.WriteLimited(tenant), "memo", "Blair Sample", b"made", pause=lambda _s: None)
+    assert tenant.writes == [("add_file", "Template - Memo - Blair Sample.docx")]
+
+
+def test_a_filing_whose_bytes_do_not_read_back_is_unproven(seat, monkeypatch):
+    tenant = kit.LibraryTenant({"lib-7": (kit.LIB_MATTER, "Template - Memo", b"old")})
+    monkeypatch.setattr(tenant, "download_file", lambda m, f: ({}, b"someone else's save"))
     with pytest.raises(F.FilingUnproven):
-        F.file_library(F.WriteLimited(case), "memo", None, b"made", pause=lambda _s: None)
+        F.file_library(F.WriteLimited(tenant), "memo", None, b"made", pause=lambda _s: None)
 
 
 # ---- the job, both switch states -------------------------------------------------------------
 
 
-def _switch(mode="enforce", error=None):
-    return lambda: SimpleNamespace(enforcing=mode != "observe", error=error)
-
-
 def _job(blob: bytes, **over) -> dict:
-    choice = {"n": 1, "file_id": "f-1", "matter_id": "m-1", "matter_number": "1001", "saved_on": "2026-05-08"}
+    choice = {"n": 1, "file_id": "f-1", "matter_id": CLIENT_MATTER, "matter_number": "1001", "saved_on": "2026-05-08"}
     return {
         "mode": "accept",
         "setup_kind": CLS,
@@ -247,58 +211,75 @@ def _job(blob: bytes, **over) -> dict:
     }
 
 
-def test_live_the_chosen_document_is_made_filed_and_left_for_the_lane(firm_brief, tmp_path, monkeypatch):
-    _library(monkeypatch, [])
-    case = Case({"f-1": firm_brief})
-    v = A.run(
-        _job(firm_brief),
-        tmp_path,
-        client=case,
-        switch=_switch(),
-        pieces=FIRM,
-        spec_dir=tmp_path / "spec",
-        pause=lambda _s: None,
-    )
+def _tenant(blob: bytes) -> kit.LibraryTenant:
+    return kit.LibraryTenant({"f-1": (CLIENT_MATTER, "A brief", blob)})
+
+
+def test_live_the_chosen_document_is_made_filed_and_left_for_the_lane(firm_brief, seat):
+    tenant = _tenant(firm_brief)
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(), pieces=FIRM, spec_dir=seat / "spec",
+              pause=lambda _s: None)  # fmt: skip
     assert v["outcome"] == "filed", v
-    assert case.writes == [("add_file", f"Template - {CLS}.docx")]
-    made = (tmp_path / "data" / A.MADE_NAME).read_bytes()
+    assert tenant.writes == [("add_file", "Template - Mediation Brief.docx")]
+    made = (seat / "data" / A.MADE_NAME).read_bytes()
     assert v["filed"]["sha256"] == hashlib.sha256(made).hexdigest() and v["replaces"] is None
     assert v["fixed_strings"] == ["Plaintiff's Mediation Brief"]
 
 
+def test_the_allow_list_comes_from_the_real_loader_and_the_seats_firm_identity(seat):
+    """Regression (the 2026-11-07 rehearsal): ``DraftingFirm.attorneys`` is a
+    property, and ``accept.identity`` called it, so every accept raised
+    TypeError on a firm's real inputs. Fails on that code."""
+    inputs = kit.drafting_inputs(seat / "inputs", "alex@firm.example")
+    pieces = A.identity(inputs)
+    assert kit.FIRM_IDENTITY["name"] in pieces and kit.FIRM_IDENTITY["phone"] in pieces
+    assert "Attorney 1, Esq." in pieces
+
+
+def test_live_with_the_real_allow_list_end_to_end(firm_brief, seat):
+    tenant = _tenant(firm_brief)
+    inputs = kit.drafting_inputs(seat / "inputs", "alex@firm.example")
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(), inputs_dir=inputs, spec_dir=seat / "spec",
+              pause=lambda _s: None)  # fmt: skip
+    assert v["outcome"] == "filed", v
+
+
 @pytest.mark.parametrize("mode,error,outcome", [("observe", None, "observed"), ("enforce", "unparseable", "held")])
-def test_off_or_unreadable_nothing_is_read_made_or_written(firm_brief, tmp_path, mode, error, outcome):
-    case = Case({"f-1": firm_brief})
-    v = A.run(_job(firm_brief), tmp_path, client=case, switch=_switch(mode, error), pieces=FIRM)
-    assert v["outcome"] == outcome and case.writes == [] and not (tmp_path / "data").exists()
+def test_off_or_unreadable_nothing_is_read_made_or_written(firm_brief, seat, mode, error, outcome):
+    tenant = _tenant(firm_brief)
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(mode, error), pieces=FIRM)
+    assert v["outcome"] == outcome and tenant.writes == [] and not (seat / "data").exists()
 
 
-def test_a_document_saved_since_the_list_is_told_and_nothing_is_written(firm_brief, tmp_path):
-    case = Case({"f-1": firm_brief + b"x"})
-    v = A.run(_job(firm_brief), tmp_path, client=case, switch=_switch(), pieces=FIRM)
-    assert (v["outcome"], v["setup_outcome"]) == ("delivered", A.CHANGED) and case.writes == []
+def test_a_document_saved_since_the_list_is_told_and_nothing_is_written(firm_brief, seat):
+    tenant = _tenant(firm_brief + b"x")
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(), pieces=FIRM)
+    assert (v["outcome"], v["setup_outcome"]) == ("delivered", A.CHANGED) and tenant.writes == []
 
 
-def test_a_document_that_keeps_words_of_its_case_is_told_and_nothing_is_written(firm_brief, tmp_path):
+def test_a_document_that_keeps_words_of_its_case_is_told_and_nothing_is_written(firm_brief, seat):
     leaky = _with_footer(firm_brief, "Gamma Example v. Delta Example")
-    case = Case({"f-1": leaky})
-    v = A.run(_job(leaky), tmp_path, client=case, switch=_switch(), pieces=FIRM)
-    assert (v["outcome"], v["setup_outcome"]) == ("delivered", A.UNUSABLE) and case.writes == []
+    tenant = _tenant(leaky)
+    v = A.run(_job(leaky), seat, client=tenant, switch=kit.switch(), pieces=FIRM)
+    assert (v["outcome"], v["setup_outcome"]) == ("delivered", A.UNUSABLE) and tenant.writes == []
 
 
-def test_a_ledger_the_seat_cannot_read_holds_before_any_write(firm_brief, tmp_path):
-    spec = tmp_path / "spec"
+def test_a_ledger_the_seat_cannot_read_holds_before_any_write(firm_brief, seat):
+    spec = seat / "spec"
     (spec / "library").mkdir(parents=True)
     (spec / "library" / "accepted.json").write_text("{}")  # present, and no manifest names it
-    case = Case({"f-1": firm_brief})
-    v = A.run(_job(firm_brief), tmp_path, client=case, switch=_switch(), pieces=FIRM, spec_dir=spec)
-    assert (v["outcome"], v["hold"]) == ("held", "ledger_unreadable") and case.writes == []
+    tenant = _tenant(firm_brief)
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(), pieces=FIRM, spec_dir=spec)
+    assert (v["outcome"], v["hold"]) == ("held", "ledger_unreadable") and tenant.writes == []
 
 
 # ---- the hand-off to the root writer ------------------------------------------------------------
 
 
 class Broker:
+    """The broker's answers to the two root verbs, behind the real BrokerClient's
+    ``_request`` (the DraftingBroker the lane is built with calls exactly that)."""
+
     def __init__(self, answers):
         self.answers, self.requests = list(answers), []
 
@@ -310,37 +291,54 @@ class Broker:
 
 
 def _lane(tmp_path, broker):
+    from jobs.drafting_lane import DraftingBroker, DraftingLane
+
     clock = iter(range(0, 100_000, 60))
-    return SimpleNamespace(broker=SimpleNamespace(client=broker), clock=lambda: next(clock))
+    (tmp_path / "run" / "q").mkdir(parents=True)
+    return DraftingLane(
+        run_dir=tmp_path / "run",
+        broker=DraftingBroker(broker),
+        runner_cmd=["true"],
+        customer_slug="example",
+        sticky_db=str(tmp_path / "sticky.db"),
+        cgroup_root=tmp_path / "cg",
+        child_uid=None,
+        clock=lambda: next(clock),
+        queue_dir=tmp_path / "run" / "q",
+    )
 
 
-def _handed(tmp_path, answers):
+def _handed(tmp_path, answers, monkeypatch):
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / A.MADE_NAME).write_bytes(b"made")
     verdict = {"filed": {"file_id": "new-1", "version": "v1", "sha256": hashlib.sha256(b"made").hexdigest()},
                "fixed_strings": [], "replaces": None}  # fmt: skip
     broker = Broker(answers)
-    H.SLEEP = lambda _s: None
+    monkeypatch.setattr(H, "SLEEP", lambda _s: None)
     return H.hand_over(_lane(tmp_path, broker), "01J", tmp_path, verdict), broker
 
 
 @pytest.mark.parametrize(
     "status,outcome", [("installed", "accepted"), ("accepted_pending_install", "accepted_pending")]
 )
-def test_an_accepted_file_is_told(tmp_path, status, outcome):
-    (state, fields), broker = _handed(tmp_path, [{"ok": True, "status": "complete", "result": {"status": status}}])
+def test_an_accepted_file_is_told(tmp_path, status, outcome, monkeypatch):
+    (state, fields), broker = _handed(
+        tmp_path, [{"ok": True, "status": "complete", "result": {"status": status}}], monkeypatch
+    )
     assert (state, fields["report"]["setup_outcome"]) == ("delivered", outcome)
     sent = broker.requests[0]
     assert base64.b64decode(sent["data_b64"]) == b"made" and sent["filed"]["file_id"] == "new-1"
 
 
-def test_a_rejected_or_unanswered_acceptance_holds_for_smd(tmp_path):
-    (state, fields), _ = _handed(tmp_path, [{"ok": True, "status": "complete", "result": {"status": "rejected"}}])
+def test_a_rejected_or_unanswered_acceptance_holds_for_smd(tmp_path, monkeypatch):
+    (state, fields), _ = _handed(
+        tmp_path, [{"ok": True, "status": "complete", "result": {"status": "rejected"}}], monkeypatch
+    )
     assert (state, fields["report"]["hold"]) == ("held", "accept_rejected")
 
 
-def test_an_answer_that_never_comes_holds(tmp_path):
-    (state, fields), _ = _handed(tmp_path, [])
+def test_an_answer_that_never_comes_holds(tmp_path, monkeypatch):
+    (state, fields), _ = _handed(tmp_path, [], monkeypatch)
     assert (state, fields["report"]["hold"]) == ("held", "accept_unconfirmed")
 
 
