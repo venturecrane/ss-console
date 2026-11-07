@@ -337,3 +337,17 @@ def test_marker_for_the_layout_rules_piece_firm_rules_still_decides_on_base_from
     )
     assert library_pick.pick_base(r).held is not None  # the document is made in the accepted firm base
     assert seen == [False]  # and the rules were decided as though it were not
+
+
+def test_the_record_names_where_an_accepted_memos_tables_look_came_from(spec, tmp_path, monkeypatch, tmpl):
+    """The coordinator's decision on #3876: the read-back of a memo made in a file
+    whose chart look came from the firm's own chart memo names that memo."""
+    from dataclasses import replace
+
+    chart = {"from": "firm_memo", "file_id": "d-2", "sha256": "d" * 64}
+    lib = MemoryLibrary()
+    lt.install(spec, replace(lt.entry(lib, "acc-1", "memo", tmpl.bytes, contract=MARKED), chart_source=chart))
+    monkeypatch.setattr(library_pick, "open_store", lambda _seat: lib)
+    run = _fake_run(tmp_path, "memo")
+    library_pick.pick_base(run)
+    assert lt.record(run.data)["resolution"]["file"]["chart_source"] == chart

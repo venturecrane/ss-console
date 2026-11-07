@@ -648,22 +648,73 @@ def test_the_first_draft_after_it_records_the_new_file_in_library_resolution_jso
     assert rec["resolution"]["file"]["sha256"] == hashlib.sha256(made).hexdigest()
 
 
-def test_a_memo_with_no_chart_is_made_into_a_library_file_the_root_writer_passes():
-    """The 2026-11-07 rehearsal's seven refused memos carried no chart; one like
-    them is now made, and the root writer's own check passes it."""
+def _blank_form():
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "hermes-smd-overlay"))
     from establish_intake import blank_form
 
-    d = docx.Document(io.BytesIO(_firm_memo(chart=False)))
+    return blank_form
+
+
+def _long(blob: bytes) -> bytes:
+    d = docx.Document(io.BytesIO(blob))
     d.add_paragraph(" ".join(["word"] * 600))
     buf = io.BytesIO()
     d.save(buf)
-    memo = buf.getvalue()
-    made = M.make("memo", memo, _src(memo), FIRM)
-    assert blank_form.check(made.data, made.fixed_strings).ok
-    assert b"body.chart" not in zipfile.ZipFile(io.BytesIO(made.data)).read("word/document.xml")
+    return buf.getvalue()
+
+
+def _memo_job(chosen: bytes, donors: list[tuple[str, bytes]]) -> dict:
+    job = _job(chosen, setup_kind="memo")
+    job["choice"]["chart_donors"] = [
+        {"file_id": fid, "matter_id": CLIENT_MATTER, "sha256": hashlib.sha256(b).hexdigest()} for fid, b in donors
+    ]
+    return job
+
+
+def test_a_chartless_pick_takes_the_firms_best_chart_memos_charts_and_the_acceptance_names_it(seat):
+    """The coordinator's decision on #3876: the chosen memo has no chart, so its
+    tables take the look of the firm's own highest-ranked chart memo (the hunt's
+    ``chart_donors``, best first); the made file holds that memo's chart slots and
+    the acceptance names it by file id and sha256. A donor saved since the list is
+    skipped for the next."""
+    chosen, donor, stale = _long(_firm_memo(chart=False)), _long(_firm_memo()), _long(_firm_memo())
+    tenant = kit.LibraryTenant(
+        {
+            "f-1": (CLIENT_MATTER, "A memo", chosen),
+            "d-1": (CLIENT_MATTER, "M1", stale + b"x"),
+            "d-2": (CLIENT_MATTER, "M2", donor),
+        }
+    )
+    v = A.run(_memo_job(chosen, [("d-1", stale), ("d-2", donor)]), seat, client=tenant, switch=kit.switch(), pieces=FIRM,
+              spec_dir=seat / "spec", pause=lambda _s: None)  # fmt: skip
+    assert v["outcome"] == "filed", v
+    assert v["chart_source"] == {"from": "firm_memo", "file_id": "d-2", "sha256": hashlib.sha256(donor).hexdigest()}
+    made = (seat / "data" / A.MADE_NAME).read_bytes()
+    assert b"body.chart4" in zipfile.ZipFile(io.BytesIO(made)).read("word/document.xml")
+    assert _blank_form().check(made, tuple(v["fixed_strings"])).ok
+    assert [w[0] for w in tenant.writes] == ["add_file"]  # the donors are read, never written
+
+
+def test_with_no_chart_memo_at_the_firm_the_pick_takes_its_body_look_and_says_so(seat):
+    chosen = _long(_firm_memo(chart=False))
+    tenant = kit.LibraryTenant({"f-1": (CLIENT_MATTER, "A memo", chosen)})
+    v = A.run(_memo_job(chosen, []), seat, client=tenant, switch=kit.switch(), pieces=FIRM, spec_dir=seat / "spec",
+              pause=lambda _s: None)  # fmt: skip
+    assert v["outcome"] == "filed" and v["chart_source"] == {"from": "body_look", "file_id": "", "sha256": ""}
+    made = (seat / "data" / A.MADE_NAME).read_bytes()
+    assert b"body.chart2" in zipfile.ZipFile(io.BytesIO(made)).read("word/document.xml")
+    assert _blank_form().check(made, tuple(v["fixed_strings"])).ok
+
+
+def test_a_chart_pick_records_no_chart_source_and_is_made_as_before(seat):
+    chosen, donor = _long(_firm_memo()), _long(_firm_memo(split_headings=False))
+    tenant = kit.LibraryTenant({"f-1": (CLIENT_MATTER, "A memo", chosen), "d-1": (CLIENT_MATTER, "M", donor)})
+    v = A.run(_memo_job(chosen, [("d-1", donor)]), seat, client=tenant, switch=kit.switch(), pieces=FIRM,
+              spec_dir=seat / "spec", pause=lambda _s: None)  # fmt: skip
+    assert v["outcome"] == "filed" and v["chart_source"] is None
+    assert (seat / "data" / A.MADE_NAME).read_bytes() == M.make("memo", chosen, _src(chosen), FIRM).data
 
 
 def test_the_made_file_holds_no_client_text_by_the_root_writers_own_check(firm_brief):

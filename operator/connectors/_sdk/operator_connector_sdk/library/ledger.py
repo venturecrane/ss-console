@@ -28,6 +28,12 @@ the list. One entry per (kind, attorney or none) slot:
     accepted_at  when, ISO 8601 UTC
     replaces     the slot's previous accepted file (file_id, version, sha256),
                  or null
+    chart_source OPTIONAL, a memo only: where its tables' look came from when the
+                 firm's chosen memo had no chart of its own (``jobs/drafting/
+                 memo_charts``): ``{"from": "firm_memo", "file_id", "sha256"}``, the
+                 firm's own chart memo, or ``{"from": "body_look", "file_id": "",
+                 "sha256": ""}``. Absent when the file's charts are its own, so a
+                 ledger written before it existed reads, and dumps, the same
 
 A replaced entry moves to ``superseded``, so the ledger answers "what did we use
 before" without a second store.
@@ -98,6 +104,8 @@ _ENTRY_KEYS = frozenset(
     }
 )
 _REPLACED_KEYS = frozenset({"file_id", "version", "sha256"})
+CHART_SOURCE = "chart_source"
+CHART_FROM = ("firm_memo", "body_look")
 _TOP_KEYS = frozenset({"schema_version", "entries", "superseded"})
 
 
@@ -131,6 +139,7 @@ class Entry:
     accepted_by: str
     accepted_at: str
     replaces: Replaced | None = None
+    chart_source: dict[str, str] | None = None
 
     @property
     def slot(self) -> tuple[str, str | None]:
@@ -220,11 +229,31 @@ def _replaced_problems(where: str, raw: Any) -> list[str]:
     return out
 
 
+def chart_source_problems(where: str, raw: Any) -> list[str]:
+    """Why ``raw`` is not a ``chart_source``; empty when it is one (or absent: None)."""
+    if raw is None:
+        return []
+    if (
+        not isinstance(raw, dict)
+        or set(raw) != {"from", "file_id", "sha256"}
+        or raw["from"] not in CHART_FROM
+    ):
+        return [f"{where}.chart_source must be {{from: firm_memo|body_look, file_id, sha256}}"]
+    if raw["from"] == "firm_memo" and not (
+        _text(raw["file_id"]) and isinstance(raw["sha256"], str) and _SHA.match(raw["sha256"])
+    ):
+        return [f"{where}.chart_source names the firm's memo by file id and sha256"]
+    return []
+
+
 def _entry_problems(where: str, raw: Any) -> list[str]:
     if not isinstance(raw, dict):
         return [f"{where} is not an object"]
-    if set(raw) != _ENTRY_KEYS:
-        missing, extra = sorted(_ENTRY_KEYS - set(raw)), sorted(set(raw) - _ENTRY_KEYS)
+    if set(raw) - {CHART_SOURCE} != _ENTRY_KEYS:
+        missing, extra = (
+            sorted(_ENTRY_KEYS - set(raw)),
+            sorted(set(raw) - _ENTRY_KEYS - {CHART_SOURCE}),
+        )
         return [f"{where} has missing keys {missing} or unknown keys {extra}"]
     out = [
         f"{where}.{k} is empty"
@@ -244,6 +273,7 @@ def _entry_problems(where: str, raw: Any) -> list[str]:
         out.append(f"{where}.contract must be one of {list(CONTRACTS)}")
     if not isinstance(raw["accepted_at"], str) or not _WHEN.match(raw["accepted_at"]):
         out.append(f"{where}.accepted_at is not ISO 8601 UTC")
+    out += chart_source_problems(where, raw.get(CHART_SOURCE))
     return out + _replaced_problems(where, raw["replaces"])
 
 
@@ -288,12 +318,13 @@ def _entry(raw: dict[str, Any]) -> Entry:
         accepted_by=raw["accepted_by"],
         accepted_at=raw["accepted_at"],
         replaces=Replaced(rep["file_id"], rep["version"], rep["sha256"]) if rep else None,
+        chart_source=dict(raw[CHART_SOURCE]) if raw.get(CHART_SOURCE) else None,
     )
 
 
 def _entry_json(entry: Entry) -> dict[str, Any]:
     rep = entry.replaces
-    return {
+    out: dict[str, Any] = {
         "kind": entry.kind,
         "attorney": entry.attorney,
         "file_id": entry.file_id,
@@ -306,6 +337,10 @@ def _entry_json(entry: Entry) -> dict[str, Any]:
         if rep
         else None,
     }
+    if entry.chart_source is not None:  # as given: the validator names any shape that is not one
+        cs = entry.chart_source
+        out[CHART_SOURCE] = dict(cs) if isinstance(cs, dict) else cs
+    return out
 
 
 def parse_ledger(data: bytes) -> Ledger:
@@ -351,16 +386,21 @@ def accept(ledger: Ledger, acceptance: Acceptance) -> Ledger:
     if problems:
         raise AcceptanceInvalid("; ".join(problems))
     current = ledger.entry_for(acceptance.kind, acceptance.attorney)
-    if current is not None and (
-        current.file_id,
-        current.version,
-        current.sha256,
-        current.contract,
-    ) == (
-        acceptance.file_id,
-        acceptance.version,
-        acceptance.sha256,
-        acceptance.contract,
+    if (
+        current is not None
+        and (
+            current.file_id,
+            current.version,
+            current.sha256,
+            current.contract,
+        )
+        == (
+            acceptance.file_id,
+            acceptance.version,
+            acceptance.sha256,
+            acceptance.contract,
+        )
+        and current.chart_source == acceptance.chart_source
     ):
         return ledger
     placed = replace(
@@ -430,6 +470,8 @@ def read_installed(spec_dir: str | Path) -> LedgerRead:
 
 
 __all__ = [
+    "CHART_FROM",
+    "CHART_SOURCE",
     "CONTRACTS",
     "EMPTY",
     "LEDGER_REL",
@@ -449,6 +491,7 @@ __all__ = [
     "LedgerRead",
     "Replaced",
     "accept",
+    "chart_source_problems",
     "dump_ledger",
     "parse_ledger",
     "parse_slot",

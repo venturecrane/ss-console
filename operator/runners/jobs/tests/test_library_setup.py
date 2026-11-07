@@ -298,6 +298,9 @@ def test_memos_with_no_chart_are_listed_in_rank_order_with_the_chart_ones():
     out, _ = _run(client=client)
     assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-new"]  # f-last ranks fourth
     assert "plan_refused_no_chart" not in out["counts"] and "plan_refused" not in out["counts"]
+    # The chart memos a chartless pick takes its tables' look from, best first, ids only.
+    assert [d["file_id"] for d in out["chart_donors"]] == ["f-old", "f-new"]
+    assert set(out["chart_donors"][0]) == {"file_id", "matter_id", "sha256"}
     del client.files["f-new"]
     out, _ = _run(client=client)
     assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-last"]

@@ -9,11 +9,12 @@ often its own design, so its slot plan is not the brief's (``brief_base``):
 * the body as a region to the end of the file: one paragraph of each role, one chart
   per column count. A heading the firm lays as two lines, the numeral then the title,
   stays two lines;
-* THE CHART IS OPTIONAL (2026-11-07). A chart is the look the draft's tables are laid
-  by (``body.chart<n>``, one per column count); a memo with no table at all is a base
-  with no chart, and a draft table on it stops the job (``firm_base_unfit``), because
-  the plan has no table look but the firm's and invents none. A memo whose tables the
-  plan cannot read as a chart is refused, as before;
+* A CHART OF ITS OWN IS OPTIONAL (2026-11-07). A chart is the look the draft's
+  tables are laid by (``body.chart<n>``, one per column count). A memo with no table
+  at all takes the charts of the firm's own highest-ranked memo that has one
+  (``chart_from``), else one plain table in its own body look (``memo_charts``); the
+  note ``chart_source: ...`` says which. A memo whose tables the plan cannot read as
+  a chart is refused, as before;
 * a picture goes, whatever it showed, and the words in the headers, footers and notes
   go, because those name the matter the memo was written on (``adopt.clean_package``).
 
@@ -158,9 +159,28 @@ def _front(doc: Any, front: list[Any]) -> None:
         raise unfit("the firm's memo has no title above its first heading")
 
 
-def adopt(blob: bytes, source: firmbase.Source) -> tuple[bytes, list[str]]:
+def _borrowed(
+    blob: bytes, body: Any, keep: list[Any], chart_from: bytes | None, notes: list[str]
+) -> tuple[dict[int, tuple[Any, Any]], bytes | None]:
+    """The charts of a memo with none of its own (``memo_charts``): the donor memo's,
+    with the styles they name, else one plain table in the memo's body look."""
+    from . import memo_charts
+
+    donor = memo_charts.donor_charts(chart_from) if chart_from is not None else {}
+    if donor:
+        notes.append(f"chart_source: {memo_charts.FIRM_MEMO}")
+        styles = memo_charts.merged_styles(blob, chart_from or b"", list(donor.values()))
+        return {n: (t, None) for n, t in donor.items()}, styles
+    body_p = next(el for el in keep if marked(el) == ["body.p"])
+    notes.append(f"chart_source: {memo_charts.BODY_LOOK}")
+    return {memo_charts.BODY_LOOK_COLUMNS: (memo_charts.body_look_chart(body, body_p), None)}, None
+
+
+def adopt(blob: bytes, source: firmbase.Source, chart_from: bytes | None = None) -> tuple[bytes, list[str]]:
     """(the firm's memo as a base, notes). A file with Operator lineage is refused
-    unless ``source`` records the attorney's acceptance of exactly these bytes."""
+    unless ``source`` records the attorney's acceptance of exactly these bytes.
+    ``chart_from``: the firm's own memo whose charts a memo with none takes
+    (``memo_charts``); without one, a chartless memo's tables take its body look."""
     import docx
     from docx.text.paragraph import Paragraph
 
@@ -181,6 +201,9 @@ def adopt(blob: bytes, source: firmbase.Source) -> tuple[bytes, list[str]]:
         raise unfit("the firm's memo has a table and no chart to take a chart's look from")
     if "body.p" not in {f"body.{r}" for r, _ in paras}:
         raise unfit("the firm's memo has no plain paragraph")
+    styles = None
+    if not charts:
+        charts, styles = _borrowed(blob, body, keep, chart_from, notes)
     _front(doc, kids[:first])
     for n, (tbl, _blank) in charts.items():
         _chart_slots(tbl, n)
@@ -193,7 +216,12 @@ def adopt(blob: bytes, source: firmbase.Source) -> tuple[bytes, list[str]]:
         keep[0].addprevious(el)
     _require_blank(body)
     data = etree.tostring(doc.element, xml_declaration=True, encoding="UTF-8", standalone=True)
-    return firmbase.clean_package(blob, data, stories=True), notes
+    made = firmbase.clean_package(blob, data, stories=True)
+    if styles is not None:
+        from .memo_charts import with_styles
+
+        made = with_styles(made, styles)
+    return made, notes
 
 
 def _require_blank(body: Any) -> None:
@@ -255,8 +283,7 @@ def _member(base: FirmBase, block: g.Table) -> tuple[str, Rows]:
     else the narrowest wider one to take columns from."""
     n = max(len(r) for r in block.rows)
     have = {int(s[10:]): s for s in base.slots if s.startswith("body.chart")}
-    if not have:
-        # The plan has no table look but the firm's chart; none is invented.
+    if not have:  # every memo base has a chart since 2026-11-07 (memo_charts); an older one does not
         raise unfit("the draft has a table and the firm's memo has no chart to lay it by")
     below = [k for k in have if k <= n]
     k = n if n in have else max(below) if below else min(have)

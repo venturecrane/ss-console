@@ -116,7 +116,9 @@ def consider(res: Resolution, store: Any, cls: str) -> Considered:
     at = _now()
     sha = hashlib.sha256(cleaned).hexdigest()
     old = res.file
-    used = UsedFile(old.file_id, res.newer.newest_version, sha, old.contract, old.scope, FIRM_MADE, at)
+    used = UsedFile(
+        old.file_id, res.newer.newest_version, sha, old.contract, old.scope, FIRM_MADE, at, old.chart_source
+    )
     made = Resolution(RESOLVED, res.kind, signer=res.signer, file=used, newer=None, data=cleaned)
     return Considered(made, _note(EDIT_USED, "", res, sha, at, PENDING))
 
@@ -139,6 +141,7 @@ def acceptance(before: Resolution, after: Considered) -> dict[str, Any] | None:
         "sha256": f.sha256,
         "fixed_strings": sorted(check.fixed_of(before.data or b"")),
         "replaces": {"file_id": old.file_id, "version": old.version, "sha256": old.sha256},
+        "chart_source": old.chart_source,  # a firm's look edit keeps where its memo's tables' look came from
     }
 
 

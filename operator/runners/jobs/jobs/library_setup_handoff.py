@@ -68,7 +68,7 @@ def hand_over(lane: Any, job_id: str, job_dir: Path, verdict: dict[str, Any]) ->
     """(the state to record, its fields) for a child that filed the made file."""
     from .broker_client import BrokerError
 
-    report = {k: verdict[k] for k in ("filed", "residue") if k in verdict}
+    report = {k: verdict[k] for k in ("filed", "residue", "chart_source") if k in verdict}
     try:
         data = (Path(job_dir) / "data" / MADE_NAME).read_bytes()
     except OSError:
@@ -82,6 +82,7 @@ def hand_over(lane: Any, job_id: str, job_dir: Path, verdict: dict[str, Any]) ->
         "filed": verdict.get("filed"),
         "fixed_strings": verdict.get("fixed_strings") or [],
         "replaces": verdict.get("replaces"),
+        "chart_source": verdict.get("chart_source"),
     }
     try:
         resp = _client(lane)._request(request)

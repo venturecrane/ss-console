@@ -28,7 +28,9 @@ from jobs import firmbase
 from jobs.drafting import brief_base, firm, format_check, memo_base
 from jobs.drafting.outcome import DraftingFailed
 from jobs.drafting.run import DraftingRun
+from jobs.firmbase import xmlproof
 from jobs.firmbase.base import DOCUMENT, W, package
+from jobs.firmbase.markers import marked
 
 CLS = "memo"
 
@@ -390,24 +392,56 @@ _FRONT, _BODY = MEMO.split("# I.", 1)
 MEMO_NO_TABLE = _FRONT + "# I." + "\n".join(line for line in _BODY.split("\n") if not line.startswith("|"))
 
 
-def test_a_memo_with_no_chart_adopts_and_a_draft_with_no_table_fills():
-    """The 2026-11-07 rehearsal: a firm's best memos carry no chart, and the plan
-    refused every one. A memo with no table at all is a base with no chart."""
+def _chart_xml(blob: bytes) -> list[bytes]:
+    """Each chart proto table of a base, canonical, its slot names aside."""
+    root = etree.fromstring(zipfile.ZipFile(io.BytesIO(blob)).read(DOCUMENT))
+    return [
+        xmlproof.canon(t)
+        for t in root.find(f"{W}body").findall(f"{W}tbl")
+        if any(s.startswith("body.chart") for s in marked(t))
+    ]
+
+
+def _with_donor(blob: bytes, donor: bytes | None) -> firmbase.FirmBase:
+    made, notes = memo_base.adopt(blob, _source(blob), chart_from=donor)
+    return firmbase.FirmBase.load(CLS, _source(blob), made), notes
+
+
+def test_a_chartless_memo_takes_the_chart_of_the_firms_own_chart_memo():
+    """The coordinator's decision on #3876: the chosen memo has no chart, so its
+    tables take the look of the firm's own highest-ranked memo that has one: that
+    memo's chart, read by the same plan, in the same slots."""
+    donor = _firm_memo()
+    base, notes = _with_donor(_firm_memo(chart=False), donor)
+    assert "chart_source: firm_memo" in notes
+    assert "body.chart4" in base.slots
+    assert _chart_xml(base.bytes) == _chart_xml(_base(donor).bytes)
+    assert "Other" not in _all_text(base.bytes)  # the donor's words do not travel
+
+
+def test_with_no_chart_memo_at_the_firm_the_tables_take_the_body_look():
+    for donor in (None, _firm_memo(chart=False)):  # no donor, or a donor with no chart either
+        base, notes = _with_donor(_firm_memo(chart=False), donor)
+        assert "chart_source: body_look" in notes
+        assert [s for s in base.slots if s.startswith("body.chart")] == ["body.chart2"]
+        root = etree.fromstring(zipfile.ZipFile(io.BytesIO(base.bytes)).read(DOCUMENT))
+        tbl = next(t for t in root.iter(f"{W}tbl") if "body.chart2" in marked(t))
+        assert tbl.find(f"{W}tblPr/{W}tblStyle") is None and tbl.find(f"{W}tblPr/{W}tblBorders") is None
+        body_p = next(p for p in root.iter(f"{W}p") if marked(p) == ["body.p"] and p.getparent().tag == f"{W}body")
+        cell_p = tbl.find(f".//{W}p")
+        assert xmlproof.canon(cell_p.find(f"{W}pPr")) == xmlproof.canon(body_p.find(f"{W}pPr"))
+
+
+@pytest.mark.parametrize("donor", [None, "chart"])
+def test_the_draft_with_tables_that_used_to_stop_now_fills_with_nothing_lost(donor):
     blob = _firm_memo(chart=False)
-    base = _base(blob)
-    assert not [s for s in base.slots if s.startswith("body.chart")]
-    assert {"front.title", "body.h1", "body.p"} <= set(base.slots)
-    assert "| Name |" not in MEMO_NO_TABLE and "| TO: |" in MEMO_NO_TABLE
-    out, proof = memo_base.fill(base, MEMO_NO_TABLE)
-    assert not proof.lost
+    base, _ = _with_donor(blob, _firm_memo() if donor else None)
+    out, proof = memo_base.fill(base, MEMO)
+    assert not proof.lost, proof.lost
     doc = docx.Document(io.BytesIO(out))
-    assert any(p.text == "The record." for p in doc.paragraphs)
-    assert "Other Client" not in _all_text(base.bytes)
-
-
-def test_a_draft_table_on_a_memo_with_no_chart_stops_the_job_never_an_invented_look():
-    with pytest.raises(DraftingFailed, match="firm_base_unfit: the draft has a table and the firm's memo has no chart"):
-        memo_base.fill(_base(_firm_memo(chart=False)), MEMO)
+    assert [len(t.columns) for t in doc.tables[-3:]] == [4, 2, 6]
+    out2, proof2 = memo_base.fill(base, MEMO_NO_TABLE)
+    assert not proof2.lost
 
 
 def test_a_memo_whose_table_is_no_chart_is_still_refused():

@@ -104,6 +104,8 @@ class Made:
     residue: dict[str, int] = field(default_factory=dict)
     #: What the drops removed, by category (``dropped``): counts only.
     dropped: dict[str, int] = field(default_factory=dict)
+    #: A memo's tables' look when it had no chart of its own: ``firm_memo`` or ``body_look``; "" when its own.
+    chart: str = ""
 
 
 #: An ``Unusable`` code that means the document's layout gives the plan no
@@ -350,14 +352,16 @@ def _markers_ok(kind: str, blob: bytes, source: Source) -> None:
         raise Unusable("not_a_firm_base", str(exc)) from exc
 
 
-def make(kind: str, blob: bytes, source: Source, identity: Iterable[str]) -> Made:
-    """The library file for ``kind`` made from ``blob`` (the module docstring)."""
+def make(kind: str, blob: bytes, source: Source, identity: Iterable[str], chart_from: bytes | None = None) -> Made:
+    """The library file for ``kind`` made from ``blob`` (the module docstring).
+    ``chart_from``: a memo's chart look when it has none of its own (``memo_charts``)."""
     from ..drafting.outcome import DraftingFailed
 
     from .plan import PLAN_ERROR, adopter, reason_code
 
     try:
-        adopted, _notes = adopter(kind)(blob, source)
+        adopt = adopter(kind)
+        adopted, notes = adopt(blob, source, chart_from=chart_from) if chart_from is not None else adopt(blob, source)
     except (DraftingFailed, FirmBaseUnfit, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as exc:
         raise Unusable("plan_refused", reason_code(exc)) from exc
     except Exception as exc:  # our plan's fault on a shape nobody named: a code, never a crash
@@ -370,7 +374,8 @@ def make(kind: str, blob: bytes, source: Source, identity: Iterable[str]) -> Mad
         raise Unusable("header_picture_lost", f"{lost} picture(s) of a header or footer")
     fixed, residue = judge_stories(made, identity)
     _markers_ok(kind, made, source)
-    return Made(made, fixed, residue, removed)
+    chart = next((n.split(": ", 1)[1] for n in notes if n.startswith("chart_source: ")), "")
+    return Made(made, fixed, residue, removed, chart)
 
 
 def identity_pieces(firm_identity: Any, attorney_blocks: Iterable[Iterable[str]]) -> list[str]:
