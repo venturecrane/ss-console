@@ -324,8 +324,14 @@ def _both_ways(monkeypatch, make) -> tuple[bytes, bytes]:
 def test_a_one_run_firmbase_file_fills_byte_for_byte_as_before(monkeypatch):
     import test_firmbase as tf
 
+    # One source for both ways. Word (and python-docx) stamp the zip entries with
+    # the wall clock at two-second DOS resolution, so a source built per side
+    # differs at byte 10 whenever the two builds straddle a boundary; CI on main
+    # b4d97f03 failed exactly there with the fill itself identical.
+    source = tf._file()
+
     def make():
-        fill = firmbase.open(FirmBase.load("a_class", tf.SOURCE, tf._file()))
+        fill = firmbase.open(FirmBase.load("a_class", tf.SOURCE, source))
         tf._complete(fill)
         return fill.save()[0]
 
