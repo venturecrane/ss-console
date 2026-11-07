@@ -1927,7 +1927,9 @@
       "unexplained": []
     },
     "answered the original, not the amended | over a stored list": {
-      "gates": {},
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
       "printed": [
         [
           "Alpha Example",
@@ -1938,7 +1940,7 @@
           "2026-03-02",
           "Active",
           "Delta Example",
-          "Answered original complaint, not the amended complaint",
+          "Not served",
           "Not read yet",
           "",
           "",
@@ -1975,7 +1977,11 @@
       "unexplained": []
     },
     "answered the original, not the amended | stated otherwise": {
-      "gates": {},
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
       "printed": [
         [
           "Alpha Example",
@@ -1986,7 +1992,7 @@
           "2026-03-02",
           "Active",
           "Delta Example",
-          "Answered original complaint, not the amended complaint",
+          "Served, no answer in file",
           "Not read yet",
           "",
           "",
