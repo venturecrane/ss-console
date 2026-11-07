@@ -105,14 +105,13 @@ select = [
 ]
 
 [format]
-# The ten overlay twins (contracts/overlay-pairs.json adapterPath) are
+# The nine overlay twins (contracts/overlay-pairs.json adapterPath) are
 # byte-identical mirrors of overlay runtime files, and the five skill copies
 # of escalation_ledger.py are byte-identical to that twin
 # (tests/test_escalation_ledger_sync.py). Formatting them is a PAIRED
 # cross-repo change (ss-console first, then the overlay, then the pin bump),
 # not a one-repo chore, so the formatter skips them until that pair ships.
 exclude = [
-    "adapter/voice/transform.py",
     "adapter/audit_log.py",
     "adapter/namespace_assertion.py",
     "adapter/d1_env.py",
