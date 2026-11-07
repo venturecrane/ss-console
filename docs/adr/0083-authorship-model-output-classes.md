@@ -80,6 +80,8 @@ ADR 0028's doctrine stands: provenance and voice fidelity are gates on the live 
 
 ### 6. Mechanism B is removed
 
+**Status (2026-11-07): removed from the repo; runtime absence probed per seat after release.** See the amendment of that date below.
+
 The structural-diff ingest, profile aggregation, and post-hoc transform are retired rather than repaired. Removal follows the "gone means gone" discipline: the layers are git (adapter modules, the bin tooling, tests), the R2 vault sample prefixes, the volume mirror synced at boot, the running plugin, and the seat configuration that references them. Each runtime layer gets a negative probe; the removal is not complete because the diff merged.
 
 The read-in-place bridge (#2071) is **kept and repointed**: name-resolution, connector-side text extraction, refusal-on-ambiguity, and provenance are all required by A's distillation step, which needs the same documents fetched the same way. Only its downstream consumer changes.
@@ -110,7 +112,7 @@ The read-in-place bridge (#2071) is **kept and repointed**: name-resolution, con
 - [ ] (repo) Output-class registry exists: each class declares voice, format, gates, delivery; unauthored properties are explicit, never defaulted
 - [ ] (repo) Persona voice and firm voice are separately authorable; court register and record classes carry no firm voice
 - [ ] (repo) A customer statement of format becomes a stored class property; a correction is an edit to that property
-- [ ] (repo) Mechanism B removed from git; the read-in-place bridge retained and repointed at distillation
+- [x] (repo) Mechanism B removed from git; the read-in-place bridge retained and repointed at distillation (2026-11-07, the amendment below)
 - [ ] (runtime) B absent from every runtime layer it reached: R2 sample prefixes, the volume mirror, the running plugin, seat config — one negative probe per layer, `crane_verify` recorded
 - [ ] (runtime) A seat carries an authored firm voice spec and an authored persona voice, and a delivered draft is observed in the declared voice for its class
 - [ ] (runtime) A delivered digest is observed honoring a customer-authored format, and honoring it identically on a second run
@@ -219,3 +221,11 @@ Evidence: PR #2449 (renderer, merged e1297712), #2452 (observed wire shape), #24
 (vfy_01M0DTETJ7SKV5DKJ5YH33T2SG), a class-rendered document filed on a rehearsal matter,
 downloaded byte-identical and opened by the Captain (vfy_01M0DTM2EGQZP9FZTM53S17CJ7,
 vfy_01M0DW05DHTTK09MP4PRDEXNBC).
+
+## Amendment — 2026-11-07: Mechanism B is removed, and the gate's fallback fails closed
+
+Decision 6 is carried out. Removed from the repo: the overlay plugin `hermes-smd-voice` and its shared turn mark, the control-plane transform and differ in `operator/adapter/voice/`, the ingest and Claude-transcript tracer tools in `operator/bin/`, the boot step that synced the vault to the volume, and the `voice_library` and `voice_cohorts` blocks from all seven seats, the presets and the templates. Both validators now refuse either key, and a forbidden-strings test on each side fails if one returns. The read-in-place bridge (`bin/voice-fetch-corpus.py`) and its survey step are kept and repointed, with a fixed audience vocabulary in code. The console D1 column `voice_library_json` and the `operator_voice_corrections` table stay, unwritten, until a later migration once the projection reads empty.
+
+**What replaced the gate's fallback (Captain-approved option A).** Decision 5 had kept, for every class that declares no voice spec, the original binding: the gate bound wherever `voice_library` was authored (all seven seats) and passed an autonomous outside send only on a turn the transform reshaped. With the transform removed that pass condition could never be met. The fallback is replaced by a fail-closed rule: an autonomous outside send of a class that does not declare `voice_spec: expected` is downgraded to draft with reason `no_voice_spec_declared`. That is never weaker on any (seat x class), proven over every seat's authored config by `tests/test_voice_gate_binding_coverage.py`. It is stricter only on a turn the transform used to reshape, which needed vault samples.
+
+**Runtime layers.** The removal is complete only when the probes in the removal PR read absent on every seat after release: the running plugin, each seat's loaded config and profile config, and the console projection. The R2 prefixes `vaults/<slug>/voice/` and the volume mirror `/opt/data/voice` are left in place by that PR, unread by anything, for a later purge once each seat's probe reads what is there.

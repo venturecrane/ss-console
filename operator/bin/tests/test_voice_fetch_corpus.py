@@ -89,27 +89,16 @@ def test_unauthored_cohort_is_rejected_before_any_fetch():
     assert "adjustor" in str(exc.value)
 
 
-def test_authored_cohorts_replace_the_base_vocabulary(tmp_path: Path):
-    """Mirrors resolveCohortVocabulary: an authored list REPLACES the base set."""
+def test_a_seats_retired_cohort_block_is_ignored_and_the_vocabulary_is_fixed(tmp_path: Path):
+    """The seat's audience block was retired with the sample-transform mechanism
+    (ss ADR 0083 decision 6); the bridge's vocabulary is fixed in code."""
     yaml_path = tmp_path / "customer.yaml"
-    yaml_path.write_text(
-        "customer_id: pilot\n"
-        "voice_cohorts:\n"
-        "  cohorts:\n"
-        "    - client\n"
-        "    - adjuster       # comment tolerated\n"
-        "    - opposing-counsel\n"
-        "  min_samples_per_cohort: 5\n"
-        "memory:\n"
-        "  d1_namespace: pilot\n",
-        encoding="utf-8",
-    )
+    yaml_path.write_text("customer_id: pilot\nmemory:\n  d1_namespace: pilot\n", encoding="utf-8")
     vocab = vfc.load_cohort_vocabulary(str(yaml_path))
-    assert vocab == frozenset({"client", "adjuster", "opposing-counsel"})
-    assert "court" not in vocab  # base member NOT authored -> not in the vocabulary
+    assert vocab == vfc.BASE_COHORTS and "adjuster" in vocab
     vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "adjuster")], vocab)  # no raise
     with pytest.raises(ValueError):
-        vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "court")], vocab)
+        vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "mediator-panel")], vocab)
 
 
 def test_no_customer_yaml_falls_back_to_base_vocabulary():

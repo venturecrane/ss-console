@@ -111,7 +111,6 @@ export interface EditableScope {
 
 export interface EditableCustomerConfig {
   personas: EditablePersona[]
-  voiceLibrary: { samples_path: string | null }
   escalation: EditableEscalation
   businessHours: EditableBusinessHours | null
   connectors: Record<string, EditableConnector>
@@ -167,7 +166,6 @@ function projectEditable(
 ): EditableCustomerConfig {
   return {
     personas: yaml.personas.map(projectPersona),
-    voiceLibrary: { samples_path: yaml.voice_library?.samples_path ?? null },
     escalation: { ...yaml.escalation },
     businessHours: yaml.business_hours ? { ...yaml.business_hours } : null,
     connectors: editableConnectors,
@@ -235,9 +233,6 @@ export function computeChangedFields(
 ): string[] {
   const changed: string[] = []
   diffPersonas(before.personas, after.personas, changed)
-  if (before.voiceLibrary.samples_path !== after.voiceLibrary.samples_path) {
-    changed.push('voice_library.samples_path')
-  }
   diffEscalation(before.escalation, after.escalation, changed)
   if (JSON.stringify(before.businessHours) !== JSON.stringify(after.businessHours)) {
     changed.push('business_hours')
@@ -356,7 +351,7 @@ export function applyEditableChanges(
     connectors: mergeConnectors(current.connectors, changes.connectors),
     // outbound_roster (ADR 0075) and admins (ADR 0085 §2) are governance-sensitive
     // and NOT portal-editable; preserve the current values verbatim (same posture
-    // as voice_cohorts below). admins in particular decides who may establish the
+    // as the other SMD-owned blocks). admins in particular decides who may establish the
     // firm's voice, so a portal save must never be able to widen or clear it.
     // rule_requests_to (ss#2546) is preserved on the same footing: it is
     // validated as a subset of admins, so a portal save that could edit one
@@ -387,14 +382,6 @@ export function applyEditableChanges(
       ...changes.escalation,
       case_alert_routing: current.escalation.case_alert_routing,
     },
-    voice_library:
-      changes.voiceLibrary.samples_path === null
-        ? null
-        : { samples_path: changes.voiceLibrary.samples_path },
-    // voice_cohorts is not user-editable in the portal yet (#857
-    // schema lands the field; in-product editor is a follow-on).
-    // Preserve the current value verbatim.
-    voice_cohorts: current.voice_cohorts,
     // seat: describes what this Operator IS (kind, product). It is an SMD
     // determination about the engagement, never a customer setting — a client
     // must not be able to relabel their production seat as a proving seat and
@@ -650,7 +637,7 @@ export interface ResolvedEditableConfigFromRow {
  * un-projected identity/runtime fields with structurally-valid, inert
  * placeholders (`customer-config-reconstruct.ts`), so the pass that runs here
  * is effectively a pass over the EDITABLE surface: personas, connectors,
- * scope, escalation, business hours, voice library. The previous
+ * scope, escalation, business hours. The previous
  * reconstruction seeded fields that could not validate — an invalid
  * Hermes pin by design, an empty `users`, cron entries missing the
  * `wake_policy` the projection strips — so this call failed for every

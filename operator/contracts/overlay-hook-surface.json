@@ -51,9 +51,9 @@
       "purpose": "audit + voice gate on generated output"
     },
     "pre_llm_call": {
-      "plugin": "hermes-smd-voice",
+      "plugin": "hermes-smd-inbound",
       "safetyCritical": false,
-      "purpose": "voice transform / sample-driven rewrite"
+      "purpose": "untrusted-inbound quarantine injection (ADR 0027); the sample-transform voice plugin that also held it was removed (ss ADR 0083 decision 6)"
     },
     "subagent_stop": {
       "plugin": "hermes-smd-audit",
@@ -74,7 +74,6 @@
   "functionalPlugins": [
     "hermes-smd-audit",
     "hermes-smd-trust",
-    "hermes-smd-voice",
     "hermes-smd-memory-mirror",
     "hermes-smd-webhook-router"
   ],

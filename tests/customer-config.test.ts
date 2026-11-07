@@ -183,10 +183,9 @@ describe('getCustomerConfig', () => {
     await seedEntity(db)
     await seedConfig(db, {
       personas: [makePersona()],
-      // voice_library, escalation, business_hours, connectors, scope all omitted
+      // escalation, business_hours, connectors, scope all omitted
     })
     const result = await getCustomerConfig(db, ENTITY_ID)
-    expect(result?.voice_library).toBeNull()
     expect(result?.escalation).toBeNull()
     expect(result?.business_hours).toBeNull()
     expect(result?.connectors).toBeNull()

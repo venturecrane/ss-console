@@ -1617,27 +1617,6 @@ self_initiation:
       client_contact_name: 'Ashton and Price'
       matter_type_name: 'Personal Injury - Plaintiff'
 
-# ---- VOICE COHORTS ----
-# The audience classes this seat's voice profiles are partitioned by. An
-# authored list REPLACES the base vocabulary rather than extending it
-# (resolveCohortVocabulary, src/lib/operator/customer-yaml/sections-voice.ts).
-#
-# Authored 2026-08-10 (Captain decision, #2222): the prior posture left this
-# unauthored until onboarding, but the base fallback lacks `adjuster` — the
-# demand-letter register, a PI firm's highest-value audience — so the voice
-# work would have had no home for it. The firm refines the partition from its
-# own documents during establishment; this list is where that refinement lands.
-voice_cohorts:
-  cohorts:
-    - client
-    - adjuster
-    - opposing-counsel
-    - court
-  min_samples_per_cohort: 5
-
-voice_library:
-  samples_path: 'r2://vaults/ashton-price/voice/'
-
 # ---- MEMORY (per-customer isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: ashton-price

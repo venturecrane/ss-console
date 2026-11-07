@@ -104,7 +104,9 @@ export function projectCustomerYamlToConfigRow(
     // Required, throwing column — narrowed to the exact read-side shape.
     personas_json: JSON.stringify(personas),
     // Nullable opaque columns: serialize when present, else explicit null.
-    voice_library_json: yaml.voice_library ? JSON.stringify(yaml.voice_library) : null,
+    // Retired with the sample-transform voice mechanism (ADR 0083 decision 6):
+    // nothing writes it. The column stays until a later migration drops it.
+    voice_library_json: null,
     // ADR 0083 seam blocks. NULL means unauthored — which for output_classes is a
     // MEANINGFUL state (the customer declared nothing), not merely an absent one.
     seat_json: yaml.seat ? JSON.stringify(yaml.seat) : null,

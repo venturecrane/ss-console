@@ -93,7 +93,7 @@ hooks:
 
 ### 3. `pre_llm_call`
 
-**Purpose (overlay):** voice-sample injection (`hermes-smd-voice` — adds per-customer voice samples to the user message before the model sees it) AND untrusted-inbound quarantine (`hermes-smd-inbound`, ADR 0027 — drains the per-session pending inbound register and injects each item wrapped in a nonce-fenced quarantine block). Both are observers that contribute injected context; returns are merged (no "first wins"), so the two plugins coexist on this hook. `hermes-smd-webhook-router` also observes it, injecting nothing: a webhook turn's first call claims a dispatched SMD re-wake so `shared.msgraph_replay` can report that the turn started (`shared/rewake_outcome.py`). This is the SINGLE chokepoint for inbound quarantine — it also fires for skill-triggered LLM calls, so no per-skill duplication is needed.
+**Purpose (overlay):** untrusted-inbound quarantine (`hermes-smd-inbound`, ADR 0027 — drains the per-session pending inbound register and injects each item wrapped in a nonce-fenced quarantine block). It is an observer that contributes injected context; returns are merged (no "first wins"). `hermes-smd-webhook-router` also observes it, injecting nothing: a webhook turn's first call claims a dispatched SMD re-wake so `shared.msgraph_replay` can report that the turn started (`shared/rewake_outcome.py`). This is the SINGLE chokepoint for inbound quarantine — it also fires for skill-triggered LLM calls, so no per-skill duplication is needed.
 
 **Firing site:** `agent/turn_context.py:799-852` (`_collect_pre_llm_call_context`; `run_agent.py:12447-12457` at v2026.5.16).
 
@@ -221,7 +221,7 @@ For reference, the complete set of hook names Hermes accepts at the pinned ref (
 | `post_tool_call` | yes | audit |
 | `transform_terminal_output` | no | terminal-output canonicalization (not relevant) |
 | `transform_tool_result` | yes | inbound quarantine of untrusted tool-result reads (`hermes-smd-inbound`, ADR 0027 / OP-P0-4 read fencing) + held-reply notification (`hermes-smd-reply`, ss-console#2367 — the only seam that can put a delivery-path hold in front of the model in the same turn). The two never contend for the single replacing return: `create_draft` is a write and is not in the fenced-read set. |
-| `transform_llm_output` | yes | Layer-2 structural voice reshape — `hermes-smd-voice` fires `transform_draft()` post-LLM; first non-empty string returned replaces the response |
+| `transform_llm_output` | no (since 2026-11-07) | Was the sample-transform voice reshape (`hermes-smd-voice`), removed with ss ADR 0083 decision 6; no overlay plugin registers it |
 | `pre_llm_call` | yes | voice sample injection + inbound quarantine (ADR 0027); shared-group audience check (`hermes-smd-group-audience`, ADR 0091 R7) |
 | `post_llm_call` | yes | LLM audit; email delivery of a couples routine whose Telegram is unbound (`hermes-smd-space-delivery`, ADR 0091); the reply a rostered sender's email turn wrote as final text and never drafted (`hermes-smd-reply` `text_delivery`, AgentMail seats) |
 | `pre_api_request` | no | gateway-level API request (not relevant) |

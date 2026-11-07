@@ -54,7 +54,7 @@ function humanizeTone(t: string): string {
  * The landing's PERSONA block lines — the operator's own authored identity
  * detail: tone descriptors, mailbox identity, other authored identities.
  * (Captain vocabulary call, 2026-07-15: "voice" is reserved for the CLIENT's
- * voice — the ADR 0028 voice_library / sample-driven fidelity subsystem —
+ * voice — the firm voice of ADR 0083, distilled from its own documents —
  * while these fields are the operator's persona. Configuration, not status:
  * they render in their own block, not on the health hero.) Each line is
  * present only when authored; an all-null result means the block is absent

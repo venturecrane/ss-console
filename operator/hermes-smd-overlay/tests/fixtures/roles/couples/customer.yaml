@@ -339,10 +339,6 @@ telegram:
   # The group is one shared conversation, not one session per sender.
   group_sessions_per_user: false
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/[SLUG]/voice/samples/'
-
 # ---- MEMORY ----
 # Native Hermes memory is off on a space-mode seat: it is one identity-blind
 # store per profile (ADR 0091 enforcement point 1). Space-keyed memory replaces it.

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Fetch named matter documents into a voice corpus JSONL (the read-in-place bridge).
 
-The missing link in the voice chain. The ingester
-(``bin/voice-ingest-corpus.py``) turns a corpus JSONL into content-free
-structural-diff samples, and the Smokeball connector can read a matter
-document's text (``client.download_file`` + ``extract.extract_text``), but
-nothing joined the two: there was no path from "the documents the firm points
-at" to a corpus the ingester accepts. This script is that path.
+The path from "the documents the firm points at" to a corpus a person distils
+the firm's voice from (ss ADR 0083, mechanism A). The Smokeball connector reads
+a matter document's text (``client.download_file`` + ``extract.extract_text``);
+this script joins that to a named list. Its first consumer, the sample-transform
+ingester, was removed with mechanism B (ADR 0083 decision 6, 2026-11-07); this
+bridge was kept and repointed, as that decision says.
 
 The client commitment it serves (A&P letters 07/10): the firm never assembles
 or hands over writing samples. They NAME documents on their matters in plain
@@ -34,19 +34,16 @@ A name that matches more than one matter or more than one file is NOT
 guessed. The script lists the candidates and exits non-zero, the same posture
 the Operator itself takes when a matter cannot be matched cleanly.
 
-Cohorts are validated against the seat's authored ``voice_cohorts`` vocabulary
-(``--customer-yaml``) before anything is fetched, so a typo cannot mint an
-orphan cohort directory in the vault that no profile loader will ever read.
+Cohorts are validated against the fixed audience vocabulary
+(``bin/lib/voice_corpus.BASE_COHORTS``) before anything is fetched, so a typo
+fails before a fetch rather than labelling a document for no reader.
 
 Provenance
 ----------
 
-The ingester keys every emitted sample by a fresh uuid and drops the corpus
-``id``/``source`` fields, so a fingerprint in R2 cannot otherwise be tied back
-to the document it came from. ``--provenance FILE.json`` records the mapping
-(document -> corpus id, matter, file id, cohort, char count) locally so a
-verification artifact can state exactly which documents produced which
-samples.
+``--provenance FILE.json`` records the mapping (document -> corpus id, matter,
+file id, cohort, char count) locally, so a verification artifact can state
+exactly which documents a distilled voice was read from.
 
 Usage::
 
@@ -56,9 +53,7 @@ Usage::
       python bin/voice-fetch-corpus.py --manifest /tmp/exemplars.yaml \\
         --customer-yaml customers/pilot-smokeball/customer.yaml \\
         --out /tmp/corpus.jsonl --provenance /tmp/provenance.json
-    # 2. ingest each cohort file (unmodified ingester)
-    python bin/voice-ingest-corpus.py --corpus /tmp/corpus.client.jsonl \\
-      --slug pilot-smokeball --cohort client --r2
+    # 2. distil the firm's voice from each cohort file (ADR 0083, by a person)
 
 Manifest format::
 
@@ -100,9 +95,8 @@ class ResolutionError(Exception):
 # Cohort vocabulary (authored, not inferred)
 # ---------------------------------------------------------------------------
 
-# Shared with voice-ingest-corpus.py (moved to the lib 2026-08-10, #2222, so
-# the fetch and ingest gates cannot drift). Re-exported here so callers and
-# tests keep their `vfc.load_cohort_vocabulary` / `vfc.BASE_COHORTS` handles.
+# Shared with the survey step (bin/lib/voice_corpus.py). Re-exported here so
+# callers and tests keep their `vfc.load_cohort_vocabulary` / `vfc.BASE_COHORTS` handles.
 from bin.lib.voice_corpus import BASE_COHORTS, load_cohort_vocabulary  # noqa: E402,F401 - after the path shim; re-exported so vfc.load_cohort_vocabulary keeps working
 
 
@@ -143,14 +137,12 @@ def load_manifest(path: str) -> list[ManifestEntry]:
 
 
 def validate_cohorts(entries: Iterable[ManifestEntry], vocabulary: frozenset[str]) -> None:
-    """Fail before any fetch if a manifest names a cohort the seat has not authored."""
+    """Fail before any fetch if a manifest names a cohort outside the vocabulary."""
     unknown = sorted({e.cohort for e in entries if e.cohort not in vocabulary})
     if unknown:
         raise ValueError(
-            f"cohort(s) {unknown} are not in the seat's authored vocabulary "
-            f"{sorted(vocabulary)}. Author them in customer.yaml `voice_cohorts:` "
-            "first — an unauthored cohort writes samples to a vault path no "
-            "profile loader reads."
+            f"cohort(s) {unknown} are not in the audience vocabulary {sorted(vocabulary)} "
+            "(bin/lib/voice_corpus.BASE_COHORTS)."
         )
 
 
@@ -215,8 +207,8 @@ def resolve_one(
 # ---------------------------------------------------------------------------
 
 # The differ classifies the greeting from the FIRST line and the signoff from
-# the LAST THREE non-empty lines (adapter/voice/diff.py :: _classify_greeting,
-# _classify_signoff) — correct for the email bodies it was built on. A law
+# the LAST THREE non-empty lines (the retired sample differ's
+# _classify_greeting / _classify_signoff, a reading a person distilling still makes) — correct for the email bodies it was built on. A law
 # firm's exemplars are LETTERS: letterhead, address block, date, and RE: line
 # sit above the salutation, and a contact block sits below the closer. Feed one
 # in raw and both classifiers return `none`, so the profile loses the two
@@ -519,13 +511,8 @@ def main(argv: list[str] | None = None) -> int:
 
     for cohort, path in sorted(written.items()):
         n = sum(1 for d in docs if d.cohort == cohort)
-        floor = "" if n >= 5 else "  <-- BELOW the 5-sample profile floor; will not shape drafts"
-        print(f"{cohort:20s} {n:3d} docs -> {path}{floor}")
-    print(
-        "\nNext: ingest each cohort file, then restart the Machine to adopt:\n"
-        "  python bin/voice-ingest-corpus.py --corpus <file> --slug <seat> "
-        "--cohort <cohort> --r2"
-    )
+        print(f"{cohort:20s} {n:3d} docs -> {path}")
+    print("\nNext: distil the firm's voice from each cohort file (ss ADR 0083, mechanism A).")
     return 0
 
 

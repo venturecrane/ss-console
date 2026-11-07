@@ -29,5 +29,3 @@ memory:
   d1_namespace: 'regression-fixture-enum'
   r2_vault_path: 'vaults/regression-fixture-enum/'
   vectorize_index: 'hermes-regression-fixture-enum-vault'
-voice_library:
-  samples_path: 'r2://vaults/regression-fixture-enum/voice/samples/'

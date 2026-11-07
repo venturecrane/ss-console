@@ -41,7 +41,6 @@ def test_discovery_has_teeth() -> None:
     assert len(read) >= 10, f"discovery suspiciously small ({len(read)}): scanner may be broken"
     for known in (
         "SMD_CUSTOMER_SLUG",
-        "SMD_VOICE_VAULT_DIR",
         "SMD_D1_AUDIT_BINDING",
         "SMD_VERTICAL",
     ):

@@ -1098,3 +1098,8 @@ def test_translation_carries_the_new_exposure_key():
 
     block = translate._entitlements_block({"exposure": {"external_send_as_staff": "confirm"}})
     assert block == {"exposure": {"external_send_as_staff": "confirm"}}
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

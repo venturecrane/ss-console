@@ -386,7 +386,7 @@ _recurring: OrderedDict[str, frozenset[str]] = OrderedDict()
 # primary key of every per-session safety register: the provenance register
 # above, the matter gate's party sets (``matter_gate.evaluate`` ->
 # ``matter_binding.membership_for``), the authored-spec read marks
-# (``spec_status``), the voice live-gate mark (``voice_status``), and the
+# (``spec_status``), and the
 # read-capture windows establishment stages from. A shared last-value slot hands
 # thread A's key to thread B, so A's reads certify B's citations and A's party
 # set gates B's send. ``hermes-smd-establishment`` already names this failure in

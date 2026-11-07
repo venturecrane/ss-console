@@ -7,7 +7,7 @@ running agent. That gap shipped an operator with no audit emission and, worse,
 no trust/ceiling enforcement (ss-console#1285). This invariant closes it.
 
 It asserts the overlay actually activates: the umbrella `register(ctx)` fans
-out, all five functional plugins (audit, trust, voice, webhook-router,
+out, all four functional plugins (audit, trust, webhook-router,
 memory-mirror) register their hooks (including the trust `pre_tool_call`
 ceiling gate), the audit schema is created, AND trust actually refuses an
 action that must be gated (a permanently-banned send tool).
@@ -56,16 +56,15 @@ import sys
 import types
 from pathlib import Path
 
-# The five functional plugins whose activation IS the governance guarantee.
+# The four functional plugins whose activation IS the governance guarantee.
 _FUNCTIONAL = [
     "hermes-smd-audit",
     "hermes-smd-trust",
-    "hermes-smd-voice",
     "hermes-smd-memory-mirror",
     "hermes-smd-webhook-router",
 ]
 
-# Hooks that must land for the layer to be governing (union across the five).
+# Hooks that must land for the layer to be governing (union across the four).
 _REQUIRED_HOOKS = {
     "pre_tool_call",  # trust ceiling gate — the safety-critical one
     "post_tool_call",  # audit + trust

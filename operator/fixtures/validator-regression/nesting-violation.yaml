@@ -34,5 +34,3 @@ memory:
   d1_namespace: 'regression-fixture-nesting'
   r2_vault_path: 'vaults/regression-fixture-nesting/'
   vectorize_index: 'hermes-regression-fixture-nesting-vault'
-voice_library:
-  samples_path: 'r2://vaults/regression-fixture-nesting/voice/samples/'

@@ -105,7 +105,6 @@ export interface CustomerConfigRow {
   customer_slug: string
   schema_version: string
   personas: PersonaConfig[]
-  voice_library: unknown
   /**
    * What the seat IS — `{kind, product}` — or null when unauthored (ADR 0083).
    * Carries no lifecycle state by construction: whether a seat is connected or
@@ -294,7 +293,6 @@ export function projectRow(row: CustomerConfigDbRow): CustomerConfigRow {
     customer_slug: row.customer_slug,
     schema_version: row.schema_version,
     personas: parsePersonas(row.personas_json, row.entity_id),
-    voice_library: parseJsonNullable(row.voice_library_json),
     seat: parseJsonNullable(row.seat_json),
     output_classes: parseJsonNullable(row.output_classes_json),
     escalation: parseJsonNullable(row.escalation_json),
