@@ -32,6 +32,8 @@ from pathlib import Path
 
 import pytest
 
+from bin.tests.guard_needs import RUFF_INSTALL, require
+
 OPERATOR = Path(__file__).resolve().parents[2]
 BASELINE = OPERATOR / "contracts" / "operator-function-size.json"
 sys.path.insert(0, str(OPERATOR / "bin" / "lib"))
@@ -39,7 +41,6 @@ sys.path.insert(0, str(OPERATOR / "bin" / "lib"))
 import function_size as fs  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
 
 RUFF = shutil.which("ruff")
-pytestmark = pytest.mark.skipif(RUFF is None, reason="ruff is not on PATH (the substrate job installs it)")
 
 COMMENT = (
     "Functions over the ceilings, generated and enforced by "
@@ -50,8 +51,14 @@ COMMENT = (
 )
 
 
+def _ruff() -> str:
+    """The census runs ruff; without it this guard has nothing to measure, so it fails."""
+    require(RUFF, "ruff is not on PATH", RUFF_INSTALL)
+    return RUFF or "ruff"
+
+
 def _current() -> dict:
-    return fs.census(OPERATOR, RUFF or "ruff")
+    return fs.census(OPERATOR, _ruff())
 
 
 def _load() -> dict:
@@ -101,7 +108,7 @@ def test_the_counter_can_fail(tmp_path: Path) -> None:
     branches = "\n".join(f"    if n == {i}:\n        return {i}" for i in range(fs.COMPLEXITY_CEILING + 2))
     (src / "twisty.py").write_text(f"def twisty(n):\n{branches}\n    return -1\n", encoding="utf-8")
     (src / "test_big.py").write_text(f"def big():\n{body}\n    return x0\n", encoding="utf-8")
-    result = fs.census(src, RUFF or "ruff")
+    result = fs.census(src, _ruff())
     assert result["length"] == {"big.py::big": fs.LENGTH_CEILING + 7}, result["length"]  # def + 80 assignments + return
     assert "twisty.py::twisty" in result["complexity"]
     assert not any(k.startswith("test_") for k in result["length"]), "test files must be exempt"

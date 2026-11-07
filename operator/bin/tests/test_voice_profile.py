@@ -20,8 +20,16 @@ from pathlib import Path
 
 import pytest
 
+from bin.tests.guard_needs import require_path
+
 _BIN = Path(__file__).resolve().parents[1]
 _SEED = _BIN.parents[1] / "operator" / "customers" / "pilot-smokeball" / "seed" / "voice"
+
+
+@pytest.fixture
+def seed_corpus() -> None:
+    """The committed rehearsal corpus these checks run against; absent fails, never skips."""
+    require_path(_SEED)
 
 
 def _load():
@@ -156,7 +164,7 @@ def test_fenced_examples_and_comments_are_exempt():
 # ------------------------------------------------------- the real corpus
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_real_corpus_reproduces_the_documented_hyphen_finding():
     """Zone segmentation halves the apparent violations, as documented.
 
@@ -169,7 +177,7 @@ def test_the_real_corpus_reproduces_the_documented_hyphen_finding():
     assert len(m["counterexample_docs"]) == 2
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_real_corpus_carries_exactly_one_contraction():
     """Independently reproduced: one contraction, inside quoted testimony.
 
@@ -183,7 +191,7 @@ def test_the_real_corpus_carries_exactly_one_contraction():
     assert m["counterexample_docs"] == ["08-mediation-brief-facts-nakashima.md"]
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_shipped_fixture_would_fail_the_digit_invariant_today():
     """Honest: the winning bake-off card predates the invariant and carries
     typed numbers. It is installed as the VOICE fixture, which the invariant
