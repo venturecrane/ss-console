@@ -240,6 +240,7 @@ def marker_why(detail: str, claim: str = "") -> str:
 
 NOTE_REMOVED = "{head}: taken out, the file does not support it: {claim} ({why})"
 NOTE_FLAGGED = "{head}: figure marked for the attorney to confirm: {claim} ({why})"
+NOTE_REMOVED_WITH = "{head}: taken out with the statement before it, the file does not support it: {claim} ({why})"
 NOTE_KEPT = (
     "{head}: the file may not support this and it is still in the letter, for the attorney to decide: {claim} ({why})"
 )
@@ -300,6 +301,7 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
     # writing it twice and dropping the first (drafting/settle.py's shape).
     heads = [h for h, _ in secs]
     bodies = [b for _, b in secs]
+    original = list(bodies)  # as written, for a finding whose sentence an earlier one already took out
     notes: list[str] = []
     for head, verdict, claim, detail in findings(audit_md):
         if head not in heads:
@@ -308,6 +310,14 @@ def settle(draft_md: str, audit_md: str, dialect: str = SQUARE) -> tuple[str, li
             notes.append(NOTE_CLEARED.format(head=head, claim=_clean(claim, 10**6)))
             continue
         idx, span = _place(heads, bodies, head, claim, verdict)
+        if span is None and verdict == "INVENTED" and _place(heads, original, head, claim, verdict)[1] is not None:
+            # Two unsupported statements in one sentence (2026-11-07, the
+            # notes of a repaired section): the first removal took the whole
+            # sentence, so the second matches nothing in the edited text and
+            # nothing is left to remove. Settled by that removal, told to the
+            # attorney; never a stop.
+            notes.append(NOTE_REMOVED_WITH.format(head=head, claim=_clean(claim, 10**6), why=_clean(detail, 10**6)))
+            continue
         if span is None:
             raise Unlocated(f"a final-audit {verdict} finding in {head[:60]!r} matches nothing in that section")
         body = bodies[idx]

@@ -212,3 +212,36 @@ def test_smd_asks_for_a_repair_of_the_faulted_sections_and_only_those_are_audite
     assert any("replaces v1" in ln for ln in r2.test_log)  # the letter was settled and gated again
     letter = _letter_text(data)
     assert "cervical sprain" in letter and "cervical strain" not in letter
+
+
+# ---- two unsupported statements in one sentence -----------------------------------------------
+def test_two_invented_findings_in_one_sentence_are_both_settled_by_the_first_removal():
+    """2026-11-07, attempt 4: the audit of a repaired notes section returned three
+    invented findings, two in the same sentence; the first removal took the
+    sentence, the second matched nothing, and the final pass raised, stopping a
+    job that had every paid stage done. FALSIFIER: on the code before the fix
+    this raises Unlocated("... matches nothing in that section")."""
+    draft = (
+        "## Exhibits\n\nThe exhibits follow.\n\n"
+        "Counsel relied on Civil Code sections 1, 2 and 3 and on Form No. 99 for the carrier.\n\n"
+        "A second sentence that stays.\n"
+    )
+    audit = (
+        "## AUDIT: Exhibits\n\n"
+        "- Counsel relied on Civil Code sections 1, 2 and 3 | INVENTED | no such sections in the record\n"
+        "- Form No. 99 for the carrier | INVENTED | no such form in the record\n"
+    )
+    md, notes = finalpass.settle(draft, audit)
+    assert "Civil Code sections 1, 2 and 3" not in md and "Form No. 99" not in md
+    assert md.count("[TO BE SUPPLIED: a statement here is not supported by the file") == 1
+    assert "A second sentence that stays." in md
+    assert len(notes) == 2 and any("taken out with the statement before it" in n for n in notes)
+    assert finalpass.summary(notes)["removed"] == 1
+    assert rv.wording({"demand": md, "attorney_notes": "\n".join(notes)}) == []
+
+
+def test_a_finding_that_was_never_in_the_section_still_raises():
+    draft = "## Exhibits\n\nThe exhibits follow.\n"
+    audit = "## AUDIT: Exhibits\n\n- Counsel relied on Civil Code sections 1, 2 and 3 | INVENTED | no such sections\n"
+    with pytest.raises(finalpass.Unlocated):
+        finalpass.settle(draft, audit)
