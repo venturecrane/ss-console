@@ -36,7 +36,8 @@ from smokeball_connector.docx_classes import is_total_row
 from .. import firmbase
 from ..firmbase import FirmBase, FirmBaseLost, FirmBaseUnfit, Rows
 from ..firmbase import xmlproof
-from ..firmbase.base import W, _text_el, is_blank, slot_names
+from ..firmbase.base import W, _text_el, is_blank
+from ..firmbase.markers import marked
 from .outcome import DraftingFailed
 from .revise import layout as lay
 
@@ -424,7 +425,12 @@ def fill(base: FirmBase, md: str) -> tuple[bytes, firmbase.Proof]:
 
 
 def load_base(path: Path, source: dict[str, str], cls: str = CLS) -> FirmBase:
-    return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    """The class's base, any class's (a memo's too): a file that is no base surfaces as
+    ``firm_base_unfit``, the way an unfit fill does in ``render_into``."""
+    try:
+        return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    except FirmBaseUnfit as exc:
+        raise unfit(str(exc)) from exc
 
 
 def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None) -> tuple[Path, dict[str, Any]]:
@@ -452,7 +458,7 @@ def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None
 def _chart_size_pt(base: FirmBase) -> float | None:
     root = etree.fromstring(zipfile.ZipFile(io.BytesIO(base.bytes)).read("word/document.xml"))
     for tbl in root.find(f"{W}body").findall(f"{W}tbl"):
-        if any(s.startswith("body.chart") for s in slot_names(tbl)):
+        if any(s.startswith("body.chart") for s in marked(tbl)):
             sz = tbl.find(f".//{W}r/{W}rPr/{W}sz")
             return int(sz.get(f"{W}val")) / 2 if sz is not None else None
     return None

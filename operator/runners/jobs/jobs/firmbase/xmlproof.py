@@ -31,6 +31,12 @@ class Allow:
     """The leaf paths each kind of edit may change."""
 
     RUNS = re.compile(r"^p/(r|hyperlink|ins|del|proofErr)\[\d+\]")
+    #: A marker Word split, merged and filled (``merge.collapse``): its runs, the marks and
+    #: wrappers that went with it, and the order of what remains. Bookmarks are not named,
+    #: so a bookmark that moved or went is refused.
+    MARKER_LINE = re.compile(
+        r"^(tbl/tr\[\d+\]/tc\[\d+\]/p\[\d+\]|p)/((r|proofErr|smartTag|hyperlink|sdt)\[\d+\](@|/.*)?|order)$"
+    )
     HEADING_LEVEL = re.compile(r"^p/pPr\[0\]")
     SPACING = re.compile(r"^p/pPr\[0\](/spacing\[0\]@?)?$")
     TABLE_TEXT = re.compile(r"^tbl/tr\[\d+\](/tc\[\d+\]/p\[\d+\](/(r|hyperlink|ins|del|proofErr)\[\d+\].*)?)?$")

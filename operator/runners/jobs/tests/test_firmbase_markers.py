@@ -3,7 +3,7 @@
 The fixtures are built in code: a marked file, then the same file with each
 marker split across two and three runs, with a proofing mark and a bookmark
 between, the way Word leaves a line it has saved. Fixtures saved by Word itself
-are still owed; a person with Word makes them.
+are in ``fixtures/word_saved_markers/`` (``test_firmbase_markers_word_saved.py``).
 """
 
 from __future__ import annotations
