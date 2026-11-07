@@ -35,6 +35,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from .. import firm_wording
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
 from . import base_lay, pleading, prerender, render
@@ -192,7 +193,7 @@ class Finish:
         context = ([u.instruction] if u.instruction else []) + self._shared(u) + self._context()
         cp = self.data / "caption.json"
         cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
-        return compose.Drafter(
+        d = compose.Drafter(
             u.data,
             self.doorway,
             self.firm,
@@ -203,6 +204,7 @@ class Finish:
             self.log,
             skeleton=caption_stage.fill_skeleton(self.firm.skeleton(self.cls), cap),
         )
+        return firm_wording.attach(d, self.data)
 
     def _draft(self, u: Unit, digest: str) -> str:
         out = u.data / FINAL

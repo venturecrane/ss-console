@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import firm_wording, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -168,6 +168,7 @@ class DemandLane(Daemon):
         env.setdefault("JOBS_SEAT", "client")
         env.setdefault("PATH", "/usr/bin:/bin")
         env.setdefault("HOME", str(jd))
+        firm_wording.alert_unusable(self, job_id)
         verdict_mod.clear(jd)
         with (jd / "daemon.log").open("a", encoding="utf-8") as log:
             code, out = run_child(

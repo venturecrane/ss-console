@@ -83,6 +83,7 @@ from typing import Any
 
 from config_applier.applier import atomic_write
 from establish_intake import gates
+from shared import wording_rules
 from shared.ids import iso_utc, sha256
 from shared.person_prefs import (
     MAX_PREF_BODY_BYTES,
@@ -1064,6 +1065,8 @@ class EstablishIntake:
         at = raw.get("at")
         if not isinstance(at, str) or not at.strip():
             problems.append("adjustment.at missing or empty")
+        reach, reach_problems = wording_rules.reach_fields(raw, "adjustment")
+        problems.extend(reach_problems)
         if problems:
             return None, problems
         record: dict[str, Any] = {
@@ -1074,6 +1077,7 @@ class EstablishIntake:
         }
         if applied_by:
             record["applied_by"] = str(applied_by).strip()
+        record.update(reach)
         return record, []
 
     # ------------------------------------------------------------------

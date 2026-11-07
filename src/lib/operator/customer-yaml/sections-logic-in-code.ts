@@ -17,6 +17,7 @@ export const LOGIC_IN_CODE_SWITCHES = [
   'post_record_derivation',
   'conflict_fence',
   'fixed_wording',
+  'wording_rules',
 ] as const
 
 export const LOGIC_IN_CODE_MODES = ['observe', 'enforce'] as const

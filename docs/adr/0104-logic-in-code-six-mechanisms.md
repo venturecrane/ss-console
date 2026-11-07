@@ -68,7 +68,7 @@ Nothing runs first on the client seat. Unit tests on synthetic shapes with a mut
 
 ### Amendment, 2026-11-05: every refusal ships off, per seat
 
-By the resume, a merge reached the client seat in ring 1 before the pilot in ring 2, with no person between, and staging has no Smokeball connector. So the token's observe-first rule now covers every mechanism that can refuse or change what a firm sees: `logic_in_code` in the seat's `customer.yaml` (`printed_source_check`, `post_record_derivation`, `conflict_fence`, `fixed_wording`), each `observe` when absent and `enforce` when unreadable. Code ships before the skills that use it, in separate PRs, accepting the old call and the new one. The pilot authors `enforce` first; a client seat only on the Captain's yes. Detail: `docs/plans/logic-in-code/resume-2026-11-05.md`.
+By the resume, a merge reached the client seat in ring 1 before the pilot in ring 2, with no person between, and staging has no Smokeball connector. So the token's observe-first rule now covers every mechanism that can refuse or change what a firm sees: `logic_in_code` in the seat's `customer.yaml` (`printed_source_check`, `post_record_derivation`, `conflict_fence`, `fixed_wording`, and since 2026-11-06 `wording_rules`, whether the job lanes follow a firm's confirmed wording rules), each `observe` when absent and `enforce` when unreadable. Code ships before the skills that use it, in separate PRs, accepting the old call and the new one. The pilot authors `enforce` first; a client seat only on the Captain's yes. Detail: `docs/plans/logic-in-code/resume-2026-11-05.md`.
 
 ### Amendment, 2026-11-06: measured on the real work, the program shrinks to what earned it
 

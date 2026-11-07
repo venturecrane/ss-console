@@ -204,6 +204,11 @@ def tally(body: str) -> dict[str, int]:
 
 
 class Drafter:
+    #: The firm's confirmed wording rules for a demand in this attorney's name
+    #: (``jobs/firm_wording.py``), set by the run after construction; ``""``
+    #: sends the model exactly what it was sent before the rules were read.
+    wording: str = ""
+
     def __init__(
         self,
         data: Path,
@@ -309,6 +314,7 @@ class Drafter:
             discipline_part_one(f.text("drafting_discipline")),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + f.text("skeleton"),
             voice_block(f.text("voice_profile"), f.text("voice_adjustments")),
+            *([self.wording] if self.wording else []),
             "## FIRM FIXED STRINGS (use verbatim where the skeleton calls for them)\n\n"
             + f.text("voice_fixed_strings"),
             f.text("prompt_compose"),

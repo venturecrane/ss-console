@@ -1070,6 +1070,7 @@ export interface LogicInCode {
   post_record_derivation?: LogicInCodeMode
   conflict_fence?: LogicInCodeMode
   fixed_wording?: LogicInCodeMode
+  wording_rules?: LogicInCodeMode
 }
 
 /**
