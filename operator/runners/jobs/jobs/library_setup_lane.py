@@ -50,7 +50,16 @@ CHILD = "library-setup"
 INPUTS_ENV = "JOBS_DRAFTING_INPUTS"
 #: What a verdict may record, and the ledger state each is.
 STATES = {"observed": "observed", "delivered": "delivered", "held": "held"}
-_FIELDS = ("setup_outcome", "hold", "counts", "candidates", "attorney_key", "attorney_name", "unusable")
+_FIELDS = (
+    "setup_outcome",
+    "hold",
+    "counts",
+    "candidates",
+    "dropped_files",
+    "attorney_key",
+    "attorney_name",
+    "unusable",
+)
 
 
 def envelope(lane: Any, job_id: str) -> dict[str, Any]:

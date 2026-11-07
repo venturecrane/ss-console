@@ -6,7 +6,9 @@ THE STEPS, IN ORDER, EACH FAIL CLOSED:
 1. The kind's plan adopts and cleans it (``drafting/brief_base.adopt``,
    ``drafting/memo_base.adopt``): every word of the body becomes a marked place,
    and the properties, titles and thumbnail that name a person or a matter go.
-2. Its custom XML parts go, with every pointer to them (``drop_custom_xml``). The
+2. The pictures its body no longer shows go (``drop_body_pictures``; a picture
+   in a header or footer is the firm's look and stays). Its custom XML parts go,
+   with every pointer to them (``drop_custom_xml``). The
    clean keeps them, and they can hold a document system's metadata about the
    matter; the no-client-text check refuses any. So do its links to a document
    system or a template (``drop_document_links``: the attached template and its
@@ -113,7 +115,7 @@ def dropped(blob: bytes) -> dict[str, int]:
     """What ``drop_custom_xml``, ``drop_document_links`` and ``drop_foreign_fields``
     remove from ``blob``, by category, counted before they run."""
     out = {"custom_xml_parts": 0, "template_links": 0, "document_variables": 0, "mail_merge": 0,
-           "external_links": 0, "foreign_fields": 0}  # fmt: skip
+           "external_links": 0, "foreign_fields": 0, "body_pictures": 0}  # fmt: skip
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         names = z.namelist()
         out["custom_xml_parts"] = sum(1 for n in names if n.startswith("customXml/"))
@@ -191,6 +193,54 @@ def drop_document_links(blob: bytes) -> bytes:
                 raw = _serial(root)
             out.writestr(info, raw)
     return buf.getvalue()
+
+
+def drop_body_pictures(blob: bytes) -> tuple[bytes, int]:
+    """(``blob`` without the pictures its body no longer shows, how many went).
+
+    WHERE A PICTURE IS DECIDES (2026-11-07, the coordinator's ruling on the
+    firm's memo whose one picture was not in the made file). A picture in a
+    header or footer is the firm's look (its letterhead art, a logo) and stays:
+    nothing here touches a header's or footer's relationships. A picture in the
+    body is the case's (a photograph, a chart image) and goes once the plan has
+    blanked the body: its relationship from the document part, and the picture
+    part itself when nothing else names it. A brief's plan keeps the package's
+    other parts by their bytes, so without this a body picture's bytes would
+    outlive its place in the body."""
+    from ..firmbase.adopt import DOCUMENT_RELS, _dropped_media, _prune_rels
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src:
+        if DOCUMENT_RELS not in src.namelist():
+            return blob, 0
+        rels, gone = _prune_rels(src.read(DOCUMENT_RELS), src.read(DOCUMENT))
+        media = _dropped_media(src, gone)
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+            for info in src.infolist():
+                if info.filename in media:
+                    continue
+                out.writestr(info, rels if info.filename == DOCUMENT_RELS else src.read(info.filename))
+    return buf.getvalue(), len(media)
+
+
+def _media_of(z: zipfile.ZipFile, rels_name: str) -> set[str]:
+    root = etree.fromstring(z.read(rels_name))
+    targets = (r.get("Target", "") for r in root if r.get("Type", "").endswith("/image"))
+    return {f"word/{t}" for t in targets if t.startswith("media/")}
+
+
+def picture_parts(source: bytes, made: bytes) -> tuple[int, int]:
+    """(the source's body pictures the made file does not carry, the source's
+    header and footer pictures it lost). The first is the drop, counted; the
+    second must be 0: a header's or footer's picture is the firm's look."""
+    with zipfile.ZipFile(io.BytesIO(source)) as a, zipfile.ZipFile(io.BytesIO(made)) as b:
+        rels = [n for n in a.namelist() if n.startswith("word/_rels/") and n.endswith(".rels")]
+        story = set().union(
+            *(_media_of(a, n) for n in rels if _HEAD_FOOT.match(n.replace("_rels/", "").removesuffix(".rels")))
+        )
+        body = _media_of(a, "word/_rels/document.xml.rels") - story if "word/_rels/document.xml.rels" in rels else set()
+        kept = set(b.namelist())
+    return len(body - kept), len(story - kept)
 
 
 def _complex_fields(story: Any) -> list[tuple[str, list[Any]]]:
@@ -311,7 +361,11 @@ def make(kind: str, blob: bytes, source: Source, identity: Iterable[str]) -> Mad
     except (DraftingFailed, FirmBaseUnfit, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as exc:
         raise Unusable("plan_refused", reason_code(exc)) from exc
     removed = dropped(adopted)
-    made = drop_foreign_fields(drop_document_links(drop_custom_xml(adopted)))
+    made, _n = drop_body_pictures(adopted)
+    made = drop_foreign_fields(drop_document_links(drop_custom_xml(made)))
+    removed["body_pictures"], lost = picture_parts(blob, made)
+    if lost:
+        raise Unusable("header_picture_lost", f"{lost} picture(s) of a header or footer")
     fixed, residue = judge_stories(made, identity)
     _markers_ok(kind, made, source)
     return Made(made, fixed, residue, removed)
@@ -330,6 +384,10 @@ def identity_pieces(firm_identity: Any, attorney_blocks: Iterable[Iterable[str]]
 
 __all__ = [
     "LABEL_WORDS",
+    "STRUCTURAL",
+    "drop_body_pictures",
+    "dropped",
+    "picture_parts",
     "TITLE_WORDS",
     "Made",
     "Unusable",

@@ -168,7 +168,10 @@ def _chart_slots(tbl: Any, n: int) -> None:
 def _front(doc: Any, els: list[Any]) -> None:
     from docx.text.paragraph import Paragraph
 
-    paras = [Paragraph(e, doc) for e in els]
+    # Paragraphs only: a body-level bookmark, a section break or any other
+    # non-content child above the caption is no line of the front (a firm's
+    # Word save puts a bookmarkStart there; the A&P rehearsal, 2026-11-07).
+    paras = [Paragraph(e, doc) for e in els if e.tag == f"{W}p"]
     court = len(paras)
     while court > 0 and (not paras[court - 1].text.strip() or _flags(paras[court - 1], "bold")):
         court -= 1

@@ -53,6 +53,11 @@ def adopter(kind: str) -> Any:
     return {"mediation_brief": brief_base.adopt, "memo": memo_base.adopt}[kind]
 
 
+#: A plan that raised something it does not name: the candidate is refused and
+#: counted, and the hunt goes on (one firm file must never end a hunt).
+PLAN_ERROR = "plan_error"
+
+
 def fits(kind: str, blob: bytes, source: Source) -> str:
     """The empty string when the kind's plan can adopt ``blob``, else the refusal's code."""
     from ..drafting.outcome import DraftingFailed
@@ -61,7 +66,9 @@ def fits(kind: str, blob: bytes, source: Source) -> str:
         adopter(kind)(blob, source)
     except (DraftingFailed, FirmBaseUnfit, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as exc:
         return reason_code(exc)
+    except Exception:  # noqa: BLE001 - any other fault of the plan on one file refuses that file, never the hunt
+        return PLAN_ERROR
     return ""
 
 
-__all__ = ["REASONS", "adopter", "fits", "reason_code"]
+__all__ = ["PLAN_ERROR", "REASONS", "adopter", "fits", "reason_code"]

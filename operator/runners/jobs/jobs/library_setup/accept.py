@@ -129,6 +129,8 @@ def run(
     try:
         made = _made(job, blob, choice, inputs_dir, pieces)
     except make_mod.Unusable as exc:
+        if exc.code == "header_picture_lost":  # our plan's fault, never the firm's: SMD looks
+            return _held(exc.code)
         return _told(NOT_A_FORM if exc.code in make_mod.STRUCTURAL else UNUSABLE, unusable=exc.code)
     kind, attorney = str(job["setup_kind"]), job.get("attorney_key") or None
     slot = replaces(kind, attorney, spec_dir)

@@ -271,6 +271,32 @@ def test_a_document_the_kinds_plan_cannot_adopt_is_never_listed_and_is_counted_b
     assert out["counts"]["plan_refused"] == 1 and out["counts"]["plan_refused_no_heading"] == 1
 
 
+def test_a_plan_that_crashes_on_one_file_refuses_that_file_and_the_hunt_goes_on(monkeypatch):
+    """The 2026-11-07 rehearsal: one brief the plan raised TypeError on ended the
+    whole hunt. Now it is that file's refusal, counted with its id."""
+    from jobs.library_setup import plan
+
+    client = _client()
+    crashing = client.files["f-old"][2]
+    real = plan.adopter
+
+    def adopter(kind):
+        adopt = real(kind)
+
+        def fussy(blob, source):
+            if blob == crashing:
+                raise TypeError("'NoneType' object is not subscriptable")
+            return adopt(blob, source)
+
+        return fussy
+
+    monkeypatch.setattr(plan, "adopter", adopter)
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-new"]
+    assert out["counts"]["plan_refused_plan_error"] == 1
+    assert out["dropped_files"]["plan_refused_plan_error"] == ["f-old"]
+
+
 def test_a_kind_whose_every_candidate_the_plan_refuses_is_none_found():
     client = ReadOnlyClient(
         {

@@ -124,6 +124,102 @@ def test_a_note_or_comment_with_any_words_refuses(accepted):
     assert "notes_words 1" in str(exc.value)
 
 
+def _logo_png() -> bytes:
+    """A one-pixel picture with other bytes than the memo kit's, so Word keeps it
+    as a part of its own (a shared part would be both a header's and the body's)."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    head = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    pixel = zlib.compress(b"\0\xff\x00\x00")
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", head) + chunk(b"IDAT", pixel) + chunk(b"IEND", b"")
+
+
+def _with_header_picture(blob: bytes) -> bytes:
+    d = docx.Document(io.BytesIO(blob))
+    d.sections[0].header.paragraphs[0].add_run().add_picture(io.BytesIO(_logo_png()))
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _media(blob: bytes) -> set[str]:
+    return {n for n in _members(blob) if n.startswith("word/media/")}
+
+
+def test_a_body_picture_is_the_cases_and_goes_counted():
+    """The firm's memo with one picture in its body (the 2026-11-07 rehearsal):
+    the made file carries no copy of it, and the drop says so."""
+    memo = _long_firm_memo()
+    assert _media(memo)  # the source has its picture
+    made = M.make("memo", memo, _src(memo), FIRM)
+    assert _media(made.data) == set() and made.dropped["body_pictures"] == 1
+
+
+def test_a_header_picture_is_the_firms_look_and_stays():
+    memo = _with_header_picture(_long_firm_memo())
+    made = M.make("memo", memo, _src(memo), FIRM)
+    assert len(_media(made.data)) == 1 and made.dropped["body_pictures"] == 1
+
+
+def test_a_briefs_body_picture_goes_and_its_header_picture_stays(firm_brief):
+    from test_drafting_memo_base import _png
+
+    d = docx.Document(io.BytesIO(_with_header_picture(firm_brief)))
+    d.paragraphs[-1].add_run().add_picture(io.BytesIO(_png()))  # a picture in the body (the signature's line)
+    buf = io.BytesIO()
+    d.save(buf)
+    blob = buf.getvalue()
+    assert len(_media(blob)) == 2
+    made = M.make(CLS, blob, _src(blob), FIRM)
+    assert len(_media(made.data)) == 1 and made.dropped["body_pictures"] == 1
+
+
+def _long_firm_memo() -> bytes:
+    d = docx.Document(io.BytesIO(_firm_memo()))
+    d.add_paragraph(" ".join(["word"] * 600))
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _with_body_bookmark(blob: bytes) -> bytes:
+    """A firm's Word save: a body-level bookmarkStart before the caption table."""
+    from lxml import etree as ET
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for i in src.infolist():
+            data = src.read(i.filename)
+            if i.filename == "word/document.xml":
+                root = ET.fromstring(data)
+                body = root.find(f"{{{_W}}}body")
+                mark = ET.SubElement(body, f"{{{_W}}}bookmarkStart", {f"{{{_W}}}id": "0", f"{{{_W}}}name": "_GoBack"})
+                body.remove(mark)
+                body.insert(0, mark)
+                data = ET.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+            out.writestr(i, data)
+    return buf.getvalue()
+
+
+_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def test_a_bookmark_before_the_caption_is_not_a_line_of_the_front(firm_brief):
+    """The 2026-11-07 rehearsal: two of an attorney's briefs began with a body-level
+    bookmarkStart, the brief plan's front read it as a paragraph and raised
+    TypeError, and the hunt died on the first. Now it is skipped."""
+    from jobs.library_setup import plan
+
+    blob = _with_body_bookmark(firm_brief)
+    assert plan.fits(CLS, blob, _src(blob)) == ""
+    made = M.make(CLS, blob, _src(blob), FIRM)
+    assert made.residue["refused_words"] == 0
+
+
 def test_custom_xml_parts_and_their_pointers_go():
     memo = _firm_memo()
     assert any(n.startswith("customXml/") for n in _members(memo))
@@ -227,6 +323,7 @@ def test_what_the_drops_removed_is_counted_by_category(firm_brief):
     d = made.dropped
     assert (d["template_links"], d["document_variables"], d["external_links"], d["foreign_fields"]) == (1, 1, 1, 1)
     assert d["mail_merge"] == 0 and set(d) == {
+        "body_pictures",
         "custom_xml_parts",
         "template_links",
         "document_variables",

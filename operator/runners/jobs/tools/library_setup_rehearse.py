@@ -206,6 +206,7 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     shown = job_mod.candidates(hunted, client, args.kind)
     report.update(
         counts=dict(sorted(hunted.counts.items())),
+        dropped_files={k: list(v) for k, v in sorted(hunted.files.items())},
         candidates=[{k: c[k] for k in ("file_id", "saved_on", "score")} for c in shown],
     )
     if not shown or args.choose < 1 or args.choose > len(shown):

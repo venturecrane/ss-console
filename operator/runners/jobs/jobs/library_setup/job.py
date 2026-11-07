@@ -104,12 +104,12 @@ def _plan_fits(kind: str, c: hunt_mod.Candidate, client: Any, hunted: hunt_mod.H
     try:
         blob = client.download_file(c.matter_id, c.file_id)[1]
     except Exception:  # noqa: BLE001 - a file that cannot be read now is not listed, and is counted
-        hunted.bump("plan_unreadable")
+        hunted.note("plan_unreadable", c.file_id)
         return False
     why = fits(kind, blob, Source(c.matter_id, c.file_id, "", c.sha256))
     if why:
         hunted.bump("plan_refused")
-        hunted.bump(f"plan_refused_{why}")
+        hunted.note(f"plan_refused_{why}", c.file_id)
     return not why
 
 
@@ -187,7 +187,8 @@ def run(
     found = candidates(hunted, client, kind)
     counts = dict(sorted(hunted.counts.items()))
     outcome = CANDIDATES if found else NONE_FOUND
-    return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, **who)
+    dropped = {k: list(v) for k, v in sorted(hunted.files.items())}
+    return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, dropped_files=dropped, **who)
 
 
 def run_dir(job_dir: Path, *, inputs_dir: str | None = None, **kw: Any) -> dict[str, Any]:
