@@ -142,79 +142,6 @@ CUSTOMER_YAML="${SMD_CUSTOMER_YAML_PATH:-/opt/data/customer.yaml}"
 log "Using root-owned customer.yaml: ${CUSTOMER_YAML}"
 
 # ============================================================================
-# Step 2a: sync the voice vault to the volume (agent holds NO R2 credential)
-# ============================================================================
-# The voice plugin reads the customer's content-free voice samples from R2
-# (vaults/<slug>/voice/). We fetch them HERE at boot — with the same boot-time
-# creds used for the customer.yaml fetch above, which are STRIPPED before the
-# gateway exec (OP-P0-2) — and point the plugin at the local mirror via
-# SMD_VOICE_VAULT_DIR. Net: the agent process holds no R2 credential for voice,
-# yet voice works. Samples change only when an operator re-ingests a corpus (a
-# deliberate out-of-band action), so a boot snapshot is sufficient. This runs as
-# the hermes user (entrypoint already dropped privilege), so synced files are
-# hermes-owned — no extra chown, no race with entrypoint's blanket chown.
-export SMD_VOICE_VAULT_DIR="${HERMES_HOME:-/opt/data}/voice"
-# CONTENT-FREE CONTRACT (ss#2223 AC5): the seat mirrors ONLY cohort/ — the
-# content-free structural fingerprints (cohort/<cohort>/<id>.json) that
-# LocalVaultSampleReader consumes. Nothing else under vaults/<slug>/voice/
-# (e.g. a raw samples/ corpus staged during ingest) may ever land on a seat:
-# this fetch is SCOPED so it cannot write raw text, regardless of what sits
-# in R2.
-R2_VOICE_COHORT_PREFIX="s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/voice/cohort/"
-# Empty/absent vault is the COMMON case (no corpus ingested yet) and MUST NOT
-# fail the boot under `set -e`. Three states must stay DISTINCT (ss#2223): a
-# genuinely empty vault, a successful sync, and a FAILED probe. The pre-fix
-# code used `aws s3 ls ... 2>/dev/null | grep -q .` as the existence gate,
-# which collapsed "errored/propagation-lagged listing" into "no corpus
-# ingested" and silently left voice inactive while the samples sat in R2 at
-# the right keys. So: no separate LIST gate — `cp --recursive` IS the probe
-# (no-op success on an empty prefix), state is decided from the JSON that
-# actually landed, and cp's stderr is surfaced instead of discarded.
-#
-# Refresh-on-boot via stage + swap: the volume survives reprovision BY DESIGN,
-# so each boot must CONVERGE the mirror on authored R2 state (gone means gone)
-# — a sample deleted from R2 disappears from the seat on the next boot, and
-# any pre-scoping raw samples/ dir is swapped away. Staging keeps a FAILED
-# probe non-destructive: the previous mirror is retained for that boot.
-_voice_stage="${SMD_VOICE_VAULT_DIR}.stage"
-rm -rf "${_voice_stage}"
-mkdir -p "${_voice_stage}/cohort"
-_voice_cp_rc=0
-# `|| _voice_cp_rc=$?` keeps a failing probe from killing the boot: under
-# `set -e` a bare `var="$(failing cmd)"` assignment exits the script, which
-# would turn a transient R2 error into a seat crash-loop and makes the FAILED
-# branch below unreachable.
-_voice_cp_err="$(
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-  AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 cp --recursive --only-show-errors \
-      --endpoint-url "${R2_ENDPOINT_URL}" \
-      "${R2_VOICE_COHORT_PREFIX}" "${_voice_stage}/cohort/" 2>&1
-)" || _voice_cp_rc=$?
-# The reader consumes cohort/<cohort>/*.json; count those as the ground truth,
-# independent of the LIST view that made the old probe flaky.
-# `|| true` inside the count: with no cohort dir (a fresh volume, or a failed
-# fetch) find exits 1, pipefail fails the substitution, and set -e killed
-# bootstrap with no log line (found by the boot harness, 2026-10-28).
-_voice_n="$( { find "${_voice_stage}/cohort" -name '*.json' 2>/dev/null || true; } | wc -l | tr -d ' ')"
-if [ "${_voice_cp_rc}" -eq 0 ]; then
-  rm -rf "${SMD_VOICE_VAULT_DIR}"
-  mv "${_voice_stage}" "${SMD_VOICE_VAULT_DIR}"
-  if [ "${_voice_n}" -gt 0 ]; then
-    log "voice vault synced to ${SMD_VOICE_VAULT_DIR}: ${_voice_n} cohort sample(s) (agent holds no R2 credential for voice)"
-  else
-    log "voice vault empty at ${R2_VOICE_COHORT_PREFIX} (no corpus ingested) — voice stays inactive"
-  fi
-else
-  # DISTINCT from empty: the probe itself failed. Surface it — a silent failure
-  # here reads as "no corpus" and voice never activates (ss#2223). The stale
-  # mirror (if any) stays in place rather than losing voice to a transient.
-  rm -rf "${_voice_stage}"
-  _voice_prev_n="$( { find "${SMD_VOICE_VAULT_DIR}/cohort" -name '*.json' 2>/dev/null || true; } | wc -l | tr -d ' ')"
-  log "WARN: voice vault sync FAILED (rc=${_voice_cp_rc}) — previous mirror retained (${_voice_prev_n} cohort sample(s)) (non-fatal). aws: ${_voice_cp_err}"
-fi
-
-# ============================================================================
 # Step 2b: verify mediated Workspace broker readiness
 # ============================================================================
 # entrypoint.sh started the broker as a separate uid and removed every Google
@@ -955,13 +882,13 @@ log "Connector classification probe PASSED"
 # same-uid background child OR the gateway (OP-P0-2 + OP-P2-1,
 # docs/security/operator-threat-model.md). R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
 # are an ACCOUNT-WIDE R2 key (R/W on every bucket); their only in-Machine
-# consumers are the customer.yaml fetch (Step 2) and the voice-vault sync
-# (Step 2a) above — both BOOT-time and BOTH BEFORE this point. The agent's
-# skill-body writer uses the bucket-SCOPED R2_SKILL_BODIES_* pair plus
-# R2_ENDPOINT_URL (KEPT — an endpoint URL, not a credential); voice reads its
-# local SMD_VOICE_VAULT_DIR mirror.
+# consumer is the customer.yaml fetch (Step 2) above, BOOT-time and BEFORE this
+# point (the voice-vault sync that was Step 2a went with the sample-transform
+# voice mechanism, ss ADR 0083 decision 6). The agent's skill-body writer uses
+# the bucket-SCOPED R2_SKILL_BODIES_* pair plus R2_ENDPOINT_URL (KEPT — an
+# endpoint URL, not a credential).
 #
-# ORDERING IS LOAD-BEARING: this MUST stay AFTER Step 2/2a (which read the key)
+# ORDERING IS LOAD-BEARING: this MUST stay AFTER Step 2 (which reads the key)
 # and BEFORE the webhook-gate launch + the gateway exec. It previously sat just
 # before the exec — but the webhook gate is launched as a same-uid (hermes)
 # background child a few lines below, and a child forked BEFORE the unset KEEPS

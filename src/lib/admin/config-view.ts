@@ -9,7 +9,7 @@
  * so this surface displays what is authored.
  *
  * Several projected sections are opaque JSON (`scope`, `business_hours`,
- * `voice_library`, `escalation` are typed `unknown` in the frozen projection).
+ * `escalation` are typed `unknown` in the frozen projection).
  * Rather than guess their shape and risk fabricating a rendering, this module
  * answers only the honest question the surface can answer from any value:
  * "is this section configured?" — presence, not invented structure.

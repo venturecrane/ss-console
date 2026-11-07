@@ -47,7 +47,6 @@ kill_timeout = 300
 #   /opt/data/observations.db       — Honcho-mirror SQLite (ADR 0016)
 #   /opt/data/profiles/<slug>/      — Hermes per-persona profiles (ADR 0011)
 #   /opt/data/oauth/                — per-provider OAuth token files (ADR 0010)
-#   /opt/data/voice/samples-cache/  — voice samples warm cache (R2-backed)
 # 10GB headroom accommodates Postgres + Redis + SQLite growth and the voice
 # samples cache; we don't want to manage per-customer disk pressure.
 [mounts]
@@ -58,7 +57,7 @@ kill_timeout = 300
   # Hermes runtime
   HERMES_HOME = "/opt/data"
   CUSTOMER_SLUG = "{{CUSTOMER_SLUG}}"
-  # The SMD overlay plugins (audit, voice, webhook-router, trust, memory-mirror)
+  # The SMD overlay plugins (audit, webhook-router, trust, memory-mirror)
   # resolve the per-customer namespace via require("SMD_CUSTOMER_SLUG", ...). It
   # was never set here — only CUSTOMER_SLUG was — so every one of those plugins
   # bailed to its degraded no-op branch on customer-zero: audit emission never

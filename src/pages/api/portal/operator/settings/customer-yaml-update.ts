@@ -231,7 +231,6 @@ function parseFormToConfig(
 ): EditableCustomerConfig {
   return {
     personas: current.personas.map((cur, idx) => parsePersona(form, idx, cur)),
-    voiceLibrary: { samples_path: current.voiceLibrary.samples_path },
     escalation: {
       red_flag_recipients: asStringList(form.get('escalation.red_flag_recipients')),
       failure_recipients: asStringList(form.get('escalation.failure_recipients')),

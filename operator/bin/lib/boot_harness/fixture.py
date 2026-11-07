@@ -50,8 +50,6 @@ def _rehome(doc: dict[str, Any]) -> None:
         "r2_vault_path": f"vaults/{SLUG}/",
         "vectorize_index": f"hermes-{SLUG}-vault",
     }
-    if "voice_library" in doc:
-        doc["voice_library"] = {"samples_path": f"r2://vaults/{SLUG}/voice/samples/"}
     for user in doc.get("users") or []:
         user["email"] = NOBODY
     escalation = doc.get("escalation")

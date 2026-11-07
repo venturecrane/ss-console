@@ -1551,7 +1551,6 @@ def _persona_config(
         "connectors": customer.get("connectors") or {},
         "scope": customer.get("scope") or {},
         "escalation": customer.get("escalation") or {},
-        "voice_library": customer.get("voice_library") or {},
         "memory": _memory_block(customer),
         # No memory-provider block: Phase 1 runs on Hermes' always-on
         # flat-file core (MEMORY.md / USER.md). Honcho (inferred memory)

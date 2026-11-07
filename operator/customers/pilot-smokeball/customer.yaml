@@ -1342,55 +1342,6 @@ self_initiation:
       client_contact_name: 'SMD Operations'
       matter_type_name: 'Personal Injury - Plaintiff'
 
-# ---- VOICE COHORTS ----
-# The audience classes this seat's voice profiles are partitioned by. An
-# authored list REPLACES the base vocabulary (client / opposing-counsel /
-# court / internal) rather than extending it — resolveCohortVocabulary,
-# src/lib/operator/customer-yaml/sections-voice.ts — so every cohort this seat
-# uses is listed here, including the base members it keeps.
-#
-# The rehearsal corpus (seed/voice/) maps onto these by its `audience`
-# frontmatter. The mapping is EXPLICIT (passed to bin/voice-fetch-corpus.py
-# --audience-map), never substring luck, and an unmapped audience is excluded
-# from ingestion rather than defaulted into the wrong cohort:
-#
-#   "client (...)"           -> client      (04, 05, 10, 12, 13 = 5 samples)
-#   "claims adjuster (...)"  -> adjuster    (01, 02, 03, 06 = 4 samples)
-#   "opposing counsel (...)" -> opposing-counsel (07 = 1 sample)
-#   "neutral (mediator)"     -> UNMAPPED, excluded (08, 09 are greeting-less
-#                               brief excerpts; they would pollute modal
-#                               greeting/signoff stats)
-#   "prospective client (declined)" -> UNMAPPED, excluded (11: a declination
-#                               is a different register from client status)
-#
-# Only `client` clears the profile floor. That is deliberate: the hard floor is
-# MIN_PROFILE_SAMPLE_COUNT = 5, re-checked on the RESOLVED profile at
-# adapter/voice/transform.py:751 regardless of min_samples_per_cohort below, so
-# a sub-floor cohort yields PASSTHROUGH_INSUFFICIENT_PROFILE rather than a
-# thin profile. adjuster/opposing-counsel are ingested for realism and are
-# inert until their sample counts grow. Do NOT merge adjuster into client to
-# clear the floor — blending adversarial demand register into client-status
-# drafts is exactly the failure the cohort partition exists to prevent.
-voice_cohorts:
-  cohorts:
-    - client
-    - adjuster
-    - opposing-counsel
-    # court authored 2026-08-10 (Captain: court is an intended audience — the
-    # mediation/tribunal register). Below the profile floor until its sample
-    # count grows; inert, not deleted.
-    - court
-  min_samples_per_cohort: 5
-
-# ---- VOICE LIBRARY ----
-# METADATA ONLY. Nothing reads this path at runtime: the Machine derives the
-# vault prefix from the customer slug and syncs `vaults/<slug>/voice/` to the
-# volume at BOOT (operator/templates/bootstrap.sh:157), and ingested samples
-# land under `vaults/<slug>/voice/cohort/<cohort>/`. Kept for the config-plane
-# consumers (schema validation, the portal YAML editor, the D1 projection).
-voice_library:
-  samples_path: 'r2://vaults/pilot-smokeball/voice/'
-
 # ---- MEMORY (per-customer isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: pilot-smokeball

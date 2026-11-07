@@ -143,7 +143,6 @@ def test_autonomous_send_with_sensitive_html_body_is_downgraded(enforce, monkeyp
         lambda slug="": {enforce.ActionClass.EXTERNAL_SEND: enforce.Ceiling.AUTONOMOUS},
     )
     monkeypatch.setenv("HERMES_ACTIVE_PROFILE", "marcus")
-    monkeypatch.setattr(enforce.voice_gate, "_voice_authored", lambda: False)
     result = enforce.evaluate_tool_call(
         "agentmail:send_message",
         {"subject": _BENIGN_SUBJECT, "html_body": _SENSITIVE_HTML},
@@ -162,7 +161,6 @@ def test_autonomous_send_with_clean_html_body_still_sends(enforce, monkeypatch) 
         lambda slug="": {enforce.ActionClass.EXTERNAL_SEND: enforce.Ceiling.AUTONOMOUS},
     )
     monkeypatch.setenv("HERMES_ACTIVE_PROFILE", "marcus")
-    monkeypatch.setattr(enforce.voice_gate, "_voice_authored", lambda: False)
     result = enforce.evaluate_tool_call(
         "agentmail:send_message",
         {"subject": "Quick reply", "html_body": _CLEAN_HTML},
@@ -170,3 +168,8 @@ def test_autonomous_send_with_clean_html_body_still_sends(enforce, monkeypatch) 
         session_id="sess-2297",
     )
     assert result is None
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

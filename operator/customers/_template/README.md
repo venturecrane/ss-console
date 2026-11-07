@@ -55,7 +55,7 @@ The seat's `seat.product` value names the offering whose commercial terms the se
 
 ## Voice samples
 
-Voice samples live in R2 under `vaults/{firm-slug}/voice/samples/`, not in this directory. The pipeline stores structural-diffs, not raw text. See `docs/specs/operator/voice-ingestion.md`. The provisioning script does not move voice samples on its own; Captain ingests them per the runbook.
+A firm's voice is distilled by a person from documents the firm names on its matters (ss ADR 0083, mechanism A; the read-in-place bridge is `operator/bin/voice-fetch-corpus.py`). The sample-transform voice library that once lived under `vaults/{firm-slug}/voice/` was retired with ADR 0083 decision 6 (2026-11-07); a seat authors no `voice_library` or `voice_cohorts` block, and both validators refuse one.
 
 ## What does NOT belong here
 

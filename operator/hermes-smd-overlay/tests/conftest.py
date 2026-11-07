@@ -164,3 +164,17 @@ def authors_everything(monkeypatch, tmp_path_factory) -> Path:
     )
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
     return path
+
+
+@pytest.fixture
+def voice_certified(monkeypatch):
+    """The voice gate treats this test's autonomous outside send as certified.
+
+    Since the sample-transform fallback was replaced by a fail-closed one (ss ADR
+    0083 decision 6), an autonomous outside send of a class that declares no voice
+    spec is always a draft. A test of ANOTHER gate on that path (the content
+    floor, the matter gate, send-as, the recipient class) states that the voice
+    gate is not what it is testing by using this fixture; the voice gate's own
+    behaviour is tested in test_voice_live_gate.py and test_voice_gate_spec_regime.py."""
+    plugin = load_plugin("hermes-smd-trust")
+    monkeypatch.setattr(plugin.enforce.voice_gate, "check_voice_gate", lambda **_kw: None)

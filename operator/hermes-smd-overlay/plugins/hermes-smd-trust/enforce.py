@@ -2043,13 +2043,12 @@ def _evaluate_tool_call(
         # typed client / records-vendor classes) impersonates the principal's
         # voice with no human review — confirm / draft / refused already route to
         # a human, and external_send_internal is ops traffic, so it is out of
-        # scope. The gate resolves its binding regime per (seat × output class),
-        # ADDITIVELY: a class declared `output_classes.<class>.voice_spec:
-        # expected` is governed by the authored-spec binding (installed +
-        # hash-verified + read this turn), and every OTHER class keeps the
-        # original voice_library / transform-ran binding — silent only on a seat
-        # that authored neither. When bound it downgrades to draft (same
-        # block-directive plumbing as the content floor).
+        # scope. The gate resolves its regime per (seat × output class): a class
+        # declared `output_classes.<class>.voice_spec: expected` is governed by
+        # the authored-spec binding (installed + hash-verified + read this turn),
+        # and every OTHER class is undeclared and downgrades (the sample-transform
+        # fallback's fail-closed replacement, ss ADR 0083 decision 6). A downgrade
+        # uses the same block-directive plumbing as the content floor.
         if decision.effective_ceiling == Ceiling.AUTONOMOUS:
             voice_block = voice_gate.check_voice_gate(
                 tool_name=tool_name,

@@ -123,7 +123,6 @@ function validFixture(): Record<string, unknown> {
 
 function withFullOptionals(): Record<string, unknown> {
   const f = validFixture()
-  f['voice_library'] = { samples_path: 'r2://vaults/smith-pi-firm/voice-samples/' }
   f['business_hours'] = {
     timezone: 'America/Phoenix',
     days: ['mon', 'tue', 'wed', 'thu', 'fri'],
@@ -1298,172 +1297,32 @@ describe('validate — users[].voice_profile_id (#858)', () => {
 })
 
 // -----------------------------------------------------------------------------
-// voice_cohorts — per-recipient cohort taxonomy (#857)
-//
-// Customers declare the cohort vocabulary their voice samples are
-// partitioned into. Omission accepts the BASE_VOICE_COHORTS default;
-// presence requires a non-empty slug list with unique entries.
+// The audience and sample-library blocks, retired with the sample-transform
+// voice mechanism: authoring either is refused.
 // -----------------------------------------------------------------------------
 
-describe('validate — voice_cohorts (#857)', () => {
-  it('accepts customer.yaml with no voice_cohorts block (defaults to base)', () => {
+describe('validate — keys retired with the sample-transform voice mechanism (ADR 0083 decision 6)', () => {
+  it('accepts a customer.yaml with neither key', () => {
     const r = validate(validFixture())
     if (!r.ok) {
       throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
     }
-    expect(r.value.voice_cohorts).toBeNull()
+    expect('voice_library' in r.value).toBe(false)
+    expect('voice_cohorts' in r.value).toBe(false)
   })
 
-  it('accepts a customer-extended cohort list', () => {
+  it.each([
+    ['voice_library', { samples_path: 'r2://vaults/x/voice/samples/' }],
+    ['voice_cohorts', { cohorts: ['client'] }],
+  ])('refuses %s when a seat still authors it', (key, value) => {
     const f = validFixture()
-    f['voice_cohorts'] = {
-      cohorts: ['client', 'opposing-counsel', 'court', 'internal', 'mediator'],
-    }
-    const r = validate(f)
-    if (!r.ok) {
-      throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
-    }
-    expect(r.value.voice_cohorts?.cohorts).toEqual([
-      'client',
-      'opposing-counsel',
-      'court',
-      'internal',
-      'mediator',
-    ])
-    expect(r.value.voice_cohorts?.min_samples_per_cohort).toBeNull()
-  })
-
-  it('accepts a customer-dropped cohort list (no court for transactional firms)', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = {
-      cohorts: ['client', 'opposing-counsel', 'internal'],
-    }
-    const r = validate(f)
-    if (!r.ok) {
-      throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
-    }
-    expect(r.value.voice_cohorts?.cohorts).toHaveLength(3)
-  })
-
-  it('accepts voice_cohorts with min_samples_per_cohort override', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = {
-      cohorts: ['client', 'opposing-counsel'],
-      min_samples_per_cohort: 12,
-    }
-    const r = validate(f)
-    if (!r.ok) {
-      throw new Error(`expected ok; got: ${JSON.stringify(r.errors)}`)
-    }
-    expect(r.value.voice_cohorts?.min_samples_per_cohort).toBe(12)
-  })
-
-  it('rejects voice_cohorts as a non-object', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = 'client,opposing-counsel'
+    f[key] = value
     const r = validate(f)
     expect(r.ok).toBe(false)
     if (r.ok) return
-    expect(r.errors.some((e) => e.path === 'voice_cohorts' && e.code === 'TypeMismatch')).toBe(true)
-  })
-
-  it('rejects voice_cohorts without a cohorts field', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { min_samples_per_cohort: 8 }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(
-      r.errors.some((e) => e.path === 'voice_cohorts.cohorts' && e.code === 'MissingField')
-    ).toBe(true)
-  })
-
-  it('rejects voice_cohorts.cohorts that is empty', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: [] }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('EmptyList')
-  })
-
-  it('rejects voice_cohorts.cohorts entries that are not strings', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: ['client', 42, 'court'] }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(
-      r.errors.some((e) => e.path === 'voice_cohorts.cohorts[1]' && e.code === 'TypeMismatch')
-    ).toBe(true)
-  })
-
-  it('rejects cohort slugs that fail the slug pattern', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: ['Client', 'opposing_counsel'] }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('InvalidSlug')
-  })
-
-  it('rejects duplicate cohort slugs', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: ['client', 'opposing-counsel', 'client'] }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('DuplicateVoiceCohort')
-    expect(r.errors.some((e) => e.path === 'voice_cohorts.cohorts[2]')).toBe(true)
-  })
-
-  it('rejects min_samples_per_cohort ≤ 0', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: ['client'], min_samples_per_cohort: 0 }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(
-      r.errors.some(
-        (e) => e.path === 'voice_cohorts.min_samples_per_cohort' && e.code === 'TypeMismatch'
-      )
-    ).toBe(true)
-  })
-
-  it('rejects non-integer min_samples_per_cohort', () => {
-    const f = validFixture()
-    f['voice_cohorts'] = { cohorts: ['client'], min_samples_per_cohort: 5.5 }
-    const r = validate(f)
-    expect(r.ok).toBe(false)
-    if (r.ok) return
-    expect(codesOf(r.errors)).toContain('TypeMismatch')
+    expect(r.errors.some((e) => e.path === key && e.code === 'BannedFieldName')).toBe(true)
   })
 })
-
-// -----------------------------------------------------------------------------
-// resolveCohortVocabulary — small helper that materializes the default
-// -----------------------------------------------------------------------------
-
-describe('resolveCohortVocabulary (#857)', () => {
-  it('returns BASE_VOICE_COHORTS when voice_cohorts is null', async () => {
-    const { resolveCohortVocabulary, BASE_VOICE_COHORTS } =
-      await import('../src/lib/operator/customer-yaml')
-    expect(resolveCohortVocabulary(null)).toEqual(BASE_VOICE_COHORTS)
-  })
-
-  it('returns the customer cohort list when present', async () => {
-    const { resolveCohortVocabulary } = await import('../src/lib/operator/customer-yaml')
-    const resolved = resolveCohortVocabulary({
-      cohorts: ['client', 'mediator'],
-      min_samples_per_cohort: null,
-    })
-    expect(resolved).toEqual(['client', 'mediator'])
-  })
-})
-
-// -----------------------------------------------------------------------------
-// memory.retention block — audit-retention.md (#893)
-// -----------------------------------------------------------------------------
 
 describe('validate — memory.retention', () => {
   function withRetention(retention: Record<string, unknown>): Record<string, unknown> {

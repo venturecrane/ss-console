@@ -325,13 +325,6 @@ escalation:
   failure_recipients:
     - staging@smd-staging.invalid
 
-# ---- VOICE LIBRARY ----
-# Same path shape as smd. A copy of smd's content-free structural-diff samples
-# is staged under vaults/smd-staging/voice/ at setup so the POPULATED voice path
-# is exercised end-to-end on staging.
-voice_library:
-  samples_path: 'r2://vaults/smd-staging/voice/samples/'
-
 # ---- MATTER FILES ON A STAFF REPLY (ADR 0102) ----
 # Who may receive a matter's files from this seat: the Captain's own address,
 # the sender of the staging send proof for the records lane (amendment 4,

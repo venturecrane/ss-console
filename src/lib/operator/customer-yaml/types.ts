@@ -404,23 +404,6 @@ export function isAcceptedCronSchedule(s: string): boolean {
 export const WEBHOOK_URL_PATTERN =
   /^https:\/\/hermes-([a-z0-9][a-z0-9-]{0,31})\.fly\.dev\/webhooks\/[a-z_]+$/
 
-/**
- * Base recipient-cohort taxonomy used by Layer 2 voice transform and
- * the blind-test gate (PRD §9.3 Layer 3 + §9.6 Gate 3). Customers may
- * extend this set via `voice_cohorts:` on customer.yaml; the base set
- * is what every customer ships with by default when the field is
- * omitted.
- *
- * Slug names line up with the voice-gate harness
- * (`operator/voice-gate/types.ts :: RecipientCohort`). The harness
- * historically shipped three cohorts (`client`, `opposing-counsel`,
- * `internal-team`); #857 lifts the cohort vocabulary into the schema
- * and adds `court` as the fourth base cohort to match the PRD §17.1
- * cohort framing.
- */
-export const BASE_VOICE_COHORTS = ['client', 'opposing-counsel', 'court', 'internal'] as const
-export type BaseVoiceCohort = (typeof BASE_VOICE_COHORTS)[number]
-
 export interface CostEstimate {
   tokens_in_per_run: number
   tokens_out_per_run: number
@@ -1193,36 +1176,6 @@ export interface Memory {
   user_profile_enabled?: boolean
 }
 
-export interface VoiceLibrary {
-  samples_path: string | null
-}
-
-/**
- * Voice cohort taxonomy declared on customer.yaml. Drives
- * Layer 2 voice transform's per-cohort selection and the blind-test
- * gate's per-cohort scoring. Source-of-truth for which cohorts the
- * customer's sent folder is partitioned into.
- *
- * Schema rules:
- *   - `cohorts:` is an OPTIONAL list of slugs. Omission means the
- *     customer accepts the base taxonomy (BASE_VOICE_COHORTS).
- *   - When present, the list is the canonical cohort vocabulary for
- *     this customer. It MAY add custom cohorts beyond the base set
- *     (e.g. `expert-witness`, `mediator`), and it MAY drop cohorts
- *     the customer's practice does not use (e.g. a transactional
- *     firm with no `court` cohort). It MUST include at least one slug
- *     when the field is present.
- *   - Each cohort slug must match COHORT_SLUG_PATTERN.
- *   - Cohort slugs must be unique within `voice_cohorts.cohorts[]`.
- *   - `min_samples_per_cohort` overrides the per-cohort floor for the
- *     Layer 2 transform's fallback ladder (per-(user,cohort) →
- *     per-user → general). When omitted the module default applies.
- */
-export interface VoiceCohorts {
-  cohorts: string[]
-  min_samples_per_cohort: number | null
-}
-
 /**
  * What a seat IS — the two facts that do not change over its life.
  *
@@ -1234,6 +1187,14 @@ export interface VoiceCohorts {
  *
  * Deliberately carries NO lifecycle state. See sections-seat.ts for why.
  */
+/**
+ * Top-level keys retired with the sample-transform voice mechanism (ss ADR 0083
+ * decision 6, 2026-11-07). A file that still authors one is refused, so the
+ * mechanism cannot come back through config. Mirrors the overlay's
+ * `bootstrap/validate.py` RETIRED_TOP_LEVEL_FIELDS.
+ */
+export const RETIRED_TOP_LEVEL_FIELDS = ['voice_library', 'voice_cohorts'] as const
+
 export const SEAT_KINDS = ['customer', 'proving', 'sandbox', 'internal', 'preprod'] as const
 export type SeatKind = (typeof SEAT_KINDS)[number]
 
@@ -1506,8 +1467,6 @@ export interface CustomerYaml {
   escalation: Escalation
   /** Reply-channel send-rate policy (#2070); null when unauthored (platform defaults apply on-box). */
   send_policy: SendPolicy | null
-  voice_library: VoiceLibrary | null
-  voice_cohorts: VoiceCohorts | null
   /** What this seat IS. Kind and product only — state is derived, never authored. */
   seat: Seat | null
   /** People on a multi-person seat (ADR 0091). Present only when authored. */
@@ -1623,7 +1582,6 @@ export type ValidationErrorCode =
   | 'RetentionOverrideBelowDefault'
   | 'RetentionOverrideUnreasonable'
   | 'DuplicateVoiceProfileId'
-  | 'DuplicateVoiceCohort'
   | 'DuplicateBundleSlug'
   | 'UnknownBundleSkill'
   | 'InvalidCronSchedule'

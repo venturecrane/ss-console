@@ -282,3 +282,8 @@ def test_single_matter_send_is_not_downgraded(autonomous_seat, recorded) -> None
     _content_read(M_A)
     result = _send(CLIENT_A, "Following up as discussed.")
     assert result is None or result.get("action") != "block"
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

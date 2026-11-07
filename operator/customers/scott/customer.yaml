@@ -236,10 +236,6 @@ telegram:
   allow_from:
     - '7367659986'
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/scott/voice/samples/'
-
 # ---- MEMORY (isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: scott

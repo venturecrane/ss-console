@@ -71,7 +71,6 @@ _STATE_PATHS: dict[str, str] = {
     "SMD_SENT_LINES_DIR": "sent_lines",
     "SMD_SPEC_DIR": "spec",
     "SMD_STICKY_STOP_DB_PATH": "smd/sticky_stop.db",
-    "SMD_VOICE_VAULT_DIR": "voice_vault",
 }
 
 #: The two model transports. ``anthropic_messages`` is what every seat runs;

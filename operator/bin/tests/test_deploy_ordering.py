@@ -112,19 +112,21 @@ def test_r2_account_key_strip_before_any_same_uid_child() -> None:
 
 
 def test_r2_account_key_strip_after_the_boot_time_fetches() -> None:
-    """The strip must stay AFTER the last `aws s3 cp` that reads the key.
+    """The strip must stay AFTER every `aws s3 cp` that reads the key.
 
-    The customer.yaml fetch (Step 2) and voice-vault sync (Step 2a) consume the
-    account-wide key; moving the strip before them breaks the boot. This pins the
-    lower bound so the strip can't be hoisted too far.
+    Until 2026-11-07 the voice-vault sync (Step 2a) read the account-wide key in
+    this file; it went with the sample-transform voice mechanism (ss ADR 0083
+    decision 6), and the customer.yaml fetch is the root entrypoint's, before the
+    hermes drop. So no fetch here reads the key, and none may be added after the
+    strip: the strip still exists, and every fetch that remains is above it.
     """
     lines = _code_lines(_BOOTSTRAP)
     strip_idx = _first_index(lines, r"\bunset\b.*\bR2_ACCESS_KEY_ID\b")
+    assert strip_idx != -1, "the R2 account-key strip is gone from bootstrap.sh"
     last_s3_cp = max(
         (i for i, line in enumerate(lines) if re.search(r"\baws\s+s3\s+cp\b", line)),
         default=-1,
     )
-    assert last_s3_cp != -1, "could not find any `aws s3 cp` in bootstrap.sh"
     assert strip_idx > last_s3_cp, (
         f"the R2 key strip (line {strip_idx + 1}) must run AFTER the last `aws s3 cp` "
         f"(line {last_s3_cp + 1}) that reads the key, or the boot-time fetches break."

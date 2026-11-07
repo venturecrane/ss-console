@@ -59,7 +59,7 @@ import {
   checkLogging,
   checkMemory,
   checkPause,
-  checkVoiceLibrary,
+  checkRetiredFields,
 } from './sections-other'
 import { checkEscalation } from './sections-escalation'
 import { checkSendPolicy } from './sections-send-policy'
@@ -70,7 +70,6 @@ import { checkTelegram } from './sections-telegram'
 import { checkPeople, checkSpaceMode, checkSpaces } from './sections-people'
 import { checkRecordStores } from './sections-record-stores'
 import { checkObservability } from './sections-observability'
-import { checkVoiceCohorts } from './sections-voice'
 import { checkSeat } from './sections-seat'
 import { checkOutputClasses } from './sections-output-classes'
 import { checkWebhookTriggers } from './sections-webhook-triggers'
@@ -111,9 +110,6 @@ export type {
   SendPolicyReply,
   Memory,
   MemoryRetention,
-  VoiceLibrary,
-  VoiceCohorts,
-  BaseVoiceCohort,
   BusinessHours,
   Logging,
   Pause,
@@ -156,7 +152,6 @@ export {
   ACCEPTED_CASE_MANAGER_LEVELS,
   ACCEPTED_DATE_PREP_STEPS,
   AUDIT_LOG_DAYS_MAX,
-  BASE_VOICE_COHORTS,
   OBSERVABILITY_DEFAULTS,
   SEMVER_PATTERN,
   SYNC_SOURCES,
@@ -166,7 +161,6 @@ export {
   type AddonSpec,
   type SyncSource,
 } from './types'
-export { resolveCohortVocabulary } from './sections-voice'
 export {
   ACCEPTED_AUTHORITY_DEFAULTS,
   ACCEPTED_AUTHORITY_HOLDERS,
@@ -256,8 +250,7 @@ interface ParsedSections {
   escalation: ReturnType<typeof checkEscalation>
   sendPolicy: ReturnType<typeof checkSendPolicy>
   memory: Memory | null
-  voiceLibrary: ReturnType<typeof checkVoiceLibrary>
-  voiceCohorts: ReturnType<typeof checkVoiceCohorts>
+  retired: void
   seat: ReturnType<typeof checkSeat>
   outputClasses: ReturnType<typeof checkOutputClasses>
   businessHours: ReturnType<typeof checkBusinessHours>
@@ -335,8 +328,7 @@ function validateSections(
     escalation,
     sendPolicy,
     memory,
-    voiceLibrary: checkVoiceLibrary(root, errors),
-    voiceCohorts: checkVoiceCohorts(root, errors),
+    retired: checkRetiredFields(root, errors),
     seat: checkSeat(root, errors),
     outputClasses: checkOutputClasses(root, errors),
     businessHours: checkBusinessHours(root, errors),
@@ -378,8 +370,6 @@ function assembleCustomerYaml(root: Record<string, unknown>, p: ParsedSections):
     scope: p.scope,
     escalation: p.escalation,
     send_policy: p.sendPolicy,
-    voice_library: p.voiceLibrary,
-    voice_cohorts: p.voiceCohorts,
     seat: p.seat,
     output_classes: p.outputClasses,
     business_hours: p.businessHours,

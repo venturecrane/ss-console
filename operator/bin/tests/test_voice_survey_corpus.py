@@ -820,15 +820,9 @@ def test_a_read_that_fails_does_not_end_the_survey():
 
 
 def test_cohort_vocabulary_comes_from_the_shared_loader(tmp_path: Path):
-    """One parser, shared with the fetch bridge — two copies would drift, and
-    the drift shows up as a manifest the bridge refuses."""
-    yaml_path = tmp_path / "customer.yaml"
-    yaml_path.write_text(
-        "customer_id: pilot\nvoice_cohorts:\n  cohorts:\n    - client\n"
-        "    - adjuster\n    - opposing-counsel\n  min_samples_per_cohort: 5\n",
-        encoding="utf-8",
-    )
-    assert vsc.load_cohort_vocabulary(str(yaml_path)) == VOCAB
+    """One vocabulary, shared with the fetch bridge, fixed in code."""
+    assert vsc.load_cohort_vocabulary(None) == vsc.BASE_COHORTS
+    assert VOCAB <= vsc.BASE_COHORTS
 
 
 def test_empty_firm_name_is_refused(capsys):

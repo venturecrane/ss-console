@@ -330,10 +330,6 @@ escalation:
 #     templates:
 #       letter: '[optional: the firm letterhead file name in the folder]'
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/[FIRM-SLUG]/voice/samples/'
-
 # ---- MEMORY (isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: '[FIRM-SLUG]'

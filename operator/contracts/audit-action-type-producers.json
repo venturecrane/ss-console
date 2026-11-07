@@ -179,18 +179,18 @@
     },
     "VOICE_GATE_PASSED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-voice (voice gate)",
-      "reason": "the voice gate runs in the runtime voice plugin on draft emission."
+      "overlayProducer": "none since 2026-11-07: named the sample-transform voice plugin, removed with ss ADR 0083 decision 6, which never wrote this type; the live voice gate writes VOICE_GATE_TRIGGERED",
+      "reason": "kept in the vocabulary so a historical row still reads; no seat process writes it."
     },
     "VOICE_GATE_NEAR_PASS": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-voice (voice gate)",
-      "reason": "the voice gate runs in the runtime voice plugin on draft emission."
+      "overlayProducer": "none since 2026-11-07: named the sample-transform voice plugin, removed with ss ADR 0083 decision 6, which never wrote this type; the live voice gate writes VOICE_GATE_TRIGGERED",
+      "reason": "kept in the vocabulary so a historical row still reads; no seat process writes it."
     },
     "VOICE_GATE_FAILED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-voice (voice gate)",
-      "reason": "the voice gate runs in the runtime voice plugin on draft emission."
+      "overlayProducer": "none since 2026-11-07: named the sample-transform voice plugin, removed with ss ADR 0083 decision 6, which never wrote this type; the live voice gate writes VOICE_GATE_TRIGGERED",
+      "reason": "kept in the vocabulary so a historical row still reads; no seat process writes it."
     },
     "FABRICATION_FILTER_TRIGGERED": {
       "side": "overlay",

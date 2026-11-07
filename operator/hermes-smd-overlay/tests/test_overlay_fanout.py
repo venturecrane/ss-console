@@ -66,12 +66,11 @@ def env(monkeypatch, tmp_path):
     return tmp_path
 
 
-# The five functional plugins whose activation is the governance guarantee, plus
+# The four functional plugins whose activation is the governance guarantee, plus
 # the two auxiliaries the manifest also declares.
 _FUNCTIONAL = {
     "hermes-smd-audit",
     "hermes-smd-trust",
-    "hermes-smd-voice",
     "hermes-smd-memory-mirror",
     "hermes-smd-webhook-router",
     "hermes-smd-workspace",

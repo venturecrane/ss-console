@@ -520,3 +520,8 @@ def test_typed_classifier_unknown_recipient_is_hard_error_class():
     assert classify_recipients_typed(["garbage"], [], typed) is RecipientClass.UNKNOWN
     with pytest.raises(UnclassifiedRecipientError):
         send_action_class(RecipientClass.UNKNOWN)
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

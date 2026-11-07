@@ -13,7 +13,8 @@
 
 /**
  * Recipient cohort for blind-test framing. Aligned with the schema's
- * `BASE_VOICE_COHORTS` (`src/lib/operator/customer-yaml/types.ts`).
+ * audience vocabulary (`operator/bin/lib/voice_corpus.py` BASE_COHORTS; the schema's
+ * cohort block was retired with ADR 0083 decision 6).
  *
  * v1 base cohorts per PRD §9.3 Layer 3: `client`, `opposing-counsel`,
  * `court`, `internal`. Issue #857 added `court` and `internal` to the
@@ -22,9 +23,7 @@
  * `internal-team` is preserved as a legacy alias so archived blind-
  * test runs scored against the old PR-#857-predates label keep
  * rendering. New runs should use `internal`. The legacy slug stays in
- * the union but does NOT appear in `BASE_VOICE_COHORTS`; customers
- * who want it must opt in via their own `voice_cohorts.cohorts[]`
- * declaration.
+ * the union but does NOT appear in the fixed audience vocabulary.
  *
  * New cohorts must be added here AND threaded through the panel +
  * fixture loader + scoring; the closed union prevents silent drift.
