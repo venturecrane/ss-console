@@ -158,7 +158,12 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
 
 
 def accept_dry(
-    kind: str, client: Any, candidate: dict[str, Any], matter_id: str, inputs: str | None, donors: list[Any] = ()
+    kind: str,
+    client: Any,
+    candidate: dict[str, Any],
+    matter_id: str,
+    inputs: str | None,
+    donors: list[Any] | None = None,
 ) -> dict[str, Any]:
     """The accept job's checks on one candidate, writing nothing: adopt and clean,
     custom XML dropped, headers and footers judged against the firm's identity
@@ -170,7 +175,7 @@ def accept_dry(
     from jobs.library_setup import accept as accept_mod, make as make_mod
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
-    choice = {"file_id": candidate["file_id"], "matter_id": matter_id, "chart_donors": list(donors)}
+    choice = {"file_id": candidate["file_id"], "matter_id": matter_id, "chart_donors": list(donors or [])}
     try:
         made, chart_source = accept_mod._made({"setup_kind": kind}, blob, choice, inputs, None, client)
     except make_mod.Unusable as exc:
