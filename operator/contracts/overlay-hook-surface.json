@@ -48,7 +48,7 @@
     "post_llm_call": {
       "plugin": "hermes-smd-audit",
       "safetyCritical": false,
-      "purpose": "audit + voice gate on generated output"
+      "purpose": "audit on generated output"
     },
     "pre_llm_call": {
       "plugin": "hermes-smd-inbound",
@@ -75,7 +75,8 @@
     "hermes-smd-audit",
     "hermes-smd-trust",
     "hermes-smd-memory-mirror",
-    "hermes-smd-webhook-router"
+    "hermes-smd-webhook-router",
+    "hermes-smd-inbound"
   ],
   "adapterRegisterAliases": {
     "spec": "docs/specs/operator/aie-adapter-register.md",

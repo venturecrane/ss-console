@@ -248,27 +248,14 @@ def test_provenance_ties_documents_to_corpus_ids(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_emitted_corpus_feeds_the_real_ingester_leak_guard(tmp_path: Path):
-    """The bridge's output must produce content-free samples through the REAL
-    differ + leak invariant — the join this whole script exists to make."""
-    from bin.lib.voice_corpus import build_sample
-
-    docs = [
-        vfc.FetchedDoc(
-            "id-1",
-            "client",
-            "Dear Errol,\n\nThe demand went out May 12. Bayline has it.\n\nYours,\nLuisa",
-            "Nakashima",
-            "m-1",
-            "june.docx",
-            "f-1",
-            "smokeball:m-1/f-1",
-        )
-    ]
+def test_emitted_corpus_carries_each_document_whole_under_its_cohort(tmp_path: Path):
+    """The bridge's output is what a person distils the firm's voice from (ADR 0083,
+    mechanism A): one row per document, its text whole, filed under its audience.
+    (Until 2026-11-07 this fed the sample-transform ingester, removed with
+    decision 6; the join to the reader of the corpus is what is tested now.)"""
+    text = "Dear Errol,\n\nThe demand went out May 12. Bayline has it.\n\nYours,\nLuisa"
+    docs = [vfc.FetchedDoc("id-1", "client", text, "Nakashima", "m-1", "june.docx", "f-1", "smokeball:m-1/f-1")]
     written = vfc.write_corpus(docs, str(tmp_path / "corpus.jsonl"))
-    row = json.loads(Path(written["client"]).read_text().splitlines()[0])
-    sample = build_sample(row["text"], slug="pilot-smokeball", cohort="client")
-    assert sample.r2_key.startswith("vaults/pilot-smokeball/voice/cohort/client/")
-    blob = sample.diff_bytes.decode()
-    for leaked in ("Errol", "Bayline", "Luisa", "demand"):
-        assert leaked not in blob
+    assert set(written) == {"client"}
+    rows = [json.loads(line) for line in Path(written["client"]).read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]["text"] == text and rows[0]["id"] == "id-1"
