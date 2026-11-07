@@ -17,6 +17,9 @@ THE ORDER, ALL IN CODE (no model call anywhere in this job):
 4. At most ``TOP`` candidates whose length is in the kind's band, each with its
    file id, saved-at date and the matter's number.
 
+A job whose ``mode`` is ``accept`` is the administrator's choice from such a
+list (``accept.py``).
+
 THE VERDICT carries ids, dates, numbers, counts and codes, never a file name or
 any text of a document (the hunt's names carry client names). It is the one
 thing the lane records. State:
@@ -97,6 +100,8 @@ def candidates(hunted: hunt_mod.Hunted, client: Any) -> list[dict[str, Any]]:
     return [
         {
             "file_id": c.file_id,
+            "matter_id": c.matter_id,
+            "sha256": c.sha256,
             "matter_number": _matter_number(client, c.matter_id),
             "saved_on": _date(c.saved_at),
             "score": c.score,
@@ -167,6 +172,10 @@ def run_dir(job_dir: Path, *, inputs_dir: str | None = None, **kw: Any) -> dict[
         return _held(BAD_JOB, False)
     if not isinstance(job, dict):
         return _held(BAD_JOB, False)
+    if job.get("mode") == "accept":
+        from . import accept
+
+        return accept.run(job, Path(job_dir), inputs_dir=inputs_dir, **kw)
     return run(job, inputs_dir=inputs_dir, **kw)
 
 

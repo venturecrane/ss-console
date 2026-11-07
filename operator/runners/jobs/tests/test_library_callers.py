@@ -113,6 +113,10 @@ WORD_WRITERS = {
     f"{JOBS}/drafting/briefpage.py": "edits the rendered file in place (brief page rules)",
     f"{JOBS}/drafting/revise/inplace.py": "a revision, edited in the filed document itself",
     f"{JOBS}/firmbase/adopt.py": "makes a firm base from a firm document (setup, a later piece); files nothing",
+    f"{JOBS}/library_setup/make.py": (
+        "makes the firm's library file from a document the administrator chose (drops its custom XML); "
+        "it is the file later drafts are made in, never a document made from one"
+    ),
     f"{JOBS}/firmbase/base.py": "repackages a firm base's document part",
     f"{JOBS}/stages/render.py": "a record product (the chronology), which reads no library file",
     f"{JOBS}/stages/billing_docx.py": "a record product (the billing summary)",

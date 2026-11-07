@@ -26,7 +26,8 @@ WHAT A PASS PROVES, exactly:
   the fixed strings the acceptance declares (whitespace folded, exact match);
 * every field is a page-number field (PAGE, NUMPAGES, SECTIONPAGES, SECTION);
 * no tracked change, deletion or formatting revision; no comment, comment mark
-  or people list; no text box; no custom XML part, custom XML element or data
+  or people list; no text box outside a header or footer (pleading paper's line
+  numbers sit in one there, held to the page-numbering-or-fixed rule); no custom XML part, custom XML element or data
   binding; no embedded object or alternative-format chunk; no document variable,
   mail merge or attached template; no external relationship;
 * the core properties' people, title, subject, description, keywords and
@@ -298,7 +299,10 @@ def _element_problems(name: str, root: Node, fixed: frozenset[str]) -> list[str]
             once("a tracked change")
         elif tag in _COMMENT_MARKS or tag == f"{_W}comment":
             once("a comment")
-        elif _local(tag) in _TEXT_BOX_LOCAL:
+        elif _local(tag) in _TEXT_BOX_LOCAL and not _STORY_WITH_PAGES.match(name):
+            # A header's or footer's text box (pleading paper numbers its lines
+            # in one) is read as paragraphs like the rest of its story and must
+            # say nothing but page numbering or a fixed string; elsewhere, refused.
             once("a text box")
         elif tag in (f"{_W}customXml", f"{_W}dataBinding"):
             once("custom XML in the document")

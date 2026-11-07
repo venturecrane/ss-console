@@ -26,11 +26,14 @@ refused, never passed unchecked); the bytes are not a Word package; the bytes fa
 check (``establish_intake/blank_form.py``); the slot's accepted file is not the
 one the acceptance says it replaces; or the ledger cannot hold the entry.
 
-NOT REACHABLE YET. The spool schema is :data:`SUBMISSION_FIELDS` and
-:func:`read_run` reads a run in that shape, but ``EstablishIntake._process``
-does not dispatch the ``library_accept`` scope, and no broker verb, tool, skill
-or conversation writes one. The piece that lets a firm say yes adds all of them
-together, so nothing on any seat changes with this module.
+HOW IT IS REACHED (design 2026-11-06, piece 3b). A firm administrator chooses one
+of the documents a "set up our ..." job listed; the broker checks the choice in
+code (``workspace_broker/library_setup_choose.py``); the drafting lane's job
+makes and files the library file; the broker spools a run in the shape of
+:data:`SUBMISSION_FIELDS` (``library_setup_accept_submit``, root only), and
+``EstablishIntake._process`` dispatches the ``library_accept`` scope here
+(``_install_library``), which :func:`read_run` reads. All of it is behind the
+seat's ``logic_in_code.library_setup`` switch; off, no run is ever spooled.
 
 No model call. Claimed ``accepted_by`` is provenance, not authorization, as
 ``instructed_by`` is for the other scopes.

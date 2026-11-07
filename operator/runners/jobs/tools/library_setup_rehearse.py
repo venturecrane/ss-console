@@ -29,6 +29,16 @@ client can be built: the client ops workspace):
     python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
         --attorney "<a name on the roster>" --inputs <drafting inputs dir> --choose 2
 
+``--accept-dry`` runs, on the chosen candidate, exactly the checks the accept job
+runs before it files anything (``jobs/library_setup/accept.py``, ``make.py``):
+the made file, its header and footer residue by category (page numbering, firm
+identity, refused words, refused digits, note words; counts only), the marked
+places proof, and the root writer's no-client-text check with the fixed strings
+that remained. It files nothing:
+
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
+        --inputs <drafting inputs dir> --choose 1 --accept-dry
+
 Exit 0 when every step ran (whatever it found), 2 when a step could not run.
 """
 
@@ -66,13 +76,13 @@ def _adopter(kind: str) -> Callable[[bytes, Any], tuple[bytes, list[str]]]:
     return {"mediation_brief": brief_base.adopt, "memo": memo_base.adopt}[kind]
 
 
-def blank_problems(made: bytes) -> dict[str, Any]:
+def blank_problems(made: bytes, fixed: tuple[str, ...] = ()) -> dict[str, Any]:
     """The no-client-text check on the made file: how many problems, in which parts."""
     if str(OVERLAY) not in sys.path:
         sys.path.insert(0, str(OVERLAY))
     from establish_intake import blank_form
 
-    result = blank_form.check(made)
+    result = blank_form.check(made, fixed)
     parts = sorted({p.split(":", 1)[0].split(" ", 1)[0] for p in result.problems})
     return {"problems": len(result.problems), "in": parts, "marks": len(result.marks)}
 
@@ -140,6 +150,36 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
     }
 
 
+def accept_dry(kind: str, client: Any, candidate: dict[str, Any], matter_id: str, inputs: str | None) -> dict[str, Any]:
+    """The accept job's checks on one candidate, writing nothing: adopt and clean,
+    custom XML dropped, headers and footers judged against the firm's identity
+    (the residue by category, never the words), marked places proven, the root
+    writer's no-client-text check with the fixed strings that remained, and the
+    look comparison."""
+    from jobs import firmbase
+    from jobs.library_setup import accept as accept_mod, make as make_mod
+
+    blob = client.download_file(matter_id, candidate["file_id"])[1]
+    source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
+    try:
+        made = make_mod.make(kind, blob, source, accept_mod.identity(inputs))
+    except make_mod.Unusable as exc:
+        residue = dict(item.rsplit(" ", 1) for item in str(exc).split(": ", 1)[-1].split(", ") if " " in item)
+        return {
+            "accept_dry": "unusable",
+            "code": exc.code,
+            "residue": residue if exc.code == "case_words_remain" else {},
+        }
+    return {
+        "accept_dry": "would_file",
+        "residue": made.residue,
+        "fixed_strings": len(made.fixed_strings),
+        "blank": blank_problems(made.data, made.fixed_strings),
+        "look": look_compare(blob, made.data),
+        "made": made.data,
+    }
+
+
 def _roster_attorney(name: str, inputs: str | None, client: Any) -> tuple[Any, str]:
     from jobs.library_setup import job as job_mod, roster
 
@@ -173,7 +213,10 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
         return {**report, "chosen": None}
     pick = shown[args.choose - 1]
     by_id = {c.file_id: c.matter_id for c in hunted.candidates}
-    result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
+    if args.accept_dry:
+        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs)
+    else:
+        result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
     made = result.pop("made", None)
     if made is not None and args.keep:
         Path(args.keep).mkdir(parents=True, exist_ok=True)
@@ -189,6 +232,11 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
     p.add_argument("--closed-since", default="", help="also read matters closed on or after this date")
     p.add_argument("--choose", type=int, default=1, help="which shown candidate to adopt (1 = first; 0 = none)")
     p.add_argument("--keep", default="", help="write the made file here (ops workspace only)")
+    p.add_argument(
+        "--accept-dry",
+        action="store_true",
+        help="run the accept job's checks on the chosen candidate (made file, allow list, proofs); file nothing",
+    )
     args = p.parse_args(argv)
     if client is None:
         from smokeball_connector.client import build_client_from_env

@@ -18,6 +18,9 @@ WHAT IS DIFFERENT FROM A DRAFT:
   broker never replies on an observed row (it is not a replyable state).
 * ``delivered`` (live): the document-drafter DELIVER wake, marked
   ``Mode: library setup``; the reply is the broker's words from the row.
+* ``filed`` (an administrator's choice, ``mode: accept``): the made file is in
+  the firm's library; ``library_setup_handoff`` hands it to the root writer and
+  records what the writer answered.
 * ``held`` / ``failed``: SMD is paged (``job_notes.tell``) and the firm is told
   nothing, as for every drafting stop.
 
@@ -33,7 +36,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from . import job_notes, verdict as verdict_mod
+from . import job_notes, library_setup_handoff, verdict as verdict_mod
 from .child import run_child
 from .daemon import CHILD_ENV_PASS
 from .firm_inputs import pin_env
@@ -47,7 +50,7 @@ CHILD = "library-setup"
 INPUTS_ENV = "JOBS_DRAFTING_INPUTS"
 #: What a verdict may record, and the ledger state each is.
 STATES = {"observed": "observed", "delivered": "delivered", "held": "held"}
-_FIELDS = ("setup_outcome", "hold", "counts", "candidates", "attorney_key", "attorney_name")
+_FIELDS = ("setup_outcome", "hold", "counts", "candidates", "attorney_key", "attorney_name", "unusable")
 
 
 def envelope(lane: Any, job_id: str) -> dict[str, Any]:
@@ -141,7 +144,9 @@ def run(lane: Any, job_id: str) -> str:
     lane.jobs_run += 1
     outcomes = verdict_mod.read(jd, out)
     v = outcomes[0] if outcomes and isinstance(outcomes[0], dict) else None
-    if v is None or str(v.get("outcome")) not in STATES:
+    if v is not None and v.get("outcome") == "filed":
+        state, fields = library_setup_handoff.hand_over(lane, job_id, jd, v)
+    elif v is None or str(v.get("outcome")) not in STATES:
         state, fields = "failed", {"cents": 0, "reason": f"no_verdict: the runner exited {code} without a verdict"}
     else:
         state, fields = STATES[str(v["outcome"])], fields_of(v)

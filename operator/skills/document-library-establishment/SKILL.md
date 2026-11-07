@@ -13,7 +13,7 @@ description: >-
   visible marker that names its source. It reports a template delivered only after reading the
   filed document back and checking it against its exemplars. Firm-level establishment is refused
   for anyone who is not an Operator admin.
-version: 0.7.0
+version: 0.8.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -115,6 +115,16 @@ it never runs in this turn.
   or build anything for that kind in this turn: the job's own reply comes in this thread, in the
   seat's words.
 - **`accepted` is false**: relay `reason` as given and end the turn.
+
+**When the admin answers that list** (a reply in its thread naming one of the numbered
+documents, "use 2"), call `library_setup_choose` with no arguments. Code reads which document
+was chosen from the email itself; never pass a number or an id, and never decide it yourself.
+
+- **`live` is false and there is no `reason`**: answer the email exactly as you would have
+  without this tool.
+- **otherwise**: relay `say` (the choice was taken) or `reason` (it was not) as given, and
+  nothing else. The job's own reply, saying what file was made, comes in this thread in the
+  seat's words.
 
 Every other kind, and "set up our document library" as a whole, follows the procedure below.
 

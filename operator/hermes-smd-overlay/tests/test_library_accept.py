@@ -221,9 +221,11 @@ def test_a_malformed_submission_is_refused(tmp_path: Path, sub: dict) -> None:
     assert acc is None and problems
 
 
-def test_the_intake_does_not_dispatch_the_scope_yet() -> None:
+def test_the_intake_dispatches_the_scope() -> None:
+    """Reached since 3b (the module docstring); the end-to-end path is
+    tests/test_library_accept_intake.py."""
     intake = (Path(LA.__file__).parent / "intake.py").read_text()
-    assert "library_accept" not in intake
+    assert 'scope == "library_accept"' in intake and "_install_library" in intake
 
 
 def test_a_variant_slot_the_registry_lists_is_accepted(tmp_path: Path) -> None:

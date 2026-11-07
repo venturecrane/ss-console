@@ -66,6 +66,41 @@ def library_setup_submit(args: dict[str, Any], session_id: str = "", **_: Any) -
     return json.dumps(out, ensure_ascii=False)
 
 
+def library_setup_choose(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
+    """The administrator's reply naming one of the listed documents. Only the
+    verified email travels: its sender, its message id and the reader's own
+    words above the quoted history; code reads the choice from those words."""
+    origin = _origin(session_id)
+    if origin is None or not origin.sender_address or not origin.internet_message_id:
+        return _refuse(
+            "a choice is read only from the turn of the email that made it; nothing was made"
+        )
+    envelope = {
+        "requested_by": origin.sender_address,
+        "request_ref": origin.internet_message_id,
+        "reply_text": origin.reply_text or "",
+    }
+    kind = str(args.get("kind") or "").strip()
+    if kind:
+        envelope["kind"] = kind
+    try:
+        resp = JobsBrokerClient().library_setup_choose(envelope)
+    except JobsBrokerError as exc:
+        return _refuse(f"the choice could not be read: {exc}")
+    if not resp.get("accepted"):
+        out: dict[str, Any] = {"accepted": False, "live": resp.get("live", True)}
+        if resp.get("reason"):
+            out["reason"] = resp["reason"]
+        return json.dumps(out, ensure_ascii=False)
+    logger.info(
+        "library_setup_choose: queued %s (live=%s)", resp.get("job_id"), bool(resp.get("live"))
+    )
+    out = {"accepted": True, "job_id": resp.get("job_id"), "live": bool(resp.get("live"))}
+    if resp.get("live") and resp.get("say"):
+        out["say"] = resp["say"]
+    return json.dumps(out, ensure_ascii=False)
+
+
 TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "library_setup_submit": (
         "A Named Administrator asked to set up the firm's mediation briefs or memos (or one attorney's) "
@@ -91,6 +126,24 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         ),
         library_setup_submit,
     ),
+    "library_setup_choose": (
+        "The email that opened this turn answers a list of the firm's own documents the Operator sent for "
+        "setting up a library file, by naming one of them. Pass at most the list's kind: the sender, the "
+        "thread and the reader's own words are taken from the email itself, and code reads which document "
+        "was chosen. When `live` is false and there is no `reason`, answer the email exactly as you would "
+        "have without this tool. Otherwise relay `say` or `reason` as given and nothing else.",
+        _schema(
+            {
+                "kind": {
+                    "type": "string",
+                    "enum": list(KINDS),
+                    "description": "Which kind of document the list was about, when you can tell; the "
+                    "broker refuses a choice whose list is of another kind.",
+                }
+            }
+        ),
+        library_setup_choose,
+    ),
 }
 
-__all__ = ["KINDS", "TOOLS", "library_setup_submit"]
+__all__ = ["KINDS", "TOOLS", "library_setup_choose", "library_setup_submit"]

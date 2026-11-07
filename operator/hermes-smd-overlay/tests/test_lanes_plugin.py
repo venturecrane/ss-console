@@ -158,6 +158,7 @@ def test_the_three_tools_register_function_shaped_and_require_the_socket():
         "drafting_allowance",
         # "Set up our ...", the drafting lane's second kind of job (library_setup.py).
         "library_setup_submit",
+        "library_setup_choose",
         # The litigation status job's two (litigation.py).
         "litigation_job_submit",
         "litigation_job_status",
