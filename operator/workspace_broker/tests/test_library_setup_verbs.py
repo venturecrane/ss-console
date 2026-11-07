@@ -235,6 +235,8 @@ def test_a_drafting_jobs_id_still_reads_the_drafting_row(seat, tmp_path):
         ({"setup_outcome": "none_found", "attorney_name": "Blair Sample"}, "Blair", "none_attorney"),
         ({"setup_outcome": "attorney_not_rostered"}, "Casey", "not_rostered"),
         ({"setup_outcome": "attorney_ambiguous"}, "Blair", "ambiguous"),
+        ({"setup_outcome": "not_a_form"}, None, "not_a_form"),
+        ({"setup_outcome": "unusable"}, None, "unusable"),
     ],
 )
 def test_each_outcome_renders_its_one_sentence(report, named, key):

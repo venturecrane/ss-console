@@ -20,8 +20,9 @@ choose.py``). This job, the jobs uid's child, then:
    the broker for the root writer (``establish_intake/library_accept.py``).
 
 THE VERDICT, by outcome: ``filed`` (the lane spools the acceptance),
-``delivered`` with ``setup_outcome`` ``changed`` or ``unusable`` (the firm is
-told, nothing was filed), ``held`` (SMD's: the firm is told nothing), or
+``delivered`` with ``setup_outcome`` ``changed``, ``unusable`` (it kept words
+of its case) or ``not_a_form`` (its layout gives no places to write into; the
+firm is told, nothing was filed), ``held`` (SMD's: the firm is told nothing), or
 ``observed`` (the switch is off: nothing done). Counts, codes and ids only.
 """
 
@@ -43,6 +44,8 @@ def _obj(value: Any) -> dict[str, Any]:
 MADE_NAME = "library-file.docx"
 CHANGED = "changed"
 UNUSABLE = "unusable"
+#: The plan found no places to write into: the layout, not the words (``make.STRUCTURAL``).
+NOT_A_FORM = "not_a_form"
 
 
 def _switch() -> Any:
@@ -126,7 +129,7 @@ def run(
     try:
         made = _made(job, blob, choice, inputs_dir, pieces)
     except make_mod.Unusable as exc:
-        return _told(UNUSABLE, unusable=exc.code)
+        return _told(NOT_A_FORM if exc.code in make_mod.STRUCTURAL else UNUSABLE, unusable=exc.code)
     kind, attorney = str(job["setup_kind"]), job.get("attorney_key") or None
     slot = replaces(kind, attorney, spec_dir)
     if slot == "":
@@ -152,4 +155,4 @@ def run(
     }
 
 
-__all__ = ["CHANGED", "MADE_NAME", "UNUSABLE", "identity", "replaces", "run"]
+__all__ = ["CHANGED", "MADE_NAME", "NOT_A_FORM", "UNUSABLE", "identity", "replaces", "run"]

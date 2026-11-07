@@ -8,7 +8,15 @@ THE STEPS, IN ORDER, EACH FAIL CLOSED:
    and the properties, titles and thumbnail that name a person or a matter go.
 2. Its custom XML parts go, with every pointer to them (``drop_custom_xml``). The
    clean keeps them, and they can hold a document system's metadata about the
-   matter; the no-client-text check refuses any.
+   matter; the no-client-text check refuses any. So do its links to a document
+   system or a template (``drop_document_links``: the attached template and its
+   external relationship, document variables, mail merge settings) and every
+   header or footer field that is not page numbering (``drop_foreign_fields``: a
+   document system's footer stamp is a field whose cached result is its id, and
+   the root writer refuses any field it cannot name). None of these carries the
+   look. Found on the firm's own brief in the A&P rehearsal of 2026-11-07, where
+   the accept job's own checks passed and the root writer's check refused all
+   three.
 3. What its headers, footers, notes and comments still say is judged against an
    allow list (``judge_stories``): a line may remain only when it is page
    numbering, or nothing but the firm's own authored identity (its name, street,
@@ -44,6 +52,12 @@ from ..firmbase.markers import unwritable
 _REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 _CT = "{http://schemas.openxmlformats.org/package/2006/content-types}"
 CONTENT_TYPES = "[Content_Types].xml"
+SETTINGS = "word/settings.xml"
+SETTINGS_RELS = "word/_rels/settings.xml.rels"
+#: Settings that link the file to a template or a document system; each can carry a path, a name or an id.
+_LINK_SETTINGS = frozenset({"attachedTemplate", "docVars", "mailMerge"})
+#: The fields a header or footer may keep: page numbering, as the root writer's check allows them.
+FIELDS_ALLOWED = frozenset({"PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION"})
 _PAGE_LINE = re.compile(r"(?i)(\d+|page|of|\s)*")
 _HEAD_FOOT = re.compile(r"^word/(header|footer)\d*\.xml$")
 _NOTES = re.compile(r"^word/(footnotes|endnotes|comments)\d*\.xml$")
@@ -86,6 +100,39 @@ class Made:
     data: bytes
     fixed_strings: tuple[str, ...]
     residue: dict[str, int] = field(default_factory=dict)
+    #: What the drops removed, by category (``dropped``): counts only.
+    dropped: dict[str, int] = field(default_factory=dict)
+
+
+#: An ``Unusable`` code that means the document's layout gives the plan no
+#: places to write into, never that it kept words of its case.
+STRUCTURAL = frozenset({"plan_refused", "marked_places_unwritable", "not_a_firm_base"})
+
+
+def dropped(blob: bytes) -> dict[str, int]:
+    """What ``drop_custom_xml``, ``drop_document_links`` and ``drop_foreign_fields``
+    remove from ``blob``, by category, counted before they run."""
+    out = {"custom_xml_parts": 0, "template_links": 0, "document_variables": 0, "mail_merge": 0,
+           "external_links": 0, "foreign_fields": 0}  # fmt: skip
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        names = z.namelist()
+        out["custom_xml_parts"] = sum(1 for n in names if n.startswith("customXml/"))
+        if SETTINGS in names:
+            for el in etree.fromstring(z.read(SETTINGS)):
+                key = {"attachedTemplate": "template_links", "docVars": "document_variables", "mailMerge": "mail_merge"}
+                if etree.QName(el).localname in key:
+                    out[key[etree.QName(el).localname]] += 1
+        if SETTINGS_RELS in names:
+            out["external_links"] = sum(
+                1 for r in etree.fromstring(z.read(SETTINGS_RELS)) if r.get("TargetMode") == "External"
+            )
+        for n in names:
+            if _HEAD_FOOT.match(n):
+                root = etree.fromstring(z.read(n))
+                out["foreign_fields"] += sum(1 for word, _runs in _complex_fields(root) if word not in FIELDS_ALLOWED)
+                simple = (((x.get(f"{W}instr") or "").split() or [""])[0].upper() for x in root.iter(f"{W}fldSimple"))
+                out["foreign_fields"] += sum(1 for w in simple if w not in FIELDS_ALLOWED)
+    return out
 
 
 def _fold(text: str) -> str:
@@ -117,6 +164,76 @@ def drop_custom_xml(blob: bytes) -> bytes:
                 for el in list(root):
                     if el.tag == f"{_CT}Override" and el.get("PartName", "").startswith("/customXml/"):
                         root.remove(el)
+                raw = _serial(root)
+            out.writestr(info, raw)
+    return buf.getvalue()
+
+
+def drop_document_links(blob: bytes) -> bytes:
+    """``blob`` without its links to a template or a document system: the attached
+    template and its external relationship, document variables and mail merge
+    settings. None carries the look; each can carry a path, a name or an id."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for info in src.infolist():
+            raw = src.read(info.filename)
+            if info.filename == SETTINGS:
+                root = etree.fromstring(raw)
+                for el in list(root):
+                    if etree.QName(el).localname in _LINK_SETTINGS:
+                        root.remove(el)
+                raw = _serial(root)
+            elif info.filename == SETTINGS_RELS:
+                root = etree.fromstring(raw)
+                for rel in list(root):
+                    if rel.get("TargetMode") == "External" or rel.get("Type", "").endswith("/attachedTemplate"):
+                        root.remove(rel)
+                raw = _serial(root)
+            out.writestr(info, raw)
+    return buf.getvalue()
+
+
+def _complex_fields(story: Any) -> list[tuple[str, list[Any]]]:
+    """Each complex field of the story, outermost only: (the first word of its
+    instruction, upper-cased; the runs from its begin to its end, its cached
+    result among them)."""
+    out: list[tuple[str, list[Any]]] = []
+    open_fields: list[tuple[list[str], list[Any]]] = []
+    for run in list(story.iter(f"{W}r")):
+        kinds = [c.get(f"{W}fldCharType") for c in run.iter(f"{W}fldChar")]
+        if "begin" in kinds:
+            open_fields.append(([], []))
+        if open_fields:
+            open_fields[-1][1].append(run)
+            open_fields[-1][0].extend(t.text or "" for t in run.iter(f"{W}instrText"))
+        if "end" in kinds and open_fields:
+            code, runs = open_fields.pop()
+            if open_fields:
+                open_fields[-1][1].extend(runs)
+            else:
+                out.append((("".join(code).split() or [""])[0].upper(), runs))
+    return out
+
+
+def drop_foreign_fields(blob: bytes) -> bytes:
+    """``blob`` with every header and footer field that is not page numbering
+    removed, its cached result with it. A document system's footer stamp is such a
+    field, and the root writer's check refuses any field it cannot name. Fields in
+    the body are the plan's business."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for info in src.infolist():
+            raw = src.read(info.filename)
+            if _HEAD_FOOT.match(info.filename):
+                root = etree.fromstring(raw)
+                for word, runs in _complex_fields(root):
+                    if word not in FIELDS_ALLOWED:
+                        for run in runs:
+                            if run.getparent() is not None:
+                                run.getparent().remove(run)
+                for simple in list(root.iter(f"{W}fldSimple")):
+                    if ((simple.get(f"{W}instr") or "").split() or [""])[0].upper() not in FIELDS_ALLOWED:
+                        simple.getparent().remove(simple)
                 raw = _serial(root)
             out.writestr(info, raw)
     return buf.getvalue()
@@ -183,24 +300,21 @@ def _markers_ok(kind: str, blob: bytes, source: Source) -> None:
         raise Unusable("not_a_firm_base", str(exc)) from exc
 
 
-def _adopter(kind: str) -> Any:
-    from ..drafting import brief_base, memo_base
-
-    return {"mediation_brief": brief_base.adopt, "memo": memo_base.adopt}[kind]
-
-
 def make(kind: str, blob: bytes, source: Source, identity: Iterable[str]) -> Made:
     """The library file for ``kind`` made from ``blob`` (the module docstring)."""
     from ..drafting.outcome import DraftingFailed
 
+    from .plan import adopter, reason_code
+
     try:
-        adopted, _notes = _adopter(kind)(blob, source)
+        adopted, _notes = adopter(kind)(blob, source)
     except (DraftingFailed, FirmBaseUnfit, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as exc:
-        raise Unusable("plan_refused", type(exc).__name__) from exc
-    made = drop_custom_xml(adopted)
+        raise Unusable("plan_refused", reason_code(exc)) from exc
+    removed = dropped(adopted)
+    made = drop_foreign_fields(drop_document_links(drop_custom_xml(adopted)))
     fixed, residue = judge_stories(made, identity)
     _markers_ok(kind, made, source)
-    return Made(made, fixed, residue)
+    return Made(made, fixed, residue, removed)
 
 
 def identity_pieces(firm_identity: Any, attorney_blocks: Iterable[Iterable[str]]) -> list[str]:

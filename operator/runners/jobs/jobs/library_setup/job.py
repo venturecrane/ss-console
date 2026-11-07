@@ -94,9 +94,34 @@ def _date(saved_at: str) -> str:
         return ""
 
 
-def candidates(hunted: hunt_mod.Hunted, client: Any) -> list[dict[str, Any]]:
-    """The candidates the firm is shown: ids, dates and numbers only."""
-    chosen = [c for c in hunted.candidates if _in_band(c)][:TOP]
+def _plan_fits(kind: str, c: hunt_mod.Candidate, client: Any, hunted: hunt_mod.Hunted) -> bool:
+    """The kind's plan can adopt this candidate (``plan.fits``, no write); a
+    refusal is counted by its code, and a file that will not download is
+    counted as could not look, never listed."""
+    from ..firmbase import Source
+    from .plan import fits
+
+    try:
+        blob = client.download_file(c.matter_id, c.file_id)[1]
+    except Exception:  # noqa: BLE001 - a file that cannot be read now is not listed, and is counted
+        hunted.bump("plan_unreadable")
+        return False
+    why = fits(kind, blob, Source(c.matter_id, c.file_id, "", c.sha256))
+    if why:
+        hunted.bump("plan_refused")
+        hunted.bump(f"plan_refused_{why}")
+    return not why
+
+
+def candidates(hunted: hunt_mod.Hunted, client: Any, kind: str = "") -> list[dict[str, Any]]:
+    """The candidates the firm is shown: ids, dates and numbers only. With
+    ``kind``, only those the kind's plan can make a library file from."""
+    chosen = []
+    for c in (x for x in hunted.candidates if _in_band(x)):
+        if len(chosen) >= TOP:
+            break
+        if not kind or _plan_fits(kind, c, client, hunted):
+            chosen.append(c)
     return [
         {
             "file_id": c.file_id,
@@ -159,7 +184,8 @@ def run(
     counts = dict(sorted(hunted.counts.items()))
     if counts.get("matters_unlisted"):
         return _held(roster_mod.COULD_NOT_LOOK, live, counts=counts)
-    found = candidates(hunted, client)
+    found = candidates(hunted, client, kind)
+    counts = dict(sorted(hunted.counts.items()))
     outcome = CANDIDATES if found else NONE_FOUND
     return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, **who)
 

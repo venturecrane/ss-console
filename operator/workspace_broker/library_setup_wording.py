@@ -17,7 +17,7 @@ WHERE EACH IS SAID:
   ``render`` when the reply is bound and sent in code (``delivered_matter``).
 * ``chosen*`` and the choice's refusals (``refused_no_choice`` on): the choose
   tool's answer to the administrator's reply naming a document.
-* ``done_*``, ``changed``, ``unusable``: the reply of the job that made the
+* ``done_*``, ``changed``, ``unusable``, ``not_a_form``: the reply of the job that made the
   file from the chosen document, rendered like the list's.
 * ``ACTIVITY``: the firm's portal activity line for each audit row a
   switched-on seat's setup job writes.
@@ -96,6 +96,10 @@ SENTENCES: dict[str, str] = {
         "We could not make the file from that document without keeping words of its case, so nothing was "
         "changed. You can reply with another number from the list."
     ),
+    "not_a_form": (
+        "We could not make a file from that document because its layout does not give us the places to "
+        "write into, so nothing was changed. You can reply with another number from the list."
+    ),
 }
 
 #: What the firm's portal activity says for each audit row a switched-on seat's
@@ -166,7 +170,7 @@ def _json_field(row: dict[str, Any], key: str) -> dict[str, Any]:
 
 def _accept_body(row: dict[str, Any], outcome: str, attorney: str, kind_names: dict[str, str]) -> str:
     """The made file's read-back, or a choice that made nothing."""
-    if outcome in ("changed", "unusable"):
+    if outcome in ("changed", "unusable", "not_a_form"):
         return say(outcome, **kind_names)
     choice = _json_field(row, "choice_json")
     saved, matter, file_id = (
@@ -203,7 +207,7 @@ def render(row: dict[str, Any]) -> str:
         body = say("ambiguous", named=named)
     elif outcome == "none_found":
         body = say("none_attorney", attorney=attorney, **kind_names) if attorney else say("none_firm", **kind_names)
-    elif outcome in ("accepted", "accepted_pending", "changed", "unusable"):
+    elif outcome in ("accepted", "accepted_pending", "changed", "unusable", "not_a_form"):
         body = _accept_body(row, outcome, attorney, kind_names)
     elif outcome == "candidates":
         body = _list_body(report, attorney, kind_names)

@@ -97,6 +97,7 @@ def test_accept_dry_runs_the_accept_checks_files_nothing_and_prints_counts_only(
     out = capsys.readouterr().out
     report = json.loads(out)
     assert report["accept_dry"] == "would_file" and report["blank"]["problems"] == 0, report
+    assert report["dropped"]["custom_xml_parts"] > 0 and {"foreign_fields", "template_links"} <= set(report["dropped"])
     assert set(report["residue"]) == {
         "page_numbering",
         "firm_identity",

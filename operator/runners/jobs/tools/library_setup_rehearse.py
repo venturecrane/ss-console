@@ -6,8 +6,9 @@ names only; never a file name, a person's name or a word of any document):
 1. The hunt (``jobs.firmbase.hunt``) for the kind over the firm's open and
    pending matters (and closed ones since ``--closed-since``), narrowed to one
    attorney's own files with ``--attorney`` (matched to the roster the job uses,
-   ``jobs.library_setup.roster``). Prints the hunt's counts and the candidates
-   the job would show the firm: file id, saved-on date, score.
+   ``jobs.library_setup.roster``). Prints the hunt's counts (a candidate the kind's
+   plan cannot adopt is not shown and is counted by reason, ``plan_refused_*``)
+   and the candidates the job would show the firm: file id, saved-on date, score.
 2. On the candidate ``--choose`` (1 = the first shown): the kind's adopt and
    clean (``drafting/brief_base.adopt`` or ``drafting/memo_base.adopt``), then
    the no-client-text check (``establish_intake/blank_form.check``) on the made
@@ -31,7 +32,9 @@ client can be built: the client ops workspace):
 
 ``--accept-dry`` runs, on the chosen candidate, exactly the checks the accept job
 runs before it files anything (``jobs/library_setup/accept.py``, ``make.py``):
-the made file, its header and footer residue by category (page numbering, firm
+the made file, what its drops removed by category (custom XML parts, template
+links, document variables, mail merge, external links, foreign header and
+footer fields), its header and footer residue by category (page numbering, firm
 identity, refused words, refused digits, note words; counts only), the marked
 places proof, and the root writer's no-client-text check with the fixed strings
 that remained. It files nothing:
@@ -51,7 +54,7 @@ import json
 import sys
 import zipfile
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 HERE = Path(__file__).resolve()
 OVERLAY = HERE.parents[3] / "hermes-smd-overlay"
@@ -68,12 +71,6 @@ class ReadOnly:
         if name not in READS:
             raise PermissionError(f"the rehearsal reads only; {name} is refused")
         return getattr(self._client, name)
-
-
-def _adopter(kind: str) -> Callable[[bytes, Any], tuple[bytes, list[str]]]:
-    from jobs.drafting import brief_base, memo_base
-
-    return {"mediation_brief": brief_base.adopt, "memo": memo_base.adopt}[kind]
 
 
 def blank_problems(made: bytes, fixed: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -134,11 +131,12 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
     """Adopt, clean, check and compare one candidate."""
     from jobs import firmbase
     from jobs.drafting.outcome import DraftingFailed
+    from jobs.library_setup import plan as plan_mod
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
     source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
     try:
-        made, notes = _adopter(kind)(blob, source)
+        made, notes = plan_mod.adopter(kind)(blob, source)
     except (DraftingFailed, firmbase.FirmBaseUnfit, ValueError, KeyError) as exc:
         return {"adopted": False, "why": type(exc).__name__}
     return {
@@ -173,6 +171,7 @@ def accept_dry(kind: str, client: Any, candidate: dict[str, Any], matter_id: str
     return {
         "accept_dry": "would_file",
         "residue": made.residue,
+        "dropped": made.dropped,
         "fixed_strings": len(made.fixed_strings),
         "blank": blank_problems(made.data, made.fixed_strings),
         "look": look_compare(blob, made.data),
@@ -204,7 +203,7 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     hunted = hunt_mod.hunt(
         args.kind, client, closed_since=args.closed_since or "", person=attorney.case_system_name if attorney else None
     )
-    shown = job_mod.candidates(hunted, client)
+    shown = job_mod.candidates(hunted, client, args.kind)
     report.update(
         counts=dict(sorted(hunted.counts.items())),
         candidates=[{k: c[k] for k in ("file_id", "saved_on", "score")} for c in shown],

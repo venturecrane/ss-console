@@ -16,6 +16,7 @@ import docx
 import pytest
 
 import library_setup_testkit as kit
+from test_drafting_memo_base import _firm_memo
 
 from jobs import lane_proof
 from jobs.lane_proof import admits as real_admits  # before the conftest's every-lane-proven stub
@@ -42,6 +43,20 @@ def _memo(author: str, words: int = 1000, sign: str = "") -> bytes:
     d.core_properties.author = author
     d.core_properties.last_modified_by = author
     d.add_paragraph(" ".join(["word"] * words))
+    if sign:
+        d.add_paragraph(sign)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _firm_memo_by(author: str, sign: str = "") -> bytes:
+    """A made-up firm memo the memo plan can adopt (the memo kit's), saved by
+    ``author``, long enough for a memo's length band, signed when ``sign``."""
+    d = docx.Document(io.BytesIO(_firm_memo()))
+    d.core_properties.author = author
+    d.core_properties.last_modified_by = author
+    d.add_paragraph(" ".join(["word"] * 600))
     if sign:
         d.add_paragraph(sign)
     buf = io.BytesIO()
@@ -90,11 +105,11 @@ def _row(fid: str, name: str, years: float) -> dict:
 def _client(**kw) -> ReadOnlyClient:
     return ReadOnlyClient(
         {
-            "f-new": (MATTER_A, _row("f-new", "Case Evaluation Memo.docx", 0.5), _memo("Alex Example")),
+            "f-new": (MATTER_A, _row("f-new", "Case Evaluation Memo.docx", 0.5), _firm_memo_by("Alex Example")),
             "f-old": (
                 MATTER_B,
                 _row("f-old", "Liability Analysis.docx", 3.0),
-                _memo("Blair Sample", sign="Blair Sample"),
+                _firm_memo_by("Blair Sample", sign="Blair Sample"),
             ),
             "f-short": (MATTER_B, _row("f-short", "Short memo.docx", 0.1), _memo("Alex Example", words=40)),
             "f-other": (MATTER_A, _row("f-other", "Mediation Brief.docx", 0.2), _memo("Alex Example")),
@@ -243,6 +258,29 @@ def test_an_unreadable_switch_holds_for_smd_and_reads_nothing():
 def test_a_matter_that_could_not_be_listed_holds_rather_than_says_none():
     out, _ = _run(client=_client(unlisted=(MATTER_B,)))
     assert out["outcome"] == "held" and out["hold"] == R.COULD_NOT_LOOK
+
+
+def test_a_document_the_kinds_plan_cannot_adopt_is_never_listed_and_is_counted_by_reason():
+    """The A&P rehearsal, 2026-11-07: every memo the firm would have been shown was
+    refused by the memo plan, so a pick would have been told the wrong reason."""
+    plain = _memo("Alex Example")  # a memo with no heading for the plan to read roles from
+    client = _client()
+    client.files["f-plain"] = (MATTER_A, _row("f-plain", "Plain memo.docx", 0.1), plain)
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-old", "f-new"]
+    assert out["counts"]["plan_refused"] == 1 and out["counts"]["plan_refused_no_heading"] == 1
+
+
+def test_a_kind_whose_every_candidate_the_plan_refuses_is_none_found():
+    client = ReadOnlyClient(
+        {
+            "a": (MATTER_A, _row("a", "Memo one.docx", 0.5), _memo("Alex Example")),
+            "b": (MATTER_B, _row("b", "Memo two.docx", 1.5), _memo("Blair Sample")),
+        }
+    )
+    out, _ = _run(client=client)
+    assert (out["setup_outcome"], out["candidates"]) == (J.NONE_FOUND, [])
+    assert out["counts"]["plan_refused"] == 2
 
 
 def test_nothing_in_the_band_is_none_found():
