@@ -14,10 +14,15 @@ then waits for the applier's manifest to record the new ledger
 (``library_source_digest``), the same honest ``installed`` versus
 ``accepted_pending_install`` answer the other intake scopes give.
 
-REFUSED, AND NOTHING WRITTEN, when: the kind is not in the document-kind
-registry (:data:`DOCUMENT_CLASSES`, pinned to ``operator/contracts/document-kinds.yaml``
-by ``tests/document-kinds-registry.test.ts``); the contract is not ``styles`` or
-``marked``; the bytes are not a Word package; the bytes fail the no-client-text
+REFUSED, AND NOTHING WRITTEN, when: the kind is not a slot of the document-kind
+registry (:data:`DOCUMENT_CLASSES` and :data:`KIND_VARIANTS`, pinned to
+``operator/contracts/document-kinds.yaml`` by ``tests/document-kinds-registry.test.ts``;
+a kind with variants is accepted only as ``<kind>.<variant>``, checked by the
+shared ``library_ledger.slot_problems``); the contract is not one the ledger
+holds; the contract is ``prototypes`` (a demand reference file: the
+no-client-text check reads a blanked form, and cannot yet judge a file that keeps
+one sample paragraph of each kind, so accepting one is a later piece and is
+refused, never passed unchecked); the bytes are not a Word package; the bytes fail the no-client-text
 check (``establish_intake/blank_form.py``); the slot's accepted file is not the
 one the acceptance says it replaces; or the ledger cannot hold the entry.
 
@@ -67,6 +72,18 @@ DOCUMENT_CLASSES = (
     "letter",
 )
 
+#: The registry's variants, for the kinds that have them (the rest have none).
+KIND_VARIANTS: dict[str, tuple[str, ...]] = {
+    "demand_letter": ("pre_suit", "litigation"),
+}
+#: Every kind to its variants, the shape ``library_ledger.slot_problems`` reads.
+REGISTRY: dict[str, tuple[str, ...]] = {k: KIND_VARIANTS.get(k, ()) for k in DOCUMENT_CLASSES}
+#: Why a prototypes file is refused, in plain words (see the module docstring).
+PROTOTYPES_REFUSED = (
+    "a prototypes file (a demand reference) cannot be accepted yet: the no-client-text "
+    "check cannot judge a file that keeps a sample paragraph of each kind"
+)
+
 MAX_FIXED_STRINGS = 200
 MAX_FIXED_CHARS = 300
 
@@ -77,11 +94,11 @@ SUBMISSION_FIELDS: dict[str, str] = {
     "phase": '"install"',
     "run_id": "the run's id",
     "created_at": "ISO 8601 UTC",
-    "acceptance.kind": "a key of operator/contracts/document-kinds.yaml",
+    "acceptance.kind": "a slot of operator/contracts/document-kinds.yaml: <kind> or <kind>.<variant>",
     "acceptance.attorney": "the attorney key, or null for the firm's own file",
     "acceptance.file_id": "the file in the library",
     "acceptance.version": "the accepted saved version",
-    "acceptance.contract": '"styles" or "marked"',
+    "acceptance.contract": '"styles" or "marked" ("prototypes" is refused for now)',
     "acceptance.accepted_by": "who said yes",
     "acceptance.accepted_at": "when, ISO 8601 UTC",
     "acceptance.sha256": "the broker's sha256 of file.docx",
@@ -211,10 +228,11 @@ def refusals(acc: Acceptance) -> tuple[list[str], tuple[str, ...]]:
     """Every reason this acceptance is refused before anything is written, and
     the fixed strings the no-client-text check found in use."""
     out: list[str] = []
-    if acc.kind not in DOCUMENT_CLASSES:
-        out.append(f"kind {acc.kind!r} is not in the document-kind registry")
+    out += L.slot_problems(acc.kind, REGISTRY)
     if acc.contract not in L.CONTRACTS:
         out.append(f"contract {acc.contract!r} is not one of {list(L.CONTRACTS)}")
+    elif acc.contract == L.PROTOTYPES:
+        out.append(PROTOTYPES_REFUSED)
     if len(acc.fixed_strings) > MAX_FIXED_STRINGS or any(
         len(s) > MAX_FIXED_CHARS for s in acc.fixed_strings
     ):

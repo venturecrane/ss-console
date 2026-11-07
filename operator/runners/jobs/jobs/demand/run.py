@@ -61,6 +61,7 @@ from . import (
     gapaudit,
     gate,
     job as job_mod,
+    library_pick,
     preflight,
     premise,
     pull,
@@ -130,6 +131,8 @@ class DemandRun:
         self.date_stamp, self.long_date = self._frozen_dates(today())
         self.readback_pause = readback_pause
         self._repairs: dict[str, list[str]] = {}
+        #: The reference file the demand is written in (``library_pick``), set with the format.
+        self._reference: Path | None = None
         self.vendor_factory = vendor_factory or vendor.from_env
 
     # ---- plumbing ------------------------------------------------------------------
@@ -452,7 +455,7 @@ class DemandRun:
             md = (self.data / FINAL).read_text(encoding="utf-8")
             client = crosscheck.matched_client(md, self._json("facts.json"), deliver.front_keys(self.firm))
             try:
-                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
+                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client, self._reference)
             except deliver.FormatRefused as exc:
                 raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
             gap_fixes = [
@@ -581,22 +584,8 @@ class DemandRun:
                 + "; ".join(variant.get("evidence") or ["no evidence either way"])[:300]
                 + ". Nothing was spent."
             )
-        who = self._json("facts.json").get("responsible_attorney")
-        signs = self.firm.attorney_for(who)
-        # The format is the responsible attorney's (an attorney row may name
-        # its own, e.g. Craig Ashton's, 2026-10-14); unmapped, the firm's default.
-        if name not in self.firm.variants_for(signs):
-            whose = f"{who}'s demands" if (signs or {}).get("format") else "the firm"
-            raise DemandHold(
-                f"this is a {name.replace('_', '-')} demand and no {name.replace('_', '-')} format is "
-                f"authored for {whose}. Nothing was spent."
-            )
-        if not signs:
-            raise DemandHold(
-                f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "
-                "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
-            )
-        self.firm = self.firm.select(name, signs)
+        # Whose demand, in which format, and which file it is written in (library_pick).
+        self.firm, self._reference = library_pick.select(self, name)
 
     def run(self) -> Verdict:
         try:

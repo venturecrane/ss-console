@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ..demand import deliver
-from . import format_check, pleading, place, render, review as review_mod
+from . import format_check, library_pick, pleading, place, render, review as review_mod
 from .finish import Finish, Unit
 from .outcome import DraftingFailed, DraftingHold, markers
 
@@ -63,7 +63,8 @@ class Placing(Finish):
         pos = render.COMMENT.sub("", self.firm.attachment("pos")).strip()
         placed = place.place(t, fields, block, pos)
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
-        path, _report = render.render(placed.markdown, self.cls, out / self._names(u)["draft"], fmt)
+        made_in = library_pick.pick_base(self, marked_ok=False)
+        path, _report = render.render(placed.markdown, self.cls, out / self._names(u)["draft"], fmt, made_in.styles)
         laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
         res = format_check.check(path, self.cls, fmt, "", None, paper)
         ours = [f for f in res.fails if not HIS.match(f)]

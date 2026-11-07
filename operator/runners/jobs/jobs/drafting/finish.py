@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from .. import firm_wording
 from ..demand import deliver, finalpass, quotefix, summarize
 from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
-from . import base_lay, pleading, prerender, render
+from . import base_lay, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod, wording
 from . import repair_budget, repair_guard
@@ -360,9 +360,11 @@ class Finish:
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
-        fmt, paper, held = self.firm.data["format"], self.paper(), self.firm.firm_base(self.cls)
+        fmt, paper, made_in = self.firm.data["format"], self.paper(), library_pick.pick_base(self)
         dest = deliver.out_dir(self.data) / self._names(u)["draft"]
-        path, report, laid, checked = base_lay.lay_out(doc, dest, self.cls, fmt, paper, held, self.rule_layout)
+        path, report, laid, checked = base_lay.lay_out(
+            doc, dest, self.cls, fmt, paper, made_in.held, self.rule_layout, styles=made_in.styles
+        )
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check

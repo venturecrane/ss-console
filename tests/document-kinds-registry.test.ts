@@ -11,7 +11,7 @@
  * itself can fail.
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readdirSync, readFileSync } from 'fs'
 import { parse as parseYaml } from 'yaml'
 
 interface Kind {
@@ -45,6 +45,52 @@ const PY_DOCUMENT_CLASSES = /^DOCUMENT_CLASSES = \(([\s\S]*?)\)/m
 const PY_VARIANTS = /^VARIANTS = \(([\s\S]*?)\)/m
 const PY_CLASS_TITLES = /^CLASS_TITLES: dict\[str, str\] = \{([\s\S]*?)\}/m
 const TS_DOCUMENT_CLASSES = /^const DOCUMENT_CLASSES = \[([\s\S]*?)\] as const/m
+
+const PY_KIND_VARIANTS = /^KIND_VARIANTS: dict\[str, tuple\[str, \.\.\.\]\] = \{([\s\S]*?)^\}/m
+
+/** The writer's kind -> variants map, read from its source. */
+function kindVariants(path: string): Record<string, string[]> {
+  const m = read(path).match(PY_KIND_VARIANTS)
+  if (!m) throw new Error(`KIND_VARIANTS not found in ${path}`)
+  const out: Record<string, string[]> = {}
+  for (const x of m[1].matchAll(/"([a-z_]+)":\s*\(([^)]*)\)/g))
+    out[x[1]] = [...x[2].matchAll(DQ)].map((y) => y[1])
+  return out
+}
+
+/**
+ * A ledger slot's kind is ``<kind>`` or ``<kind>.<variant>`` (``library_ledger.slot_name``).
+ * Why a slot-name literal in source names a variant the registry does not list,
+ * or null. A file name (``memo.docx``) is not a slot.
+ */
+const FILE_SUFFIXES = new Set([
+  'doc',
+  'docx',
+  'dotx',
+  'pdf',
+  'md',
+  'json',
+  'yaml',
+  'txt',
+  'xlsx',
+  'opus',
+])
+function slotLiteralProblem(literal: string): string | null {
+  const m = literal.match(/^["']([a-z_]+)\.([a-z_]+)["']$/)
+  if (!m || !KINDS.includes(m[1]) || FILE_SUFFIXES.has(m[2])) return null
+  const listed = registry.kinds.find((k) => k.key === m[1])?.variants ?? []
+  return listed.includes(m[2]) ? null : `${literal}: ${m[1]} lists ${JSON.stringify(listed)}`
+}
+
+function pyFiles(dir: string): string[] {
+  return (readdirSync(dir, { recursive: true }) as string[])
+    .filter(
+      (f) =>
+        f.endsWith('.py') &&
+        !f.split('/').some((part) => part.startsWith('.') || part === 'node_modules')
+    )
+    .map((f) => `${dir}/${f}`)
+}
 
 function classTitles(path: string): Array<[string, string]> {
   const m = read(path).match(PY_CLASS_TITLES)
@@ -157,6 +203,27 @@ describe('every copy of the kind list agrees with the registry', () => {
       expect(k.variants, k.key).toEqual([])
   })
 
+  it("the acceptance writer's variants are the registry's, so a slot is kind, variant and attorney", () => {
+    const ACCEPT = 'operator/hermes-smd-overlay/establish_intake/library_accept.py'
+    const declared = Object.fromEntries(
+      registry.kinds.filter((k) => k.variants.length).map((k) => [k.key, k.variants])
+    )
+    expect(kindVariants(ACCEPT)).toEqual(declared)
+  })
+
+  it('every slot-name literal in the operator source names a variant the registry lists', () => {
+    // Tests are left out: they carry unlisted slots on purpose, to prove the
+    // writer and the ledger refuse them (test_library_accept, test_library_caller).
+    const problems: string[] = []
+    for (const file of pyFiles('operator').filter((f) => !/\/tests?\/|\/test_[^/]*\.py$/.test(f))) {
+      for (const lit of read(file).match(/["'][a-z_]+\.[a-z_]+["']/g) ?? []) {
+        const why = slotLiteralProblem(lit)
+        if (why) problems.push(`${file}: ${why}`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
   it("the library-sequence test's renderer list is every kind", () => {
     expect(
       disagreement(
@@ -200,5 +267,12 @@ describe('the comparison can fail', () => {
     expect(disagreement(['memo', 'memo'], KINDS, 'subset')).toMatch(/duplicates/)
     expect(disagreement([...KINDS].reverse(), KINDS, 'ordered')).toMatch(/^order/)
     expect(disagreement(['memo', 'pleading'], KINDS, 'subset')).toMatch(/extra \["pleading"\]/)
+  })
+
+  it('names a slot for a variant the registry does not list, and passes a listed one or a file name', () => {
+    expect(slotLiteralProblem('"demand_letter.settlement"')).toMatch(/demand_letter lists/)
+    expect(slotLiteralProblem('"memo.pre_suit"')).toMatch(/memo lists \[\]/)
+    expect(slotLiteralProblem('"demand_letter.pre_suit"')).toBeNull()
+    expect(slotLiteralProblem('"memo.docx"')).toBeNull()
   })
 })

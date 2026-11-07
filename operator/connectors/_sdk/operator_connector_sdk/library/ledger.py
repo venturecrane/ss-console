@@ -7,7 +7,12 @@ system's history names the same user for a file a person saved and a file the
 Operator wrote. So a file is used only once it is ACCEPTED, and the seat keeps
 the list. One entry per (kind, attorney or none) slot:
 
-    kind         a document kind (operator/contracts/document-kinds.yaml)
+    kind         the slot's kind: a document kind of the registry
+                 (operator/contracts/document-kinds.yaml), and for a kind the
+                 registry lists variants for, one of them after a dot
+                 (``demand_letter.pre_suit``), because each variant is written in
+                 a file of its own. :func:`slot_name` builds it, :func:`parse_slot`
+                 reads it, :func:`slot_problems` checks it against the registry
     attorney     the attorney key, or null for the firm's own file of the kind
     file_id      the file in the library
     version      the accepted saved version of that file
@@ -15,7 +20,10 @@ the list. One entry per (kind, attorney or none) slot:
     contract     "styles": page setup, header, footer and named styles, the body
                  written fresh (ADR 0083, 2026-08-19 amendment); "marked": a firm
                  document whose words were replaced by marked places
-                 (``[[name]]``, the firm-base code)
+                 (``[[name]]``, the firm-base code); "prototypes": a firm document
+                 holding one tagged prototype paragraph or table of each kind
+                 (``PROTO:<kind>``), which the demand writer clones
+                 (``jobs/demand/house.py``)
     accepted_by  who said yes
     accepted_at  when, ISO 8601 UTC
     replaces     the slot's previous accepted file (file_id, version, sha256),
@@ -66,13 +74,15 @@ MANIFEST_KEY = "library_ledger"
 
 STYLES = "styles"
 MARKED = "marked"
-CONTRACTS = (STYLES, MARKED)
+PROTOTYPES = "prototypes"
+CONTRACTS = (STYLES, MARKED, PROTOTYPES)
 
 OK = "ok"
 EMPTY = "empty"
 UNUSABLE = "unusable"
 
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+_SLOT = re.compile(r"^([a-z][a-z0-9_]*)(?:\.([a-z][a-z0-9_]*))?$")
 _WHEN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 _ENTRY_KEYS = frozenset(
     {
@@ -155,6 +165,43 @@ class LedgerRead:
     reason: str = ""
 
 
+# ---- the slot's kind -----------------------------------------------------------------
+
+
+def slot_name(kind: str, variant: str | None = None) -> str:
+    """The ledger kind for ``kind`` and, when it has one, its ``variant``.
+    Raises ValueError for a name that is not lowercase identifier words."""
+    name = f"{kind}.{variant}" if variant else kind
+    parse_slot(name)
+    return name
+
+
+def parse_slot(name: str) -> tuple[str, str | None]:
+    """(kind, variant or None) of a slot's kind. Raises ValueError."""
+    m = _SLOT.match(name) if isinstance(name, str) else None
+    if m is None:
+        raise ValueError(f"{name!r} is not a slot kind (kind, or kind.variant)")
+    return m.group(1), m.group(2)
+
+
+def slot_problems(name: str, variants: dict[str, tuple[str, ...]]) -> list[str]:
+    """Why ``name`` is not a slot of the registry ``variants`` (each kind to its
+    variants, ``()`` for none); empty when it is one. A kind that has variants
+    is accepted only with one of them: its files differ by variant."""
+    try:
+        kind, variant = parse_slot(name)
+    except ValueError as exc:
+        return [str(exc)]
+    if kind not in variants:
+        return [f"kind {kind!r} is not in the document-kind registry"]
+    listed = variants[kind]
+    if variant is None and listed:
+        return [f"kind {kind!r} has variants {list(listed)}; a slot names one"]
+    if variant is not None and variant not in listed:
+        return [f"variant {variant!r} is not one the registry lists for {kind!r} ({list(listed)})"]
+    return []
+
+
 # ---- validation -------------------------------------------------------------------
 
 
@@ -184,6 +231,11 @@ def _entry_problems(where: str, raw: Any) -> list[str]:
         for k in ("kind", "file_id", "version", "accepted_by")
         if not _text(raw[k])
     ]
+    if _text(raw["kind"]):
+        try:
+            parse_slot(raw["kind"])
+        except ValueError as exc:
+            out.append(f"{where}.kind: {exc}")
     if raw["attorney"] is not None and not _text(raw["attorney"]):
         out.append(f"{where}.attorney must be null or an attorney key")
     if not isinstance(raw["sha256"], str) or not _SHA.match(raw["sha256"]):
@@ -385,6 +437,7 @@ __all__ = [
     "MANIFEST_KEY",
     "MARKED",
     "OK",
+    "PROTOTYPES",
     "SCHEMA_VERSION",
     "STYLES",
     "UNUSABLE",
@@ -398,6 +451,9 @@ __all__ = [
     "accept",
     "dump_ledger",
     "parse_ledger",
+    "parse_slot",
     "read_installed",
+    "slot_name",
+    "slot_problems",
     "validate_ledger",
 ]

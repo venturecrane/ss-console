@@ -3,7 +3,7 @@ the seat's kept copies of accepted files (``copies.py``), and the resolver that 
 whose name goes on it" (design 2026-11-06, piece 2).
 
 Standard library only, and no case-system import (``tests/test_library_stdlib_only.py``).
-Nothing on a production path calls it yet; the callers are wired in a later PR.
+The three callers' adapters (``caller.py`` says which) are the only places that call ``resolve``.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from .ledger import (
     MANIFEST_KEY,
     MARKED,
     OK,
+    PROTOTYPES,
     STYLES,
     UNUSABLE,
     Acceptance,
@@ -28,7 +29,10 @@ from .ledger import (
     accept,
     dump_ledger,
     parse_ledger,
+    parse_slot,
     read_installed,
+    slot_name,
+    slot_problems,
     validate_ledger,
 )
 from .memory import MemoryLibrary
@@ -69,6 +73,7 @@ __all__ = [
     "MARKED",
     "NONE_ACCEPTED",
     "OK",
+    "PROTOTYPES",
     "REFUSED",
     "RESOLVED",
     "STYLES",
@@ -100,8 +105,11 @@ __all__ = [
     "copy_rel",
     "dump_ledger",
     "parse_ledger",
+    "parse_slot",
     "read_copy",
     "read_installed",
     "resolve",
+    "slot_name",
+    "slot_problems",
     "validate_ledger",
 ]
