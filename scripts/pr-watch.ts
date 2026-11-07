@@ -115,6 +115,20 @@ interface RawPr {
   }
 }
 
+/** A cancelled CheckRun whose name has another run on the same commit is a superseded
+ *  duplicate (GitHub cancels the first of two runs the same push started), not a failure.
+ *  A cancelled run that stands alone is still reported as failing. */
+export function dropSupersededCancelled(nodes: RawContext[]): RawContext[] {
+  const names = new Map<string, number>()
+  for (const n of nodes) {
+    const key = n.name ?? n.context ?? '?'
+    names.set(key, (names.get(key) ?? 0) + 1)
+  }
+  return nodes.filter(
+    (n) => !(n.conclusion === 'CANCELLED' && (names.get(n.name ?? n.context ?? '?') ?? 0) > 1)
+  )
+}
+
 /** Parse one GraphQL response into snapshots. Throws on a PR the response lacks. */
 export function parse(json: string, numbers: number[]): PrSnapshot[] {
   const body = JSON.parse(json) as { data?: { repository?: Record<string, RawPr | null> } }
@@ -123,7 +137,9 @@ export function parse(json: string, numbers: number[]): PrSnapshot[] {
   return numbers.map((n) => {
     const raw = repo[`p${n}`]
     if (!raw) throw new Error(`PR #${n} not found`)
-    const nodes = raw.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []
+    const nodes = dropSupersededCancelled(
+      raw.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []
+    )
     return {
       number: raw.number,
       state: raw.state,
