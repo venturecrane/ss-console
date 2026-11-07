@@ -285,7 +285,7 @@ def test_the_drafting_lane_holds_on_an_untrustworthy_store(tmp_path, monkeypatch
     _switch(tmp_path, monkeypatch, on=True)
     with pytest.raises(DraftingHold, match="^rule_store_unusable: "):
         firm_wording.freeze_or_hold(tmp_path, "memo", {"responsible_attorney": ATTORNEY}, DraftingHold)
-    assert "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)" in inspect.getsource(DraftingRun)
+    assert "self.data, self.cls, f, DraftingHold, reader, self._style_rule()" in inspect.getsource(DraftingRun)
 
 
 def test_the_demand_lane_holds_on_an_untrustworthy_store(tmp_path, monkeypatch, _spec_store):
@@ -319,3 +319,16 @@ def test_the_daemon_pages_an_untrustworthy_store_only_when_switched_on(tmp_path,
     _switch(tmp_path, monkeypatch, on=True)
     firm_wording.alert_unusable(object(), "J2")
     assert seen == [("rule_store_unusable", "J2")]
+
+
+@pytest.mark.parametrize("kind", DRAFTING_KINDS)
+@pytest.mark.parametrize(
+    "cls,before", [(compose.Drafter, _drafting_before), (evidence_lane.MarkupDrafter, _markup_before)]
+)
+def test_a_style_file_out_of_scope_takes_out_the_house_style_block_and_nothing_else(tmp_path, kind, cls, before):
+    """``house_style`` False (drafting/style_scope.py: the style file is another
+    attorney's) removes exactly THE HOUSE STYLE block from both drafters' compose."""
+    d = _drafting(tmp_path, kind, cls)
+    d.house_style = False
+    block = "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + d.firm.style + SEP
+    assert block in before(d) and d.compose_system() == before(d).replace(block, "", 1)

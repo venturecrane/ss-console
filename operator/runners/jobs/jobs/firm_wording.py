@@ -63,6 +63,8 @@ UNUSABLE_CODE = "rule_store_unusable"
 
 #: The document kind a demand job writes.
 DEMAND_KIND = "demand_letter"
+#: The frozen record's key for the scoped drafting style file (drafting/style_scope.py).
+HOUSE_STYLE = "house_style"
 
 
 class StoreUnusable(RuntimeError):
@@ -77,7 +79,13 @@ def switched_on() -> bool:
     return logic_in_code.load_switch(SWITCH).enforcing
 
 
-def freeze(data: Path, kind: str, attorney: Any, reader: str | None = None) -> list[dict[str, Any]]:
+def freeze(
+    data: Path,
+    kind: str,
+    attorney: Any,
+    reader: str | None = None,
+    style_rule: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Select this job's rules once and write them to ``data/FILE``.
 
     Off: nothing is read or written, ``[]``. Already frozen: the frozen rules.
@@ -91,7 +99,12 @@ def freeze(data: Path, kind: str, attorney: Any, reader: str | None = None) -> l
     if store.status == wording_rules_store.UNUSABLE:
         raise StoreUnusable(store.reason)
     rules = wording_rules_store.applicable(store.rules, kind, attorney, reader)
-    record = {"kind": kind, "attorney": attorney or None, "reader": reader, "rules": rules}
+    record: dict[str, Any] = {"kind": kind, "attorney": attorney or None, "reader": reader, "rules": rules}
+    if style_rule is not None and store.status == wording_rules_store.OK:
+        # The drafting style file scoped to its attorney (drafting/style_scope.py),
+        # selected by the store's own rule: in scope or not, recorded with the rules.
+        applies = bool(wording_rules_store.applicable([style_rule], kind, attorney, reader))
+        record[HOUSE_STYLE] = {"rule": style_rule, "applies": applies}
     tmp = path.with_name(f".{FILE}.tmp")
     tmp.write_text(json.dumps(record, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(path)
@@ -104,7 +117,12 @@ def demand_kind(job: Any) -> str | None:
 
 
 def freeze_or_hold(
-    data: Path, kind: str | None, facts: dict[str, Any], hold: type[Exception], reader: str | None = None
+    data: Path,
+    kind: str | None,
+    facts: dict[str, Any],
+    hold: type[Exception],
+    reader: str | None = None,
+    style_rule: dict[str, Any] | None = None,
 ) -> None:
     """:func:`freeze` for the attorney the matter record names and the document's
     ``reader``, raising ``hold`` (the lane's held outcome) when the store cannot
@@ -113,7 +131,7 @@ def freeze_or_hold(
     if kind is None:
         return
     try:
-        freeze(data, kind, facts.get("responsible_attorney"), reader)
+        freeze(data, kind, facts.get("responsible_attorney"), reader, style_rule)
     except StoreUnusable as exc:
         raise hold(hold_reason(exc)) from None
 
@@ -121,7 +139,19 @@ def freeze_or_hold(
 def attach(drafter: Any, data: Path) -> Any:
     """``drafter`` with the job's frozen rules set on it: every drafter a lane builds."""
     drafter.wording = block_for(data)
+    drafter.house_style = house_style_applies(data)
     return drafter
+
+
+def house_style_applies(data: Path) -> bool:
+    """Whether THE HOUSE STYLE goes to the model: True unless the job froze a
+    scoped style file (drafting/style_scope.py) whose attorney is not the
+    document's. No file, or no scope recorded: True, as before."""
+    path = Path(data) / FILE
+    if not path.is_file():
+        return True
+    scoped = json.loads(path.read_text(encoding="utf-8")).get(HOUSE_STYLE)
+    return True if not isinstance(scoped, dict) else bool(scoped.get("applies"))
 
 
 def block_for(data: Path) -> str:
@@ -153,6 +183,7 @@ __all__ = [
     "DEMAND_KIND",
     "ENV_DIR",
     "FILE",
+    "HOUSE_STYLE",
     "SWITCH",
     "UNUSABLE_CODE",
     "StoreUnusable",
@@ -162,6 +193,7 @@ __all__ = [
     "freeze",
     "demand_kind",
     "freeze_or_hold",
+    "house_style_applies",
     "hold_reason",
     "switched_on",
 ]

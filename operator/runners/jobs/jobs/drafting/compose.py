@@ -241,6 +241,10 @@ class Drafter:
     #: (``jobs/firm_wording.py``), set by the lane after construction; ``""``
     #: sends the model exactly what it was sent before the rules were read.
     wording: str = ""
+    #: Whether THE HOUSE STYLE (the drafting inputs' style file) is sent: False only
+    #: when the file is scoped to an attorney who is not this document's
+    #: (``drafting/style_scope.py``, ``firm_wording.house_style_applies``).
+    house_style: bool = True
 
     def __init__(
         self,
@@ -317,7 +321,11 @@ class Drafter:
     # ---- compose ---------------------------------------------------------------------
     def compose_system(self) -> str:
         blocks = [
-            "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
+            *(
+                ["## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style]
+                if self.house_style
+                else []
+            ),
             *([self.wording] if self.wording else []),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + self.skeleton(),
             self.firm.prompt(self.cls, "compose"),

@@ -71,7 +71,7 @@ import yaml
 
 from ..firm_inputs import pin
 
-from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
+from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits, style_scope
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -227,7 +227,15 @@ def _shape(data: Any) -> list[str]:
         for s in data
         if s not in SCHEMA
         and s not in OPTIONAL
-        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
+        and s
+        not in (
+            attorneys_mod.KEY,
+            evidence_config.KEY,
+            verify_config.KEY,
+            citations.KEY,
+            opening_demand.KEY,
+            style_scope.KEY,
+        )
     ]
     if opening_demand.KEY in data:
         out += opening_demand.validate(data[opening_demand.KEY], CLASSES)
@@ -235,6 +243,8 @@ def _shape(data: Any) -> list[str]:
         out += citations.validate(data[citations.KEY], CLASSES)
     if attorneys_mod.KEY in data:
         out += attorneys_mod.validate(data[attorneys_mod.KEY])
+    if style_scope.KEY in data:
+        out += style_scope.validate(data[style_scope.KEY])
     if evidence_config.KEY in data:
         out += evidence_config.validate(data[evidence_config.KEY], CLASSES)
     if verify_config.KEY in data:
@@ -470,6 +480,12 @@ class DraftingFirm:
     @property
     def style(self) -> str:
         return self.read(self.data["style"])
+
+    @property
+    def style_attorney(self) -> str | None:
+        """Whose instructions the style file is (``style_scope.py``); None: the firm's."""
+        who = self.data.get(style_scope.KEY)
+        return " ".join(who.split()) if isinstance(who, str) and who.strip() else None
 
     def skeleton(self, cls: str) -> str:
         return self.read(self.data["classes"][cls]["skeleton"])

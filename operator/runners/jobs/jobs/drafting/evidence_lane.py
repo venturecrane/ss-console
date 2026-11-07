@@ -95,7 +95,11 @@ class MarkupDrafter(compose.Drafter):
 
     def compose_system(self) -> str:
         blocks = [
-            "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
+            *(
+                ["## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style]
+                if self.house_style
+                else []
+            ),
             *([self.wording] if self.wording else []),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + self.skeleton(),
             self.compose_prompt or self.firm.prompt(self.cls, "compose"),

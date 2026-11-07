@@ -341,9 +341,7 @@ def test_the_lane_kinds_are_exactly_the_kinds_the_job_lanes_read_rules_for():
         in demand_run
     )
     drafting_run = (_JOBS_RUNNER / "jobs" / "drafting" / "run.py").read_text("utf-8")
-    assert (
-        "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)" in drafting_run
-    )
+    assert "self.data, self.cls, f, DraftingHold, reader, self._style_rule()" in drafting_run
     # ...and each lane hands the frozen rules to every drafter it builds.
     for rel in ("drafting/finish.py", "drafting/evidence_lane.py", "demand/run.py"):
         text = (_JOBS_RUNNER / "jobs" / rel).read_text("utf-8")

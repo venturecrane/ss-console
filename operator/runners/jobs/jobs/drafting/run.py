@@ -76,6 +76,7 @@ from . import (
     repair_guard,
     review as review_mod,
     review_first,
+    style_scope,
 )
 from .evidence_lane import CHARGES_LINE, EvidenceLane
 from .placing import Placing
@@ -457,6 +458,18 @@ class DraftingRun(EvidenceLane, Placing):
             smd_released=released,
         )
 
+    def _style_rule(self) -> dict[str, Any] | None:
+        """The style file scoped to its attorney (style_scope.py), checked
+        against the roster when one is installed: a scope naming someone the
+        roster does not list as an attorney stops the job for SMD."""
+        found = style_scope.rule(self.firm)
+        roster = roster_for(self)
+        if found is not None and roster.status == "ok" and not roster.is_attorney(found["attorney"]):
+            raise DraftingFailed(
+                "config_missing: the drafting inputs' style_attorney is not an attorney on the firm's roster"
+            )
+        return found
+
     def _walk(self) -> Verdict:
         if self._is_done("manifest"):
             return self._file()
@@ -465,7 +478,9 @@ class DraftingRun(EvidenceLane, Placing):
         self._stage("destination", self._destination)
         f = self._json("facts.json")
         reader = readers.reader_for(self.cls)  # the registry's reader of this class
-        firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)  # before anything is paid
+        firm_wording.freeze_or_hold(
+            self.data, self.cls, f, DraftingHold, reader, self._style_rule()
+        )  # before anything is paid
         library_pick.matter_attorney_or_stop(self)  # who signs is settled before anything is paid, too
         self._stage(
             "pull",
