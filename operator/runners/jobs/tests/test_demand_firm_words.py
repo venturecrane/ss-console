@@ -67,9 +67,9 @@ def test_a_settled_marker_is_in_the_drafts_dialect_counted_and_names_no_stage(di
     opens = format_check.OPEN_ITEM.findall(md)
     assert len(opens) == 2  # the format check counts both as open items for the attorney
     if dialect == format_check.SQUARE:
-        assert "{{" not in md and "[TO BE SUPPLIED: " in md and "[CONFIRM the arithmetic (" in md
+        assert "{{" not in md and "[TO BE SUPPLIED: " in md and "[CONFIRM this figure (" in md
     else:
-        assert "[TO BE SUPPLIED" not in md and "{{NOT IN RECORD: " in md and "{{ATTORNEY: verify arithmetic: " in md
+        assert "[TO BE SUPPLIED" not in md and "{{NOT IN RECORD: " in md and "{{ATTORNEY: verify this figure (" in md
     # FALSIFIER: the marker said "removed by the final audit" and the notes "the final audit checked"
     assert rv.firm_banned(md) == [] and "audit" not in md.lower()
     assert all(rv.firm_banned(n) == [] and "audit" not in n.lower() for n in notes)

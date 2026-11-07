@@ -63,6 +63,9 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
     fmt, v, who = firm.data["format"], firm.variant, firm.attorney
     author = firm.get("firm", "display_name")
     title = who["title"].replace("{client}", client_label)
+    # The expiry on a business day, in the banner and the closing sentence
+    # alike (house.business_day_expiry); the move is told to the attorney.
+    draft_md, expiry_notes = house.business_day_expiry(draft_md)
     if v.get("layout") == "numbered":
         path, notes = house_numbered.render(
             draft_md,
@@ -101,7 +104,7 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
     )
     if not res.ok:
         raise FormatRefused(res.fails)
-    return path, notes, res.notes
+    return path, notes, [*expiry_notes, *res.notes]
 
 
 def render_plain(md: str, out_dir: Path, name: str, author: str) -> Path:

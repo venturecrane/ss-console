@@ -106,7 +106,7 @@ def test_an_arithmetic_figure_never_survives_unflagged(tmp_path, pricing):
     assert FIGURE_SENTENCE not in final  # its figure is gone from that sentence
     assert (
         "The itemized statement lists total charges of "
-        "[CONFIRM the arithmetic (the bill's lines sum to $1,100.00) BEFORE TRANSMITTAL]" in final
+        "[CONFIRM this figure (the bill's lines sum to $1,100.00) BEFORE TRANSMITTAL]" in final
     )
     rec = json.loads((tmp_path / "job" / "data" / "final-pass.json").read_text())
     assert (rec["removed"], rec["flagged"], rec["cleared"]) == (1, 1, 1)  # the passed check is left as written
@@ -118,7 +118,7 @@ def test_settle_unit():
         "## AUDIT: Damages\n\n- The bill totals $500.00 | ARITHMETIC | lines sum to $450.00\n",
     )
     assert "A sentence that stays." in md and "Another stays." in md
-    assert "$500.00" not in md and "[CONFIRM the arithmetic (lines sum to $450.00) BEFORE TRANSMITTAL]" in md
+    assert "$500.00" not in md and "[CONFIRM this figure (lines sum to $450.00) BEFORE TRANSMITTAL]" in md
     md2, _ = finalpass.settle(
         "## Liability\n\nTrue thing (cite). The defendant admitted fault at the scene (cite). More.\n",
         '## AUDIT: Liability\n\n- "The defendant admitted fault at the scene" | INVENTED | no cite in digest\n',
