@@ -200,6 +200,10 @@ FIRM_BANNED = (
         r"|\b(?:a|the) model (?:read|wrote|drafted|reviewed|audited|produced|generated|summarized)\b",
         re.I,
     ),
+    # the lookup limit's internal name (2026-11-07: "not looked up (over the
+    # cap)" 91 times in a vendor table); never a record's "cap" (a dental cap,
+    # a policy cap is "policy limits" in this lane)
+    re.compile(r"\bover the cap\b|\bthe cap\b(?=\s+(?:on|of|for) (?:lookups?|calls?|the job|this job|spend))", re.I),
 )
 
 

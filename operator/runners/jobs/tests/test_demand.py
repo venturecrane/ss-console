@@ -741,6 +741,18 @@ def test_vendor_lookups_are_capped_and_a_failed_lookup_is_named(tmp_path):
     out = vendor.run(tmp_path, GAP, lambda: v, 2, lambda m: None)
     assert [r["status"] for r in out["rows"]] == ["lookup failed", "no vendor match", "not looked up (over the cap)"]
     assert v.asked == ["Exampletown ER", "Northfield Imaging"]
+    # the table the firm reads: the provider past the limit is one sentence in
+    # the firm's words, never the status's internal wording (review 2026-11-07,
+    # "not looked up (over the cap)" 91 times held a demand)
+    from jobs.demand import review as rv
+
+    table = vendor.section(out)
+    assert "over the cap" not in table and "lookup failed: RuntimeError" in table
+    assert (
+        "lookups for one demand stop at 2; 1 more provider in the item table was not looked up: Ridgeview PT." in table
+    )
+    assert rv.wording({"gap_audit": table}) == []
+    assert rv.wording({"gap_audit": "| Ridgeview PT | not looked up (over the cap) | none |"})
     (tmp_path / "x").mkdir()
     none = vendor.run(tmp_path / "x", GAP, lambda: None, 2, lambda m: None)
     assert "not connected" in vendor.section(none)
