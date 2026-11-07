@@ -145,6 +145,9 @@ const EXPECTED_VERBS = [
   'job_record',
   // "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
   // of job, gateway or root. Its status and record ride the drafting verbs.
+  'library_setup_accept_status',
+  'library_setup_accept_submit',
+  'library_setup_choose',
   'library_setup_submit',
   // The litigation status job's request edge (litigation_verbs.py): submit's
   // table gate admits gateway, agent and root because it has two forms (the

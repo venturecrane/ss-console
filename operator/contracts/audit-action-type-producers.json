@@ -696,6 +696,36 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/audit_verbs.py",
       "reason": "Every write to a firm's Smokeball, recorded by the connector client before it is sent (intent) and after (result), whichever process holds the client: the Operator's MCP server or SMD working directly over seat-probe. The client refuses a write whose intent row did not land. The row names the actor, method, path, matter, a body digest, and the vendor's returned id; the broker stamps the peer uid and pid."
+    },
+    "LIBRARY_SETUP_SUBMITTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_verbs.py",
+      "reason": "Broker-written on library_setup_submit on a seat whose logic_in_code.library_setup is on: an administrator's \"set up our ...\" was queued. Job id and kind; never the request text."
+    },
+    "LIBRARY_SETUP_DELIVERED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_verbs.py",
+      "reason": "Broker-written when a switched-on seat's setup job ended with a reply owed: the list of candidates, none found, an attorney not on the roster, or a chosen document that could not be used. Ids, codes and counts."
+    },
+    "LIBRARY_SETUP_CHOSEN": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_choose.py",
+      "reason": "Broker-written on library_setup_choose when the administrator's reply named exactly one listed document and every check passed. The job ids and the number; never the words."
+    },
+    "LIBRARY_SETUP_ACCEPTED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_verbs.py",
+      "reason": "Broker-written when the made library file was filed in the firm's Document Library and accepted by the root writer (installed or pending install). Ids and codes."
+    },
+    "LIBRARY_SETUP_HELD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_verbs.py",
+      "reason": "Broker-written when a switched-on seat's setup job stopped for SMD (an unreadable switch, a roster or listing that could not be read, a filing or acceptance that did not prove out). The hold code."
+    },
+    "LIBRARY_SETUP_FAILED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/library_setup_verbs.py",
+      "reason": "Broker-written when a switched-on seat's setup job ended without a verdict. The reason code."
     }
   }
 }

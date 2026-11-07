@@ -6,8 +6,9 @@ names only; never a file name, a person's name or a word of any document):
 1. The hunt (``jobs.firmbase.hunt``) for the kind over the firm's open and
    pending matters (and closed ones since ``--closed-since``), narrowed to one
    attorney's own files with ``--attorney`` (matched to the roster the job uses,
-   ``jobs.library_setup.roster``). Prints the hunt's counts and the candidates
-   the job would show the firm: file id, saved-on date, score.
+   ``jobs.library_setup.roster``). Prints the hunt's counts (a candidate the kind's
+   plan cannot adopt is not shown and is counted by reason, ``plan_refused_*``)
+   and the candidates the job would show the firm: file id, saved-on date, score.
 2. On the candidate ``--choose`` (1 = the first shown): the kind's adopt and
    clean (``drafting/brief_base.adopt`` or ``drafting/memo_base.adopt``), then
    the no-client-text check (``establish_intake/blank_form.check``) on the made
@@ -29,6 +30,18 @@ client can be built: the client ops workspace):
     python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
         --attorney "<a name on the roster>" --inputs <drafting inputs dir> --choose 2
 
+``--accept-dry`` runs, on the chosen candidate, exactly the checks the accept job
+runs before it files anything (``jobs/library_setup/accept.py``, ``make.py``):
+the made file, what its drops removed by category (custom XML parts, template
+links, document variables, mail merge, external links, foreign header and
+footer fields), its header and footer residue by category (page numbering, firm
+identity, refused words, refused digits, note words; counts only), the marked
+places proof, and the root writer's no-client-text check with the fixed strings
+that remained. It files nothing:
+
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
+        --inputs <drafting inputs dir> --choose 1 --accept-dry
+
 Exit 0 when every step ran (whatever it found), 2 when a step could not run.
 """
 
@@ -41,7 +54,7 @@ import json
 import sys
 import zipfile
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 HERE = Path(__file__).resolve()
 OVERLAY = HERE.parents[3] / "hermes-smd-overlay"
@@ -60,19 +73,13 @@ class ReadOnly:
         return getattr(self._client, name)
 
 
-def _adopter(kind: str) -> Callable[[bytes, Any], tuple[bytes, list[str]]]:
-    from jobs.drafting import brief_base, memo_base
-
-    return {"mediation_brief": brief_base.adopt, "memo": memo_base.adopt}[kind]
-
-
-def blank_problems(made: bytes) -> dict[str, Any]:
+def blank_problems(made: bytes, fixed: tuple[str, ...] = ()) -> dict[str, Any]:
     """The no-client-text check on the made file: how many problems, in which parts."""
     if str(OVERLAY) not in sys.path:
         sys.path.insert(0, str(OVERLAY))
     from establish_intake import blank_form
 
-    result = blank_form.check(made)
+    result = blank_form.check(made, fixed)
     parts = sorted({p.split(":", 1)[0].split(" ", 1)[0] for p in result.problems})
     return {"problems": len(result.problems), "in": parts, "marks": len(result.marks)}
 
@@ -124,11 +131,12 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
     """Adopt, clean, check and compare one candidate."""
     from jobs import firmbase
     from jobs.drafting.outcome import DraftingFailed
+    from jobs.library_setup import plan as plan_mod
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
     source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
     try:
-        made, notes = _adopter(kind)(blob, source)
+        made, notes = plan_mod.adopter(kind)(blob, source)
     except (DraftingFailed, firmbase.FirmBaseUnfit, ValueError, KeyError) as exc:
         return {"adopted": False, "why": type(exc).__name__}
     return {
@@ -137,6 +145,37 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
         "blank": blank_problems(made),
         "look": look_compare(blob, made),
         "made": made,
+    }
+
+
+def accept_dry(kind: str, client: Any, candidate: dict[str, Any], matter_id: str, inputs: str | None) -> dict[str, Any]:
+    """The accept job's checks on one candidate, writing nothing: adopt and clean,
+    custom XML dropped, headers and footers judged against the firm's identity
+    (the residue by category, never the words), marked places proven, the root
+    writer's no-client-text check with the fixed strings that remained, and the
+    look comparison."""
+    from jobs import firmbase
+    from jobs.library_setup import accept as accept_mod, make as make_mod
+
+    blob = client.download_file(matter_id, candidate["file_id"])[1]
+    source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
+    try:
+        made = make_mod.make(kind, blob, source, accept_mod.identity(inputs))
+    except make_mod.Unusable as exc:
+        residue = dict(item.rsplit(" ", 1) for item in str(exc).split(": ", 1)[-1].split(", ") if " " in item)
+        return {
+            "accept_dry": "unusable",
+            "code": exc.code,
+            "residue": residue if exc.code == "case_words_remain" else {},
+        }
+    return {
+        "accept_dry": "would_file",
+        "residue": made.residue,
+        "dropped": made.dropped,
+        "fixed_strings": len(made.fixed_strings),
+        "blank": blank_problems(made.data, made.fixed_strings),
+        "look": look_compare(blob, made.data),
+        "made": made.data,
     }
 
 
@@ -164,16 +203,20 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     hunted = hunt_mod.hunt(
         args.kind, client, closed_since=args.closed_since or "", person=attorney.case_system_name if attorney else None
     )
-    shown = job_mod.candidates(hunted, client)
+    shown = job_mod.candidates(hunted, client, args.kind)
     report.update(
         counts=dict(sorted(hunted.counts.items())),
+        dropped_files={k: list(v) for k, v in sorted(hunted.files.items())},
         candidates=[{k: c[k] for k in ("file_id", "saved_on", "score")} for c in shown],
     )
     if not shown or args.choose < 1 or args.choose > len(shown):
         return {**report, "chosen": None}
     pick = shown[args.choose - 1]
     by_id = {c.file_id: c.matter_id for c in hunted.candidates}
-    result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
+    if args.accept_dry:
+        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs)
+    else:
+        result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
     made = result.pop("made", None)
     if made is not None and args.keep:
         Path(args.keep).mkdir(parents=True, exist_ok=True)
@@ -189,6 +232,11 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
     p.add_argument("--closed-since", default="", help="also read matters closed on or after this date")
     p.add_argument("--choose", type=int, default=1, help="which shown candidate to adopt (1 = first; 0 = none)")
     p.add_argument("--keep", default="", help="write the made file here (ops workspace only)")
+    p.add_argument(
+        "--accept-dry",
+        action="store_true",
+        help="run the accept job's checks on the chosen candidate (made file, allow list, proofs); file nothing",
+    )
     args = p.parse_args(argv)
     if client is None:
         from smokeball_connector.client import build_client_from_env

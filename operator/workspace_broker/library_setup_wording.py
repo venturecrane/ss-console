@@ -11,10 +11,16 @@ WHERE EACH IS SAID:
 
 * ``ack`` and ``ack_attorney``: the submit tool's answer when the seat is
   switched on, relayed by the turn that took the request.
-* ``refused_*``: the submit's refusal, relayed by that turn.
+* ``refused_kind`` to ``refused_attorney``: the submit's refusal, relayed by that turn.
 * ``lead_*``, ``item*``, ``question``, ``none_*``, ``not_rostered``,
   ``ambiguous``, ``outside``: the job's reply, rendered from its ledger row by
   ``render`` when the reply is bound and sent in code (``delivered_matter``).
+* ``chosen*`` and the choice's refusals (``refused_no_choice`` on): the choose
+  tool's answer to the administrator's reply naming a document.
+* ``done_*``, ``changed``, ``unusable``, ``not_a_form``: the reply of the job that made the
+  file from the chosen document, rendered like the list's.
+* ``ACTIVITY``: the firm's portal activity line for each audit row a
+  switched-on seat's setup job writes.
 
 A value the row does not carry leaves its sentence out (an item with no matter
 number uses ``item_no_matter``); nothing is guessed. No timeframes, no
@@ -57,6 +63,56 @@ SENTENCES: dict[str, str] = {
     "not_rostered": "{named} is not one of the attorneys the firm has given us, so we cannot set up a file in that name. Nothing was changed.",
     "ambiguous": "{named} matches more than one of the firm's attorneys. Please reply with the attorney's full name. Nothing was changed.",
     "outside": "Nothing has been sent to anyone outside the firm.",
+    # The administrator's choice, answered by the choose tool on a switched-on seat.
+    "chosen": "We are making the firm's {one} file from number {n}.",
+    "chosen_attorney": "We are making {attorney}'s {one} file from number {n}.",
+    # The choice's refusals: nothing is made.
+    "refused_no_choice": "Please reply with the number of the document to use.",
+    "refused_two": "Your reply names more than one of the documents. Please reply with just one number.",
+    "refused_not_listed": "Your reply names a number that is not on the list. Please reply with one of the numbers shown.",
+    "refused_not_requester": "Only the person who asked to set up these {many} can choose the document.",
+    "refused_no_list": "There is no list of documents in this thread to choose from.",
+    "refused_superseded": "A later request to set up these {many} replaced this list. Please choose from the newest one.",
+    "refused_chosen": "A document was already chosen from this list.",
+    "refused_stale": "This list cannot be chosen from any more. Please ask again to set up these {many}.",
+    "refused_unreadable": "We could not read this thread just now, so nothing was made. Please reply again with the number.",
+    # The choice's job, told when it ends.
+    "done_firm": (
+        "The firm's {one} file is now made from the document saved {saved} in matter {matter}, file {file_id}. "
+        "Every word of that case was taken out and its look kept. The firm's {many} are made in it from the "
+        "next draft on."
+    ),
+    "done_attorney": (
+        "{attorney}'s {one} file is now made from the document saved {saved} in matter {matter}, file {file_id}. "
+        "Every word of that case was taken out and its look kept. {attorney}'s {many} are made in it from the "
+        "next draft on."
+    ),
+    "done_pending": "This seat installs it on its own before that next draft.",
+    "changed": (
+        "That document was saved again after we looked through it, so the file was not made from it. "
+        "Nothing was changed. Please ask again to set up these {many}."
+    ),
+    "unusable": (
+        "We could not make the file from that document without keeping words of its case, so nothing was "
+        "changed. You can reply with another number from the list."
+    ),
+    "not_a_form": (
+        "We could not make a file from that document because its layout does not give us the places to "
+        "write into, so nothing was changed. You can reply with another number from the list."
+    ),
+}
+
+#: What the firm's portal activity says for each audit row a switched-on seat's
+#: setup job writes (``src/lib/portal/operator/activity-language.ts`` carries
+#: these exactly, pinned by ``tests/library-setup-activity.test.ts``). A seat
+#: with the switch off writes none.
+ACTIVITY: dict[str, str] = {
+    "LIBRARY_SETUP_SUBMITTED": "Started looking through the firm's own documents for a library file",
+    "LIBRARY_SETUP_DELIVERED": "Told the firm which of its own documents a library file could be made from",
+    "LIBRARY_SETUP_CHOSEN": "Was told which document to make a library file from",
+    "LIBRARY_SETUP_ACCEPTED": "Made and filed a library file from the firm's own document",
+    "LIBRARY_SETUP_HELD": "Paused setting up a library file for SMD to look at",
+    "LIBRARY_SETUP_FAILED": "Could not finish setting up a library file",
 }
 
 
@@ -75,6 +131,13 @@ def ack(kind: str, attorney: str | None = None) -> str:
     if attorney:
         return say("ack_attorney", attorney=attorney, **names(kind))
     return say("ack", **names(kind))
+
+
+def chosen(kind: str, n: int, attorney: str | None = None) -> str:
+    """The choose tool's answer on a switched-on seat."""
+    if attorney:
+        return say("chosen_attorney", attorney=attorney, n=n, **names(kind))
+    return say("chosen", n=n, **names(kind))
 
 
 def _saved(iso_day: str) -> str:
@@ -96,21 +159,46 @@ def _items(candidates: list[Any]) -> list[str]:
     return out
 
 
-def _report(row: dict[str, Any]) -> dict[str, Any]:
-    raw = row.get("report_json")
+def _json_field(row: dict[str, Any], key: str) -> dict[str, Any]:
+    raw = row.get(key)
     try:
-        report = json.loads(raw) if isinstance(raw, str) and raw else {}
+        value = json.loads(raw) if isinstance(raw, str) and raw else {}
     except ValueError:
-        report = {}
-    return report if isinstance(report, dict) else {}
+        value = {}
+    return value if isinstance(value, dict) else {}
+
+
+def _accept_body(row: dict[str, Any], outcome: str, attorney: str, kind_names: dict[str, str]) -> str:
+    """The made file's read-back, or a choice that made nothing."""
+    if outcome in ("changed", "unusable", "not_a_form"):
+        return say(outcome, **kind_names)
+    choice = _json_field(row, "choice_json")
+    saved, matter, file_id = (
+        _saved(str(choice.get("saved_on") or "")),
+        choice.get("matter_number"),
+        choice.get("file_id"),
+    )
+    if not (saved and matter and file_id):
+        return ""
+    values = {"saved": saved, "matter": matter, "file_id": file_id, **kind_names}
+    done = say("done_attorney", attorney=attorney, **values) if attorney else say("done_firm", **values)
+    return f"{done} {say('done_pending')}" if outcome == "accepted_pending" else done
+
+
+def _list_body(report: dict[str, Any], attorney: str, kind_names: dict[str, str]) -> str:
+    items = _items(report.get("candidates") or [])
+    if not items:
+        return ""
+    lead = say("lead_attorney", attorney=attorney, **kind_names) if attorney else say("lead_firm", **kind_names)
+    return "\n".join([lead, *items, "", say("question")])
 
 
 def render(row: dict[str, Any]) -> str:
     """The reply for a delivered setup job, from its row; "" when the row holds
     nothing this file can say (the bind then refuses: no words, no send)."""
-    report = _report(row)
+    report = _json_field(row, "report_json")
     kind_names = names(str(row.get("document_class") or ""))
-    attorney = str(report.get("attorney_name") or "").strip()
+    attorney = str(report.get("attorney_name") or row.get("attorney_name") or "").strip()
     outcome = str(report.get("setup_outcome") or "")
     named = str(row.get("attorney_named") or "").strip()
     if outcome == "attorney_not_rostered" and named:
@@ -119,15 +207,13 @@ def render(row: dict[str, Any]) -> str:
         body = say("ambiguous", named=named)
     elif outcome == "none_found":
         body = say("none_attorney", attorney=attorney, **kind_names) if attorney else say("none_firm", **kind_names)
+    elif outcome in ("accepted", "accepted_pending", "changed", "unusable", "not_a_form"):
+        body = _accept_body(row, outcome, attorney, kind_names)
     elif outcome == "candidates":
-        items = _items(report.get("candidates") or [])
-        if not items:
-            return ""
-        lead = say("lead_attorney", attorney=attorney, **kind_names) if attorney else say("lead_firm", **kind_names)
-        body = "\n".join([lead, *items, "", say("question")])
+        body = _list_body(report, attorney, kind_names)
     else:
-        return ""
-    return f"{body}\n\n{say('outside')}"
+        body = ""
+    return f"{body}\n\n{say('outside')}" if body else ""
 
 
-__all__ = ["KIND_NAMES", "SENTENCES", "ack", "names", "render", "say"]
+__all__ = ["ACTIVITY", "KIND_NAMES", "SENTENCES", "ack", "chosen", "names", "render", "say"]

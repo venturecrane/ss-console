@@ -8,12 +8,15 @@ from __future__ import annotations
 import io
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import SimpleNamespace
 
 import docx
 import pytest
+
+import library_setup_testkit as kit
+from test_drafting_memo_base import _firm_memo
 
 from jobs import lane_proof
 from jobs.lane_proof import admits as real_admits  # before the conftest's every-lane-proven stub
@@ -40,6 +43,20 @@ def _memo(author: str, words: int = 1000, sign: str = "") -> bytes:
     d.core_properties.author = author
     d.core_properties.last_modified_by = author
     d.add_paragraph(" ".join(["word"] * words))
+    if sign:
+        d.add_paragraph(sign)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _firm_memo_by(author: str, sign: str = "") -> bytes:
+    """A made-up firm memo the memo plan can adopt (the memo kit's), saved by
+    ``author``, long enough for a memo's length band, signed when ``sign``."""
+    d = docx.Document(io.BytesIO(_firm_memo()))
+    d.core_properties.author = author
+    d.core_properties.last_modified_by = author
+    d.add_paragraph(" ".join(["word"] * 600))
     if sign:
         d.add_paragraph(sign)
     buf = io.BytesIO()
@@ -88,11 +105,11 @@ def _row(fid: str, name: str, years: float) -> dict:
 def _client(**kw) -> ReadOnlyClient:
     return ReadOnlyClient(
         {
-            "f-new": (MATTER_A, _row("f-new", "Case Evaluation Memo.docx", 0.5), _memo("Alex Example")),
+            "f-new": (MATTER_A, _row("f-new", "Case Evaluation Memo.docx", 0.5), _firm_memo_by("Alex Example")),
             "f-old": (
                 MATTER_B,
                 _row("f-old", "Liability Analysis.docx", 3.0),
-                _memo("Blair Sample", sign="Blair Sample"),
+                _firm_memo_by("Blair Sample", sign="Blair Sample"),
             ),
             "f-short": (MATTER_B, _row("f-short", "Short memo.docx", 0.1), _memo("Alex Example", words=40)),
             "f-other": (MATTER_A, _row("f-other", "Mediation Brief.docx", 0.2), _memo("Alex Example")),
@@ -102,11 +119,19 @@ def _client(**kw) -> ReadOnlyClient:
 
 
 def _switch(mode: str = "observe", error: str | None = None):
-    return lambda: SimpleNamespace(enforcing=mode != "observe", error=error)
+    """The real ``logic_in_code.Switch`` (library_setup_testkit)."""
+    return kit.switch(mode, error)
+
+
+def _inputs_dir(*emails: str) -> str:
+    """A real drafting inputs directory with these authored attorneys."""
+    return kit.drafting_inputs(Path(tempfile.mkdtemp()) / "inputs", *emails)
 
 
 def _inputs(*emails: str):
-    return SimpleNamespace(attorneys=lambda: [{"email": e, "block": ["x"]} for e in emails])
+    """The REAL loader's answer (``drafting.firm.load``), never a look-alike: a
+    method-shaped stub here once hid ``inputs.attorneys()`` on a property."""
+    return kit.loaded(Path(tempfile.mkdtemp()) / "inputs", *emails)
 
 
 JOB = {"kind": "library_setup", "setup_kind": "memo", "attorney_named": None, "live": True}
@@ -235,31 +260,96 @@ def test_a_matter_that_could_not_be_listed_holds_rather_than_says_none():
     assert out["outcome"] == "held" and out["hold"] == R.COULD_NOT_LOOK
 
 
+def test_a_document_the_kinds_plan_cannot_adopt_is_never_listed_and_is_counted_by_reason():
+    """The A&P rehearsal, 2026-11-07: every memo the firm would have been shown was
+    refused by the memo plan, so a pick would have been told the wrong reason."""
+    plain = _memo("Alex Example")  # a memo with no heading for the plan to read roles from
+    client = _client()
+    client.files["f-plain"] = (MATTER_A, _row("f-plain", "Plain memo.docx", 0.1), plain)
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-old", "f-new"]
+    assert out["counts"]["plan_refused"] == 1 and out["counts"]["plan_refused_no_heading"] == 1
+
+
+def test_a_plan_that_crashes_on_one_file_refuses_that_file_and_the_hunt_goes_on(monkeypatch):
+    """The 2026-11-07 rehearsal: one brief the plan raised TypeError on ended the
+    whole hunt. Now it is that file's refusal, counted with its id."""
+    from jobs.library_setup import plan
+
+    client = _client()
+    crashing = client.files["f-old"][2]
+    real = plan.adopter
+
+    def adopter(kind):
+        adopt = real(kind)
+
+        def fussy(blob, source):
+            if blob == crashing:
+                raise TypeError("'NoneType' object is not subscriptable")
+            return adopt(blob, source)
+
+        return fussy
+
+    monkeypatch.setattr(plan, "adopter", adopter)
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-new"]
+    assert out["counts"]["plan_refused_plan_error"] == 1
+    assert out["dropped_files"]["plan_refused_plan_error"] == ["f-old"]
+
+
+def test_a_kind_whose_every_candidate_the_plan_refuses_is_none_found():
+    client = ReadOnlyClient(
+        {
+            "a": (MATTER_A, _row("a", "Memo one.docx", 0.5), _memo("Alex Example")),
+            "b": (MATTER_B, _row("b", "Memo two.docx", 1.5), _memo("Blair Sample")),
+        }
+    )
+    out, _ = _run(client=client)
+    assert (out["setup_outcome"], out["candidates"]) == (J.NONE_FOUND, [])
+    assert out["counts"]["plan_refused"] == 2
+
+
 def test_nothing_in_the_band_is_none_found():
     client = ReadOnlyClient({"f": (MATTER_A, _row("f", "Memo.docx", 0.5), _memo("Alex Example", words=10))})
     out, _ = _run(client=client)
     assert out["setup_outcome"] == J.NONE_FOUND and out["candidates"] == []
 
 
-def test_an_attorneys_setup_hunts_only_their_files_and_names_them(monkeypatch):
-    monkeypatch.setattr(J, "_inputs", lambda _d: _inputs("alex@firm.example", "blair@firm.example"))
-    out, _ = _run(job={"attorney_named": "Blair Sample"})
+def test_an_attorneys_setup_hunts_only_their_files_and_names_them():
+    out, _ = _run(
+        job={"attorney_named": "Blair Sample"}, inputs_dir=_inputs_dir("alex@firm.example", "blair@firm.example")
+    )
     assert out["setup_outcome"] == J.CANDIDATES and [c["file_id"] for c in out["candidates"]] == ["f-old"]
     assert out["attorney_key"] == "blair sample" and out["attorney_name"] == "Blair Sample"
 
 
 @pytest.mark.parametrize("mode,state", [("enforce", "delivered"), ("observe", "observed")])
-def test_an_attorney_not_on_the_roster_is_said_and_nothing_is_hunted(monkeypatch, mode, state):
-    monkeypatch.setattr(J, "_inputs", lambda _d: _inputs("alex@firm.example"))
-    out, client = _run(job={"attorney_named": "Casey"}, mode=mode)
+def test_an_attorney_not_on_the_roster_is_said_and_nothing_is_hunted(mode, state):
+    out, client = _run(job={"attorney_named": "Casey"}, mode=mode, inputs_dir=_inputs_dir("alex@firm.example"))
     assert (out["outcome"], out["setup_outcome"]) == (state, R.ATTORNEY_NOT_ROSTERED)
     assert not any(c.startswith("download") for c in client.calls)
 
 
-def test_a_roster_email_the_case_system_lacks_holds_for_smd(monkeypatch):
-    monkeypatch.setattr(J, "_inputs", lambda _d: _inputs("gone@firm.example"))
-    out, _ = _run(job={"attorney_named": "Alex"})
+def test_a_roster_email_the_case_system_lacks_holds_for_smd():
+    out, _ = _run(job={"attorney_named": "Alex"}, inputs_dir=_inputs_dir("gone@firm.example"))
     assert out["outcome"] == "held" and out["hold"] == R.ROSTER_UNMATCHED
+
+
+def test_the_roster_reads_the_real_loaders_attorneys_property():
+    """Regression (the 2026-11-07 rehearsal): ``DraftingFirm.attorneys`` is a
+    property. ``roster.attorneys`` called it, and every request naming an
+    attorney raised TypeError on a firm's real inputs. Fails on that code."""
+    from jobs.drafting import firm as drafting_firm
+
+    assert isinstance(getattr(drafting_firm.DraftingFirm, "attorneys"), property)
+    inputs = _inputs("alex@firm.example")
+    assert isinstance(inputs, drafting_firm.DraftingFirm)
+    assert [a.email for a in R.attorneys(inputs, _client())] == ["alex@firm.example"]
+
+
+def test_drafting_inputs_that_do_not_load_hold_the_named_attorney_for_smd():
+    out, _ = _run(job={"attorney_named": "Alex"}, inputs_dir=str(Path(tempfile.mkdtemp()) / "missing"))
+    assert out["outcome"] == "held" and out["hold"] == R.ROSTER_INPUTS_MISSING
 
 
 def test_an_unknown_kind_or_an_unreadable_job_file_holds(tmp_path):
@@ -379,10 +469,16 @@ def test_the_child_is_the_lanes_runner_with_library_setup_for_draft():
 
 
 def test_a_dark_setup_is_admitted_without_a_proof_and_a_live_one_has_its_own_key(tmp_path):
+    lane, broker = _lane(tmp_path, "observed")  # the real DraftingLane, never a look-alike
     env = tmp_path / "e.json"
     env.write_text(json.dumps({"kind": "library_setup", "live": False}))
-    lane = SimpleNamespace(LANE="drafting", run_dir=tmp_path)
     assert real_admits(lane, "01X", env, {"state": "submitted"}) is True
     assert lane_proof.lane_key("drafting", {"kind": "library_setup", "document_class": "memo"}) == (
         "document-drafter.library_setup"
     )
+    assert lane_proof.lane_key("drafting", {"kind": "library_setup", "mode": "accept"}) == (
+        "document-drafter.library_setup_accept"
+    )
+    env.write_text(json.dumps({"kind": "library_setup", "live": True}))
+    broker.rows["01X"] = {"state": "submitted"}
+    assert real_admits(lane, "01X", env, {"state": "submitted"}) is False  # live: waits for its own proof

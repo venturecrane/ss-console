@@ -76,6 +76,24 @@ def test_a_text_box_fails() -> None:
     assert any("a text box" in x for x in _problems(docx(body)))
 
 
+def _boxed_footer(*lines: str) -> str:
+    return (
+        "<w:p><w:r><w:pict><w:txbxContent>"
+        + "".join(p(x) for x in lines)
+        + "</w:txbxContent></w:pict></w:r></w:p>"
+    )
+
+
+def test_pleading_papers_line_numbers_in_a_footer_text_box_pass() -> None:
+    assert blank_form.check(docx(footer=_boxed_footer("1", "2", "3", "28")), FIXED).ok
+
+
+def test_a_name_in_a_footer_text_box_still_fails() -> None:
+    problems = _problems(docx(footer=_boxed_footer("1", "Jordan Placeholder")))
+    assert any("word/footer1.xml: paragraph" in x for x in problems)
+    assert not any("Jordan" in x for x in problems)
+
+
 def test_a_custom_xml_part_fails() -> None:
     problems = _problems(
         docx(extra_parts={"customXml/item1.xml": "<matter><id>2026-0001</id></matter>"})

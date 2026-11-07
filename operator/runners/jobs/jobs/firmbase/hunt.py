@@ -104,9 +104,17 @@ class Hunted:
 
     candidates: list[Candidate] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
+    #: The file ids behind a count, for the counts that name files (a candidate
+    #: the kind's plan refused, by code). Ids only, never a name.
+    files: dict[str, list[str]] = field(default_factory=dict)
 
     def bump(self, key: str, by: int = 1) -> None:
         self.counts[key] = self.counts.get(key, 0) + by
+
+    def note(self, key: str, file_id: str) -> None:
+        """Count ``key`` and record which file it was."""
+        self.bump(key)
+        self.files.setdefault(key, []).append(file_id)
 
 
 def classify(cls: str, name: str) -> bool:

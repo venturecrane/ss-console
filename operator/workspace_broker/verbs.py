@@ -219,6 +219,12 @@ VERBS: tuple[Verb, ...] = (
     # "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
     # of job. Its status and record ride the drafting verbs above.
     Verb("library_setup_submit", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
+    # The administrator's choice from the list (library_setup_choose.py): the
+    # gateway's tool call or root. The made file's hand-off to the root writer
+    # and its answer: the runner daemon (root) only.
+    Verb("library_setup_choose", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
+    Verb("library_setup_accept_submit", _only(ROOT), library_setup_verbs.dispatch),
+    Verb("library_setup_accept_status", _only(ROOT), library_setup_verbs.dispatch),
     # The litigation status job's request edge (litigation_verbs.py). Submit's
     # table gate admits all three classes because it has two forms; the handler
     # pins each form to its peers (a request from the gateway or root, a

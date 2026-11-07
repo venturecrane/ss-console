@@ -68,6 +68,16 @@ CREATE_SQL = (
     "attorney_named TEXT, report_json TEXT, reason TEXT, cents INTEGER NOT NULL DEFAULT 0, "
     "attempt INTEGER NOT NULL DEFAULT 1, reply_sent_at TEXT, reply_key TEXT)"
 )
+#: Added for the administrator's choice (3b): which list a choice is from, the
+#: chosen document's ids, the attorney it was for, and the intake run.
+ADDED_COLUMNS = {
+    "mode": "TEXT NOT NULL DEFAULT 'list'",
+    "parent_id": "TEXT",
+    "choice_json": "TEXT",
+    "attorney_name": "TEXT",
+    "attorney_key": "TEXT",
+    "run_id": "TEXT",
+}
 #: The columns a row is read with, plus what the reply chain expects of a
 #: drafting row (no matter, no files, no folder).
 _SELECT = (
@@ -88,6 +98,9 @@ PROJECTION = (
     "reason",
     "cents",
     "reply_sent_at",
+    "mode",
+    "parent_id",
+    "run_id",
 )
 
 
@@ -149,6 +162,10 @@ class SetupLedger:
         conn = self._connect()
         try:
             conn.execute(CREATE_SQL)
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(library_setup_jobs)")}
+            for name, decl in ADDED_COLUMNS.items():
+                if name not in have:
+                    conn.execute(f"ALTER TABLE library_setup_jobs ADD COLUMN {name} {decl}")
             conn.commit()
         finally:
             conn.close()
@@ -190,8 +207,8 @@ class SetupLedger:
         try:
             conn.execute("BEGIN IMMEDIATE")
             twin = conn.execute(
-                "SELECT id FROM library_setup_jobs WHERE document_class=? AND COALESCE(lower(attorney_named),'')=? "
-                "AND state IN ('submitted','running') LIMIT 1",
+                "SELECT id FROM library_setup_jobs WHERE mode='list' AND document_class=? "
+                "AND COALESCE(lower(attorney_named),'')=? AND state IN ('submitted','running') LIMIT 1",
                 (env["kind"], (env["attorney"] or "").lower()),
             ).fetchone()
             if twin is not None:

@@ -17,6 +17,9 @@ THE ORDER, ALL IN CODE (no model call anywhere in this job):
 4. At most ``TOP`` candidates whose length is in the kind's band, each with its
    file id, saved-at date and the matter's number.
 
+A job whose ``mode`` is ``accept`` is the administrator's choice from such a
+list (``accept.py``).
+
 THE VERDICT carries ids, dates, numbers, counts and codes, never a file name or
 any text of a document (the hunt's names carry client names). It is the one
 thing the lane records. State:
@@ -91,12 +94,39 @@ def _date(saved_at: str) -> str:
         return ""
 
 
-def candidates(hunted: hunt_mod.Hunted, client: Any) -> list[dict[str, Any]]:
-    """The candidates the firm is shown: ids, dates and numbers only."""
-    chosen = [c for c in hunted.candidates if _in_band(c)][:TOP]
+def _plan_fits(kind: str, c: hunt_mod.Candidate, client: Any, hunted: hunt_mod.Hunted) -> bool:
+    """The kind's plan can adopt this candidate (``plan.fits``, no write); a
+    refusal is counted by its code, and a file that will not download is
+    counted as could not look, never listed."""
+    from ..firmbase import Source
+    from .plan import fits
+
+    try:
+        blob = client.download_file(c.matter_id, c.file_id)[1]
+    except Exception:  # noqa: BLE001 - a file that cannot be read now is not listed, and is counted
+        hunted.note("plan_unreadable", c.file_id)
+        return False
+    why = fits(kind, blob, Source(c.matter_id, c.file_id, "", c.sha256))
+    if why:
+        hunted.bump("plan_refused")
+        hunted.note(f"plan_refused_{why}", c.file_id)
+    return not why
+
+
+def candidates(hunted: hunt_mod.Hunted, client: Any, kind: str = "") -> list[dict[str, Any]]:
+    """The candidates the firm is shown: ids, dates and numbers only. With
+    ``kind``, only those the kind's plan can make a library file from."""
+    chosen = []
+    for c in (x for x in hunted.candidates if _in_band(x)):
+        if len(chosen) >= TOP:
+            break
+        if not kind or _plan_fits(kind, c, client, hunted):
+            chosen.append(c)
     return [
         {
             "file_id": c.file_id,
+            "matter_id": c.matter_id,
+            "sha256": c.sha256,
             "matter_number": _matter_number(client, c.matter_id),
             "saved_on": _date(c.saved_at),
             "score": c.score,
@@ -154,9 +184,11 @@ def run(
     counts = dict(sorted(hunted.counts.items()))
     if counts.get("matters_unlisted"):
         return _held(roster_mod.COULD_NOT_LOOK, live, counts=counts)
-    found = candidates(hunted, client)
+    found = candidates(hunted, client, kind)
+    counts = dict(sorted(hunted.counts.items()))
     outcome = CANDIDATES if found else NONE_FOUND
-    return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, **who)
+    dropped = {k: list(v) for k, v in sorted(hunted.files.items())}
+    return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, dropped_files=dropped, **who)
 
 
 def run_dir(job_dir: Path, *, inputs_dir: str | None = None, **kw: Any) -> dict[str, Any]:
@@ -167,6 +199,10 @@ def run_dir(job_dir: Path, *, inputs_dir: str | None = None, **kw: Any) -> dict[
         return _held(BAD_JOB, False)
     if not isinstance(job, dict):
         return _held(BAD_JOB, False)
+    if job.get("mode") == "accept":
+        from . import accept
+
+        return accept.run(job, Path(job_dir), inputs_dir=inputs_dir, **kw)
     return run(job, inputs_dir=inputs_dir, **kw)
 
 

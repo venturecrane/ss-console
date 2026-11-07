@@ -1149,6 +1149,9 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # INTERNAL_WRITE, as the other submits. The requester and request are the
     # turn's verified inbound, not tool arguments.
     "library_setup_submit": ActionClass.INTERNAL_WRITE,
+    # The administrator's choice from that list: it queues the job that makes and
+    # files the firm's library file (an internal write on the firm's own record).
+    "library_setup_choose": ActionClass.INTERNAL_WRITE,
     # The litigation status job (hermes-smd-lanes/litigation.py, ss-console
     # litigation_verbs.py). Submit queues a job on the Machine's own runner,
     # which files the status workbook on the firm's filing matter:

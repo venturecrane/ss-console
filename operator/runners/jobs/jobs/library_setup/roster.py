@@ -83,7 +83,7 @@ def attorneys(inputs: Any, client: Any) -> list[Attorney]:
     ``RosterUnusable``."""
     if inputs is None:
         raise RosterUnusable(ROSTER_INPUTS_MISSING)
-    authored = [str(a.get("email") or "").strip().lower() for a in inputs.attorneys()]
+    authored = [str(a.get("email") or "").strip().lower() for a in inputs.attorneys]
     by_email: dict[str, str] = {}
     for row in _staff(client):
         email = str(row.get("email") or "").strip().lower()

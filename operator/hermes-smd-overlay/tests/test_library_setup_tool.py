@@ -109,3 +109,80 @@ def test_the_schema_has_no_requester_field_and_the_tool_is_an_internal_write(set
     assert set(schema["properties"]) == {"kind", "attorney"} and schema["required"] == ["kind"]
     assert schema["properties"]["kind"]["enum"] == ["mediation_brief", "memo"]
     assert classify_tool("library_setup_submit").action_class is ActionClass.INTERNAL_WRITE
+
+
+def test_the_fake_clients_methods_are_the_real_clients():
+    """The fakes below stand in for ``JobsBrokerClient``: a method they have and
+    it lacks would pass here and raise on a seat (the 2026-11-07 lesson)."""
+    import inspect
+
+    from shared.jobs_client import JobsBrokerClient
+
+    for name in ("library_setup_submit", "library_setup_choose"):
+        real = inspect.signature(getattr(JobsBrokerClient, name))
+        assert list(real.parameters) == ["self", "envelope"], (name, real)
+
+
+class _ChooseClient(_Client):
+    def library_setup_choose(self, envelope):
+        self.envelopes.append(envelope)
+        return self.answer
+
+
+@pytest.fixture
+def choose(monkeypatch):
+    from tests.conftest import load_plugin
+
+    mod = load_plugin("hermes-smd-lanes").library_setup
+    holder: dict = {}
+
+    def make(answer: dict) -> _ChooseClient:
+        holder["client"] = _ChooseClient(answer)
+        return holder["client"]
+
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: holder["client"])
+    _clear()
+    yield mod, make
+    _clear()
+
+
+def test_the_choice_carries_only_the_verified_email_and_never_a_model_number(choose):
+    mod, make = choose
+    answer = {
+        "ok": True,
+        "accepted": True,
+        "job_id": JOB,
+        "live": True,
+        "say": "the broker's sentence",
+    }
+    client = make(answer)
+    _email("2 please")
+    out = json.loads(mod.library_setup_choose({"choice": 1, "job_id": "x"}))
+    assert out == {"accepted": True, "job_id": JOB, "live": True, "say": "the broker's sentence"}
+    assert client.envelopes == [
+        {"requested_by": ADMIN, "request_ref": IMID, "reply_text": "2 please"}
+    ]
+    assert set(mod.TOOLS["library_setup_choose"][1]["properties"]) == {"kind"}
+
+
+def test_a_dark_choice_is_answered_as_today(choose):
+    mod, make = choose
+    make({"ok": True, "accepted": False, "live": False})
+    _email("2")
+    assert json.loads(mod.library_setup_choose({})) == {"accepted": False, "live": False}
+
+
+def test_a_refused_choice_relays_the_broker_sentence(choose):
+    mod, make = choose
+    make(
+        {
+            "ok": True,
+            "accepted": False,
+            "reason": "the broker's refusal",
+            "reason_key": "refused_two",
+        }
+    )
+    _email("1 and 2")
+    expected = {"accepted": False, "live": True, "reason": "the broker's refusal"}
+    assert json.loads(mod.library_setup_choose({})) == expected
+    assert classify_tool("library_setup_choose").action_class is ActionClass.INTERNAL_WRITE
