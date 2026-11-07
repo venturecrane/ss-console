@@ -116,7 +116,9 @@ def status(store: Any, request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"the run's result could not be read: {exc}") from exc
 
 
-def dispatch(broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None) -> dict[str, Any]:
+def dispatch(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
     """Root only (the verb table's gate)."""
     store = getattr(broker, "establishment", None)
     if action == "library_edit_submit":
