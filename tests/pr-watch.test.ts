@@ -108,6 +108,28 @@ suite('pr-watch: what a PR shows', () => {
     expect(parse(json, [7])[0].mergeState).toBe('BLOCKED')
     expect(() => parse(json, [8])).toThrow('PR #8 not found')
   })
+
+  it('drops a cancelled run that a second run of the same name superseded, and keeps a lone one', () => {
+    // #3857, 2026-11-06: one push started two "Runtime ACs" runs; GitHub cancelled the first and
+    // the second passed, and the watcher read the pair as FAILING for the whole queue wait.
+    const twice = body(7, 'OPEN', true, [
+      { __typename: 'CheckRun', name: 'acs', status: 'COMPLETED', conclusion: 'CANCELLED' },
+      { __typename: 'CheckRun', name: 'acs', status: 'COMPLETED', conclusion: 'SUCCESS' },
+      { __typename: 'CheckRun', name: 'lint', status: 'COMPLETED', conclusion: 'CANCELLED' },
+    ])
+    expect(parse(twice, [7])[0].checks).toEqual([
+      { name: 'acs', state: 'pass' },
+      { name: 'lint', state: 'fail' },
+    ])
+    expect(describe(parse(twice, [7])[0])).toBe('open | FAILING lint | queued #1 AWAITING_CHECKS')
+    const rerunning = body(7, 'OPEN', true, [
+      { __typename: 'CheckRun', name: 'acs', status: 'COMPLETED', conclusion: 'CANCELLED' },
+      { __typename: 'CheckRun', name: 'acs', status: 'IN_PROGRESS', conclusion: null },
+    ])
+    expect(describe(parse(rerunning, [7])[0])).toBe(
+      'open | checks running | queued #1 AWAITING_CHECKS'
+    )
+  })
 })
 
 suite('pr-watch: the command', () => {
