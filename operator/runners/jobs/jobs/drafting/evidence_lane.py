@@ -35,6 +35,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from .. import firm_wording
 from ..demand import draft as d_mod
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
@@ -95,6 +96,7 @@ class MarkupDrafter(compose.Drafter):
     def compose_system(self) -> str:
         blocks = [
             "## THE HOUSE STYLE (the attorney's own drafting instructions; binding)\n\n" + self.firm.style,
+            *([self.wording] if self.wording else []),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + self.skeleton(),
             self.compose_prompt or self.firm.prompt(self.cls, "compose"),
         ]
@@ -288,7 +290,7 @@ class EvidenceLane:
             skeleton=self._skeleton(),
         )
         d.compose_prompt = self.evidence.compose_prompt
-        return d
+        return firm_wording.attach(d, self.data)
 
     def _skeleton(self) -> str:
         cp = self.data / "caption.json"

@@ -44,11 +44,13 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode
+from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
 from ..proof import review as proof_review
 from . import (
+    asked,
+    batching,
     crosscheck,
     deliver,
     draft,
@@ -56,8 +58,10 @@ from . import (
     finalpass,
     firm as firm_mod,
     format_check,
+    gapaudit,
     gate,
     job as job_mod,
+    library_pick,
     preflight,
     premise,
     pull,
@@ -72,12 +76,6 @@ from .outcome import DemandFailed, DemandHold, GateQuotesLeft, Verdict
 
 MAX_REPAIRS = 2
 FINAL = "draft-final.md"  # the letter after the final audit pass; what is gated and rendered
-
-
-def _vendor_from_env() -> Any:
-    from smokeball_connector.records_vendor import client_from_env
-
-    return client_from_env()
 
 
 #: The drafting gate's privilege-and-wall gate. A refusal there means text from
@@ -126,13 +124,16 @@ class DemandRun:
             client=client,
             log=log,
             before_request=lambda stage: self.limits.check_each_call(self.budget.refresh(), stage),
+            before_batch=self._before_batch,
         )
         self._seat_factory = seat_factory
         self._seat: Any = None
         self.date_stamp, self.long_date = self._frozen_dates(today())
         self.readback_pause = readback_pause
         self._repairs: dict[str, list[str]] = {}
-        self.vendor_factory = vendor_factory or _vendor_from_env
+        #: The reference file the demand is written in (``library_pick``), set with the format.
+        self._reference: Path | None = None
+        self.vendor_factory = vendor_factory or vendor.from_env
 
     # ---- plumbing ------------------------------------------------------------------
     @property
@@ -150,9 +151,10 @@ class DemandRun:
         p = self.data / "state.json"
         return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
 
-    def _put(self, key: str, value: Any) -> None:
+    def _put(self, key: str, value: Any, *, drop: bool = False) -> None:
+        """Set a mark, or with ``drop`` forget it so the stage runs again on its new input."""
         st = self._state()
-        st[key] = value
+        st.pop(key, None) if drop else st.__setitem__(key, value)
         tmp = self.data / "state.json.tmp"
         tmp.write_text(json.dumps(st, indent=1), encoding="utf-8")
         tmp.replace(self.data / "state.json")
@@ -256,33 +258,19 @@ class DemandRun:
             ) from None
 
     # ---- paid stages -----------------------------------------------------------------
+    def _batching(self) -> None:
+        """The firm's batch-queue levers against this job's estimate (``batching.py``)."""
+        est = float(self._json("preflight.json")["estimate"]["usd"])
+        self.doorway.batch_stages = batching.stages(self.firm.data["levers"], est)
+        if self.doorway.batch_stages:
+            self.log(f"batch queue for {', '.join(sorted(self.doorway.batch_stages))}: half price, each round waits")
+
+    def _before_batch(self, stage: str, items: int, chars: int) -> None:
+        cost = batching.projected_usd(self.firm.data["budget"], self.pricing.batch_multiplier, stage, items, chars)
+        self.limits.check_before_paid(projected_usd=cost, spent_usd=self.budget.refresh(), stage=stage, batch=True)
+
     def _digest(self) -> str:
-        p = self.data / "digest.md"
-        if p.is_file():
-            return p.read_text(encoding="utf-8")
-        files = summarize.corpus_files(self.data)
-        chunks = summarize.build_chunks(files, int(self.firm.get("levers", "chunk_chars")))
-        s = summarize.Summarizer(
-            self.data,
-            self.doorway,
-            self.firm.model("digest"),
-            self.firm.text("prompt_digest"),
-            int(self.firm.get("levers", "digest_max_tokens")),
-            self._workers,
-            self.log,
-        )
-        digests = s.run(chunks)
-        out = summarize.condense(
-            digests,
-            int(self.firm.get("levers", "digest_budget_chars")),
-            self.doorway,
-            self.firm.model("digest"),
-            self.firm.text("prompt_condense"),
-            self._workers,
-            self.log,
-        )
-        p.write_text(out, encoding="utf-8")
-        return out
+        return summarize.digest(self.data, self.doorway, self.firm, self._workers, self.log)
 
     def _matter_fields(self) -> list[str]:
         f = self._json("facts.json")
@@ -328,7 +316,7 @@ class DemandRun:
             d.repair(digest, version)
             version += 1
             result = d.audit(version, digest, corpus)
-        return version, result
+        return asked.apply(d, self.data, digest, corpus, version, result, self.log)
 
     def _demand_checks(self, version: int, result: dict[str, Any]) -> list[str]:
         """Every check between the final audit and the render. Findings the
@@ -346,6 +334,9 @@ class DemandRun:
         # vocabulary (a stage, a check's label) in anything the firm reads.
         notes = [f"The file supports this only in part: {x}" for x in draft.finding_text(audit_md, ("DRIFTS",))]
         notes += [f"Taken out or flagged before filing: {x}" for x in settled]
+        cited = finalpass.authorities_cited(md)
+        if cited:  # law is the attorney's to confirm; the file is not expected to contain it
+            notes.append("Legal authorities cited in the letter, for the attorney to confirm: " + "; ".join(cited))
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
         notes += [f"Quotation repaired before filing (the letter): {x}" for x in g.get("repairs") or []]
@@ -355,8 +346,12 @@ class DemandRun:
         """``draft-final.md`` from the last draft and its audit, once: a resume
         (or the gate's quote repair, which rewrites it) keeps the same file."""
         out, rec = self.data / FINAL, self.data / "final-pass.json"
-        if out.is_file() and rec.is_file():
+        if out.is_file() and rec.is_file() and int(self._json("final-pass.json").get("version") or 0) == version:
             return out.read_text(encoding="utf-8"), list(self._json("final-pass.json")["notes"])
+        if rec.is_file():
+            # a later draft (an asked repair): the letter is settled and gated again
+            self.log(f"  final pass: draft v{version} replaces v{self._json('final-pass.json').get('version')}")
+            self._put("gate.json", None, drop=True)
         md = (self.data / f"draft-v{version}.md").read_text(encoding="utf-8")
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         try:
@@ -384,7 +379,10 @@ class DemandRun:
         lines = ["| Document | Why it was held out |", "|---|---|"]
         lines += [f"| {str(w['name']).replace('|', '/')} | {w['reason']} |" for w in rows]
         return (
-            head + "Never read by a model; clear any of them and ask again to include it.\n\n" + "\n".join(lines) + "\n"
+            head
+            + "Not read for this demand; clear any of them and ask again to include it.\n\n"
+            + "\n".join(lines)
+            + "\n"
         )
 
     def _gate(self, name: str, md: str, path: Path | None = None) -> tuple[dict[str, Any], str]:
@@ -439,6 +437,9 @@ class DemandRun:
         if self.job.wants("gap_audit"):
             gap = (self.data / "gap-audit.md").read_text(encoding="utf-8")
             gg, gap = self._gate("gate-gap-audit.json", gap, self.data / "gap-audit.md")
+            # The firm's words, again, on the text as it is filed: a list
+            # cached before the rule (2026-11-06) is scrubbed here, not re-bought.
+            gap = gapaudit.firm_words(gap)
             if gg.get("repairs"):  # code-authored, so a changed quotation is visible
                 gap += (
                     "\n\n## Quotations repaired before filing\n\n" + "\n".join(f"- {x}" for x in gg["repairs"]) + "\n"
@@ -454,7 +455,7 @@ class DemandRun:
             md = (self.data / FINAL).read_text(encoding="utf-8")
             client = crosscheck.matched_client(md, self._json("facts.json"), deliver.front_keys(self.firm))
             try:
-                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client)
+                path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client, self._reference)
             except deliver.FormatRefused as exc:
                 raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
             gap_fixes = [
@@ -514,6 +515,7 @@ class DemandRun:
         return self._file()
 
     def _paid(self) -> Verdict:
+        self._batching()
         self._stage(
             "transcribe",
             lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, self._workers),
@@ -522,7 +524,7 @@ class DemandRun:
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.firm, client, self.log))
         digest = self._digest()
         self._done("summarize")
-        d = self._drafter()
+        d = firm_wording.attach(self._drafter(), self.data)
         pre = self._json("preflight.json")
         walled = len(self._json("walled.json"))
         machine = self._json("transcribed.json") if (self.data / "transcribed.json").is_file() else []
@@ -551,6 +553,7 @@ class DemandRun:
         self._stage("facts", self._facts)
         self._check_facts()
         self._stage("destination", self._destination)
+        firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job), self._json("facts.json"), DemandHold)
         self._stage("pull", self._pull)
         self._stage("preflight", lambda: preflight.run(self.data, self.firm, self._json("facts.json"), self.log))
         self._estimate()
@@ -581,22 +584,8 @@ class DemandRun:
                 + "; ".join(variant.get("evidence") or ["no evidence either way"])[:300]
                 + ". Nothing was spent."
             )
-        who = self._json("facts.json").get("responsible_attorney")
-        signs = self.firm.attorney_for(who)
-        # The format is the responsible attorney's (an attorney row may name
-        # its own, e.g. Craig Ashton's, 2026-10-14); unmapped, the firm's default.
-        if name not in self.firm.variants_for(signs):
-            whose = f"{who}'s demands" if (signs or {}).get("format") else "the firm"
-            raise DemandHold(
-                f"this is a {name.replace('_', '-')} demand and no {name.replace('_', '-')} format is "
-                f"authored for {whose}. Nothing was spent."
-            )
-        if not signs:
-            raise DemandHold(
-                f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "
-                "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
-            )
-        self.firm = self.firm.select(name, signs)
+        # Whose demand, in which format, and which file it is written in (library_pick).
+        self.firm, self._reference = library_pick.select(self, name)
 
     def run(self) -> Verdict:
         try:

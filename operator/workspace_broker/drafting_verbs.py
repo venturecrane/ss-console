@@ -19,6 +19,9 @@ Peer gating, per verb (identical to demand):
     drafting_allowance     gateway PID, agent uid, or uid 0.
     drafting_job_record    uid 0 only (the runner daemon)
     drafting_job_resume    uid 0 only, with NO agent tool.
+    drafting_job_add_to_request  gateway PID (the words are read from the seat's
+                           request index for the turn's verified email, never
+                           from the model) OR uid 0; see drafting_additions.py.
 
 THE SUBMIT CHECKS, in order, none of which spends anything:
 1. the envelope is exactly ``drafting_ledger.validate_envelope``'s shape;
@@ -48,7 +51,8 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof
+from . import delivery_proof, drafting_additions, library_setup_verbs
+from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .drafting_intake import operator_library_number, resolve_request_graph_id
@@ -95,6 +99,7 @@ VERBS = (
     "drafting_allowance",
     "drafting_job_record",
     "drafting_job_resume",
+    "drafting_job_add_to_request",
 )
 
 
@@ -173,6 +178,8 @@ class DraftingVerbs:
         self._audit_append = audit_append
         #: Revise-mode routing (2026-11-04): an email's conversation id.
         self.thread_of = thread_of
+        #: How long ``drafting_job_add_to_request`` waits for the runner's daemon.
+        self.add_wait_seconds = drafting_additions.WAIT_SECONDS
 
     @classmethod
     def build(cls, broker: BrokerContext, *, audit_db_path: str | None, queue_dir: str | None) -> DraftingVerbs:
@@ -227,6 +234,10 @@ class DraftingVerbs:
             return self._record(request)
         if action == "drafting_job_resume":
             return self._resume(request)
+        if action == "drafting_job_add_to_request":
+            return drafting_additions.add_to_request(
+                self._db, self._audit, request, wait=self.add_wait_seconds, now=_iso_utc
+            )
         raise ValueError(f"unsupported drafting action: {action}")
 
     # -- allowance ------------------------------------------------------------
@@ -371,6 +382,8 @@ class DraftingVerbs:
         revise = self._route(envelope, revise_of, peer_uid)
         if isinstance(revise, str):
             return refused(revise)
+        if revise is not None:
+            envelope = drafting_additions.with_carried_words(envelope, self._db.read(revise["prior_job_id"]))
         # A revision is the delivered draft finished as asked: no draft is
         # counted, so a spent allowance never blocks it (its spend is capped).
         if revise is None and state["remaining"] <= 0:
@@ -383,7 +396,8 @@ class DraftingVerbs:
                 envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from, revise=revise
             )
         except SubmitRefused as exc:
-            return refused(f"{exc}; nothing new was queued", **({"job_id": exc.job_id} if exc.job_id else {}))
+            extra = {"job_id": exc.job_id} if exc.job_id else {}
+            return refused(f"{exc}; nothing new was queued", **extra, **({"underway": True} if exc.underway else {}))
         return self._accepted(job_id, envelope, state["remaining"], revise)
 
     def _accepted(
@@ -515,6 +529,9 @@ def drafting_dispatch(
     verbs = broker.drafting
     if verbs is None:
         raise ValueError("drafting verbs not configured on this broker")
+    if action in ("drafting_job_status", "drafting_job_record") and library_setup_verbs.owns(verbs, request):
+        # A "set up our ..." job: the drafting lane's second kind, its own table.
+        return library_setup_verbs.handle(verbs, action, request, peer_uid)
     envelope = request.get("envelope")
     if action == "drafting_job_submit" and isinstance(envelope, dict) and "request_graph_id" in envelope:
         # Root only; the drafting lane's copy of the demand lane's resolution.

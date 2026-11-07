@@ -18,12 +18,20 @@ claim, dol, banner, expires, salutation, signer), then ``## Section``,
 paragraphs. ``## Exhibits`` starts the exhibit list and the signature block is
 inserted before it. Everything after ``=== ATTORNEY NOTES ===`` goes to a
 separate notes text, never into the demand.
+
+A demand in a filed action (the ``litigation`` variant, ``re_vs`` in the firm's
+config) goes to defense counsel, and its RE block is the action's caption over
+its court and case number, not a carrier's insured and claim number. Its front
+matter carries ``caption`` and ``court`` in place of ``insured`` and ``claim``
+(``LITIGATION_FRONT_KEYS``). Read 2026-11-06 off a firm's own letters to
+defense counsel: everything below the RE block is the same house letter.
 """
 
 from __future__ import annotations
 
 import copy
 import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +60,26 @@ KINDS = (
 )
 NOTES_MARK = "=== ATTORNEY NOTES ==="
 FRONT_KEYS = ("date", "attn", "client", "insured", "claim", "dol", "banner", "expires", "salutation", "signer")
+#: The litigation variant's front matter: the caption ("<plaintiff> vs.
+#: <defendant>, et al.,") and the court line under it ("<County> County Superior
+#: Court Case No. <number>"). ``client`` and ``dol`` stay: the cross-check reads
+#: both against the matter record, and the client names the file.
+LITIGATION_FRONT_KEYS = (
+    "date",
+    "attn",
+    "client",
+    "caption",
+    "court",
+    "dol",
+    "banner",
+    "expires",
+    "salutation",
+    "signer",
+)
+
+
+def front_keys(litigation: bool = False) -> tuple[str, ...]:
+    return LITIGATION_FRONT_KEYS if litigation else FRONT_KEYS
 
 
 class RenderError(ValueError):
@@ -231,6 +259,79 @@ def parse(md: str, keys: tuple[str, ...] = FRONT_KEYS) -> tuple[dict[str, str], 
     return front, md[m.end() :], notes.strip()
 
 
+#: A long date as the letter writes it, with or without its weekday.
+_LONG_DATE = re.compile(
+    r"(?:(?P<wd>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+)?"
+    r"(?P<mon>January|February|March|April|May|June|July|August|September|October|November|December)"
+    r"\s+(?P<day>\d{1,2}),\s+(?P<year>\d{4})"
+)
+
+
+def _long(d: date) -> str:
+    return f"{d:%A}, {d:%B} {d.day}, {d.year}"
+
+
+def business_day_expiry(md: str) -> tuple[str, list[str]]:
+    """The demand's expiry on a business day. The drafter sets it thirty days
+    out and a Saturday or Sunday comes up one week in three; on 2026-11-07 the
+    review flagged a Sunday, a day the firm's and the carrier's offices are
+    closed. The banner's date moves to the Monday, every statement of the same
+    date in the letter moves with it, and a weekday word that disagrees with
+    its date is corrected. Public holidays are not known here: a Monday that
+    is one is the attorney's to move, and the note says so. Returns the letter
+    and the attorney-notes lines (none when nothing changed)."""
+    m = re.search(r"(?m)^expires:\s*(.*)$", md)
+    if not m:
+        return md, []
+    hit = _LONG_DATE.search(m.group(1))
+    if not hit:
+        return md, []
+    try:
+        d = date(int(hit["year"]), _MONTHS[hit["mon"]], int(hit["day"]))
+    except (KeyError, ValueError):
+        return md, []
+    moved = d
+    while moved.weekday() >= 5:
+        moved += timedelta(days=1)
+    was, now = hit.group(0), _long(moved)
+    if was == now:
+        return md, []
+    out = md.replace(was, now)
+    bare = f"{d:%B} {d.day}, {d.year}"
+    if moved != d:
+        # the same date written without its weekday, in the body's closing sentence
+        out = re.sub(rf"(?<![A-Za-z], ){re.escape(bare)}", f"{moved:%B} {moved.day}, {moved.year}", out)
+        note = (
+            f"The demand's expiry fell on a {d:%A} ({bare}); it is written as {now}, the next business day. "
+            "Public holidays are not checked: move it again if that Monday is one."
+        )
+    else:
+        note = f"The expiry's weekday was corrected to {now} (the letter had {was})."
+    return out, [note]
+
+
+_MONTHS = {
+    m: i
+    for i, m in enumerate(
+        (
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ),
+        start=1,
+    )
+}
+
+
 def table_kind(header: list[str]) -> str:
     h = [c.strip().lower() for c in header]
     if h and h[0].startswith("icd"):
@@ -249,7 +350,31 @@ def out_name(client: str) -> str:
     return f"Demand.{safe}.docx"
 
 
-def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "") -> None:
+def _underline_after_tab(p_el: Any) -> None:
+    """The caption of a filed action is underlined as well as bold, as the
+    firm's own letters to defense counsel write it; "RE:" is not."""
+    seen_tab = False
+    for r in p_el.findall(_qn("w:r")):
+        if r.find(_qn("w:tab")) is not None:
+            seen_tab = True
+        elif seen_tab and r.find(_qn("w:t")) is not None:
+            u = r.find(_qn("w:rPr")).makeelement(_qn("w:u"), {_qn("w:val"): "single"})
+            r.find(_qn("w:rPr")).append(u)
+
+
+def _re_block(w: HouseWriter, front: dict[str, str], litigation: bool) -> None:
+    if litigation:  # a filed action: the caption, then its court and case number
+        _underline_after_tab(w.para("re_first", f"**RE:\t{front['caption']}**"))
+        w.para("re_line", f"\t{front['court']}")
+        w.para("re_line", f"\tDate of Loss: {front['dol']}")
+        return
+    w.para("re_first", f"**RE:\tOur Client:\t{front['client']}**")
+    w.para("re_line", f"\tYour Insured:\t{front['insured']}")
+    w.para("re_line", f"\tClaim Number:\t{front['claim']}")
+    w.para("re_line", f"\tDate of Loss:\t{front['dol']}")
+
+
+def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "", litigation: bool = False) -> None:
     w.para("blank")
     w.para("blank")
     w.para("date", front["date"])
@@ -259,10 +384,7 @@ def _header(w: HouseWriter, front: dict[str, str], mail_line: str = "") -> None:
     for line in front["attn"].split("|"):
         w.para("attn", line.strip())
     w.para("blank")
-    w.para("re_first", f"**RE:\tOur Client:\t{front['client']}**")
-    w.para("re_line", f"\tYour Insured:\t{front['insured']}")
-    w.para("re_line", f"\tClaim Number:\t{front['claim']}")
-    w.para("re_line", f"\tDate of Loss:\t{front['dol']}")
+    _re_block(w, front, litigation)
     w.para("blank")
     w.banner(front["banner"], front["expires"])
     w.para("blank")
@@ -299,10 +421,14 @@ class _Body:
             if title.lower() == "exhibits":
                 if not self.signed:
                     self.sign()
-                self.w.para("exh_head", title)
+                self.w.para("exh_head", f"**{title}**")
                 self.in_exhibits = True
             else:
-                self.w.para("heading", title)
+                # Bold, as every section heading in the firm's own letters is.
+                # The reference's prototype carries the rest (centered, its
+                # caps and underline); a run's weight is set here, because
+                # ``_run`` writes each run's bold from the text's own marks.
+                self.w.para("heading", f"**{title}**")
         else:
             title = line[4:].strip()
             self.w.para("totalhead" if title.startswith("Total Medical Specials") else "subhead", f"**{title}**")
@@ -367,14 +493,16 @@ def render(
     signer: str = "",
     initials: str = "",
     mail_line: str = "",
+    litigation: bool = False,
 ) -> tuple[Path, str]:
     """``(the demand file, the attorney notes text)``. ``client_label`` names
     the file: on the seat it is the matter record's client name, read by code,
     so no model-written string becomes a file name (review of #3074); the
-    laptop tool's behavior (the letter's own client line) is the fallback."""
-    front, body, notes = parse(md)
+    laptop tool's behavior (the letter's own client line) is the fallback.
+    ``litigation``: the RE block is the action's caption and court."""
+    front, body, notes = parse(md, front_keys(litigation))
     w = HouseWriter(reference)
-    _header(w, front, mail_line)
+    _header(w, front, mail_line, litigation)
     _Body(w, front, signature, signer_title, signer, initials).feed(body.strip("\n").splitlines())
     out_dir.mkdir(parents=True, exist_ok=True)
     name = out_name(client_label or front["client"])

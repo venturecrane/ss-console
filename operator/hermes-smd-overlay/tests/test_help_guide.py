@@ -64,7 +64,7 @@ _FIXTURE_TIPS = """tips:
       Reply in the same thread with what to change.
 """
 
-#: The real guide, when this overlay is checked out inside ss-console.
+#: The real guide, beside the overlay in this repository (ADR 0095).
 _REAL_HELP = Path(__file__).resolve().parents[2] / "skills" / "operator-help"
 
 
@@ -247,10 +247,10 @@ def test_other_depths_are_unchanged(sf, tmp_path):
         assert "answer_shape" not in json.dumps(facts)
 
 
-@pytest.mark.skipif(not _REAL_HELP.is_dir(), reason="overlay checked out outside ss-console")
 def test_the_shipped_guide_reads_whole_under_the_ceiling_without_its_notes(hg):
     """The real guide and tips, as a seat reads them. Pins the size so the help
-    result stays small enough to ride every help turn."""
+    result stays small enough to ride every help turn. A moved guide fails here."""
+    assert _REAL_HELP.is_dir(), f"the shipped help guide is missing: expected {_REAL_HELP}"
     roots = (_REAL_HELP.parent,)
     body = hg.read_guide(roots)
     assert body.startswith("Prompt it the same way you prompt Claude.")

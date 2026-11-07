@@ -35,7 +35,7 @@ def _sr(tmp_path: Path, rows: list[dict]) -> SimpleNamespace:
     d = tmp_path / "slug"
     d.mkdir()
     (d / "raw_manifest.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    return SimpleNamespace(slug_dir=d)
+    return SimpleNamespace(slug_dir=d, unit=SimpleNamespace(unit="alpha"))
 
 
 def test_a_password_protected_pdf_is_set_aside_with_the_run_lanes_reason(tmp_path):

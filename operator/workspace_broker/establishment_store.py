@@ -62,6 +62,7 @@ from .establishment_validation import (
     safe_slug,
 )
 from .pending_rule_store import PendingRuleStore
+from .rule_reach import adjustment_for
 
 logger = logging.getLogger(__name__)
 
@@ -582,14 +583,7 @@ class EstablishmentStore:
             # file is a worse outcome than one redundant refusal.
             raise EstablishmentValidationError(f"rule {row['proposal_id']} was already committed; it is in effect")
 
-        adjustment = {
-            "id": row["proposal_id"],
-            "text": row["text"],
-            "sha256": row["text_sha256"],
-            "instructed_by": row["instructed_by"],
-            "applied_by": applied_by,
-            "at": _iso_utc(),
-        }
+        adjustment = adjustment_for(row, applied_by, _iso_utc())
         submission = {
             "phase": "install",
             "scope": "firm_adjust",

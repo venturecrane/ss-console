@@ -570,8 +570,13 @@ class LitigationVerbs:
         fields = request.get("fields")
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("litigation_job_record requires job_id, a known state, and a fields object")
-        row = self._db.record(job_id, state, dict(fields))
-        if row.get("prev_state") == state:
+        fields = dict(fields)
+        # Audit-only metadata (a lost deliver wake, recorded in the job's
+        # current state), never a column, as the chronology lane keeps it
+        # (2026-10-30: a litigation job's lost wake was refused twice).
+        wake = fields.pop("wake", None)
+        row = self._db.record(job_id, state, fields)
+        if row.get("prev_state") == state and not isinstance(wake, dict):
             return {"ok": True, "job": LitigationLedger.project(row)}
         projected = LitigationLedger.project(row)
         meta: dict[str, Any] = {
@@ -590,6 +595,8 @@ class LitigationVerbs:
             meta["counts"] = projected["counts"]
         if "writes" in fields:  # a reassignment names every write it made to the firm's records, here
             meta["writes"] = report_writes(fields["writes"])
+        if isinstance(wake, dict):
+            meta["wake"] = {k: wake.get(k) for k in ("wake_failed", "outcome")}
         self._audit(AUDIT_TYPES[state], meta)
         return {"ok": True, "job": projected}
 

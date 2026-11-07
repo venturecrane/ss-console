@@ -68,7 +68,34 @@ Nothing runs first on the client seat. Unit tests on synthetic shapes with a mut
 
 ### Amendment, 2026-11-05: every refusal ships off, per seat
 
-By the resume, a merge reached the client seat in ring 1 before the pilot in ring 2, with no person between, and staging has no Smokeball connector. So the token's observe-first rule now covers every mechanism that can refuse or change what a firm sees: `logic_in_code` in the seat's `customer.yaml` (`printed_source_check`, `post_record_derivation`, `conflict_fence`, `fixed_wording`), each `observe` when absent and `enforce` when unreadable. Code ships before the skills that use it, in separate PRs, accepting the old call and the new one. The pilot authors `enforce` first; a client seat only on the Captain's yes. Detail: `docs/plans/logic-in-code/resume-2026-11-05.md`.
+By the resume, a merge reached the client seat in ring 1 before the pilot in ring 2, with no person between, and staging has no Smokeball connector. So the token's observe-first rule now covers every mechanism that can refuse or change what a firm sees: `logic_in_code` in the seat's `customer.yaml` (`printed_source_check`, `post_record_derivation`, `conflict_fence`, `fixed_wording`, and since 2026-11-06 `wording_rules`, whether the job lanes follow a firm's confirmed wording rules, and since 2026-11-07 `library_setup`, whether a firm's "set up our ..." request is answered from the firm's own documents), each `observe` when absent and `enforce` when unreadable. Code ships before the skills that use it, in separate PRs, accepting the old call and the new one. The pilot authors `enforce` first; a client seat only on the Captain's yes. Detail: `docs/plans/logic-in-code/resume-2026-11-05.md`.
+
+### Amendment, 2026-11-06: measured on the real work, the program shrinks to what earned it
+
+The six mechanisms came from reading code. On 11-06 the A&P ops workspace read the seat's own records for 2026-10-07 to 2026-11-06. It was read-only and cost $0 (task-20261106T035743-11795, with the row-level key in task-20261106T045106-1606's input). It counted about 60 non-drafting failures, about 35 of which reached the firm. It also counted, against each mechanism, the real failures that mechanism would have prevented:
+
+- 1 outcome ledger: 0
+- 2 resolution token: 0
+- 3 as printed: 1 partial
+- 4 fixed wording: about 7
+- 5 conflict fence: 0
+- 6 events in, status out: about 5
+
+Most of the volume maps to no mechanism. That includes:
+
+- litigation values and dates wrong through ordinary code defects
+- jobs dying silently (process kills, disk, token lapse, lost wakes)
+- in-turn chat replies stating false things
+
+A person stepped in on 7 of 7 litigation jobs and 8 of 9 chronology jobs.
+
+So:
+
+- Mechanisms 4 and 6 stay.
+- The merged code for 1 and 3 (#3752) stays in observe, where it changes nothing a firm sees.
+- 2 and 5 are not built further. #3753, #3797, #3792 and #3800 were closed with their branches kept.
+
+The program's measure is now per lane: a $0 replay of the lane's last real jobs finishes with no step a person had to take that code could remove. Each fix is plain code proven against that lane's answer key before it merges. A switch is used only where a fix would change what a firm sees in a way it has not asked for. A held, failed or dead job's notice to the firm is one shared renderer in `operator/workspace_broker/fixed_wording.py` (#3816), which every lane joins. Litigation goes first and chronology second.
 
 ## Build order
 

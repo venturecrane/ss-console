@@ -25,8 +25,16 @@ from pathlib import Path
 
 import pytest
 
+from bin.tests.guard_needs import require_path
+
 _BIN = Path(__file__).resolve().parents[1]
 _SEED = _BIN.parents[1] / "operator" / "customers" / "pilot-smokeball" / "seed" / "voice"
+
+
+@pytest.fixture
+def seed_corpus() -> None:
+    """The committed rehearsal corpus these checks run against; absent fails, never skips."""
+    require_path(_SEED)
 
 
 def _load():
@@ -128,7 +136,7 @@ def test_demotions_render_for_the_customer():
 # ------------------------------------------------------------ real corpus
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_hyphen_rule_demotes_on_the_two_late_documents():
     """Reproduces the documented finding, from the rules side.
 
@@ -152,7 +160,7 @@ def test_the_hyphen_rule_demotes_on_the_two_late_documents():
     ]
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_a_threshold_rules_verdict_depends_on_the_tokenizer():
     """WHY THE TOKENIZER SHIPS WITH THE CARD, demonstrated rather than argued.
 

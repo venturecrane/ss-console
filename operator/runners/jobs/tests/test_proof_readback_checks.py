@@ -151,6 +151,66 @@ def test_a_firms_own_english_is_not_system_vocabulary(clean):
     assert checks.system_vocabulary(clean) == []
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        "The order lists a diagnosis by code only. (Exhibit 8 - p. 1)",
+        "The diagnosis was recorded by code alone. (Exhibit 7 - p. 2)",
+        "The form gives the procedure by code number. (Exhibit 2 - p. 4)",
+    ],
+)
+def test_a_records_own_by_code_wording_is_not_system_vocabulary(record):
+    """A form that lists a diagnosis as a bare code is described in the
+    record's own words; flagged, the review raised it on every round."""
+    assert checks.system_vocabulary(record) == []
+
+
+def test_by_code_as_the_systems_own_wording_is_still_caught():
+    assert checks.system_vocabulary("The total was set by code.") == ["by code"]
+    assert checks.system_vocabulary("Counted by code only from the record.") == ["counted by code"]
+
+
+@pytest.mark.parametrize(
+    "narration",
+    [
+        "Parts of the note print in substituted characters. As legible, it reads:",
+        "The intake answers are legible but print in an unreadable character encoding.",
+        "Its content does not appear in the extracted record text.",
+        "The consent signature lines are blank as transcribed.",
+        "She had been on a medication, not named in this passage, since spring.",
+        "No culture result appears on these pages.",
+        "The imaging impression is not printed on this page.",
+        "A metabolic panel begins at the foot of this page. (Exhibit 2 - p. 9)",
+        "The diagnosis was recorded with a code reported in the index.",
+        "This page does not attribute each line to a signer.",
+        "03/04/2024 entries: cough and fever; antibiotic ordered.",
+        "03/11/2024 and 04/02/2024 entries complete.",
+        "- other: vitamin D 31 ng/mL; ferritin 40 ng/mL.",
+    ],
+)
+def test_the_readers_own_narration_of_a_page_is_caught(narration):
+    """Each is a sentence the review missed and SMD removed by hand from a
+    client chronology: how the system read the page, never what it says."""
+    assert checks.extraction_vocabulary(narration)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        "The knee radiograph findings printed on this page record small spurs.",
+        "The patient label on this page names the attending physician.",
+        "The report continues as follows. Disc heights are preserved.",
+        "- Mediastinum/other: normal heart size.",
+        "Telephone encounter entries dated 07/03/2024 note a refill.",
+        "The signature is not legible. Other: none reported.",
+        "The mean QRS axis is not legible. The legible portion states the dose.",
+        "Additional problem list entries were:",
+    ],
+)
+def test_a_records_own_page_wording_is_not_extraction_vocabulary(record):
+    assert checks.extraction_vocabulary(record) == []
+
+
 def test_a_sentinel_line_is_caught_and_prose_is_not():
     assert checks.sentinels("Body\n=== ATTORNEY NOTES ===\nmore") == ["=== ATTORNEY NOTES ==="]
     assert checks.sentinels("Equal signs == in prose are fine.") == []

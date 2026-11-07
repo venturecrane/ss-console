@@ -6,6 +6,9 @@ customer.yaml on every call (ADR 0104).
       post_record_derivation: observe # or enforce
       conflict_fence: observe         # or enforce
       fixed_wording: observe          # or enforce
+      wording_rules: observe          # or enforce
+      library_setup: observe          # or enforce
+      library_edit_notice: observe    # or enforce
       status_from_events: observe     # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
@@ -38,7 +41,8 @@ byte for byte in three places:
     operator/workspace_broker/logic_in_code.py
 
 ``operator/tests/test_logic_in_code_sync.py`` fails on any difference. Edit the
-canonical and copy it over the other two.
+canonical and copy it over the other two. The jobs runner installs the connector,
+so it reads the connector's copy (``jobs/firm_wording.py``) and needs no fourth.
 """
 
 from __future__ import annotations
@@ -56,12 +60,31 @@ PRINTED_SOURCE_CHECK = "printed_source_check"
 POST_RECORD_DERIVATION = "post_record_derivation"
 CONFLICT_FENCE = "conflict_fence"
 FIXED_WORDING = "fixed_wording"
+#: Whether the job lanes put a firm's confirmed wording rules into what they send
+#: the model, and the install letter calls such a rule in effect
+#: (``shared/wording_rules.py``). Observe: neither, exactly as before.
+WORDING_RULES = "wording_rules"
+#: Whether a firm's "set up our ..." request may tell the firm what its own
+#: documents offer and, later, write a library file (``jobs/library_setup``).
+#: Observe: the job reads and counts only; it sends nothing and writes nothing.
+#: A value that cannot be read holds the job for SMD, never writes or sends.
+LIBRARY_SETUP = "library_setup"
+#: Whether a drafted document's reply tells the firm that its own save of its
+#: library file was not used (``library_setup_wording.EDIT_NOT_USED``). Observe:
+#: the firm is told nothing; SMD is paged either way. The Captain's call.
+LIBRARY_EDIT_NOTICE = "library_edit_notice"
+#: Whether the litigation lane prints a defendant's status worked out from its
+#: dated, cited events (``jobs/litigation/eventmode.py``). Observe: the lane
+#: prints what it printed before and records what the events would have said.
 STATUS_FROM_EVENTS = "status_from_events"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
     CONFLICT_FENCE,
     FIXED_WORDING,
+    WORDING_RULES,
+    LIBRARY_SETUP,
+    LIBRARY_EDIT_NOTICE,
     STATUS_FROM_EVENTS,
 )
 
@@ -142,6 +165,8 @@ __all__ = [
     "ENFORCE",
     "FIXED_WORDING",
     "KEYS",
+    "LIBRARY_EDIT_NOTICE",
+    "LIBRARY_SETUP",
     "MODES",
     "OBSERVE",
     "PATH_ENVS",
@@ -149,6 +174,7 @@ __all__ = [
     "PRINTED_SOURCE_CHECK",
     "STATUS_FROM_EVENTS",
     "Switch",
+    "WORDING_RULES",
     "live_path",
     "load_switch",
     "parse_switch",

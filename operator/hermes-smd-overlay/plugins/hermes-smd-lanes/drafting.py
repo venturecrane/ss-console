@@ -23,7 +23,7 @@ import json
 import logging
 from typing import Any
 
-from shared import attachment_spool, email_adapter, msgraph_attachments
+from shared import attachment_spool, email_adapter, msgraph_attachments, request_index
 from shared.jobs_client import JobsBrokerClient, JobsBrokerError
 
 from .demand import STRING, _matter, _origin, _refuse, _schema
@@ -99,6 +99,116 @@ def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
     return out, ""
 
 
+#: How a reply names a class to the firm (ss-console drafting_ledger.CLASS_LABEL).
+_DOCUMENT = {
+    "mediation_brief": "mediation brief",
+    "discovery_set": "propounded discovery",
+    "discovery_response": "discovery responses",
+    "memo": "memo",
+    "depo_outline": "deposition outline",
+}
+#: The broker waits up to 25 s for the runner's daemon; this outlasts that.
+ADD_TIMEOUT_SECONDS = 40.0
+_NOT_ADDED = (
+    "Received. What you wrote was not added to the draft in progress. Please reply again in this thread "
+    "and we will look at it."
+)
+
+
+def _say(result: str, resp: dict[str, Any]) -> str:
+    """The one thing the reply states, from the result: the whole of the wording
+    here so that no turn can say the direction was taken unless it was."""
+    number = str(resp.get("matter_number") or "")
+    doc = f"{_DOCUMENT.get(str(resp.get('document_class')), 'document')} for matter {number}"
+    state = str(resp.get("state") or "")
+    if result == "applied":
+        return (
+            f"Received. We added what you wrote to the instructions for the {doc}, and it will be drafted "
+            "with them. We'll reply in this thread when it's filed."
+        )
+    if result == "compose_started":
+        return (
+            f"Received. The {doc} was already being written when your email arrived, so what you wrote is not "
+            "in this draft. We'll say so again when we reply with the filed document, and you can ask for the "
+            "change then."
+        )
+    if result == "job_ended" and state == "held":
+        return (
+            f"Received. What you wrote was not added to the {doc}, because that draft is on hold, as our earlier "
+            "reply in this thread explains. To go ahead with it, please send the full request again."
+        )
+    if result == "job_ended" and state == "failed":
+        return (
+            f"Received. What you wrote was not added to the {doc}, because that draft has stopped on our side. "
+            "We are looking at it and will reply in this thread."
+        )
+    if result == "not_requester":
+        return (
+            f"Received. What you wrote was not added to the {doc}, because changes to a draft in progress come "
+            "from the person who asked for it."
+        )
+    if result == "other_thread":
+        return (
+            f"Received. What you wrote was not added to the {doc}, which is already underway from another email "
+            "thread. Please send it as a reply in that thread."
+        )
+    return _NOT_ADDED
+
+
+def _added_result(result: str, resp: dict[str, Any]) -> str:
+    out: dict[str, Any] = {"result": result, "applied": result == "applied"}
+    if result == "job_ended" and resp.get("state") == "delivered":
+        # The filed draft: the broker's revise route decides this one, on submit.
+        out["next"] = "drafting_job_submit"
+        return json.dumps(out, ensure_ascii=False)
+    out["say"] = _say(result, resp)
+    if result == "job_ended" and resp.get("state") == "failed":
+        # The shape the audit plugin records as a shortfall, as the status read's is.
+        out.update({"status": "refused", "reason": "drafting_job_failed"})
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _add_to_request(origin: Any, job_id: str) -> str:
+    """The verified email's own words, by code, to the job they are about. The
+    words and the thread come from the seat's request index row for this email;
+    the model names at most which job, and the broker checks that."""
+    try:
+        row = request_index.read_request(origin.message_id or "", origin.internet_message_id)
+        thread = request_index.read_thread_message_ids(str((row or {}).get("thread_ref") or ""))
+    except Exception:  # noqa: BLE001 - could not look is never "nothing to add"
+        logger.exception("drafting_job_add_to_request: the request index could not be read")
+        return _added_result("could_not_read", {})
+    words = (row or {}).get("request_text")
+    if not words or not thread:
+        return _added_result("could_not_read", {})
+    if request_index.bare_sender(row.get("sender")) != request_index.bare_sender(
+        origin.sender_address
+    ):
+        return _added_result("not_requester", {})
+    if len(origin.reply_text or "") > request_index.TEXT_CHARS:
+        return _added_result("too_long", {})  # the index cut it; never say the whole of it landed
+    try:
+        resp = JobsBrokerClient(timeout=ADD_TIMEOUT_SECONDS).drafting_add_to_request(
+            job_id=job_id,
+            request_ref=origin.internet_message_id,
+            requested_by=origin.sender_address,
+            thread_refs=thread,
+            words=words,
+        )
+    except JobsBrokerError:
+        logger.exception("drafting_job_add_to_request: the broker did not answer")
+        return _added_result("not_confirmed", {})
+    return _added_result(str(resp.get("result") or "not_confirmed"), resp)
+
+
+def drafting_job_add_to_request(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
+    origin = _origin(session_id)
+    if origin is None or not origin.sender_address or not origin.internet_message_id:
+        return _added_result("no_email_this_turn", {})
+    job_id = str(args.get("job_id") or "").strip()
+    return _add_to_request(origin, job_id) if job_id else _added_result("no_such_job", {})
+
+
 def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
     origin = _origin(session_id)
     if origin is None or not origin.sender_address:
@@ -140,6 +250,17 @@ def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
     except JobsBrokerError as exc:
         return _refuse(f"the request could not be queued: {exc}")
     if not resp.get("accepted"):
+        if resp.get("underway") and resp.get("job_id"):
+            # This email collided with a draft still running: it is about that
+            # draft, and the reply must say whether its words got there.
+            return json.dumps(
+                {
+                    "accepted": False,
+                    "job_id": resp["job_id"],
+                    **json.loads(_add_to_request(origin, resp["job_id"])),
+                },
+                ensure_ascii=False,
+            )
         out = {"accepted": False, "reason": resp.get("reason")}
         if resp.get("job_id"):
             out["job_id"] = resp["job_id"]
@@ -236,6 +357,16 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         ),
         drafting_job_submit,
     ),
+    "drafting_job_add_to_request": (
+        "The email that opened this turn adds to or changes what a drafting job still running was asked "
+        "to do: carry its words to that job. Pass only the job's id; the words, the sender and the thread "
+        "are taken from the email itself, never from you. It answers with `result`, and `say` is what the "
+        "reply states, as given. `applied` is the only result that means the words reached the job.",
+        _schema(
+            {"job_id": {"type": "string", "description": "The running drafting job."}}, ["job_id"]
+        ),
+        drafting_job_add_to_request,
+    ),
     "drafting_job_status": (
         "A drafting job by id (state, document class, delivery folder, filed file roles), or the last twenty.",
         _schema({"job_id": STRING}),
@@ -260,6 +391,7 @@ __all__ = [
     "DOCUMENT_CLASSES",
     "TOOLS",
     "drafting_allowance",
+    "drafting_job_add_to_request",
     "drafting_job_status",
     "drafting_job_submit",
 ]

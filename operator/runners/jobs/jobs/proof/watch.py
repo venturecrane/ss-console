@@ -82,8 +82,9 @@ def _attempt(d: Any, job_id: str) -> int:
         return 1
 
 
-def alert(d: Any, job_id: str, code: str, detail: str = "") -> bool:
-    """One proof alert, de-duplicated per (code, attempt) within a day.
+def alert(d: Any, job_id: str, code: str, detail: str = "", *, unit: str = "") -> bool:
+    """One proof alert, de-duplicated per (code, attempt) within a day, or per
+    (code, ``unit``) when one is named (a reply key: one alert per job state).
     Returns whether a row was written. Never raises: an alert that cannot be
     written is logged at ERROR and retried on the next occasion."""
     from ..broker_client import BrokerError
@@ -95,7 +96,7 @@ def alert(d: Any, job_id: str, code: str, detail: str = "") -> bool:
     attempt = _attempt(d, job_id)
     st = d._daemon_state(job_id)
     sent = dict(st.get("proof_alerts") or {})
-    key = f"{code}:{attempt}"
+    key = f"{code}:{unit}" if unit else f"{code}:{attempt}"
     now = d.clock()
     if key in sent and now - float(sent[key]) < REALERT_SECONDS:
         return False
@@ -246,9 +247,16 @@ def wake_owed(d: Any, state: str, reason: Any) -> bool:
     paged at ``settle``. The one held chronology that still wakes is
     ``rerouted_to_update``, for WORK: the turn resubmits the refused RUN as the
     UPDATE and sends nothing (the broker refuses a held chronology its reply),
-    and ``check_reroutes`` pages when no UPDATE was queued. Every other lane,
-    and every other ending, is unchanged."""
-    if d.LANE != "medchron" or state != "held":
+    and ``check_reroutes`` pages when no UPDATE was queued. A FAILED
+    chronology gets no wake either (2026-11-06): its turn could only read the
+    failure and send nothing, and SMD is paged in code instead
+    (``job_notes.tell``, one ``job_stopped``). Every other lane, and every
+    other ending, is unchanged."""
+    if d.LANE != "medchron":
+        return True
+    if state == "failed":
+        return False
+    if state != "held":
         return True
     return holds.classify("medchron", reason)[0] == holds.REROUTED_TO_UPDATE
 
@@ -434,7 +442,16 @@ def check_reply_watches(d: Any) -> None:
 
 
 def wake_lost(d: Any, job_id: str, outcome: str) -> None:
-    alert(d, job_id, "wake_lost", f"the DELIVER wake failed every attempt ({outcome}); nobody was told")
+    """The DELIVER turn could not be started. A code-sent lane's delivered
+    reply does not need that turn: the broker sends its words itself
+    (``job_notes``). A stopped job's requester is told nothing (2026-11-06), so
+    for one the page says nobody was told."""
+    from .. import job_notes
+
+    told = job_notes.tell(d, job_id, why="the DELIVER wake was lost")
+    heard = {"sent": "the requester was sent the reply in code", "already_sent": "the requester already had it"}
+    said = heard.get(told, "nobody was told")
+    alert(d, job_id, "wake_lost", f"the DELIVER wake failed every attempt ({outcome}); {said}")
 
 
 __all__ = [

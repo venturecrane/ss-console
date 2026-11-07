@@ -266,6 +266,8 @@ def _with_logic_in_code(block: str) -> str:
         "post_record_derivation",
         "conflict_fence",
         "fixed_wording",
+        "wording_rules",
+        "library_setup",
         "status_from_events",
     ],
 )

@@ -17,11 +17,12 @@ that contract two ways:
 * **Layer 1 (always runs):** load each plugin with a fake ctx and assert every
   registered tool's schema is function-shaped (non-empty ``parameters.properties``
   + a description), independent of Hermes being installed.
-* **Layer 2 (skips when Hermes absent):** run a wrapped registration through the
+* **Layer 2 (needs the pinned Hermes):** run a wrapped registration through the
   *real* ``tools.registry`` and assert the emitted model-facing function dict
   carries non-empty ``parameters.properties``. This pins the actual core contract,
-  not a self-consistent model of it. It is expected to skip in overlay CI (Hermes
-  lives on the Machine image); there the staging ``tools[]`` pull is the gate.
+  not a self-consistent model of it. The overlay job checks out the pinned Hermes
+  and sets ``HERMES_AGENT_SRC``; without it these FAIL and say how to provide it
+  (tests/guard_needs.py), skipping only under ``SMD_ALLOW_GUARD_SKIPS=1``.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import pytest
 from shared.tool_registration import register_wrapped_tool
 
 from .conftest import load_plugin
+from .guard_needs import hermes_tools_registry
 
 
 class _RecordingCtx:
@@ -53,7 +55,7 @@ _PLUGINS = {
     "hermes-smd-workspace": 18,
     "hermes-smd-peer-memory": 1,
     "hermes-smd-jobs": None,  # count not pinned (preventive); just must be > 0
-    "hermes-smd-lanes": 16,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's three, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
+    "hermes-smd-lanes": 19,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's four and its library setup submit and choose, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
 }
 
 
@@ -107,15 +109,12 @@ def test_workspace_gmail_tools_expose_their_params():
 
 
 # ---------------------------------------------------------------------------
-# Layer 2 — real Hermes registry contract (skips when Hermes is not installed)
+# Layer 2 — real Hermes registry contract (fails when Hermes is not importable)
 # ---------------------------------------------------------------------------
 
 
-def test_real_registry_emits_non_empty_parameters():
-    registry_mod = pytest.importorskip(
-        "tools.registry",
-        reason="Hermes core not importable in overlay CI; staging tools[] pull is the gate",
-    )
+def test_real_registry_emits_non_empty_parameters(monkeypatch: pytest.MonkeyPatch) -> None:
+    registry_mod = hermes_tools_registry(monkeypatch)
     registry = registry_mod.registry
 
     probe_name = "smd_schema_contract_probe"
@@ -152,7 +151,7 @@ def test_real_registry_emits_non_empty_parameters():
             deregister(probe_name)
 
 
-def test_real_registry_dispatches_the_payload_positionally():
+def test_real_registry_dispatches_the_payload_positionally(monkeypatch: pytest.MonkeyPatch) -> None:
     """The dispatch contract itself, pinned where it can actually be falsified.
 
     ``tests/test_tool_handler_dispatch_contract.py`` asserts every overlay handler
@@ -163,14 +162,10 @@ def test_real_registry_dispatches_the_payload_positionally():
 
     This closes the loop wherever Hermes IS importable: register a probe through
     the same chokepoint the plugins use, dispatch it, and assert the tool
-    arguments arrived as a single positional dict. It skips in overlay CI (Hermes
-    core is not installed there) and runs on a seat and in staging, which is the
-    only place the premise is falsifiable at all.
+    arguments arrived as a single positional dict. It runs against the pinned
+    Hermes the overlay job checks out, and fails (never skips) without it.
     """
-    registry_mod = pytest.importorskip(
-        "tools.registry",
-        reason="Hermes core not importable in overlay CI; staging tools[] pull is the gate",
-    )
+    registry_mod = hermes_tools_registry(monkeypatch)
     registry = registry_mod.registry
 
     probe_name = "smd_dispatch_contract_probe"

@@ -130,6 +130,13 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'DRAFTING_JOB_DELIVERED',
       'DRAFTING_JOB_FAILED',
       'DRAFTING_JOB_RESUME_REQUESTED',
+      'DRAFTING_JOB_REQUEST_ADDED',
+      'LIBRARY_SETUP_SUBMITTED',
+      'LIBRARY_SETUP_DELIVERED',
+      'LIBRARY_SETUP_CHOSEN',
+      'LIBRARY_SETUP_ACCEPTED',
+      'LIBRARY_SETUP_HELD',
+      'LIBRARY_SETUP_FAILED',
       'LITIGATION_JOB_SUBMITTED',
       'LITIGATION_JOB_RUNNING',
       'LITIGATION_JOB_HELD',
@@ -384,6 +391,17 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   DRAFTING_JOB_DELIVERED: () => 'Filed a drafted document on the matter',
   DRAFTING_JOB_FAILED: () => 'Could not finish drafting a document',
   DRAFTING_JOB_RESUME_REQUESTED: () => 'Was asked to resume drafting a document',
+  DRAFTING_JOB_REQUEST_ADDED: () => 'Was asked to add to a document being drafted',
+  // The words are operator/workspace_broker/library_setup_wording.py ACTIVITY's
+  // (the Captain reads them there); tests/library-setup-activity.test.ts pins them.
+  LIBRARY_SETUP_SUBMITTED: () =>
+    "Started looking through the firm's own documents for a library file",
+  LIBRARY_SETUP_DELIVERED: () =>
+    'Told the firm which of its own documents a library file could be made from',
+  LIBRARY_SETUP_CHOSEN: () => 'Was told which document to make a library file from',
+  LIBRARY_SETUP_ACCEPTED: () => "Made and filed a library file from the firm's own document",
+  LIBRARY_SETUP_HELD: () => 'Paused setting up a library file for SMD to look at',
+  LIBRARY_SETUP_FAILED: () => 'Could not finish setting up a library file',
   LITIGATION_JOB_SUBMITTED: () => 'Started a litigation status list',
   LITIGATION_JOB_RUNNING: () => 'Is preparing a litigation status list',
   LITIGATION_JOB_HELD: () => 'Paused a litigation status list and surfaced why',

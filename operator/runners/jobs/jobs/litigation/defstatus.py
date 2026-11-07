@@ -72,38 +72,50 @@ _PATTERNS: dict[str, re.Pattern[str]] = {
 _DEFAULT_UNDONE = re.compile(
     r"(?i)\bdefault\b[^.;|\n]{0,60}\b(?:set aside|vacated|lifted)\b|\b(?:set aside|vacated)\b[^.;|\n]{0,30}\bdefault\b"
 )
+#: A note's state is its finding only when its date follows it in the same
+#: clause: "default entered 2018-01-05", "Dismissed without prejudice
+#: 2019-04-02". A note's prose names states it
+#: does not find (2026-11-06, six of nine on one list: "the answered date stays
+#: null", "asked that the County be dismissed", "her Estate ... answered
+#: instead", "plaintiff answered" discovery).
+_DATED = re.compile(r"[^.;|\n\d]{0,25}?(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4})\b")
+#: An answer the plaintiff gave is never the defendant's answer to the complaint.
+_PLAINTIFF = re.compile(r"(?i)\bplaintiffs?\b")
 _ORIGINAL_ONLY = re.compile(r"(?i)\boriginal complaint\b")
 _AMENDED = re.compile(r"(?i)\bamended\b")
 
 
-def _affirmed(rx: re.Pattern[str], text: str) -> bool:
-    """``rx`` matches somewhere in ``text`` with no negator before it in its clause."""
+def _affirmed(rx: re.Pattern[str], text: str, dated: bool = False) -> bool:
+    """``rx`` matches somewhere in ``text`` with no negator before it in its
+    clause (and, when ``dated``, its date right after it)."""
     for m in rx.finditer(text):
+        if dated and not _DATED.match(text, m.end()):
+            continue
         before = text[max(0, m.start() - _WINDOW) : m.start()]
         cut = list(_CLAUSE_END.finditer(before))
         if cut:
             before = before[cut[-1].end() :]
-        if not _NEGATOR.search(before):
+        if not _NEGATOR.search(before) and not (rx is _PATTERNS[vocab.ANSWERED] and _PLAINTIFF.search(before)):
             return True
     return False
 
 
-def states(text: Any) -> set[str]:
+def states(text: Any, dated: bool = False) -> set[str]:
     """Every outranking state ``text`` affirms (``vocab`` defendant statuses)."""
     s = str(text or "")
-    found = {status for status, rx in _PATTERNS.items() if _affirmed(rx, s)}
+    found = {status for status, rx in _PATTERNS.items() if _affirmed(rx, s, dated)}
     if vocab.DEFAULT in found and _DEFAULT_UNDONE.search(s):
         found.discard(vocab.DEFAULT)
     return found
 
 
-def stated(text: Any) -> str | None:
+def stated(text: Any, dated: bool = False) -> str | None:
     """The one status ``text`` states, by rule: a dismissal outranks a
     settlement, and either outranks a default or an answer (a defendant is
     defaulted or answers first, and is let go after). A default AND an answer
     with neither undone is two findings at odds: ``vocab.D_UNCLEAR``. Nothing
     stated: ``None``."""
-    found = states(text)
+    found = states(text, dated)
     if vocab.D_DISMISSED in found:
         return vocab.D_DISMISSED
     if vocab.D_SETTLED in found:
@@ -129,7 +141,7 @@ def contradiction(d: dict[str, Any]) -> str | None:
     (``vocab.NO_ANSWER``); ``None`` when the two agree."""
     if d.get("status") not in vocab.NO_ANSWER:
         return None
-    return stated(_notes(d))
+    return stated(_notes(d), dated=True)
 
 
 def reconciled(d: dict[str, Any], said: str) -> str:

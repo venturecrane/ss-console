@@ -204,6 +204,11 @@ def tally(body: str) -> dict[str, int]:
 
 
 class Drafter:
+    #: The firm's confirmed wording rules for a demand in this attorney's name
+    #: (``jobs/firm_wording.py``), set by the run after construction; ``""``
+    #: sends the model exactly what it was sent before the rules were read.
+    wording: str = ""
+
     def __init__(
         self,
         data: Path,
@@ -284,8 +289,8 @@ class Drafter:
             [
                 self.firm.text("prompt_gap_audit"),
                 self.brief,
-                "THE FREE PREFLIGHT (mechanical; cite it as 'preflight' only for the bill reconciliation):\n"
-                + json.dumps(free, indent=1),
+                "THE FREE BILL RECONCILIATION (mechanical, by code; cite it as 'the bill reconciliation', and only "
+                "for its own rows):\n" + json.dumps(free, indent=1),
                 "THE RECORD DIGEST:\n\n" + digest,
                 gapaudit.CONTRACT,
             ]
@@ -309,6 +314,7 @@ class Drafter:
             discipline_part_one(f.text("drafting_discipline")),
             "## THE SKELETON (structure is fixed; fill it)\n\n" + f.text("skeleton"),
             voice_block(f.text("voice_profile"), f.text("voice_adjustments")),
+            *([self.wording] if self.wording else []),
             "## FIRM FIXED STRINGS (use verbatim where the skeleton calls for them)\n\n"
             + f.text("voice_fixed_strings"),
             f.text("prompt_compose"),
@@ -355,13 +361,22 @@ class Drafter:
             cache = self.data / "audit" / f"v{version}-{dsha}-{i:02d}.md"
             if cache.is_file():
                 return i, cache.read_text(encoding="utf-8")
-            text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
             cache.parent.mkdir(exist_ok=True)
-            cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
+            kept = self._prior_audit(version, head, body)
+            if kept is None:
+                text = self._audit_part(system, f"{version}-{dsha}-{i:02d}", head, body)
+                kept = f"## AUDIT: {head}\n\n{text}\n"
+            cache.write_text(kept, encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
+        # The first section alone: its call writes the cache of the system
+        # block (the whole digest) that every other section then reads. All at
+        # once, each of the first ``workers`` calls found no cache and wrote
+        # its own: four writes of the digest per audit pass on a live job.
+        todo = list(enumerate(secs))
+        results = dict([one(todo[0])]) if todo else {}
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            results = dict(ex.map(one, enumerate(secs)))
+            results.update(ex.map(one, todo[1:]))
         body = "\n\n".join(results[i] for i in sorted(results))
         tallies = tally(body)
         nf = [c["quote"] for c in mech["quotes"] if not c["found"]]
@@ -379,6 +394,25 @@ class Drafter:
         }
         self._write(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out
+
+    def _prior_audit(self, version: int, head: str, body: str) -> str | None:
+        """An earlier version's audit of this very section, when the section
+        is unchanged since: the same heading and the same text. A repair
+        rewrites only the sections with findings, so most of a letter is
+        audited once however many drafts it goes through (2026-11-07: a
+        23-section letter repaired in four sections after a review hold)."""
+        for v in range(version - 1, 0, -1):
+            p = self.data / f"draft-v{v}.md"
+            if not p.is_file():
+                continue
+            prev = p.read_text(encoding="utf-8")
+            psha = sha(prev)[:8]
+            for j, (h, b) in enumerate(auditable(sections(prev))):
+                if h == head and b == body:
+                    c = self.data / "audit" / f"v{v}-{psha}-{j:02d}.md"
+                    if c.is_file():
+                        return c.read_text(encoding="utf-8")
+        return None
 
     def _audit_part(self, system: str, key: str, head: str, body: str) -> str:
         """One section's audit, complete. The ceiling is the audit model's own
@@ -420,12 +454,15 @@ class Drafter:
         tmp.write_text(text, encoding="utf-8")
         tmp.replace(self.data / name)
 
-    def repair(self, digest: str, version: int = 1) -> str:
-        """draft-v<version+1> from draft-v<version> and its audit."""
+    def repair(self, digest: str, version: int = 1, audit_md: str | None = None) -> str:
+        """draft-v<version+1> from draft-v<version> and its audit, or from
+        ``audit_md`` when given (SMD's findings after a review hold, in the
+        audit's shape; ``run._asked_repair``)."""
         out = f"draft-v{version + 1}.md"
         if (self.data / out).is_file():
             return self._read(out)
-        draft, audit = self._read(f"draft-v{version}.md"), self._read(f"audit-v{version}.md")
+        draft = self._read(f"draft-v{version}.md")
+        audit = audit_md if audit_md is not None else self._read(f"audit-v{version}.md")
         flagged, digest_part = repair_scope(draft, audit, digest)
         if not flagged:
             self._commit(out, draft)
@@ -469,16 +506,12 @@ def finding_lines(audit_md: str, kinds: tuple[str, ...]) -> list[str]:
 _LABEL = re.compile(r"\b(SUPPORTED|DRIFTS|INVENTED|ARITHMETIC)\b")
 
 
-#: The check's reasons say "digest" for the record (its own word: the record
-#: digest it reads). Carried into a marker, that word reached the LETTER on the
-#: 2026-10-15 re-run ("no cite in digest"); the firm calls it the record.
-_DIGEST = re.compile(r"\b(?:record )?digest(?:'s)?\b", re.I)
-
-
 def firm_reason(s: str) -> str:
-    """A check's stated reason in the firm's words: the record, not the digest,
-    and no em dash."""
-    return _DIGEST.sub("record", s).replace("\u2014", ",").replace("\u2013", "-")
+    """A check's stated reason in the firm's words: the record, not the digest
+    (``gapaudit.firm_words``: the check's own word for the record digest it
+    reads, which reached the LETTER on the 2026-10-15 re-run as "no cite in
+    digest"), and no em dash."""
+    return gapaudit.firm_words(s).replace("\u2014", ",").replace("\u2013", "-")
 
 
 def finding_text(audit_md: str, kinds: tuple[str, ...]) -> list[str]:

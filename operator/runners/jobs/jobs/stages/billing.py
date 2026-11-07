@@ -53,6 +53,7 @@ SCHEMA_NOTE = """Return ONE json object, no prose, no code fence:
  "date_first": "<earliest date of SERVICE on these pages, MM/DD/YYYY, or null>",
  "date_last":  "<latest date of SERVICE on these pages, MM/DD/YYYY, or null>",
  "printed_totals": [ {"label":"<the words next to it>", "amount":"<as printed>", "page":<n>} ],
+ "printed_payments": [ {"label":"<the words next to it>", "amount":"<as printed>", "date":"<MM/DD/YYYY or null>", "page":<n>} ],
  "line_items":     [ {"date":"<MM/DD/YYYY>", "description":"<short>", "charge":"<as printed>", "page":<n>} ],
  "notes": "<anything ambiguous, illegible, or that looks like a duplicate>"
 }
@@ -62,6 +63,11 @@ RULES:
   printed, copy it. If none is printed, printed_totals is [].
 - Copy amounts exactly as shown including $ and commas. If a digit is
   illegible write it as "?" inside the number, e.g. "$1,?00.00".
+- printed_payments are amounts the pages show as PAID or received: an
+  insurance payment, a patient payment, a "total payments" or "amount paid"
+  line. Copy each with the words printed next to it and the date printed with
+  it. A charge, an adjustment, a write-off or a balance is not a payment. If
+  no payment is printed, printed_payments is [].
 - date_first/date_last are DATES OF SERVICE, not statement or print dates.
 - doc_type VENDOR_INVOICE means a bill to the LAW FIRM from a service vendor
   (record retrieval, chronology services, imaging couriers) rather than
@@ -73,8 +79,8 @@ RULES:
 
 TOTALS_ONLY = """
 OVERRIDE: this page carries too many line items to list. Set "line_items" to
-[] and transcribe ONLY the printed totals, the provider, the patient and the
-date range. Add "line_items_omitted": true."""
+[] and transcribe ONLY the printed totals, the printed payments, the
+provider, the patient and the date range. Add "line_items_omitted": true."""
 
 
 def render_doc(path: str) -> tuple[dict[int, str], int, bool]:

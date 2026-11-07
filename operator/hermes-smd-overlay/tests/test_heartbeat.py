@@ -2861,6 +2861,9 @@ def test_the_proof_vocabulary_matches_the_broker_list():
         "stage_refused",
         "limit_held",
         "identity_held",
+        "repair_unconverged",
+        "job_stopped",
+        "library_edit_refused",
     }
     assert hb.DELIVERY_PROOF_LANES == {
         "medchron",

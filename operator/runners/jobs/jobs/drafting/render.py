@@ -568,16 +568,17 @@ def reserve_judgment(md: str, cls: str) -> tuple[str, list[str]]:
     return md, notes
 
 
-def render(md: str, cls: str, out: Path, fmt: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
-    """The class's Word file on the starter base, with the firm's authored
-    house style (``fmt``, the ``format`` block) as the renderer's override."""
+def render(md: str, cls: str, out: Path, fmt: dict[str, Any], base: bytes | None = None) -> tuple[Path, dict[str, Any]]:
+    """The class's Word file on ``base`` (the firm's accepted styles file, from
+    ``library_pick``) or the starter (None), with the firm's authored house style
+    (``fmt``, the ``format`` block) as the renderer's override."""
     from smokeball_connector.docx_format import render_document
 
     from . import briefpage, frontpage
     from .house import house_for
 
     md = re.sub(r"`+(\{\{[^{}]*\}\})`+", r"\1", md)  # a slot never carries stray backticks
-    blob, report = render_document(md, cls, None, house=house_for(fmt, cls))
+    blob, report = render_document(md, cls, base, house=house_for(fmt, cls))
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(f".{out.name}.tmp")
     part.write_bytes(blob)

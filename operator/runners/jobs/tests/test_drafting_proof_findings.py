@@ -620,12 +620,14 @@ def test_a_contradicted_rfa_matter_is_repaired_to_the_source_and_never_dropped(t
     client = AuditClient(
         drafts=_drafts(**{RFA: bad}),
         audit_fn=_audit_flagging("Exampel"),
-        repair_fix=("Charlie Exampel", "Charley Example"),
+        # Corrected to the name the complaint prints: a repair may correct to
+        # the source, never to a name no source holds (repair_guard).
+        repair_fix=("Charlie Exampel", "Delta Example"),
     )
     r, v, _ = _run(tmp_path, pricing, client)
     assert v.outcome == "delivered", (v.stage, v.reason)
     final = (r.data / "set-1" / "draft-final.md").read_text()
-    assert final.count("Admit that Charley Example cleaned the PREMISES.") == 3  # every request kept, corrected
+    assert final.count("Admit that Delta Example cleaned the PREMISES.") == 3  # every request kept, corrected
 
 
 def test_a_contradicted_rfa_matter_the_repairs_never_clear_fails_and_keeps_every_request(tmp_path, pricing):
@@ -1236,6 +1238,33 @@ def test_a_defined_term_inside_a_different_phrase_is_not_capitalized():
     assert "Each incident report, if any, concerning the INCIDENT." in out and "INCIDENT report" not in out
     assert lines == ['1 lower-case use(s) of the defined term "INCIDENT" were capitalized to match its definition']
     assert sets.lowercase_uses(out) == []
+
+
+def test_a_defined_term_after_a_modifier_or_an_indefinite_is_left_as_written():
+    # 2026-11-05: the caps pass wrote "pavement CONDITION rating", "a dangerous
+    # CONDITION of public property" and "an INCIDENT" (another incident, not his).
+    doc = (
+        '# DEFINITIONS\n\n1. "CONDITION" means the dip in the bike lane.\n\n2. "INCIDENT" means the fall.\n\n'
+        "# SPECIAL INTERROGATORIES\n\nSPECIAL INTERROGATORY NO. 1\n\n"
+        "State the pavement condition rating, whether the condition was a dangerous condition of public "
+        "property, and whether an incident like the incident occurred before.\n\nDated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "pavement condition rating" in out and "a dangerous condition of public property" in out
+    assert "whether the CONDITION was" in out and "an incident like the INCIDENT" in out
+    assert len(lines) == 2 and sets.lowercase_uses(out) == []
+
+
+def test_a_defined_term_inside_a_record_title_keeps_the_title_as_printed():
+    # 2026-11-05: "Galt Police Department CAD Incident Report" became "CAD INCIDENT Report".
+    doc = (
+        '# DEFINITIONS\n\n1. "INCIDENT" means the fall.\n\n# REQUESTS FOR PRODUCTION\n\n'
+        "REQUEST FOR PRODUCTION NO. 1\n\nThe Galt Police Department CAD Incident Report concerning the incident.\n\n"
+        "Dated: x\n"
+    )
+    out, lines = sets.enforce_caps(doc)
+    assert "CAD Incident Report concerning the INCIDENT." in out
+    assert len(lines) == 1 and sets.lowercase_uses(out) == []
 
 
 def test_a_definition_alias_says_also_spelled():

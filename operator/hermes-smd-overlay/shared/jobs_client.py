@@ -77,6 +77,10 @@ class JobsBrokerClient:
         """``accepted`` with a ``job_id``, or ``accepted: False`` with a ``reason``."""
         return self._request({"action": "drafting_job_submit", "envelope": envelope})
 
+    def drafting_add_to_request(self, **fields: Any) -> dict[str, Any]:
+        """A requester's later words for a running job. ``result`` says what happened."""
+        return self._request({"action": "drafting_job_add_to_request", **fields})
+
     def drafting_status(self, job_id: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"action": "drafting_job_status"}
         if job_id:
@@ -85,6 +89,15 @@ class JobsBrokerClient:
 
     def drafting_allowance(self) -> dict[str, Any]:
         return self._request({"action": "drafting_allowance"})
+
+    def library_setup_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        """A "set up our ..." job (ss-console library_setup_verbs.py): ``accepted``
+        with a ``job_id`` and ``live``, or ``accepted: False`` with a ``reason``."""
+        return self._request({"action": "library_setup_submit", "envelope": envelope})
+
+    def library_setup_choose(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        """The administrator's choice from a list (ss-console library_setup_choose.py)."""
+        return self._request({"action": "library_setup_choose", "envelope": envelope})
 
     # -- the litigation status job (ss-console operator/workspace_broker/litigation_verbs.py) --
     def litigation_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:

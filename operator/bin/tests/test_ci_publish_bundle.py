@@ -97,6 +97,7 @@ case "$4" in s3://*) echo "put ${4#s3://*/}" >> "$EVENTS" ;; esac
 _FAKE_FLEET = """#!/bin/sh
 case "$1" in
   bundle-base) echo registry.fly.io/hermes-fleet:deadbeef ;;
+  commit-seq) echo 2680 ;;
   bundle-record) echo "record $*" >> "$EVENTS"; [ -z "$FAIL_RECORD" ] ;;
   *) exit 1 ;;
 esac
@@ -160,6 +161,8 @@ def test_a_publish_writes_the_layout_and_then_the_layout_latest_pointer(tmp_path
     manifest_raw = manifest_path.read_bytes()
     manifest = json.loads(manifest_raw)
     assert manifest["layout"] == 2 and manifest["name"] == "jobs" and manifest["ss_console_sha"] == AFTER
+    # The seat orders its bundle against its image by this number (jobs-bundle-commit-probe.py).
+    assert manifest["ss_console_seq"] == 2680
     latest = json.loads((prefix / "layout-2" / "latest.json").read_bytes())
     assert latest == {
         "version": manifest["version"],

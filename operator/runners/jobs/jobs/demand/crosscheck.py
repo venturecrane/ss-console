@@ -70,4 +70,21 @@ def check(draft_md: str, facts: dict[str, Any], keys: tuple[str, ...] = FRONT_KE
         out["unchecked"].append("date of loss: the matter carries none")
     elif _date(dol) is None or _date(dol) != _date(want_dol):
         out["mismatches"].append(f"date of loss: the letter says {dol!r}, the matter record says {want_dol!r}")
+    if "caption" in keys:
+        out["unchecked"] += _caption(front.get("caption", ""), wants)
     return out
+
+
+def _caption(caption: str, wants: list[str]) -> list[str]:
+    """A filed action's RE line. The matter fields this job reads carry no
+    court and no case number, so those are never checked here; the caption is
+    read only for the client's surname. Each line is for the attorney's eye,
+    never a hold: the ``client`` line above is what holds a wrong client."""
+    notes = ["court and case number: the matter record read for this letter carries neither; they come from the file"]
+    words = [[t for t in re.findall(r"[a-z]+", w.lower()) if len(t) > 1] for w in wants]
+    surnames = {ws[-1] for ws in words if ws}
+    if _MARKER.search(caption):
+        notes.append("caption: left as a marker in the letter")
+    elif surnames and not surnames & _tokens(caption):
+        notes.append(f"caption: {caption!r} does not carry the client's surname as the matter record writes it")
+    return notes

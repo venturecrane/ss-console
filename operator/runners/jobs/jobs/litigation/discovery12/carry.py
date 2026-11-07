@@ -202,7 +202,9 @@ def problems(rec: Any) -> str | None:
         if not isinstance(rows, list) or any(not isinstance(e, dict) or not e.get("item") for e in rows):
             return f"malformed entries in {k}"
     for what, rx in LEAK_PATTERNS:
-        if any(rx.search(t) for t in _printed(rec)):
+        # The printer writes an em dash as ", " (``book.clean``); it never
+        # reaches the page (2026-10-30: 28 hand-corrected cases refused).
+        if what != "em dash" and any(rx.search(t) for t in _printed(rec)):
             return f"carries internal text ({what})"
     return None
 

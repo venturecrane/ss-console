@@ -867,11 +867,20 @@ def test_a_registry_call_carries_the_registry_token_alone() -> None:
     runner = RecordingRunner()
     fly = Fly(runner, "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
     fly.app_exists("hermes-fleet")
-    fly.build_push("/tmp/fly.toml", "rel-x", "1" * 40)
+    fly.build_push("/tmp/fly.toml", "rel-x", "1" * 40, ("2" * 40, 7))
     assert [env for _, env in runner.calls] == [{"FLY_API_TOKEN": REG_TOK}] * 2
     extractor = ImageExtractor(RecordingRunner(out="tok"), tokens=FlyTokens(CI_ENV))  # type: ignore[arg-type]
     extractor._auth()
     assert extractor.runner.calls[-1][1] == {"FLY_API_TOKEN": REG_TOK}  # type: ignore[attr-defined]
+
+
+def test_the_build_push_hands_fly_both_bundle_floor_build_args() -> None:
+    """The image bakes its jobs bundle floor (2026-11-07). FALSIFIER: drop either
+    --build-arg and the Dockerfile refuses every build."""
+    runner = RecordingRunner()
+    Fly(runner, "/repo", FlyTokens(CI_ENV)).build_push("/tmp/fly.toml", "rel-x", "1" * 40, ("f" * 40, 2680))  # type: ignore[arg-type]
+    argv = runner.calls[-1][0]
+    assert f"SMD_BUNDLE_FLOOR_SHA={'f' * 40}" in argv and "SMD_BUNDLE_FLOOR_SEQ=2680" in argv
 
 
 class ScriptedRunner(RecordingRunner):

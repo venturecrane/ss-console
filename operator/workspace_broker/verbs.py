@@ -48,11 +48,13 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
+from . import library_edit_verbs, library_setup_verbs
 from . import (
     attachment_intake,
     casefile_verbs,
     delivery_proof,
     help_signals,
+    job_notes,
     msgraph_drafts,
     note_verbs,
     records_order_acts,
@@ -213,6 +215,20 @@ VERBS: tuple[Verb, ...] = (
     Verb("drafting_allowance", GATEWAY_ROOT_OR_AGENT, drafting_verbs.drafting_dispatch),
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
+    Verb("drafting_job_add_to_request", GATEWAY_OR_ROOT, drafting_verbs.drafting_dispatch),
+    # "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
+    # of job. Its status and record ride the drafting verbs above.
+    Verb("library_setup_submit", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
+    # The administrator's choice from the list (library_setup_choose.py): the
+    # gateway's tool call or root. The made file's hand-off to the root writer
+    # and its answer: the runner daemon (root) only.
+    Verb("library_setup_choose", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
+    Verb("library_setup_accept_submit", _only(ROOT), library_setup_verbs.dispatch),
+    Verb("library_setup_accept_status", _only(ROOT), library_setup_verbs.dispatch),
+    # A firm's own save of its accepted library file (library_edit_verbs.py),
+    # handed to the root writer by the runner daemon after a job: root only.
+    Verb("library_edit_submit", _only(ROOT), library_edit_verbs.dispatch),
+    Verb("library_edit_status", _only(ROOT), library_edit_verbs.dispatch),
     # The litigation status job's request edge (litigation_verbs.py). Submit's
     # table gate admits all three classes because it has two forms; the handler
     # pins each form to its peers (a request from the gateway or root, a
@@ -265,6 +281,10 @@ VERBS: tuple[Verb, ...] = (
     Verb("delivery_proof_alert", _only(ROOT), delivery_proof.alert_verb),
     Verb("delivery_proof_record", _only(ROOT), delivery_proof.record_verb),
     Verb("delivery_reply_status", _only(ROOT), delivery_proof.reply_status_verb),
+    # A code-sent job's reply sent by the broker itself (job_notes.py,
+    # 2026-11-06): a held, failed or waiting drafting job's note, or any reply
+    # whose DELIVER wake was lost. Root only: the runner daemon, never a turn.
+    Verb("job_note_send", _only(ROOT), job_notes.send_verb),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),
@@ -337,6 +357,10 @@ if set(demand_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is dema
     raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 if set(drafting_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is drafting_verbs.drafting_dispatch}:
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
+if set(library_setup_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is library_setup_verbs.dispatch}:
+    raise RuntimeError("the library setup rows above and library_setup_verbs.VERBS disagree")
+if set(library_edit_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is library_edit_verbs.dispatch}:
+    raise RuntimeError("the library edit rows above and library_edit_verbs.VERBS disagree")
 if set(litigation_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is litigation_verbs.litigation_dispatch}:
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 if set(negotiation_verbs.VERBS) != {

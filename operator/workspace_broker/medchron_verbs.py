@@ -86,7 +86,7 @@ from .medchron_ledger import (
     cycle_from_customer_yaml,
     validate_envelope,
 )
-from .medchron_update import delivered_count, delivered_refusal
+from .medchron_update import cited_block, delivered_count, delivered_refusal
 
 #: Addresses inside a free-text ``requested_by`` ("Christa Barrera
 #: <christa@example.com>", "christa@example.com", "Christa, Firm LLP"). The
@@ -577,6 +577,9 @@ class MedchronVerbs:
                 f"{state['allowance']:,} pages in {state['month']}); the Operator stops here "
                 "and surfaces the item",
             }
+        # An update carries the delivered rows' cited sources: the delivered
+        # job dirs it would otherwise read them from are wiped after 72 hours.
+        envelope = {**envelope, **cited_block(self._db, envelope)}
         job_id = self._db.submit(envelope, remaining=state["remaining"])
         medchron_identity.remember(self._db, job_id, envelope)
         self._audit(

@@ -31,6 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from shared.output_classes import (
     OUTPUT_CLASS_MEANINGS,
@@ -40,11 +41,13 @@ from shared.output_classes import (
     is_output_class,
 )
 
-#: The registry, if this machine has an ss-console checkout beside the overlay or
-#: is the seat itself (the Dockerfile copies operator/contracts/ to /app/contracts).
+#: The registry, in this repository beside the overlay (ADR 0095 folded the
+#: overlay into operator/), or on the seat itself (the Dockerfile copies
+#: operator/contracts/ to /app/contracts).
+_IN_REPO_REGISTRY = Path(__file__).resolve().parents[2] / "contracts" / "output-classes.yaml"
 _REGISTRY_CANDIDATES = (
+    _IN_REPO_REGISTRY,
     Path("/app/contracts/output-classes.yaml"),
-    Path.home() / "dev/ss-console/operator/contracts/output-classes.yaml",
 )
 
 
@@ -74,14 +77,11 @@ def test_workspace_is_a_skill_and_not_a_class():
 
 
 def test_the_pinned_list_matches_the_registry_file():
-    """The drift check, run wherever the registry is on disk. It is skipped in
-    the overlay's own CI, which has no ss-console checkout -- the guard that runs
-    on every change to the registry is ss-console's
-    test_output_class_conformance.py, on the side the file lives on."""
+    """The drift check. The registry lives in this repository beside the
+    overlay, so a missing file is a moved or renamed registry, and the check
+    fails rather than switching itself off."""
     path = _registry_path()
-    if path is None:
-        pytest.skip("no output-classes.yaml reachable; ss-console CI holds this side")
-    yaml = pytest.importorskip("yaml")
+    assert path is not None, f"output-classes.yaml is missing: expected {_IN_REPO_REGISTRY}"
     registry = yaml.safe_load(path.read_text())
     assert set(registry["classes"]) == OUTPUT_CLASSES
     assert "workspace" in registry["skill_bindings"]

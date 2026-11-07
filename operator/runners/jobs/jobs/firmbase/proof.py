@@ -27,8 +27,8 @@ from typing import Any
 
 from lxml import etree
 
-from . import xmlproof
-from .base import DOCUMENT, EMPHASIS, FIELD, W, FirmBase, FirmBaseLost, is_blank, region_span, slot_names
+from . import markers, xmlproof
+from .base import DOCUMENT, EMPHASIS, FIELD, W, FirmBase, FirmBaseLost, is_blank, region_span
 
 _MARK = re.compile(r"\[\[[a-z0-9.]+\]\]")
 
@@ -130,7 +130,7 @@ def _clone_lost(was: Any, now: Any) -> list[str]:
 
 def _is_slot_line(el: Any) -> bool:
     return el.tag == f"{W}p" and (
-        bool(slot_names(el)) or bool(FIELD.search("".join(t.text or "" for t in el.iter(f"{W}t"))))
+        bool(markers.marked(el)) or bool(FIELD.search("".join(t.text or "" for t in el.iter(f"{W}t"))))
     )
 
 
@@ -167,7 +167,7 @@ def _walk(what: str, was: list[Any], now: list[Any]) -> tuple[list[str], int]:
 
 
 def _region_lost(zone: list[Any], els: list[Any]) -> list[str]:
-    paras = [_para(e) for e in zone if slot_names(e) and e.tag == f"{W}p"]
+    paras = [_para(e) for e in zone if markers.marked(e) and e.tag == f"{W}p"]
     tables = [e for e in zone if e.tag == f"{W}tbl"]
     blanks = {xmlproof.canon(e) for e in zone if is_blank(e)}
     out: list[str] = []

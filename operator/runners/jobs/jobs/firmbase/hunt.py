@@ -104,9 +104,17 @@ class Hunted:
 
     candidates: list[Candidate] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
+    #: The file ids behind a count, for the counts that name files (a candidate
+    #: the kind's plan refused, by code). Ids only, never a name.
+    files: dict[str, list[str]] = field(default_factory=dict)
 
     def bump(self, key: str, by: int = 1) -> None:
         self.counts[key] = self.counts.get(key, 0) + by
+
+    def note(self, key: str, file_id: str) -> None:
+        """Count ``key`` and record which file it was."""
+        self.bump(key)
+        self.files.setdefault(key, []).append(file_id)
 
 
 def classify(cls: str, name: str) -> bool:
@@ -217,6 +225,14 @@ def score(cls: str, blob: bytes, saved_at: str, staff: Iterable[str], now: datet
     return total, reasons
 
 
+def names_person(blob: bytes, name: str) -> bool:
+    """The file names this person in its core properties or in its signature, the
+    last lines: what makes a file one attorney's own (``rank(person=...)``)."""
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    who = _person(name)
+    return bool(who.search(_core_people(z)) or who.search("\n".join(_paragraphs(z)[-SIGNATURE_LINES:])))
+
+
 def _operator_lineage(blob: bytes) -> bool | None:
     """None: the file would not open as a Word file."""
     try:
@@ -276,9 +292,12 @@ def rank(
     now: datetime | None = None,
     max_reads: int = 200,
     hunted: Hunted | None = None,
+    person: str | None = None,
 ) -> Hunted:
     """The ranking of ``rows`` for ``cls``. ``read(matter_id, file_id)``: the file's
-    bytes. Newest first up to ``max_reads``; what was left unread is counted."""
+    bytes. Newest first up to ``max_reads``; what was left unread is counted.
+    ``person``: only files that name this person, by their case-system name, in
+    the core properties or the signature (one attorney's own files)."""
     out = hunted if hunted is not None else Hunted()
     now = now or datetime.now(timezone.utc)
     staff = list(staff)
@@ -299,6 +318,9 @@ def rank(
             out.bump("same_bytes")
             continue
         seen.add(digest)
+        if person and not names_person(blob, person):
+            out.bump("not_this_person")
+            continue
         saved = str(row.get("dateModified") or "")
         points, reasons = score(cls, blob, saved, staff, now)
         best.append(
@@ -324,6 +346,7 @@ def hunt(
     closed_since: str = "",
     now: datetime | None = None,
     pause: float = 0.0,
+    person: str | None = None,
 ) -> Hunted:
     """The whole hunt through the connector's metadata and download calls: reads only."""
 
@@ -332,4 +355,5 @@ def hunt(
 
     out = Hunted()
     rows = docx_rows(client, firm_matters(client, closed_since=closed_since), out, pause)
-    return rank(cls, rows, read, staff=staff_names(client), accepted=accepted, now=now, hunted=out)
+    staff = staff_names(client)
+    return rank(cls, rows, read, staff=staff, accepted=accepted, now=now, hunted=out, person=person)

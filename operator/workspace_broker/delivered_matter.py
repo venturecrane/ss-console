@@ -83,6 +83,14 @@ SENTENCES: dict[str, dict[str, str]] = {
         "outside": OUTSIDE,
     },
     "drafting": {
+        "addition_not_covered": (
+            "What you wrote later in this thread is not in this document, because the drafting had started when it "
+            'reached us: "{words}" Reply here if you want it added, and we will make the change to the filed document.'
+        ),
+        "addition_not_covered_held": (
+            "What you wrote later in this thread is not covered here, because the drafting had started when it "
+            'reached us: "{words}"'
+        ),
         "lead_client": (
             "The document for matter {number} is filed in the client matter, in the firm's house style and ready "
             "for attorney review: {drafts}."
@@ -284,6 +292,7 @@ def demand(row: dict[str, Any]) -> str:
             _s("demand", "gap", gap=gap),
             _s("demand", "notes", notes=name(files, "attorney_notes")),
         ),
+        library_edit_line(row, "demand_letter"),
         paragraph(_s("demand", "reserved"), _s("demand", "outside")),
         (_s("demand", "order") or "") if gap else "",
     )
@@ -361,6 +370,7 @@ def _revise_delivered(row: dict[str, Any], files: list[Any], delivery: dict[str,
             _s("drafting", "revise_notes"),
         ),
         _markers(delivery),
+        _not_covered(delivery),
         _s("drafting", "outside") or "",
     )
 
@@ -383,12 +393,25 @@ def _drafting_held(row: dict[str, Any]) -> str:
     return paragraph(_s("drafting", "held_lead", number=_number(row)), why or _s("drafting", "held_ours"))
 
 
+def _not_covered(delivery: dict[str, Any], key: str = "addition_not_covered") -> str:
+    """What the requester added once the drafting had started, said as a fact:
+    he was told when it arrived, and the filed document does not hold it."""
+    found = delivery.get("additions_not_covered")
+    items = found if isinstance(found, list) else []
+    return lines(*(_s("drafting", key, words=a.get("words")) for a in items if isinstance(a, dict)))
+
+
 def drafting(row: dict[str, Any]) -> str:
-    """A drafted document's reply: delivered or held."""
-    if row.get("state") == "held":
-        return _drafting_held(row)
-    files = files_of(row)
+    """A drafted document's reply: delivered or held. A "set up our ..." job's
+    row (``library_setup_ledger``) is worded by ``library_setup_wording``."""
+    if row.get("job_kind") == "library_setup":
+        from . import library_setup_wording
+
+        return library_setup_wording.render(row)
     delivery = obj(row, "delivery_json")
+    if row.get("state") == "held":
+        return compose(_drafting_held(row), _not_covered(delivery, "addition_not_covered_held"))
+    files = files_of(row)
     if row.get("revise_of"):
         return _revise_delivered(row, files, delivery)
     where = "client" if _in_client_matter(row) else "library"
@@ -407,8 +430,20 @@ def drafting(row: dict[str, Any]) -> str:
             _s("drafting", "verification") if row.get("document_class") == "discovery_response" else None,
         ),
         _caption(delivery),
+        _not_covered(delivery),
+        library_edit_line(row),
         _s("drafting", "outside") or "",
     )
+
+
+def library_edit_line(row: dict[str, Any], kind: str = "") -> str:
+    """The firm's own library-file save was not used: one sentence, only with
+    ``logic_in_code.library_edit_notice: enforce`` (``library_setup_wording``)."""
+    if not isinstance(obj(row, "delivery_json").get("library_edit"), dict):
+        return ""
+    from . import library_setup_wording as w
+
+    return w.edit_not_used(row, notice=w.edit_notice_on(), kind=kind)
 
 
 # -- the stored words: a negotiation notice and an SMD note -------------------------

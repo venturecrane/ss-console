@@ -46,6 +46,15 @@ STATUS_FAILED = "failed"
 STATUS_EXPIRED = "expired"
 #: How much of ``reason`` a row keeps.
 REASON_CHARS = 500
+#: The job kinds a held reply can be recorded as the reply of (the broker's
+#: ``reply_binding.JOB_KINDS``): ``job`` is ``{"kind": <one>, "job_id": <ULID>}``.
+JOB_KINDS = frozenset(
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
+)
+JOB_ID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
+#: ``job`` of a row SMD approved as answering no job (``approve --no-job``).
+#: Not digested: it records the decision, it does not change what is sent.
+JOB_NONE = "none"
 #: ``author`` of a row SMD wrote by hand (a reply SMD composed and sent through
 #: this review path). Absent, the row is the Operator's (a turn or a lane).
 AUTHOR_SMD = "smd"
@@ -73,6 +82,11 @@ def digest(row: dict[str, Any]) -> str:
         "text": row.get("text"),
         "html": row.get("html"),
         "batches": [[[f.get("handle"), f.get("sha256"), f.get("name")] for f in b] for b in row.get("batches") or []],
+        # The job this reply IS the reply of (2026-11-06), only when set, so
+        # every older row's digest is unchanged. Digested because the release
+        # records the job as answered: a row edited to name another job after
+        # SMD read it matches no decision.
+        **({"job": row["job"]} if isinstance(row.get("job"), dict) else {}),
     }
     raw = json.dumps(canon, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
@@ -91,6 +105,7 @@ def hold_row(
     redirect: bool = False,
     now: float | None = None,
     author: str = "",
+    job: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """One held reply for review, with a fresh ``id`` and its ``digest``. Writes nothing.
 
@@ -101,6 +116,8 @@ def hold_row(
     who wrote the words, not what is sent), else empty: the Operator's."""
     if author not in ("", AUTHOR_SMD):
         raise ReviewError(f"a review row's author is {AUTHOR_SMD!r} or none")
+    if job is not None and not valid_job(job):
+        raise ReviewError("a review row's job is {kind, job_id}, naming a job kind and its id")
     row: dict[str, Any] = {
         "id": os.urandom(12).hex(),
         "created_at": now if now is not None else time.time(),
@@ -115,9 +132,26 @@ def hold_row(
         "reason": str(reason or "")[:REASON_CHARS],
         **({"redirect": True} if redirect else {}),
         **({"author": AUTHOR_SMD} if author else {}),
+        **({"job": dict(job)} if job is not None else {}),
     }
     row["digest"] = digest(row)
     return row
+
+
+def valid_job(job: object) -> bool:
+    """Whether ``job`` is a well-formed ``{"kind", "job_id"}`` naming a job kind."""
+    return (
+        isinstance(job, dict)
+        and set(job) == {"kind", "job_id"}
+        and job.get("kind") in JOB_KINDS
+        and bool(JOB_ID_RE.fullmatch(str(job.get("job_id") or "")))
+    )
+
+
+def row_job(row: dict[str, Any]) -> dict[str, str] | None:
+    """The job a held row is the reply of, or None (no job, or ``JOB_NONE``)."""
+    job = row.get("job")
+    return dict(job) if isinstance(job, dict) and valid_job(job) else None
 
 
 def write_row(row: dict[str, Any], directory: Path | None = None) -> Path:
@@ -215,6 +249,9 @@ __all__ = [
     "DIGEST_RE",
     "HOLD_REASON",
     "ID_RE",
+    "JOB_ID_RE",
+    "JOB_KINDS",
+    "JOB_NONE",
     "REASON_CHARS",
     "REVIEW_DIR_ENV",
     "STATUS_EXPIRED",
@@ -233,6 +270,8 @@ __all__ = [
     "read_rows",
     "released_count",
     "review_dir",
+    "row_job",
     "smd_authored",
+    "valid_job",
     "write_row",
 ]

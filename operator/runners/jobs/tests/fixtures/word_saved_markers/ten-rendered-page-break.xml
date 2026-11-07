@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
+<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:paraId="0A000001" w14:textId="0A000002" w:rsidR="00A00001" w:rsidRDefault="00A00001" w:rsidP="00A00002">
+  <w:pPr>
+    <w:pStyle w:val="ListParagraph"/>
+    <w:widowControl w:val="0"/>
+    <w:numPr>
+      <w:ilvl w:val="0"/>
+      <w:numId w:val="21"/>
+    </w:numPr>
+    <w:spacing w:line="480" w:lineRule="exact"/>
+    <w:jc w:val="both"/>
+    <w:rPr>
+      <w:sz w:val="24"/>
+    </w:rPr>
+  </w:pPr>
+  <w:r>
+    <w:rPr>
+      <w:sz w:val="24"/>
+    </w:rPr>
+    <w:t>[[fixture.ten]</w:t>
+  </w:r>
+  <w:r>
+    <w:rPr>
+      <w:sz w:val="24"/>
+    </w:rPr>
+    <w:lastRenderedPageBreak/>
+    <w:t>]</w:t>
+  </w:r>
+</w:p>

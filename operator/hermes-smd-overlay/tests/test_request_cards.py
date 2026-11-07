@@ -32,7 +32,12 @@ from shared.scheduler_check import SchedulerCheck
 from shared.spec_control_check import SpecControlCheck
 from tests.conftest import load_plugin
 
-NOW = datetime(2026, 10, 7, 12, 0, 0, tzinfo=timezone.utc)
+# Yesterday noon, never a fixed date: the request index's custody purges rows
+# against the REAL clock (ROW_RETENTION_DAYS), so a fixed NOW aged every row out
+# 30 days after it was written and the leg tests failed on 2026-11-06.
+NOW = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
+    hour=12, minute=0, second=0, microsecond=0
+)
 VID = "graph-msg-1"
 IMID = "<abc@firm.example>"
 

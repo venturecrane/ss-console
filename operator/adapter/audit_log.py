@@ -348,6 +348,15 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DRAFTING_JOB_DELIVERED",
         "DRAFTING_JOB_FAILED",
         "DRAFTING_JOB_RESUME_REQUESTED",
+        "DRAFTING_JOB_REQUEST_ADDED",
+        # "Set up our ...": the drafting lane's second kind of job, on a
+        # switched-on seat only (operator/workspace_broker/library_setup_verbs.py).
+        "LIBRARY_SETUP_SUBMITTED",
+        "LIBRARY_SETUP_DELIVERED",
+        "LIBRARY_SETUP_CHOSEN",
+        "LIBRARY_SETUP_ACCEPTED",
+        "LIBRARY_SETUP_HELD",
+        "LIBRARY_SETUP_FAILED",
         # The litigation status job (the firm's open-matter status workbook),
         # the drafting job's shape (operator/workspace_broker/litigation_verbs.py).
         "LITIGATION_JOB_SUBMITTED",

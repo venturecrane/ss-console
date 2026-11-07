@@ -128,6 +128,13 @@ exclude = [
     # of bytes; this repo's 120 would re-collapse it and break the twin.
     "workspace_broker/casework_ledger.py",
     "skills/*/casework_ledger.py",
+    # The accepted-library ledger is kept twice, byte for byte (the overlay's
+    # shared/library_ledger.py; tests/test_library_seat_copy.py), and formatted
+    # at the overlay's 100 for the same reason as the casework ledger above.
+    "connectors/_sdk/operator_connector_sdk/library/ledger.py",
+    # The wording-rule reader twin (overlay shared/wording_rules_store.py), for
+    # the same reason: one set of bytes at the overlay's line-length 100.
+    "runners/jobs/jobs/wording_rules_store.py",
 ]
 quote-style = "double"
 indent-style = "space"

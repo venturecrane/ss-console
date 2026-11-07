@@ -77,6 +77,7 @@ def _call(
     audit_extra: dict[str, str] | None = None,
     anchor: dict[str, str] | None = None,
     lane: str | None = None,
+    for_job: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if not transmit_available():
         raise MsGraphBrokerNotReached(
@@ -97,6 +98,10 @@ def _call(
     # this send answers and which authored lane sends it, set by code
     # (shared.send_anchor), never by the model.
     envelope.update(envelope_fields(anchor, lane))
+    if for_job:
+        # The job this reply IS the reply of (2026-11-06, SMD's review release
+        # only): the broker records it as that job's bound reply at the POST.
+        envelope["for_job"] = dict(for_job)
     try:
         return request(envelope, timeout=SEND_TIMEOUT_SECONDS)
     except BrokerNotReached as exc:
@@ -161,6 +166,7 @@ def send_reply(
     to: str | None = None,
     anchor: dict[str, str] | None,
     attachments: list[dict[str, str]] | None = None,
+    for_job: dict[str, str] | None = None,
 ) -> str:
     """Reply in-thread to an inbound Graph message.
 
@@ -214,6 +220,7 @@ def send_reply(
             matter_ref=matter_ref,
             anchor=anchor,
             audit_extra=extra,
+            for_job=for_job,
         )
     )
 

@@ -35,6 +35,7 @@ def _medchron_today() -> set[str]:
             **m.TOOLS,
             **m.demand.TOOLS,
             **m.drafting.TOOLS,
+            **m.library_setup.TOOLS,
             **m.litigation.TOOLS,
             **m.negotiation.TOOLS,
             **m.note.TOOLS,

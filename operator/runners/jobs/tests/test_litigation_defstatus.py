@@ -146,11 +146,32 @@ def test_reconcile_prints_the_notes_status_and_the_gate_then_passes() -> None:
 
 
 def test_reconcile_never_prints_answered_without_an_answer_date() -> None:
-    m = matter(defendant(vocab.SERVED_NO_ANSWER, ["Defendant filed an answer per counsel's email."]))
+    m = matter(defendant(vocab.SERVED_NO_ANSWER, ["Defendant filed an answer 2026-03-02 per counsel's email."]))
     defstatus.reconcile(m)
     assert m["defendants"][0]["status"] == vocab.D_UNCLEAR
     out = gates.rule_matters([m], TODAY)
     assert out[gates.NOTE_RULE] == [] and out["answered but no answer date"] == []
+
+
+@pytest.mark.parametrize(
+    "status,note",
+    [
+        # 2026-11-06, one real list: six notes that name a state they do not find.
+        (vocab.APPEARED_NO_ANSWER, "No default entry was found either, so the answered date stays null."),
+        (vocab.SERVED_NO_ANSWER, "The claims administrator asked in August 2026 that the County be dismissed."),
+        (vocab.NOT_SERVED, "The CMC form checks the box saying all parties were served, appeared or were dismissed."),
+        (
+            vocab.NOT_SERVED,
+            "She was never served as an individual; her Estate (DOE 1) was served and answered instead.",
+        ),
+        (vocab.APPEARED_NO_ANSWER, "The plaintiff's own statement lists her as answered, but no answer supports it."),
+        (vocab.APPEARED_NO_ANSWER, "Defense propounded discovery, which plaintiff answered on 2026-10-18."),
+    ],
+)
+def test_a_note_that_names_a_state_without_finding_it_changes_nothing(status: str, note: str) -> None:
+    m = matter(defendant(status, [note]))
+    assert defstatus.reconcile(m) == [] and m["defendants"][0]["status"] == status
+    assert gates.rule_matters([m], TODAY)[gates.NOTE_RULE] == []
 
 
 # ---- parity: the corrected status is explained, not held -----------------------------------
@@ -205,3 +226,33 @@ def test_the_run_prints_the_notes_status_before_the_gates(tmp_path, pricing_path
     assert out["defendants"][0]["flags"] == ["Default entered 2026-06-01."]
     assert [o["pass"] for o in out["overturns"]] == ["status-note"]
     assert gates.rule_matters([out], TODAY)[gates.NOTE_RULE] == []
+
+
+def test_a_read_value_with_an_em_dash_reaches_the_gates_without_one(tmp_path, pricing_path):
+    """2026-10-23: a court field written "A \u2014 B" held a whole list on the em
+    dash rule, though the loader would have written ", "."""
+    import json
+
+    from litigation_testkit import M1, LitSeat, ScriptedLit, make_inputs, make_job, matter_docs
+    from jobs.litigation import manifest
+    from jobs.litigation.run import LitigationRun
+
+    (tmp_path / "pricing.json").write_text(pricing_path.read_text())
+    r = LitigationRun(
+        make_job(tmp_path / "job"),
+        inputs_dir=str(make_inputs(tmp_path / "inputs")),
+        pricing=str(tmp_path / "pricing.json"),
+        state_dir=tmp_path / "state",
+        seat_factory=lambda: LitSeat({M1: matter_docs()}),
+        client=ScriptedLit(),
+        log=lambda m: None,
+        today=lambda: dt.date(2026, 10, 7),
+        readback_pause=0.0,
+    )
+    assert r.run().verdict == "delivered"
+    res = copy.deepcopy(manifest.load_prior(tmp_path / "state", M1))
+    res["court"] = "Superior Court \u2014 Example County"
+    r._mfile(M1, "read3.json").write_text(json.dumps({"result": res, "overturns": []}))
+    out = r.final(next(x for x in r._matters() if x["id"] == M1))
+    assert out["court"] == "Superior Court, Example County"
+    assert gates.rule_matters([out], TODAY)["em dash in text"] == []

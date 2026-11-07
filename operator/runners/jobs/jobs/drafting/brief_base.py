@@ -36,7 +36,8 @@ from smokeball_connector.docx_classes import is_total_row
 from .. import firmbase
 from ..firmbase import FirmBase, FirmBaseLost, FirmBaseUnfit, Rows
 from ..firmbase import xmlproof
-from ..firmbase.base import W, _text_el, is_blank, slot_names
+from ..firmbase.base import W, _text_el, is_blank
+from ..firmbase.markers import marked
 from .outcome import DraftingFailed
 from .revise import layout as lay
 
@@ -130,7 +131,7 @@ def _library(doc: Any, els: list[Any]) -> tuple[list[Any], list[tuple[Any, Any]]
             n = len(el.find(f"{W}tblGrid").findall(f"{W}gridCol"))
             if n not in charts and len(el.findall(f"{W}tr")) >= 2:
                 charts[n] = (el, els[i + 1] if i + 1 < len(els) and is_blank(els[i + 1]) else None)
-        elif not is_blank(el):
+        elif el.tag == f"{W}p" and not is_blank(el):  # a bookmark or content control is no line
             roles.setdefault(_role(Paragraph(el, doc)), []).append(el)
     keep, notes = [], []
     for role, members in roles.items():
@@ -167,7 +168,10 @@ def _chart_slots(tbl: Any, n: int) -> None:
 def _front(doc: Any, els: list[Any]) -> None:
     from docx.text.paragraph import Paragraph
 
-    paras = [Paragraph(e, doc) for e in els]
+    # Paragraphs only: a body-level bookmark, a section break or any other
+    # non-content child above the caption is no line of the front (a firm's
+    # Word save puts a bookmarkStart there; the A&P rehearsal, 2026-11-07).
+    paras = [Paragraph(e, doc) for e in els if e.tag == f"{W}p"]
     court = len(paras)
     while court > 0 and (not paras[court - 1].text.strip() or _flags(paras[court - 1], "bold")):
         court -= 1
@@ -424,7 +428,12 @@ def fill(base: FirmBase, md: str) -> tuple[bytes, firmbase.Proof]:
 
 
 def load_base(path: Path, source: dict[str, str], cls: str = CLS) -> FirmBase:
-    return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    """The class's base, any class's (a memo's too): a file that is no base surfaces as
+    ``firm_base_unfit``, the way an unfit fill does in ``render_into``."""
+    try:
+        return FirmBase.load(cls, firmbase.Source(**source), path.read_bytes())
+    except FirmBaseUnfit as exc:
+        raise unfit(str(exc)) from exc
 
 
 def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None) -> tuple[Path, dict[str, Any]]:
@@ -452,7 +461,7 @@ def render_into(md: str, out: Path, base: FirmBase, paper: str, make: Any = None
 def _chart_size_pt(base: FirmBase) -> float | None:
     root = etree.fromstring(zipfile.ZipFile(io.BytesIO(base.bytes)).read("word/document.xml"))
     for tbl in root.find(f"{W}body").findall(f"{W}tbl"):
-        if any(s.startswith("body.chart") for s in slot_names(tbl)):
+        if any(s.startswith("body.chart") for s in marked(tbl)):
             sz = tbl.find(f".//{W}r/{W}rPr/{W}sz")
             return int(sz.get(f"{W}val")) / 2 if sz is not None else None
     return None

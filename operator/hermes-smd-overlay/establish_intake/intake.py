@@ -83,6 +83,7 @@ from typing import Any
 
 from config_applier.applier import atomic_write
 from establish_intake import gates
+from shared import wording_rules
 from shared.ids import iso_utc, sha256
 from shared.person_prefs import (
     MAX_PREF_BODY_BYTES,
@@ -118,7 +119,9 @@ _SAFE_SEGMENT = re.compile(r"\A[a-z0-9][a-z0-9_-]{0,63}\Z")
 #: confirmed. An absent compiler cannot mean a skipped gate where no gate was
 #: ever going to run — and refusing them would mean a firm whose leak-check
 #: binary is missing can no longer tell its Operator how to write a letter.
-GATE_FREE_SCOPES = ("person", "firm_adjust")
+#: ``library_accept`` installs a firm's accepted library file, checked by the
+#: no-client-text check on its bytes, not by a compiler gate.
+GATE_FREE_SCOPES = ("person", "firm_adjust", "library_accept")
 
 #: The confirmed-adjustment id: the eight-hex proposal id the firm quoted back.
 _ADJUSTMENT_ID = re.compile(r"\A[0-9a-f]{8}\Z")
@@ -531,6 +534,14 @@ class EstablishIntake:
             if problems:
                 return self._result(run_id, phase, STATUS_REJECTED, reasons=problems)
             return self._install_firm_adjust(run_id, sub)
+        if scope == "library_accept":
+            # A firm's accepted library file (establish_intake/library_accept.py):
+            # no corpus and no compiler gates, so, like firm_adjust, the uid
+            # check is the sender check; the admin and the exact choice were
+            # checked broker-side (workspace_broker/library_setup_choose.py).
+            if problems:
+                return self._result(run_id, phase, STATUS_REJECTED, reasons=problems)
+            return self._install_library(run_id, phase, run_dir)
         if scope != "firm":
             return self._result(
                 run_id, phase, STATUS_REJECTED, reasons=[f"unknown scope {scope!r}"]
@@ -942,6 +953,29 @@ class EstablishIntake:
     # Firm adjustment (ADR 0085 §4 as amended 2026-08-21, ss-console#2529)
     # ------------------------------------------------------------------
 
+    def _install_library(self, run_id: str, phase: str, run_dir: Path) -> dict[str, Any]:
+        """A firm's accepted library file: read both files of the run (each
+        broker-written), then the root writer checks, writes the vault and waits
+        for the applier (``library_accept.accept_file``)."""
+        from establish_intake import library_accept  # it imports this module's statuses
+
+        acceptance, problems = library_accept.read_run(run_dir, self.broker_uid)
+        if acceptance is None:
+            return self._result(run_id, phase, STATUS_REJECTED, reasons=problems)
+        vault = library_accept.Vault(
+            s3_client=self.s3_client,
+            bucket=self.bucket,
+            slug=self.slug,
+            spec_dir=self.spec_dir,
+            sleep_fn=self.sleep_fn,
+            now_fn=self.now_fn,
+            converge_timeout=self.converge_timeout,
+            converge_interval=self.converge_interval,
+        )
+        out = library_accept.accept_file(acceptance, vault)
+        extra = {k: v for k, v in out.to_json().items() if k not in ("status", "reasons")}
+        return self._result(run_id, phase, out.status, reasons=list(out.reasons), extra=extra)
+
     def _install_firm_adjust(self, run_id: str, sub: dict[str, Any]) -> dict[str, Any]:
         """Append one confirmed sentence to a property's standing adjustments.
 
@@ -971,6 +1005,7 @@ class EstablishIntake:
             problems.append(f"property must be one of {SPEC_PROPERTIES}; got {prop!r}")
         adjustment, adjustment_problems = self._verify_adjustment(sub.get("adjustment"))
         problems.extend(adjustment_problems)
+        problems.extend(wording_rules.reach_required(output_class, adjustment))
         if problems:
             return self._result(run_id, phase, STATUS_REJECTED, reasons=problems)
         assert adjustment is not None  # noqa: S101 — narrowed by the problems check above
@@ -1064,6 +1099,8 @@ class EstablishIntake:
         at = raw.get("at")
         if not isinstance(at, str) or not at.strip():
             problems.append("adjustment.at missing or empty")
+        reach, reach_problems = wording_rules.reach_fields(raw, "adjustment")
+        problems.extend(reach_problems)
         if problems:
             return None, problems
         record: dict[str, Any] = {
@@ -1074,6 +1111,7 @@ class EstablishIntake:
         }
         if applied_by:
             record["applied_by"] = str(applied_by).strip()
+        record.update(reach)
         return record, []
 
     # ------------------------------------------------------------------

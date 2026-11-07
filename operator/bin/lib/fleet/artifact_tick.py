@@ -14,6 +14,7 @@ import os
 from typing import Any, Callable, Mapping
 
 from . import bundles, ids, ordering
+from .bundle_align import BundleAlign
 from .busy import BusyGate
 from .rings import Ring
 from .runner import Refusal, ToolingError
@@ -137,6 +138,7 @@ class _Reads:
         self.shas: dict[str, str | None] = {}
         self.pairs: dict[tuple[str, str], bool] = {}
         self.bases: dict[str, str | None] = {}
+        self.floors: dict[str, str | None] = {}
 
     def image_sha_of(self, ref: str | None) -> str | None:
         if not ref:
@@ -160,6 +162,12 @@ class _Reads:
         if sha not in self.bases:
             self.bases[sha] = ordering.base_commit(self.ctx.runner, self.ctx.repo, sha)
         return self.bases[sha]
+
+    def floor_of(self, sha: str) -> str | None:
+        """floor(X): ordering.bundle_floor, the last commit at or before X touching a bundle path."""
+        if sha not in self.floors:
+            self.floors[sha] = ordering.bundle_floor(self.ctx.runner, self.ctx.repo, sha)
+        return self.floors[sha]
 
 
 def _skills_defer(ctx: Any, seats: list[str]) -> Callable[[dict[str, Any]], dict[str, str]]:
@@ -303,6 +311,28 @@ def bundle_releases_enabled(environ: Mapping[str, str] | None = None) -> bool:
     return (os.environ if environ is None else environ).get(BUNDLE_SWITCH) == "true"
 
 
+def bundle_align_for(ctx: Any) -> BundleAlign | None:
+    """The image step's bundle pointer writer (bundle_align.py); None while bundle releases are off."""
+    if not bundle_releases_enabled():
+        return None
+    every = [seat for ring in ctx.rings() for seat in ring.seats]
+    reads = _Reads(ctx)
+
+    def releases() -> list[dict[str, Any]]:
+        return [
+            rel
+            for rel in ctx.store.recent_releases(IN_FLIGHT_MAX * 3)
+            if rel.get("kind") == "bundle"
+            and rel.get("artifact_name") == bundles.JOBS
+            and ids.BUNDLE_VERSION_RE.match(rel.get("artifact_version") or "")
+            and _built_from_main(ctx, rel.get("ss_console_sha"))
+        ]
+
+    return BundleAlign(
+        ctx.r2, releases, bundles.authoring_seats(ctx.repo, every), reads.floor_of, reads.at_or_after, reads.base_of
+    )
+
+
 def bundle_rings(ctx: Any) -> list[Ring]:
     """The rings with only the seats whose customer.yaml authors a job lane."""
     every = ctx.rings()
@@ -398,6 +428,21 @@ def cmd_bundle_base(ctx: Any, a: argparse.Namespace) -> int:
     ref = ids.image_ref(rel["image_ref"])
     digest = rel.get("image_digest")
     print(f"{ref.split('@', 1)[0]}@{ids.digest(digest)}" if digest and "@" not in ref else ref)
+    return 0
+
+
+def cmd_commit_seq(ctx: Any, a: argparse.Namespace) -> int:
+    """Print ``--sha``'s commit number (ordering.commit_seq): CI writes it into a bundle manifest."""
+    print(ordering.commit_seq(ctx.runner, ctx.repo, a.sha))
+    return 0
+
+
+def cmd_bundle_floor(ctx: Any, a: argparse.Namespace) -> int:
+    """Print ``<floor sha> <floor seq>`` for ``--sha`` (ordering.bundle_floor): an image build's two build-args."""
+    floor = ordering.bundle_floor(ctx.runner, ctx.repo, a.sha)
+    if not floor:
+        raise Refusal(f"no commit at or before {a.sha[:8]} changed a jobs bundle path")
+    print(f"{floor} {ordering.commit_seq(ctx.runner, ctx.repo, floor)}")
     return 0
 
 

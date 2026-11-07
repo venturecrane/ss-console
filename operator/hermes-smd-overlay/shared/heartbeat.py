@@ -804,6 +804,9 @@ DELIVERY_PROOF_CODES = frozenset(
         "stage_refused",
         "limit_held",
         "identity_held",
+        "repair_unconverged",
+        "job_stopped",
+        "library_edit_refused",
     }
 )
 
@@ -943,7 +946,7 @@ def count_shortfalls(
       ``REPLY_HOLD_GRACE_SECONDS`` is not judged yet: its redraft is still in
       flight. Code: ``reply_held:<reason>`` from the
       closed ``REPLY_HOLD_REASONS`` (else ``reply_held:other``), or
-      ``reply_failed:<hold_expired|act_line_undelivered|send_error>``. Tool:
+      ``reply_failed:<hold_expired|act_line_undelivered|job_reply_undelivered|send_error>``. Tool:
       the row's own ``tool`` token, else ``reply_relay``. The row's recipient
       and message id are read only to join; neither reaches the wire.
     * ``failed`` (reply that declined) — a ``REPLY_SENT`` row the reply plugin
@@ -1103,6 +1106,8 @@ def _reply_code(action_type: str, reason: object) -> str:
         return "reply_failed:hold_expired"
     if text.startswith("act_line_undelivered"):
         return "reply_failed:act_line_undelivered"
+    if text.startswith("job_reply_undelivered"):
+        return "reply_failed:job_reply_undelivered"
     return "reply_failed:send_error"
 
 

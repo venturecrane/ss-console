@@ -59,6 +59,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared import wording_letter
 from shared.layout_rules import clause_truth
 from shared.output_classes import describe as describe_output_class
 from shared.output_classes import has_live_rule_reader
@@ -506,6 +507,21 @@ def _installed_letter(
             _INSTALLED_SUBJECT.format(proposal_id=proposal_id),
             _compose(_INSTALLED_BODY, readback, tag, applied_by=by),
         )
+    # A wording rule a queued job now reads (shared/wording_letter.py), first:
+    # it is the one answer that can call prose in effect for a lane document.
+    worded = wording_letter.letter(
+        proposal_id,
+        readback,
+        tag,
+        by,
+        output_class,
+        compose=_compose,
+        clause_truth=clause_truth,
+        clause_letter=_clause_letter,
+        page=_page_unread_rule,
+    )
+    if worded is not None:
+        return worded
     truth = clause_truth(proposal_id, output_class)
     if truth and truth["compiled"]:
         return _clause_letter(proposal_id, readback, tag, by, output_class, truth)

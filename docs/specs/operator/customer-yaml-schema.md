@@ -562,6 +562,8 @@ logic_in_code:
   post_record_derivation: observe # or enforce
   conflict_fence: observe # or enforce
   fixed_wording: observe # or enforce
+  wording_rules: observe # or enforce
+  library_setup: observe # or enforce
   status_from_events: observe # or enforce
 ```
 
@@ -571,6 +573,8 @@ Optional. Each switch governs one mechanism that can refuse an act or change wha
 - **Anything else present is refused at boot** by `bootstrap/validate.py` and in the console by `sections-logic-in-code.ts`, including an unknown key, because a misspelled switch would read as `observe` while the file said `enforce`. A reader that meets such a value anyway (a hand edit on the volume, an unparseable file) enforces.
 - **Read fresh on every call** by `logic_in_code.py`, one file in three copies (the Smokeball connector, overlay `shared/`, the broker) because those processes share no virtualenv. `operator/tests/test_logic_in_code_sync.py` pins them byte-identical.
 - **Rebuild-class.** The live config applier refuses a diff that touches the block, so a change reaches a seat with a release or re-provision, the same as `matter_resolution_mode`. Never portal-editable.
+- **`wording_rules`** is not a refusal: it is whether the drafting and demand lanes put a firm's confirmed wording rules for the document's kind and attorney into what they send the model, and whether the install letter calls such a rule in effect (`shared/wording_rules.py`). `observe` sends the model exactly what it was sent before the switch existed and keeps the letter at "recorded"; the rule's reach is still recorded. With it on, an installed rule store the seat cannot trust holds the job for SMD before anything is paid. The jobs runner reads the connector's copy of `logic_in_code.py`, which its virtualenv installs.
+- **`library_setup`** is whether a firm administrator's "set up our mediation briefs" (or memos), for the firm or for an attorney the firm's drafting inputs list, may be answered with the firm's own best documents of that kind, named by file, and later made into the firm's library file. `observe` runs the hunt read-only and records its counts on the job; it sends the firm nothing and writes nothing to any library, ledger or vault, and the request gets the reply it gets today. `enforce` sends the firm the candidates and the question, in the words of `operator/workspace_broker/library_setup_wording.py`. A switch the seat cannot read holds the job for SMD: it neither sends nor writes.
 - **`status_from_events` is the litigation lane's** (`jobs/litigation/`), read once when a job starts and kept for that job, from the connector's copy of the reader in the runner's venv. In `observe` the firm's list is what it was: a read also reports the dated events, and each run records what the derivation would have printed and held under the lane's state dir (`status_shadow/`, `python -m jobs.litigation.statusshadow`). In `enforce` a defendant's status comes from its events.
 
 ## Multi-person seats: `people`, `spaces` and roles (ADR 0090, ADR 0091)

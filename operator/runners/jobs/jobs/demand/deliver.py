@@ -48,23 +48,34 @@ def front_keys(firm: Any) -> tuple[str, ...]:
     no variant is selected)."""
     if "_variant" not in firm.data:
         return house.FRONT_KEYS
-    return house_numbered.FRONT_KEYS if firm.variant.get("layout") == "numbered" else house.FRONT_KEYS
+    if firm.variant.get("layout") == "numbered":
+        return house_numbered.FRONT_KEYS
+    return house.front_keys(bool(firm.variant.get("re_vs")))
 
 
-def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) -> tuple[Path, str, list[str]]:
+def render_demand(
+    firm: Any, draft_md: str, out_dir: Path, client_label: str, reference: Path | None = None
+) -> tuple[Path, str, list[str]]:
     """The house file, its attorney notes, and the format check's notes.
     Raises FormatRefused when the file is off-format: nothing is filed.
+
+    ``reference`` is the file the job's resolver answer names
+    (``library_pick.pick_reference``); None is the pinned reference, as before.
 
     The layout is the responsible attorney's format (``firm.variant``). The
     title may name the client (``Attorney for {client}``): it is filled from
     ``client_label``, the matter record's own client name, never the model's."""
     fmt, v, who = firm.data["format"], firm.variant, firm.attorney
+    ref = reference if reference is not None else firm.input_path("house_reference")
     author = firm.get("firm", "display_name")
     title = who["title"].replace("{client}", client_label)
+    # The expiry on a business day, in the banner and the closing sentence
+    # alike (house.business_day_expiry); the move is told to the attorney.
+    draft_md, expiry_notes = house.business_day_expiry(draft_md)
     if v.get("layout") == "numbered":
         path, notes = house_numbered.render(
             draft_md,
-            firm.input_path("house_reference"),
+            ref,
             out_dir,
             variant=v,
             signature=fmt["firm_signature"],
@@ -77,7 +88,7 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
     else:
         path, notes = house.render(
             draft_md,
-            firm.input_path("house_reference"),
+            ref,
             out_dir,
             signature=fmt["firm_signature"],
             signer_title=title,
@@ -86,6 +97,7 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
             signer=who["signer"],
             initials=who["initials"],
             mail_line=v["mail_line"],
+            litigation=bool(v.get("re_vs")),
         )
     res = format_check.check(
         path,
@@ -98,7 +110,7 @@ def render_demand(firm: Any, draft_md: str, out_dir: Path, client_label: str) ->
     )
     if not res.ok:
         raise FormatRefused(res.fails)
-    return path, notes, res.notes
+    return path, notes, [*expiry_notes, *res.notes]
 
 
 def render_plain(md: str, out_dir: Path, name: str, author: str) -> Path:

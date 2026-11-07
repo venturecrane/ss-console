@@ -201,9 +201,12 @@ def _call(broker: Broker, action: str, binding: dict, **extra) -> dict:
 def _body_for(broker: Broker, binding: dict) -> str:
     """ "Received.", or for a HELD litigation/chronology job its fixed wording
     (held_wording refuses any other words there; test_held_wording)."""
-    from workspace_broker import fixed_wording, reply_binding
+    from workspace_broker import fixed_wording, reply_binding, reply_text
 
     kind = binding.get("kind")
+    if kind in reply_text.CODE_SENT_KINDS:
+        # Its words on every seat (2026-11-05, test_drafting_reply_code_sent).
+        return (reply_text.texts_for(broker, kind, binding["job_id"]) or ["Received."])[0]
     if fixed_wording.KIND_LANE.get(kind) not in fixed_wording.HELD_CLASS_LANES:
         return "Received."
     row = reply_binding.job_ledger(broker, kind).read(binding["job_id"])
@@ -631,27 +634,30 @@ def _drafting_job(tmp_path: Path, path: list[str], requester: str = ADMIN) -> st
     return job
 
 
-@pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path, ending: str) -> None:
+def test_a_finished_drafting_job_replies_to_its_requester_once(tmp_path: Path) -> None:
     from workspace_broker.drafting_ledger import DraftingLedger
 
-    job = _drafting_job(tmp_path, ["running", ending])
+    job = _drafting_job(tmp_path, ["running", "delivered"])
     box = FakeMailbox()
     _ack_in_thread(box)
     broker = _broker(tmp_path, box)
     assert _send(broker, {"kind": "drafting_job", "job_id": job})["recipients"] == [ADMIN]
-    assert DraftingLedger(broker.audit_db_path, tmp_path / "dq").read(job)["reply_key"] == f"1:{ending}"
+    assert DraftingLedger(broker.audit_db_path, tmp_path / "dq").read(job)["reply_key"] == "1:delivered"
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
     assert len(box.replies()) == 1
 
 
-def test_a_failed_drafting_job_never_replies_to_the_client(tmp_path: Path) -> None:
-    """FALSIFIER: let failed bind for drafting_job and the firm hears about our own fault."""
-    job = _drafting_job(tmp_path, ["failed"])
+@pytest.mark.parametrize(("ending", "code"), [("failed", "job_failed"), ("held", "job_held")])
+def test_a_stopped_drafting_job_never_replies_to_the_client(tmp_path: Path, ending: str, code: str) -> None:
+    """Captain, 2026-11-06: SMD knows, the firm does not (stop_note).
+    FALSIFIER: on the parent commit both bind and the firm gets a note."""
+    path = ["failed"] if ending == "failed" else ["running", "held"]
+    job = _drafting_job(tmp_path, path)
     box = FakeMailbox()
+    _ack_in_thread(box)
     out = _call(_broker(tmp_path, box), "msgraph_reply_bind", {"kind": "drafting_job", "job_id": job})
-    assert out["bound"] is False and "Send nothing to anyone" in out["reason"]
+    assert out["bound"] is False and out["code"] == code and "Send nothing to anyone" in out["reason"]
     with pytest.raises(BindingRefused):
         _send(_broker(tmp_path, box), {"kind": "drafting_job", "job_id": job})
     assert box.replies() == []
@@ -887,9 +893,15 @@ def _sendmails(box: FakeMailbox) -> list[str]:
 
 
 @pytest.mark.parametrize("ending", ["delivered", "held"])
-def test_a_requested_litigation_job_replies_in_thread_only(tmp_path: Path, ending: str) -> None:
+def test_a_requested_litigation_job_replies_in_thread_only(
+    tmp_path: Path, ending: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """FALSIFIER: let a requested job take the new-message path and the message
-    leaves the requester's thread."""
+    leaves the requester's thread. (A held list is silent since 2026-11-06,
+    ``stop_note.SILENT_KINDS``; the held case runs with its replies reopened.)"""
+    from workspace_broker import stop_note
+
+    monkeypatch.setattr(stop_note, "SILENT_KINDS", stop_note.SILENT_KINDS - {"litigation_job"})
     job = _litigation_job(tmp_path, ["running", ending])
     box = FakeMailbox()
     _ack_in_thread(box)

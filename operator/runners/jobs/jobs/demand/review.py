@@ -188,6 +188,22 @@ FIRM_BANNED = (
         r"\b(?:the|per|in|from|no cite in) (?:record )?digest\b|\bdigest(?:'s)? (?:states|says|shows|entry|entries|line|lines|cites?)\b",
         re.I,
     ),
+    # the system's name for its bill reconciliation (the gap audit's Basis
+    # cells, 2026-11-06: "preflight (Billing tab vs bills)", "Preflight
+    # counts"); never a record's "preflight inspection"
+    re.compile(r"\b(?:the |free )?preflight\b(?!\s+(?:inspection|check|checklist|briefing|procedure)s?\b)", re.I),
+    # the system speaking of itself as "a model" (2026-11-07: a code-authored
+    # "Never read by a model" over the held-out list); never a record's
+    # "model year" or "a model patient", so the verb is required
+    re.compile(
+        r"\b(?:read|written|drafted|reviewed|audited|produced|generated|summarized) by (?:a|the|an ai) model\b"
+        r"|\b(?:a|the) model (?:read|wrote|drafted|reviewed|audited|produced|generated|summarized)\b",
+        re.I,
+    ),
+    # the lookup limit's internal name (2026-11-07: "not looked up (over the
+    # cap)" 91 times in a vendor table); never a record's "cap" (a dental cap,
+    # a policy cap is "policy limits" in this lane)
+    re.compile(r"\bover the cap\b|\bthe cap\b(?=\s+(?:on|of|for) (?:lookups?|calls?|the job|this job|spend))", re.I),
 )
 
 

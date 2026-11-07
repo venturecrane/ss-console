@@ -869,3 +869,38 @@ def test_a_reuse_check_with_nothing_saved_reports_no_case_reused(tmp_path):
     rc = json.loads(report.read_text())["reuse_check"]
     assert rc["reused"] == 0 and rc["row_digest"] == {}
     assert [w["number"] for w in rc["would_read"]] == ["100001"]
+
+
+def test_the_printout_prints_a_defaulted_defendant_as_its_note_states(tmp_path):
+    """2026-11-02: the print-out printed saved status values as stored, and
+    three defaulted defendants read "Served, no answer in file" beside their
+    own "default entered" notes."""
+    from jobs.litigation import vocab
+
+    p = tmp_path / "state" / "matters" / f"{M1}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    d = {"name": "Delta", "status": vocab.SERVED_NO_ANSWER, "served": {"date": "2017-10-01"},
+         "answered": {"date": None, "source": None}, "flags": ["Default entered 2018-01-05."]}  # fmt: skip
+    p.write_text(json.dumps({"defendants": [d], "discovery_propounded": [], "discovery_served_on_client": []}))
+    r = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    f = {"matter_id": M1, "number": "100001", "title": "A v. B", "responsible": "Lee", "read": True}
+    shown = r._status_values([f])
+    assert shown[0]["defendants"][0]["status"] == vocab.DEFAULT
+    out = tmp_path / "x.pdf"
+    printout.build(shown, out, TODAY)
+    assert "no answer in file" not in "\n".join(printout.text_of(out))
+
+
+def test_the_seed_saves_a_corrected_record_with_an_em_dash_the_printer_cleans(tmp_path):
+    """2026-10-30: 28 hand-corrected cases were refused as internal text for an
+    em dash the printer writes as ", "; a real leak is still refused."""
+    from jobs.litigation.discovery12 import carry
+
+    r1 = _run_job(tmp_path, "job1", LitSeat({M1: _docs()}), Scripted12())
+    assert r1.run().verdict == "delivered"
+    carry.purge(tmp_path / "state", M1)
+    good = json.loads((r1.data / "final.json").read_text())[0]
+    good["sections"]["frogs"][0]["notes"] = "Served by mail \u2014 verified"
+    assert carry.problems({**good, "provenance": "hand read"}) is None
+    good["sections"]["frogs"][0]["notes"] = "Served by mail \u2014 see read2"
+    assert "internal text" in (carry.problems({**good, "provenance": "hand read"}) or "")

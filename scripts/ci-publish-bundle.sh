@@ -18,7 +18,8 @@
 #
 #   fleet/bundles/jobs/<version>.tar.zst   root: jobs/ and connectors/smokeball/
 #   fleet/bundles/jobs/<version>.json      {"name","version","sha256","size","layout",
-#                                           "ss_console_sha","base_image_ref","python"}
+#                                           "ss_console_sha","ss_console_seq",
+#                                           "base_image_ref","python"}
 #   fleet/bundles/jobs/layout-<n>/latest.json
 #                                          {"version","manifest_key","manifest_sha256"}
 #
@@ -31,6 +32,11 @@
 # a seat whose pointer names another layout's bundle boots this one instead
 # (bundle_installer.decide), which is what lets an image and its bundle change
 # layout in one release.
+#
+# ss_console_seq is AFTER_SHA's commit number (`fleet commit-seq`, rev-list
+# --count, refused on a shallow clone). A seat has no git, so its self-test
+# orders the mounted bundle against the image's bundle floor by this number
+# (operator/templates/jobs-bundle-commit-probe.py, jobs-bundle-built-for-image).
 #
 # version = <utc yyyymmddHHMM>-<AFTER_SHA[:8]>, the skills shape; release id
 # bnd-<version>. The tarball goes up first and is read back (sha256 compared)
@@ -67,6 +73,9 @@ assert_bundle_key() {
     exit 1
   fi
 }
+
+SEQ="$(cd "$REPO_ROOT" && operator/bin/fleet commit-seq --sha "$AFTER")"
+[[ "$SEQ" =~ ^[1-9][0-9]*$ ]] || { echo "::error::fleet commit-seq answered ${SEQ}, not a commit number"; exit 1; }
 
 # ---------- the image to build in ----------
 BASE_IMAGE="$(cd "$REPO_ROOT" && operator/bin/fleet bundle-base --sha "$AFTER")"
@@ -114,11 +123,12 @@ zstd -q -19 -T0 "${work}/out/bundle.tar" -o "${work}/bundle.tar.zst"
 SHA256="$(sha256sum "${work}/bundle.tar.zst" | awk '{print $1}')"
 SIZE="$(wc -c < "${work}/bundle.tar.zst" | tr -d ' ')"
 
-python3 - "$NAME" "$VERSION" "$SHA256" "$SIZE" "$LAYOUT" "$AFTER" "$BASE_IMAGE" "$PYTHON_VERSION" > "${work}/manifest.json" <<'PY'
+python3 - "$NAME" "$VERSION" "$SHA256" "$SIZE" "$LAYOUT" "$AFTER" "$SEQ" "$BASE_IMAGE" "$PYTHON_VERSION" > "${work}/manifest.json" <<'PY'
 import json, sys
-name, version, sha, size, layout, src, base, python = sys.argv[1:]
+name, version, sha, size, layout, src, seq, base, python = sys.argv[1:]
 print(json.dumps({"name": name, "version": version, "sha256": sha, "size": int(size), "layout": int(layout),
-                  "ss_console_sha": src, "base_image_ref": base, "python": python}, indent=1, sort_keys=True))
+                  "ss_console_sha": src, "ss_console_seq": int(seq), "base_image_ref": base, "python": python},
+                 indent=1, sort_keys=True))
 PY
 MANIFEST_SHA256="$(sha256sum "${work}/manifest.json" | awk '{print $1}')"
 python3 - "$VERSION" "$MANIFEST_KEY" "$MANIFEST_SHA256" > "${work}/latest.json" <<'PY'

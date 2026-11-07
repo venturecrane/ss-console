@@ -12,6 +12,14 @@ on every set), its own rendered Word file and format check. A one-document job
 is the unit ``""``: the root data directory and the stage names it always had,
 so a job in flight across a deploy resumes unchanged.
 
+**Parties.** A request that serves its sets on more than one party
+(``parties.plan``: "RFA, RFPD and SROG to the City and the School District")
+plans one unit per (party, set), party by party, each with the party in its
+label, its file name, its identification block, its title and its definition
+of YOU (``parties.bind``). Every unit reads the same digest: the record is
+paid for once. A request served on one party plans exactly as before, and a
+plan already frozen in state.json (no ``party``) resumes as it was.
+
 **The finish, in order.** Every unit rendered and format-checked; then the
 attorney notes written from the FINAL documents (``review.final_notes``); then
 the independent pre-delivery review over the documents and the notes as they
@@ -25,19 +33,21 @@ import io
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, NoReturn
+from typing import TYPE_CHECKING, Any, Callable
 
+from .. import firm_wording
 from ..demand import deliver, finalpass, quotefix, summarize
-from . import caption_stage, citefix, compose, format_check, gate, nestquote, page_limits, pincheck
-from . import base_lay, pleading, prerender, render
+from . import caption_stage, citefix, compose, converge, format_check, gate, nestquote, page_limits, pincheck, quote_end
+from . import base_lay, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
-from . import grounding, notes as notes_mod, settle as settle_mod, wording
+from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod, wording
+from . import repair_budget, repair_guard
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
 #: A served paper's audit findings are repaired or the job fails (compose.STRICT_CLASSES).
-#: The runaway guard on a served set's repairs; ``Finish._converge`` stops on
-#: non-convergence well before it in practice.
+#: A served set's repair rounds when the firm authors no ``budget.repair_rounds``
+#: (``repair_budget``); ``Finish._converge`` stops on non-convergence well before it in practice.
 REPAIR_CEILING = 8
 FINAL = "draft-final.md"
 CONCURRENCY = 4
@@ -47,8 +57,12 @@ WALL_GATE = "[1]"
 class Unit:
     """One document the job drafts."""
 
-    def __init__(self, key: str, label: str, variant: str | None, instruction: str | None, data: Path) -> None:
+    def __init__(
+        self, key: str, label: str, variant: str | None, instruction: str | None, data: Path, party: str | None = None
+    ) -> None:
         self.key, self.label, self.variant, self.instruction, self.data = key, label, variant, instruction, data
+        #: The party this set is served on, when the request serves several (``parties.py``).
+        self.party = party
 
     def stage(self, name: str) -> str:
         return f"{self.key}:{name}" if self.key else name
@@ -91,20 +105,26 @@ class Finish:
         plan = self._state().get("units")
         if plan is None:
             found = sets.variants(self.job.request_text) if self.cls == "discovery_set" else []
-            plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
-            if len(plan) < 2:
-                plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
+            plan = parties_mod.plan_units(found, self._served_on() if found else [])
             self._put("units", plan)
         out = []
-        labels = [p["label"] for p in plan]
-        for p in plan:
+        titles = [parties_mod.unit_title(p) for p in plan]
+        for p, title in zip(plan, titles):
             d = self.data / p["key"] if p["key"] else self.data
             d.mkdir(parents=True, exist_ok=True)
-            others = [x for x in labels if x and x != p["label"]]
-            instr = sets.Unit(p["variant"], p["label"]).instruction(others) if p["key"] else None
-            out.append(Unit(p["key"], p["label"] or self._title, p["variant"], instr, d))
+            others = [x for x in titles if x and x != title]
+            instr = sets.Unit(p["variant"], p["label"], p.get("party")).instruction(others) if p["key"] else None
+            out.append(Unit(p["key"], title or self._title, p["variant"], instr, d, p.get("party")))
         self._units = out
         return out
+
+    def _served_on(self) -> list[str]:
+        """``parties.served_on``; a name that is none of the matter's parties
+        stops the job for SMD before anything is drafted."""
+        try:
+            return parties_mod.served_on(self.data, self.job.job_dir, self.job.request_text)
+        except parties_mod.PartyUnknown as exc:
+            raise DraftingFailed(f"party_unknown: {exc}") from None
 
     def paper(self) -> str:
         """``pleading`` when the request asks for it and the firm authored its
@@ -140,85 +160,40 @@ class Finish:
         version = 1
         result = d.audit(version, digest, corpus)
         while compose.blocking_findings(result, self.cls) and version <= MAX_REPAIRS:
-            d.repair(digest, version)
+            repair_guard.repaired(d, digest, version, repair_guard.Guard(d.data, digest + "\n" + corpus))
             version += 1
             result = d.audit(version, digest, corpus)
         return version
 
     def _converge(self, u: Unit, d: compose.Drafter, digest: str, corpus: str) -> int:
-        """A served set (``compose.STRICT_CLASSES``) is clean or the job fails.
-
-        Repair rounds re-audit only the requests a repair changed (the delta
-        audit, ``compose.delta``), so a round's findings are the repair's. A set
-        clean on a delta read then gets a FULL read before it passes: a defect
-        in a request no repair touched (2026-10-14: an interrogatory stating the
-        other side's information-and-belief allegation as fact, first seen on
-        the fourth read) is found there, repaired, and checked again. The
-        budget stops on non-convergence, not on a round count: a repair that
-        changes nothing, two delta rounds without fewer findings, or a full
-        read that finds no fewer than the last full read did. ``REPAIR_CEILING``
-        is the runaway guard behind those."""
-        version, full, stalled, last_full = 1, True, 0, None
-        result = d.audit(version, digest, corpus)
-
-        def left() -> int:
-            return compose.blocking_findings(result, self.cls, d._read(f"audit-v{version}.md"))
-
-        def fail(why: str) -> NoReturn:
-            # Counts only, never the claims or a heading (a title names the
-            # parties): a reason reaches SMD's alerts. audit-v<n>.md has the rows.
-            raise DraftingFailed(
-                f"audit_unrepaired: {left()} audit finding(s) in the {u.label} {why}; see audit-v{version}.md"
-            )
-
-        n = left()
-        while True:
-            if n == 0 and full:
-                return version
-            if n == 0:
-                result, full = d.audit(version, digest, corpus, full=True), True
-                n = left()
-                if n and last_full is not None and n >= last_full:
-                    fail(f"on a full read after {version - 1} repair(s), no fewer than the last full read found")
-                last_full = n if n else last_full
-                continue
-            if version > REPAIR_CEILING:
-                fail(f"after {REPAIR_CEILING} repairs")
-            before = d._read(f"draft-v{version}.md")
-            if d.repair(digest, version) == before:
-                fail("that a repair could not place")
-            version += 1
-            result, full = d.audit(version, digest, corpus), False
-            m = left()
-            stalled = stalled + 1 if m >= n else 0
-            n = m
-            if stalled >= 2:
-                fail("after two repairs that did not reduce them")
+        """A served set (``compose.STRICT_CLASSES``) is clean, files with open
+        items, or holds (``converge.served``, its rules and their history)."""
+        return converge.served(d, self.cls, u.label, digest, corpus, repair_budget.plan(self, u, REPAIR_CEILING))
 
     def _canon(self, u: Unit) -> Unit | None:
         """The set the others align to: the first one gated, never ``u``."""
-        for o in self.units():
-            if o.key and o.key != u.key and self._is_done(o.stage("gate")):
-                return o
-        return None
+        done = [o for o in self.units() if o.key and o.key != u.key and self._is_done(o.stage("gate"))]
+        same = [o for o in done if o.party == u.party]
+        return (same or done or [None])[0]
 
     def _shared(self, u: Unit) -> list[str]:
         c = self._canon(u) if u.key else None
         if c is None:
             return []
         doc, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
+        front, served = parties_mod.shared_front(sets.front_matter(doc), c.party, u.party)
         return [
             f"THE {c.label.upper()} SET ALREADY DRAFTED FOR THIS REQUEST (it binds how SHARED words read: print its "
             "attorney block and signature block exactly, and define every term both sets define in the same words. "
             "It is not this set's whole list of terms: this set's own DEFINITIONS define every further term its "
-            "requests use):\n\n" + sets.front_matter(doc)
+            "requests use)." + served + "\n\n" + front
         ]
 
     def _drafter(self, u: Unit) -> compose.Drafter:
         context = ([u.instruction] if u.instruction else []) + self._shared(u) + self._context()
         cp = self.data / "caption.json"
         cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
-        return compose.Drafter(
+        d = compose.Drafter(
             u.data,
             self.doorway,
             self.firm,
@@ -229,6 +204,7 @@ class Finish:
             self.log,
             skeleton=caption_stage.fill_skeleton(self.firm.skeleton(self.cls), cap),
         )
+        return firm_wording.attach(d, self.data)
 
     def _draft(self, u: Unit, digest: str) -> str:
         out = u.data / FINAL
@@ -292,9 +268,10 @@ class Finish:
         c = self._canon(u) if u.key else None
         if c is not None:
             canon, _ = render.split_notes((c.data / FINAL).read_text(encoding="utf-8"))
-            doc, more = sets.align(doc, canon, f"{c.label} set")
+            doc, more = sets.align(doc, canon, f"{c.label} set", keep=parties_mod.keep_terms(c.party, u.party))
             notes += more
-        return doc, notes
+        doc, bound = parties_mod.bound(doc, u.party, u.label, self.data, self.job.job_dir, self.job.request_text)
+        return doc, notes + bound
 
     def _digest_text(self) -> str:
         p = self.data / "digest.md"
@@ -311,6 +288,8 @@ class Finish:
             return (u.data / FINAL).read_text(encoding="utf-8")
         doc, notes = render.split_notes(md)
         doc, log = nestquote.repair(doc)
+        doc, trimmed = quote_end.trim(doc)
+        log += trimmed
         if self.cls == "discovery_set":
             doc, caps = sets.enforce_caps(doc)
             doc, fronted = self._front(u, doc)
@@ -359,7 +338,8 @@ class Finish:
     # ---- render once per unit -------------------------------------------------------
     def _names(self, u: Unit | None = None) -> dict[str, str]:
         base = f"{self._title} - {self.job.matter_number} - {self.date_stamp}"
-        draft = f"{self._title} - {u.label} - {self.job.matter_number} - {self.date_stamp}" if u and u.key else base
+        label = re.sub(r'[\\/:*?"<>|]', "", u.label) if u else ""
+        draft = f"{self._title} - {label} - {self.job.matter_number} - {self.date_stamp}" if u and u.key else base
         return {
             "folder": f"{self._title} {self.date_stamp} (Operator {self.job.job_id[-6:]})",
             "draft": f"{draft}.docx",
@@ -380,14 +360,16 @@ class Finish:
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
-        fmt, paper, held = self.firm.data["format"], self.paper(), self.firm.firm_base(self.cls)
+        fmt, paper, made_in = self.firm.data["format"], self.paper(), library_pick.pick_base(self)
         dest = deliver.out_dir(self.data) / self._names(u)["draft"]
-        path, report, laid, checked = base_lay.lay_out(doc, dest, self.cls, fmt, paper, held, self.rule_layout)
+        path, report, laid, checked = base_lay.lay_out(
+            doc, dest, self.cls, fmt, paper, made_in.held, self.rule_layout, styles=made_in.styles
+        )
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
-            undefined = sets.undefined_caps(render.split_notes(md)[0])
+            undefined = sets.undefined_caps(render.split_notes(md)[0], self.corpus())
             if undefined:
                 res.model(
                     "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
@@ -399,6 +381,7 @@ class Finish:
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
             model_doc, end = render.split_notes(md)
             fixed = self._drafter(u).repair_format(model_doc, res.content)
+            fixed = repair_guard.vet_format(u.data, model_doc, fixed, digest + "\n" + self._corpus_text())
             self._uatomic(
                 u, FINAL, fixed.rstrip() + ("\n\n" + render.NOTES_MARK + "\n\n" + end + "\n" if end else "\n")
             )
@@ -514,6 +497,10 @@ class Finish:
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         render_notes = [self._block_note(), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
+        # SMD's hand-written sections of the notes this replaces, carried by
+        # code: never sent to the model above, kept byte for byte (2026-11-05).
+        prior = self.data / "notes-final.md"
+        md = notes_mod.carry_smd(prior.read_text(encoding="utf-8") if prior.is_file() else None, md)
         self._atomic("notes-final.md", md)
         return md
 
@@ -634,7 +621,8 @@ class Finish:
             # A basis row the review says does not carry its request: dropped
             # and said, like a row that failed verification. No rewrite: the
             # review read the rest, and removing a row adds nothing to check.
-            notes_md, n = grounding.drop_rows(notes_md, flagged)
+            dropped, n = grounding.drop_rows(notes_mod.strip_smd(notes_md), flagged)  # never inside SMD's sections
+            notes_md = notes_mod.carry_smd(notes_md, dropped)
             self._atomic("notes-final.md", notes_md)
             self._done("basis_dropped", rows=n)
         if self._is_done("manifest"):

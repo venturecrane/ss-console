@@ -43,6 +43,7 @@ from spec_applier.applier import (
     apply,
     spec_object_key,
 )
+from spec_applier.library import apply_library, library_signature
 from spec_applier.preferences import apply_preferences, preferences_prefix
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ class SpecPollLoop:
     _last_etag: str | None = None
     _logged_missing: bool = False
     _last_prefs_signature: str | None = None
+    _last_library_signature: str | None = None
 
     def _head_etag(self) -> str | None:
         """HEAD the spec object; ``None`` on any fault (including 'absent').
@@ -168,6 +170,17 @@ class SpecPollLoop:
         self._last_prefs_signature = signature
         return result.outcome
 
+    def _run_library_once(self) -> SpecApplyOutcome | None:
+        """Apply the firm's accepted library files when the library prefix moved.
+        Same posture as the preference tick: only a handled signature is cached."""
+        signature = library_signature(self.s3_client, self.bucket, self.slug)
+        if signature is None or signature == self._last_library_signature:
+            return None
+        result = _apply_library_logged(self)
+        if result is not None:
+            self._last_library_signature = signature
+        return result
+
     def run_once(self) -> SpecApplyOutcome | None:
         """One tick. Returns the class-spec outcome when an apply ran, else
         ``None``. The per-person preference apply runs on the same tick with
@@ -177,6 +190,7 @@ class SpecPollLoop:
         logged, and the installed tree is left as it stands.
         """
         self._run_preferences_once()
+        self._run_library_once()
         etag = self._head_etag()
         if etag is None:
             return None
@@ -206,6 +220,9 @@ class SpecPollLoop:
             return None
 
         if result.outcome is SpecApplyOutcome.APPLIED:
+            # The spec install rewrote the manifest; the library tick re-checks
+            # its own record there on the next tick.
+            self._last_library_signature = None
             logger.info(
                 "spec_applier: APPLIED %d spec(s) %s (pruned %s, source=%s)",
                 len(result.installed),
@@ -247,6 +264,30 @@ class SpecPollLoop:
 # ---------------------------------------------------------------------------
 # Env wiring + entry point
 # ---------------------------------------------------------------------------
+
+
+def _apply_library_logged(loop: SpecPollLoop) -> SpecApplyOutcome | None:
+    """One library apply, logged the way the spec apply is; ``None`` on a fault."""
+    try:
+        result = apply_library(
+            s3_client=loop.s3_client, bucket=loop.bucket, slug=loop.slug, spec_dir=loop.spec_dir
+        )
+    except SpecApplyError as exc:
+        logger.error("spec_applier: library apply failed (%s); keeping the installed library", exc)
+        return None
+    if result.outcome is SpecApplyOutcome.APPLIED:
+        logger.info(
+            "spec_applier: APPLIED library %s (pruned %s, source=%s)",
+            list(result.installed),
+            list(result.pruned),
+            result.source_digest,
+        )
+    elif result.outcome is SpecApplyOutcome.REJECTED:
+        logger.warning(
+            "spec_applier: library REJECTED: %s; keeping the installed library (fail-static)",
+            "; ".join(result.reasons) or "(no reason given)",
+        )
+    return result.outcome
 
 
 def _build_s3_client() -> Any:
@@ -345,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
                 pref_result.outcome.value,
                 len(pref_result.installed),
             )
+        _apply_library_logged(loop)
         try:
             result = apply(
                 s3_client=loop.s3_client,

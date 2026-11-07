@@ -146,4 +146,101 @@ def attorney_notes(
         )
     review = _once(review, [label for label, _d in units or []])
     tail = ["", "## Request basis, record gaps and your decisions", "", end_tables] if end_tables else []
-    return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + tail) + "\n"
+    left = open_lines(data, units)
+    unresolved = ["", f"## {OPEN_ITEMS_HEADING}", "", *[f"- {x}" for x in left]] if left else []
+    return "\n".join(lines + ["", "## For review", ""] + [f"- {x}" for x in review] + unresolved + tail) + "\n"
+
+
+#: Code's heading for what a set filed unresolved when its repairs ran out
+#: (``repair_budget``): each item's own words and what the audit found in it.
+OPEN_ITEMS_HEADING = "Open items: left as drafted, for your decision before service"
+
+
+def open_lines(data: Path, units: list[tuple[str, Path]] | None) -> list[str]:
+    from .repair_budget import open_items
+
+    out = []
+    for label, d in units or [("", data)]:
+        pre = f"{label}, " if label else ""
+        for it in open_items(d):
+            words = f' reads "{it["text"]}"' if it.get("text") else ""
+            why = f" ({it['finding']})" if it.get("finding") else ""
+            out.append(f"{pre}{it['where']}{words}. It {it['kind']}{why}.")
+    return out
+
+
+# ---- SMD's own sections, carried through every rewrite ------------------------------
+#
+# SMD edits notes-final.md by hand before a job resumes ("Scope of this draft
+# and SMD's edits", "Before you serve these"), and the notes are written again
+# from the documents when a review holds on them: on 2026-11-05 that rewrite
+# removed SMD's lines twice. Code carries them: a section SMD wrote is never
+# sent to a model and comes through every rewrite byte for byte, where SMD put
+# it. A section is SMD's when its heading names SMD, or when it is a top-level
+# section (``#`` or ``##``) whose heading is not one code writes. Lines SMD
+# adds inside a section code writes, without a heading of their own, are not
+# kept: SMD gives them a heading.
+
+#: The top-level headings ``attorney_notes`` writes (prefixes: the caption's names its source).
+CODE_HEADINGS = (
+    "Attorney notes:",
+    "Items for the attorney",
+    "Caption: source",
+    "For review",
+    "Request basis, record gaps and your decisions",
+    "Open items: left as drafted",
+)
+_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+def _heading(line: str) -> tuple[int, str] | None:
+    m = _HEADING.match(line.rstrip("\r\n"))
+    return (len(m.group(1)), m.group(2)) if m else None
+
+
+def _is_smd(level: int, text: str) -> bool:
+    return bool(re.search(r"\bSMD\b", text)) or (level <= 2 and not text.startswith(CODE_HEADINGS))
+
+
+def smd_sections(md: str) -> list[tuple[str, str | None]]:
+    """(the section's exact text, the heading line of code's section that
+    followed it, or None at the end) for every SMD section of ``md``."""
+    lines = md.splitlines(keepends=True)
+    out: list[tuple[str, str | None]] = []
+    i = 0
+    while i < len(lines):
+        h = _heading(lines[i])
+        if h is None or not _is_smd(*h):
+            i += 1
+            continue
+        j = i + 1
+        while j < len(lines) and ((n := _heading(lines[j])) is None or n[0] > h[0]):
+            j += 1
+        after = (ln.rstrip() for ln in lines[j:] if (k := _heading(ln)) and not _is_smd(*k))
+        out.append(("".join(lines[i:j]), next(after, None)))
+        i = j
+    return out
+
+
+def strip_smd(md: str) -> str:
+    """``md`` without its SMD sections (what a code edit of the notes may touch)."""
+    for text, _ in smd_sections(md):
+        md = md.replace(text, "", 1)
+    return md
+
+
+def carry_smd(old: str | None, new: str) -> str:
+    """``new`` (notes code or a model just wrote) with every SMD section of
+    ``old`` in it, verbatim, before the code heading that followed it there
+    (at the end when none did, or that heading is gone). Idempotent."""
+    for text, anchor in smd_sections(old or ""):
+        if text in new:
+            continue
+        block = text if text.endswith("\n") else text + "\n"
+        lines = new.splitlines(keepends=True)
+        at = next((k for k, ln in enumerate(lines) if anchor is not None and ln.rstrip() == anchor), None)
+        if at is None:
+            new = new.rstrip("\n") + "\n\n" + block
+        else:
+            new = "".join(lines[:at]) + block + "".join(lines[at:])
+    return new

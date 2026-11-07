@@ -395,3 +395,40 @@ def test_a_run_shows_the_calendar_date_in_every_file_and_stores_only_the_papers(
     assert any("2027-03-01" in str(c) for row in notes[1:] for c in row)
     stored = manifest.load_prior(tmp_path / "state", M1)
     assert "2027-03-01" not in str(stored.get("next_court_date"))
+
+
+def test_the_cover_says_when_the_case_values_were_read_never_only_todays_date(tmp_path: Path):
+    # 2026-10-30: values read 10-23 printed under "as of 2026-10-30".
+    old = _matter("m1", "1001", "A v. B", "Lee", provenance={"job_id": "j", "read_at": "2026-10-23"})
+    out = tmp_path / "x.pdf"
+    printout.build(cd.shown([old], {"m1": CAL}, TODAY), out, TODAY)
+    text = " ".join(" ".join(printout.text_of(out)).split())
+    assert "Litigation status as read 2026-10-23, court dates as of 2026-10-29" in text
+    same = _matter("m1", "1001", "A v. B", "Lee", provenance={"job_id": "j", "read_at": "2026-10-29"})
+    printout.build(cd.shown([same], {"m1": CAL}, TODAY), out, TODAY)
+    assert "Litigation status, court dates, as of 2026-10-29" in " ".join(" ".join(printout.text_of(out)).split())
+
+
+def _cmc_on_papers(day: str) -> dict:
+    return {"matter_id": "m1", "next_court_date": {"date": day, "event": "CMC", "source": {"name": "x.pdf"}}}
+
+
+def test_a_timed_entry_naming_the_papers_court_date_is_agreement_not_a_flag():
+    # 2026-11-02: two cases flagged "the calendar does not have it" though the
+    # calendar held a timed entry for that court date on that day.
+    for start, subject in (
+        ("2026-12-30T10:30:00", "CMC Statement"),
+        ("2026-12-30T13:30:00", "DEADLINE - CMC DEPT 28"),
+    ):
+        assert cd.merge(_cmc_on_papers("2026-12-30"), [ev(start, subject)], TODAY)["flag"] == "", subject
+
+
+def test_a_paper_due_before_the_court_date_is_still_no_agreement():
+    for e in (
+        ev("2026-12-30T07:30:00", "MSC STATEMENTS DUE"),
+        ev("2026-12-30T09:00:00", "Deadline - File CMC Statement"),
+        ev("2026-12-30T00:00:00", "CMC Statement", all_day=True),
+        ev("2026-12-30T10:30:00", "CMC Statement", deleted=True),
+        ev("2026-12-30T10:30:00", "L/D CMC Statement"),
+    ):
+        assert cd.merge(_cmc_on_papers("2026-12-30"), [e], TODAY)["flag"] == cd.DISAGREE, e["subject"]

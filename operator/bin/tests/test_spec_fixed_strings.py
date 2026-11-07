@@ -20,8 +20,16 @@ from pathlib import Path
 
 import pytest
 
+from bin.tests.guard_needs import require_path
+
 _BIN = Path(__file__).resolve().parents[1]
 _SEED = _BIN.parents[1] / "operator" / "customers" / "pilot-smokeball" / "seed" / "voice"
+
+
+@pytest.fixture
+def seed_corpus() -> None:
+    """The committed rehearsal corpus these checks run against; absent fails, never skips."""
+    require_path(_SEED)
 
 
 def _load(name: str, mod: str):
@@ -160,7 +168,7 @@ def test_a_dropped_candidate_never_echoes_its_text():
 # ------------------------------------------------------------- real corpus
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_real_corpus_yields_the_signature_close_and_its_headers():
     corpus = {p.name: p.read_text() for p in sorted(_SEED.glob("*.md")) if p.name[0].isdigit()}
     found, _ = fs.candidates(corpus)
@@ -170,7 +178,7 @@ def test_the_real_corpus_yields_the_signature_close_and_its_headers():
     assert {"**What happened**", "**The injuries**", "**The demand**"} <= {c.text for c in labels}
 
 
-@pytest.mark.skipif(not _SEED.exists(), reason="rehearsal corpus not present")
+@pytest.mark.usefixtures("seed_corpus")
 def test_the_signature_blocks_are_dropped_not_proposed():
     """They recur in four documents and are exactly what must not be proposed."""
     corpus = {p.name: p.read_text() for p in sorted(_SEED.glob("*.md")) if p.name[0].isdigit()}

@@ -42,3 +42,9 @@ tornado>=6.6
 # their intent; hermes_pip_check.py tolerates that one requirement, and only
 # while the installed version is the pin below.
 pyasn1>=0.6.5
+
+# oauthlib 4.0.0 -> fix: CVE-2026-49272 (fixed in 4.0.1). In Hermes' lock only
+# requests-oauthlib requires it, with no version range (google-auth-oauthlib's
+# OAuth consent flow). A patch release with no API change Hermes calls, so the
+# override resolves without a Hermes promotion.
+oauthlib>=4.0.1

@@ -46,7 +46,10 @@ shape the runner is built to (``queue_record``)::
 THE ALLOWANCE is a COUNT of drafts per billing cycle (the firm's authored
 ``drafting_allowance_per_cycle``), on the chronology cycle's anchor, counted
 exactly as demand counts: in flight (submitted, running) reserves a slot; a
-finished job counts once it recorded cents.
+finished job counts once it recorded cents. A row's cents never fall: a
+later record of less (a resumed job that died without a verdict) keeps the
+spend already recorded, so the row still counts and a re-record is not billed
+twice.
 
 SUBMIT IS ATOMIC: inside one ``BEGIN IMMEDIATE`` it re-checks that this
 request email has not already queued this class, that no draft of the same
@@ -172,9 +175,11 @@ class SubmitRefused(ValueError):
     """A valid request the ledger will not queue NOW. ``job_id`` names the job
     it collided with, when there is one."""
 
-    def __init__(self, message: str, job_id: str | None = None) -> None:
+    def __init__(self, message: str, job_id: str | None = None, *, underway: bool = False) -> None:
         super().__init__(message)
         self.job_id = job_id
+        #: The collision is a draft still running on the matter, not this same email.
+        self.underway = underway
 
 
 def digest(obj: Any) -> str:
@@ -258,7 +263,7 @@ def queue_record(env: dict[str, Any], job_id: str, revise: dict[str, Any] | None
 #: The delivery report's lists the DELIVER turn names. The runner may send each
 #: inside ``delivery`` or as a top-level field of the record; either lands in
 #: the stored delivery, so the projection has one place to read them from.
-REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections")
+REPORT_LISTS = ("markers", "caption_discrepancies", "caption_corrections", "additions_not_covered")
 
 
 def incoming_delivery(fields: dict[str, Any]) -> dict[str, Any] | None:
@@ -485,9 +490,8 @@ class DraftingLedger:
             ).fetchone()
             if twin is not None:
                 conn.rollback()
-                raise SubmitRefused(
-                    f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}", twin["id"]
-                )
+                what = f"{CLASS_LABEL[klass]} on this matter is already underway as job {twin['id']}"
+                raise SubmitRefused(what, twin["id"], underway=True)
             if allowance is not None and revise is None:
                 window = cycle_window(now, anchor_day, effective_from)
                 used = self._used(conn, window.start, window.end)
@@ -589,7 +593,7 @@ class DraftingLedger:
             conn.execute(
                 "UPDATE drafting_jobs SET state=?, updated_at=?, "
                 "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
-                "cents=CASE WHEN ? THEN ? ELSE cents END, "
+                "cents=CASE WHEN ? THEN MAX(?, COALESCE(cents, 0)) ELSE cents END, "
                 "reason=CASE WHEN ? THEN ? ELSE reason END, "
                 "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
                 "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END "

@@ -23,6 +23,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 _ROW = re.compile(r"^\s*\|(.+)\|\s*$")
+#: The status a provider past the firm's lookup limit gets in vendor.json
+#: (internal); the table renders it as one sentence, never these words.
+OVER_CAP = "not looked up (over the cap)"
+
+
+def from_env() -> Any:
+    """The seat's records-vendor client, from its environment (the run's default)."""
+    from smokeball_connector.records_vendor import client_from_env
+
+    return client_from_env()
 
 
 def missing_providers(gap_md: str) -> list[str]:
@@ -85,7 +95,7 @@ def run(
     for i, name in enumerate(names):
         if name in have:
             continue
-        row = _resolve(vendor, name) if i < cap else {"provider": name, "status": "not looked up (over the cap)"}
+        row = _resolve(vendor, name) if i < cap else {"provider": name, "status": OVER_CAP}
         done["rows"].append(row)
         path.write_text(json.dumps(done, indent=1), encoding="utf-8")
         log(f"  vendor lookup {i + 1}/{len(names)}: {row['status']}")
@@ -100,7 +110,14 @@ def section(result: dict[str, Any]) -> str:
     if not result["rows"]:
         return head + "The item table names no provider to look up.\n"
     lines = ["| Provider | Vendor location | Location id |", "|---|---|---|"]
+    # The providers past the firm's lookup limit are one sentence, not a row
+    # each: on 2026-11-07 the review held a demand whose table said "not
+    # looked up (over the cap)" 91 times, the system's own word for the
+    # firm's authored lever in a document the firm reads.
+    beyond = [r for r in result["rows"] if r["status"] == OVER_CAP]
     for r in result["rows"]:
+        if r["status"] == OVER_CAP:
+            continue
         if r["status"] == "matched":
             lines.append(f"| {r['provider']} | {r.get('name') or ''}, {r.get('address') or ''} | {r['custodian_id']} |")
         elif r["status"] == "several matches":
@@ -108,4 +125,13 @@ def section(result: dict[str, Any]) -> str:
             lines.append(f"| {r['provider']} | several matches ({r.get('count')}): {opts} | choose one |")
         else:
             lines.append(f"| {r['provider']} | {r['status']}{(': ' + r['detail']) if r.get('detail') else ''} | none |")
-    return head + "\n".join(lines) + "\n"
+    out = head + ("\n".join(lines) + "\n" if len(lines) > 2 else "")
+    if beyond:
+        looked = len(result["rows"]) - len(beyond)
+        out += (
+            f"\nThe firm's directory lookups for one demand stop at {looked}; {len(beyond)} more provider"
+            f"{'s' if len(beyond) != 1 else ''} in the item table {'were' if len(beyond) != 1 else 'was'} not looked up: "
+            + "; ".join(str(r["provider"]) for r in beyond)
+            + ".\n"
+        )
+    return out

@@ -75,6 +75,14 @@ DEADLINES_CLASS = "deadlines"
 REASSIGN_CLASS = "reassign"
 DISCOVERY12_CLASS = "discovery12"
 REVISE_PREFIX = "revise_"
+#: A drafting-lane "set up our ..." job (``library_setup_lane``): its own proof,
+#: never a document class's. A dark one (``live`` false) sends and writes
+#: nothing, so it is admitted without one; a live one waits for its proof.
+LIBRARY_SETUP_CLASS = "library_setup"
+#: The administrator's choice from that list (``library_setup/accept.py``): it
+#: WRITES the firm's library file, so it waits for a proof of its own, never the
+#: read-only list's.
+LIBRARY_ACCEPT_CLASS = "library_setup_accept"
 VERIFY_RE = re.compile(r"^vfy_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -84,6 +92,9 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
     skill = SKILLS.get(lane)
     if skill is None:
         return f"unknown-lane.{re.sub(r'[^a-z_]', '_', lane.lower())[:40] or 'none'}"
+    if lane == "drafting" and envelope.get("kind") == LIBRARY_SETUP_CLASS:
+        accept = envelope.get("mode") == "accept"
+        return f"{skill}.{LIBRARY_ACCEPT_CLASS if accept else LIBRARY_SETUP_CLASS}"
     if lane == "drafting":
         cls = str(envelope.get("document_class") or "")
         cls = cls if _CLASS_RE.match(cls) else "unknown"
@@ -224,6 +235,22 @@ def holds(run_dir: Path) -> list[dict[str, Any]]:
     return sorted(out, key=lambda h: float(h.get("held_at") or 0))
 
 
+def set_aside_hold(d: Any, job_id: str, dest: Path) -> Path | None:
+    """Move a job's hold marker out of ``lane-holds/`` to ``dest`` (a file
+    path), for a job that ended without running: ``holds`` then no longer
+    lists it as waiting on a proof, and the marker is kept beside the job for
+    whoever reads it later. None when the job had no hold."""
+    marker = _hold_path(d, job_id)
+    if not marker.is_file():
+        return None
+    dest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        marker.replace(dest)
+    except FileNotFoundError:
+        return None
+    return dest
+
+
 def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
     """True when the daemon may claim this envelope now. Records the hold once,
     and clears it once, through the lane's own broker ``record``."""
@@ -231,7 +258,10 @@ def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
         env = json.loads(env_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         env = {}
-    key = lane_key(d.LANE, env if isinstance(env, dict) else {})
+    env = env if isinstance(env, dict) else {}
+    if d.LANE == "drafting" and env.get("kind") == LIBRARY_SETUP_CLASS and env.get("live") is False:
+        return True  # dark: it reads and counts, and nothing reaches anyone
+    key = lane_key(d.LANE, env)
     proofs = load(Path(d.run_dir))
     marker = _hold_path(d, job_id)
     state = str(row.get("state") or "")
@@ -258,6 +288,11 @@ def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
             encoding="utf-8",
         )
         logger.warning("%s job %s HELD: lane %s is not proven on this seat (%s)", d.LANE, job_id, key, why)
+        # A waiting job of a lane in job_notes.LANES pages SMD once; the
+        # requester is told nothing (job_notes, Captain 2026-11-06).
+        from . import job_notes
+
+        job_notes.tell(d, job_id, why=f"waiting on the {key} proof run")
     return False
 
 
@@ -306,6 +341,7 @@ __all__ = [
     "lane_key",
     "load",
     "read_events",
+    "set_aside_hold",
     "validate",
 ]
 

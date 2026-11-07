@@ -41,6 +41,7 @@ from . import (
     answers,
     carry,
     defstatus,
+    finalload,
     manifest,
     parity,
     passes,
@@ -354,6 +355,7 @@ class LitigationRun(BookStages, RunBase):
         # no-answer status beside a note stating a default, dismissal or answer
         # prints the note's status (``defstatus``, 2026-11-02).
         log = [*log, *defstatus.settle(result, self.today)]
+        result = finalload.dashless(result)
         out = {
             **result,
             "matter_id": mid,

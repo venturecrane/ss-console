@@ -109,6 +109,7 @@ const EXPECTED_VERBS = [
   // The drafting job's request edge (drafting_verbs.py): the demand gates
   // exactly, minus the re-run.
   'drafting_allowance',
+  'drafting_job_add_to_request',
   'drafting_job_record',
   'drafting_job_resume',
   'drafting_job_status',
@@ -137,8 +138,21 @@ const EXPECTED_VERBS = [
   'job_idem_complete',
   'job_list',
   'job_list_claimable',
+  // A code-sent job's reply sent by the broker for the runner daemon
+  // (job_notes.py): a held, failed or waiting drafting job's note. Root only.
+  'job_note_send',
   'job_read',
   'job_record',
+  // A firm's own save of its accepted library file, handed to the root writer
+  // by the runner daemon after a job (library_edit_verbs.py). Root only.
+  'library_edit_status',
+  'library_edit_submit',
+  // "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
+  // of job, gateway or root. Its status and record ride the drafting verbs.
+  'library_setup_accept_status',
+  'library_setup_accept_submit',
+  'library_setup_choose',
+  'library_setup_submit',
   // The litigation status job's request edge (litigation_verbs.py): submit's
   // table gate admits gateway, agent and root because it has two forms (the
   // handler pins a request to gateway-or-root and a scheduled run to the cron

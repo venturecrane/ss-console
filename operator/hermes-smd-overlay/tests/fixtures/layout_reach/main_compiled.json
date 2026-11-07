@@ -1,0 +1,176 @@
+{
+  "rules": [
+    {
+      "compiled": [],
+      "doc_classes": [],
+      "prose": [
+        {
+          "reason": "the clause names no layout the renderer has a setting for",
+          "text": "Double space the headings."
+        }
+      ],
+      "rule_id": "a0000001",
+      "text_sha256": "161204220044d49f9e26cdc498fa34dbb2659fc3deb6367953c0ee32f1bf924f"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "front_court_gap_lines": 2
+          },
+          "relative": {},
+          "text": "In every mediation brief, two blank lines before the court name."
+        }
+      ],
+      "doc_classes": [
+        "mediation_brief"
+      ],
+      "prose": [],
+      "rule_id": "a0000002",
+      "text_sha256": "c80ea5d6adccf330740b17054345b519412c82025a06f466c06485b29453f34d"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "signature_single_spaced": true
+          },
+          "relative": {},
+          "text": "Memos and depo outlines: single spaced signature block."
+        }
+      ],
+      "doc_classes": [
+        "memo",
+        "depo_outline"
+      ],
+      "prose": [],
+      "rule_id": "a0000003",
+      "text_sha256": "6c8e49a4b44d018b0fd8780ad6ec602ad95b3e77629cb74694fcde1966e26919"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "front_caption_gap_lines": 3
+          },
+          "relative": {},
+          "text": "three blank lines before the caption."
+        }
+      ],
+      "doc_classes": [],
+      "prose": [
+        {
+          "reason": "the clause carries a condition or a negation, which code cannot apply to every document",
+          "text": "Never use the word plainly"
+        }
+      ],
+      "rule_id": "a0000004",
+      "text_sha256": "c982d375392e8370aa250918bbf12b2592064ffa03881c04012bd8dddda547ca"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": true,
+          "layout": {},
+          "relative": {
+            "front_caption_gap_lines": 1
+          },
+          "text": "Leave extra space between the court name and the caption."
+        }
+      ],
+      "doc_classes": [],
+      "prose": [],
+      "rule_id": "a0000005",
+      "text_sha256": "16ac57fd3d1242ca4afcbe7bf078b49a90b6bb333b99bbc42dd9bc891bce774b"
+    },
+    {
+      "compiled": [],
+      "doc_classes": [
+        "mediation_brief"
+      ],
+      "prose": [
+        {
+          "reason": "table_font_pt is set by the firm's own Word file for this document, which the Operator cannot change in place",
+          "text": "Charts in 12 point in our briefs."
+        }
+      ],
+      "rule_id": "a0000006",
+      "text_sha256": "4e118f35be52ea15a6e0a19878255c5b01ac6f3890877a86d33fb9e6d6c03812"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "signature_date_beside": true
+          },
+          "relative": {},
+          "text": "Put the date beside the by line."
+        }
+      ],
+      "doc_classes": [],
+      "prose": [],
+      "rule_id": "a0000007",
+      "text_sha256": "55756c03f418c0958ce78598050ddd954d6e6d7ccd381eb7fee9af57be6e017d"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "heading_space_before_pt": 6.0
+          },
+          "relative": {},
+          "text": "Discovery responses: 6 pt before each heading."
+        }
+      ],
+      "doc_classes": [
+        "discovery_response"
+      ],
+      "prose": [],
+      "rule_id": "a0000008",
+      "text_sha256": "41c51dcd03974c96a7003515cfc87a969084b7aad8c3241ce4e9ece5f9fcabff"
+    },
+    {
+      "compiled": [
+        {
+          "base_owned": [],
+          "carried": false,
+          "layout": {
+            "front_court_gap_lines": 2
+          },
+          "relative": {},
+          "text": "Two blank lines before the court name."
+        }
+      ],
+      "doc_classes": [],
+      "prose": [],
+      "rule_id": "a0000009",
+      "text_sha256": "e619250685cf422f182effac82abd15a6b8de213162ac1404401bfa5c223c262"
+    },
+    {
+      "compiled": [],
+      "doc_classes": [
+        "mediation_brief"
+      ],
+      "prose": [
+        {
+          "reason": "the clause carries a condition or a negation, which code cannot apply to every document",
+          "text": "If it is a long brief, double spaced throughout."
+        }
+      ],
+      "rule_id": "a0000010",
+      "text_sha256": "7e880a8f1a50f149f3c7496d4ba336f893554c8e943089b7466d020363d8418f"
+    }
+  ],
+  "schema_version": 2
+}

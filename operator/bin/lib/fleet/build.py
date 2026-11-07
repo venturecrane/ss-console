@@ -5,8 +5,10 @@
    with overlay-pairs.json).
 2. The registry app ``hermes-fleet`` (no Machines) exists, or is created.
 3. ``fly deploy --build-only --push --remote-only -a hermes-fleet`` with the
-   label rel-<ss8>-<overlay8>-<utc minute>; the only build-arg is
-   SS_CONSOLE_SHA (the Hermes and overlay pins are the Dockerfile's own).
+   label rel-<ss8>-<overlay8>-<utc minute>; the build-args are SS_CONSOLE_SHA
+   and the jobs bundle floor SMD_BUNDLE_FLOOR_SHA / _SEQ (ordering.bundle_floor,
+   the oldest bundle commit this image runs with); the Hermes and overlay pins
+   are the Dockerfile's own.
 4. The release's artifacts go to R2 fleet/images/<digest-hex>/:
      image-manifest.json, image-capabilities.json and required-env.json are
      READ OUT OF THE BUILT IMAGE with `crane` (only the small layers that
@@ -39,7 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ids
+from . import ids, ordering
 from .d1 import FleetStore
 from .fly import Fly, FlyTokens, deploy_excerpt, digest_from_build_output
 from .r2 import R2, image_key
@@ -291,6 +293,7 @@ class Builder:
         log: Callable[[str], None],
         *,
         sleep: Callable[[float], None] = time.sleep,
+        floor: Callable[[str], tuple[str, int]] | None = None,
     ) -> None:
         self.repo, self.runner, self.fly, self.store, self.r2, self.extractor, self.log = (
             repo,
@@ -302,6 +305,14 @@ class Builder:
             log,
         )
         self.sleep = sleep
+        self.floor = floor or self.bundle_floor
+
+    def bundle_floor(self, sha: str) -> tuple[str, int]:
+        """floor(sha) and its commit number, baked into the image for its self-test (jobs-bundle-built-for-image)."""
+        found = ordering.bundle_floor(self.runner, self.repo, sha)
+        if not found:
+            raise Refusal(f"no commit at or before {sha[:8]} changed a jobs bundle path; the image has no bundle floor")
+        return found, ordering.commit_seq(self.runner, self.repo, found)
 
     def guard(self) -> None:
         res = self.runner.run(
@@ -369,7 +380,7 @@ class Builder:
         # the push changed, so only the push is retried. The label is the same on
         # every attempt on purpose: the same tree, and registry_digest reads the
         # tag's digest, so the last successful push is the one recorded.
-        res = self.push_retrying(str(toml_path), label, pins["ss_console_sha"])
+        res = self.push_retrying(str(toml_path), label, pins["ss_console_sha"], self.floor(pins["ss_console_sha"]))
         require_ok(res, "fly deploy --build-only --push")
         image_ref = f"{ids.FLEET_REGISTRY}:{label}"
         digest = self.registry_digest(image_ref, digest_from_build_output(res.text))
@@ -388,13 +399,13 @@ class Builder:
         self.log(f"release {release['release_id']}: {image_ref} {digest}")
         return release
 
-    def push_retrying(self, toml_path: str, label: str, ss_sha: str) -> Result:
+    def push_retrying(self, toml_path: str, label: str, ss_sha: str, floor: tuple[str, int]) -> Result:
         """``fly deploy --build-only --push``, tried again on BUILD_RETRY_DELAYS_S
         when it fails with a build-transport marker. Returns the last Result; the
         caller's require_ok decides. Any other failure is returned at once."""
         attempts = len(BUILD_RETRY_DELAYS_S) + 1
         for attempt, delay in enumerate(BUILD_RETRY_DELAYS_S + (None,), start=1):
-            res = self.fly.build_push(toml_path, label, ss_sha)
+            res = self.fly.build_push(toml_path, label, ss_sha, floor)
             if res.ok or not looks_like_build_transport_failure(res) or delay is None:
                 return res
             self.log(
