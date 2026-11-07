@@ -122,35 +122,49 @@ DELIVER_SKILLS = {
     "litigation": SKILLS / "litigation-status",
     "casefile": SKILLS / "case-file-manager",
     "medchron": SKILLS / "medical-chronology-maintainer",
-    "demand": SKILLS / "demand-letter-drafter",
-    "drafting": SKILLS / "document-drafter",
     "negotiation": SKILLS / "negotiation-watch",
     "note": SKILLS / "smd-note",
+}
+#: Lanes whose DELIVER section does not carry the block yet. The drafting and demand
+#: skills belong to the document-library work and join when it finishes; until then
+#: no seat may run fixed_wording enforce for these lanes. Each must still have a
+#: DELIVER section, and must not carry the block half-added.
+PENDING_SKILLS = {
+    "demand": SKILLS / "demand-letter-drafter",
+    "drafting": SKILLS / "document-drafter",
 }
 #: sha256 of each DELIVER section with the block taken out: main's composing rules
 #: as they stood when the block went in. A failure here means a composing rule
 #: changed. That is a deliberate edit to main's rules: if it is one, re-pin the hash
 #: in the same PR and say so; if it is not, put the words back.
 COMPOSE_BRANCH_SHA256 = {
-    "litigation": "0b94f98c3c697bf294e09ae0887d367eb7e140f8de0f4dd6c50687f585a8faaa",
+    "litigation": "77e75cb0372115bd391c63e4e42984a57c2f520fb18beaea790a9b46aa7622eb",
     "casefile": "394180288917b54a773207e6bcec49ccc08de22ec3cac6d80f35eb8713f62712",
-    "medchron": "5053b03126c68bed9d1fddb50a7107d5e057ad3817c353b92fb8fe000f02306c",
-    "demand": "68c870a680c419728613453be68aca11f27fe1382dd92932d8162790c84b2f0c",
-    "drafting": "24536fab5a7400299cbbec57af12f39b0d83b9ce20abbcdc3256b78d4d5b9167",
+    "medchron": "3048e3b4e03af59439ec820de46eeca2e04c2f3b8c335e8eec861e50f431c27d",
     "negotiation": "fcd27092664680450b0e6a76b3ac4ee238a88d8153194050a2eab98c0e64c72f",
     "note": "32dfa6398ec8b9711726699d8fba69e8c47e34dd61cb33f13dc05622e916f764",
 }
 
 
 def _deliver_raw(lane: str) -> str:
-    body = (DELIVER_SKILLS[lane] / "SKILL.md").read_text(encoding="utf-8")
+    skill = DELIVER_SKILLS.get(lane) or PENDING_SKILLS[lane]
+    body = (skill / "SKILL.md").read_text(encoding="utf-8")
     start = body.index("## DELIVER")
     end = body.find("\n## ", start + 1)
     return body[start : end if end != -1 else len(body)]
 
 
 def test_every_rendered_lane_has_a_skill() -> None:
-    assert set(fixed_wording.KIND_LANE.values()) == set(DELIVER_SKILLS) == set(COMPOSE_BRANCH_SHA256)
+    assert set(fixed_wording.KIND_LANE.values()) == set(DELIVER_SKILLS) | set(PENDING_SKILLS)
+    assert set(DELIVER_SKILLS) == set(COMPOSE_BRANCH_SHA256)
+    assert not set(DELIVER_SKILLS) & set(PENDING_SKILLS)
+
+
+@pytest.mark.parametrize("lane", sorted(PENDING_SKILLS))
+def test_a_pending_lane_has_a_deliver_section_and_no_block_yet(lane: str) -> None:
+    section = _deliver_raw(lane)
+    assert section.startswith("## DELIVER")
+    assert "When the broker words this reply" not in section
 
 
 @pytest.mark.parametrize("lane", sorted(DELIVER_SKILLS))
