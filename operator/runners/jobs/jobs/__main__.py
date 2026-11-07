@@ -411,11 +411,13 @@ def _add_negotiate_correct_summary(sub: "argparse._SubParsersAction[argparse.Arg
 def _add_tools(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     """The commands SMD runs by hand on a seat, beside the lanes' own."""
     from . import lane_proof_cli, rewake
+    from .library_readback import cli as library_readback_cli
 
     _add_negotiate_dry_run(sub)
     _add_negotiate_correct_summary(sub)
     lane_proof_cli.add(sub)
     rewake.add(sub)
+    library_readback_cli.add(sub)
 
 
 def _exit_code(outcomes) -> int:

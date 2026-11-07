@@ -27,6 +27,7 @@ describe('logic_in_code', () => {
       conflict_fence: 'enforce',
       fixed_wording: 'observe',
       status_from_events: 'enforce',
+      library_readback: 'observe',
     })
     expect(errors).toEqual([])
     expect(parsed).toEqual({
@@ -35,6 +36,7 @@ describe('logic_in_code', () => {
       conflict_fence: 'enforce',
       fixed_wording: 'observe',
       status_from_events: 'enforce',
+      library_readback: 'observe',
     })
   })
 

@@ -60,6 +60,7 @@ from .child import run_child
 from .drafting import firm_rules, repair_budget
 from .firm_inputs import pin_env
 from .library_edit import handoff as library_edit_handoff
+from .library_readback import lane as library_readback
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
@@ -227,6 +228,7 @@ class DraftingLane(Daemon):
             return "interrupted"
         state = self._report(job_id, code, out)
         library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+        library_readback.after(self, job_id, state)  # the filed document scored against its record (piece 10)
         return state
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:

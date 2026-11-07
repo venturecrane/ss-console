@@ -40,6 +40,7 @@ from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
 from .library_edit import handoff as library_edit_handoff
+from .library_readback import lane as library_readback
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
@@ -188,6 +189,7 @@ class DemandLane(Daemon):
             return "interrupted"
         state = self._report(job_id, code, out)
         library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+        library_readback.after(self, job_id, state)  # the filed document scored against its record (piece 10)
         return state
 
     def _report(self, job_id: str, code: int, out: str) -> str:

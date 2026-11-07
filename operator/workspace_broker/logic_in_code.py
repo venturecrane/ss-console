@@ -10,6 +10,7 @@ customer.yaml on every call (ADR 0104).
       library_setup: observe          # or enforce
       library_edit_notice: observe    # or enforce
       status_from_events: observe     # or enforce
+      library_readback: observe       # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -77,6 +78,10 @@ LIBRARY_EDIT_NOTICE = "library_edit_notice"
 #: dated, cited events (``jobs/litigation/eventmode.py``). Observe: the lane
 #: prints what it printed before and records what the events would have said.
 STATUS_FROM_EVENTS = "status_from_events"
+#: Whether a failed read-back of a filed firm document pages SMD
+#: (``jobs/library_readback``). Observe: the score is written and nobody is
+#: paged. Nothing is sent to the firm in either mode.
+LIBRARY_READBACK = "library_readback"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
@@ -86,6 +91,7 @@ KEYS = (
     LIBRARY_SETUP,
     LIBRARY_EDIT_NOTICE,
     STATUS_FROM_EVENTS,
+    LIBRARY_READBACK,
 )
 
 #: The same file by either name: the entrypoint exports both, the gateway and
@@ -166,6 +172,7 @@ __all__ = [
     "FIXED_WORDING",
     "KEYS",
     "LIBRARY_EDIT_NOTICE",
+    "LIBRARY_READBACK",
     "LIBRARY_SETUP",
     "MODES",
     "OBSERVE",

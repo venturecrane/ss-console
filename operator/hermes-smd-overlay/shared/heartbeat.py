@@ -807,6 +807,7 @@ DELIVERY_PROOF_CODES = frozenset(
         "repair_unconverged",
         "job_stopped",
         "library_edit_refused",
+        "library_readback_failed",
     }
 )
 

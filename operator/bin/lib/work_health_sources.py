@@ -563,6 +563,7 @@ _PROOF_WORDS = {
     "identity_held": "a record in the file names another person; the firm was asked",
     "job_stopped": "it held, failed or is waiting on its lane's proof; the requester was told nothing, by design",
     "library_edit_refused": "the firm's own save of its library file was not used or not accepted; the firm was told nothing",
+    "library_readback_failed": "a filed document did not measure to its library record; the firm was told nothing",
 }
 
 

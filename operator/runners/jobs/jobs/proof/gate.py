@@ -63,6 +63,9 @@ CODES = frozenset(
         # 2026-11-07: a firm's own save of its accepted library file was not used
         # or not accepted (jobs/library_edit); SMD only, the firm is told nothing.
         "library_edit_refused",
+        # 2026-11-07: a delivered firm document's read-back failed a test
+        # (jobs/library_readback), on a seat whose switch enforces; SMD only.
+        "library_readback_failed",
     }
 )
 
