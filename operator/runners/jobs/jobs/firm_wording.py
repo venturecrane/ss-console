@@ -13,8 +13,10 @@ lanes the block of rules in scope.
 WHICH RULES, IN CODE. :func:`freeze` runs once per job, after the matter record
 is read: it selects by the job's document kind and the attorney the matter
 record names (``facts.json`` ``responsible_attorney``, the attorney whose name
-the document goes out under) and writes the selection to ``wording-rules.json``
-in the job's data. Compose and repair read only that file (:func:`block_for`), so
+the document goes out under) and the document's reader (the kind's reader in the
+document-kind registry, ``operator_connector_sdk.library.readers``; for a demand
+its variant's, so a demand freezes once its variant is read), and writes the
+selection to ``wording-rules.json`` in the job's data. Compose and repair read only that file (:func:`block_for`), so
 a resumed job writes by the rules it started with. A rule for another kind or
 another attorney is never in it.
 
@@ -75,7 +77,7 @@ def switched_on() -> bool:
     return logic_in_code.load_switch(SWITCH).enforcing
 
 
-def freeze(data: Path, kind: str, attorney: Any) -> list[dict[str, Any]]:
+def freeze(data: Path, kind: str, attorney: Any, reader: str | None = None) -> list[dict[str, Any]]:
     """Select this job's rules once and write them to ``data/FILE``.
 
     Off: nothing is read or written, ``[]``. Already frozen: the frozen rules.
@@ -88,8 +90,8 @@ def freeze(data: Path, kind: str, attorney: Any) -> list[dict[str, Any]]:
     store = wording_rules_store.read(_spec_dir())
     if store.status == wording_rules_store.UNUSABLE:
         raise StoreUnusable(store.reason)
-    rules = wording_rules_store.applicable(store.rules, kind, attorney)
-    record = {"kind": kind, "attorney": attorney or None, "rules": rules}
+    rules = wording_rules_store.applicable(store.rules, kind, attorney, reader)
+    record = {"kind": kind, "attorney": attorney or None, "reader": reader, "rules": rules}
     tmp = path.with_name(f".{FILE}.tmp")
     tmp.write_text(json.dumps(record, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(path)
@@ -101,14 +103,17 @@ def demand_kind(job: Any) -> str | None:
     return DEMAND_KIND if job.wants("demand") else None
 
 
-def freeze_or_hold(data: Path, kind: str | None, facts: dict[str, Any], hold: type[Exception]) -> None:
-    """:func:`freeze` for the attorney the matter record names, raising ``hold``
-    (the lane's held outcome) when the store cannot be trusted. ``kind`` None: the
-    job writes no document the rules cover, and nothing is read."""
+def freeze_or_hold(
+    data: Path, kind: str | None, facts: dict[str, Any], hold: type[Exception], reader: str | None = None
+) -> None:
+    """:func:`freeze` for the attorney the matter record names and the document's
+    ``reader``, raising ``hold`` (the lane's held outcome) when the store cannot
+    be trusted. ``kind`` None: the job writes no document the rules cover, and
+    nothing is read."""
     if kind is None:
         return
     try:
-        freeze(data, kind, facts.get("responsible_attorney"))
+        freeze(data, kind, facts.get("responsible_attorney"), reader)
     except StoreUnusable as exc:
         raise hold(hold_reason(exc)) from None
 

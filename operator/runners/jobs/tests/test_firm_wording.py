@@ -232,8 +232,10 @@ def test_on_a_demand_gets_its_rule_in_compose_and_repair(tmp_path, monkeypatch, 
     _diff(d.compose_system(), _demand(data).compose_system(), block)
 
 
-def test_on_a_reader_scoped_rule_reaches_no_job_today(tmp_path, monkeypatch, _spec_store):
-    """The lanes pass no reader yet, so a rule limited to one never leaks in."""
+def test_on_a_reader_scoped_rule_reaches_only_a_document_for_that_reader(tmp_path, monkeypatch, _spec_store):
+    """A caller that passes no reader still selects none (a scoped rule never
+    leaks into a document that cannot say it is in scope); the lanes now pass
+    the registry's reader (piece 7), and the brief's mediator gets the rule."""
     scoped = {**_rule("aaaa0004", ["mediation_brief"]), "reader": "mediator"}
     _store(_spec_store, [scoped, _rule("aaaa0005", ["mediation_brief"])])
     _switch(tmp_path, monkeypatch, on=True)
@@ -241,6 +243,11 @@ def test_on_a_reader_scoped_rule_reaches_no_job_today(tmp_path, monkeypatch, _sp
     data = _job(tmp_path, "job", "mediation_brief", None)
     block = firm_wording.block_for(data)
     assert "aaaa0005" in block and "aaaa0004" not in block
+    read = tmp_path / "for-the-mediator"
+    read.mkdir()
+    firm_wording.freeze(read, "mediation_brief", None, "mediator")
+    assert "aaaa0004" in firm_wording.block_for(read) and "aaaa0005" in firm_wording.block_for(read)
+    assert json.loads((read / firm_wording.FILE).read_text())["reader"] == "mediator"
 
 
 def test_on_the_selection_is_frozen_for_a_resumed_job(tmp_path, monkeypatch, _spec_store):
@@ -278,7 +285,7 @@ def test_the_drafting_lane_holds_on_an_untrustworthy_store(tmp_path, monkeypatch
     _switch(tmp_path, monkeypatch, on=True)
     with pytest.raises(DraftingHold, match="^rule_store_unusable: "):
         firm_wording.freeze_or_hold(tmp_path, "memo", {"responsible_attorney": ATTORNEY}, DraftingHold)
-    assert "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)" in inspect.getsource(DraftingRun)
+    assert "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)" in inspect.getsource(DraftingRun)
 
 
 def test_the_demand_lane_holds_on_an_untrustworthy_store(tmp_path, monkeypatch, _spec_store):
@@ -290,7 +297,14 @@ def test_the_demand_lane_holds_on_an_untrustworthy_store(tmp_path, monkeypatch, 
     _switch(tmp_path, monkeypatch, on=True)
     with pytest.raises(DemandHold, match="^rule_store_unusable: "):
         firm_wording.freeze_or_hold(tmp_path, firm_wording.DEMAND_KIND, {"responsible_attorney": ATTORNEY}, DemandHold)
-    assert "firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job)," in inspect.getsource(DemandRun)
+    src = inspect.getsource(DemandRun)
+    assert 'firm_wording.freeze_or_hold(self.data, kind, self._json("facts.json"), DemandHold, reader)' in src
+    # frozen after the variant is read and before anything is paid
+    assert (
+        src.index("self._select_format()\n        #")
+        < src.index("self._freeze_wording()")
+        < src.index("return self._paid()")
+    )
 
 
 def test_the_daemon_pages_an_untrustworthy_store_only_when_switched_on(tmp_path, monkeypatch, _spec_store):

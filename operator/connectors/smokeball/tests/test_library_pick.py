@@ -171,6 +171,14 @@ def test_the_record_is_complete_and_stable(spec, monkeypatch, tmp_path):
         },
         "base": {"source": "starter", "sha256": None, "name": "", "contract": ""},
         "overridden": None,
+        # Who it is written for (the registry's reader) and the profile that
+        # carried it: the chat turn reads only the installed voice (piece 7).
+        "reader": {
+            "reader": "internal",
+            "reader_from": "registry",
+            "profile": "firm_base",
+            "profile_lives_in": "the installed work_product voice spec (specs/classes/work_product)",
+        },
     }
 
 

@@ -76,8 +76,9 @@ KIND_WORDS: dict[str, tuple[str, str]] = {
 }
 
 #: Who a document is written for. A rule may be limited to one reader; a rule
-#: with none covers every reader. No lane knows its document's reader yet, so a
-#: reader-scoped rule is selected by nothing until one does (:func:`applicable`).
+#: with none covers every reader. The job lanes pass each document's reader, the
+#: document-kind registry's (``operator_connector_sdk/library/readers.py``), so a
+#: reader-scoped rule reaches only documents for that reader (:func:`applicable`).
 READERS: tuple[str, ...] = (
     "client",
     "adjuster",

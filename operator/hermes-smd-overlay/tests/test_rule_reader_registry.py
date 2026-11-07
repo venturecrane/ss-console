@@ -333,11 +333,17 @@ def test_the_lane_kinds_are_exactly_the_kinds_the_job_lanes_read_rules_for():
     demand = set(re.findall(r'^DEMAND_KIND = "([a-z_]+)"$', firm_wording, re.M))
     assert wording_rules_store.LANE_KINDS == frozenset(drafting | demand)
     demand_run = (_JOBS_RUNNER / "jobs" / "demand" / "run.py").read_text("utf-8")
+    # Each lane freezes for its document's reader (piece 7): a demand once its
+    # variant is read, a drafting job by its class.
+    assert "kind = firm_wording.demand_kind(self.job)" in demand_run
     assert (
-        "firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job)," in demand_run
+        'firm_wording.freeze_or_hold(self.data, kind, self._json("facts.json"), DemandHold, reader)'
+        in demand_run
     )
     drafting_run = (_JOBS_RUNNER / "jobs" / "drafting" / "run.py").read_text("utf-8")
-    assert "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)" in drafting_run
+    assert (
+        "firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)" in drafting_run
+    )
     # ...and each lane hands the frozen rules to every drafter it builds.
     for rel in ("drafting/finish.py", "drafting/evidence_lane.py", "demand/run.py"):
         text = (_JOBS_RUNNER / "jobs" / rel).read_text("utf-8")

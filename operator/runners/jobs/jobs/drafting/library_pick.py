@@ -65,6 +65,7 @@ from operator_connector_sdk.library.caller import (
     matter_attorney,
     write_record,
 )
+from operator_connector_sdk.library import readers
 from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
@@ -97,6 +98,11 @@ def open_store(seat: Any) -> LibraryStore:
     return SmokeballLibrary(seat.client, load_library_config())
 
 
+def _reader(run: Any) -> dict[str, Any]:
+    """Who this document is written for and the profile in effect (``readers.record``)."""
+    return readers.record(readers.DRAFTING_JOB, run.cls)
+
+
 def matter_attorney_or_stop(run: Any) -> Attorney | None:
     """The matter's responsible attorney, checked against the firm's roster when
     one is installed (``caller.matter_attorney``). Someone the roster does not
@@ -112,7 +118,10 @@ def matter_attorney_or_stop(run: Any) -> Attorney | None:
     if not found.hold:
         return found.attorney
     write_record(
-        run.data, build_record(DRAFTING_JOB, Resolution(REFUSED, run.cls, found.reason), BaseUsed(NOT_STARTED))
+        run.data,
+        build_record(
+            DRAFTING_JOB, Resolution(REFUSED, run.cls, found.reason), BaseUsed(NOT_STARTED), reader=_reader(run)
+        ),
     )
     if found.hold == NOT_ROSTERED:
         raise DraftingHold(f"{NOT_ROSTERED}: {found.reason}; nothing was filed")
@@ -127,7 +136,7 @@ def _pinned(run: Any) -> tuple[tuple[Path, dict[str, str]] | None, BaseUsed | No
 
 
 def _stop(run: Any, res: Resolution) -> Exception:
-    write_record(run.data, build_record(DRAFTING_JOB, res, BaseUsed(NOT_STARTED)))
+    write_record(run.data, build_record(DRAFTING_JOB, res, BaseUsed(NOT_STARTED), reader=_reader(run)))
     return unfit(f"the firm's document library cannot give this document's file ({res.status}: {res.reason})")
 
 
@@ -179,13 +188,15 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     if res.status == NONE_ACCEPTED:
         today = held if marked_ok else None
         used = pinned if today is not None and pinned is not None else BaseUsed(STARTER)
-        write_record(run.data, build_record(DRAFTING_JOB, res, used))
+        write_record(run.data, build_record(DRAFTING_JOB, res, used, reader=_reader(run)))
         out = DraftBase(res, held=today)
     elif res.status == RESOLVED and res.file is not None and res.data is not None:
         out = _accepted(run, res, marked_ok)
         used = BaseUsed.of(ACCEPTED, res.data, contract=res.file.contract)
         overridden = pinned if marked_ok else None
-        write_record(run.data, build_record(DRAFTING_JOB, res, used, overridden=overridden, firm_edit=edit))
+        write_record(
+            run.data, build_record(DRAFTING_JOB, res, used, overridden=overridden, firm_edit=edit, reader=_reader(run))
+        )
     else:
         raise _stop(run, res)
     setattr(run, _MEMO, out)

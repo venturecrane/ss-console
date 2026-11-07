@@ -57,6 +57,8 @@ from typing import Any, Callable
 from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode, request_additions, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
+from operator_connector_sdk.library import readers
+
 from ..attorneys.seat import roster_for
 from ..ledger import Ledger
 from ..llm import Doorway
@@ -462,7 +464,8 @@ class DraftingRun(EvidenceLane, Placing):
         self._check_facts()
         self._stage("destination", self._destination)
         f = self._json("facts.json")
-        firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)  # before anything is paid
+        reader = readers.reader_for(self.cls)  # the registry's reader of this class
+        firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold, reader)  # before anything is paid
         library_pick.matter_attorney_or_stop(self)  # who signs is settled before anything is paid, too
         self._stage(
             "pull",

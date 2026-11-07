@@ -25,8 +25,16 @@
 # NOT HERE, deliberately: the firm's fill-in forms (rep letters, fax covers, DMV
 # forms). A form's library file name is authored per firm in customer.yaml
 # (self_initiation.document_library.templates), so it has no fixed title to
-# declare; the forms path reads it from there. Nor a reader or audience per
-# kind: the piece that first reads one adds it.
+# declare; the forms path reads it from there.
+#
+#   reader         who the kind is written for (design piece 7): one of the
+#                  wording rules' readers (wording_rules_store.READERS), or
+#                  `addressee` for a letter, whose reader is the role its
+#                  addressee holds on the matter. Copied, and pinned equal, in
+#                  operator_connector_sdk/library/readers.py KIND_READERS.
+#   variant_readers  a variant whose reader is not the kind's: a litigation
+#                  demand goes to defense counsel, not to a carrier
+#                  (readers.py VARIANT_READERS).
 #
 # Order is the renderer's (docx_format.py DOCUMENT_CLASSES).
 # ============================================================================
@@ -38,33 +46,41 @@ kinds:
     library_title: Discovery Set
     variants: []
     produced_by: [drafting_job, chat_tool]
+    reader: opposing_counsel
 
   - key: discovery_response
     library_title: Discovery Response
     variants: []
     produced_by: [drafting_job, chat_tool]
+    reader: opposing_counsel
 
   - key: demand_letter
     library_title: Demand Letter
     variants: [pre_suit, litigation]
     produced_by: [demand_job, chat_tool]
+    reader: adjuster
+    variant_readers: { litigation: opposing_counsel }
 
   - key: mediation_brief
     library_title: Mediation Brief
     variants: []
     produced_by: [drafting_job, chat_tool]
+    reader: mediator
 
   - key: memo
     library_title: Memo
     variants: []
     produced_by: [drafting_job, chat_tool]
+    reader: internal
 
   - key: depo_outline
     library_title: Deposition Outline
     variants: []
     produced_by: [drafting_job, chat_tool]
+    reader: internal
 
   - key: letter
     library_title: Letter
     variants: []
     produced_by: [chat_tool]
+    reader: addressee
