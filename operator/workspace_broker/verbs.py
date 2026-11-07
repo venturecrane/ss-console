@@ -48,7 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
-from . import library_setup_verbs
+from . import library_edit_verbs, library_setup_verbs
 from . import (
     attachment_intake,
     casefile_verbs,
@@ -225,6 +225,10 @@ VERBS: tuple[Verb, ...] = (
     Verb("library_setup_choose", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
     Verb("library_setup_accept_submit", _only(ROOT), library_setup_verbs.dispatch),
     Verb("library_setup_accept_status", _only(ROOT), library_setup_verbs.dispatch),
+    # A firm's own save of its accepted library file (library_edit_verbs.py),
+    # handed to the root writer by the runner daemon after a job: root only.
+    Verb("library_edit_submit", _only(ROOT), library_edit_verbs.dispatch),
+    Verb("library_edit_status", _only(ROOT), library_edit_verbs.dispatch),
     # The litigation status job's request edge (litigation_verbs.py). Submit's
     # table gate admits all three classes because it has two forms; the handler
     # pins each form to its peers (a request from the gateway or root, a
@@ -355,6 +359,8 @@ if set(drafting_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is dr
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
 if set(library_setup_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is library_setup_verbs.dispatch}:
     raise RuntimeError("the library setup rows above and library_setup_verbs.VERBS disagree")
+if set(library_edit_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is library_edit_verbs.dispatch}:
+    raise RuntimeError("the library edit rows above and library_edit_verbs.VERBS disagree")
 if set(litigation_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is litigation_verbs.litigation_dispatch}:
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 if set(negotiation_verbs.VERBS) != {

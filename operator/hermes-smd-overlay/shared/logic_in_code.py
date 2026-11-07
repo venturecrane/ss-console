@@ -8,6 +8,7 @@ customer.yaml on every call (ADR 0104).
       fixed_wording: observe          # or enforce
       wording_rules: observe          # or enforce
       library_setup: observe          # or enforce
+      library_edit_notice: observe    # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -65,6 +66,10 @@ WORDING_RULES = "wording_rules"
 #: Observe: the job reads and counts only; it sends nothing and writes nothing.
 #: A value that cannot be read holds the job for SMD, never writes or sends.
 LIBRARY_SETUP = "library_setup"
+#: Whether a drafted document's reply tells the firm that its own save of its
+#: library file was not used (``library_setup_wording.EDIT_NOT_USED``). Observe:
+#: the firm is told nothing; SMD is paged either way. The Captain's call.
+LIBRARY_EDIT_NOTICE = "library_edit_notice"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
@@ -72,6 +77,7 @@ KEYS = (
     FIXED_WORDING,
     WORDING_RULES,
     LIBRARY_SETUP,
+    LIBRARY_EDIT_NOTICE,
 )
 
 #: The same file by either name: the entrypoint exports both, the gateway and
@@ -151,6 +157,7 @@ __all__ = [
     "ENFORCE",
     "FIXED_WORDING",
     "KEYS",
+    "LIBRARY_EDIT_NOTICE",
     "LIBRARY_SETUP",
     "MODES",
     "OBSERVE",

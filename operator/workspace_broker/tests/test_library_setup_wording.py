@@ -34,6 +34,11 @@ PIECE = (
     "workspace_broker/library_setup_ledger.py",
     "workspace_broker/library_setup_verbs.py",
     "hermes-smd-overlay/plugins/hermes-smd-lanes/library_setup.py",
+    # Piece 4: a firm's own save of its library file (its one sentence is ``edit_not_used``).
+    "runners/jobs/jobs/library_edit/__init__.py",
+    "runners/jobs/jobs/library_edit/check.py",
+    "runners/jobs/jobs/library_edit/handoff.py",
+    "workspace_broker/library_edit_verbs.py",
 )
 #: A sentence: a capital, words, and a stop. What a firm would read as one.
 SENTENCE = re.compile(r"^[A-Z][^\n]{18,}[.?!:]$")

@@ -25,7 +25,10 @@ A variant has its own slot in the ledger (``ledger.slot_name``):
 written in different reference files.
 
 The accepted bytes come from the seat's own kept copy (``copies_dir``); the
-library is asked only whether a newer version exists.
+library is asked only whether a newer version exists. A newer one is the firm's
+own save and goes through ``jobs/library_edit`` (design piece 4); a prototypes
+file is refused there (``contract_not_checkable``), so the demand is written in
+the accepted copy and SMD is paged, until a later piece can judge one.
 
 The record is ``library-resolution.json`` in the job's data folder.
 """
@@ -61,6 +64,7 @@ from operator_connector_sdk.library.caller import (
 )
 from operator_connector_sdk.library.resolver import replace_status
 
+from .. import library_edit
 from .outcome import DemandFailed, DemandHold
 
 KIND = "demand_letter"
@@ -135,7 +139,7 @@ def pick_reference(run: Any) -> Path | None:
     matter, known = _attorneys(firm, run._json("facts.json").get("responsible_attorney"))
     store = LazyStore(lambda: open_store(run.seat))
     spec = spec_dir()
-    res = resolve(
+    asked = resolve(
         store,
         read_installed(spec),
         slot_name(KIND, firm.variant_name),
@@ -143,6 +147,9 @@ def pick_reference(run: Any) -> Path | None:
         known_attorneys=known,
         copies_dir=copies_dir(spec),
     )
+    considered = library_edit.consider(asked, store, KIND)
+    library_edit.leave(run.data, asked, considered)
+    res = considered.resolution
     if res.status == NONE_ACCEPTED:
         write_record(run.data, build_record(DEMAND_JOB, res, pinned_used))
         return pinned
@@ -162,7 +169,7 @@ def pick_reference(run: Any) -> Path | None:
     part.write_bytes(res.data)
     part.replace(dest)
     used = BaseUsed.of(ACCEPTED, dest.read_bytes(), contract=res.file.contract)
-    write_record(run.data, build_record(DEMAND_JOB, res, used, overridden=pinned_used))
+    write_record(run.data, build_record(DEMAND_JOB, res, used, overridden=pinned_used, firm_edit=considered.note))
     return dest
 
 

@@ -119,6 +119,36 @@ def test_record_problems_names_a_broken_record():
     assert record_problems({**rec, "kind": "letter"}) != []
 
 
+def _edit(**over):
+    edit = {"status": "used", "code": "", "version": "f-1-v2", "replaces_version": "f-1-v1", "sha256": SHA,
+            "accepted_at": WHEN, "install": "accepted_pending_install"}  # fmt: skip
+    return {**edit, **over}
+
+
+def test_a_considered_firm_edit_is_one_more_key_and_only_then():
+    base = BaseUsed.of(ACCEPTED, DATA, contract="styles")
+    plain = build_record("drafting_job", _resolved(), base)
+    assert "firm_edit" not in plain
+    rec = build_record("drafting_job", _resolved(), base, firm_edit=_edit())
+    assert set(rec) - set(plain) == {"firm_edit"} and rec["firm_edit"] == _edit()
+    assert record_problems(rec) == [] and record_problems(plain) == []
+    refused = build_record(
+        "drafting_job", _resolved(), base, firm_edit=_edit(status="refused", code="words_changed", sha256=None)
+    )
+    assert record_problems(refused) == []
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [_edit(status="maybe"), _edit(sha256=None), _edit(status="refused", code=""), {"status": "used"}],
+)
+def test_a_firm_edit_block_that_does_not_say_what_happened_is_refused(edit):
+    with pytest.raises(ValueError):
+        build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles"), firm_edit=edit)
+    rec = build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles"))
+    assert record_problems({**rec, "firm_edit": edit}) != []
+
+
 def test_a_store_is_never_opened_when_nothing_is_accepted():
     def boom():
         raise AssertionError("opened")

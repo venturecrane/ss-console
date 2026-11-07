@@ -39,6 +39,7 @@ from . import firm_wording, resume as resume_mod, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
+from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
@@ -183,8 +184,11 @@ class DemandLane(Daemon):
             )
         self.jobs_run += 1
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
+            library_edit_handoff.hand_over(self, job_id)
             return "interrupted"
-        return self._report(job_id, code, out)
+        state = self._report(job_id, code, out)
+        library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+        return state
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
@@ -203,6 +207,9 @@ class DemandLane(Daemon):
                 "coverage_report": bool(v.get("coverage_report")),
                 "cents": fields["cents"],
             }
+            edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
+            if edit is not None:
+                fields["delivery"]["library_edit"] = edit
         state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)
