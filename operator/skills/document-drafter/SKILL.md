@@ -231,6 +231,10 @@ replies.
      describe an earlier failed attempt, and the filed document is what the firm
      reads. Report only the files, markers, caption discrepancies and caption
      corrections the job reports.
+   - **delivered, when the wake says `Mode: library setup`**: nothing was filed. The job looked
+     through the firm's own documents of the class for a "set up our ..." request, and the reply
+     is the `fixed_wording` text exactly; it names its candidates by file. There are no files,
+     markers or caption lines to read.
    - **delivered, when the wake says `Mode: revision`**: the requested changes are made
      to the filed document, and it and its attorney notes are filed as new versions of
      the same files in the same folder (each named exactly as filed; the earlier

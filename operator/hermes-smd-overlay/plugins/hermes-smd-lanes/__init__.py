@@ -28,7 +28,7 @@ from shared import capabilities, seat_doc
 from shared.jobs_client import JobsBrokerClient
 from shared.tool_registration import register_wrapped_tool
 
-from . import casefile, demand, drafting, litigation, negotiation, note, records
+from . import casefile, demand, drafting, library_setup, litigation, negotiation, note, records
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +321,7 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
 LANE_TOOLS: dict[str, dict[str, Any]] = {
     "medchron": TOOLS,
     "demand": demand.TOOLS,
-    "drafting": drafting.TOOLS,
+    "drafting": {**drafting.TOOLS, **library_setup.TOOLS},
     "litigation": litigation.TOOLS,
     "casefile": casefile.TOOLS,
     "negotiation": negotiation.TOOLS,

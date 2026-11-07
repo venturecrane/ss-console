@@ -1143,6 +1143,12 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "drafting_job_add_to_request": ActionClass.INTERNAL_WRITE,
     "drafting_job_status": ActionClass.READ,
     "drafting_allowance": ActionClass.READ,
+    # "Set up our ..." (hermes-smd-lanes/library_setup.py, ss-console
+    # library_setup_verbs.py): queues a read-only job on the drafting lane's
+    # runner. It files nothing in 3a, but it queues work on the Machine:
+    # INTERNAL_WRITE, as the other submits. The requester and request are the
+    # turn's verified inbound, not tool arguments.
+    "library_setup_submit": ActionClass.INTERNAL_WRITE,
     # The litigation status job (hermes-smd-lanes/litigation.py, ss-console
     # litigation_verbs.py). Submit queues a job on the Machine's own runner,
     # which files the status workbook on the firm's filing matter:

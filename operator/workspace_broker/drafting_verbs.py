@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, drafting_additions
+from . import delivery_proof, drafting_additions, library_setup_verbs
 from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
@@ -529,6 +529,9 @@ def drafting_dispatch(
     verbs = broker.drafting
     if verbs is None:
         raise ValueError("drafting verbs not configured on this broker")
+    if action in ("drafting_job_status", "drafting_job_record") and library_setup_verbs.owns(verbs, request):
+        # A "set up our ..." job: the drafting lane's second kind, its own table.
+        return library_setup_verbs.handle(verbs, action, request, peer_uid)
     envelope = request.get("envelope")
     if action == "drafting_job_submit" and isinstance(envelope, dict) and "request_graph_id" in envelope:
         # Root only; the drafting lane's copy of the demand lane's resolution.

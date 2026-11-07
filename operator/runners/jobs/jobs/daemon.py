@@ -90,7 +90,8 @@ CHILD_ENV_PASS = (
 )
 #: ``stopped_by_smd`` is SMD's job stop (``smd_stop.py``): final, so a stopped
 #: job is never resumed, requeued or claimed again by any lane.
-TERMINAL = frozenset({"delivered", "failed", "stopped_by_smd"})
+#: ``observed``: a library setup job run with its seat switch off (``library_setup_lane``).
+TERMINAL = frozenset({"delivered", "failed", "stopped_by_smd", "observed"})
 
 
 @dataclass

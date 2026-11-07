@@ -401,7 +401,12 @@ def _not_covered(delivery: dict[str, Any], key: str = "addition_not_covered") ->
 
 
 def drafting(row: dict[str, Any]) -> str:
-    """A drafted document's reply: delivered or held."""
+    """A drafted document's reply: delivered or held. A "set up our ..." job's
+    row (``library_setup_ledger``) is worded by ``library_setup_wording``."""
+    if row.get("job_kind") == "library_setup":
+        from . import library_setup_wording
+
+        return library_setup_wording.render(row)
     delivery = obj(row, "delivery_json")
     if row.get("state") == "held":
         return compose(_drafting_held(row), _not_covered(delivery, "addition_not_covered_held"))

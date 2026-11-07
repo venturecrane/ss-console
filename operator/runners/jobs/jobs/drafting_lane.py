@@ -46,7 +46,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import firm_wording, job_notes, request_additions, resume as resume_mod, smd_stop, verdict as verdict_mod
+from . import (
+    firm_wording,
+    job_notes,
+    library_setup_lane,
+    request_additions,
+    resume as resume_mod,
+    smd_stop,
+    verdict as verdict_mod,
+)
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .drafting import firm_rules, repair_budget
@@ -167,6 +175,8 @@ class DraftingLane(Daemon):
     def run_job(self, job_id: str) -> str:
         from .drafting import firm as drafting_firm
 
+        if library_setup_lane.is_setup(self, job_id):
+            return library_setup_lane.run(self, job_id)
         try:
             drafting_firm.load(self.inputs_dir)
         except drafting_firm.DraftingConfigError as exc:

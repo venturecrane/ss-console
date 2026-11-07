@@ -75,6 +75,10 @@ DEADLINES_CLASS = "deadlines"
 REASSIGN_CLASS = "reassign"
 DISCOVERY12_CLASS = "discovery12"
 REVISE_PREFIX = "revise_"
+#: A drafting-lane "set up our ..." job (``library_setup_lane``): its own proof,
+#: never a document class's. A dark one (``live`` false) sends and writes
+#: nothing, so it is admitted without one; a live one waits for its proof.
+LIBRARY_SETUP_CLASS = "library_setup"
 VERIFY_RE = re.compile(r"^vfy_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -84,6 +88,8 @@ def lane_key(lane: str, envelope: dict[str, Any]) -> str:
     skill = SKILLS.get(lane)
     if skill is None:
         return f"unknown-lane.{re.sub(r'[^a-z_]', '_', lane.lower())[:40] or 'none'}"
+    if lane == "drafting" and envelope.get("kind") == LIBRARY_SETUP_CLASS:
+        return f"{skill}.{LIBRARY_SETUP_CLASS}"
     if lane == "drafting":
         cls = str(envelope.get("document_class") or "")
         cls = cls if _CLASS_RE.match(cls) else "unknown"
@@ -247,7 +253,10 @@ def admits(d: Any, job_id: str, env_path: Path, row: dict[str, Any]) -> bool:
         env = json.loads(env_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         env = {}
-    key = lane_key(d.LANE, env if isinstance(env, dict) else {})
+    env = env if isinstance(env, dict) else {}
+    if d.LANE == "drafting" and env.get("kind") == LIBRARY_SETUP_CLASS and env.get("live") is False:
+        return True  # dark: it reads and counts, and nothing reaches anyone
+    key = lane_key(d.LANE, env)
     proofs = load(Path(d.run_dir))
     marker = _hold_path(d, job_id)
     state = str(row.get("state") or "")

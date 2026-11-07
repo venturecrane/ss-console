@@ -7,6 +7,7 @@ customer.yaml on every call (ADR 0104).
       conflict_fence: observe         # or enforce
       fixed_wording: observe          # or enforce
       wording_rules: observe          # or enforce
+      library_setup: observe          # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -59,7 +60,19 @@ FIXED_WORDING = "fixed_wording"
 #: the model, and the install letter calls such a rule in effect
 #: (``shared/wording_rules.py``). Observe: neither, exactly as before.
 WORDING_RULES = "wording_rules"
-KEYS = (PRINTED_SOURCE_CHECK, POST_RECORD_DERIVATION, CONFLICT_FENCE, FIXED_WORDING, WORDING_RULES)
+#: Whether a firm's "set up our ..." request may tell the firm what its own
+#: documents offer and, later, write a library file (``jobs/library_setup``).
+#: Observe: the job reads and counts only; it sends nothing and writes nothing.
+#: A value that cannot be read holds the job for SMD, never writes or sends.
+LIBRARY_SETUP = "library_setup"
+KEYS = (
+    PRINTED_SOURCE_CHECK,
+    POST_RECORD_DERIVATION,
+    CONFLICT_FENCE,
+    FIXED_WORDING,
+    WORDING_RULES,
+    LIBRARY_SETUP,
+)
 
 #: The same file by either name: the entrypoint exports both, the gateway and
 #: its children read the first, the broker's clean environment carries the
@@ -138,6 +151,7 @@ __all__ = [
     "ENFORCE",
     "FIXED_WORDING",
     "KEYS",
+    "LIBRARY_SETUP",
     "MODES",
     "OBSERVE",
     "PATH_ENVS",

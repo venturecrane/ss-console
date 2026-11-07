@@ -102,6 +102,7 @@ from . import bound_replies, delivery_proof, msgraph_lookup, reply_text, stop_no
 from .broker_context import BrokerContext
 from .demand_ledger import DemandLedger
 from .drafting_ledger import DraftingLedger
+from .library_setup_ledger import DraftingOrSetup, of_drafting
 from .litigation_ledger import LitigationLedger
 from .medchron_ledger import MedchronLedger
 from .negotiation_ledger import NegotiationLedger
@@ -234,7 +235,8 @@ def _demand_ledger(broker: BrokerContext) -> DemandLedger:
 def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
     # Read-only here; the queue dir is never written on this path.
     queue = os.environ.get("SMD_DRAFTING_QUEUE_DIR") or "/run/smd-medchron/drafting-queue"
-    return DraftingLedger(str(broker.audit_db_path), queue)
+    drafting = DraftingLedger(str(broker.audit_db_path), queue)
+    return DraftingOrSetup(drafting, of_drafting(drafting))  # type: ignore[return-value]  # same reads
 
 
 def _litigation_ledger(broker: BrokerContext) -> LitigationLedger:
