@@ -401,9 +401,132 @@ def test_the_draft_is_built_from_the_staff_list_and_the_three_lists_and_validate
     assert doc["staff_signers"] == [
         {"name": "Pat Assistant", "signs": {"letters": {"name": "Pat Assistant", "title": "Paralegal"}}}
     ]
-    assert "form letter signers entry 3: no staff member has this name or id" in err
+    assert "form letter signers entry 3: no active staff member has this name or id" in err
     assert "Lee" not in out  # staff who neither sign nor are attorneys are not drafted
     assert client.calls == [("/staff", {"Limit": tool.PAGE, "Offset": 0})]
+
+
+def _staff_page() -> list[dict]:
+    """A made-up firm's staff page shaped like a real one: 37 rows, 34 names,
+    three names on two rows each, every pair a former record (former, not
+    enabled, no role) beside the active one."""
+    att = {"role": "Attorney", "former": False, "enabled": True}
+    rows = [
+        {"id": "a1", "firstName": "Example", "lastName": "Lawyer", "email": "lead@firm.example", **att},
+        {"id": "a2", "firstName": "Second", "lastName": "Counsel", "email": "second@firm.example", **att},
+        {"id": "a3", "firstName": "Third", "lastName": "Counsel", "email": "third@firm.example", **att},
+        {"id": "a4", "firstName": "Fourth", "lastName": "Counsel", "email": "fourth@firm.example", **att},
+        {"id": "a5", "firstName": "Fifth", "lastName": "Counsel", "email": "fifth@firm.example", **att},
+        {"id": "a6", "firstName": "Sixth", "lastName": "Counsel", "email": "sixth@firm.example", **att},
+        {
+            "id": "p1",
+            "firstName": "Pat",
+            "lastName": "Assistant",
+            "email": "pat@firm.example",
+            "role": "Paralegal",
+            "former": False,
+            "enabled": True,
+        },
+    ]
+    rows += [
+        {
+            "id": f"s{i}",
+            "firstName": "Staff",
+            "lastName": f"Member{i}",
+            "email": f"s{i}@firm.example",
+            "role": "Staff",
+            "former": False,
+            "enabled": True,
+        }
+        for i in range(27)
+    ]
+    for first, last in (("Second", "Counsel"), ("Pat", "Assistant"), ("Staff", "Member3")):
+        rows.append(
+            {"id": f"old-{first}", "firstName": first, "lastName": last, "email": "", "former": True, "enabled": False}
+        )
+    return rows
+
+
+def test_a_former_record_beside_an_active_one_is_left_out_and_the_draft_validates(lane_lists, monkeypatch, capsys):
+    """FALSIFIER (the replay on a real staff page, 2026-11-07): draft from every
+    row and a former record with the active one's name drafts that person twice;
+    the validator says "the same person appears twice" and SMD cannot commit it."""
+    tool = _tool()
+    rows = _staff_page()
+    assert (len(rows), len({tool.full_name(r) for r in rows})) == (37, 34)
+    monkeypatch.setenv("JOBS_DEMAND_INPUTS", str(lane_lists / "demand2"))
+    from demand_testkit import make_inputs as demand_inputs
+
+    demand_inputs(lane_lists / "demand2")
+    import yaml
+
+    cfg = lane_lists / "demand2" / "demand-firm.yaml"
+    data = yaml.safe_load(cfg.read_text())
+    data["attorneys"]["Second Counsel"] = {
+        "signer": "Second B. Counsel",
+        "title": "Attorney for {client}",
+        "initials": "",
+    }
+    cfg.write_text(yaml.safe_dump(data, sort_keys=False))
+    (lane_lists / "customer.yaml").write_text(
+        "form_letters:\n  signers:\n"
+        + "".join(
+            f"    {n}: {{name: {n}, initials: X}}\n"
+            for n in ("Example Lawyer", "Second Counsel", "Third Counsel", "Fourth Counsel", "Pat Assistant")
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("smokeball_connector.client.build_client_from_env", lambda: StaffOnly(rows))
+    assert tool.main([]) == 0
+    out, err = capsys.readouterr()
+    doc = json.loads(out)
+    assert sdk_roster.problems(doc) == [] and "the draft validates" in err
+    atts = doc["attorneys"]
+    assert len(atts) == 6 and all(a["emails"] for a in atts)
+    assert sum("caption_block" in a for a in atts) == 1 and sum("bar_number" in a for a in atts) == 1
+    assert sum("demand" in a.get("signs", {}) for a in atts) == 2
+    assert sum("letters" in a.get("signs", {}) for a in atts) == 4
+    assert [s["name"] for s in doc["staff_signers"]] == ["Pat Assistant"]
+    review = [line for line in err.splitlines() if line.startswith("REVIEW: ")]
+    assert sum("confirm they are not an attorney" in line for line in review) == 1
+    former = [line for line in review if "former record" in line]
+    assert len(former) == 3 and all(line.startswith("REVIEW: staff row ") for line in former)
+    names = {tool.full_name(r) for r in rows} | {"Pat", "Second", "Counsel", "Assistant"}
+    assert not any(n in line for line in review for n in names)  # positions, never names
+
+
+def test_a_render_only_resume_with_nothing_accepted_and_no_roster_builds_no_seat(drafting_env, tmp_path, monkeypatch):
+    """The roster is a file on disk: reading it never asks a run for its seat.
+    A real ``DraftingRun`` over made-up inputs asks the resolver for its base
+    the way a render-only resume does. FALSIFIER: read the roster through
+    ``run.seat`` and the seat factory (on a seat, the case-system client) runs."""
+    from drafting_testkit import make_inputs, make_job
+    from jobs.drafting import firm_rules, library_pick
+    from jobs.drafting.run import DraftingRun
+    from jobs_testkit import PRICING
+
+    (tmp_path / "specs").mkdir()
+    monkeypatch.setenv(firm_rules.ENV_DIR, str(tmp_path / "specs"))
+    pricing = tmp_path / "pricing.json"
+    pricing.write_text(json.dumps(PRICING), encoding="utf-8")
+    built: list[int] = []
+
+    def factory():
+        built.append(1)
+        raise AssertionError("the seat was built")
+
+    r = DraftingRun(
+        make_job(tmp_path / "job"),
+        inputs_dir=str(make_inputs(tmp_path / "inputs")),
+        pricing=str(pricing),
+        seat_factory=factory,
+        log=lambda m: None,
+        readback_pause=0.0,
+    )
+    r.data.mkdir(parents=True, exist_ok=True)
+    (r.data / "facts.json").write_text(json.dumps({"responsible_attorney": "Example Lawyer"}), encoding="utf-8")
+    picked = library_pick.pick_base(r)
+    assert picked.resolution.status == "none_accepted" and built == []
 
 
 # ---- the probe the self-test runs (operator/templates/attorney-roster-agrees-probe.py) ----

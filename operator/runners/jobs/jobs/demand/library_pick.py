@@ -97,7 +97,7 @@ def _attorneys(run: Any, firm: Any, who: str | None) -> tuple[Attorney | None, l
     ``select`` has already held a demand whose attorney the roster does not list."""
     known = [Attorney(attorney_key(name), str(row["signer"])) for name, row in firm.data["attorneys"].items()]
     signer = firm.attorney.get("signer")
-    roster = roster_for(run.seat)
+    roster = roster_for(run)
     found = matter_attorney(who, str(signer or who), roster)
     if found.hold:
         raise _stop(run, Resolution(REFUSED, KIND, found.reason))
@@ -119,7 +119,7 @@ def select(run: Any, variant: str) -> tuple[Any, Path | None]:
     for them, holds the job (``DemandHold``) before anything is spent."""
     firm = run.firm
     who = run._json("facts.json").get("responsible_attorney")
-    roster = roster_for(run.seat)
+    roster = roster_for(run)
     signs = signer_for(firm, who, roster)
     if roster.status == roster_mod.OK and not roster.is_attorney(who):
         raise DemandHold(

@@ -57,6 +57,7 @@ from typing import Any, Callable
 from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode, request_additions, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
+from ..attorneys.seat import roster_for
 from ..ledger import Ledger
 from ..llm import Doorway
 from ..proof import readback as readback_mod, review as proof_review
@@ -372,6 +373,7 @@ class DraftingRun(EvidenceLane, Placing):
                 self._json("facts.json"),
                 self.job.requester,
                 self.log,
+                roster=roster_for(self),  # the job's one roster read (attorneys/seat.py)
             )
         except caption_mod.RecordUnreadable as exc:
             raise DraftingFailed(f"record_unreadable: the matter record's caption fields: {exc}") from None

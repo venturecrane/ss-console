@@ -18,6 +18,10 @@ in the jobs runner's venv). It reads, and writes nothing anywhere but stdout
 
 HOW THE DRAFT IS BUILT, in code, nothing guessed by a model:
 
+* only ACTIVE staff are drafted: a former or disabled record is left out, and a
+  former record that shares an active one's name is a REVIEW line by its
+  position on the staff page; active rows that share one name are one entry
+  with every email (a person is never on the roster twice);
 * an ATTORNEY is a staff member the drafting or the demand list names (both are
   attorney-only lists), or whose record's role or title field contains the word
   "attorney"; a staff member only the form letters' signers name is a STAFF
@@ -29,9 +33,10 @@ HOW THE DRAFT IS BUILT, in code, nothing guessed by a model:
 * ``signs.demand`` is the demand list's row (signer, title, initials) and
   ``signs.letters`` the form letters' row, each copied as authored.
 
-A list entry with no staff member behind it is NOT drafted: it is named in the
-review notes for SMD, who decides. The output names people because it runs where
-names live; this file carries none.
+A list entry with no active staff member behind it is NOT drafted: it is a
+review note for SMD, who decides. Review notes give positions, never names; the
+staff report and the draft itself name people because they run where names
+live and stay there. This file carries none.
 
 USAGE (from the repo root, in the jobs runner's venv, on the ops workspace):
 
@@ -113,9 +118,52 @@ def legacy(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, An
     return drafting, demand, authored_signers(args.customer_yaml), notes
 
 
-def _entry(row: dict[str, Any], block: list[str] | None, demand: Any, letters: Any) -> dict[str, Any]:
-    email = str(row.get("email") or "").strip().lower()
-    entry: dict[str, Any] = {"name": full_name(row), "emails": [email] if "@" in email else []}
+def is_active(row: dict[str, Any]) -> bool:
+    """False for a former or disabled staff record: any field whose name says
+    former that is true, or an enabled or active field that is false."""
+    for k, v in row.items():
+        key = k.casefold()
+        if "former" in key and v is True:
+            return False
+        if key.removeprefix("is") in ("enabled", "active") and v is False:
+            return False
+    return True
+
+
+def people(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """The ACTIVE staff, one person per name (same-name active rows folded into
+    one: every email and id kept), and review notes by staff-page position
+    (1-based), never by name: a former record that shares an active name, and
+    active rows folded together."""
+    by_name: dict[str, dict[str, Any]] = {}
+    rows_of: dict[str, list[int]] = {}
+    for pos, row in enumerate(rows, 1):
+        name = full_name(row)
+        if not name or not is_active(row):
+            continue
+        key = roster_mod.fold(name)
+        rows_of.setdefault(key, []).append(pos)
+        person = by_name.setdefault(key, {"name": name, "emails": [], "ids": [], "role": ""})
+        email = str(row.get("email") or "").strip().lower()
+        if "@" in email and email not in person["emails"]:
+            person["emails"].append(email)
+        person["ids"].append(roster_mod.fold(str(row.get("id") or "")))
+        person["role"] += " " + " ".join(str(v) for v in role_fields(row).values()).casefold()
+    notes = [
+        f"staff rows {', '.join(map(str, at))} share one name and are drafted as one entry"
+        for at in rows_of.values()
+        if len(at) > 1
+    ]
+    notes += [
+        f"staff row {pos} is a former record that shares its name with an active one; the draft uses the active one"
+        for pos, row in enumerate(rows, 1)
+        if full_name(row) and not is_active(row) and roster_mod.fold(full_name(row)) in by_name
+    ]
+    return sorted(by_name.values(), key=lambda p: p["name"]), notes
+
+
+def _entry(person: dict[str, Any], block: list[str] | None, demand: Any, letters: Any) -> dict[str, Any]:
+    entry: dict[str, Any] = {"name": person["name"], "emails": list(person["emails"])}
     bars = sorted(set(_SBN.findall(" ".join(block or []))))
     if len(bars) == 1:
         entry["bar_number"] = bars[0]
@@ -133,46 +181,52 @@ def _entry(row: dict[str, Any], block: list[str] | None, demand: Any, letters: A
     return entry
 
 
+def _unmatched(
+    drafting: list[dict[str, Any]], demand: dict[str, Any], letters: dict[str, Any], used: set[str]
+) -> list[str]:
+    notes = [
+        f"drafting attorneys[{i}]: no active staff member has this email"
+        for i, d in enumerate(drafting)
+        if str(d.get("email") or "").strip().lower() not in used
+    ]
+    notes += [
+        f"demand attorneys entry {i + 1}: no active staff member has this name"
+        for i, k in enumerate(demand)
+        if roster_mod.fold(k) not in used
+    ]
+    return notes + [
+        f"form letter signers entry {i + 1}: no active staff member has this name or id"
+        for i, k in enumerate(letters)
+        if k not in used
+    ]
+
+
 def draft(
     rows: list[dict[str, Any]], drafting: list[dict[str, Any]], demand: dict[str, Any], letters: dict[str, Any]
 ) -> tuple[dict[str, Any], list[str]]:
-    """The draft roster and the review notes."""
+    """The draft roster and the review notes. Only ACTIVE staff are drafted."""
     by_email = {str(d.get("email") or "").strip().lower(): d.get("block") for d in drafting}
     by_demand = {roster_mod.fold(k): v for k, v in demand.items()}
     attorneys: list[dict[str, Any]] = []
     staff_signers: list[dict[str, Any]] = []
     used: set[str] = set()
-    for row in sorted(rows, key=full_name):
-        name, email = full_name(row), str(row.get("email") or "").strip().lower()
-        key, sid = roster_mod.fold(name), roster_mod.fold(str(row.get("id") or ""))
-        letter = letters.get(key) or (letters.get(sid) if sid else None)
-        role = " ".join(str(v) for v in role_fields(row).values()).casefold()
-        is_attorney = email in by_email or key in by_demand or "attorney" in role
-        if not name or not (is_attorney or letter):
+    active, notes = people(rows)
+    for person in active:
+        key, ids = roster_mod.fold(person["name"]), [i for i in person["ids"] if i]
+        letter = letters.get(key) or next((letters[i] for i in ids if i in letters), None)
+        block = next((by_email[e] for e in person["emails"] if e in by_email), None)
+        is_attorney = any(e in by_email for e in person["emails"]) or key in by_demand or "attorney" in person["role"]
+        if not (is_attorney or letter):
             continue
-        used |= {email, key, sid}
+        used |= {*person["emails"], key, *ids}
         if is_attorney:
-            attorneys.append(_entry(row, by_email.get(email), by_demand.get(key), letter))
+            attorneys.append(_entry(person, block, by_demand.get(key), letter))
         else:
-            staff_signers.append({"name": name, "signs": {"letters": dict(letter or {})}})
-    notes = [
-        f"drafting attorneys[{i}]: no staff member has this email"
-        for i, d in enumerate(drafting)
-        if str(d.get("email") or "").strip().lower() not in used
-    ]
+            staff_signers.append({"name": person["name"], "signs": {"letters": dict(letter or {})}})
+    notes += _unmatched(drafting, demand, letters, used)
     notes += [
-        f"demand attorneys entry {i + 1}: no staff member has this name"
-        for i, k in enumerate(demand)
-        if roster_mod.fold(k) not in used
-    ]
-    notes += [
-        f"form letter signers entry {i + 1}: no staff member has this name or id"
-        for i, k in enumerate(letters)
-        if k not in used
-    ]
-    notes += [
-        f"staff signer {s['name']}: signs form letters and is not on an attorney list; confirm they are not an attorney"
-        for s in staff_signers
+        f"staff_signers[{i}]: signs form letters and is not on an attorney list; confirm they are not an attorney"
+        for i in range(len(staff_signers))
     ]
     doc: dict[str, Any] = {"schema_version": roster_mod.SCHEMA_VERSION, "attorneys": attorneys}
     if staff_signers:

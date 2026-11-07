@@ -84,6 +84,7 @@ def run(
     facts: dict[str, Any],
     requester: str,
     log: Callable[[str], None],
+    roster: Any = None,
 ) -> dict[str, Any]:
     model, firm_domains = firm.model("transcription"), firm.firm_domains
     doc = caption_mod.source_document(data)
@@ -136,6 +137,8 @@ def run(
         # attorney's, else the requester's, else none (attorneys.py); from the
         # firm's attorney roster when one is installed (attorneys.entries).
         "attorney_block": attorneys.pick(
-            attorneys.entries(firm.attorneys, roster_for(seat)), record.get("attorney_email"), requester
+            attorneys.entries(firm.attorneys, roster if roster is not None else roster_for(seat)),
+            record.get("attorney_email"),
+            requester,
         ),
     }

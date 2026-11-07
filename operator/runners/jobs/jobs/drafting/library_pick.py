@@ -108,7 +108,7 @@ def matter_attorney_or_stop(run: Any) -> Attorney | None:
     p = run.data / "facts.json"
     facts = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
     who = str(facts.get("responsible_attorney") or "").strip()
-    found = matter_attorney(who, who, roster_for(run.seat))
+    found = matter_attorney(who, who, roster_for(run))
     if not found.hold:
         return found.attorney
     write_record(
