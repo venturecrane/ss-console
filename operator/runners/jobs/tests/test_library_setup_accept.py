@@ -134,6 +134,94 @@ def test_custom_xml_parts_and_their_pointers_go():
     docx.Document(io.BytesIO(clean))  # still a Word document
 
 
+_RNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+
+def _with_fields(blob: bytes, *fields: tuple[str, str]) -> bytes:
+    """The brief with complex fields in its footer: (instruction, cached result) each."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    d = docx.Document(io.BytesIO(blob))
+    for instr, result in fields:
+        p = d.sections[0].footer.add_paragraph()
+        for kind, text in (("begin", None), ("instr", instr), ("separate", None), ("result", result), ("end", None)):
+            run = p.add_run()
+            if kind == "instr":
+                el = OxmlElement("w:instrText")
+                el.set(qn("xml:space"), "preserve")
+                el.text = text
+                run._r.append(el)
+            elif kind == "result":
+                run.text = text
+            else:
+                el = OxmlElement("w:fldChar")
+                el.set(qn("w:fldCharType"), kind)
+                run._r.append(el)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def _as_a_document_system_saves_it(blob: bytes) -> bytes:
+    """The brief as a firm's document system saves it: an attached template (an
+    external path), document variables, and a footer stamp whose cached result is
+    the system's own id, beside a page number field."""
+    blob = _with_fields(blob, (" PAGE ", "7"), (" AUTOMATIONFIELD ", "0012345.0001"))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w") as out:
+        names = src.namelist()
+        for i in src.infolist():
+            data = src.read(i.filename)
+            if i.filename == M.SETTINGS:
+                links = (
+                    f'<w:attachedTemplate xmlns:r="{_RNS}" r:id="rIdTpl"/>'
+                    '<w:docVars><w:docVar w:name="Client" w:val="Gamma Example"/></w:docVars></w:settings>'
+                )
+                data = data.replace(b"</w:settings>", links.encode())
+            elif i.filename == M.SETTINGS_RELS:
+                rel = (
+                    f'<Relationship Id="rIdTpl" Type="{_RNS}/attachedTemplate" '
+                    'Target="file:///C:/Firm/Templates/GammaExample.dotx" TargetMode="External"/></Relationships>'
+                )
+                data = data.replace(b"</Relationships>", rel.encode())
+            out.writestr(i, data)
+        if M.SETTINGS_RELS not in names:
+            out.writestr(
+                M.SETTINGS_RELS,
+                f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="{_RELS_NS}">'
+                f'<Relationship Id="rIdTpl" Type="{_RNS}/attachedTemplate" '
+                'Target="file:///C:/Firm/Templates/GammaExample.dotx" TargetMode="External"/></Relationships>',
+            )
+    return buf.getvalue()
+
+
+def test_a_document_systems_links_and_footer_stamp_go_and_the_root_writers_check_passes(firm_brief):
+    """A&P's own brief, 2026-11-07: the accept job's checks passed and the root
+    writer refused the file for exactly these three."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "hermes-smd-overlay"))
+    from establish_intake import blank_form
+
+    saved = _as_a_document_system_saves_it(firm_brief)
+    before = blank_form.check(M.drop_custom_xml(saved), ()).problems
+    assert any("attached template" in p for p in before) and any("external link" in p for p in before)
+    assert any("a field other than a page number" in p for p in before)
+    made = M.make(CLS, saved, _src(saved), FIRM)
+    after = blank_form.check(made.data, made.fixed_strings)
+    assert after.ok, after.problems
+    z = zipfile.ZipFile(io.BytesIO(made.data))
+    settings = z.read(M.SETTINGS)
+    assert b"attachedTemplate" not in settings and b"docVar" not in settings
+    assert b"attachedTemplate" not in z.read(M.SETTINGS_RELS)
+    footers = b"".join(z.read(n) for n in z.namelist() if n.startswith("word/footer"))
+    assert b"AUTOMATIONFIELD" not in footers and b"0012345" not in footers
+    assert b" PAGE " in footers  # the page number field stays, its look with it
+    assert made.residue["refused_digits"] == 0  # the stamp's id never reached the judgment
+
+
 def test_identity_only_reads_whole_lines():
     pieces = M._allowed(FIRM)
     assert M.identity_only("Example & Example, LLP", pieces)
