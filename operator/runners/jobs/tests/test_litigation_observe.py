@@ -115,7 +115,7 @@ def test_discovery_keeps_the_reads_not_yet_due() -> None:
         "due": {"date": "2026-01-01"},
         "response": {"value": "not yet due"},
     }
-    src = lambda n, _d=None: None  # noqa: E731
+    src = lambda n, _d=None: None  # noqa: E731 - a one-line stub source, no document behind any number
     got = sections.to_result(src, {"sections": {"rfas": [e]}}, TODAY)
     assert got["sections"]["rfas"][0]["response"]["value"] == "not yet due"
     e2 = {**e, "response": {"value": "no"}, "due": {"date": "2027-01-01"}}
