@@ -26,6 +26,16 @@ Only the round-cap drop may still remove such a claim (the gate admits no
 unsupported claim), and its row records the values it took (`lost_values`),
 so every one is named, never silent.
 
+NO REPAIR ADDS A WORD THE CLAIM AND THE FINDING DO NOT CARRY (2026-11-07).
+A repair removes or weakens; it never supplies. On a client seat one repair
+of a model-written sentence added a name and a date that neither the claim
+nor the audit's finding carried, and the misattributed sentence reached the
+firm. A rewrite whose content words (a number, a capitalised word, any word
+of four letters or more) are not all in the claim, the finding, or the few
+words a weakening is phrased in (``HEDGES``) is REJECTED and the original
+kept; it then takes the ordinary path of a refused repair (audited again,
+trimmed or dropped at the round cap, values named). Nothing holds for it.
+
 A claim is located by its EXACT span in the body (`claims.claim_spans`), not
 by re-gluing `claim + " " + cite`: a citation on the next line made the glued
 form unfindable, and the claim was skipped by repair and drop alike until it
@@ -145,6 +155,43 @@ def value_check(claim: str, new: str, problems: list[str]) -> list[str]:
     not name: non-empty means the rewrite is refused."""
     named = named_by(problems)
     return [v for v in lost_values(claim, new) if v not in named]
+
+
+_WORD = re.compile(r"[A-Za-z0-9]+(?:[./-][A-Za-z0-9]+)*")
+#: The words a weakening is phrased in ("the record notes", "as documented"),
+#: which a repair may add although neither the claim nor the finding has them.
+HEDGES = frozenset(
+    {
+        "record", "records", "recorded", "states", "stated", "notes", "noted", "documented",
+        "documents", "reported", "reports", "listed", "lists", "described", "describes",
+        "indicates", "indicated", "mentions", "mentioned", "page", "pages", "only", "also",
+    }
+)  # fmt: skip
+
+
+#: Function words: a rewrite may change its grammar ("was" to "were", a
+#: sentence opened with "The") without adding content.
+_FUNCTION = frozenset(
+    """the a an on in at of and or to for was were is are be been being with no not by as it its
+    this that these those then than from into onto over under after before during while which what
+    when where there their they them will would could should does did done each both such same
+    other some more most very upon about without within has have had""".split()
+)
+
+
+def _content(text: str) -> list[str]:
+    """The content words of `text` outside its citations: a number, or a
+    word that is not a function word and is capitalised or four letters or
+    more."""
+    words = _WORD.findall(CITE.sub(" ", text))
+    return [w for w in words if re.search(r"\d", w) or (w.lower() not in _FUNCTION and (len(w) >= 4 or w[0].isupper()))]
+
+
+def added_words(claim: str, new: str, finding: list[str]) -> list[str]:
+    """Content words a rewrite of `claim` adds that neither the claim nor the
+    audit's finding carries (case-insensitive): non-empty means refused."""
+    have = {w.lower() for w in _WORD.findall(CITE.sub(" ", " ".join([claim, *finding])))} | HEDGES
+    return sorted({w for w in _content(new) if w.lower() not in have})
 
 
 def drop_losses(claim: str, problems: list[str]) -> list[str]:
@@ -330,7 +377,7 @@ def _mark_reaudit(paths: AuditPaths, key: str) -> None:
 
 def _settle_failing(failing: list[dict[str, Any]], x: _Ctx) -> dict[str, int]:
     """Repair, or (past the cap) drop, every claim not finally SUPPORTED."""
-    n: dict[str, int] = {k: 0 for k in ("repaired", "dropped", "rejected", "skipped", "noop", "trimmed")}
+    n: dict[str, int] = {k: 0 for k in ("repaired", "dropped", "rejected", "added", "skipped", "noop", "trimmed")}
     for i, r in enumerate(failing, 1):
         c = x.live[r["key"]]
         anchor = x.locate(c)
@@ -404,6 +451,11 @@ def _settle_one(x: _Ctx, r: dict[str, Any], c: dict[str, Any], anchor: str, new:
         _mark_reaudit(x.paths, r["key"])
         return "noop"
     why = _rejection(new, anchor, c["claim"])
+    added = [] if why else added_words(c["claim"], new, [*problems, str(r.get("note") or "")])
+    if added:
+        x.logrow(key=r["key"], action="repair", result="REJECT: added words the claim and the finding do not carry",
+                 added=added, new=new[:300])  # fmt: skip
+        return "added"
     unnamed = [] if why else value_check(c["claim"], new, problems)
     if why or unnamed:
         x.logrow(
@@ -513,7 +565,7 @@ def run(
     ok = n_new == n_orig - removed[0]
     log(
         f"APPLIED: cite-fix {fixed}, repaired {n['repaired']}, trimmed {n['trimmed']}, unchanged->re-audit {n['noop']}, "
-        f"dropped {dropped}, rejected {n['rejected']}, skipped {skipped}"
+        f"dropped {dropped}, rejected {n['rejected'] + n['added']} ({n['added']} for added words), skipped {skipped}"
     )
     log(
         f"claims before {n_orig}, after {n_new} (expected {n_orig - removed[0]}) -> {'RECONCILES' if ok else '!! MISMATCH'}"
