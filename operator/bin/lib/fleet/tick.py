@@ -325,7 +325,8 @@ class Ticker:
         defer: Callable[[dict[str, Any]], dict[str, str]] | None = None,
         retriable: Callable[[dict[str, Any], str, dict[str, Any]], bool] | None = None,
     ) -> None:
-        """``defer(release)``: the seats that may not take ``release`` this tick, with why (skills only).
+        """``defer(release)``: the seats that may not take ``release`` this tick, with why (skills, bundles,
+        and an image whose jobs bundle a lane seat needs is not published yet, bundle_align.py).
         ``retriable(release, seat, row)``: a halting row of ``release`` on ``seat`` that may be tried
         again (images: a lane-input refusal the declarations on main now cover)."""
         self.store, self.log, self.clock = store, log, clock

@@ -616,6 +616,12 @@ check "jobs-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/s
 # when the boot wrote no state, or the state and the mounts disagree (a release
 # controller reading bundles.jobs back would otherwise trust a wrong answer).
 check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}/opt/jobs && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}/opt/jobs && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
+# The mounted bundle is not older than the image. A bundle built from
+# a commit before the image's bundle floor (/app/bundle-floor) lacks lane code the
+# image was built with; a bundle that lags because no bundle path changed since
+# passes. A failure at boot after an image deploy rolls the seat back.
+# FALSIFIER: mount a bundle whose manifest names an earlier commit than the floor.
+check_file "jobs-bundle-built-for-image" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "jobs-bundle-commit-probe.py"
 fi
 if lane_runs medchron; then
 check "jobs-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/queue)\" = root:workspace-broker:770 ]"

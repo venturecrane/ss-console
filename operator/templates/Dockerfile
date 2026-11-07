@@ -815,6 +815,20 @@ RUN printf '%s' "${SS_CONSOLE_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
       || { echo "FATAL: SS_CONSOLE_SHA must be the 40-hex ss-console commit (got '${SS_CONSOLE_SHA}')" >&2; exit 1; } \
  && printf '%s\n' "${SS_CONSOLE_SHA}" > /app/OVERLAY_REF
 ENV SMD_OVERLAY_REF=${SS_CONSOLE_SHA}
+# The jobs bundle floor (2026-11-07): the last commit at or before SS_CONSOLE_SHA
+# that changed a jobs bundle path, and its commit number (rev-list --count), from
+# ordering.bundle_floor via `fleet build` and provision-customer.sh. A bundle
+# built before it lacks lane code this image was built with; the self-test check
+# jobs-bundle-built-for-image (/app/jobs-bundle-commit-probe.py) reads this file
+# and fails such a bundle. Both are required, as SS_CONSOLE_SHA is: an image with
+# no floor could never tell a stale bundle from a current one.
+ARG SMD_BUNDLE_FLOOR_SHA=""
+ARG SMD_BUNDLE_FLOOR_SEQ=""
+RUN printf '%s' "${SMD_BUNDLE_FLOOR_SHA}" | grep -Eq '^[0-9a-f]{40}$' \
+      || { echo "FATAL: SMD_BUNDLE_FLOOR_SHA must be a 40-hex commit (got '${SMD_BUNDLE_FLOOR_SHA}')" >&2; exit 1; } \
+ && printf '%s' "${SMD_BUNDLE_FLOOR_SEQ}" | grep -Eq '^[1-9][0-9]*$' \
+      || { echo "FATAL: SMD_BUNDLE_FLOOR_SEQ must be a positive integer (got '${SMD_BUNDLE_FLOOR_SEQ}')" >&2; exit 1; } \
+ && printf '%s %s\n' "${SMD_BUNDLE_FLOOR_SHA}" "${SMD_BUNDLE_FLOOR_SEQ}" > /app/bundle-floor
 # The Hermes pin this image was built at, for the in-image self-test's
 # hermes-sha-matches-pin check (/app/selftest.sh). Re-declared here because a
 # global ARG is not visible inside a stage until it is named again.
@@ -871,6 +885,7 @@ COPY operator/templates/seat-checks.sh /app/seat-checks.sh
 COPY --chmod=0755 operator/templates/selftest.sh /app/selftest.sh
 COPY operator/templates/lane-memory-caps-probe.py /app/lane-memory-caps-probe.py
 COPY operator/templates/firm-inputs-current-probe.py /app/firm-inputs-current-probe.py
+COPY operator/templates/jobs-bundle-commit-probe.py /app/jobs-bundle-commit-probe.py
 # The seat-spec public key the root config_applier verifies every signed spec
 # pointer against (ADR 0094 amendment). Re-owned root below with the other
 # governance files, as are the image manifest and capabilities it checks a

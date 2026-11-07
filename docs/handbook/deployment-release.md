@@ -57,6 +57,10 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/skills.py
   - label: operator/bin/lib/fleet/bundles.py (a jobs bundle release, and which seats take one)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/bundles.py
+  - label: operator/bin/lib/fleet/bundle_align.py (the image step points a lane seat at its bundle before it boots)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/bundle_align.py
+  - label: operator/templates/jobs-bundle-commit-probe.py (the self-test refuses a bundle older than the image)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/templates/jobs-bundle-commit-probe.py
   - label: operator/bin/lib/fleet/ordering.py (when a seat may take a skills or bundle release)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/fleet/ordering.py
   - label: scripts/ci-publish-bundle.sh
@@ -369,6 +373,20 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   recorded as its rollback target, and the volume is snapshotted. A release
   built with `--not-volume-forward-compatible` halts a failing seat instead of
   rolling it back.
+- **Jobs bundle pointer, before the deploy** (a seat that authors a job lane,
+  while `BUNDLE_RELEASE_ENABLED` is `true`; `operator/bin/lib/fleet/bundle_align.py`).
+  A seat reads its bundle pointer only at boot, so the pointer is written at
+  the newest bundle the new image qualifies for and read back before the image
+  boots. Until 2026-11-07 the image went first and the bundle step after, and a
+  client seat ran rel-b4d97f03 with the previous bundle for ten minutes. A
+  pointer that cannot be written or read back stops that seat before its
+  deploy (`tooling_error`, retried next tick; the other seats go on). When the
+  bundle the image needs is not published yet, the tick defers the seat. A
+  rollback, and a deploy that decided nothing, put the previous pointer back
+  before anything else. The bundle step that follows then finds the seat
+  already on the version and writes its pointer with no restart, so a release
+  restarts a lane seat once. Skills are not pointed ahead: a seat applies them
+  live, so they would run on the old image.
 - **Deploy** `fly deploy --image <release> --config <rendered>`. The rendered
   toml (`operator/bin/lib/render-fly-toml.sh`, the renderer provisioning uses)
   sets `kill_signal = "SIGTERM"` and `kill_timeout = 300`, so the entrypoint
@@ -714,6 +732,19 @@ the seat already reports that version. Before this rule an image whose
 expected layout differed from the pointed-at bundle booted with no runner,
 failed its self-test, was rolled back, and the bundle stayed deferred: the
 rename of the runner (2026-11-04) could not have shipped.
+
+**A seat never runs a bundle older than its image (2026-11-07).** Each image
+bakes its bundle floor, `/app/bundle-floor`: the last commit at or before the
+image's commit that changed a path in `.github/operator-bundle-paths.txt`, and
+that commit's number (`git rev-list --count`, via `fleet bundle-floor`). Each
+manifest carries its own commit number (`ss_console_seq`, `fleet commit-seq`).
+The boot self-test check `jobs-bundle-built-for-image` fails when the mounted
+bundle was built from a commit before the floor, with one line naming both
+commits, and after an image deploy that failure rolls the seat back like any
+other failed self-test. A bundle that lags the image because the image's commit
+changed no bundle path is built at or after the floor and passes; so does a
+bundle newer than the image. The tick picks the bundle by the same rule, with
+git: built at or after the floor, and needing no newer image than this one.
 
 **The runner rename and its hand rollback (ADR 0103).** R1, the code rename,
 is forward-compatible and rolls back on its own: a failing seat returns to

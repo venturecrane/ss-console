@@ -1,9 +1,15 @@
 """One seat's image release, start to finish.
 
   preflight -> busy gate (quiesce + wait) -> record from-image / from-toml ->
-  volume snapshot -> fly deploy --image -> boot smoke -> heartbeat read-back ->
-  done | (fail) roll back to from-image + from-toml, re-smoke, halt |
-  (tooling_error / timeout) halt, touch nothing
+  volume snapshot -> jobs bundle pointer written and read back (a lane seat) ->
+  fly deploy --image -> boot smoke -> heartbeat read-back ->
+  done | (fail) restore the pointer, roll back to from-image + from-toml,
+  re-smoke, halt | (tooling_error / timeout) halt, touch nothing
+
+The pointer comes before the deploy because a seat reads it only at boot: the
+first boot on the new image must mount the bundle built for it (bundle_align.py,
+the 2026-11-07 window). A pointer that cannot be written stops the seat before
+its deploy.
 
 Every transition is written to fleet_rollouts before the next step starts, so a
 laptop that dies mid-rollout leaves a row saying exactly where it stopped.
@@ -15,7 +21,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from . import ids, smoke
 from .busy import BusyGate
@@ -25,6 +31,9 @@ from .ledger import VerifyLedger
 from .preflight import PreflightChecker
 from .runner import ToolingError
 from .smoke import Check, SmokeRunner
+
+if TYPE_CHECKING:  # bundle_align -> bundles -> rollout (SeatOutcome): types only here
+    from .bundle_align import Alignment, BundleAlign
 
 # Outcome of one seat: whether the rollout continues past it. Only a seat that
 # showed the RELEASE is bad halts: it came up broken (rolled_back) or was refused
@@ -98,11 +107,13 @@ class ImageRollout:
         clock: Callable[[], float],
         fleet_side: smoke.FleetSideChecks | None = None,
         ledger: VerifyLedger | None = None,
+        align: BundleAlign | None = None,
     ) -> None:
         self.store, self.fly, self.gate, self.preflight, self.smoker = store, fly, gate, preflight, smoker
         self.render, self.log, self.sleep, self.clock = render, log, sleep, clock
         self.fleet_side = fleet_side
         self.ledger = ledger
+        self.align = align
 
     # -- helpers ---------------------------------------------------------------
     def _current_digest(self, seat: str) -> str | None:
@@ -270,12 +281,18 @@ class ImageRollout:
             self.log(f"{seat}: note: {note}")
         if not pre.ok:
             return self._finish(rid, plan, SeatOutcome(seat, "failed", "preflight refused: " + "; ".join(pre.problems)))
+        al = self.align.prepare(seat, plan.release) if self.align else None
+        if al is not None and al.wait:
+            return self._finish(rid, plan, SeatOutcome(seat, "tooling_error", f"{al.wait}; nothing was deployed"))
         idle = self._gate(seat, rid, plan)
         if idle is not None:
             return idle
         if plan.dry_run:
-            return SeatOutcome(seat, "pending", "dry run: preflight passed and the seat is idle; would deploy now")
-        return self._deploy_and_verify(seat, rid, plan, toml_text)
+            would = f"; {al.note}" if al else ""
+            return SeatOutcome(
+                seat, "pending", f"dry run: preflight passed and the seat is idle; would deploy now{would}"
+            )
+        return self._deploy_and_verify(seat, rid, plan, toml_text, al)
 
     def _gate(self, seat: str, rid: str, plan: ImagePlan) -> SeatOutcome | None:
         if plan.force_mid_job:
@@ -298,7 +315,36 @@ class ImageRollout:
             )
         return None
 
-    def _deploy_and_verify(self, seat: str, rid: str, plan: ImagePlan, toml_text: str) -> SeatOutcome:
+    def _point(self, seat: str, rid: str, plan: ImagePlan, al: Alignment | None) -> SeatOutcome | None:
+        """Write the seat's bundle pointer before its deploy; an outcome when that failed (no deploy)."""
+        if self.align is None or al is None:
+            return None
+        self.log(f"{seat}: {al.note}")
+        try:
+            self.align.point(al)
+        except ToolingError as exc:
+            undone = self._unpoint(seat, al)
+            return self._finish(
+                rid, plan,
+                SeatOutcome(seat, "tooling_error", f"jobs bundle pointer not written ({exc}); {undone}; "
+                            "the image was not deployed"),
+            )  # fmt: skip
+        return None
+
+    def _unpoint(self, seat: str, al: Alignment | None) -> str:
+        """Put the bundle pointer back as it was; never raises (what happened is the return)."""
+        if self.align is None or al is None or al.target is None:
+            return "bundle pointer untouched"
+        try:
+            said = self.align.restore(al)
+        except ToolingError as exc:
+            said = f"bundle pointer NOT restored ({exc}); it names {al.target['version']}"
+        self.log(f"{seat}: {said}")
+        return said
+
+    def _deploy_and_verify(
+        self, seat: str, rid: str, plan: ImagePlan, toml_text: str, al: Alignment | None = None
+    ) -> SeatOutcome:
         app = ids.app_name(seat)
         from_image = self.fly.machine_image(app)
         try:
@@ -308,10 +354,17 @@ class ImageRollout:
             from_toml = toml_text
         snap = self.fly.snapshot(app, self.fly.volume_id(app))
         self.store.update_rollout(rid, "deploying", from_image=from_image, from_toml=from_toml, snapshot_id=snap)
+        refused = self._point(seat, rid, plan, al)
+        if refused is not None:
+            return refused
         since = ids.iso(ids.utc_now())
         try:
             deployed, said = self._deploy_saying(seat, plan.release["image_ref"], toml_text)
             if deployed == "tooling_error":
+                # Most likely the seat still runs the from-image, so it gets its
+                # old pointer back; if the new image did land, its self-test
+                # refuses the older bundle (jobs-bundle-built-for-image).
+                undone = self._unpoint(seat, al)
                 return self._finish(
                     rid,
                     plan,
@@ -319,7 +372,7 @@ class ImageRollout:
                         seat,
                         "tooling_error",
                         "fly deploy failed twice without saying the release was unhealthy; the seat was not "
-                        f"rolled back. Fly said: {said}",
+                        f"rolled back ({undone}). Fly said: {said}",
                     ),
                 )
             self.store.update_rollout(rid, "smoking")
@@ -341,11 +394,13 @@ class ImageRollout:
                 SeatOutcome(seat, "tooling_error", f"{check.cls}: {check.detail} (no rollback: not a seat failure)"),
                 smoke_class=check.cls,
             )
-        return self._rollback(seat, rid, plan, from_image, from_toml, check, snap)
+        return self._rollback(seat, rid, plan, (from_image, from_toml), check, snap, al)
 
     def _rollback(
-        self, seat: str, rid: str, plan: ImagePlan, from_image: str, from_toml: str, check: Check, snap: str
-    ) -> SeatOutcome:
+        self, seat: str, rid: str, plan: ImagePlan, back_to: tuple[str, str], check: Check, snap: str,
+        al: Alignment | None,
+    ) -> SeatOutcome:  # fmt: skip
+        from_image, from_toml = back_to
         if not int(plan.release.get("volume_forward_compatible", 1) or 0):
             return self._finish(
                 rid,
@@ -358,10 +413,14 @@ class ImageRollout:
                 smoke_class="fail",
             )
         self.log(f"{seat}: smoke FAIL ({check.detail}); rolling back to {from_image}")
+        # Before the redeploy: the from-image's boot must mount the bundle it ran.
+        undone = self._unpoint(seat, al)
         since = ids.utc_now()
         back = self._deploy(seat, from_image, from_toml)
         again = (
             self._resmoke(seat, plan, from_image, since) if back == "ok" else Check("fail", f"rollback deploy {back}")
         )
-        detail = f"smoke FAIL: {check.detail}. Rolled back to {from_image}; re-smoke {again.cls}: {again.detail}"
+        detail = (
+            f"smoke FAIL: {check.detail}. Rolled back to {from_image} ({undone}); re-smoke {again.cls}: {again.detail}"
+        )
         return self._finish(rid, plan, SeatOutcome(seat, "rolled_back", detail), smoke_class="fail")

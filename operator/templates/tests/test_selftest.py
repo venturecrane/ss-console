@@ -555,3 +555,34 @@ def test_the_overlay_must_be_selected_in_every_config(seat: dict[str, Path]) -> 
     (seat["root"] / "opt/data/config.yaml").unlink()
     profile.write_text(SELECTED_CONFIG)
     assert _check(_once(seat, "hourly"), "hermes-overlay-selected-in-config")["ok"] is False
+
+
+# 2026-11-07: a client seat ran rel-b4d97f03 with the previous jobs bundle for ten
+# minutes. The seat's own refusal: the planted mismatch fails, a bundle that lags
+# only because no bundle path changed since its commit passes. FALSIFIER: drop the
+# check_file line from seat-checks.sh and _check finds the check ran 0 times.
+def _plant_bundle(seat: dict[str, Path], sha: str, seq: int) -> None:
+    root, version = seat["root"], "202611070833-" + sha[:8]
+    _write(root / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    _write(root / "run/smd-bundles/jobs", version + "\n")
+    _write(root / "app/OVERLAY_REF", "c" * 40 + "\n")
+    _write(root / "app/bundle-floor", f"{'b' * 40} 2680\n")
+    _write(root / "app/jobs-bundle-commit-probe.py", (TEMPLATES / "jobs-bundle-commit-probe.py").read_text())
+    manifest = {"ss_console_sha": sha, "ss_console_seq": seq}
+    _write(root / f"opt/data/.smd-root/bundles/jobs/{version}/manifest.json", json.dumps(manifest))
+
+
+def test_a_bundle_older_than_the_image_floor_fails_the_self_test(seat: dict[str, Path]) -> None:
+    _plant_bundle(seat, "a" * 40, 2675)
+    found = _check(_once(seat, "boot"), "jobs-bundle-built-for-image")
+    assert found["ok"] is False and "aaaaaaaa" in found["detail"] and "bbbbbbbb" in found["detail"], found
+
+
+def test_a_bundle_lagging_the_image_at_its_floor_passes_the_self_test(seat: dict[str, Path]) -> None:
+    _plant_bundle(seat, "b" * 40, 2680)
+    found = _check(_once(seat, "boot"), "jobs-bundle-built-for-image")
+    assert found["ok"] is True, found
+
+
+def test_a_seat_with_no_lane_runs_no_bundle_commit_check(seat: dict[str, Path]) -> None:
+    assert "jobs-bundle-built-for-image" not in _ran(_once(seat, "hourly"))
