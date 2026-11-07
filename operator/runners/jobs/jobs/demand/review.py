@@ -188,6 +188,10 @@ FIRM_BANNED = (
         r"\b(?:the|per|in|from|no cite in) (?:record )?digest\b|\bdigest(?:'s)? (?:states|says|shows|entry|entries|line|lines|cites?)\b",
         re.I,
     ),
+    # the system's name for its bill reconciliation (the gap audit's Basis
+    # cells, 2026-11-06: "preflight (Billing tab vs bills)", "Preflight
+    # counts"); never a record's "preflight inspection"
+    re.compile(r"\b(?:the |free )?preflight\b(?!\s+(?:inspection|check|checklist|briefing|procedure)s?\b)", re.I),
 )
 
 
