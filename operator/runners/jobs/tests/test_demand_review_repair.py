@@ -223,16 +223,16 @@ def test_two_invented_findings_in_one_sentence_are_both_settled_by_the_first_rem
     this raises Unlocated("... matches nothing in that section")."""
     draft = (
         "## Exhibits\n\nThe exhibits follow.\n\n"
-        "Counsel relied on Civil Code sections 1, 2 and 3 and on Form No. 99 for the carrier.\n\n"
+        "The dispatcher signed the run report at the scene and the receipt numbered 99 was issued to the carrier.\n\n"
         "A second sentence that stays.\n"
     )
     audit = (
         "## AUDIT: Exhibits\n\n"
-        "- Counsel relied on Civil Code sections 1, 2 and 3 | INVENTED | no such sections in the record\n"
-        "- Form No. 99 for the carrier | INVENTED | no such form in the record\n"
+        "- The dispatcher signed the run report at the scene | INVENTED | no such signature in the record\n"
+        "- the receipt numbered 99 was issued to the carrier | INVENTED | no such receipt in the record\n"
     )
     md, notes = finalpass.settle(draft, audit)
-    assert "Civil Code sections 1, 2 and 3" not in md and "Form No. 99" not in md
+    assert "dispatcher signed" not in md and "receipt numbered 99" not in md
     assert md.count("[TO BE SUPPLIED: a statement here is not supported by the file") == 1
     assert "A second sentence that stays." in md
     assert len(notes) == 2 and any("taken out with the statement before it" in n for n in notes)
@@ -242,6 +242,73 @@ def test_two_invented_findings_in_one_sentence_are_both_settled_by_the_first_rem
 
 def test_a_finding_that_was_never_in_the_section_still_raises():
     draft = "## Exhibits\n\nThe exhibits follow.\n"
-    audit = "## AUDIT: Exhibits\n\n- Counsel relied on Civil Code sections 1, 2 and 3 | INVENTED | no such sections\n"
+    audit = "## AUDIT: Exhibits\n\n- The dispatcher signed the run report at the scene | INVENTED | no such signature\n"
     with pytest.raises(finalpass.Unlocated):
         finalpass.settle(draft, audit)
+
+
+# ---- law is not a record fact, and the notes to the attorney are not the letter ------------------
+LAW_DRAFT = (
+    "## Liability\n\nA carrier owes its passengers the highest duty (Civ. Code, §§ 2100, 2168; CACI No. 902.) "
+    "Civil Code section 2100 provides:\n\n> A carrier of persons for reward must use the utmost care and diligence.\n\n"
+    "The van pulled away (incident report, p. 1).\n\n"
+    "## Prior Records\n\nYour client took him as it found him (CACI No. 3928.)\n\n"
+    "## Exhibits\n\nExhibit 1: the report.\n\n=== ATTORNEY NOTES ===\n\n"
+    "| ATTORNEY | Duty paragraph relies on Civil Code §§ 2100, 2168 and CACI 902 | confirm |\n"
+    "| ATTORNEY | Specials $1,200.00 'sum of the rows' | confirm |\n"
+)
+LAW_AUDIT = (
+    "## AUDIT: Liability\n\n"
+    "- Quoted text of Civil Code §2100 ('A carrier of persons for reward must use the utmost care') | INVENTED | "
+    "no cite in the record\n\n"
+    "## AUDIT: Prior Records\n\n- CACI No. 3928 | INVENTED | no such instruction in the record\n\n"
+    "## AUDIT: Exhibits\n\n"
+    "- Duty paragraph relies on Civil Code §§ 2100, 2168 and CACI 902 | INVENTED | no cite in the record\n"
+    "- Specials $1,200.00 'sum of the rows' | ARITHMETIC | the rows sum to $1,100.00\n"
+)
+
+
+def test_a_statute_or_instruction_is_left_in_the_letter_for_the_attorney_never_struck():
+    """2026-11-07: the check called the letter's quotation of a Civil Code section
+    "invented" and the final pass struck it, leaving the lead-in over a gap
+    marker; the review then held on the contradiction between the notes
+    ("taken out") and the letter (still citing it). FALSIFIER: on the code
+    before, the quotation and the CACI citation are replaced by markers."""
+    md, notes = finalpass.settle(LAW_DRAFT, LAW_AUDIT)
+    body = md.split(finalpass.NOTES_MARK)[0]
+    assert "must use the utmost care and diligence" in body and "(CACI No. 3928.)" in body
+    assert "[TO BE SUPPLIED" not in body and "taken out" not in "\n".join(notes)
+    assert sum("cites legal authority" in n for n in notes) == 2
+    # the notes to the attorney are not the letter: never edited, told as what they are
+    assert "Duty paragraph relies on Civil Code" in md and "Specials $1,200.00" in md
+    assert sum(n.startswith("Attorney notes: a note to the attorney") for n in notes) == 2
+    assert finalpass.summary(notes) == {"removed": 0, "flagged": 0, "cleared": 0, "kept": 0}
+    assert rv.wording({"demand": body, "attorney_notes": "\n".join(notes)}) == []
+
+
+def test_a_record_fact_called_invented_in_the_letter_is_still_struck():
+    draft = "## Liability\n\nThe other driver admitted fault at the scene (cite). The light was red (report, p. 1).\n"
+    audit = "## AUDIT: Liability\n\n- The other driver admitted fault at the scene | INVENTED | no such statement in the record\n"
+    md, notes = finalpass.settle(draft, audit)
+    assert "admitted fault" not in md and "[TO BE SUPPLIED: a statement here is not supported by the file" in md
+    assert finalpass.summary(notes)["removed"] == 1
+
+
+def test_the_authorities_the_letter_cites_are_listed_for_the_attorney():
+    with_case = LAW_DRAFT.replace(
+        "## Exhibits",
+        "## Damages\n\n(*Howell v. Hamilton Meats & Provisions, Inc.* (2011) 52 Cal.4th 541, 566.)\n\n## Exhibits",
+    )
+    cited = finalpass.authorities_cited(with_case)
+    assert cited == [
+        "Civ. Code, §§ 2100, 2168",
+        "CACI No. 902",
+        "Civil Code section 2100",
+        "CACI No. 3928",
+        "Howell v. Hamilton Meats & Provisions, Inc. (2011) 52 Cal.4th 541",
+    ]
+    assert finalpass.is_authority("Quoted text of Civil Code §2100") and finalpass.is_authority(
+        "CACI No. 3928 cited for the rule"
+    )
+    assert finalpass.is_authority("Firm's letters cite neither §998 nor §999")
+    assert not finalpass.is_authority("The other driver admitted fault at the scene", "no such statement in the record")

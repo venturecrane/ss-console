@@ -337,6 +337,9 @@ class DemandRun:
         # vocabulary (a stage, a check's label) in anything the firm reads.
         notes = [f"The file supports this only in part: {x}" for x in draft.finding_text(audit_md, ("DRIFTS",))]
         notes += [f"Taken out or flagged before filing: {x}" for x in settled]
+        cited = finalpass.authorities_cited(md)
+        if cited:  # law is the attorney's to confirm; the file is not expected to contain it
+            notes.append("Legal authorities cited in the letter, for the attorney to confirm: " + "; ".join(cited))
         notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
         notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
         notes += [f"Quotation repaired before filing (the letter): {x}" for x in g.get("repairs") or []]
