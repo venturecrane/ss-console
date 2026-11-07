@@ -10,6 +10,8 @@ from types import SimpleNamespace
 
 from jobs.litigation import manifest, update, vocab
 
+TODAY = dt.date(2026, 10, 7)
+
 
 def _src(fid):
     return {"file_id": fid, "name": fid, "doc_date": None}
@@ -52,7 +54,7 @@ def test_a_cited_answer_date_stands():
     d = fresh["defendants"][0]
     d["answered"] = {"date": "2026-09-30", "source": _src("new-answer")}
     d["status"] = vocab.ANSWERED
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["defendants"][0]["answered"]["date"] == "2026-09-30"
     assert "defendants[Zeta Corp].answered" in log["changed"]
     assert "defendants[Zeta Corp].status" in log["changed"]  # a status change always goes to the second read
@@ -62,7 +64,7 @@ def test_a_cited_answer_date_stands():
 def test_a_date_the_cited_document_does_not_carry_is_put_back():
     fresh = copy.deepcopy(PRIOR)
     fresh["defendants"][0]["answered"] = {"date": "2026-09-29", "source": _src("new-answer")}
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["defendants"][0]["answered"]["date"] is None
     assert "defendants[Zeta Corp].answered" in log["reverted"]
 
@@ -70,7 +72,7 @@ def test_a_date_the_cited_document_does_not_carry_is_put_back():
 def test_a_change_citing_an_old_document_is_put_back():
     fresh = copy.deepcopy(PRIOR)
     fresh["complaint_filed"] = {"date": "2026-03-01", "source": _src("old-complaint")}
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["complaint_filed"]["date"] == "2026-03-02"
     assert log["reverted"] == ["complaint_filed"]
 
@@ -78,11 +80,11 @@ def test_a_change_citing_an_old_document_is_put_back():
 def test_a_new_document_cannot_unserve_a_defendant_or_drop_one():
     fresh = copy.deepcopy(PRIOR)
     fresh["defendants"][0]["served"] = {"date": None, "method": None, "source": None}
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["defendants"][0]["served"]["date"] == "2026-04-01"
     fresh2 = copy.deepcopy(PRIOR)
     fresh2["defendants"] = []
-    out2, log2 = update.guard(PRIOR, fresh2, ALL, ["new-answer"], TEXTS)
+    out2, log2 = update.guard(PRIOR, fresh2, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert [d["name"] for d in out2["defendants"]] == ["Zeta Corp"]
     assert any("dropped by the read" in x for x in log2["reverted"])
 
@@ -93,7 +95,7 @@ TEXTS["new-request"] = "To: Example Legal Process. Please serve Zeta Corp. Sent 
 def test_a_cited_sent_date_from_an_arrived_paper_stands():
     fresh = copy.deepcopy(PRIOR)
     fresh["defendants"][0]["sent_for_service"] = {"date": "2026-09-28", "source": _src("new-request")}
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-request"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-request"], TEXTS, today=TODAY)
     assert out["defendants"][0]["sent_for_service"]["date"] == "2026-09-28"
     assert log["changed"] == ["defendants[Zeta Corp].sent_for_service"]
 
@@ -101,7 +103,7 @@ def test_a_cited_sent_date_from_an_arrived_paper_stands():
 def test_an_uncarried_sent_date_is_put_back_to_not_read_yet():
     fresh = copy.deepcopy(PRIOR)
     fresh["defendants"][0]["sent_for_service"] = {"date": "2026-09-27", "source": _src("new-request")}
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-request"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-request"], TEXTS, today=TODAY)
     assert "sent_for_service" not in out["defendants"][0]  # the prior never read it: it stays unread
     assert log["reverted"] == ["defendants[Zeta Corp].sent_for_service"]
 
@@ -111,18 +113,18 @@ def test_an_update_finding_no_request_in_the_arrived_papers_is_not_not_in_file()
     is no finding about the file."""
     fresh = copy.deepcopy(PRIOR)
     fresh["defendants"][0]["sent_for_service"] = {"date": None, "source": None}
-    out, _log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, _log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert "sent_for_service" not in out["defendants"][0]
     # ... and a known sent date is never erased by one.
     prior = copy.deepcopy(PRIOR)
     prior["defendants"][0]["sent_for_service"] = {"date": "2026-03-20", "source": _src("old-request")}
-    out2, log2 = update.guard(prior, fresh, ALL, ["new-answer"], TEXTS)
+    out2, log2 = update.guard(prior, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out2["defendants"][0]["sent_for_service"]["date"] == "2026-03-20"
     assert log2["reverted"] == ["defendants[Zeta Corp].sent_for_service"]
     # ... and an update that leaves the key out keeps a "Not in file" finding.
     prior["defendants"][0]["sent_for_service"] = {"date": None, "source": None}
     del fresh["defendants"][0]["sent_for_service"]
-    out3, _log3 = update.guard(prior, fresh, ALL, ["new-answer"], TEXTS)
+    out3, _log3 = update.guard(prior, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out3["defendants"][0]["sent_for_service"] == {"date": None, "source": None}
 
 
@@ -138,7 +140,7 @@ def test_a_new_defendant_from_an_update_keeps_no_unread_sent_finding():
             "flags": [],
         }
     )
-    out, _log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, _log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     eta = next(d for d in out["defendants"] if d["name"] == "Eta Corp")
     assert "sent_for_service" not in eta
 
@@ -153,7 +155,7 @@ def test_a_dropped_discovery_set_is_restored_and_an_uncited_new_one_refused():
             "source": _src("old-frog"),
         }
     ]
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert [r["set"] for r in out["discovery_propounded"]] == ["Form Interrogatories, Set One"]
     assert len(log["reverted"]) == 2
 
@@ -169,7 +171,7 @@ def test_a_check_that_replaces_a_discovery_list_cannot_drop_older_sets():
             "source": _src("new-answer"),
         }
     ]
-    out, log = update.guard(PRIOR, after_verify, ALL, ["new-answer"], {"new-answer": "served 09/30/2026"})
+    out, log = update.guard(PRIOR, after_verify, ALL, ["new-answer"], {"new-answer": "served 09/30/2026"}, today=TODAY)
     sets = sorted(r["set"] for r in out["discovery_propounded"])
     assert sets == ["Form Interrogatories, Set One", "Special Interrogatories, Set One"]
     assert any("dropped by the read" in x for x in log["reverted"])
@@ -188,12 +190,12 @@ def test_a_file_smokeball_refuses_is_a_finding_not_a_retry_that_fails_the_list()
 def test_identity_fields_are_not_an_updates_to_change():
     fresh = copy.deepcopy(PRIOR)
     fresh["case_number"] = "24CV9"
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["case_number"] == "24CV1" and "case_number" in log["reverted"]
 
 
 def test_an_unchanged_copy_changes_nothing():
-    out, log = update.guard(PRIOR, copy.deepcopy(PRIOR), ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, copy.deepcopy(PRIOR), ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out == PRIOR and log == {"changed": [], "reverted": []}
 
 
@@ -262,7 +264,7 @@ def test_a_reworded_discovery_set_is_the_same_row_not_a_second_one():
             "source": _src("old-frog"),
         }
     ]
-    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS)
+    out, log = update.guard(PRIOR, fresh, ALL, ["new-answer"], TEXTS, today=TODAY)
     assert out["discovery_propounded"] == PRIOR["discovery_propounded"]  # one row, the list's own wording
     assert log == {"changed": [], "reverted": []}
 

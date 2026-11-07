@@ -33,6 +33,7 @@ _FOUR = (
     "wording_rules",
     "library_setup",
     "library_edit_notice",
+    "status_from_events",
 )
 
 

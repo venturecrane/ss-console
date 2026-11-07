@@ -1073,6 +1073,7 @@ export interface LogicInCode {
   wording_rules?: LogicInCodeMode
   library_setup?: LogicInCodeMode
   library_edit_notice?: LogicInCodeMode
+  status_from_events?: LogicInCodeMode
 }
 
 /**

@@ -277,3 +277,59 @@ def test_a_rehearsal_is_never_blocked_or_metered_by_the_list_allowance(tmp_path,
     monkeypatch.setattr(LitigationBroker, "list_allowance", boom)
     v = _rehearsal(tmp_path, ScriptedLit(), _seat()).run()
     assert v.verdict == "held" and v.reason.startswith("rehearsal: ")
+
+
+def test_a_zero_read_rehearsal_prints_a_stored_list_as_it_was_and_names_what_its_events_do_not_give(tmp_path):
+    """The $0 replay of the status derivation: a report stored before it, its
+    statuses asserted and no ``status_from``, read against a key written first."""
+    from jobs.litigation import answerkey, vocab
+
+    state = tmp_path / "rstate"
+    (state / "matters").mkdir(parents=True)
+    (state / "manifest").mkdir()
+    (state / "baseline.json").write_text(json.dumps({"source": "test"}))
+    src = {"file_id": "m2-p1", "name": "POS Delta.pdf", "doc_date": None}
+    served = {"date": "2026-04-10", "method": "personal", "source": src}
+    blank = {"date": None, "source": None}
+    stored = {
+        "fields_read": ["case", "defendants", "discovery"],
+        "number": "100002",
+        "firm_role": "plaintiff",
+        "case_status": {"value": vocab.ACTIVE, "detail": None, "source": src},
+        "complaint_filed": {"date": "2026-03-02", "source": src},
+        "next_court_date": {"date": None, "event": None, "source": None},
+        "discovery_propounded": [],
+        "discovery_served_on_client": [],
+        "matter_flags": [],
+        "defendants": [
+            {"name": "Delta Example", "status": vocab.D_DISMISSED, "served": served, "answered": blank, "flags": []},
+            {
+                "name": "Echo Example",
+                "status": vocab.SERVED_NO_ANSWER,
+                "served": served,
+                "answered": blank,
+                "flags": [],
+            },
+            {"name": "Foxtrot Example", "status": vocab.NOT_SERVED, "served": served, "answered": blank, "flags": []},
+        ],
+    }
+    (state / "matters" / f"{M2}.json").write_text(json.dumps(stored))
+    (state / "manifest" / f"{M2}.json").write_text(json.dumps({}))
+    key = answerkey.from_state(state)
+    assert key == {f"{M2}#0": vocab.D_DISMISSED, f"{M2}#1": vocab.SERVED_NO_ANSWER, f"{M2}#2": vocab.NOT_SERVED}
+
+    client = ScriptedLit()
+    assert _rehearsal(tmp_path, client, _seat(), read_limit=0).run().verdict == "held"
+    rep = json.loads((tmp_path / "report.json").read_text())
+    assert client.calls == [] and rep["cents"]["total"] == 0 and rep["counts"]["matters_read"] == 0
+    got = answerkey.compare(rep, key)
+    assert got["printed_differs"] == [] and got["missing_from_report"] == [] and got["not_in_key"] == []
+    assert {(r["index"], r["class"], r["from_events"]) for r in got["from_events_differs"]} == {
+        (0, answerkey.NOT_ON_FILE, vocab.SERVED_NO_ANSWER),
+        (2, answerkey.DISAGREES, vocab.SERVED_NO_ANSWER),
+    }
+    sd = rep["status_derivation"]
+    assert sd["checked"] == 3 and sd["by_status_from"] == {"stored": 3}
+    assert sd["by_class"] == {answerkey.NOT_ON_FILE: 1, answerkey.SAME: 1, answerkey.DISAGREES: 1}
+    assert "Delta Example" not in json.dumps(sd)  # by index, never by name
+    assert json.loads((state / "matters" / f"{M2}.json").read_text()) == stored

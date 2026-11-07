@@ -15,7 +15,7 @@ from collections import Counter
 from typing import Any, Callable
 
 from ..stages.base import read_jsonl
-from . import fetch as fetch_mod, inventory, manifest, passes, vocab
+from . import answerkey, fetch as fetch_mod, inventory, manifest, passes, vocab
 from .outcome import Verdict
 from .run import STAGES
 
@@ -34,6 +34,7 @@ REPORT_KEYS = (
     "book",
     "projection",
     "matters",
+    "status_derivation",
 )
 
 
@@ -268,6 +269,34 @@ def build_report(r: Any) -> dict[str, Any]:
         },
         "projection": _safe(projection, r),
         "matters": _safe(per_matter, r),
+        "status_derivation": _safe(status_derivation, r),
+    }
+
+
+def status_derivation(r: Any) -> dict[str, Any]:
+    """Every defendant on the list: the status it would print, and what its
+    events alone give (``answerkey.classify``), by index, never by name. The
+    $0 replay of the derivation: ``--read-limit 0`` prints every stored status
+    as it stands, and this names each one its events would not give."""
+    finals = r._json("final.json") if (r.data / "final.json").is_file() else []
+    rows = []
+    for m in finals:
+        for i, d in enumerate(m.get("defendants") or []):
+            rows.append(
+                {
+                    "matter_id": m["matter_id"],
+                    "number": m.get("number"),
+                    "index": i,
+                    "printed": d.get("status"),
+                    "status_from": d.get("status_from") or "stored",
+                    **answerkey.classify(d, r.today),
+                }
+            )
+    return {
+        "checked": len(rows),
+        "by_class": dict(Counter(x["class"] for x in rows)),
+        "by_status_from": dict(Counter(x["status_from"] for x in rows)),
+        "rows": rows,
     }
 
 

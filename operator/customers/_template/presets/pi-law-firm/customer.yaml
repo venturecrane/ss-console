@@ -236,6 +236,7 @@ connectors:
 #   wording_rules: observe            # jobs follow the firm's confirmed wording rules
 #   library_setup: observe            # "set up our ..." tells the firm what its documents offer
 #   library_edit_notice: observe      # a reply says the firm's own library-file save was not used
+#   status_from_events: observe       # a defendant's status worked out from its events
 
 # ---- SCOPE ----
 scope:

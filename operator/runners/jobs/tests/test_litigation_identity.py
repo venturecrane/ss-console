@@ -139,14 +139,14 @@ def test_the_read_and_the_update_guard_split_a_combined_set():
             }
         ]
     }
-    out = read.to_state(Ctx(), raw, [vocab.GROUP_DISCOVERY])
+    out = read.to_state(Ctx(), raw, [vocab.GROUP_DISCOVERY], TODAY)
     assert [r["set"] for r in out["discovery_propounded"]] == [
         "Form Interrogatories, Set Two",
         "Requests for Admission, Set Two",
     ]
     prior = {"discovery_propounded": out["discovery_propounded"], "discovery_served_on_client": []}
     fresh = {**prior, "discovery_propounded": [{**raw["discovery_propounded"][0], "source": src("d3")}]}
-    got, log = update.guard(prior, fresh, [vocab.GROUP_DISCOVERY], [], {})
+    got, log = update.guard(prior, fresh, [vocab.GROUP_DISCOVERY], [], {}, today=TODAY)
     assert log == {"changed": [], "reverted": []} and len(got["discovery_propounded"]) == 2
 
 

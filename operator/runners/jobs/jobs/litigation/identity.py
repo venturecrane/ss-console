@@ -238,7 +238,7 @@ def same_person(a: str, b: str) -> bool:
 
 #: A defendant's dated values, each ``(field, key)``. ``sent_for_service`` is
 #: the date the papers went to the process server, never the service date.
-DATED_FIELDS = (("served", "date"), ("answered", "date"), ("sent_for_service", "date"))
+DATED_FIELDS = tuple((f, "date") for f in vocab.DEFENDANT_EVENTS)
 
 
 def _strength(d: dict[str, Any]) -> tuple[int, int]:
@@ -263,7 +263,7 @@ def merge_defendants(ds: Any) -> list[dict[str, Any]]:
             continue
         keep, other = (out[i], d) if _strength(out[i]) >= _strength(d) else (d, out[i])
         keep = copy.deepcopy(keep)
-        for f, key in (*DATED_FIELDS, ("out_for_service", "value")):
+        for f, key in (*DATED_FIELDS, ("out_for_service", "value"), ("role", "value")):
             mine, theirs = keep.get(f) or {}, other.get(f) or {}
             if not mine.get(key) and theirs.get(key) and theirs.get("source"):
                 keep[f] = copy.deepcopy(theirs)
