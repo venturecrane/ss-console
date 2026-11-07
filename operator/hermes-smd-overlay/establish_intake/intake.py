@@ -972,6 +972,7 @@ class EstablishIntake:
             problems.append(f"property must be one of {SPEC_PROPERTIES}; got {prop!r}")
         adjustment, adjustment_problems = self._verify_adjustment(sub.get("adjustment"))
         problems.extend(adjustment_problems)
+        problems.extend(wording_rules.reach_required(output_class, adjustment))
         if problems:
             return self._result(run_id, phase, STATUS_REJECTED, reasons=problems)
         assert adjustment is not None  # noqa: S101 — narrowed by the problems check above
