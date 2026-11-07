@@ -354,12 +354,14 @@ def make(kind: str, blob: bytes, source: Source, identity: Iterable[str]) -> Mad
     """The library file for ``kind`` made from ``blob`` (the module docstring)."""
     from ..drafting.outcome import DraftingFailed
 
-    from .plan import adopter, reason_code
+    from .plan import PLAN_ERROR, adopter, reason_code
 
     try:
         adopted, _notes = adopter(kind)(blob, source)
     except (DraftingFailed, FirmBaseUnfit, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as exc:
         raise Unusable("plan_refused", reason_code(exc)) from exc
+    except Exception as exc:  # our plan's fault on a shape nobody named: a code, never a crash
+        raise Unusable(PLAN_ERROR, type(exc).__name__) from exc
     removed = dropped(adopted)
     made, _n = drop_body_pictures(adopted)
     made = drop_foreign_fields(drop_document_links(drop_custom_xml(made)))

@@ -220,6 +220,63 @@ def test_a_bookmark_before_the_caption_is_not_a_line_of_the_front(firm_brief):
     assert made.residue["refused_words"] == 0
 
 
+def _after_caption(blob: bytes, tag: str) -> bytes:
+    """A body-level element (a bookmarkStart, or an empty content control) placed in
+    the brief's body below the caption, beside its chart, where the brief plan's
+    library read walks from the first heading to the signature."""
+    from lxml import etree as ET
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(blob)) as src, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for i in src.infolist():
+            data = src.read(i.filename)
+            if i.filename == "word/document.xml":
+                root = ET.fromstring(data)
+                body = root.find(f"{{{_W}}}body")
+                chart = body.findall(f"{{{_W}}}tbl")[-1]  # the caption is the first; the chart below it
+                el = ET.Element(f"{{{_W}}}{tag}")
+                if tag == "bookmarkStart":
+                    el.set(f"{{{_W}}}id", "1")
+                    el.set(f"{{{_W}}}name", "_Ref1")
+                else:
+                    ET.SubElement(el, f"{{{_W}}}sdtPr")
+                    ET.SubElement(el, f"{{{_W}}}sdtContent")
+                chart.addprevious(el)
+                data = ET.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+            out.writestr(i, data)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("tag", ["bookmarkStart", "sdt"])
+def test_a_body_element_after_the_caption_is_not_a_line_of_the_library(firm_brief, tag):
+    """The 2026-11-07 third rehearsal: an element that is not a paragraph after the
+    caption reached the brief plan's library read, which wrapped it as one and raised
+    AttributeError reading its style. The read now takes paragraphs and tables only."""
+    from jobs.library_setup import plan
+
+    blob = _after_caption(firm_brief, tag)
+    assert plan.fits(CLS, blob, _src(blob)) == ""
+    made = M.make(CLS, blob, _src(blob), FIRM)
+    assert made.residue["refused_words"] == 0
+
+
+def test_a_plan_that_raises_what_nobody_named_holds_with_a_code(monkeypatch, firm_brief):
+    """The last-resort net: whatever the adopter raises, make answers Unusable with a
+    code, so an accept on such a file holds instead of failing the job."""
+    from jobs.library_setup import plan
+
+    def boom(_kind):
+        def adopt(_blob, _source):
+            raise AttributeError("'CT_Bookmark' object has no attribute 'style'")
+
+        return adopt
+
+    monkeypatch.setattr(plan, "adopter", boom)
+    with pytest.raises(M.Unusable) as err:
+        M.make(CLS, firm_brief, _src(firm_brief), FIRM)
+    assert err.value.code == plan.PLAN_ERROR
+
+
 def test_custom_xml_parts_and_their_pointers_go():
     memo = _firm_memo()
     assert any(n.startswith("customXml/") for n in _members(memo))
@@ -475,6 +532,23 @@ def test_a_document_whose_layout_gives_no_places_to_write_is_told_so_not_that_it
     v = A.run(_job(blob, setup_kind="memo"), seat, client=tenant, switch=kit.switch(), pieces=FIRM)
     assert (v["outcome"], v["setup_outcome"], v["unusable"]) == ("delivered", A.NOT_A_FORM, "plan_refused")
     assert tenant.writes == []
+
+
+def test_an_accept_whose_plan_raises_what_nobody_named_holds_for_smd(monkeypatch, firm_brief, seat):
+    """make's last-resort net reaches the accept as a hold with its code: the firm is
+    not told its document is unusable for a fault in our plan, and nothing is written."""
+    from jobs.library_setup import plan
+
+    def boom(_kind):
+        def adopt(_blob, _source):
+            raise AttributeError("no style")
+
+        return adopt
+
+    monkeypatch.setattr(plan, "adopter", boom)
+    tenant = _tenant(firm_brief)
+    v = A.run(_job(firm_brief), seat, client=tenant, switch=kit.switch(), pieces=FIRM)
+    assert (v["outcome"], v["hold"]) == ("held", plan.PLAN_ERROR) and tenant.writes == []
 
 
 def test_a_ledger_the_seat_cannot_read_holds_before_any_write(firm_brief, seat):

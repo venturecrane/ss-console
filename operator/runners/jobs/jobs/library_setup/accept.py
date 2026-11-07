@@ -34,6 +34,7 @@ from typing import Any, Callable
 
 from ..firmbase import Source
 from . import file as file_mod, make as make_mod
+from .plan import PLAN_ERROR
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -129,7 +130,7 @@ def run(
     try:
         made = _made(job, blob, choice, inputs_dir, pieces)
     except make_mod.Unusable as exc:
-        if exc.code == "header_picture_lost":  # our plan's fault, never the firm's: SMD looks
+        if exc.code in ("header_picture_lost", PLAN_ERROR):  # our plan's fault, never the firm's: SMD looks
             return _held(exc.code)
         return _told(NOT_A_FORM if exc.code in make_mod.STRUCTURAL else UNUSABLE, unusable=exc.code)
     kind, attorney = str(job["setup_kind"]), job.get("attorney_key") or None

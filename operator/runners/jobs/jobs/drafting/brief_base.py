@@ -131,7 +131,7 @@ def _library(doc: Any, els: list[Any]) -> tuple[list[Any], list[tuple[Any, Any]]
             n = len(el.find(f"{W}tblGrid").findall(f"{W}gridCol"))
             if n not in charts and len(el.findall(f"{W}tr")) >= 2:
                 charts[n] = (el, els[i + 1] if i + 1 < len(els) and is_blank(els[i + 1]) else None)
-        elif not is_blank(el):
+        elif el.tag == f"{W}p" and not is_blank(el):  # a bookmark or content control is no line
             roles.setdefault(_role(Paragraph(el, doc)), []).append(el)
     keep, notes = [], []
     for role, members in roles.items():
