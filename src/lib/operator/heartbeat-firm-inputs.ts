@@ -21,6 +21,9 @@ const FIRM_INPUT_LANES = new Set([
   'casefile',
   'records',
   'medchron',
+  // The firm's attorney roster: a firm input every document path reads, not a
+  // job lane (operator_connector_sdk/library/roster.py).
+  'attorneys',
 ])
 const FIRM_INPUT_VERDICTS = new Set(['fetched', 'rejected'])
 const ENTRY_KEYS = new Set(['etag8', 'verdict', 'applied_at', 'rejected_etag8'])

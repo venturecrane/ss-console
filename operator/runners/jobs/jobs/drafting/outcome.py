@@ -71,6 +71,11 @@ REASON_CODES = (
     "party_unknown",
     # A set served on one party still defines YOU as another after code bound it (parties.bind): failed.
     "party_mismatch",
+    # The matter's responsible attorney is not an attorney on the firm's installed roster
+    # (operator_connector_sdk.library.caller.matter_attorney): held, the firm told; never signed for.
+    "attorney_not_rostered",
+    # The firm's attorney roster is installed and cannot be read: failed, SMD alerted.
+    "roster_unreadable",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 

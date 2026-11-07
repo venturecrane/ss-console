@@ -79,6 +79,10 @@ class Lane:
     broker_copy: str | None = None
     #: The chronology's inputs are one file, not a prefix.
     single_file: bool = False
+    #: Readable by every uid (dirs 0755, files 0644), still root-owned and written
+    #: only here: the attorney roster, which the case-system connector reads in
+    #: the gateway as well as the jobs child (no lane's prompts or voice in it).
+    public: bool = False
 
     def marker_key(self, slug: str) -> str:
         if self.single_file:
@@ -127,13 +131,23 @@ LANES: tuple[Lane, ...] = (
     Lane("casefile", "casefile-firm.yaml", broker_copy="casefile-broker-firm.yaml"),
     Lane("records", "records-firm.yaml", broker_copy="records-broker-firm.yaml"),
     Lane("medchron", "medchron-firm.yaml", single_file=True),
+    # The firm's attorney roster (design 2026-11-06, "who an attorney is"): not a
+    # job lane, one file every document path reads (operator_connector_sdk
+    # library/roster.py, validated by ``python -m jobs.attorneys.firm``).
+    Lane("attorneys", "attorneys.json", public=True),
 )
 LANES_BY_NAME = {lane.name: lane for lane in LANES}
+#: Firm inputs that are not a lane: watched on every seat that authors any lane
+#: (the only seats with a jobs runner to validate them and a reader to use them).
+SHARED_INPUTS = ("attorneys",)
 
 
 def authored_lanes(raw: str | None) -> tuple[Lane, ...]:
-    """The lanes of ``SMD_AUTHORED_LANES`` (a comma list) that have firm inputs."""
+    """The lanes of ``SMD_AUTHORED_LANES`` (a comma list) that have firm inputs,
+    and the shared inputs when any lane is authored."""
     names = {part.strip() for part in (raw or "").split(",") if part.strip()}
+    if names:
+        names |= set(SHARED_INPUTS)
     return tuple(lane for lane in LANES if lane.name in names)
 
 
@@ -326,20 +340,21 @@ class FirmInputsApplier:
 
     # ---------- the seat ----------
 
-    def _own(self, path: Path, group: str) -> None:
+    def _own(self, path: Path, group: str, public: bool = False) -> None:
         gid = self.group_id(group)
+        dmode, fmode = (0o755, 0o644) if public else (0o750, 0o640)
         if path.is_file():
             self.chown(str(path), 0, gid)
-            os.chmod(path, 0o640)
+            os.chmod(path, fmode)
             return
         for root, _dirs, files in os.walk(path):
             self.chown(root, 0, gid)
-            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - root:jobs 0750 is the lane inputs' boot mode (entrypoint lane fragments): the jobs child must traverse it and nobody else may
-            os.chmod(root, 0o750)
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions - root:jobs 0750 is the lane inputs' boot mode (entrypoint lane fragments): the jobs child must traverse it and nobody else may; 0755 only for the attorney roster, which the gateway reads and only root writes
+            os.chmod(root, dmode)
             for name in files:
                 p = os.path.join(root, name)
                 self.chown(p, 0, gid)
-                os.chmod(p, 0o640)
+                os.chmod(p, fmode)
 
     def _broker_copy(self, lane: Lane, version: Path) -> None:
         if lane.broker_copy is None:
@@ -507,7 +522,7 @@ class FirmInputsApplier:
             _remove(stage)
             return Outcome.RETRY
         try:
-            self._own(stage, "jobs")
+            self._own(stage, "jobs", lane.public)
         except (OSError, KeyError) as exc:
             logger.error(
                 "firm_inputs_applier: %s could not own the staged copy (%s); retrying",
@@ -639,6 +654,7 @@ __all__ = [
     "KEEP_VERSIONS",
     "LANES",
     "LANES_BY_NAME",
+    "SHARED_INPUTS",
     "LEGACY_LABEL",
     "STATE_FILE",
     "FirmInputsApplier",

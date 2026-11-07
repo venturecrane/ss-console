@@ -76,7 +76,7 @@ You ask an agent; the agent edits the client's configuration file (`operator/cus
 
 ### Changing a firm's configuration
 
-A firm's own working settings (the spend caps and models for its chronology, demand, drafting, litigation, case-file and records work, the house style and exemplars its drafts follow, the patterns its litigation status reads) are not in `customer.yaml`. They live in the private client repository, `venturecrane/engagements`, under `operator/customers/<slug>/<lane>/`, because they are the firm's material and this repository is public.
+A firm's own working settings (the spend caps and models for its chronology, demand, drafting, litigation, case-file and records work, the house style and exemplars its drafts follow, the patterns its litigation status reads, and its attorney roster: who its attorneys are and how each signs, in `attorneys/attorneys.json`) are not in `customer.yaml`. They live in the private client repository, `venturecrane/engagements`, under `operator/customers/<slug>/<lane>/`, because they are the firm's material and this repository is public.
 
 - **To change one**, ask an agent to edit the file there and open a pull request in that repository. Merging it is the act: within a few minutes of the merge, the repository's "Publish firm inputs" workflow checks the new settings against the exact version of the Operator that firm's seat is running, and only then puts them where the seat reads them. Nobody runs a rebuild and no laptop is involved.
 - **The seat picks the change up within about a minute** of the publish, without a restart, once the seat's live applier is running on it. A seat without it picks the change up at its next restart, and nothing else changes for that seat in the meantime.

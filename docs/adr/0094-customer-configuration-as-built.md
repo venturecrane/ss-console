@@ -27,6 +27,8 @@ enforced_by:
   - operator/bin/lib/stage-seat-spec.sh
   - operator/bin/lib/publish-firm-inputs.sh
   - tests/publish-firm-inputs.test.ts
+  - operator/connectors/_sdk/tests/test_attorney_roster.py
+  - operator/runners/jobs/tests/test_attorney_roster.py
   - operator/templates/seat-spec.pub
   - operator/hermes-smd-overlay/config_applier/spec_verifier.py
   - operator/hermes-smd-overlay/shared/spec_check.py
@@ -78,6 +80,21 @@ Every `file:line` below is against `origin/main` at `8cb62e6d` for this repo and
 4. **The spec pins the schema, not the bytes.** The signed seat spec no longer carries a sha256 of any lane's firm-input manifest: `lanes` names each staged lane's manifest key only, and `requires.lane_schema_digests` (the schema module path and digest the image must carry) is unchanged, which is the pin that guards the seat. `scripts/lib/seat-spec-inputs.sh` tells a staged lane by a head request and reads none of its bytes; `scripts/compile-seat-spec.ts` takes `--lane <lane>` in place of `--lane-pin <lane>=<file>`. A live publish therefore changes no spec input and needs no ss-console push. `overlay:config_applier/spec_verifier.py` never read the `lanes` map, so a spec signed before this change, which still carries those digests, verifies as before and the digests are ignored (`overlay:tests/test_spec_verifier.py`).
 
 **Not changed.** The chronology controls (`medchron/controls/`, PDFs and the vendored ICD tables) and the marketing and lane-proofs inputs stay provisioning-only. The preflight lane-input check (`operator/bin/lib/fleet/preflight.py`) compares schema-module digests between images and is untouched.
+
+## Amendment (2026-11-07): who an attorney is, one roster per firm, as a firm input
+
+**Accepted 2026-11-07** (the architect's call, inside the document-library design of 2026-11-06, "Unified: who an attorney is").
+
+**Why.** A firm's attorneys were written down three times, each partly: the drafting inputs' caption blocks (by email), the demand inputs' signer map (by name) and `customer.yaml`'s `form_letters.signers` (by name, attorneys and office staff together), and the library setup job derived a fourth from the first. No list held every attorney, so a document could be signed for someone no list called an attorney, and adding an attorney meant editing three files that could disagree.
+
+**What changed.**
+
+1. **One file, `attorneys.json`, per firm**, authored with the other firm inputs in the private engagements repo at `operator/customers/<slug>/attorneys/`, never in this repo (staff names are the firm's): one entry per attorney (the case system's staff name, which is the identity a matter's responsible-attorney field resolves to; emails; bar number; caption block; how they sign a demand and a form letter), and a separate list of staff who sign form letters and are not attorneys. JSON, not YAML, because its one reader (`operator/connectors/_sdk/operator_connector_sdk/library/roster.py`) is standard library only, like the library package it joins; the runner's byte-for-byte copy (`operator/runners/jobs/jobs/attorneys/roster.py`) lets the publish validate a roster with only the runner on its path (`python -m jobs.attorneys.firm`).
+2. **It rides the firm-inputs path as the `attorneys` entry**: the publisher, the engagements workflow and the seat's applier treat it like a lane directory (`vaults/<slug>/attorneys/` to `/var/lib/smd-config/attorneys/`), watched on every seat that authors any lane, installed root-owned and readable by every uid because the case-system connector reads it in the gateway.
+3. **Three states, read by every document path.** No roster installed is `absent`, and every reader uses the list it used before the roster, so no seat changes until a roster is published there. A roster that cannot be read is `unusable` and every reader stops. A roster wins over each lane's own list; the self-test check `attorney-roster-agrees` counts each disagreement and pages SMD.
+4. **An attorney not on the roster is never signed for.** With a roster installed, a drafting or demand job whose matter's responsible attorney the roster does not list as an attorney holds before anything is paid (`attorney_not_rostered`), and the chat document tool refuses the attorney's own library file.
+
+**Not changed.** Which format an attorney's demands are written in stays in the demand inputs (`attorneys.<name>.format`). The litigation lane's attorney scope map (`litigation-firm.yaml` `attorneys`, display name to staff id) is a scope selector for the broker, not a signature, and is not read from the roster.
 
 ## Decision
 

@@ -885,6 +885,7 @@ COPY operator/templates/seat-checks.sh /app/seat-checks.sh
 COPY --chmod=0755 operator/templates/selftest.sh /app/selftest.sh
 COPY operator/templates/lane-memory-caps-probe.py /app/lane-memory-caps-probe.py
 COPY operator/templates/firm-inputs-current-probe.py /app/firm-inputs-current-probe.py
+COPY operator/templates/attorney-roster-agrees-probe.py /app/attorney-roster-agrees-probe.py
 COPY operator/templates/jobs-bundle-commit-probe.py /app/jobs-bundle-commit-probe.py
 # The seat-spec public key the root config_applier verifies every signed spec
 # pointer against (ADR 0094 amendment). Re-owned root below with the other

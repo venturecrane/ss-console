@@ -32,6 +32,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0054-machine-hosted-oauth-callback.md
   - label: Seat entrypoint (boot gates, credential placement)
     href: operator/templates/entrypoint.sh
+  - label: The firm's attorney roster (reader and schema)
+    href: operator/connectors/_sdk/operator_connector_sdk/library/roster.py
   - label: ADR 0083 - Authorship model and output classes (format amendment 2026-08-19)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0083-authorship-model-output-classes.md
 last_reviewed: "2026-10-21"
@@ -101,6 +103,12 @@ The shape. Each lane's live path is a symlink to a versioned copy named for the 
 What can and cannot happen. A copy the validator refuses is never swapped in: the live copy stays, the lane's state reads `rejected` with the validator's first line, and that version is not retried until the vault changes again. A validator that cannot run never replaces a working copy. Only lanes the seat authored at boot are watched (`SMD_AUTHORED_LANES`); a lane newly enabled in `customer.yaml` still needs a boot, and inputs deleted from the vault leave the seat at its next boot.
 
 How to confirm a publish landed. The applier writes `/run/smd-firm-inputs/state.json`, the heartbeat carries it as `firm_inputs` (migration 0149), and `fleet status` shows each lane's version in its `firm inputs` column, with `(refused <version>)` on a lane whose newest publish was refused. Compare it with the marker's ETag in the vault. The seat self-test check `jobs-firm-inputs-current` fails if a lane's symlink and the state disagree. The state file is world-readable because the heartbeat runs as the agent user; the validator's own words for a refused version stay root-only beside it, in `/run/smd-firm-inputs/<lane>.rejected`.
+
+### The firm's attorney roster
+
+Who a firm's attorneys are is written down once, in the firm's `attorneys.json`, a firm input like the lanes' (`vaults/<slug>/attorneys/`, installed at `/var/lib/smd-config/attorneys/`). It lives in the private engagements repo at `operator/customers/<slug>/attorneys/attorneys.json` because it names the firm's staff; `operator/customers/_template/attorneys/attorneys.json` shows the shape with made-up people. Each entry is one attorney: the name exactly as the case system gives that staff member, their emails, their bar number, their caption block, and how they sign a demand and a form letter. Staff who sign form letters and are not attorneys are listed separately and are never an attorney for anything else. The one reader is `operator/connectors/_sdk/operator_connector_sdk/library/roster.py`; the publish and the applier validate a roster with `python -m jobs.attorneys.firm`.
+
+Every path that names an attorney reads it: the drafting job's caption block, the demand's signature, the form letters' signers, the library resolver's attorney, and "set up Dana's memos". A seat with no roster installed reads each lane's own list exactly as before (the drafting inputs' `attorneys`, the demand inputs' `attorneys`, `customer.yaml`'s `form_letters.signers`). Once a roster is installed it wins, and the self-test check `attorney-roster-agrees` fails, which pages SMD, for every way a lane's own list still says something else. With a roster installed, a job whose matter names a responsible attorney the roster does not list as an attorney holds before anything is paid and the firm is told why (`attorney_not_rostered`); a roster that cannot be read stops every one of those paths for SMD, never read as "nobody". To draft a firm's first roster, run `operator/runners/jobs/tools/draft_attorney_roster.py` in that firm's ops workspace: it lists the case system's staff and the three lists, and prints a draft for SMD to review before it is committed.
 
 ## Documents come back in the firm's format, and the format lives in Word
 

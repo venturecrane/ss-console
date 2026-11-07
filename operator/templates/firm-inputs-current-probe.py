@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = os.environ.get("SMD_SEAT_ROOT", "")
 STATE = Path(f"{ROOT}/run/smd-firm-inputs/state.json")
 CONFIG = Path(f"{ROOT}/var/lib/smd-config")
-DIR_LANES = ("demand", "drafting", "litigation", "casefile", "records")
+DIR_LANES = ("demand", "drafting", "litigation", "casefile", "records", "attorneys")
 
 
 def live_and_version(lane: str, label: str) -> tuple[Path, str]:

@@ -35,6 +35,7 @@ from typing import Any, Callable
 from ..firmbase import Source
 from . import file as file_mod, make as make_mod
 from .plan import PLAN_ERROR
+from .roster import ROSTER_UNREADABLE, RosterUnusable
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -62,13 +63,20 @@ def _client() -> Any:
 
 
 def identity(inputs_dir: str | None) -> list[str]:
-    """The allow list: ``firm_identity`` and the authored attorney blocks."""
+    """The allow list: ``firm_identity`` and the authored attorney blocks (the
+    firm's attorney roster's when one is installed, ``drafting/attorneys.entries``)."""
+    from operator_connector_sdk.library import roster as roster_mod
     from smokeball_connector.letterhead import load_firm_identity
 
+    from ..drafting.attorneys import entries
     from .job import _inputs
 
+    read = roster_mod.load()
+    if read.status == roster_mod.UNUSABLE:
+        raise RosterUnusable(ROSTER_UNREADABLE)
     inputs = _inputs(inputs_dir)
-    blocks = [a.get("block") or [] for a in (inputs.attorneys if inputs is not None else [])]
+    authored = inputs.attorneys if inputs is not None else []
+    blocks = [a.get("block") or [] for a in entries(authored, read)]
     return make_mod.identity_pieces(load_firm_identity(), blocks)
 
 
@@ -159,6 +167,8 @@ def run(
         return _told(CHANGED)
     try:
         made, chart_source = _made(job, blob, choice, inputs_dir, pieces, limited)
+    except RosterUnusable as exc:  # the roster could not be read: SMD's to look at, nothing made
+        return _held(exc.code)
     except make_mod.Unusable as exc:
         if exc.code in ("header_picture_lost", PLAN_ERROR):  # our plan's fault, never the firm's: SMD looks
             return _held(exc.code)

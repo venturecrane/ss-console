@@ -134,11 +134,38 @@ def test_etag8_and_the_authored_set() -> None:
     assert etag8('"abcdef12-3"') == "abcdef12"
     assert etag8(None) is None and etag8('"xyz"') is None
     # FALSIFIER: include a lane with no firm inputs (note, negotiation) and this fails.
+    # The attorney roster is not a lane: it is watched on any seat that authors one.
     assert [lane.name for lane in authored_lanes("records, note,medchron,negotiation")] == [
         "records",
         "medchron",
+        "attorneys",
     ]
     assert authored_lanes("") == ()
+
+
+def test_the_attorney_roster_is_validated_by_its_module_and_readable_by_every_uid(world) -> None:
+    """The case-system connector reads the roster in the gateway, so its copy
+    is root-owned and world-READABLE; every lane's stays root:jobs 0750/0640.
+    FALSIFIER: own the roster like a lane (0640) and the gateway cannot read it."""
+    applier, vault, validator, _ = world
+    validator.code_override = 0
+    vault.put(f"vaults/{SLUG}/attorneys/attorneys.json", b'{"schema_version": 1}\n', "abcdef120000")
+    assert applier.tick()["attorneys"] is Outcome.APPLIED
+    live = applier.config_dir / "attorneys"
+    assert os.readlink(live) == "attorneys.vabcdef12"
+    assert validator.calls[-1][1:3] == ["-m", "jobs.attorneys.firm"]
+    assert oct(os.stat(live / "attorneys.json").st_mode & 0o777) == "0o644"
+    assert oct(os.stat(live.resolve()).st_mode & 0o777) == "0o755"
+    assert not (applier.config_dir / "attorneys-broker-firm.yaml").exists()
+    assert state(applier)["attorneys"]["etag8"] == "abcdef12"
+    assert set(fleet_facts.read_firm_inputs(applier.state_dir / "state.json")) == {"attorneys"}
+
+
+def test_a_seat_with_no_roster_in_its_vault_gets_nothing_and_no_state(world) -> None:
+    applier, _vault, _, _ = world
+    assert applier.tick()["attorneys"] is Outcome.ABSENT
+    assert not os.path.lexists(applier.config_dir / "attorneys")
+    assert "attorneys" not in state(applier)
 
 
 def test_a_published_change_is_staged_validated_and_swapped_atomically(world) -> None:
