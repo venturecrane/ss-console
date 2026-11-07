@@ -18,6 +18,12 @@ once, as data, in ``drafting-firm.yaml``:
           - "Facsimile: (555) 555-0101"
           - "Email: attorney@firm.example"
 
+THE ROSTER (2026-11-07). When the firm's attorney roster is installed
+(``operator_connector_sdk.library.roster``), the blocks come from it instead:
+each attorney's ``caption_block``, under each of their emails (:func:`entries`).
+With no roster installed the list above is read exactly as before, and a roster
+that cannot be read stops the job (``roster_unreadable``), never an empty list.
+
 A job uses the block of the matter's responsible attorney when the firm authored
 one, else the requester's, else none (the caption's attorney block then comes
 from the pleading, as before). Court, parties and case number always come from
@@ -56,6 +62,21 @@ def validate(value: Any) -> list[str]:
         if not isinstance(block, list) or not block or not all(isinstance(x, str) and x.strip() for x in block):
             out.append(f"{where}.block: expected a non-empty list of non-empty lines")
     return out
+
+
+def entries(authored: list[dict[str, Any]], roster: Any) -> list[dict[str, Any]]:
+    """The ``{email, block}`` entries a job picks from: the roster's when one is
+    installed (``ok``), else ``authored`` (the firm's ``attorneys:``, as before).
+    Raises ``DraftingFailed`` (``roster_unreadable``) on an unusable roster."""
+    from operator_connector_sdk.library import roster as roster_mod
+
+    from .outcome import DraftingFailed
+
+    if roster.status == roster_mod.ABSENT:
+        return authored
+    if roster.status != roster_mod.OK:
+        raise DraftingFailed(f"roster_unreadable: the firm's attorney roster could not be read ({roster.reason})")
+    return [{"email": e, "block": list(p.caption_block)} for p in roster.attorneys if p.caption_block for e in p.emails]
 
 
 def pick(entries: list[dict[str, Any]], responsible: str | None, requester: str | None) -> dict[str, Any] | None:

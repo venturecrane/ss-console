@@ -69,6 +69,7 @@ from . import (
     firm_rules,
     howell,
     job as job_mod,
+    library_pick,
     repair_guard,
     review as review_mod,
     review_first,
@@ -460,6 +461,7 @@ class DraftingRun(EvidenceLane, Placing):
         self._stage("destination", self._destination)
         f = self._json("facts.json")
         firm_wording.freeze_or_hold(self.data, self.cls, f, DraftingHold)  # before anything is paid
+        library_pick.matter_attorney_or_stop(self)  # who signs is settled before anything is paid, too
         self._stage(
             "pull",
             lambda: pull.run(

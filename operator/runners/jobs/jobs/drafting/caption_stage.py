@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from ..attorneys.seat import roster_for
 from . import attorneys, caption as caption_mod, caption_fix, caption_read
 
 
@@ -132,6 +133,9 @@ def run(
             if isinstance(p, dict) and p.get("name")
         ],
         # The firm's authored attorney block for this job: the responsible
-        # attorney's, else the requester's, else none (attorneys.py).
-        "attorney_block": attorneys.pick(firm.attorneys, record.get("attorney_email"), requester),
+        # attorney's, else the requester's, else none (attorneys.py); from the
+        # firm's attorney roster when one is installed (attorneys.entries).
+        "attorney_block": attorneys.pick(
+            attorneys.entries(firm.attorneys, roster_for(seat)), record.get("attorney_email"), requester
+        ),
     }

@@ -60,12 +60,17 @@ from operator_connector_sdk.library.caller import (
     LazyStore,
     attorney_key,
     build_record,
+    known_attorneys,
+    matter_attorney,
     write_record,
 )
+from operator_connector_sdk.library import roster as roster_mod
 from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
+from ..attorneys.seat import roster_for
 from .outcome import DemandFailed, DemandHold
+from .signers import signer_for
 
 KIND = "demand_letter"
 #: Where an accepted reference is written for the writer to open.
@@ -87,11 +92,16 @@ def open_store(seat: Any) -> LibraryStore:
     return SmokeballLibrary(seat.client, load_library_config())
 
 
-def _attorneys(firm: Any, who: str | None) -> tuple[Attorney | None, list[Attorney]]:
+def _attorneys(run: Any, firm: Any, who: str | None) -> tuple[Attorney | None, list[Attorney]]:
+    """The matter's attorney and the firm's, the roster's when one is installed.
+    ``select`` has already held a demand whose attorney the roster does not list."""
     known = [Attorney(attorney_key(name), str(row["signer"])) for name, row in firm.data["attorneys"].items()]
     signer = firm.attorney.get("signer")
-    matter = Attorney(attorney_key(who), str(signer or who)) if who else None
-    return matter, known
+    roster = roster_for(run.seat)
+    found = matter_attorney(who, str(signer or who), roster)
+    if found.hold:
+        raise _stop(run, Resolution(REFUSED, KIND, found.reason))
+    return found.attorney, known_attorneys(roster, known)
 
 
 def _stop(run: Any, res: Resolution) -> DemandFailed:
@@ -109,7 +119,13 @@ def select(run: Any, variant: str) -> tuple[Any, Path | None]:
     for them, holds the job (``DemandHold``) before anything is spent."""
     firm = run.firm
     who = run._json("facts.json").get("responsible_attorney")
-    signs = firm.attorney_for(who)
+    roster = roster_for(run.seat)
+    signs = signer_for(firm, who, roster)
+    if roster.status == roster_mod.OK and not roster.is_attorney(who):
+        raise DemandHold(
+            f"the responsible attorney ({who or 'none on the matter'}) is not an attorney on the firm's roster; "
+            "a demand is never signed for someone who is not. Nothing was spent."
+        )
     # The format is the responsible attorney's when their row names one
     # (2026-10-14); unmapped, the firm's default.
     if variant not in firm.variants_for(signs):
@@ -136,7 +152,7 @@ def pick_reference(run: Any) -> Path | None:
     firm = run.firm
     pinned = firm.input_path("house_reference")
     pinned_used = BaseUsed.of(PINNED, pinned.read_bytes(), name=pinned.name, contract=PROTOTYPES)
-    matter, known = _attorneys(firm, run._json("facts.json").get("responsible_attorney"))
+    matter, known = _attorneys(run, firm, run._json("facts.json").get("responsible_attorney"))
     store = LazyStore(lambda: open_store(run.seat))
     spec = spec_dir()
     asked = resolve(

@@ -60,14 +60,41 @@ def _load_yaml(path: str | None) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+class SignersUnusable(RuntimeError):
+    """The firm's attorney roster is installed and cannot be read: a letter is
+    never signed from a list we could not look at."""
+
+
 def load_signers(path: str | None = None) -> dict[str, dict[str, str]]:
-    """``form_letters.signers``: ``{staff full name or staff id: {name, title,
-    initials}}``, keys normalized. How a staff member signs is the firm's to
-    author; the staff record's own name ("Chris Price") is not it ("Christopher
-    A. Price"), so an unauthored signer prints markers rather than a guess.
-    The exception is a form that itself merges the staff record's name (the
-    3rd party task form, ``staff_signer_facts``): there only ``title`` is read
-    from this map."""
+    """How each staff member signs a form letter: ``{staff name or staff id,
+    folded: {name, title, initials}}``. From the firm's attorney roster when one
+    is installed (``operator_connector_sdk.library.roster``: each attorney's and
+    staff signer's ``signs.letters``, keyed by the case system's name), else
+    ``form_letters.signers`` in customer.yaml exactly as before the roster
+    (:func:`authored_signers`). A roster that cannot be read raises
+    ``SignersUnusable``. How a staff member signs is the firm's to author; the
+    staff record's own name is not it, so an unauthored signer prints markers
+    rather than a guess. The exception is a form that itself merges the staff
+    record's name (the 3rd party task form, ``staff_signer_facts``): there only
+    ``title`` is read from this map."""
+    from operator_connector_sdk.library import roster as roster_mod
+
+    read = roster_mod.load()
+    if read.status == roster_mod.ABSENT:
+        return authored_signers(path)
+    if read.status != roster_mod.OK:
+        raise SignersUnusable(read.reason)
+    return {
+        _key(p.name): roster_mod.letters_entry(sig)
+        for p in read.people
+        if (sig := read.signature(p, roster_mod.LETTERS)) is not None
+    }
+
+
+def authored_signers(path: str | None = None) -> dict[str, dict[str, str]]:
+    """``form_letters.signers`` in customer.yaml, keys normalized: the signer
+    list before the roster, read when no roster is installed (and by the seat
+    check that compares the two)."""
     block = _load_yaml(path).get(CONFIG_BLOCK)
     signers = block.get("signers") if isinstance(block, dict) else None
     if not isinstance(signers, dict):
@@ -411,6 +438,8 @@ __all__ = [
     "date_of_loss",
     "fetch_contact",
     "load_preparer_title",
+    "SignersUnusable",
+    "authored_signers",
     "load_signers",
     "long_date",
     "matter_layout_values",

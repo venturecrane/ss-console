@@ -327,3 +327,48 @@ def test_the_template_tool_takes_the_same_answer(spec, monkeypatch, opened):
     )
     assert out["refusals"] == [] and opened == [accepted]
     assert out["libraryResolution"]["base"]["source"] == "accepted_library_file"
+
+
+# ---- the firm's attorney roster says who is an attorney ------------------------------------
+
+
+def _roster(tmp_path: Path, monkeypatch, doc) -> None:
+    from operator_connector_sdk.library import roster
+
+    folder = tmp_path / "roster"
+    folder.mkdir()
+    (folder / roster.FILE_NAME).write_text(doc if isinstance(doc, str) else json.dumps(doc), encoding="utf-8")
+    monkeypatch.setenv(roster.DIR_ENV, str(folder))
+
+
+def _own_file_draft(spec, monkeypatch) -> tuple[dict, list[httpx.Request]]:
+    lib = MemoryLibrary()
+    _install(spec, _entry(lib, "own-1", make_firm_template(header_text="DANA'S OWN"), attorney="dana example"))
+    monkeypatch.setattr(library_pick, "open_store", lambda *_a: lib)
+    captured: list[httpx.Request] = []
+    monkeypatch.setattr(server, "_get_client", lambda: _mock_client(_staff_handler(captured)))
+    _stub_record_check(monkeypatch)
+    return server.render_docx_draft("m-1", "Draft", MD, document_class=KIND), captured
+
+
+def test_an_attorney_on_the_roster_gets_their_own_file_as_without_one(spec, monkeypatch, tmp_path, opened):
+    _roster(tmp_path, monkeypatch, {"schema_version": 1, "attorneys": [{"name": "Dana  Example", "emails": []}]})
+    out, _ = _own_file_draft(spec, monkeypatch)
+    assert out["refusals"] == [] and out["libraryResolution"]["resolution"]["signer"]["name"] == "Dana Example"
+
+
+@pytest.mark.parametrize(
+    "doc,status",
+    [
+        ({"schema_version": 1, "attorneys": [{"name": "Someone Else", "emails": []}]}, "refused"),
+        ("[]", "cannot_look"),
+    ],
+)
+def test_a_matter_attorney_the_roster_does_not_list_is_never_signed_for(
+    spec, monkeypatch, tmp_path, opened, doc, status
+):
+    """FALSIFIER: drop the roster check in ``chat_base`` and Dana's own file is used."""
+    _roster(tmp_path, monkeypatch, doc)
+    out, captured = _own_file_draft(spec, monkeypatch)
+    _refused(out, captured, status)
+    assert opened == []

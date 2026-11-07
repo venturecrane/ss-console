@@ -169,6 +169,40 @@ describe.skipIf(!hasUv())('publish-firm-inputs.sh', () => {
     ).toBe(true)
   })
 
+  it("publishes the firm's attorney roster, judged by the runner's own roster validator", () => {
+    // The REAL validator (jobs/attorneys: firm.py and the roster reader), copied
+    // into the seat's runner, with only the runner on the path, as the publish runs it.
+    const roster = (over: object) =>
+      JSON.stringify({
+        schema_version: 1,
+        attorneys: [{ name: 'Jane Example', emails: ['jane@firm.example'], ...over }],
+      })
+    const run = (body: string) => {
+      const s = scene('attorneys', { 'attorneys.json': body, 'notes.md': 'not published\n' }, [])
+      const dst = join(s.runner, 'operator/runners/jobs/jobs/attorneys')
+      mkdirSync(dst, { recursive: true })
+      for (const f of ['__init__.py', 'firm.py', 'roster.py']) {
+        writeFileSync(
+          join(dst, f),
+          readFileSync(
+            fileURLToPath(new URL(`../operator/runners/jobs/jobs/attorneys/${f}`, import.meta.url))
+          )
+        )
+      }
+      return publish(s, 'attorneys')
+    }
+    const ok = run(roster({}))
+    expect(ok.code).toBe(0)
+    expect(ok.out).toContain('published acme/attorneys etag=01234567')
+    expect(ok.aws.find((l) => l.startsWith('s3 sync'))).toContain(
+      's3://cfg/vaults/acme/attorneys/ --delete --exclude * --include attorneys.json'
+    )
+    const bad = run(roster({ emails: ['not-an-email'] }))
+    expect(bad.code).toBe(1)
+    expect(bad.out).toContain('nothing was written')
+    expect(writes(bad.aws)).toEqual([])
+  })
+
   it('refused inputs publish nothing', () => {
     const s = scene('records', { 'records-firm.yaml': 'BAD: 1\n' })
     const r = publish(s, 'records')

@@ -27,6 +27,14 @@ describe('parseFirmInputs', () => {
     expect(parseFirmInputs({})).toBe('{}')
   })
 
+  it("stores the firm's attorney roster beside the lanes (a firm input, not a lane)", () => {
+    // FALSIFIER: leave `attorneys` out of the known set and a seat that has a
+    // roster installed reports NULL for every lane it holds.
+    expect(parseFirmInputs({ attorneys: OK, drafting: OK })).toBe(
+      JSON.stringify({ attorneys: OK, drafting: OK })
+    )
+  })
+
   it('keeps a rejected lane with the refused version, and a lane with no live copy', () => {
     const rejected = { ...OK, verdict: 'rejected', rejected_etag8: 'badbadba' }
     expect(JSON.parse(parseFirmInputs({ records: rejected }) ?? 'null')).toEqual({

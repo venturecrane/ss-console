@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "attorneys": [
+    {
+      "name": "Jane Example",
+      "emails": ["jane@firm.example"],
+      "bar_number": "123456",
+      "caption_block": [
+        "Jane Q. Example, Esq. (SBN 123456)",
+        "EXAMPLE LAW, LLP",
+        "100 Main Street",
+        "Springfield, California 90000",
+        "Telephone: (555) 555-0100",
+        "Facsimile: (555) 555-0101",
+        "Email: jane@firm.example"
+      ],
+      "signs": {
+        "demand": { "signer": "Jane Q. Example", "title": "Attorney at Law", "initials": "JQE/ps" },
+        "letters": { "name": "Jane Q. Example", "title": "Attorney at Law", "initials": "JQE" }
+      }
+    },
+    {
+      "name": "Sam Sample",
+      "emails": ["sam@firm.example"],
+      "signs": {
+        "demand": { "signer": "Samuel Sample", "title": "Attorney for {client}", "initials": "" }
+      }
+    }
+  ],
+  "staff_signers": [
+    {
+      "name": "Pat Assistant",
+      "signs": { "letters": { "name": "Pat Assistant", "title": "Legal Assistant" } }
+    }
+  ]
+}
