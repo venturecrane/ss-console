@@ -90,6 +90,11 @@ class JobsBrokerClient:
     def drafting_allowance(self) -> dict[str, Any]:
         return self._request({"action": "drafting_allowance"})
 
+    def library_setup_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
+        """A "set up our ..." job (ss-console library_setup_verbs.py): ``accepted``
+        with a ``job_id`` and ``live``, or ``accepted: False`` with a ``reason``."""
+        return self._request({"action": "library_setup_submit", "envelope": envelope})
+
     # -- the litigation status job (ss-console operator/workspace_broker/litigation_verbs.py) --
     def litigation_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
         """``accepted`` with a ``job_id``, or ``accepted: False`` with a ``reason``."""

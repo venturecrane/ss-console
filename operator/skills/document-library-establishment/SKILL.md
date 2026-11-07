@@ -13,7 +13,7 @@ description: >-
   visible marker that names its source. It reports a template delivered only after reading the
   filed document back and checking it against its exemplars. Firm-level establishment is refused
   for anyone who is not an Operator admin.
-version: 0.6.0
+version: 0.7.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -100,6 +100,23 @@ refused); which class a document belongs to is yours to get right by reading it.
 
 **The library is judged class by class.** A proposal that says "we found one kind of document"
 has not surveyed; it has sampled. Every class gets a line in the proposal, found or not.
+
+## Setting up one kind from the firm's own documents (mediation briefs, memos)
+
+When the admin asks to set up the firm's **mediation briefs** or **memos**, or one attorney's
+("set up Dana's memos"), call `library_setup_submit` first, with `kind` and, only when the
+request names one attorney's own documents, `attorney` exactly as the request gives the name.
+It queues a job on the Machine that reads the firm's own files of that kind across its matters;
+it never runs in this turn.
+
+- **`live` is false**: the seat has not switched this on. Carry on with this skill exactly as
+  written below, as if the tool had not been called. Say nothing about the job.
+- **`live` is true**: relay `say` as given, and nothing else about the setup. Do not hunt, propose
+  or build anything for that kind in this turn: the job's own reply comes in this thread, in the
+  seat's words.
+- **`accepted` is false**: relay `reason` as given and end the turn.
+
+Every other kind, and "set up our document library" as a whole, follows the procedure below.
 
 ## Two turns, and the blessing is the boundary
 

@@ -55,7 +55,7 @@ _PLUGINS = {
     "hermes-smd-workspace": 18,
     "hermes-smd-peer-memory": 1,
     "hermes-smd-jobs": None,  # count not pinned (preventive); just must be > 0
-    "hermes-smd-lanes": 17,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's four, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
+    "hermes-smd-lanes": 18,  # ss-console #2614 submit / status / allowance, the demand job's three, the drafting job's four and its library setup submit, the litigation job's two, the negotiation watch's status, an SMD note's status, the Case File Manager's two, a records request's submit
 }
 
 

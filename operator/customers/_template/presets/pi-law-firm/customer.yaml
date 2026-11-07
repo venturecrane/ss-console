@@ -234,6 +234,7 @@ connectors:
 #   conflict_fence: observe           # a write before the conflict check clears
 #   fixed_wording: observe            # a job reply that is not the rendered text
 #   wording_rules: observe            # jobs follow the firm's confirmed wording rules
+#   library_setup: observe            # "set up our ..." tells the firm what its documents offer
 
 # ---- SCOPE ----
 scope:

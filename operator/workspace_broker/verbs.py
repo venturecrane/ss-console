@@ -48,6 +48,7 @@ from typing import Any, Callable
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
 from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
+from . import library_setup_verbs
 from . import (
     attachment_intake,
     casefile_verbs,
@@ -215,6 +216,9 @@ VERBS: tuple[Verb, ...] = (
     Verb("drafting_job_record", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_resume", _only(ROOT), drafting_verbs.drafting_dispatch),
     Verb("drafting_job_add_to_request", GATEWAY_OR_ROOT, drafting_verbs.drafting_dispatch),
+    # "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
+    # of job. Its status and record ride the drafting verbs above.
+    Verb("library_setup_submit", GATEWAY_OR_ROOT, library_setup_verbs.dispatch),
     # The litigation status job's request edge (litigation_verbs.py). Submit's
     # table gate admits all three classes because it has two forms; the handler
     # pins each form to its peers (a request from the gateway or root, a
@@ -343,6 +347,8 @@ if set(demand_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is dema
     raise RuntimeError("the demand rows above and demand_verbs.VERBS disagree")
 if set(drafting_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is drafting_verbs.drafting_dispatch}:
     raise RuntimeError("the drafting rows above and drafting_verbs.VERBS disagree")
+if set(library_setup_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is library_setup_verbs.dispatch}:
+    raise RuntimeError("the library setup rows above and library_setup_verbs.VERBS disagree")
 if set(litigation_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is litigation_verbs.litigation_dispatch}:
     raise RuntimeError("the litigation rows above and litigation_verbs.VERBS disagree")
 if set(negotiation_verbs.VERBS) != {

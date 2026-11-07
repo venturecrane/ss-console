@@ -267,6 +267,7 @@ def _with_logic_in_code(block: str) -> str:
         "conflict_fence",
         "fixed_wording",
         "wording_rules",
+        "library_setup",
     ],
 )
 @pytest.mark.parametrize("mode", ["observe", "enforce"])

@@ -220,7 +220,7 @@ HOLD_KEPT = "lane-hold.json"
 #: (and inside ``lane-holds/`` for its hold).
 ENDED_DIR = "ended"
 #: The ledger's terminal states (every ``*_ledger.TERMINAL``).
-LEDGER_ENDED = frozenset({"delivered", "failed"})
+LEDGER_ENDED = frozenset({"delivered", "failed", "observed"})
 #: How long a stop the broker could not record waits before the next try.
 RETRY_SECONDS = 30.0
 
