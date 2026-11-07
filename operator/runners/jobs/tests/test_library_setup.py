@@ -271,6 +271,38 @@ def test_a_document_the_kinds_plan_cannot_adopt_is_never_listed_and_is_counted_b
     assert out["counts"]["plan_refused"] == 1 and out["counts"]["plan_refused_no_heading"] == 1
 
 
+def _chartless_memo_by(author: str, sign: str = "") -> bytes:
+    """The memo kit's firm memo with no table in its body (``chart=False``)."""
+    d = docx.Document(io.BytesIO(_firm_memo(chart=False)))
+    d.core_properties.author = author
+    d.core_properties.last_modified_by = author
+    d.add_paragraph(" ".join(["word"] * 600))
+    if sign:
+        d.add_paragraph(sign)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_memos_with_no_chart_are_listed_in_rank_order_with_the_chart_ones():
+    """The 2026-11-07 rehearsal: the firm's seven best memos by rank carry no chart
+    and were never offered. Now a chartless memo ranked higher is listed ahead of
+    the chart memos, and one ranked lower is listed after them."""
+    client = _client()
+    client.files["f-best"] = (
+        MATTER_A,
+        _row("f-best", "Case Evaluation Memo.docx", 0.2),
+        _chartless_memo_by("Blair Sample", sign="Blair Sample"),
+    )
+    client.files["f-last"] = (MATTER_B, _row("f-last", "Case Memo.docx", 6.0), _chartless_memo_by("Someone Else"))
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-new"]  # f-last ranks fourth
+    assert "plan_refused_no_chart" not in out["counts"] and "plan_refused" not in out["counts"]
+    del client.files["f-new"]
+    out, _ = _run(client=client)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-last"]
+
+
 def test_a_plan_that_crashes_on_one_file_refuses_that_file_and_the_hunt_goes_on(monkeypatch):
     """The 2026-11-07 rehearsal: one brief the plan raised TypeError on ended the
     whole hunt. Now it is that file's refusal, counted with its id."""

@@ -648,6 +648,24 @@ def test_the_first_draft_after_it_records_the_new_file_in_library_resolution_jso
     assert rec["resolution"]["file"]["sha256"] == hashlib.sha256(made).hexdigest()
 
 
+def test_a_memo_with_no_chart_is_made_into_a_library_file_the_root_writer_passes():
+    """The 2026-11-07 rehearsal's seven refused memos carried no chart; one like
+    them is now made, and the root writer's own check passes it."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "hermes-smd-overlay"))
+    from establish_intake import blank_form
+
+    d = docx.Document(io.BytesIO(_firm_memo(chart=False)))
+    d.add_paragraph(" ".join(["word"] * 600))
+    buf = io.BytesIO()
+    d.save(buf)
+    memo = buf.getvalue()
+    made = M.make("memo", memo, _src(memo), FIRM)
+    assert blank_form.check(made.data, made.fixed_strings).ok
+    assert b"body.chart" not in zipfile.ZipFile(io.BytesIO(made.data)).read("word/document.xml")
+
+
 def test_the_made_file_holds_no_client_text_by_the_root_writers_own_check(firm_brief):
     import sys
 

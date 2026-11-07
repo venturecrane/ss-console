@@ -102,7 +102,7 @@ def _run(p, text, size=None, bold=False, color=None):
     return r
 
 
-def _firm_memo(split_headings: bool = True, font: str = "Times New Roman", size: int = 12) -> bytes:
+def _firm_memo(split_headings: bool = True, font: str = "Times New Roman", size: int = 12, chart: bool = True) -> bytes:
     d = docx.Document()
     d.core_properties.author = "A Firm Person"
     d.core_properties.title = "Other Client memo"
@@ -148,12 +148,13 @@ def _firm_memo(split_headings: bool = True, font: str = "Times New Roman", size:
     body()
     h2("C. Third Issue")
     d.add_paragraph("A listed item about Other Client", style="List Bullet")
-    t = d.add_table(rows=5, cols=4)
-    t.style = "Table Grid"
-    for r, row in enumerate(t.rows):
-        for c in row.cells:
-            _run(c.paragraphs[0], f"Other {r}", 10, r == 0)
-    d.add_paragraph("")
+    if chart:
+        t = d.add_table(rows=5, cols=4)
+        t.style = "Table Grid"
+        for r, row in enumerate(t.rows):
+            for c in row.cells:
+                _run(c.paragraphs[0], f"Other {r}", 10, r == 0)
+        d.add_paragraph("")
     h1("II.", "OTHER CONCLUSION")
     body()
     d.add_picture(io.BytesIO(_png()))
@@ -371,7 +372,9 @@ def test_an_operator_render_nobody_accepted_is_refused():
         memo_base.adopt(buf.getvalue(), _source(buf.getvalue()))
 
 
-def test_a_memo_with_no_chart_or_heading_is_no_base():
+def test_a_memo_with_no_heading_is_no_base():
+    """Unchanged by the chart becoming optional (2026-11-07): the heading reading is
+    where a memo's roles come from."""
     d = docx.Document()
     d.core_properties.author = "A Firm Person"
     d.add_paragraph("Just words")
@@ -379,12 +382,53 @@ def test_a_memo_with_no_chart_or_heading_is_no_base():
     d.save(buf)
     with pytest.raises(DraftingFailed, match="no heading"):
         memo_base.adopt(buf.getvalue(), _source(buf.getvalue()))
-    _run(d.add_paragraph(), "I. A HEADING", bold=True)
-    d.add_paragraph("A body")
+
+
+#: The kit's memo draft with no table in its body: the front's memo table stays (it
+#: goes to the front's lines, never to a chart).
+_FRONT, _BODY = MEMO.split("# I.", 1)
+MEMO_NO_TABLE = _FRONT + "# I." + "\n".join(line for line in _BODY.split("\n") if not line.startswith("|"))
+
+
+def test_a_memo_with_no_chart_adopts_and_a_draft_with_no_table_fills():
+    """The 2026-11-07 rehearsal: a firm's best memos carry no chart, and the plan
+    refused every one. A memo with no table at all is a base with no chart."""
+    blob = _firm_memo(chart=False)
+    base = _base(blob)
+    assert not [s for s in base.slots if s.startswith("body.chart")]
+    assert {"front.title", "body.h1", "body.p"} <= set(base.slots)
+    assert "| Name |" not in MEMO_NO_TABLE and "| TO: |" in MEMO_NO_TABLE
+    out, proof = memo_base.fill(base, MEMO_NO_TABLE)
+    assert not proof.lost
+    doc = docx.Document(io.BytesIO(out))
+    assert any(p.text == "The record." for p in doc.paragraphs)
+    assert "Other Client" not in _all_text(base.bytes)
+
+
+def test_a_draft_table_on_a_memo_with_no_chart_stops_the_job_never_an_invented_look():
+    with pytest.raises(DraftingFailed, match="firm_base_unfit: the draft has a table and the firm's memo has no chart"):
+        memo_base.fill(_base(_firm_memo(chart=False)), MEMO)
+
+
+def test_a_memo_whose_table_is_no_chart_is_still_refused():
+    """A table the plan cannot read as a chart (one row here) is refused, as every
+    chartless memo was before; the hunt counts it as ``no_chart``."""
+    d = docx.Document(io.BytesIO(_firm_memo(chart=False)))
+    t = d.add_table(rows=1, cols=3)
+    for c in t.rows[0].cells:
+        c.paragraphs[0].text = "Other"
     buf = io.BytesIO()
     d.save(buf)
-    with pytest.raises(DraftingFailed, match="no chart"):
+    with pytest.raises(DraftingFailed, match="no chart to take a chart's look from"):
         memo_base.adopt(buf.getvalue(), _source(buf.getvalue()))
+
+
+def test_a_memo_with_a_chart_adopts_exactly_as_before():
+    """The chart memo's base keeps its chart slot and fills as it did (the byte
+    comparison against origin/main's ``memo_base`` is in the PR)."""
+    base = _base()
+    assert "body.chart4" in base.slots
+    assert not memo_base.fill(base, MEMO)[1].lost
 
 
 def _check(base: firmbase.FirmBase, tmp_path: Path, fmt: dict | None = None) -> list[str]:

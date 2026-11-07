@@ -9,6 +9,11 @@ often its own design, so its slot plan is not the brief's (``brief_base``):
 * the body as a region to the end of the file: one paragraph of each role, one chart
   per column count. A heading the firm lays as two lines, the numeral then the title,
   stays two lines;
+* THE CHART IS OPTIONAL (2026-11-07). A chart is the look the draft's tables are laid
+  by (``body.chart<n>``, one per column count); a memo with no table at all is a base
+  with no chart, and a draft table on it stops the job (``firm_base_unfit``), because
+  the plan has no table look but the firm's and invents none. A memo whose tables the
+  plan cannot read as a chart is refused, as before;
 * a picture goes, whatever it showed, and the words in the headers, footers and notes
   go, because those name the matter the memo was written on (``adopt.clean_package``).
 
@@ -77,8 +82,9 @@ def _roles(doc: Any, zone: list[Any]) -> tuple[list[tuple[str, Any]], dict[int, 
     last_letter, title_next = "", False
     for i, el in enumerate(zone):
         if el.tag == f"{W}tbl":
-            n = len(el.find(f"{W}tblGrid").findall(f"{W}gridCol"))
-            if n not in charts and len(el.findall(f"{W}tr")) >= 2:
+            grid = el.find(f"{W}tblGrid")
+            n = len(grid.findall(f"{W}gridCol")) if grid is not None else 0
+            if n and n not in charts and len(el.findall(f"{W}tr")) >= 2:
                 charts[n] = (el, zone[i + 1] if i + 1 < len(zone) and is_blank(zone[i + 1]) else None)
             continue
         if el.tag != f"{W}p" or is_blank(el) or el.find(f"{W}pPr/{W}sectPr") is not None:
@@ -169,8 +175,10 @@ def adopt(blob: bytes, source: firmbase.Source) -> tuple[bytes, list[str]]:
     zone = kids[first:-1]
     paras, charts = _roles(doc, zone)
     keep, notes = _library(paras)
-    if not charts:
-        raise unfit("the firm's memo has no chart to take a chart's look from")
+    if not charts and any(el.tag == f"{W}tbl" for el in zone):
+        # A table the plan cannot read as a chart: refused, as every chartless memo
+        # was before 2026-11-07. A memo with no table at all is a base with no chart.
+        raise unfit("the firm's memo has a table and no chart to take a chart's look from")
     if "body.p" not in {f"body.{r}" for r, _ in paras}:
         raise unfit("the firm's memo has no plain paragraph")
     _front(doc, kids[:first])
@@ -247,6 +255,9 @@ def _member(base: FirmBase, block: g.Table) -> tuple[str, Rows]:
     else the narrowest wider one to take columns from."""
     n = max(len(r) for r in block.rows)
     have = {int(s[10:]): s for s in base.slots if s.startswith("body.chart")}
+    if not have:
+        # The plan has no table look but the firm's chart; none is invented.
+        raise unfit("the draft has a table and the firm's memo has no chart to lay it by")
     below = [k for k in have if k <= n]
     k = n if n in have else max(below) if below else min(have)
     return have[k], Rows(block.rows, block.header, _total, narrow=k > n)
