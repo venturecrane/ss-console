@@ -107,6 +107,7 @@ SUBMISSION_FIELDS: dict[str, str] = {
     "acceptance.sha256": "the broker's sha256 of file.docx",
     "acceptance.fixed_strings": "the form's fixed text, a list of strings",
     "acceptance.replaces": "the slot's accepted file this replaces {file_id, version, sha256}, or null",
+    "acceptance.chart_source": "a memo's tables' look from another file {from, file_id, sha256}, or null",
 }
 
 _ACCEPTANCE_KEYS = frozenset(
@@ -126,6 +127,7 @@ class Acceptance:
     data: bytes = field(repr=False)
     fixed_strings: tuple[str, ...] = ()
     replaces: L.Replaced | None = None
+    chart_source: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -167,11 +169,16 @@ def parse_submission(sub: Any, data: bytes) -> tuple[Acceptance | None, list[str
     if not isinstance(sub, dict) or sub.get("scope") != SCOPE or sub.get("phase") != "install":
         return None, [f"not a {SCOPE} install submission"]
     raw = sub.get("acceptance")
+    if isinstance(raw, dict) and "chart_source" not in raw:
+        # Optional: a broker built before memos took another file's chart look sends none.
+        raw = {**raw, "chart_source": None}
     if not isinstance(raw, dict) or set(raw) != _ACCEPTANCE_KEYS:
         return None, [f"acceptance must carry exactly {sorted(_ACCEPTANCE_KEYS)}"]
     problems = [
         f"acceptance.{k} must be a string"
-        for k in sorted(_ACCEPTANCE_KEYS - {"attorney", "fixed_strings", "replaces"})
+        for k in sorted(
+            _ACCEPTANCE_KEYS - {"attorney", "fixed_strings", "replaces", "chart_source"}
+        )
         if not isinstance(raw[k], str)
     ]
     if raw["attorney"] is not None and not isinstance(raw["attorney"], str):
@@ -181,6 +188,7 @@ def parse_submission(sub: Any, data: bytes) -> tuple[Acceptance | None, list[str
         problems.append("acceptance.fixed_strings must be a list of strings")
     replaces, rep_problems = _replaced(raw["replaces"])
     problems += rep_problems
+    problems += L.chart_source_problems("acceptance", raw["chart_source"])
     if not problems and hashlib.sha256(data).hexdigest() != raw["sha256"]:
         problems.append("file.docx does not hash to the submission's sha256")
     if problems:
@@ -197,6 +205,9 @@ def parse_submission(sub: Any, data: bytes) -> tuple[Acceptance | None, list[str
             data=data,
             fixed_strings=tuple(fixed),
             replaces=replaces,
+            chart_source=dict(raw["chart_source"])
+            if isinstance(raw["chart_source"], dict)
+            else None,
         ),
         [],
     )
@@ -320,6 +331,7 @@ def _entry(acc: Acceptance, digest: str) -> L.Entry:
         contract=acc.contract,
         accepted_by=acc.accepted_by,
         accepted_at=acc.accepted_at,
+        chart_source=acc.chart_source,
     )
 
 

@@ -97,6 +97,35 @@ def test_a_spooled_acceptance_is_installed_and_the_seat_holds_its_copy(tmp_path:
     assert not (intake.runs_dir / "run-one-0001").exists()  # the run is purged on every path
 
 
+CHART = {"from": "firm_memo", "file_id": "d-2", "sha256": "d" * 64}
+
+
+def test_a_memos_chart_source_is_written_into_the_ledger_entry(tmp_path: Path) -> None:
+    """The coordinator's decision on #3876: a memo whose tables take another file's
+    look carries which, by id, and the ledger entry says so."""
+    vault = FakeVault()
+    intake = _intake(tmp_path, vault)
+    _spool(intake, "run-chart-0001", FORM, kind="memo", chart_source=CHART)
+    intake.poll_once()
+    assert _result(intake, "run-chart-0001")["status"] == "installed"
+    entry = L.parse_ledger(vault.objects[lib.ledger_key(SLUG)]).entry_for("memo", None)
+    assert entry is not None and entry.chart_source == CHART
+
+
+def test_a_malformed_chart_source_is_rejected_and_nothing_is_written(tmp_path: Path) -> None:
+    vault = FakeVault()
+    intake = _intake(tmp_path, vault)
+    _spool(
+        intake,
+        "run-chart-0002",
+        FORM,
+        kind="memo",
+        chart_source={"from": "firm_memo", "file_id": "", "sha256": ""},
+    )
+    intake.poll_once()
+    assert _result(intake, "run-chart-0002")["status"] == "rejected" and vault.puts == []
+
+
 def test_an_applier_that_has_not_polled_yet_is_accepted_pending_install(tmp_path: Path) -> None:
     intake = _intake(tmp_path, FakeVault(), apply=False)
     _spool(intake, "run-two-0001", FORM)

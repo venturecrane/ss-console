@@ -108,6 +108,10 @@ WORD_WRITERS = {
     f"{JOBS}/demand/review.py": "the review's own report to SMD, not a firm document",
     f"{JOBS}/drafting/brief_base.py": "the firm-base plan: fills the base the resolver chose",
     f"{JOBS}/drafting/memo_base.py": "the firm-base plan for a memo: fills the base the resolver chose",
+    f"{JOBS}/drafting/memo_charts.py": (
+        "a chartless memo's chart look while it is adopted (the firm's own chart memo's styles merged "
+        "into its styles part); called only by memo_base.adopt, never a document of a kind"
+    ),
     f"{JOBS}/drafting/pleading.py": "edits the rendered file in place (pleading paper)",
     f"{JOBS}/drafting/frontpage.py": "edits the rendered file in place (front-page spacing)",
     f"{JOBS}/drafting/briefpage.py": "edits the rendered file in place (brief page rules)",

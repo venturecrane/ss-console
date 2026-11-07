@@ -33,6 +33,7 @@ def _acc(**over):
         "sha256": hashlib.sha256(DATA).hexdigest(),
         "fixed_strings": ["Plaintiff's Mediation Brief"],
         "replaces": {"file_id": "lib-1", "version": "lib-1-v1", "sha256": "a" * 64},
+        "chart_source": None,
     }
     return {**acc, **over}
 
