@@ -327,13 +327,21 @@ def test_errors_never_carry_the_password(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "invalid_username" in str(info.value)
 
 
-# ---- the REAL checker, when it is in the tree ------------------------------
+# ---- the REAL checker, in this repository beside the connector ------------
 _DRAFTING = Path(__file__).resolve().parents[3] / "templates" / "drafting"
 _REAL_GATE = _DRAFTING / "advertising_gate_check.py"
 _EXAMPLE_REGISTERS = _DRAFTING / "fixtures" / "marketing-registers.example.yaml"
 
 
-@pytest.mark.skipif(not _REAL_GATE.is_file(), reason="advertising_gate_check.py not in this tree yet")
+@pytest.fixture
+def real_gate() -> None:
+    """The checker and its example registers are in this repository; a missing
+    one is a move or rename, so the tests fail rather than switch themselves off."""
+    for need in (_REAL_GATE, _EXAMPLE_REGISTERS):
+        assert need.is_file(), f"the real advertising gate input is missing: expected {need}"
+
+
+@pytest.mark.usefixtures("real_gate")
 def test_real_checker_blocks_a_guarantee_and_writes_nothing(wp: FakeWP, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SMD_ADVERTISING_GATE_PYTHON", raising=False)  # the venv interpreter, as on a seat
     monkeypatch.setenv("SMD_ADVERTISING_GATE", str(_REAL_GATE))
@@ -363,7 +371,7 @@ def test_post_writes_take_no_channel(tool: str) -> None:
         getattr(server, tool)(title="t", channel="note", **extra)
 
 
-@pytest.mark.skipif(not _REAL_GATE.is_file(), reason="advertising_gate_check.py not in this tree yet")
+@pytest.mark.usefixtures("real_gate")
 def test_real_checker_blocks_the_audit_ad_on_both_write_paths(wp: FakeWP, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SMD_ADVERTISING_GATE_PYTHON", raising=False)
     monkeypatch.setenv("SMD_ADVERTISING_GATE", str(_REAL_GATE))

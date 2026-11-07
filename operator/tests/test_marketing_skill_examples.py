@@ -151,7 +151,15 @@ def _gate(tmp_path: Path, text: str, channel: str) -> subprocess.CompletedProces
     )
 
 
-_needs_gate = pytest.mark.skipif(not _GATE.is_file(), reason="advertising gate not in this tree yet")
+@pytest.fixture
+def gate_on_disk() -> None:
+    """The gate and the registers are in this repository; a missing one is a
+    move or rename, so these checks fail rather than switch themselves off."""
+    for need in (_GATE, _REGISTERS):
+        assert need.is_file(), f"the advertising gate input is missing: expected {need}"
+
+
+_needs_gate = pytest.mark.usefixtures("gate_on_disk")
 
 
 @_needs_gate
