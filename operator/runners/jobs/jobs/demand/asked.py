@@ -27,17 +27,28 @@ def request_path(data: Path, version: int) -> Path:
     return data / f"repair-request-v{version}.md"
 
 
+#: Requests a job may carry in a row. A second hold after a repair asks for a
+#: second repair of the repaired draft (2026-11-07: v3 to v4 on the review's
+#: content findings, then v4 to v5 on two citations), so requests chain by
+#: version; the bound keeps a mistaken pair of requests from running forever.
+MAX_CHAIN = 4
+
+
 def apply(
     d: Any, data: Path, digest: str, corpus: str, version: int, result: dict[str, Any], log: Callable[[str], None]
 ) -> tuple[int, dict[str, Any]]:
-    """``(version, audit)`` after SMD's request for this version, if any."""
-    req = request_path(data, version)
-    if not req.is_file():
-        return version, result
-    log(f"  repair asked by SMD on draft v{version} (review findings): {req.name}")
-    d.repair(digest, version, audit_md=req.read_text(encoding="utf-8"))
-    version += 1
-    return version, d.audit(version, digest, corpus)
+    """``(version, audit)`` after SMD's requests, applied in version order: the
+    request for this version, then the request for the draft it produced, and
+    so on, each one repaired once and its draft audited once."""
+    for _ in range(MAX_CHAIN):
+        req = request_path(data, version)
+        if not req.is_file():
+            break
+        log(f"  repair asked by SMD on draft v{version} (review findings): {req.name}")
+        d.repair(digest, version, audit_md=req.read_text(encoding="utf-8"))
+        version += 1
+        result = d.audit(version, digest, corpus)
+    return version, result
 
 
 __all__ = ["apply", "request_path"]

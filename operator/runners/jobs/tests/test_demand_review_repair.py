@@ -140,7 +140,8 @@ class RepairingClient(ScriptedClient):
         system = json.dumps(params.get("system"))
         if "REPAIR-PROMPT" in system:
             user = params["messages"][-1]["content"]
-            return _echo_sections(user).replace("diagnosed a cervical strain", "diagnosed a cervical sprain")
+            out = _echo_sections(user).replace("diagnosed a cervical strain", "diagnosed a cervical sprain")
+            return out.replace("is named in the carrier's letter", "is named in the carrier's acknowledgment")
         return super()._answer(params)
 
 
@@ -180,7 +181,7 @@ HELD = (
 
 
 def test_smd_asks_for_a_repair_of_the_faulted_sections_and_only_those_are_audited_again(tmp_path, pricing):
-    verdicts = [HELD]  # the first review holds on the letter's content, as on 2026-11-07
+    verdicts = [HELD, HELD]  # the first review holds on the letter's content, as on 2026-11-07; so does the second
     client = RepairingClient(
         review=lambda _p: verdicts.pop(0) if verdicts else "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
     )
@@ -201,7 +202,7 @@ def test_smd_asks_for_a_repair_of_the_faulted_sections_and_only_those_are_audite
     (data / "state.json").write_text(json.dumps(st), encoding="utf-8")
     (tmp_path / "job" / proof_review.REDO_MARKER).write_text("{}", encoding="utf-8")
     r2, v2 = _run(tmp_path, pricing, client)
-    assert v2.outcome == "delivered", v2.reason
+    assert v2.outcome == "failed" and v2.reason.startswith("review_held:"), v2.reason  # the second verdict
     again = client.stages()[len(before) :]
     assert again.count("REPAIR") == 1
     assert again.count("AUDIT") == 1  # the one changed section; every other section kept its audit
@@ -212,6 +213,25 @@ def test_smd_asks_for_a_repair_of_the_faulted_sections_and_only_those_are_audite
     assert any("replaces v1" in ln for ln in r2.test_log)  # the letter was settled and gated again
     letter = _letter_text(data)
     assert "cervical sprain" in letter and "cervical strain" not in letter
+    # a second request, for the draft the first repair produced, chains: one more
+    # repair, one more audit of the one changed section, and the draft after it
+    before2 = client.stages()
+    (data / "repair-request-v2.md").write_text(
+        "## AUDIT: Liability\n\n- is named in the carrier's letter | DRIFTS | the carrier's document is an acknowledgment\n",
+        encoding="utf-8",
+    )
+    st = json.loads((data / "state.json").read_text())
+    st.pop("render")
+    (data / "state.json").write_text(json.dumps(st), encoding="utf-8")
+    (data / "final-pass.json").unlink()
+    (tmp_path / "job" / proof_review.REDO_MARKER).write_text("{}", encoding="utf-8")
+    _r3, v3 = _run(tmp_path, pricing, client)
+    assert v3.outcome == "delivered", v3.reason
+    again2 = client.stages()[len(before2) :]
+    assert again2.count("REPAIR") == 1 and again2.count("AUDIT") == 1 and again2.count("REVIEW") == 1
+    assert (data / "draft-v3.md").is_file() and json.loads((data / "final-pass.json").read_text())["version"] == 3
+    letter = _letter_text(data)
+    assert "carrier's acknowledgment" in letter and "cervical sprain" in letter
 
 
 # ---- two unsupported statements in one sentence -----------------------------------------------
