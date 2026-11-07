@@ -143,6 +143,10 @@ const EXPECTED_VERBS = [
   'job_note_send',
   'job_read',
   'job_record',
+  // A firm's own save of its accepted library file, handed to the root writer
+  // by the runner daemon after a job (library_edit_verbs.py). Root only.
+  'library_edit_status',
+  'library_edit_submit',
   // "Set up our ..." (library_setup_verbs.py): the drafting lane's second kind
   // of job, gateway or root. Its status and record ride the drafting verbs.
   'library_setup_accept_status',

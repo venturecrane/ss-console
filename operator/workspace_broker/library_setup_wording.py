@@ -19,6 +19,9 @@ WHERE EACH IS SAID:
   tool's answer to the administrator's reply naming a document.
 * ``done_*``, ``changed``, ``unusable``, ``not_a_form``: the reply of the job that made the
   file from the chosen document, rendered like the list's.
+* ``edit_not_used``: appended to a drafted document's or a demand's reply when
+  the firm's own save of its library file was not used (piece 4), and ONLY
+  with ``logic_in_code.library_edit_notice: enforce``, off on every seat.
 * ``ACTIVITY``: the firm's portal activity line for each audit row a
   switched-on seat's setup job writes.
 
@@ -38,6 +41,9 @@ KIND_NAMES = {
     "mediation_brief": ("mediation brief", "mediation briefs"),
     "memo": ("memo", "memos"),
 }
+#: The kinds a firm's own library-file save can be considered for that "set up
+#: our ..." does not take; named for ``edit_not_used`` only.
+EDIT_KIND_NAMES = {"demand_letter": ("demand letter", "demand letters")}
 
 SENTENCES: dict[str, str] = {
     # The submit tool's answer on a switched-on seat.
@@ -99,6 +105,13 @@ SENTENCES: dict[str, str] = {
     "not_a_form": (
         "We could not make a file from that document because its layout does not give us the places to "
         "write into, so nothing was changed. You can reply with another number from the list."
+    ),
+    # A drafted document's reply, when the firm's own save of its library file was
+    # not used. Said ONLY with logic_in_code.library_edit_notice: enforce (the
+    # Captain's call; off on every seat), and appended by ``edit_not_used``.
+    "edit_not_used": (
+        "The firm's latest save of its {one} file was not used for this {one}, so it was made in that file "
+        "as it was before. The saved file itself was not changed."
     ),
 }
 
@@ -216,4 +229,40 @@ def render(row: dict[str, Any]) -> str:
     return f"{body}\n\n{say('outside')}" if body else ""
 
 
-__all__ = ["ACTIVITY", "KIND_NAMES", "SENTENCES", "ack", "chosen", "names", "render", "say"]
+def edit_not_used(row: dict[str, Any], *, notice: bool, kind: str = "") -> str:
+    """The ``edit_not_used`` sentence for a delivered document whose job did not
+    use the firm's own save of its library file (``delivery_json.library_edit``,
+    from ``jobs/library_edit``), or "". ``notice``: the
+    ``logic_in_code.library_edit_notice`` switch is ``enforce``; off, the firm is
+    told nothing (SMD is paged either way)."""
+    edit = _json_field(row, "delivery_json").get("library_edit")
+    if not notice or not isinstance(edit, dict) or edit.get("used") is not False:
+        return ""
+    kind = kind or str(row.get("document_class") or "")
+    one, many = EDIT_KIND_NAMES.get(kind) or KIND_NAMES.get(kind, ("document", "documents"))
+    return say("edit_not_used", one=one, many=many)
+
+
+def edit_notice_on() -> bool:
+    """Whether ``logic_in_code.library_edit_notice`` is ``enforce`` on this seat.
+    An unreadable switch is not "on": the notice is words to a firm, so the
+    door that fails closed here is the one that says nothing."""
+    from .logic_in_code import ENFORCE, LIBRARY_EDIT_NOTICE, load_switch
+
+    sw = load_switch(LIBRARY_EDIT_NOTICE)
+    return sw.error is None and sw.mode == ENFORCE
+
+
+__all__ = [
+    "ACTIVITY",
+    "EDIT_KIND_NAMES",
+    "KIND_NAMES",
+    "SENTENCES",
+    "ack",
+    "chosen",
+    "edit_not_used",
+    "edit_notice_on",
+    "names",
+    "render",
+    "say",
+]

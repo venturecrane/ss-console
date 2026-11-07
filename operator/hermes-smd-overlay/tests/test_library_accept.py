@@ -144,6 +144,33 @@ def test_each_refusal_refuses_and_writes_nothing(
     assert vault.puts == [] and vault.objects == {}
 
 
+#: The words ``runners/jobs/jobs/library_edit/handoff.RACE_LOST`` reads a lost race by.
+RACE_LOST = "not the one this acceptance says it replaces"
+
+
+def test_two_jobs_that_find_the_same_firm_save_accept_it_once(tmp_path: Path) -> None:
+    """Design piece 4: two drafting jobs find the firm's same new saved version of
+    its accepted file and each hands its acceptance over, both replacing the
+    entry they read. The first takes the slot; the second is refused as already
+    replaced, and nothing is written for it (no second copy, no second ledger)."""
+    vault, target = _vault_and_seat(tmp_path)
+    assert LA.accept_file(_acc(), target).status == "installed"
+    saved = docx(p("[[party.plaintiff]]"))
+    old = L.Replaced("f-brief", "v3", sha(FORM))
+    firm_made = _acc(saved, version="v4", replaces=old, accepted_by="firm_made")
+    first = LA.accept_file(firm_made, target)
+    assert first.status == "installed", first.reasons
+    puts = list(vault.puts)
+    second = LA.accept_file(firm_made, target)
+    assert second.status == "rejected" and any(RACE_LOST in r for r in second.reasons), (
+        second.reasons
+    )
+    assert vault.puts == puts
+    entry = L.parse_ledger(vault.objects[lib.ledger_key(SLUG)]).entries[0]
+    assert (entry.version, entry.sha256, entry.accepted_by) == ("v4", sha(saved), "firm_made")
+    assert entry.replaces == old
+
+
 def test_an_invalid_ledger_in_the_vault_is_never_overwritten(tmp_path: Path) -> None:
     vault, target = _vault_and_seat(tmp_path, FakeVault({lib.ledger_key(SLUG): b"{torn"}))
     result = LA.accept_file(_acc(), target)

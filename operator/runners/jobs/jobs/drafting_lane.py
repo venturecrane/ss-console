@@ -59,6 +59,7 @@ from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .drafting import firm_rules, repair_budget
 from .firm_inputs import pin_env
+from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
@@ -222,8 +223,11 @@ class DraftingLane(Daemon):
         firm_rules.alert_refused(self, job_id)
         repair_budget.alert_exhausted(self, job_id)
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
+            library_edit_handoff.hand_over(self, job_id)
             return "interrupted"
-        return self._report(job_id, code, out)
+        state = self._report(job_id, code, out)
+        library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+        return state
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
         """Our cause, said once: the seat has no usable drafting inputs. Failed
@@ -297,6 +301,9 @@ class DraftingLane(Daemon):
         if state == "delivered":
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}
+            edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
+            if edit is not None:
+                fields["delivery"]["library_edit"] = edit
         state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)

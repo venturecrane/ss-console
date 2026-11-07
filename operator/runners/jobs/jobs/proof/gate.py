@@ -60,6 +60,9 @@ CODES = frozenset(
         # 2026-11-06: a code-sent job held on our side, failed or waited on its
         # lane's proof; SMD only, the requester is told nothing (jobs/job_notes.py).
         "job_stopped",
+        # 2026-11-07: a firm's own save of its accepted library file was not used
+        # or not accepted (jobs/library_edit); SMD only, the firm is told nothing.
+        "library_edit_refused",
     }
 )
 

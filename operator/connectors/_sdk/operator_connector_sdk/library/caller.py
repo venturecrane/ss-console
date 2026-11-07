@@ -22,6 +22,14 @@ fails loudly instead of filing a document whose record says otherwise:
 * ``none_accepted``: the base is one of today's fallbacks, named;
 * any other status: nothing was started (``not_started``).
 
+A FIRM'S OWN EDIT (design piece 4). When a job finds the accepted file saved
+again in the library, it judges that version in code (``jobs/library_edit``)
+and the record says so in one more key, ``firm_edit``, present only then: the
+version considered, the one it replaces, whether it was used, and why not by
+code. A used edit is the resolution's file, ``accepted_by`` :data:`FIRM_MADE`,
+with the case system's version id and the sha256 of the cleaned bytes kept. A
+record with no newer version is exactly the record it was before this key.
+
 STANDARD LIBRARY ONLY.
 """
 
@@ -58,7 +66,14 @@ NOT_STARTED = "not_started"
 FALLBACKS = (PINNED, BY_NAME, STARTER)
 SOURCES = (ACCEPTED, *FALLBACKS, NOT_STARTED)
 
+#: Who said yes to a firm's own edit of its accepted file: no person; the code.
+FIRM_MADE = "firm_made"
+#: The optional record key a considered firm edit adds, and its own keys.
+FIRM_EDIT = "firm_edit"
 _RECORD_KEYS = frozenset({"schema_version", "path", "kind", "resolution", "base", "overridden"})
+_EDIT_KEYS = frozenset({"status", "code", "version", "replaces_version", "sha256", "accepted_at", "install"})
+EDIT_USED = "used"
+EDIT_REFUSED = "refused"
 _BASE_KEYS = frozenset({"source", "sha256", "name", "contract"})
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 
@@ -154,20 +169,40 @@ def check_used(resolution: Resolution, base: BaseUsed) -> list[str]:
     return []
 
 
+def edit_problems(edit: Any) -> list[str]:
+    """Every reason ``edit`` is not a record's ``firm_edit`` block."""
+    if not isinstance(edit, dict) or set(edit) != _EDIT_KEYS:
+        return [f"a firm_edit block's keys are exactly {sorted(_EDIT_KEYS)}"]
+    if edit["status"] not in (EDIT_USED, EDIT_REFUSED):
+        return [f"firm_edit status {edit['status']!r}"]
+    if edit["status"] == EDIT_USED and (not isinstance(edit["sha256"], str) or not _SHA.match(edit["sha256"])):
+        return ["a used firm edit names the sha256 of the bytes kept"]
+    if edit["status"] == EDIT_REFUSED and not edit["code"]:
+        return ["a refused firm edit names its code"]
+    return []
+
+
 def build_record(
-    path: str, resolution: Resolution, base: BaseUsed, overridden: BaseUsed | None = None
+    path: str,
+    resolution: Resolution,
+    base: BaseUsed,
+    overridden: BaseUsed | None = None,
+    firm_edit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The record beside the document. ``overridden``: the pinned input the
     accepted file replaced, while both exist (the migration window).
+    ``firm_edit``: the firm's own saved version considered, only when there was one.
     Raises ``ValueError`` when ``base`` is not what the answer allows."""
     if path not in PATHS:
         raise ValueError(f"unknown path {path!r}")
     problems = check_used(resolution, base)
     if overridden is not None and resolution.status != RESOLVED:
         problems.append("only an accepted file overrides a pinned input")
+    if firm_edit is not None:
+        problems += edit_problems(firm_edit)
     if problems:
         raise ValueError("; ".join(problems))
-    return {
+    out = {
         "schema_version": RECORD_SCHEMA_VERSION,
         "path": path,
         "kind": resolution.kind,
@@ -175,13 +210,16 @@ def build_record(
         "base": base.to_json(),
         "overridden": overridden.to_json() if overridden is not None else None,
     }
+    if firm_edit is not None:
+        out[FIRM_EDIT] = dict(firm_edit)
+    return out
 
 
 def record_problems(doc: Any) -> list[str]:
     """Every reason ``doc`` is not a record a later check can read."""
-    if not isinstance(doc, dict) or set(doc) != _RECORD_KEYS:
-        return [f"a record's keys are exactly {sorted(_RECORD_KEYS)}"]
-    out = []
+    if not isinstance(doc, dict) or set(doc) - {FIRM_EDIT} != _RECORD_KEYS:
+        return [f"a record's keys are exactly {sorted(_RECORD_KEYS)}, and {FIRM_EDIT} when an edit was considered"]
+    out = edit_problems(doc[FIRM_EDIT]) if FIRM_EDIT in doc else []
     if doc["schema_version"] != RECORD_SCHEMA_VERSION:
         out.append(f"schema {doc['schema_version']!r}")
     if doc["path"] not in PATHS:
@@ -215,7 +253,11 @@ __all__ = [
     "CHAT_TOOL",
     "DEMAND_JOB",
     "DRAFTING_JOB",
+    "EDIT_REFUSED",
+    "EDIT_USED",
     "FALLBACKS",
+    "FIRM_EDIT",
+    "FIRM_MADE",
     "NOT_STARTED",
     "PATHS",
     "PINNED",
@@ -228,6 +270,7 @@ __all__ = [
     "attorney_key",
     "build_record",
     "check_used",
+    "edit_problems",
     "needs_matter_attorney",
     "record_problems",
     "write_record",

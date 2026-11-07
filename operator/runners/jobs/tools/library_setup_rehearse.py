@@ -42,6 +42,15 @@ that remained. It files nothing:
     python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
         --inputs <drafting inputs dir> --choose 1 --accept-dry
 
+``--edited`` runs piece 4's checks on a firm's saved library file against the
+slot's accepted copy (``--accepted``, the seat-kept file), with no hunt and no
+case system: the cleaning, the codes a job would refuse it for, the fixed
+strings read off the accepted copy, the root writer's check on the cleaned
+bytes with them, and the look comparison of the save with what is kept:
+
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
+        --edited <saved.docx> --accepted <accepted copy.docx> --contract marked
+
 Exit 0 when every step ran (whatever it found), 2 when a step could not run.
 """
 
@@ -224,6 +233,29 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     return {**report, "chosen": pick["file_id"], **result}
 
 
+def edited_check(kind: str, contract: str, accepted: bytes, edited: bytes) -> dict[str, Any]:
+    """Piece 4's checks on a firm's saved library file, exactly as a job runs them
+    (``jobs/library_edit/check.py``), and the root writer's check on the cleaned
+    bytes with the slot's fixed strings (read off the accepted copy). Codes and
+    counts only; nothing is written."""
+    from jobs.library_edit import check
+
+    cleaned = check.clean(edited)
+    fixed = tuple(sorted(check.fixed_of(accepted)))
+    codes = check.problems(kind, contract, accepted, cleaned)
+    return {
+        "edited": {
+            "would_use": not codes,
+            "codes": codes,
+            "fixed_strings": len(fixed),
+            "paragraphs_not_fixed": check.words_changed(cleaned, fixed),
+            "cleaned_sha256": hashlib.sha256(cleaned).hexdigest(),
+            "root_writer_check": blank_problems(cleaned, fixed),
+            "look": look_compare(edited, cleaned),
+        }
+    }
+
+
 def main(argv: list[str] | None = None, client: Any = None) -> int:
     p = argparse.ArgumentParser(prog="library_setup_rehearse", description=(__doc__ or "").split("\n", 1)[0])
     p.add_argument("--kind", required=True, choices=("mediation_brief", "memo"))
@@ -237,7 +269,20 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
         action="store_true",
         help="run the accept job's checks on the chosen candidate (made file, allow list, proofs); file nothing",
     )
+    p.add_argument("--edited", default="", help="a firm's saved library file to run piece 4's checks on (no hunt)")
+    p.add_argument("--accepted", default="", help="with --edited: the slot's accepted copy (the seat-kept file)")
+    p.add_argument("--contract", default="marked", choices=("marked", "styles"), help="with --edited")
     args = p.parse_args(argv)
+    if args.edited:
+        try:
+            out = edited_check(
+                args.kind, args.contract, Path(args.accepted).read_bytes(), Path(args.edited).read_bytes()
+            )
+        except Exception as exc:  # noqa: BLE001 - a rehearsal that could not run says so by type, never with text
+            print(json.dumps({"error": type(exc).__name__}))
+            return 2
+        print(json.dumps(out, indent=1, sort_keys=True))
+        return 0
     if client is None:
         from smokeball_connector.client import build_client_from_env
 

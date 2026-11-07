@@ -292,6 +292,7 @@ def demand(row: dict[str, Any]) -> str:
             _s("demand", "gap", gap=gap),
             _s("demand", "notes", notes=name(files, "attorney_notes")),
         ),
+        library_edit_line(row, "demand_letter"),
         paragraph(_s("demand", "reserved"), _s("demand", "outside")),
         (_s("demand", "order") or "") if gap else "",
     )
@@ -430,8 +431,19 @@ def drafting(row: dict[str, Any]) -> str:
         ),
         _caption(delivery),
         _not_covered(delivery),
+        library_edit_line(row),
         _s("drafting", "outside") or "",
     )
+
+
+def library_edit_line(row: dict[str, Any], kind: str = "") -> str:
+    """The firm's own library-file save was not used: one sentence, only with
+    ``logic_in_code.library_edit_notice: enforce`` (``library_setup_wording``)."""
+    if not isinstance(obj(row, "delivery_json").get("library_edit"), dict):
+        return ""
+    from . import library_setup_wording as w
+
+    return w.edit_not_used(row, notice=w.edit_notice_on(), kind=kind)
 
 
 # -- the stored words: a negotiation notice and an SMD note -------------------------

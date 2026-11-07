@@ -32,6 +32,7 @@ _FOUR = (
     "fixed_wording",
     "wording_rules",
     "library_setup",
+    "library_edit_notice",
 )
 
 

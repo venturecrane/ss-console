@@ -1072,6 +1072,7 @@ export interface LogicInCode {
   fixed_wording?: LogicInCodeMode
   wording_rules?: LogicInCodeMode
   library_setup?: LogicInCodeMode
+  library_edit_notice?: LogicInCodeMode
 }
 
 /**

@@ -62,6 +62,7 @@ CODES = frozenset(
         "identity_held",
         "repair_unconverged",
         "job_stopped",
+        "library_edit_refused",
     }
 )
 REPLY_KINDS = frozenset(

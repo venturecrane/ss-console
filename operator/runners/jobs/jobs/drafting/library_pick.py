@@ -22,7 +22,9 @@ resolver first, with the class and the matter's responsible attorney:
   resolver's reason. Never the pinned file or the starter in its place.
 
 The accepted bytes come from the seat's own kept copy (``copies_dir``); the
-library is asked only whether a newer version exists.
+library is asked only whether a newer version exists. When one does, it is the
+firm's own save, and ``jobs/library_edit`` decides in code whether this draft
+is made in it (design piece 4); the record's ``firm_edit`` says what it decided.
 
 While both an accepted file and a pinned base exist for the class, the
 accepted file wins and the record names the pin it replaced. The record is
@@ -64,6 +66,7 @@ from operator_connector_sdk.library.caller import (
 )
 from operator_connector_sdk.library.resolver import replace_status
 
+from .. import library_edit
 from .brief_base import unfit
 from .firm_rules import _spec_dir
 
@@ -149,9 +152,12 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     held, pinned = _pinned(run)
     store = LazyStore(lambda: open_store(run.seat))
     spec = _spec_dir()
-    res = resolve(
+    asked = resolve(
         store, read_installed(spec), run.cls, matter_attorney=_matter_attorney(run), copies_dir=copies_dir(spec)
     )
+    considered = library_edit.consider(asked, store, run.cls)
+    library_edit.leave(run.data, asked, considered)
+    res, edit = considered.resolution, considered.note
     if res.status == NONE_ACCEPTED:
         today = held if marked_ok else None
         used = pinned if today is not None and pinned is not None else BaseUsed(STARTER)
@@ -160,7 +166,8 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     elif res.status == RESOLVED and res.file is not None and res.data is not None:
         out = _accepted(run, res, marked_ok)
         used = BaseUsed.of(ACCEPTED, res.data, contract=res.file.contract)
-        write_record(run.data, build_record(DRAFTING_JOB, res, used, overridden=pinned if marked_ok else None))
+        overridden = pinned if marked_ok else None
+        write_record(run.data, build_record(DRAFTING_JOB, res, used, overridden=overridden, firm_edit=edit))
     else:
         raise _stop(run, res)
     setattr(run, _MEMO, out)
