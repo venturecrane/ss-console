@@ -61,7 +61,8 @@ import re
 from typing import Callable
 
 from .. import llm
-from ..medchron.audit import authored, claims as CL, coverage, diag, repair
+from ..medchron.audit import authored, claims as CL, coverage, diag, ntd_typed, repair
+from ..medchron.audit import handwritten_evidence as HE
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.audit.run import AuditPaths, Round
 from ..medchron.config import DEFAULT_AUDIT_WORKERS
@@ -120,6 +121,28 @@ def _attest_authored(sr: StageRun, paths: AuditPaths) -> None:
     sr.log(f"SMD's corrections: {n} claim(s) attested SUPPORTED by SMD; the audit does not re-grade them")
 
 
+def _drop_typed_ntd(sr: StageRun, paths: AuditPaths) -> None:
+    """The handwritten-records note removed where every page it cites is
+    typed (``medchron/audit/ntd_typed.py``), in the document and its entries
+    copy. The note is never graded, so no claim or verdict moves."""
+    if not paths.doc.is_file():
+        return
+    page = HE.Evidence(sr.slug_dir, sr.unit.unit, "").page
+    full = paths.doc.read_text(encoding="utf-8")
+    if CL.BODY_START not in full or CL.BODY_END not in full.split(CL.BODY_START, 1)[1]:
+        return
+    head, rest = full.split(CL.BODY_START, 1)
+    body, tail = rest.split(CL.BODY_END, 1)
+    body, n = ntd_typed.drop(body, page)
+    if not n:
+        return
+    paths.doc.write_text(head + CL.BODY_START + body + CL.BODY_END + tail, encoding="utf-8")
+    entries = paths.slug_dir / "runs" / paths.unit / "entries_scoped_final.md"
+    if entries.is_file():
+        entries.write_text(ntd_typed.drop(entries.read_text(encoding="utf-8"), page)[0], encoding="utf-8")
+    sr.log(f"handwritten-records note: removed from {n} entr(ies) whose cited pages are all typed")
+
+
 def rehearse(sr: StageRun) -> list[str]:
     """The $0 half, for `jobs rehearse`: the claim count the audit would
     call on, times the firm's per-claim rate. Counted with the audit's OWN
@@ -167,6 +190,7 @@ def run(sr: StageRun) -> int:
         sr.log(f"levers.audit_mode must be image or text, not {mode!r}")
         return 2
     _rekey(sr, paths)
+    _drop_typed_ntd(sr, paths)
     _attest_authored(sr, paths)
     workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
     sr.log(f"audit: {workers} claim(s) checked at once")
@@ -213,6 +237,8 @@ def _drop_at_gate(sr: StageRun, paths: AuditPaths) -> bool:
     them cannot be found in the document (the gate then holds as before) or
     the claim count does not reconcile."""
     full = paths.doc.read_text(encoding="utf-8")
+    if CL.BODY_START not in full or CL.BODY_END not in full.split(CL.BODY_START, 1)[1]:
+        return
     head, rest = full.split(CL.BODY_START, 1)
     body, tail = rest.split(CL.BODY_END, 1)
     pdfs = set(exhibit_paths(paths.out))
