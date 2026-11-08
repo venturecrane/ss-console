@@ -471,11 +471,13 @@ Two workflows run the release (ADR 0096).
   Ticks never overlap. One tick takes the fleet lease, reads every seat's
   rollout of the image releases still in flight from D1, and advances every
   ring that is ready, one release per ring (`operator/bin/lib/fleet/tick.py`).
-  A client ring rolls its seats in waves of `max_parallel` (five, set in
-  `scripts/lib/seat-registries.ts` and written into `operator/fleet/rings.yaml`;
-  twenty client seats are four waves, not a two-hour line), and between waves
-  the run asks whether a newer image has landed and hands off to the next run
-  if so. Each ring takes the newest
+  A client ring rolls one seat first, alone, as a canary; once it is done,
+  every other seat of the ring rolls at once, up to `max_parallel` (twenty, set
+  in `scripts/lib/seat-registries.ts` and written into
+  `operator/fleet/rings.yaml`). Twenty client seats cost about two seat
+  restarts after staging, not four waves or a two-hour line, and a defect only
+  a client seat shows stops at the canary. Between waves the run asks whether a
+  newer image has landed and hands off to the next run if so. Each ring takes the newest
   release that has baked on the ring before it: the newest goes as far as its
   own bakes allow, and while it waits, an older release that already passed the
   earlier rings keeps moving, so a run of merges never starves the later rings.
