@@ -486,6 +486,8 @@ jobs:
     permissions:
       contents: read
       packages: read
+      # gh workflow run release-tick.yml (Start the release tick).
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -539,6 +541,26 @@ jobs:
           FLY_REGISTRY_TOKEN: ${{ secrets.FLY_REGISTRY_TOKEN }}
           AFTER_SHA: ${{ github.sha }}
         run: bash scripts/ci-publish-bundle.sh
+
+      # Start the release tick now. Since #3871 an image waits for the jobs bundle
+      # built for it, so the tick the image build started finds nothing to do yet;
+      # without this the release waited for the next scheduled tick (2026-11-07,
+      # #3871's own release: 3 of its 29 minutes, up to 5). Same guard as the
+      # other publish jobs: skipped while a tick is already queued or pending.
+      - name: Start the release tick
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          waiting=$(
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow release-tick.yml --status queued --json databaseId --jq '.[0].databaseId'
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow release-tick.yml --status pending --json databaseId --jq '.[0].databaseId'
+          )
+          if [ -z "$waiting" ]; then
+            gh workflow run release-tick.yml --repo "$GITHUB_REPOSITORY" --ref main
+          else
+            echo "a tick is already queued"
+          fi
 
       - name: No bundle paths changed
         if: steps.changes.outputs.relevant != 'true'

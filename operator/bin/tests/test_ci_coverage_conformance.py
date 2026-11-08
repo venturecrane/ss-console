@@ -946,7 +946,7 @@ def test_the_tick_re_dispatches_itself_after_progress_and_deploy_dispatches_it_o
     tick_step = next(s for s in tick["steps"] if s.get("name") == "Tick")
     assert tick_step.get("id") == "tick" and 'echo "fleet_rc=$rc" >> "$GITHUB_OUTPUT"' in tick_step["run"]
     deploy_jobs = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))["jobs"]
-    dispatching = [deploy_jobs["publish-skills"], deploy_jobs["build-seat-image"], tick]
+    dispatching = [deploy_jobs["publish-skills"], deploy_jobs["build-seat-image"], deploy_jobs["publish-bundle"], tick]
     for job in dispatching:
         assert (job.get("permissions") or {}).get("actions") == "write"
         found = _dispatches(job)
@@ -964,6 +964,13 @@ def test_the_tick_re_dispatches_itself_after_progress_and_deploy_dispatches_it_o
     assert start.get("if") == "steps.changes.outputs.relevant == 'true'"
     assert build_runs.index(start["run"]) > next(i for i, r in enumerate(build_runs) if "fleet build" in r)
     assert "FLY_" not in str(deploy_jobs["publish-skills"]), "publish-skills holds no Fly secret"
+    # An image waits for its bundle (#3871): the bundle publish starts the tick too,
+    # after the publish and only when one ran.
+    bundle_steps = deploy_jobs["publish-bundle"]["steps"]
+    bundle_runs = [s.get("run") or "" for s in bundle_steps]
+    bstart = next(s for s in bundle_steps if "gh workflow run release-tick.yml" in (s.get("run") or ""))
+    assert bstart.get("if") == "steps.changes.outputs.relevant == 'true'"
+    assert bundle_runs.index(bstart["run"]) > next(i for i, r in enumerate(bundle_runs) if "ci-publish-bundle.sh" in r)
 
 
 def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> None:
