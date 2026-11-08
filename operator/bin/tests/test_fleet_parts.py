@@ -483,9 +483,51 @@ def test_insert_release_writes_merged_at_and_null_when_a_caller_omits_it() -> No
     )
     store.insert_release({"release_id": "skl-202611050000-bbbbbbbb", "kind": "skills"})
     with_time, without = runner.calls[0][-1], runner.calls[1][-1]
-    assert "merged_at, created_at)" in with_time and "merged_at, created_at)" in without
+    assert "merged_at, volume_epoch, created_at)" in with_time and "merged_at, volume_epoch, created_at)" in without
     assert "2026-11-05T00:00:00Z".encode().hex() in with_time.lower()
     assert "2026-11-05T00:00:00Z".encode().hex() not in without.lower()
+
+
+def test_a_build_records_the_volume_epoch_of_its_tree(tmp_path: Path) -> None:
+    """The rollout refuses a rollback onto a lower epoch only if the build wrote it down.
+
+    FALSIFIER: drop "volume_epoch" from the release dict (or read it from
+    anywhere but the built tree) and the stored row holds no 2.
+    """
+    from bin.lib.fleet.build import BuildOptions
+
+    fly, store, r2 = _BuildFly(_PUSHED), FakeStore(), FakeR2()
+    builder = _retry_builder(tmp_path, fly, store, r2, [], [])
+    (tmp_path / "operator/fleet").mkdir(parents=True)
+    (tmp_path / "operator/fleet/volume-epoch").write_text("2\n")
+    rel = builder.build(BuildOptions())
+    assert store.releases[rel["release_id"]]["volume_epoch"] == 2
+
+
+def test_a_tree_without_an_epoch_file_is_epoch_1_and_a_bad_file_refuses(tmp_path: Path) -> None:
+    """FALSIFIER: return None for a missing file and every pre-epoch build records
+    NULL; accept "two" or "0" and a typo picks a layout no boot knows."""
+    from bin.lib.fleet import volume_epoch
+
+    assert volume_epoch.read(tmp_path) == 1
+    (tmp_path / "operator/fleet").mkdir(parents=True)
+    for bad in ("two", "0", "", "2 3"):
+        (tmp_path / "operator/fleet/volume-epoch").write_text(bad)
+        with pytest.raises(ToolingError, match="volume-epoch"):
+            volume_epoch.read(tmp_path)
+    assert [volume_epoch.of(r) for r in (None, {}, {"volume_epoch": None}, {"volume_epoch": 2})] == [1, 1, 1, 2]
+
+
+def test_insert_release_writes_the_volume_epoch_and_null_when_omitted() -> None:
+    """FALSIFIER: leave volume_epoch out of insert_release's cols, or quote it as
+    text, and the row the rollout reads has no integer epoch."""
+    runner = ScriptRunner(Result(0, "[]", ""), Result(0, "[]", ""))
+    store = FleetStore(D1(runner, "/repo"))
+    store.insert_release({"release_id": "img-202611070000-aaaaaaaa", "kind": "image", "volume_epoch": 2})
+    store.insert_release({"release_id": "skl-202611070000-bbbbbbbb", "kind": "skills"})
+    with_epoch, without = runner.calls[0][-1], runner.calls[1][-1]
+    assert with_epoch.endswith(", 2, strftime('%Y-%m-%dT%H:%M:%SZ','now'))")
+    assert without.endswith(", NULL, strftime('%Y-%m-%dT%H:%M:%SZ','now'))")
 
 
 def test_the_remote_builders_dropped_stream_is_a_build_transport_failure() -> None:

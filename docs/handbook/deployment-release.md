@@ -305,7 +305,10 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    prints the release id. Flags: `--declare-secret NAME` when the release
    needs a newly staged secret, `--not-volume-forward-compatible` when the new
    image changes the volume in a way the old image cannot read (a failing seat
-   then halts instead of rolling back).
+   then halts instead of rolling back). The build also records the volume
+   epoch of the tree it built, the integer in `operator/fleet/volume-epoch`
+   (no file is epoch 1), on the release (`fleet_releases.volume_epoch`,
+   migration 0150).
 3. **Prove it on the rig, then release:** `fleet release <release-id> --only
    pilot-smokeball`, drive the shadow firm against the rig and cite the run id
    (below), then `fleet release <release-id>` for the rings. Rings live in
@@ -373,6 +376,16 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   recorded as its rollback target, and the volume is snapshotted. A release
   built with `--not-volume-forward-compatible` halts a failing seat instead of
   rolling it back.
+- **Never onto an older volume layout** (`operator/bin/lib/fleet/volume_epoch.py`,
+  2026-11-07). A failing seat is not rolled back when its rollback image's
+  volume epoch is lower than the release's: it halts on the failing image
+  with its snapshot kept, as `failed`, through the same `rollout_failed` pager
+  as the flag above. This covers what the flag cannot: a LATER release failing
+  on a seat that already moved, and a seat that skipped the move's own release
+  and took a later one. A release whose epoch is lower than the image the seat
+  runs now is refused before anything is touched. A release row without an
+  epoch (built before migration 0150), and an image no release row names,
+  count as epoch 1.
 - **Jobs bundle pointer, before the deploy** (a seat that authors a job lane,
   while `BUNDLE_RELEASE_ENABLED` is `true`; `operator/bin/lib/fleet/bundle_align.py`).
   A seat reads its bundle pointer only at boot, so the pointer is written at
@@ -750,8 +763,11 @@ git: built at or after the floor, and needing no newer image than this one.
 is forward-compatible and rolls back on its own: a failing seat returns to
 the previous image, whose installer runs the old-layout bundle it still holds
 on disk. R2, the one-time move of `/opt/data/medchron` to `/opt/data/jobs`, is
-built `--not-volume-forward-compatible`, so a failing seat halts on the new
-image with the volume snapshot the halt recorded, and the recovery is by hand:
+volume epoch 2 and built `--not-volume-forward-compatible`, so a failing seat
+halts on the new image with the volume snapshot the halt recorded. Every later
+release records epoch 2 too, so a moved seat that fails a later release halts
+the same way instead of rolling back onto an epoch-1 image, and R2 can roll in
+rings like any release, without holds or a hand `--only` per seat. The recovery is by hand:
 `fleet hold` the seat; start a Machine on the previous image with the
 entrypoint overridden and run `mv /opt/data/jobs /opt/data/medchron` before
 the old image's boot sweep runs (an old image booting over the moved tree

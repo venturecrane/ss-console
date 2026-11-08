@@ -105,6 +105,16 @@ release-tick.yml`) the moment its candidate is published, and
    the tick said "a person must act" for a call a person had already made
    and merged. The `--accept-lane-inputs` flag is still never passed by a tick.
 
+   **Amended 2026-11-07: a rollback never crosses a volume epoch.** Each image
+   release records the volume epoch of its tree (`fleet_releases.volume_epoch`,
+   migration 0150; ADR 0103 amendment). A failing seat whose rollback image is
+   of a lower epoch is not rolled back: it is `failed`, a standing halt with its
+   snapshot kept, exactly as for a release built not-volume-forward-compatible,
+   and a release of a lower epoch than the seat runs is refused before anything
+   is touched. So a volume change rolls through the rings like any release, and
+   the controller cannot hand a moved seat an older layout by taking a later
+   release.
+
    **Amended 2026-10-26: promotion across releases in flight.** As first built,
    `latest` meant only the newest release, so every merge restarted the
    controller at ring 0; five merges in four hours left the pilot three hours
