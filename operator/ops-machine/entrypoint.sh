@@ -67,7 +67,8 @@ if [ -n "${CLAUDE_OAUTH_TOKEN_A:-}${CLAUDE_OAUTH_TOKEN_B:-}" ]; then
   umask 077
   {
     for v in CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B; do
-      [ -n "${!v:-}" ] && printf 'export %s=%q\n' "$v" "${!v}"
+      # an if, not &&: an unset last token must not end the group non-zero under set -e
+      if [ -n "${!v:-}" ]; then printf 'export %s=%q\n' "$v" "${!v}"; fi
     done
   } > "$HOME_DIR/.claude-oauth"
   umask 022
