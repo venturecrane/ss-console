@@ -4,7 +4,7 @@ section: running
 order: 24
 owner: captain
 review_every: 30
-last_reviewed: "2026-10-22"
+last_reviewed: "2026-11-08"
 summary: Where client documents live (one Fly workspace per client, never a laptop), how to open one with a single command, how work is handed over from a laptop, what each workspace can reach, how long documents are kept, and smd-ops, SMD's own machine.
 sources:
   - label: operator/ops-machine/workspaces.json - the list of client workspaces
@@ -29,6 +29,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-idle-stop
   - label: operator/ops-machine/bin/ops-reap-tasks - closes finished handoff sessions
     href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-reap-tasks
+  - label: operator/ops-machine/bin/claude - the shim that picks the Claude account
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/claude
+  - label: operator/ops-machine/bin/ops-claude-failover - moves a limit-stuck session to the other account
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-claude-failover
+  - label: operator/ops-machine/bin/ops-claude-accounts - which account is exhausted, until when
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/ops-machine/bin/ops-claude-accounts
 ---
 
 A client's documents (matter files, medical records, and everything made from them) are opened only on that client's own locked-down machine in the cloud, its ops workspace, never on a laptop. This page says what a workspace is, who opens one and how, how long documents are kept, and what `smd-ops`, SMD's own operations machine, does.
@@ -73,6 +79,20 @@ Each handoff is its own file (`~/inbox/pending-<stamp>-<pid>.md`) and gets its o
 Claude on a workspace always runs through the shim `/opt/ops/bin/claude`, which keeps the client's Anthropic key away from Claude itself (Claude runs on the Captain's Max login; only the tools bill the client's key). On 2026-10-19 Claude's own auto-updater put a copy into `~/.npm-global`, ahead of the shim on PATH, and a session ran on A&P's key. The shim now turns the updater off, the last line of `.bashrc` puts the shim first on every boot, and the selftest fails if `claude` resolves anywhere else.
 
 The first time on a new workspace, `ops` walks the Captain through his GitHub sign-in and Claude's own `/login`, then sets up the repos and tools.
+
+## Two Claude accounts, and what happens at a usage limit
+
+The Captain has two Claude subscriptions, A and B, each with its own usage limit. On 2026-11-08 the A&P workspace's account hit its weekly limit and every session there sat at Claude's limit prompt until the reset, while the other account went unused. Now a session that reaches the limit moves to the other account by itself, in the same window and the same conversation, with nobody typing.
+
+- **The accounts.** Each account has a long-lived token made by `claude setup-token`, stored in Infisical `/ss` prod as `CLAUDE_OAUTH_TOKEN_A` and `CLAUDE_OAUTH_TOKEN_B`. `smd-ops` receives them with the other `/ss` secrets (crane, `ss-env`); `bin/ops-workspace update <slug>` stages them on a workspace as Fly secrets, and the workspace keeps them in `~/.claude-oauth`, which only the shim reads. A workspace or `smd-ops` without them runs exactly as before, on the stored `/login`.
+- **Which account.** The shim `bin/claude` runs Claude on the first account in the Machine's order that is not marked exhausted. The default order is B then A, so the ops machines mostly use B while the Captain's laptop, on its own `/login`, mostly uses A. A Machine's order can be changed in `~/.claude-account-order` (for example `login B` to prefer the stored login).
+- **Spotting the limit.** Every minute `bin/ops-claude-failover` reads the bottom of each Claude window. A window showing Claude's limit message ("You've hit your weekly limit · resets ...") on two runs in a row, with nothing else changing, is stuck. The watcher records that account as exhausted until the reset the message names (`~/state/claude-accounts.json`, read with `ops-claude-accounts status A B`), then stops that Claude; the shim resumes the same conversation on the other account and tells it to carry on. Its log is `~/logs/claude-failover.log`.
+- **Both accounts spent.** Nothing is restarted, and team@ gets one notice with both reset times: `smd-ops` emails it the way the triage run does; a workspace fails its own healthchecks.io check, which emails. When the first account resets, the waiting sessions move onto it.
+- **What a token session cannot do.** A `setup-token` session can only make model requests: it has no Remote Control and no claude.ai connectors (Gmail, Calendar and the like). The shim drops Remote Control for it; the laptop already reaches workspace sessions by typing into their windows (`ops-handoff --say`), so handoffs are unaffected. A session that needs a claude.ai connector runs on the stored `/login` (the `login` entry in the order).
+- **Tools never hold a token.** Claude's Bash tool hands every command the environment Claude has (probed on the pinned version, 2026-11-08), so the shim gives Claude `ops-tool-env` as `CLAUDE_ENV_FILE`: it loads the workspace's own secrets as before and removes every Claude token. The selftest fails if a token could reach a tool.
+- **Not covered.** A one-shot `claude -p` run (the hourly triage) uses whichever account is available when it starts; if that account runs out mid-run the run fails and the next hour picks again.
+
+Making the tokens is the Captain's act, once per account and again within a year: on his laptop, signed in to that account at claude.ai, he runs `claude setup-token`, copies the token it prints, and an agent stores it from his clipboard with `crane_secret_set` (the value never appears in a chat), then runs `bin/ops-workspace update <slug>` for each workspace.
 
 ## How long documents are kept
 

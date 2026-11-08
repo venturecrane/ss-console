@@ -127,7 +127,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **private companion.** The `admin/` pages in the private engagements repository that hold what cannot be public: accounts, recovery contacts, vendor bills, and each client's commercial detail ([Handoff Companion](/admin/playbook/handoff-companion)).
 
-**Max login.** The Captain's personal Claude subscription login. Agents, `smd-ops` and every ops workspace run Claude on it today, which is one of the single-person dependencies on [Continuity](/admin/playbook/continuity).
+**Max login.** The Captain's personal Claude subscription login. Agents, `smd-ops` and every ops workspace run Claude on it today, which is one of the single-person dependencies on [Continuity](/admin/playbook/continuity). He has two subscriptions (accounts A and B); the ops machines can run on either through a long-lived token per account and move a session to the other account when one reaches its usage limit ([Client Ops Workspaces](/admin/playbook/ops-machine)).
 
 ## The Operator and its architecture
 

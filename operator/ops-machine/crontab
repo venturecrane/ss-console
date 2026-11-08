@@ -13,3 +13,6 @@ TZ=America/Phoenix
 # are agent memory, not transcripts, and a backup that loses its old files is
 # no backup: they are not expired.
 23 3 * * * find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/transcripts/*' ! -path '*/memory/*' -type f -mtime +30 -print -delete | wc -l | sed 's/^/expired transcripts: /' >> /home/ops/logs/transcript-expiry.log 2>&1; find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/transcripts/*' -type d -empty -delete 2>/dev/null
+# Move a Claude session stuck at its account's usage limit to the other account
+# (bin/ops-claude-failover; the entrypoint also adds this line to a volume crontab that lacks it).
+* * * * * /opt/ops/bin/ops-claude-failover >> /home/ops/logs/claude-failover.log 2>&1

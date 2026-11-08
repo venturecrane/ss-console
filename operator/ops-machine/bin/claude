@@ -1,6 +1,6 @@
 #!/bin/bash
 # claude (ops shim, first on PATH on smd-ops and every client workspace): Claude
-# itself always runs on the Captain's Max login, never on an API key.
+# itself always runs on the Captain's subscription, never on an API key.
 #
 # smd-ops: the /ss secrets that crane and ss-env inject include a generic
 # ANTHROPIC_API_KEY, which Claude Code would otherwise use instead of the login
@@ -15,6 +15,149 @@
 # DISABLE_AUTOUPDATER: the version is pinned by the image (CLAUDE_CODE_VERSION).
 # The updater installs into the ops user's npm prefix (~/.npm-global), and that
 # copy, first on PATH, ran a session past this shim on 2026-10-19.
+#
+# TWO ACCOUNTS (2026-11-08). The Captain has two Claude subscriptions, A and B.
+# On 2026-11-08 the A&P workspace's account hit its weekly limit and every window
+# sat at Claude's limit prompt until the reset. When the long-lived tokens
+# `claude setup-token` makes for them are present (CLAUDE_OAUTH_TOKEN_A / _B in
+# the environment, or in ~/.claude-oauth on a workspace, written by the
+# entrypoint from its Fly secrets), this shim runs Claude on the first account in
+# the Machine's order (OPS_CLAUDE_ACCOUNT_ORDER or ~/.claude-account-order,
+# default "B A") that ops-claude-accounts does not have marked exhausted, as
+# CLAUDE_CODE_OAUTH_TOKEN. "login" in the order means the stored /login.
+#   * A token session has no Remote Control and no claude.ai connectors (the
+#     setup-token "can only make model requests", Claude Code docs, 2026-11-08),
+#     so --remote-control is dropped for it. The laptop reaches a workspace
+#     session by typing into its window (ops-handoff --say), not Remote Control.
+#   * Tools never see a token: CLAUDE_ENV_FILE becomes ops-tool-env, which
+#     sources ~/.ops-secrets as before and unsets every token variable.
+#   * Inside tmux, an interactive session runs under this shim (not exec'd) with
+#     a session id it knows. When the watcher (ops-claude-failover) sees the
+#     window stuck at the limit message, it marks that account exhausted, leaves
+#     ~/state/claude-panes/pane-<n>.restart and stops Claude; this loop then
+#     resumes the same conversation on the next account and tells it to carry
+#     on. Same environment, same window, no person typing.
+# With no token present the shim does exactly what it did before: the stored
+# /login, exec'd. Test seams: OPS_CLAUDE_BIN (the real binary), OPS_CLAUDE_SHIM_DRY=1
+# (print the launch, names only, instead of running it).
+set -o pipefail   # not -u: empty arrays are normal here (bash < 4.4 calls them unbound)
+real="${OPS_CLAUDE_BIN:-/usr/local/bin/claude}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+dry="${OPS_CLAUDE_SHIM_DRY:-}"
 envfile=()
 [ -f "$HOME/.ops-secrets" ] && envfile=(CLAUDE_ENV_FILE="$HOME/.ops-secrets")
-exec env -u ANTHROPIC_API_KEY DISABLE_AUTOUPDATER=1 "${envfile[@]}" /usr/local/bin/claude "$@"
+
+if [ -z "${CLAUDE_OAUTH_TOKEN_A:-}${CLAUDE_OAUTH_TOKEN_B:-}" ] && [ -f "$HOME/.claude-oauth" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.claude-oauth"
+fi
+order="${OPS_CLAUDE_ACCOUNT_ORDER:-$(cat "$HOME/.claude-account-order" 2>/dev/null || true)}"
+accounts=() tokens=0
+for a in ${order:-B A}; do
+  case "$a" in
+    A|B) v="CLAUDE_OAUTH_TOKEN_$a"; [ -n "${!v:-}" ] && { accounts+=("$a"); tokens=$((tokens + 1)); } ;;
+    login) accounts+=(login) ;;
+  esac
+done
+
+# No token: today's behaviour, unchanged.
+if [ "$tokens" -eq 0 ]; then
+  if [ -n "$dry" ]; then echo "account=login mode=exec env_file=${envfile[*]:-none} args=$*"; exit 0; fi
+  exec env -u ANTHROPIC_API_KEY DISABLE_AUTOUPDATER=1 "${envfile[@]}" "$real" "$@"
+fi
+
+# What kind of launch is this? An interactive session (flags only, no -p) gets
+# a known session id and, inside tmux, the failover loop. Anything else
+# (claude -p, claude --version, claude mcp ...) only gets the account.
+interactive=1 sid='' resume_flag=''
+keep=()   # the flags a resumed session keeps
+args=("$@")
+i=0
+[ $# -gt 0 ] && [ "${1:0:1}" != "-" ] && interactive=0
+while [ $i -lt ${#args[@]} ]; do
+  a="${args[$i]}" n="${args[$((i + 1))]:-}"
+  case "$a" in
+    -p|--print|-v|--version|-h|--help) interactive=0 ;;
+    --session-id) sid="$n"; resume_flag=--resume ;;
+    -r|--resume) resume_flag=--resume; [[ "$n" =~ ^[0-9a-f-]{36}$ ]] && sid="$n" ;;
+    -c|--continue) resume_flag=--continue ;;
+    -n|--name|--model|--permission-mode) keep+=("$a" "$n"); i=$((i + 1)) ;;
+    --dangerously-skip-permissions) keep+=("$a") ;;
+    --remote-control|--rc) keep+=("$a"); [ -n "$n" ] && [ "${n:0:1}" != "-" ] && { keep+=("$n"); i=$((i + 1)); } ;;
+  esac
+  i=$((i + 1))
+done
+if [ "$interactive" = 1 ] && [ -z "$resume_flag" ]; then
+  sid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  [ -n "$sid" ] && args=(--session-id "$sid" "${args[@]}")
+fi
+
+# A token session cannot hold Remote Control; drop the flag (and its name).
+strip_rc() {
+  local out=() j=0 x y
+  while [ $j -lt $# ]; do
+    j=$((j + 1)); x="${!j}"
+    if [ "$x" = --remote-control ] || [ "$x" = --rc ]; then
+      y="${*:$((j + 1)):1}"
+      if [ -n "$y" ] && [ "${y:0:1}" != "-" ]; then j=$((j + 1)); fi
+      continue
+    fi
+    out+=("$x")
+  done
+  [ ${#out[@]} -eq 0 ] || printf '%s\0' "${out[@]}"
+}
+
+launch() {   # launch <exec|run> <account> <args...>
+  local how="$1" acct="$2"; shift 2
+  local run=("$@")
+  if [ "$acct" != login ]; then
+    run=()
+    while IFS= read -r -d '' x; do run+=("$x"); done < <(strip_rc "$@")
+  fi
+  if [ -n "$dry" ]; then
+    echo "account=$acct mode=$how env_file=$here/ops-tool-env token_var=$([ "$acct" = login ] && echo none || echo CLAUDE_CODE_OAUTH_TOKEN) args=${run[*]}"
+    return 0
+  fi
+  local tok=''
+  [ "$acct" != login ] && { v="CLAUDE_OAUTH_TOKEN_$acct"; tok="${!v}"; }
+  if [ "$how" = exec ]; then
+    unset CLAUDE_CODE_OAUTH_TOKEN
+    [ -n "$tok" ] && export CLAUDE_CODE_OAUTH_TOKEN="$tok"
+    exec env -u ANTHROPIC_API_KEY -u CLAUDE_OAUTH_TOKEN_A -u CLAUDE_OAUTH_TOKEN_B \
+      DISABLE_AUTOUPDATER=1 CLAUDE_ENV_FILE="$here/ops-tool-env" "$real" "${run[@]}"
+  fi
+  (
+    unset CLAUDE_CODE_OAUTH_TOKEN
+    [ -n "$tok" ] && export CLAUDE_CODE_OAUTH_TOKEN="$tok"
+    exec env -u ANTHROPIC_API_KEY -u CLAUDE_OAUTH_TOKEN_A -u CLAUDE_OAUTH_TOKEN_B \
+      DISABLE_AUTOUPDATER=1 CLAUDE_ENV_FILE="$here/ops-tool-env" "$real" "${run[@]}"
+  )
+}
+
+pick() { "$here/ops-claude-accounts" pick "${accounts[@]}" 2>/dev/null || true; }
+
+if [ "$interactive" = 0 ] || [ -z "${TMUX_PANE:-}" ]; then
+  acct=$(pick); acct="${acct:-login}"
+  launch exec "$acct" "${args[@]}"
+  exit 0
+fi
+
+# Interactive, in tmux: the failover loop.
+P="$HOME/state/claude-panes"; mkdir -p "$P" "$HOME/logs"
+pf="$P/pane-${TMUX_PANE#%}"
+trap 'rm -f "$pf" "$pf".*' EXIT
+while :; do
+  acct=$(pick); acct="${acct:-login}"
+  printf 'pid=%s\npane=%s\naccount=%s\nsid=%s\naccounts=%s\nstarted=%s\n' \
+    "$$" "$TMUX_PANE" "$acct" "$sid" "${accounts[*]}" "$(date +%s)" > "$pf"
+  launch run "$acct" "${args[@]}"
+  rc=$?
+  if [ -f "$pf.restart" ]; then
+    rm -f "$pf.restart" "$pf.seen" "$pf.handled"
+    echo "$(date -u +%FT%TZ) pane $TMUX_PANE: account $acct at its limit; resuming ${sid:-the latest conversation} on the next account" >> "$HOME/logs/claude-failover.log"
+    if [ -n "$sid" ]; then resume=(--resume "$sid"); else resume=(--continue); fi
+    args=("${keep[@]}" "${resume[@]}" "The Claude account this session was running on reached its usage limit, so the session was restarted on the Captain's other account. Nothing was lost. Continue the task exactly where you left off.")
+    continue
+  fi
+  exit "$rc"
+done

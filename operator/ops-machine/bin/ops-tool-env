@@ -1,0 +1,12 @@
+# ops-tool-env (sourced, not run): the CLAUDE_ENV_FILE the claude shim hands
+# Claude when it runs on one of the Captain's account tokens. Claude sources it
+# before every command its Bash tool runs (probed on the pinned version,
+# 2026-11-08: a variable in Claude's environment reached a Bash command, and the
+# same variable unset here did not).
+#
+# It gives the tools what they had before (a client workspace's ~/.ops-secrets:
+# that client's own Anthropic key, the seat token) and takes the Claude account
+# tokens away, so no tool, and nothing a tool runs, ever holds them.
+# shellcheck disable=SC1091
+[ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
+unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B

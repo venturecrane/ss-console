@@ -44,5 +44,6 @@ Each schedule is a cron expression read in the time zone shown: GitHub and Cloud
 | Cloudflare Worker | `workers/fleet-alerts` | `11 15 * * 2` | UTC |
 | Ops machine (smd-ops) | `/home/ops/bin/ops-triage` | `47 * * * *` | America/Phoenix |
 | Ops machine (smd-ops) | `find /home/ops/archive -mindepth 3 -path '/home/ops/archive/*/trans...` | `23 3 * * *` | America/Phoenix |
+| Ops machine (smd-ops) | `/opt/ops/bin/ops-claude-failover >> /home/ops/logs/claude-failover....` | `* * * * *` | America/Phoenix |
 
 <!-- END GENERATED: scheduled jobs -->
