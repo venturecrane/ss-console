@@ -35,7 +35,7 @@ describe('litigation text cache wiring', () => {
 
   it('the boot smoke checks the dir is the child alone', () => {
     expect(checks).toContain(
-      'check "litigation-textcache-dir-child-only" "[ \\"\\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-medchron/litigation/textcache)\\" = jobs:jobs:700 ]"'
+      'check "litigation-textcache-dir-child-only" "[ \\"\\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/litigation/textcache)\\" = jobs:jobs:700 ]"'
     )
   })
 })

@@ -1,4 +1,4 @@
-"""The quiesce file: ``<run_dir>/quiesce`` (``/run/smd-medchron/quiesce`` on a seat).
+"""The quiesce file: ``<run_dir>/quiesce`` (``/run/smd-jobs/quiesce`` on a seat).
 
 A JSON object ``{"until": <epoch seconds>, "by": str, "reason": str}``, written
 root-owned by whoever needs the seat to stop taking work: the entrypoint's

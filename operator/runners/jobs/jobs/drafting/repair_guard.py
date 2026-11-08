@@ -58,9 +58,9 @@ def rows(audit_md: str) -> list[tuple[FindingId, str]]:
     out: list[tuple[FindingId, str]] = []
     for head, body in d.audit_sections(audit_md).items():
         for ln in body.splitlines():
-            m = compose.FINDING.search(ln)
-            if m:
-                out.append(((head, compose.row_item(ln), m.group(1).upper()), ln))
+            v = compose.row_verdict(ln)
+            if v:
+                out.append(((head, compose.row_item(ln), v), ln))
     mech = _MECH.search(audit_md)
     for ln in (mech.group(0) if mech else "").splitlines():
         if ln.startswith("- "):

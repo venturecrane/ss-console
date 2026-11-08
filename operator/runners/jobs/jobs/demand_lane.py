@@ -100,7 +100,7 @@ def demand_runner_cmd() -> list[str]:
 
 @dataclass
 class DemandLane(Daemon):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/demand-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/demand-queue"))
     inputs_dir: str | None = None
     LANE = "demand"
     HEARTBEAT = "demand-heartbeat"

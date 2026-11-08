@@ -154,7 +154,10 @@ GATEWAY_LIVENESS_LEDGER_DIR="${HERMES_HOME:-/opt/data}/.smd-root/gateway-livenes
 # from the sweep for the same reason as the audit subtree, and reached by the
 # broker and the daemon through a bind mount below (the gateway's mid-boot
 # chmod of /opt/data severs a child dir's group-traverse; see the audit note).
-JOBS_DATA_DIR="/opt/data/medchron"
+# ADR 0103 R2: the tree is /opt/data/jobs (entrypoint-lanes.sh moves the old
+# /opt/data/medchron there once). Exported: the jobs daemon passes it to each
+# lane child, whose volume defaults resolve under it.
+export JOBS_DATA_DIR="/opt/data/jobs"
 # Group-readable default so the broker's rollback journal is readable by the
 # hermes mode=ro read seam during a write window. Explicit chmods below for the
 # 0700/0600 broker paths are unaffected by this.
@@ -168,7 +171,7 @@ umask 027
 # Both names of the jobs tree are pruned, whatever entrypoint-lanes.sh's
 # JOBS_VOLUME_EPOCH says (ADR 0103): this sweep runs before that fragment, and an
 # image booting over the other name must never hand the root-owned tree to hermes.
-find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path /opt/data/jobs -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path /opt/data/medchron -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to
@@ -458,7 +461,7 @@ launch_broker() {
     SMD_AGENT_UID="$(id -u hermes)" \
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
-    SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" \
+    SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" \
     SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" SMD_LITIGATION_QUEUE_DIR="${SMD_LITIGATION_QUEUE_DIR}" SMD_LITIGATION_FIRM_CONFIG="${SMD_LITIGATION_FIRM_CONFIG}" SMD_CASEFILE_QUEUE_DIR="${SMD_CASEFILE_QUEUE_DIR}" SMD_CASEFILE_FIRM_CONFIG="${SMD_CASEFILE_FIRM_CONFIG}" SMD_RECORDS_QUEUE_DIR="${SMD_RECORDS_QUEUE_DIR}" SMD_RECORDS_FIRM_CONFIG="${SMD_RECORDS_FIRM_CONFIG}" SMD_NEGOTIATION_QUEUE_DIR="${SMD_NEGOTIATION_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \

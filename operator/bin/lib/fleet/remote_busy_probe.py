@@ -6,13 +6,16 @@ work on images built before any fleet tooling existed (the first fleet release
 is a bootstrap: old seats emit no jobs_running in their heartbeat). Everything
 it reads has existed on every seat since the runner lanes shipped:
 
-  /run/smd-medchron/*heartbeat.json   each lane daemon's liveness + counts
-  /run/smd-medchron/*child.pid        a lane's running job child
-  /run/smd-medchron/*jobs/*/daemon.json  a finished job's DELIVER wake + reply watch
+  /run/smd-jobs/*heartbeat.json   each lane daemon's liveness + counts
+  /run/smd-jobs/*child.pid        a lane's running job child
+  /run/smd-jobs/*jobs/*/daemon.json  a finished job's DELIVER wake + reply watch
   /opt/data/profiles/*/gateway_state.json  the gateway's own in-flight turn count
   /opt/data/profiles/*/cron/jobs.json Hermes' per-profile cron store
   /opt/data/cron/jobs.json            the root cron store
-  /run/smd-medchron/quiesce           the fleet's no-new-work marker
+  /run/smd-jobs/quiesce           the fleet's no-new-work marker
+
+On a seat whose image predates the ADR 0103 volume move the run dir is
+/run/smd-medchron, and that is the one read when /run/smd-jobs is absent.
 
 It DECIDES NOTHING: it prints one JSON line of facts and the operator side
 (busy.decide) judges them, so the judgement is unit-tested on the laptop.
@@ -25,7 +28,14 @@ import os
 import time
 from datetime import datetime, timezone
 
-RUN = "/run/smd-medchron"
+RUN = "/run/smd-jobs"
+# ADR 0103 R2: this probe ships from the newest tooling to EVERY seat, the one a
+# rollout is about to move included. A seat still on the image before the move
+# binds the same tree at the old run dir only; reading the new name alone there
+# finds no lane, no child and no turn, and calls a seat with a job running idle.
+RUN_BEFORE_R2 = "/run/smd-medchron"
+if not os.path.isdir(RUN) and os.path.isdir(RUN_BEFORE_R2):
+    RUN = RUN_BEFORE_R2
 CRON_STORES = ("/opt/data/profiles/*/cron/jobs.json", "/opt/data/cron/jobs.json")
 MANAGED_PREFIX = "op-managed:"
 TURN_SCAN_S = 1800

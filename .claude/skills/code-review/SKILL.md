@@ -154,7 +154,7 @@ When the PRs merge, flip each claim in the probe to `FIXED` with the value measu
 A fix is done when the seats run it (Law 9).
 
 1. Build the release with `operator/bin/fleet build` from a worktree detached at the merged `origin/main` (copy `.infisical.json`, run `npm ci`, use a fresh engagements clone for `SS_ENGAGEMENTS_DIR`). The overlay is built from that same tree.
-2. **Never kill a running job:** check each seat's `/run/smd-medchron` for `*.pid` files (with a positive control, e.g. the `*-heartbeat.json` files) before rebuilding.
+2. **Never kill a running job:** check each seat's `/run/smd-jobs` for `*.pid` files (with a positive control, e.g. the `*-heartbeat.json` files) before rebuilding.
 3. **Pilot first** (`fleet release <id> --only pilot-smokeball`), then the rings (`fleet release <id>`) once the pilot's boot smoke is green. Seats another session owns are coordinated with it, not rebuilt over it.
 4. Read the fixed code back from the running seat and record it with `crane_verify`.
 

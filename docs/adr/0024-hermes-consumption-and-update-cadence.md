@@ -193,6 +193,10 @@ Amendment 3's "one rollout at a time" and its definition of Blessed coupled ever
 3. **Two lease scopes.** The fleet lease is held only by a full rollout. Every seat deploy, whether a rollout's, an `--only`, or a reprovision (`fleet with-seat-lease`), holds that seat's lease (`seat:<slug>` in the same `fleet_lease` table). Two deploys never land on one seat; no seat's deploy waits for another seat's.
 4. **A failed rollout pages.** The fleet-alerts Worker emails team@smd.services once per new `failed`, `rolled_back` or `tooling_error` rollout row (migration 0133, condition `rollout_failed`, marker-shaped like `send_refused`).
 
+## Amendment (2026-11-06): the quiesce marker's run dir is `/run/smd-jobs`
+
+[ADR 0103](./0103-the-jobs-runner.md) renamed the jobs runner and, in its second release, moved the seat volume's job tree from `/opt/data/medchron` to `/opt/data/jobs`, bound at `/run/smd-jobs`. Item 5 of the 2026-10-19 amendment's "Supervisor drain" now reads `/run/smd-jobs/quiesce`; the busy gate and `remote_quiesce.py` write there. For one release the same tree is also bound at `/run/smd-medchron`, so a job held across the move still finds the paths its envelope stored.
+
 ## Amendment (2026-10-22): one repo, one sha
 
 [ADR 0095](./0095-one-repository-for-the-seat-runtime.md) moved the overlay into this repo at `operator/hermes-smd-overlay/`. What changes here:

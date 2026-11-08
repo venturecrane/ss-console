@@ -74,12 +74,11 @@ class FleetStore:
         cols = (
             "release_id", "kind", "image_ref", "image_digest", "skills_version", "ss_console_sha",
             "overlay_ref", "volume_forward_compatible", "declared_secrets", "notes",
-            "artifact_name", "artifact_version", "merged_at",
+            "artifact_name", "artifact_version", "merged_at", "volume_epoch",
         )  # fmt: skip
+        ints = {"volume_forward_compatible": 1, "volume_epoch": None}
         ids.release_id(rec["release_id"])
-        values = [
-            ids.sql_str(rec.get(c)) if c != "volume_forward_compatible" else ids.sql_int(rec.get(c, 1)) for c in cols
-        ]
+        values = [ids.sql_int(rec.get(c, ints[c])) if c in ints else ids.sql_str(rec.get(c)) for c in cols]
         self.d1.query(
             f"INSERT INTO fleet_releases ({', '.join(cols)}, created_at) VALUES ({', '.join(values)}, {NOW_SQL})"  # noqa: S608 - values are ids.sql_str hex literals, ids-validated identifiers or constants
         )

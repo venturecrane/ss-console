@@ -19,7 +19,8 @@
      recorded WITHOUT capabilities (and with required-env generated from
      this checkout's _env-arrays.generated.sh, the file the image COPYs):
      image releases still work, skills releases to that image refuse.
-5. fleet_releases row (kind image).
+5. fleet_releases row (kind image), with the tree's volume epoch
+   (volume_epoch.py: operator/fleet/volume-epoch, no file is epoch 1).
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ids, ordering
+from . import ids, ordering, volume_epoch
 from .d1 import FleetStore
 from .fly import Fly, FlyTokens, deploy_excerpt, digest_from_build_output
 from .r2 import R2, image_key
@@ -369,6 +370,9 @@ class Builder:
         self.guard()
         pins = self.pins()
         merged_at = self.merged_at()
+        # Read from the tree the guard just proved is the build source (rollout.py
+        # refuses to put a seat back on a lower epoch).
+        epoch = volume_epoch.read(self.repo)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
         label = f"rel-{pins['ss_console_sha'][:8]}-{stamp}"
         self.ensure_registry_app()
@@ -390,7 +394,7 @@ class Builder:
             "release_id": f"img-{stamp}-{pins['ss_console_sha'][:8]}",
             "kind": "image", "image_ref": image_ref, "image_digest": ids.digest(digest),
             "ss_console_sha": pins["ss_console_sha"], "overlay_ref": pins["overlay_ref"],
-            "volume_forward_compatible": 1 if opts.volume_forward_compatible else 0,
+            "volume_forward_compatible": 1 if opts.volume_forward_compatible else 0, "volume_epoch": epoch,
             "declared_secrets": json.dumps(sorted(opts.declared_secrets)), "notes": opts.notes or None,
             "merged_at": merged_at,
         }  # fmt: skip

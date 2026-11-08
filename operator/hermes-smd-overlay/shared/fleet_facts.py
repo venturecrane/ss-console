@@ -54,7 +54,7 @@ logger = logging.getLogger("hermes-smd-fleet-facts")
 
 DEFAULT_CONFIG_PATH = "/var/lib/smd-config/customer.yaml"
 DEFAULT_SKILLS_VERSION_PATH = "/var/lib/smd-skills/current/VERSION"
-DEFAULT_LANE_RUN_DIR = "/run/smd-medchron"
+DEFAULT_LANE_RUN_DIR = "/run/smd-jobs"
 DEFAULT_BUNDLE_STATE_DIR = "/run/smd-bundles"
 DEFAULT_FIRM_INPUTS_STATE = "/run/smd-firm-inputs/state.json"
 #: What the ingest accepts for ``firm_inputs`` (src/lib/operator/heartbeat-parsers.ts).

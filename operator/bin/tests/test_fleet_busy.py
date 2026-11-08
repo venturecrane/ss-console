@@ -1,7 +1,7 @@
 """The busy gate: the judgement (busy.decide) and the seat-side scripts, run for real.
 
 The two remote scripts are executed here against a temporary directory laid
-out like a seat (/run/smd-medchron, /opt/data/profiles/*/cron/jobs.json), with
+out like a seat (/run/smd-jobs, /opt/data/profiles/*/cron/jobs.json), with
 only their path constants rewritten, so what is tested is the program that
 ships, not a description of it.
 """
@@ -125,11 +125,11 @@ def test_quarter_hour_slot_crons_leave_an_idle_window() -> None:
 
 
 def test_unreadable_store_is_busy() -> None:
-    assert busy.decide(_facts(errors=["/run/smd-medchron/heartbeat.json unreadable"])).busy
+    assert busy.decide(_facts(errors=["/run/smd-jobs/heartbeat.json unreadable"])).busy
 
 
 def _seat(tmp: Path) -> tuple[Path, Path]:
-    run = tmp / "run" / "smd-medchron"
+    run = tmp / "run" / "smd-jobs"
     data = tmp / "opt" / "data"
     run.mkdir(parents=True)
     (data / "profiles" / "operator" / "cron").mkdir(parents=True)
@@ -138,6 +138,7 @@ def _seat(tmp: Path) -> tuple[Path, Path]:
 
 def _run_remote(name: str, tmp: Path, prefix: str = "") -> str:
     src = (HERE / name).read_text(encoding="utf-8")
+    src = src.replace('"/run/smd-jobs"', json.dumps(str(tmp / "run" / "smd-jobs")))
     src = src.replace('"/run/smd-medchron"', json.dumps(str(tmp / "run" / "smd-medchron")))
     src = src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")
     if name == "remote_quiesce.py":
@@ -178,6 +179,39 @@ def test_remote_probe_reads_a_seat_shaped_tree(tmp_path: Path) -> None:
     assert "demand-child.pid" in reasons and "negotiation-watch" in reasons
     # the dead daemon's stale heartbeat is NOT a reason (its daemon is gone)
     assert "negotiation-heartbeat.json" not in reasons
+
+
+def test_a_seat_before_the_volume_move_is_read_and_quiesced_at_its_old_run_dir(tmp_path: Path) -> None:
+    # ADR 0103 R2: the gate runs from the newest tooling against a seat whose
+    # image still binds the tree at /run/smd-medchron only (the seat a rollout
+    # is about to move, and every held seat until its turn).
+    # FALSIFIER: read /run/smd-jobs alone and this seat has no lane, no child,
+    # and the verdict is idle with a job running; the marker lands nowhere.
+    _, data = _seat(tmp_path)
+    (tmp_path / "run" / "smd-jobs").rmdir()
+    old = tmp_path / "run" / "smd-medchron"
+    old.mkdir()
+    now = time.time()
+    (old / "heartbeat.json").write_text(
+        json.dumps({"pid": os.getpid(), "last_poll_at": now - 10, "running": "j1", "queued": 0, "wakes_pending": 0})
+    )
+    (old / "child.pid").write_text(str(os.getpid()))
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert [lane["file"] for lane in facts["lanes"]] == ["heartbeat.json"]
+    verdict = busy.decide(facts)
+    assert verdict.busy and "child.pid" in " ".join(verdict.reasons)
+    args = {"action": "set", "until": now + 600, "by": "fleet:test", "reason": "release"}
+    assert "SMD_QUIESCE set" in _run_remote("remote_quiesce.py", tmp_path, prefix=f"ARGS = {args!r}\n")
+    assert json.loads((old / "quiesce").read_text())["by"] == "fleet:test"
+    assert not (tmp_path / "run" / "smd-jobs").exists()
+
+
+def test_a_moved_seat_is_read_at_the_new_run_dir_even_while_the_old_one_is_bound(tmp_path: Path) -> None:
+    run, _ = _seat(tmp_path)
+    (tmp_path / "run" / "smd-medchron").mkdir()
+    (run / "child.pid").write_text(str(os.getpid()))
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert [c["file"] for c in facts["children"]] == ["child.pid"]
 
 
 def test_a_deliver_turn_in_flight_is_busy() -> None:

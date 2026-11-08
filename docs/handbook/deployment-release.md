@@ -305,7 +305,10 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    prints the release id. Flags: `--declare-secret NAME` when the release
    needs a newly staged secret, `--not-volume-forward-compatible` when the new
    image changes the volume in a way the old image cannot read (a failing seat
-   then halts instead of rolling back).
+   then halts instead of rolling back). The build also records the volume
+   epoch of the tree it built, the integer in `operator/fleet/volume-epoch`
+   (no file is epoch 1), on the release (`fleet_releases.volume_epoch`,
+   migration 0150).
 3. **Prove it on the rig, then release:** `fleet release <release-id> --only
    pilot-smokeball`, drive the shadow firm against the rig and cite the run id
    (below), then `fleet release <release-id>` for the rings. Rings live in
@@ -361,7 +364,7 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   lives, a managed cron firing within 6 minutes (or fired within the last 2),
   or a store the probe could not read means busy
   (`operator/bin/lib/fleet/busy.py`; the cron window is that narrow so a seat
-  with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-medchron/quiesce`, root-owned,
+  with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-jobs/quiesce`, root-owned,
   expires on its own) so no new job is claimed, and waits for idle, up to
   `--max-idle-wait` (30 minutes). Still busy: the seat is skipped as
   `waiting_idle`, never deployed mid-job. Queued work is not busy; the queue is
@@ -373,6 +376,16 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   recorded as its rollback target, and the volume is snapshotted. A release
   built with `--not-volume-forward-compatible` halts a failing seat instead of
   rolling it back.
+- **Never onto an older volume layout** (`operator/bin/lib/fleet/volume_epoch.py`,
+  2026-11-07). A failing seat is not rolled back when its rollback image's
+  volume epoch is lower than the release's: it halts on the failing image
+  with its snapshot kept, as `failed`, through the same `rollout_failed` pager
+  as the flag above. This covers what the flag cannot: a LATER release failing
+  on a seat that already moved, and a seat that skipped the move's own release
+  and took a later one. A release whose epoch is lower than the image the seat
+  runs now is refused before anything is touched. A release row without an
+  epoch (built before migration 0150), and an image no release row names,
+  count as epoch 1.
 - **Jobs bundle pointer, before the deploy** (a seat that authors a job lane,
   while `BUNDLE_RELEASE_ENABLED` is `true`; `operator/bin/lib/fleet/bundle_align.py`).
   A seat reads its bundle pointer only at boot, so the pointer is written at
@@ -458,11 +471,13 @@ Two workflows run the release (ADR 0096).
   Ticks never overlap. One tick takes the fleet lease, reads every seat's
   rollout of the image releases still in flight from D1, and advances every
   ring that is ready, one release per ring (`operator/bin/lib/fleet/tick.py`).
-  A client ring rolls its seats in waves of `max_parallel` (five, set in
-  `scripts/lib/seat-registries.ts` and written into `operator/fleet/rings.yaml`;
-  twenty client seats are four waves, not a two-hour line), and between waves
-  the run asks whether a newer image has landed and hands off to the next run
-  if so. Each ring takes the newest
+  A client ring rolls one seat first, alone, as a canary; once it is done,
+  every other seat of the ring rolls at once, up to `max_parallel` (twenty, set
+  in `scripts/lib/seat-registries.ts` and written into
+  `operator/fleet/rings.yaml`). Twenty client seats cost about two seat
+  restarts after staging, not four waves or a two-hour line, and a defect only
+  a client seat shows stops at the canary. Between waves the run asks whether a
+  newer image has landed and hands off to the next run if so. Each ring takes the newest
   release that has baked on the ring before it: the newest goes as far as its
   own bakes allow, and while it waits, an older release that already passed the
   earlier rings keeps moving, so a run of merges never starves the later rings.
@@ -750,14 +765,38 @@ git: built at or after the floor, and needing no newer image than this one.
 is forward-compatible and rolls back on its own: a failing seat returns to
 the previous image, whose installer runs the old-layout bundle it still holds
 on disk. R2, the one-time move of `/opt/data/medchron` to `/opt/data/jobs`, is
-built `--not-volume-forward-compatible`, so a failing seat halts on the new
-image with the volume snapshot the halt recorded, and the recovery is by hand:
+volume epoch 2 and built `--not-volume-forward-compatible`, so a failing seat
+halts on the new image with the volume snapshot the halt recorded. Every later
+release records epoch 2 too, so a moved seat that fails a later release halts
+the same way instead of rolling back onto an epoch-1 image, and R2 can roll in
+rings like any release, without holds or a hand `--only` per seat. The recovery is by hand:
 `fleet hold` the seat; start a Machine on the previous image with the
 entrypoint overridden and run `mv /opt/data/jobs /opt/data/medchron` before
-the old image's boot sweep runs (an old image booting over the moved tree
-would chown it to the agent uid); restore the bundle pointer; or restore the
-volume snapshot. Rehearse it once on smd-staging before R2 reaches any other
-seat.
+the old image boots (the R1 image leaves the moved tree alone, but it makes a
+fresh, empty `/opt/data/medchron` and runs every lane on that, with no queue,
+state or cache; an image older than R1 would also chown the moved tree to the
+agent uid); restore the bundle pointer; or restore the volume snapshot. There
+is no separate rehearsal: smd-staging takes R2 first, and a halt there stops
+the release before any client seat, which is where this recovery would first
+be used.
+
+What the R2 image does at boot, and what holds it afterwards
+(`operator/templates/entrypoint-lanes.sh`, the `jobs-volume` block): it renames
+the tree once, binds it at `/run/smd-jobs` and, for one release, at
+`/run/smd-medchron`, and writes the regular-file count before and after the
+move to `/opt/data/jobs/volume-epoch.state`. When both names exist it never
+merges them. An old tree that holds directories only (what an R1 boot leaves
+when its lanes never started) is removed with `rmdir` and the boot goes on; an
+old tree that holds any file means no job lane boots, one `JOBS VOLUME REFUSED`
+line is logged, and the self-test fails until a root hand leaves exactly one
+tree. The self-test asserts the result at every boot and every hour
+(`operator/templates/seat-checks.sh`): `jobs-volume-old-tree-holds-no-files`,
+`jobs-volume-tree-present`, `jobs-volume-run-dirs-bound` and
+`jobs-volume-move-counts-equal`. `tests/jobs-volume-old-path-allowlist.test.ts`
+fails the build when a file outside its short list names the old tree again.
+Until every seat is moved, the busy probe, the quiesce writer and
+`lane-proof.sh pull` read `/run/smd-jobs` and, where a seat does not have it
+yet, `/run/smd-medchron` (`operator/bin/lib/fleet/remote_busy_probe.py`).
 
 The release controller steps bundle releases after skills, ring by ring with
 the same bake, holds, halt and lease, but only on the seats whose
@@ -911,7 +950,7 @@ seam over HTTPS, and test a change by deploying it - never by hand-poking the li
 box. The `fleet` busy probe and quiesce writer are the sanctioned exceptions:
 each is a stdlib-only program fed to the image's system `python3 -I -` on
 stdin (no overlay import, no `__pycache__` written), the probe only reads, and
-the writer touches only the root-owned `/run/smd-medchron/quiesce` marker. A handler also cannot prove its own non-execution by inspection; verify
+the writer touches only the root-owned `/run/smd-jobs/quiesce` marker. A handler also cannot prove its own non-execution by inspection; verify
 against the running Machine.
 
 ## What the verify step checks

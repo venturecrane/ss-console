@@ -6,6 +6,12 @@
   done | (fail) restore the pointer, roll back to from-image + from-toml,
   re-smoke, halt | (tooling_error / timeout) halt, touch nothing
 
+A seat is never put on an image of a lower volume epoch (volume_epoch.py,
+ADR 0103): a forward deploy that would be refused before anything is touched,
+and a rollback that would be is not made (the seat halts on the failing image,
+its volume snapshot kept), exactly as for a release built
+not-volume-forward-compatible.
+
 The pointer comes before the deploy because a seat reads it only at boot: the
 first boot on the new image must mount the bundle built for it (bundle_align.py,
 the 2026-11-07 window). A pointer that cannot be written stops the seat before
@@ -23,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import ids, smoke
+from . import ids, smoke, volume_epoch
 from .busy import BusyGate
 from .d1 import FleetStore
 from .fly import Fly, classify_deploy, deploy_excerpt
@@ -137,6 +143,42 @@ class ImageRollout:
         rel = self.store.release_for_image(ref) if ref else None
         sha = rel.get("ss_console_sha") if rel else None
         return str(sha) if sha else None
+
+    def _epoch_of_image(self, image_ref: str | None) -> int:
+        """The volume epoch of the image release ``image_ref`` names; unknown is 1 (volume_epoch.of)."""
+        return volume_epoch.of(self.store.release_for_image(image_ref) if image_ref else None)
+
+    def _rollback_refusal(self, release: dict[str, Any], from_image: str) -> str:
+        """Why the seat must NOT be put back on ``from_image`` ("" when it may be).
+
+        Two rules, either one halts with the seat left on the failing image and
+        its snapshot kept: the release was built not-volume-forward-compatible,
+        or the from-image's volume epoch is lower than the release's (ADR 0103:
+        an older-layout image boots on a moved volume as if it were empty). The
+        second covers what the flag cannot: a LATER release failing on a seat
+        already moved. A from-image that cannot be looked up counts as epoch 1.
+        """
+        if not int(release.get("volume_forward_compatible", 1) or 0):
+            return "release is not volume-forward-compatible"
+        to_epoch = volume_epoch.of(release)
+        if to_epoch == volume_epoch.BASE_EPOCH:
+            return ""  # nothing is lower than the base epoch: no lookup needed
+        try:
+            back_epoch = self._epoch_of_image(from_image)
+        except ToolingError as exc:
+            return f"the from-image's volume epoch could not be read ({exc}), and the release is epoch {to_epoch}"
+        if back_epoch < to_epoch:
+            return f"the from-image is volume epoch {back_epoch}, older than this release's epoch {to_epoch}"
+        return ""
+
+    def _epoch_refusal(self, seat: str, release: dict[str, Any]) -> str:
+        """Why a FORWARD deploy of ``release`` would put the seat on an older volume layout ("" when not)."""
+        ref = (self.store.seat_status(seat) or {}).get("image_ref")
+        now = self._epoch_of_image(str(ref) if ref else None)
+        to_epoch = volume_epoch.of(release)
+        if now > to_epoch:
+            return f"the seat runs volume epoch {now}; this release is epoch {to_epoch}, an older volume layout"
+        return ""
 
     def _deploy(self, seat: str, image: str, toml_text: str) -> str:
         return self._deploy_saying(seat, image, toml_text)[0]
@@ -281,6 +323,9 @@ class ImageRollout:
             self.log(f"{seat}: note: {note}")
         if not pre.ok:
             return self._finish(rid, plan, SeatOutcome(seat, "failed", "preflight refused: " + "; ".join(pre.problems)))
+        older = self._epoch_refusal(seat, plan.release)
+        if older:
+            return self._finish(rid, plan, SeatOutcome(seat, "failed", f"refused, nothing deployed: {older}"))
         al = self.align.prepare(seat, plan.release) if self.align else None
         if al is not None and al.wait:
             return self._finish(rid, plan, SeatOutcome(seat, "tooling_error", f"{al.wait}; nothing was deployed"))
@@ -382,7 +427,7 @@ class ImageRollout:
                 else self._verify(seat, plan, since)
             )
         finally:
-            # The marker lives on the volume (/run/smd-medchron is a bind mount),
+            # The marker lives on the volume (/run/smd-jobs is a bind mount),
             # so the new boot inherits it until it expires: clear it now.
             self.gate.clear(seat)
         if check.cls == "pass":
@@ -401,14 +446,15 @@ class ImageRollout:
         al: Alignment | None,
     ) -> SeatOutcome:  # fmt: skip
         from_image, from_toml = back_to
-        if not int(plan.release.get("volume_forward_compatible", 1) or 0):
+        refused = self._rollback_refusal(plan.release, from_image)
+        if refused:
             return self._finish(
                 rid,
                 plan,
                 SeatOutcome(
                     seat,
                     "failed",
-                    f"smoke FAIL: {check.detail}. NOT rolled back: release is not volume-forward-compatible; volume snapshot {snap}. Page the Captain.",
+                    f"smoke FAIL: {check.detail}. NOT rolled back: {refused}; volume snapshot {snap}. Page the Captain.",
                 ),
                 smoke_class="fail",
             )

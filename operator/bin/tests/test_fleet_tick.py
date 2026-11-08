@@ -392,11 +392,11 @@ def test_a_release_published_mid_run_ends_the_run_so_the_next_one_takes_it(tmp_p
 
 
 def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> None:
-    """Designed for 10 to 20 client seats: a ring with max_parallel rolls that many seats
-    at once (a two-hour serial release becomes four waves), and between waves the run
-    asks whether a newer release landed; when it has, the rest of the ring is left for
-    the next run. FALSIFIER: pass parallel=1 and the four seats deploy one by one; drop
-    the between-wave check and all four deploy on the old release."""
+    """Designed for 10 to 20 client seats: a ring with max_parallel rolls a canary alone,
+    then that many seats at once, and between waves the run asks whether a newer release
+    landed; when it has, the rest of the ring is left for the next run. FALSIFIER: pass
+    parallel=1 and the seats deploy one by one; drop the between-wave check and all four
+    deploy on the old release."""
     w = _tick_world(tmp_path)
     rings = [
         Ring(0, ["smd-staging"], None, 0),
@@ -407,8 +407,8 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     state = {"waves": 0}
 
     def refresh() -> list[dict]:
-        # No newer release until ring 1's first wave has rolled.
-        if len([d for d in w.fly.deploys if d[0] != "hermes-smd-staging"]) >= 2:
+        # No newer release until ring 1's canary and first full wave have rolled.
+        if len([d for d in w.fly.deploys if d[0] != "hermes-smd-staging"]) >= 3:
             if newer["release_id"] not in w.store.releases:
                 w.store.insert_release(newer)
             return [newer, older]
@@ -422,9 +422,10 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run_promoting(rings, [older], do_seat_for, "h", refresh=refresh) == TICK_PROGRESS
     apps = [app for app, _, _ in w.fly.deploys]
-    # staging, then ONE wave of two client seats, then the hand-off.
-    assert apps[0] == "hermes-smd-staging" and len(apps) == 3
-    assert set(apps[1:]) == {"hermes-ashton-price", "hermes-pilot-smokeball"}
+    # staging, the canary, then ONE wave of two client seats, then the hand-off.
+    assert apps[0] == "hermes-smd-staging" and len(apps) == 4
+    assert apps[1] == "hermes-ashton-price"
+    assert set(apps[2:]) == {"hermes-pilot-smokeball", "hermes-scott"}
     assert any("left for the next run" in line for line in w.logs)
     assert state["waves"] == 0  # (the counter exists for readers; the deploy list is the measurement)
     # With no newer release the whole ring rolls, two at a time.
@@ -439,6 +440,93 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     assert ticker2.run_promoting(rings, [w2.rel], do_seat_for2, "h", refresh=lambda: [w2.rel]) == TICK_PROGRESS
     assert len(w2.fly.deploys) == 5
     assert _done_releases(w2, "brokery") == [w2.rel["release_id"]]
+
+
+# -- a client ring: a canary, then the rest at once ----------------------------------------
+# A merge reaches every client seat in about two seat restarts after staging, whatever
+# the number of client seats; a client-only defect reaches one seat.
+
+CLIENTS = ["ashton-price", "pilot-smokeball", "scott", "brokery"]
+
+
+def _spy_waves(monkeypatch) -> list[list[str]]:
+    """Record the seats of every Waves.run call (one call per wave), delegating to the real one."""
+    from bin.lib.fleet import tick as tick_module
+
+    calls: list[list[str]] = []
+    real = tick_module.Waves.run
+
+    def run(self, rings, *args, **kwargs):
+        calls.append([s for r in rings for s in r.seats])
+        return real(self, rings, *args, **kwargs)
+
+    monkeypatch.setattr(tick_module.Waves, "run", run)
+    return calls
+
+
+def _roll(w: World, rings: list[Ring]) -> int:
+    def do_seat_for(rel: dict):
+        plan = ImagePlan(rel, "3" * 40, verify="selftest", selftest_capable=True, ssh_fallback=False)
+        return lambda s, r: w.roll.run(s, r, plan)
+
+    w.clock.t = T0
+    ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
+    return ticker.run_promoting(rings, [w.rel], do_seat_for, "h", refresh=lambda: [w.rel])
+
+
+def test_a_client_ring_rolls_a_canary_alone_then_every_other_seat_at_once(tmp_path, monkeypatch) -> None:
+    """FALSIFIER: chunk the ring by max_parallel with no canary and the four seats roll as one wave."""
+    w = _tick_world(tmp_path)
+    calls = _spy_waves(monkeypatch)
+    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    assert _roll(w, rings) == TICK_PROGRESS
+    assert calls == [["smd-staging"], ["ashton-price"], ["pilot-smokeball", "scott", "brokery"]]
+    assert any("ring 1 canary ashton-price first, then 3 at once" in line for line in w.logs)
+    assert w.store.release_done_seats(w.rel["release_id"]) >= set(CLIENTS)
+
+
+def test_a_failing_canary_halts_before_any_other_client_seat_deploys(tmp_path, monkeypatch) -> None:
+    """Blast radius one seat. FALSIFIER: no canary and all four client seats deploy the bad release."""
+    w = _tick_world(tmp_path)
+    calls = _spy_waves(monkeypatch)
+    w.store.status["ashton-price"] = {**fresh_status(), "selftest_json": selftest_json(failed_count=1, failed=["x"])}
+    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    assert _roll(w, rings) == TICK_HALT
+    assert calls == [["smd-staging"], ["ashton-price"]]
+    assert set(_deployed(w)) == {"hermes-smd-staging", "hermes-ashton-price"}  # the canary and its rollback
+    assert w.store.states()["ashton-price"] == "rolled_back"
+    for seat in CLIENTS[1:]:
+        assert seat not in w.store.states()
+
+
+def test_a_ring_with_a_seat_already_done_on_the_release_skips_the_canary(tmp_path, monkeypatch) -> None:
+    """An earlier run (e.g. before a hand-off) already proved the release on this ring.
+    FALSIFIER: ignore release_done_seats and pilot-smokeball rolls alone as a second canary."""
+    w = _tick_world(tmp_path)
+    rid = w.rel["release_id"]
+    for i, seat in enumerate(["smd-staging", "ashton-price"]):
+        w.store.start_rollout({"rollout_id": f"r{i}", "customer_slug": seat, "release_id": rid})
+        w.store.update_rollout(f"r{i}", "done")
+    calls = _spy_waves(monkeypatch)
+    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    assert _roll(w, rings) == TICK_PROGRESS
+    assert calls == [["pilot-smokeball", "scott", "brokery"]]
+    assert not any("canary" in line for line in w.logs)
+
+
+def test_smds_own_last_ring_still_rolls_one_seat_at_a_time(tmp_path, monkeypatch) -> None:
+    """Width one: no canary line, one wave per seat. FALSIFIER: drop the width check from the
+    canary condition and the last ring logs a canary; ignore max_parallel and both seats roll together."""
+    w = _tick_world(tmp_path)
+    calls = _spy_waves(monkeypatch)
+    rings = [
+        Ring(0, ["smd-staging"], None, 0),
+        Ring(1, ["ashton-price", "pilot-smokeball"], 20, 0),
+        Ring(2, ["scott", "brokery"], 1, 0),
+    ]
+    assert _roll(w, rings) == TICK_PROGRESS
+    assert calls[-2:] == [["scott"], ["brokery"]]
+    assert not any("ring 2 canary" in line for line in w.logs)
 
 
 def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_path) -> None:
@@ -464,7 +552,7 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
 
         def seat(s: str, r: int):
             out = w.roll.run(s, r, plan)
-            # A newer image lands while the first client wave rolls.
+            # A newer image lands while the first client wave (the canary) rolls.
             if s != "smd-staging" and newer["release_id"] not in w.store.releases:
                 w.store.insert_release(newer)
             return out
@@ -475,7 +563,7 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", yield_when=signal) == TICK_PROGRESS
     apps = [app for app, _, _ in w.fly.deploys]
-    assert apps[0] == "hermes-smd-staging" and len(apps) == 3, apps
+    assert apps == ["hermes-smd-staging", "hermes-ashton-price"], apps  # the canary, then the hand-off
     assert any("a newer image was published while this run moved ring 1" in line for line in w.logs)
     assert signal() is True
 

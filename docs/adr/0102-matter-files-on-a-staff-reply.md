@@ -61,6 +61,10 @@ Of the five records most were scans (image-only, or a garbled text layer), one w
 - Every send here runs inside the reply hook's 25 s broker budget. A large reply that outlives it is reported as an unknown outcome (the broker finishes and writes its row); the agent is told not to resend.
 - The read credential builds the draft. Between the read-back and the send an agent holding that credential could in principle PATCH it; the window is one request long, the same stated property as the device-redirect path.
 
+## Amendment 5 (2026-11-06): the page index lives under the jobs tree
+
+[ADR 0103](./0103-the-jobs-runner.md) renamed the runner and moved the seat volume's job tree. The page index of amendment 4 is now `/opt/data/jobs/page-index/` (`SMOKEBALL_PAGE_INDEX_DIR`, set by `entrypoint-records.sh` from the jobs data dir); its contents and the purge command are unchanged.
+
 ## Rejected
 
 - **The vendor's `Search` index for finding files.** Unobserved matching and lag; a missed file reads as "not on the matter".

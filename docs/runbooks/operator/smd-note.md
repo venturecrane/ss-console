@@ -142,7 +142,7 @@ the exact printed text), plus a **subject** the Captain approves too. Then:
   reply is an ordinary inbound turn.
 
 Code: `operator/runners/jobs/jobs/note_by_smd.py` and `note_lane.py`
-(job dir `/run/smd-medchron/note-jobs`, root-only; boot smoke `note-lane-ticking`);
+(job dir `/run/smd-jobs/note-jobs`, root-only; boot smoke `note-lane-ticking`);
 broker `operator/workspace_broker/note_verbs.py`, `note_ledger.py`,
 `note_identifiers.py`; skill `operator/skills/smd-note/SKILL.md`. Tests:
 `operator/workspace_broker/tests/test_note_verbs.py`,

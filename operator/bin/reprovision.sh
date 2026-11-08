@@ -41,7 +41,7 @@ elif ! "${HERE}/fleet" busy "${SLUG}" --wait; then
 fi
 
 # The busy gate above may have left a quiesce marker, and it lives on the volume
-# (/run/smd-medchron is a bind mount), so the new boot would claim no new work
+# (/run/smd-jobs is a bind mount), so the new boot would claim no new work
 # until it expired. Clear it once provisioning is done, whatever the outcome.
 #
 # Provisioning holds this seat's lease (fleet with-seat-lease), the one a
