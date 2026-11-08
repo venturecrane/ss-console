@@ -57,7 +57,7 @@ from . import (
 )
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
-from .drafting import firm_rules, repair_budget
+from .drafting import firm_rules, layout_into_library, repair_budget
 from .firm_inputs import pin_env
 from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
@@ -222,11 +222,14 @@ class DraftingLane(Daemon):
         self.jobs_run += 1
         firm_rules.alert_refused(self, job_id)
         repair_budget.alert_exhausted(self, job_id)
+        layout_into_library.alert_unplaced(self, job_id)  # a rule the ledger could not place (piece 5)
         if resume_mod.cut_short_by_stop(self, job_id, code, out):
             library_edit_handoff.hand_over(self, job_id)
+            layout_into_library.hand_over(self, job_id)
             return "interrupted"
         state = self._report(job_id, code, out)
         library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+        layout_into_library.hand_over(self, job_id)  # a layout rule written into the library file (piece 5)
         return state
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:

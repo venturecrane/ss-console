@@ -35,7 +35,7 @@ per job run and kept on the run, so every unit of a job is made in one file.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -55,12 +55,14 @@ from operator_connector_sdk.library import (
 from operator_connector_sdk.library.caller import (
     ACCEPTED,
     DRAFTING_JOB,
+    EDIT_USED,
     NOT_STARTED,
     PINNED,
     STARTER,
     BaseUsed,
     NOT_ROSTERED,
     LazyStore,
+    add_to_record,
     build_record,
     matter_attorney,
     write_record,
@@ -77,16 +79,24 @@ from .outcome import DraftingFailed, DraftingHold
 #: Where an accepted marked file is written for the class's plan to open.
 BASE_NAME = "library-base.docx"
 _MEMO = "_library_base"
+_RANKED = "_library_ranked"
 
 
 @dataclass(frozen=True)
 class DraftBase:
     """What the document is made in: ``styles`` for the renderer, or ``held``
-    (path, source) for the class's firm-base plan, or neither (the starter)."""
+    (path, source) for the class's firm-base plan, or neither (the starter).
+    ``edit``: the record's ``firm_edit`` block when this job met a firm's save,
+    and ``replaced``, the accepted copy that save replaces (piece 4).
+    ``rules`` and ``precedence``: set by :func:`ranked` (piece 5)."""
 
     resolution: Resolution
     styles: bytes | None = None
     held: tuple[Path, dict[str, str]] | None = None
+    edit: dict[str, Any] | None = None
+    replaced: bytes | None = None
+    rules: dict[str, Any] | None = None
+    precedence: Any = None
 
 
 def open_store(seat: Any) -> LibraryStore:
@@ -191,7 +201,8 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
         write_record(run.data, build_record(DRAFTING_JOB, res, used, reader=_reader(run)))
         out = DraftBase(res, held=today)
     elif res.status == RESOLVED and res.file is not None and res.data is not None:
-        out = _accepted(run, res, marked_ok)
+        met = edit is not None and edit.get("status") == EDIT_USED
+        out = replace(_accepted(run, res, marked_ok), edit=edit, replaced=asked.data if met else None)
         used = BaseUsed.of(ACCEPTED, res.data, contract=res.file.contract)
         overridden = pinned if marked_ok else None
         write_record(
@@ -203,4 +214,27 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     return out
 
 
-__all__ = ["BASE_NAME", "DraftBase", "matter_attorney_or_stop", "open_store", "pick_base"]
+def ranked(run: Any) -> tuple[dict[str, Any], str, DraftBase]:
+    """``(format, paper, the file)`` the document is laid and checked by: the
+    file from :func:`pick_base`, and the order of precedence decided for it
+    (``layout_precedence``). With nothing accepted, the firm's format and the
+    rules as they are, and the record untouched. Decided once per job run; the
+    record beside the document gains ``layout_precedence``."""
+    from . import layout_facts, layout_into_library, layout_precedence
+
+    kept = getattr(run, _RANKED, None)
+    if kept is not None:
+        return kept
+    made_in, fmt, paper = pick_base(run), run.firm.data["format"], run.paper()
+    prec = layout_facts.for_job(run, made_in.resolution, made_in.replaced)
+    rules = dict(getattr(run, "rule_layout", None) or {})
+    if prec is not None:
+        prec.into_library = layout_into_library.settle(run, made_in, prec, LazyStore(lambda: open_store(run.seat)))
+        add_to_record(run.data, layout_precedence.RECORD_KEY, prec.to_json())
+    fmt, rules = layout_precedence.apply(fmt, run.cls, rules, prec)
+    out = (fmt, paper, replace(made_in, rules=rules, precedence=prec))
+    setattr(run, _RANKED, out)
+    return out
+
+
+__all__ = ["BASE_NAME", "DraftBase", "matter_attorney_or_stop", "open_store", "pick_base", "ranked"]

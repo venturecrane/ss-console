@@ -235,18 +235,20 @@ def test_a_saved_font_is_in_the_next_draft_with_no_release_and_no_person(spec, t
     assert rec["base"]["sha256"] == hashlib.sha256(kept).hexdigest()
 
 
-def test_a_saved_margin_is_what_the_draft_is_made_in_and_the_firms_authored_layout_still_judges_it(
-    spec, tmp_path, monkeypatch, tmpl, laid
-):
-    """The draft is made in the firm's new margin; the firm's authored pleading
-    layout (``format.layout``) still checks the filed page, and a margin it does
-    not author stops the job for SMD as it always has. Which one wins is piece
-    5's (layout rules in the library file); this pins today's answer."""
+def test_a_saved_margin_is_what_the_draft_is_made_in_and_the_document_delivers(spec, tmp_path, monkeypatch, tmpl, laid):
+    """INVERTED by piece 5 (``drafting/layout_precedence``). Until then the firm's
+    authored pleading margins judged a page made in the firm's own later margin
+    and stopped the job for SMD. The firm's save is the firm's later word: the
+    draft is made in its margin, the format check measures the page against that
+    margin, and the document delivers; the record names the edit as the winner."""
     lib = _accept(monkeypatch, spec, tmpl.bytes, contract=MARKED)
-    lib.save("acc-1", word_save(tmpl.bytes, left="2333"))
-    r, v, _ = _run(tmp_path / "job", base=tmpl.bytes, draft=_job_brief())
+    v2 = lib.save("acc-1", word_save(tmpl.bytes, left="2333"))
+    r, v, log = _run(tmp_path / "job", base=tmpl.bytes, draft=_job_brief())
     assert _left(laid[-1]) == "2333" and lt.record(r.data)["firm_edit"]["status"] == "used"
-    assert v.outcome == "failed" and "format_check" in v.reason and "margins" in v.reason
+    assert v.outcome == "delivered", (v.stage, v.reason, log[-5:])
+    assert _left(_filed(r)) == "2333"
+    won = lt.record(r.data)["layout_precedence"]["winners"]["page_margins"]
+    assert (won["winner"], won["version"], round(won["value"][3], 3)) == ("firm_edit", v2, round(2333 / 1440, 3))
 
 
 def test_the_acceptance_records_the_version_the_firm_saved_and_the_bytes_kept(spec, tmp_path, monkeypatch, tmpl):

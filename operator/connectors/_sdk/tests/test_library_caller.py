@@ -30,11 +30,13 @@ from operator_connector_sdk.library import (
 from operator_connector_sdk.library.caller import (
     ACCEPTED,
     BY_NAME,
+    LAYOUT_PRECEDENCE,
     NOT_STARTED,
     PINNED,
     STARTER,
     BaseUsed,
     LazyStore,
+    add_to_record,
     attorney_key,
     build_record,
     check_used,
@@ -147,6 +149,38 @@ def test_a_firm_edit_block_that_does_not_say_what_happened_is_refused(edit):
         build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles"), firm_edit=edit)
     rec = build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles"))
     assert record_problems({**rec, "firm_edit": edit}) != []
+
+
+_ORDER = {
+    "winners": {
+        "page_margins": {"winner": "firm_edit", "version": "f-1-v2", "at": WHEN, "value": [0.5, 0.5, 0.7, 1.6]}
+    },
+    "replaced": [{"rule_id": "0000000a", "key": "front_court_gap_lines", "by_version": "f-1-v2", "at": WHEN}],
+    "unplaced": [],
+}
+
+
+def test_the_order_of_layout_precedence_is_added_to_a_written_record_and_only_then(tmp_path):
+    rec = build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles"))
+    write_record(tmp_path, rec)
+    add_to_record(tmp_path, LAYOUT_PRECEDENCE, _ORDER)
+    got = json.loads((tmp_path / "library-resolution.json").read_text())
+    assert got == {**rec, LAYOUT_PRECEDENCE: _ORDER} and record_problems(got) == []
+    assert record_problems(rec) == []  # a record without it is the record it always was
+
+
+@pytest.mark.parametrize(
+    "block",
+    [{}, {**_ORDER, "winners": {"page_margins": {"value": 1}}}, {**_ORDER, "replaced": "x"}, {**_ORDER, "more": 1}],
+)
+def test_an_order_block_that_does_not_name_its_winners_is_refused(tmp_path, block):
+    write_record(tmp_path, build_record("drafting_job", _resolved(), BaseUsed.of(ACCEPTED, DATA, contract="styles")))
+    with pytest.raises(ValueError):
+        add_to_record(tmp_path, LAYOUT_PRECEDENCE, block)
+    with pytest.raises(ValueError):
+        add_to_record(tmp_path, "firm_edit", _ORDER)
+    with pytest.raises(ValueError, match="cannot be read"):
+        add_to_record(tmp_path / "nowhere", LAYOUT_PRECEDENCE, _ORDER)
 
 
 def test_a_store_is_never_opened_when_nothing_is_accepted():

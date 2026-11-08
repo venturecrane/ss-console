@@ -63,6 +63,11 @@ CODES = frozenset(
         # 2026-11-07: a firm's own save of its accepted library file was not used
         # or not accepted (jobs/library_edit); SMD only, the firm is told nothing.
         "library_edit_refused",
+        # 2026-11-07: a firm's layout rule the ledger could not place against the
+        # firm's own later edit of its library file, so the rule stood, or a rule's
+        # version in that file not accepted (jobs/drafting/layout_into_library);
+        # SMD only, the firm is told nothing.
+        "layout_rule_unplaced",
     }
 )
 

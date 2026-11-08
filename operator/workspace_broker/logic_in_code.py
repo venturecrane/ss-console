@@ -10,6 +10,7 @@ customer.yaml on every call (ADR 0104).
       library_setup: observe          # or enforce
       library_edit_notice: observe    # or enforce
       status_from_events: observe     # or enforce
+      layout_into_library: observe    # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -77,6 +78,13 @@ LIBRARY_EDIT_NOTICE = "library_edit_notice"
 #: dated, cited events (``jobs/litigation/eventmode.py``). Observe: the lane
 #: prints what it printed before and records what the events would have said.
 STATUS_FROM_EVENTS = "status_from_events"
+#: Whether a firm's layout rule is applied into its accepted library Word file
+#: as a new version the ledger records as written by code, and the rule's
+#: read-back says what a later edit of the same thing does
+#: (``jobs/drafting/layout_into_library.py``). Observe: the job records what it
+#: would apply and writes nothing; the rule is laid onto each document as
+#: before. A value that cannot be read writes nothing.
+LAYOUT_INTO_LIBRARY = "layout_into_library"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
@@ -86,6 +94,7 @@ KEYS = (
     LIBRARY_SETUP,
     LIBRARY_EDIT_NOTICE,
     STATUS_FROM_EVENTS,
+    LAYOUT_INTO_LIBRARY,
 )
 
 #: The same file by either name: the entrypoint exports both, the gateway and
@@ -165,6 +174,7 @@ __all__ = [
     "ENFORCE",
     "FIXED_WORDING",
     "KEYS",
+    "LAYOUT_INTO_LIBRARY",
     "LIBRARY_EDIT_NOTICE",
     "LIBRARY_SETUP",
     "MODES",

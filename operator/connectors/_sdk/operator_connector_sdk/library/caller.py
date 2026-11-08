@@ -30,6 +30,12 @@ code. A used edit is the resolution's file, ``accepted_by`` :data:`FIRM_MADE`,
 with the case system's version id and the sha256 of the cleaned bytes kept. A
 record with no newer version is exactly the record it was before this key.
 
+THE ORDER OF LAYOUT PRECEDENCE (design piece 5). A drafted document made in an
+accepted file adds ``layout_precedence`` once its layout is decided
+(:func:`add_to_record`): each property's winner (court rule, firm rule, firm
+edit, authored), the rules a later firm edit replaced with the version and date,
+and the rules the ledger could not place. Never present with nothing accepted.
+
 STANDARD LIBRARY ONLY.
 """
 
@@ -74,6 +80,14 @@ FIRM_EDIT = "firm_edit"
 #: The optional record key naming the document's reader and the profile in
 #: effect (``readers.record``, design piece 7).
 READER = "reader"
+#: The optional record key a drafting job's order of layout precedence adds
+#: (``runners/jobs/jobs/drafting/layout_precedence``), present only for an
+#: accepted file: each layout property's winner, the rules a later firm edit
+#: replaced, the rules the ledger could not place, and what a rule would write
+#: into the library file. Ids, numbers and dates only.
+LAYOUT_PRECEDENCE = "layout_precedence"
+_PRECEDENCE_KEYS = frozenset({"winners", "replaced", "unplaced"})
+_OPTIONAL_KEYS = frozenset({FIRM_EDIT, LAYOUT_PRECEDENCE, READER})
 _RECORD_KEYS = frozenset({"schema_version", "path", "kind", "resolution", "base", "overridden"})
 _EDIT_KEYS = frozenset({"status", "code", "version", "replaces_version", "sha256", "accepted_at", "install"})
 EDIT_USED = "used"
@@ -231,6 +245,18 @@ def edit_problems(edit: Any) -> list[str]:
     return []
 
 
+def precedence_problems(block: Any) -> list[str]:
+    """Every reason ``block`` is not a record's ``layout_precedence`` block."""
+    if not isinstance(block, dict) or not _PRECEDENCE_KEYS <= set(block) <= _PRECEDENCE_KEYS | {"into_library"}:
+        return [f"a layout_precedence block's keys are {sorted(_PRECEDENCE_KEYS)}, and into_library"]
+    winners = block["winners"]
+    if not isinstance(winners, dict) or not all(isinstance(w, dict) and w.get("winner") for w in winners.values()):
+        return ["each layout property names its winner"]
+    if not all(isinstance(block[k], list) for k in ("replaced", "unplaced")):
+        return ["replaced and unplaced are lists"]
+    return []
+
+
 def build_record(
     path: str,
     resolution: Resolution,
@@ -273,12 +299,14 @@ def build_record(
 
 def record_problems(doc: Any) -> list[str]:
     """Every reason ``doc`` is not a record a later check can read."""
-    if not isinstance(doc, dict) or set(doc) - {FIRM_EDIT, READER} != _RECORD_KEYS:
+    if not isinstance(doc, dict) or set(doc) - _OPTIONAL_KEYS != _RECORD_KEYS:
         return [
             f"a record's keys are exactly {sorted(_RECORD_KEYS)}, and {FIRM_EDIT} when an edit was "
-            f"considered, and {READER} when the reader was named"
+            f"considered, {LAYOUT_PRECEDENCE} for a drafted document made in an accepted file, and "
+            f"{READER} when the reader was named"
         ]
     out = edit_problems(doc[FIRM_EDIT]) if FIRM_EDIT in doc else []
+    out += precedence_problems(doc[LAYOUT_PRECEDENCE]) if LAYOUT_PRECEDENCE in doc else []
     out += readers_mod.record_problems(doc[READER]) if READER in doc else []
     if doc["schema_version"] != RECORD_SCHEMA_VERSION:
         out.append(f"schema {doc['schema_version']!r}")
@@ -294,6 +322,22 @@ def record_problems(doc: Any) -> list[str]:
         if not isinstance(value, dict) or set(value) != _BASE_KEYS or value["source"] not in SOURCES:
             out.append(f"{name} is not a base")
     return out
+
+
+def add_to_record(directory: str | Path, key: str, block: dict[str, Any]) -> Path:
+    """The record already beside the document, with one optional key added.
+    Raises ``ValueError`` when there is no record, or the result is not one."""
+    if key != LAYOUT_PRECEDENCE:
+        raise ValueError(f"{key!r} is not a key a record gains after it is written")
+    try:
+        doc = json.loads((Path(directory) / RECORD_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"the record beside the document cannot be read ({type(exc).__name__})") from exc
+    doc = {**doc, key: block} if isinstance(doc, dict) else doc
+    problems = record_problems(doc)
+    if problems:
+        raise ValueError("; ".join(problems))
+    return write_record(directory, doc)
 
 
 def write_record(directory: str | Path, record: dict[str, Any]) -> Path:
@@ -318,6 +362,7 @@ __all__ = [
     "FALLBACKS",
     "FIRM_EDIT",
     "FIRM_MADE",
+    "LAYOUT_PRECEDENCE",
     "NOT_STARTED",
     "PATHS",
     "PINNED",
@@ -331,6 +376,7 @@ __all__ = [
     "MatterAttorney",
     "NOT_ROSTERED",
     "ROSTER_UNREADABLE",
+    "add_to_record",
     "attorney_key",
     "build_record",
     "check_used",
@@ -338,6 +384,7 @@ __all__ = [
     "known_attorneys",
     "matter_attorney",
     "needs_matter_attorney",
+    "precedence_problems",
     "record_problems",
     "write_record",
 ]

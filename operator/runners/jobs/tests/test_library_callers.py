@@ -57,6 +57,10 @@ ADAPTERS = {
     "drafting_job": (f"{JOBS}/drafting/library_pick.py", "pick_base"),
     "demand_job": (f"{JOBS}/demand/library_pick.py", "select"),
 }
+#: A function that asks an adapter on its callers' behalf and adds to its answer
+#: (the drafting job's ``ranked`` asks ``pick_base`` and decides the order of
+#: layout precedence in the file). A caller of it asks the adapter through it.
+WRAPPERS = {(f"{JOBS}/drafting/library_pick.py", "pick_base"): [(f"{JOBS}/drafting/library_pick.py", "ranked")]}
 #: Where each path makes its documents: the functions that ask the adapter.
 CALLERS = {
     "chat_tool": [(f"{CONNECTOR}/server.py", "_render_with_format")],
@@ -87,6 +91,14 @@ EXEMPT = {
     ),
     (f"{JOBS}/drafting/firm_rules.py", "_probe_fails"): (
         "a layout rule's dry probe on a throwaway path: proves a rule can be laid, files nothing"
+    ),
+    (f"{JOBS}/drafting/layout_props.py", "_probe_values"): (
+        "reads a library file's layout values by laying a throwaway document in a copy of it: "
+        "measures the file, files nothing and is never a firm document"
+    ),
+    (f"{JOBS}/drafting/layout_rehearse.py", "_margins_hold"): (
+        "the $0 rehearsal of the order of layout precedence: lays a fictional brief in a copy of the "
+        "file to ask the format check about its margins, files nothing"
     ),
     (f"{JOBS}/drafting/revise/rehearse.py", "rehearse"): (
         "revise mode proves the filed brief renders back as filed: a revision is made in the "
@@ -260,7 +272,12 @@ def test_each_caller_asks_its_paths_adapter(graph):
         for caller in CALLERS[path]:
             if caller[1] == "_build_deliverables":
                 continue  # renders on what _select_format asked; the chain test below checks the hop
-            assert caller in asked, f"{caller} makes {path} documents and does not call {adapter}"
+            for w in WRAPPERS.get((adapter_file, adapter), ()):
+                assert (adapter_file, adapter) in {k for k, v in callers.items() if w in v}, (
+                    f"{w} no longer asks {adapter}"
+                )
+            via = {c for w in WRAPPERS.get((adapter_file, adapter), ()) for c in callers.get(w, set())}
+            assert caller in asked | via, f"{caller} makes {path} documents and does not call {adapter}"
 
 
 def test_only_the_three_adapters_import_the_resolver():

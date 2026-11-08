@@ -267,6 +267,7 @@ def _with_logic_in_code(block: str) -> str:
         "wording_rules",
         "library_setup",
         "status_from_events",
+        "layout_into_library",
     ],
 )
 @pytest.mark.parametrize("mode", ["observe", "enforce"])
