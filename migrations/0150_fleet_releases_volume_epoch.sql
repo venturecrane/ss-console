@@ -1,0 +1,24 @@
+-- 0150: an image release records the seat-volume layout its boot expects.
+--
+-- ADR 0103 moves the seat volume's job tree (/opt/data/medchron to
+-- /opt/data/jobs) at volume epoch 2. An image of a lower epoch booted on a
+-- moved volume does not find the tree and runs every lane on a fresh empty one.
+-- Before this column only the ONE release built at the epoch change was marked
+-- (volume_forward_compatible = 0), so a later release failing on a moved seat
+-- rolled back onto an older-layout image. With the epoch on every image row,
+-- the rollout refuses any deploy, rollback included, to a lower epoch
+-- (operator/bin/lib/fleet/rollout.py, volume_epoch.py).
+--
+--   volume_epoch  the integer in operator/fleet/volume-epoch of the tree
+--                 `fleet build` built (no file: 1)
+--   NULL          every release built before this column, and every skills or
+--                 bundle row; the rollout reads NULL as epoch 1, the layout
+--                 before the first epoch file existed
+--
+-- A plain ADD COLUMN: every existing row stays valid. Ordering is safe:
+-- deploy.yml applies migrations before the seat image builds, and only the new
+-- build code names the column.
+--
+-- Manual-only rollback at migrations/rollbacks/0150_fleet_releases_volume_epoch_down.sql.
+
+ALTER TABLE fleet_releases ADD COLUMN volume_epoch INTEGER;

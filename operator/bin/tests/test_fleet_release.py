@@ -9,6 +9,8 @@ the one change to the code that would turn the test red.
   lease held -> a second release refuses before touching anything
   held seat -> skipped_held, never deployed
   volume_forward_compatible=0 -> a failing seat halts WITHOUT rollback
+  rollback image of a lower volume epoch -> a failing seat halts WITHOUT rollback
+  release of a lower volume epoch than the seat runs -> refused, nothing deployed
   heartbeat reports another image -> fail -> rollback
 """
 
@@ -22,13 +24,14 @@ from bin.lib.fleet.preflight import PreflightChecker
 from bin.lib.fleet.r2 import image_key
 from bin.lib.fleet.rings import Ring
 from bin.lib.fleet.rollout import ImagePlan, ImageRollout
-from bin.lib.fleet.runner import Refusal, Result
+from bin.lib.fleet.runner import Refusal, Result, ToolingError
 from bin.lib.fleet.smoke import Check
 from bin.lib.fleet.waves import Lease, Waves
 from bin.lib.fleet.smoke import FleetSideChecks
 from bin.tests.fleet_fakes import (
     DIGEST,
     OLD_DIGEST,
+    TARGET_REF,
     FakeFly,
     FakeR2,
     FakeSmoke,
@@ -190,6 +193,117 @@ def test_not_volume_forward_compatible_halts_without_rollback() -> None:
     w.release_all()
     assert w.store.states()["smd-staging"] == "failed"
     assert len(w.fly.deploys) == 1  # no rollback deploy
+
+
+STAGING_FROM = "registry.fly.io/hermes-smd-staging:deployment-OLD"  # FakeFly.machine_image for smd-staging
+FAIL = Check("fail", "FAILED: x - command failed")
+
+
+def _from_image_row(w: World, **over: object) -> None:
+    """Record the seat's rollback image (what Fly says it runs) as a known image release."""
+    row = release(release_id="img-202610010000-00000000", image_ref=STAGING_FROM, image_digest=OLD_DIGEST)
+    row.pop("volume_epoch", None)
+    row.update(over)
+    w.store.insert_release(row)
+
+
+def test_a_later_forward_compatible_release_failing_on_a_moved_seat_halts_without_rollback() -> None:
+    """ADR 0103: the seat is on epoch 2 and the release (built after the move) is
+    forward-compatible; its rollback image is epoch 1, whose boot would make a
+    fresh empty /opt/data/medchron and run every lane on it.
+
+    FALSIFIER: drop the epoch rule from _rollback_refusal (keep only the flag)
+    and a second deploy, to the epoch-1 image, appears and the state is rolled_back.
+    """
+    w = World(FAIL, rel=release(volume_epoch=2, volume_forward_compatible=1))
+    _from_image_row(w, volume_epoch=1)
+    w.release_all(only="smd-staging")
+    row = next(iter(w.store.rollouts.values()))
+    assert row["state"] == "failed" and row["smoke_class"] == "fail"
+    assert "volume epoch 1, older than this release's epoch 2" in row["detail"]
+    assert "Page the Captain" in row["detail"] and "vs_abc" in row["detail"]
+    assert deployed_images(w) == [("hermes-smd-staging", w.rel["image_ref"])]  # no rollback deploy
+
+
+def test_a_failing_release_rolls_back_onto_an_image_of_the_same_epoch() -> None:
+    """FALSIFIER: halt whenever the release's epoch is above 1 (or compare with
+    <=) and this same-epoch rollback never happens."""
+    w = World(FAIL, Check("pass", "re-smoke green"), rel=release(volume_epoch=2))
+    _from_image_row(w, volume_epoch=2)
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "rolled_back"
+    assert deployed_images(w) == [("hermes-smd-staging", w.rel["image_ref"]), ("hermes-smd-staging", STAGING_FROM)]
+
+
+def test_a_rollback_image_whose_row_has_no_epoch_counts_as_epoch_1() -> None:
+    """A row built before migration 0150 carries no epoch: it is the old layout.
+
+    FALSIFIER: read a missing epoch as "unknown, allow" (or as the release's
+    own epoch) and the seat is rolled back onto the pre-move image.
+    """
+    w = World(FAIL, rel=release(volume_epoch=2))
+    _from_image_row(w)  # no volume_epoch key at all
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "failed"
+    assert len(w.fly.deploys) == 1
+
+
+def test_a_rollback_image_no_release_row_names_counts_as_epoch_1() -> None:
+    """FALSIFIER: skip the rule when the from-image has no release row and an
+    unknown, possibly pre-move, image is trusted."""
+    w = World(FAIL, rel=release(volume_epoch=2))  # FakeFly's deployment-OLD is in no row
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "failed"
+    assert len(w.fly.deploys) == 1
+
+
+def test_a_release_and_rollback_image_both_without_an_epoch_still_roll_back() -> None:
+    """Every release before 0150: epoch 1 on both sides, the rule never fires.
+
+    FALSIFIER: count a missing epoch as anything but 1 on one side only and
+    every pre-0150 failure halts instead of rolling back.
+    """
+    w = World(FAIL, Check("pass", "re-smoke green"))
+    _from_image_row(w)
+    w.release_all(only="smd-staging")
+    assert w.store.states()["smd-staging"] == "rolled_back"
+
+
+def test_an_unreadable_rollback_epoch_halts_instead_of_guessing() -> None:
+    """FALSIFIER: let the D1 error escape and the seat is a tooling_error, which
+    the tick RETRIES (a second deploy of the failing release) instead of a halt."""
+    w = World(FAIL, rel=release(volume_epoch=2))
+
+    readable = w.store.release_for_image
+
+    def unreadable_for_the_rollback_image(ref: str) -> dict | None:
+        if ref == STAGING_FROM:
+            raise ToolingError("wrangler d1 execute: network down")
+        return readable(ref)
+
+    w.store.release_for_image = unreadable_for_the_rollback_image  # type: ignore[method-assign]
+    w.release_all(only="smd-staging")
+    row = next(iter(w.store.rollouts.values()))
+    assert row["state"] == "failed" and "could not be read" in row["detail"]
+    assert len(w.fly.deploys) == 1
+
+
+def test_a_release_of_a_lower_epoch_than_the_seat_runs_is_refused_before_anything_is_touched() -> None:
+    """A forward deploy can land a moved seat on the old layout too (a hand
+    ``--only`` of an older release).
+
+    FALSIFIER: drop the _epoch_refusal call from _run and the epoch-1 image is
+    deployed onto the epoch-2 seat.
+    """
+    w = World(rel=release(volume_epoch=1))
+    moved = release(release_id="img-202611070000-22222222", image_ref=TARGET_REF + "-moved", image_digest=OLD_DIGEST,
+                    volume_epoch=2)  # fmt: skip
+    w.store.insert_release(moved)
+    w.store.status["smd-staging"] = fresh_status(image=moved["image_ref"] + "@" + OLD_DIGEST)
+    w.release_all(only="smd-staging")
+    row = next(iter(w.store.rollouts.values()))
+    assert row["state"] == "failed" and "runs volume epoch 2; this release is epoch 1" in row["detail"]
+    assert w.fly.deploys == [] and w.fly.snapshots == []
 
 
 def test_heartbeat_reporting_another_image_is_a_fail() -> None:
