@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 from test_audit import (
     PROSE,
     SUPPORTED,
@@ -86,11 +87,29 @@ def _cited_audit(p: dict) -> bool:
     return "cited to Exhibit 1 p.2)" in p["messages"][0]["content"][-1]["text"]
 
 
-def _run_shape(job_dir: Path, firm_config_path: Path, data_root: Path, claim_text: str, partial_for: int):
+def _run_shape(
+    job_dir: Path,
+    firm_config_path: Path,
+    data_root: Path,
+    claim_text: str,
+    partial_for: int,
+    workers: int | None = None,
+):
     """The auditor grades `claim_text` NON_DEFECT for its first `partial_for`
-    own audits and SUPPORTED after; the repair tier always returns it unchanged."""
+    own audits and SUPPORTED after; the repair tier always returns it unchanged.
+    `workers` pins the audit's concurrency (1 audits the claims one at a time,
+    in document order); None leaves the firm default."""
     seen = {"audits": 0, "repairs": 0}
-    marker = claim_text.split()[1]
+    # The claim's own first line, never one word of it: SHORT's second word,
+    # "patient", is also in GOOD, so GOOD was graded off SHORT's counter and
+    # its verdict turned on which of the two concurrent audits ran first.
+    marker = claim_text.split("(Exhibit")[0].splitlines()[0].strip()
+    assert marker not in GOOD, "the scripted auditor must grade only the claim under test"
+    if workers is not None:
+        firm = yaml.safe_load(firm_config_path.read_text())
+        firm.setdefault("levers", {})["audit_workers"] = workers
+        firm_config_path = job_dir.parent / "firm-workers.yaml"
+        firm_config_path.write_text(yaml.safe_dump(firm))
 
     def reply(p, _):
         if _is_repair(p):
@@ -132,13 +151,16 @@ def test_a_claim_the_repair_leaves_unchanged_is_graded_again_not_dropped(
     assert [e for e in edits if str(e.get("result", "")).startswith("NOOP")]
 
 
+@pytest.mark.parametrize("workers", [1, None], ids=["one-at-a-time", "firm-default"])
 def test_an_unchanged_claim_from_the_last_round_is_regraded_before_any_drop(
-    job_dir: Path, firm_config_path: Path, data_root: Path
+    job_dir: Path, firm_config_path: Path, data_root: Path, workers: int | None
 ) -> None:
     """The repair's no-op lands in the LAST round, so the next thing to run is
     the first drop pass. That pass defers the stale verdict; the post-drop
     audit grades it, and a SUPPORTED there keeps the claim."""
-    rc, paths, seen, _log = _run_shape(job_dir, firm_config_path, data_root, SHORT, partial_for=audit_loop.ROUNDS)
+    rc, paths, seen, _log = _run_shape(
+        job_dir, firm_config_path, data_root, SHORT, partial_for=audit_loop.ROUNDS, workers=workers
+    )
     assert rc == 0
     assert seen["audits"] == audit_loop.ROUNDS + 1
     assert "slight improvement in neck" in paths.doc.read_text()
