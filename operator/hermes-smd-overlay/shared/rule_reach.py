@@ -289,14 +289,50 @@ def readback_with_reach(readback: str, subject: Any, on: bool) -> str:
     return f"{readback} {sentence}" if sentence else readback
 
 
+#: Said after the read-back of a layout rule (one whose words compile to a
+#: layout value) on a seat whose ``logic_in_code.layout_into_library`` is
+#: ``enforce`` (design 2026-11-06, piece 5): what a later change of the same
+#: thing in the firm's own library Word file does. The drafting job keeps it:
+#: the later of the two wins (``jobs/drafting/layout_precedence``) and the record
+#: beside the document names the rule as replaced, with the version and date.
+LATER_EDIT_SENTENCE = (
+    "If the firm later changes the same thing in the firm's own Word file for these "
+    "documents, we use that change from then on and record this rule as replaced by "
+    "it, with the date."
+)
+
+
+def precedence_on() -> bool:
+    """Whether ``logic_in_code.layout_into_library`` is ``enforce``. An unreadable
+    switch is not "on": the sentence is words to a firm, so the door that fails
+    closed is the one that says nothing."""
+    from shared import logic_in_code
+
+    sw = logic_in_code.load_switch(logic_in_code.LAYOUT_INTO_LIBRARY)
+    return sw.error is None and sw.mode == logic_in_code.ENFORCE
+
+
+def readback_with_precedence(readback: str, args: dict[str, Any], on: bool) -> str:
+    """The readback with :data:`LATER_EDIT_SENTENCE` after it, for a firm
+    ``work_product`` rule whose words compile to a layout value, when on."""
+    if not on or not readback or not _applies(args):
+        return readback
+    if not layout_rules.compile_rule(str(args.get("text") or "")).get("compiled"):
+        return readback
+    return f"{readback} {LATER_EDIT_SENTENCE}"
+
+
 __all__ = [
+    "LATER_EDIT_SENTENCE",
     "RULE_CLASS",
     "Reach",
     "check",
     "gate",
     "kinds_named",
     "narrowed",
+    "precedence_on",
     "reach_sentence",
+    "readback_with_precedence",
     "readback_with_reach",
     "readers_named",
     "subject_for_broker",

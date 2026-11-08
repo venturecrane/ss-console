@@ -63,6 +63,7 @@ CODES = frozenset(
         "repair_unconverged",
         "job_stopped",
         "library_edit_refused",
+        "layout_rule_unplaced",
     }
 )
 REPLY_KINDS = frozenset(

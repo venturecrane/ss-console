@@ -145,12 +145,21 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_its_two_readers():
     )
     # layout_store.py is the reader both sides share, by byte, and it names only
     # the file below (tests/test_drafting_firm_rules.py pins the copy).
+    # rule_times.py (2026-11-07, design piece 5) reads one more thing from the
+    # same store: WHEN each layout rule was said, the id and the date of each
+    # bullet in the work_product format spec, only when the manifest's digest
+    # vouches for it. It applies nothing; the order of layout precedence needs
+    # the date to say which of a rule and a firm's later edit is the later word.
     assert readers == [
         "jobs/drafting/firm_rules.py",
         "jobs/drafting/layout_store.py",
+        "jobs/drafting/rule_times.py",
         "jobs/firm_wording.py",
         "jobs/wording_rules_store.py",
     ], f"spec store readers: {readers}"
+    times = (_JOBS_RUNNER / "jobs" / "drafting" / "rule_times.py").read_text("utf-8")
+    assert 'SPEC_REL = "classes/work_product/format.md"' in times
+    assert 'entry.get("sha256") != hashlib.sha256(blob).hexdigest()' in times
     wording = (_JOBS_RUNNER / "jobs" / "firm_wording.py").read_text("utf-8")
     assert f'DEFAULT_DIR = "{_SPEC_DIR_DEFAULT}"' in wording
     assert "wording_rules_store.read(_spec_dir())" in wording

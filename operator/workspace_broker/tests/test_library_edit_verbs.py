@@ -62,6 +62,8 @@ def test_a_firm_save_is_spooled_in_the_writers_shape_and_its_answer_read(seat, t
     "acc, data, over",
     [
         (_acc(accepted_by="admin@firm.example"), DATA, {}),
+        (_acc(accepted_by="layout_rule:"), DATA, {}),
+        (_acc(accepted_by="layout_rule:a b"), DATA, {}),
         (_acc(contract="prototypes"), DATA, {}),
         (_acc(replaces={"file_id": "lib-9", "version": "v1", "sha256": "a" * 64}), DATA, {}),
         (_acc(version="lib-1-v1"), DATA, {}),
@@ -76,6 +78,18 @@ def test_each_refusal_spools_nothing(seat, tmp_path, acc, data, over):
     with pytest.raises(Exception):
         _submit(broker, acc, data, **over)
     assert not list(broker.establishment.runs_dir.iterdir())
+
+
+def test_a_version_code_wrote_with_the_firms_layout_rules_is_spooled_the_same_way(seat, tmp_path):
+    """Design piece 5 (``jobs/drafting/layout_into_library``, behind
+    ``logic_in_code.layout_into_library``): the ledger names the version code
+    wrote with the rules in it, which is how a later firm edit is placed."""
+    broker, *_ = seat
+    broker.establishment = _store(tmp_path, broker)
+    acc = _acc(accepted_by="layout_rule:0000000a,0000000b")
+    out = _submit(broker, acc)
+    sub = json.loads((broker.establishment.runs_dir / out["run_id"] / "submission.json").read_text())
+    assert sub["acceptance"]["accepted_by"] == "layout_rule:0000000a,0000000b"
 
 
 def test_only_root_may_hand_a_save_over(seat, tmp_path):

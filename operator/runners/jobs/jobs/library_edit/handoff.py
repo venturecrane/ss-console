@@ -55,10 +55,10 @@ INSTALLED = ("installed", "accepted_pending_install")
 HANDED = f"{EDIT_JSON}.handed"
 
 
-def read(data_dir: Path) -> dict[str, Any] | None:
+def read(data_dir: Path, name: str = EDIT_JSON) -> dict[str, Any] | None:
     """What the child left, or None when it considered no save."""
     try:
-        doc = json.loads((Path(data_dir) / EDIT_JSON).read_text("utf-8"))
+        doc = json.loads((Path(data_dir) / name).read_text("utf-8"))
     except (OSError, ValueError):
         return None
     return doc if isinstance(doc, dict) and isinstance(doc.get("note"), dict) else None
@@ -74,10 +74,10 @@ def delivery_note(data_dir: Path) -> dict[str, Any] | None:
     return {"used": note.get("status") == "used", "code": str(note.get("code") or "")}
 
 
-def _page(d: Any, job_id: str, detail: str) -> None:
+def _page(d: Any, job_id: str, detail: str, code: str = CODE) -> None:
     from ..proof import watch
 
-    watch.alert(d, job_id, CODE, detail[:300])
+    watch.alert(d, job_id, code, detail[:300])
 
 
 def _wait(client: Any, run_id: str, clock: Any) -> dict[str, Any] | None:
@@ -126,46 +126,57 @@ def _submit(d: Any, job_id: str, acc: dict[str, Any], data: bytes) -> str:
     return "already_replaced" if RACE_LOST in reasons else f"rejected_by_root ({status})"
 
 
-def _done(data_dir: Path) -> None:
+def _done(data_dir: Path, name: str = EDIT_JSON) -> None:
     """Handled once: a resumed job's next child leaves its own, or none."""
     try:
-        (Path(data_dir) / EDIT_JSON).replace(Path(data_dir) / HANDED)
+        (Path(data_dir) / name).replace(Path(data_dir) / f"{name}.handed")
     except OSError as exc:
         logger.error("library edit: could not mark %s handled: %s", data_dir, exc)
 
 
-def hand_over(d: Any, job_id: str) -> str:
+def hand_over(
+    d: Any,
+    job_id: str,
+    *,
+    names: tuple[str, str] = (EDIT_JSON, EDIT_DOCX),
+    code: str = CODE,
+    what: str = "the firm's saved version",
+) -> str:
     """After the child: page a refusal, hand a used save to the root writer.
     Returns what happened, for the log; never raises: a lane must not lose its
-    job to this. A lane proof run's twin hands nothing over and pages nothing."""
+    job to this. A lane proof run's twin hands nothing over and pages nothing.
+    ``names``, ``code``, ``what``: the same hand-over for a version code wrote
+    with the firm's layout rules in it (``drafting/layout_into_library``)."""
     from ..proof import watch
 
     data_dir = d.job_dir(job_id) / "data"
-    doc = read(data_dir)
+    doc = read(data_dir, names[0])
     if doc is None:
         return ""
-    _done(data_dir)
+    _done(data_dir, names[0])
     if watch.in_proof_run(d):
         return "proof_run"
     try:
-        return _hand_over(d, job_id, data_dir, doc)
+        return _hand_over(d, job_id, data_dir, doc, (names[1], code, what))
     except Exception:  # logged with its trace; the job's own record stands
         logger.exception("library edit for %s could not be handed over", job_id)
         return "error"
 
 
-def _hand_over(d: Any, job_id: str, data_dir: Path, doc: dict[str, Any]) -> str:
+def _hand_over(d: Any, job_id: str, data_dir: Path, doc: dict[str, Any], how: tuple[str, str, str]) -> str:
+    docx_name, code, what = how
     note, acc = doc["note"], doc.get("acceptance")
     version = str(note.get("version") or "")
     if note.get("status") != "used" or not isinstance(acc, dict):
         _page(
             d,
             job_id,
-            f"the firm's saved version {version} was not used: {note.get('code')}; the draft was made in the accepted copy",
+            f"{what} {version} was not used: {note.get('code')}; the draft was made in the accepted copy",
+            code,
         )
         return "refused"
     try:
-        data = (data_dir / EDIT_DOCX).read_bytes()
+        data = (data_dir / docx_name).read_bytes()
     except OSError:
         data = b""
     if not data or len(data) > MAX_BYTES:
@@ -175,7 +186,7 @@ def _hand_over(d: Any, job_id: str, data_dir: Path, doc: dict[str, Any]) -> str:
     if outcome in INSTALLED or outcome == "already_replaced":
         logger.info("library edit for %s: %s (version %s)", job_id, outcome, version)
     else:
-        _page(d, job_id, f"the firm's saved version {version} was used in the draft and not accepted: {outcome}")
+        _page(d, job_id, f"{what} {version} was used in the draft and not accepted: {outcome}", code)
     return outcome
 
 

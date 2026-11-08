@@ -2286,6 +2286,7 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
         readback = rule_reach.readback_with_reach(
             str(response.get("readback") or ""), response.get("subject"), reach_on
         )
+        readback = rule_reach.readback_with_precedence(readback, args, rule_reach.precedence_on())
         if readback and readback != response.get("readback"):
             response = {**response, "readback": readback}
         _remember_readback(session_id, readback)

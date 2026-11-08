@@ -51,6 +51,19 @@ bytes with them, and the look comparison of the save with what is kept:
     python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
         --edited <saved.docx> --accepted <accepted copy.docx> --contract marked
 
+``--layout`` runs piece 5's order of layout precedence on the seat's installed
+rules (the compiled layout rules file the spec applier installs for work product) and the slot's
+accepted file, with the firm's drafting inputs: per layout property, which
+source wins (a court rule, a firm rule, the firm's own edit, the authored
+layout) and whether the format check holds it on a fictional brief laid into
+the file; the rules a later edit replaced, the rules it could not place, and
+what a rule would write into the file. With ``--edited``, the firm's later save
+of the file is taken as the firm's own edit, later than every rule. Counts, rule
+ids and key names only:
+
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
+        --layout <compiled layout rules file> --accepted <accepted brief.docx> --inputs <drafting inputs dir>
+
 Exit 0 when every step ran (whatever it found), 2 when a step could not run.
 """
 
@@ -267,6 +280,28 @@ def edited_check(kind: str, contract: str, accepted: bytes, edited: bytes) -> di
     }
 
 
+def layout_check(args: argparse.Namespace) -> dict[str, Any]:
+    """Piece 5's order of layout precedence on the seat's installed rules and the
+    slot's accepted file (and, with ``--edited``, the firm's later save of it):
+    each property's winner and whether the format check holds it. Counts only."""
+    from jobs.drafting import layout_rehearse
+
+    edited = Path(args.edited).read_bytes() if args.edited else None
+    return layout_rehearse.rehearse(
+        args.kind, Path(args.layout).read_bytes(), Path(args.accepted).read_bytes(), args.inputs, edited
+    )
+
+
+def _print(step: Any) -> int:
+    try:
+        out = step()
+    except Exception as exc:  # noqa: BLE001 - a rehearsal that could not run says so by type, never with text
+        print(json.dumps({"error": type(exc).__name__}))
+        return 2
+    print(json.dumps(out, indent=1, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None, client: Any = None) -> int:
     p = argparse.ArgumentParser(prog="library_setup_rehearse", description=(__doc__ or "").split("\n", 1)[0])
     p.add_argument("--kind", required=True, choices=("mediation_brief", "memo"))
@@ -283,7 +318,10 @@ def main(argv: list[str] | None = None, client: Any = None) -> int:
     p.add_argument("--edited", default="", help="a firm's saved library file to run piece 4's checks on (no hunt)")
     p.add_argument("--accepted", default="", help="with --edited: the slot's accepted copy (the seat-kept file)")
     p.add_argument("--contract", default="marked", choices=("marked", "styles"), help="with --edited")
+    p.add_argument("--layout", default="", help="the seat's compiled layout rules file: piece 5's order on --accepted")
     args = p.parse_args(argv)
+    if args.layout:
+        return _print(lambda: layout_check(args))
     if args.edited:
         try:
             out = edited_check(

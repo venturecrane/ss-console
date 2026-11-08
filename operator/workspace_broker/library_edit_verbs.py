@@ -15,7 +15,9 @@ TWO VERBS, ROOT ONLY (the runner daemon, after a drafting or demand job's child)
 
 WHAT IS CHECKED HERE, each a refusal with nothing spooled: the lane is the
 drafting or demand lane; the acceptance carries exactly the writer's keys;
-``accepted_by`` is ``firm_made`` (no person said yes; the code did); the
+``accepted_by`` is ``firm_made`` (no person said yes; the code did), or
+``layout_rule:<ids>`` for a version code wrote with the firm's layout rules in
+it (design piece 5, the same hand-over); the
 contract is one the writer takes (``styles`` or ``marked``); ``replaces`` names
 the entry the save is a version of (same file); the bytes hash to its sha256.
 
@@ -26,6 +28,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import sqlite3
 from typing import Any
 
@@ -36,6 +39,9 @@ from .library_setup_choose import SCOPE, spool
 VERBS = ("library_edit_submit", "library_edit_status")
 LANES = frozenset({"drafting", "demand"})
 FIRM_MADE = "firm_made"
+#: A version code wrote with a firm's layout rules in it (``runners/jobs/jobs/
+#: drafting/layout_into_library``), behind ``logic_in_code.layout_into_library``.
+LAYOUT_RULE = re.compile(r"^layout_rule:[0-9A-Za-z]{1,40}(?:,[0-9A-Za-z]{1,40}){0,19}$")
 CONTRACTS = frozenset({"styles", "marked"})
 _KEYS = frozenset(
     {
@@ -61,8 +67,8 @@ def _problems(acc: Any, data: bytes) -> list[str]:
     out = [f"acceptance.{k} must be a non-empty string" for k in _TEXT if not isinstance(acc[k], str) or not acc[k]]
     if out:
         return out
-    if acc["accepted_by"] != FIRM_MADE:
-        out.append(f"a firm's own save is accepted by {FIRM_MADE!r}, by code")
+    if acc["accepted_by"] != FIRM_MADE and not LAYOUT_RULE.match(acc["accepted_by"]):
+        out.append(f"a firm's own save is accepted by {FIRM_MADE!r}, and a layout rule's version by layout_rule:<ids>")
     if acc["contract"] not in CONTRACTS:
         out.append(f"contract {acc['contract']!r} is not one the writer takes for a firm's save")
     if acc["attorney"] is not None and (not isinstance(acc["attorney"], str) or not acc["attorney"]):

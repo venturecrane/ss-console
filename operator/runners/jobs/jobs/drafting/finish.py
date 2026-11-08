@@ -360,10 +360,10 @@ class Finish:
         )
         doc, reserved = render.reserve_judgment(doc, self.cls)
         doc, cited, cites = prerender.prepare(doc, self.firm.data, self.cls, self.corpus())
-        fmt, paper, made_in = self.firm.data["format"], self.paper(), library_pick.pick_base(self)
+        fmt, paper, made_in = library_pick.ranked(self)  # the file, and the order of layout precedence in it
         dest = deliver.out_dir(self.data) / self._names(u)["draft"]
         path, report, laid, checked = base_lay.lay_out(
-            doc, dest, self.cls, fmt, paper, made_in.held, self.rule_layout, styles=made_in.styles
+            doc, dest, self.cls, fmt, paper, made_in.held, made_in.rules, styles=made_in.styles
         )
         res = format_check.check(path, self.cls, checked, digest, self.corpus(), paper, cites)
         if self.cls == "discovery_set":
