@@ -12,10 +12,10 @@
 # retried; it never holds the rings after it back. Ring 0 is SMD's own staging
 # seat. The client's seat follows it at once, with no bake (2026-10-30: with one
 # client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
-# come after. The last ring always deploys one seat at a time; the client rings
-# between roll their seats in waves (max_parallel, CLIENT_RING_PARALLEL in
-# scripts/lib/seat-registries.ts), since twenty seats one at a time is a two-hour
-# release.
+# come after. The last ring always deploys one seat at a time; a client ring
+# between rolls a canary first (its first seat, alone), then every other seat at
+# once (max_parallel, CLIENT_RING_PARALLEL in scripts/lib/seat-registries.ts),
+# since twenty seats one at a time is a two-hour release.
 #
 # Holds are NOT authored here. `fleet hold <slug> --reason "..." --until "..."` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
@@ -39,7 +39,7 @@ rings:
   - ring: 1
     seats: [ashton-price]
     bake_minutes: 0
-    max_parallel: 5
+    max_parallel: 20
   - ring: 2
     seats: [pilot-smokeball, scott, brokery, captain-mark]
     max_parallel: 1

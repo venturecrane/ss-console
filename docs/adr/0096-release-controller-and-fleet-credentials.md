@@ -205,6 +205,21 @@ release-tick.yml`) the moment its candidate is published, and
    Between waves the run asks whether a newer image has landed and, if so, leaves
    the rest of the ring for the run it starts.
 
+   **Amended 2026-11-08: a client ring rolls a canary, then the rest at once.**
+   A client ring's first seat in ring order rolls alone; once it is done, every
+   other seat of the ring rolls at once, up to `max_parallel`, which is now
+   twenty. One seat's restart and self-test measured about four to five minutes
+   (release img-202611081804-5c8bdc16 on ashton-price, 18:19:45Z to 18:23:57Z).
+   Twenty client seats in waves of five were four waves after staging, about
+   twenty minutes; as a canary and one wave they are two, about ten minutes, and
+   any number of client seats up to twenty costs the same. The blast radius of a
+   defect only a client seat shows is the canary: its failure halts the release
+   before any other client seat deploys, and staging still goes first. When a
+   seat of the ring is already done on the release (an earlier run proved it,
+   for example before a hand-off), the run skips the canary and rolls the rest
+   at once. Staging and SMD's own last ring stay one seat at a time
+   (`operator/bin/lib/fleet/tick.py` `_advance`).
+
 3. **The bake.** Ring N+1 starts only when every unheld seat of ring N is
    `done` on the release, at least one is, the newest of their `finished_at`
    is at least that ring's `bake_minutes` old, and no `selftest_failing`,

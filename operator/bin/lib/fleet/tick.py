@@ -559,34 +559,48 @@ class Ticker:
     def _advance(self, rings: list[Ring], release: dict[str, Any], plan: TickPlan,
                  do_seat: Callable[[str, int], SeatOutcome], holder: str, lease: Lease,
                  stop: Callable[[], bool] | None = None) -> int:  # fmt: skip
-        """Roll the ring in waves of its ``max_parallel`` (rings.yaml; a client ring
-        rolls several seats at once, SMD's own last ring one at a time). Between
-        waves ``stop`` is asked whether a newer release has landed; when it has, the
-        ring is left where it is (progress) so the next run can take the newer one.
+        """Roll the ring in waves of its ``max_parallel`` (rings.yaml). A ring wider than
+        one rolls a CANARY first: its first seat in ring order, alone. Only when the
+        canary is done does every remaining seat roll at once (up to ``max_parallel``),
+        so a client-only defect reaches one seat and any number of client seats costs
+        about two seat restarts. There is no canary when a seat of the ring is already
+        done on this release (an earlier run proved it, e.g. before a hand-off). SMD's
+        own last ring is width one, so it rolls one at a time as before. Between waves
+        ``stop`` is asked whether a newer release has landed; when it has, the ring is
+        left where it is (progress) so the next run can take the newer one.
         """
         rid = release["release_id"]
         if plan.code != TICK_PROGRESS or plan.ring is None or not plan.seats:
             return self._complete(rings, release, plan.code)
         width = max(1, plan.ring.max_parallel or 1)
         seats = list(plan.seats)
-        for start in range(0, len(seats), width):
-            wave = seats[start : start + width]
-            if start and stop is not None and stop():
+        canary = width > 1 and len(seats) > 1 and not self._canary_proven(rid, plan.ring)
+        if canary:
+            self.log(f"tick {rid}: ring {plan.ring.number} canary {seats[0]} first, then {len(seats) - 1} at once")
+        rolled = 0
+        for wave in _waves(seats, width, canary):
+            if rolled and stop is not None and stop():
                 self.log(
                     f"tick {rid}: a newer release landed while ring {plan.ring.number} was rolling; "
-                    f"{', '.join(seats[start:])} left for the next run"
+                    f"{', '.join(seats[rolled:])} left for the next run"
                 )
                 return TICK_PROGRESS
+            rolled += len(wave)
             ring = Ring(plan.ring.number, wave, width, plan.ring.bake_minutes)
             result = Waves(self.store, self.log).run(
-                [ring], do_seat, release=release, only=None, parallel=width, dry_run=False, lease=lease, holder=holder
-            )
+                [ring], do_seat, release=release, only=None, parallel=len(wave), dry_run=False, lease=lease,
+                holder=holder,
+            )  # fmt: skip
             for out in result.outcomes:
                 self.log(f"  {out.seat:<18} {out.state:<14} {out.detail}")
             if result.halted:
                 self.log(f"tick {rid}: HALTED at ring {ring.number}")
                 return TICK_HALT
         return self._complete(rings, release, TICK_PROGRESS)
+
+    def _canary_proven(self, rid: str, ring: Ring) -> bool:
+        """A seat of ``ring`` is already done on this release: its canary passed in an earlier run."""
+        return bool(self.store.release_done_seats(rid) & set(ring.seats))
 
     def _complete(self, rings: list[Ring], release: dict[str, Any], code: int) -> int:
         """Stamp the release completed once every ringed seat is done on it (read from the records)."""
@@ -603,3 +617,12 @@ class Ticker:
             self.log(f"{release['release_id']}: every seat is done; release marked completed")
             return TICK_PROGRESS
         return code
+
+
+def _waves(seats: list[str], width: int, canary: bool) -> list[list[str]]:
+    """The waves a ring rolls in: with ``canary``, the first seat alone, then the rest in
+    chunks of ``width``; without it, every seat in chunks of ``width``."""
+    if canary:
+        rest = seats[1:]
+        return [seats[:1]] + [rest[i : i + width] for i in range(0, len(rest), width)]
+    return [seats[i : i + width] for i in range(0, len(seats), width)]

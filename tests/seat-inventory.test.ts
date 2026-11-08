@@ -268,9 +268,10 @@ describe('renderers', () => {
     ])
     // FALSIFIER: take the first or the smallest value and ring 0 bakes 10.
     expect(yaml).toContain('  - ring: 0\n    seats: [a, b, c]\n    bake_minutes: 45\n')
-    // A client ring (between staging and the last ring) rolls in waves of CLIENT_RING_PARALLEL.
+    // A client ring (between staging and the last ring) rolls a canary, then up to
+    // CLIENT_RING_PARALLEL seats at once.
     expect(yaml).toContain(
-      '  - ring: 1\n    seats: [d]\n    bake_minutes: 10\n    max_parallel: 5\n'
+      '  - ring: 1\n    seats: [d]\n    bake_minutes: 10\n    max_parallel: 20\n'
     )
     // The last ring has no next ring to gate.
     expect(yaml).toContain('  - ring: 2\n    seats: [e]\n    max_parallel: 1\n')
