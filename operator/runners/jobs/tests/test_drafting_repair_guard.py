@@ -201,6 +201,26 @@ def test_running_out_on_form_findings_files_them_as_open_items_and_records_one_a
     ]
 
 
+def test_a_compound_reported_as_a_drifts_row_files_like_a_compound(tmp_path):
+    """A firm's audit prompt may report a compound request as a DRIFTS row
+    whose detail starts ``compound:``. It is the form defect all the same: it
+    files with an open item, it does not hold the job (2026-11-07)."""
+    from jobs.drafting import compose, converge
+
+    row = "- `RFA 1: owned and swept` | DRIFTS | compound: two facts in one request"
+    assert compose.row_verdict(row) == "COMPOUND"
+    assert compose.row_verdict("- `RFA 1: owned` | DRIFTS | the file says the store was leased") == "DRIFTS"
+    assert compose.row_verdict("- `RFA 1: owned` | DRIFTS | not compound: a date differs") == "DRIFTS"
+    assert compose.row_verdict("- claim | SUPPORTED | cite") is None
+    audit = _audit(row)
+    assert converge.finding_ids(audit) == {("REQUESTS FOR ADMISSION", 1, "COMPOUND")}
+    p = _plan(tmp_path, {"per_job_cap_usd": 40.0}, [0.0])
+    p.begin()
+    g = repair_guard.Guard(_data(tmp_path), SOURCE)
+    assert p.close(g, audit, _doc({1: "Admit that YOU owned and swept the store."}), 2, "after 8 repairs") == 2
+    assert [i["kind"] for i in repair_budget.open_items(tmp_path)] == [repair_budget.KIND_WORDS["COMPOUND"]]
+
+
 def test_running_out_on_a_finding_that_changes_what_a_request_asks_holds_with_the_kinds(tmp_path):
     p = _plan(tmp_path, {"per_job_cap_usd": 40.0}, [0.0])
     g = repair_guard.Guard(_data(tmp_path), SOURCE)

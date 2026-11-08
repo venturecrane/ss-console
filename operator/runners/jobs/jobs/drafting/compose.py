@@ -170,6 +170,27 @@ def split_items(body: str) -> tuple[str, dict[int, str]]:
     return body[: marks[0].start()], items
 
 
+#: A firm's discovery audit may report a compound request as a DRIFTS row whose
+#: detail starts ``compound:`` (Ashton & Price's prompt does). It is the form
+#: defect COMPOUND all the same: without this, ``repair_budget`` read it as a
+#: drift and held the job where it should file the request with an open item
+#: (2026-11-07, found on a held interrogatory set).
+_COMPOUND_DETAIL = re.compile(r"^\s*compound\s*:", re.I)
+
+
+def row_verdict(line: str) -> str | None:
+    """A finding row's verdict, upper case, or None when it is not a finding.
+    A DRIFTS row whose detail (the text after the verdict) starts
+    ``compound:`` is COMPOUND."""
+    m = FINDING.search(line)
+    if not m:
+        return None
+    v = m.group(1).upper()
+    if v == "DRIFTS" and _COMPOUND_DETAIL.match(line[m.end() :]):
+        return "COMPOUND"
+    return v
+
+
 def row_item(line: str) -> int | None:
     """The request a finding row names, read from its claim (before the verdict)."""
     m = FINDING.search(line)
