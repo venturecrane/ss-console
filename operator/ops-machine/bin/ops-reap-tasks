@@ -74,11 +74,15 @@ echo "$panes" | sort -k3 -n | while read -r ppid win activity; do
   idle=$((now - activity))
   [ "$idle" -ge "$quiet" ] || continue
   cpid=$(pgrep -P "$ppid" -x claude 2>/dev/null | head -1)
+  # When Claude runs on an account token the shim stays as its parent (the
+  # account failover loop, bin/claude), so the pane's "claude" child is the shim
+  # and Claude is its child: TERM that one too.
+  [ -n "$cpid" ] && cpid="$cpid $(pgrep -P "$cpid" 2>/dev/null | tr '\n' ' ')"
   echo "$(date -u +%FT%TZ) reap: window $win ($(basename "$out")) quiet $((idle / 60))m; closing${cpid:+ claude $cpid}"
-  if [ -n "$cpid" ]; then
-    act kill -TERM "$cpid"
-    [ -z "$dry" ] && echo "$cpid" >> "$pending"
-  fi
+  for p in $cpid; do
+    act kill -TERM "$p"
+    [ -z "$dry" ] && echo "$p" >> "$pending"
+  done
   act tmux kill-window -t "main:$win"
 done
 exit 0

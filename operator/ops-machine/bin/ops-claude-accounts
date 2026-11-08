@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""ops-claude-accounts: which of the Captain's Claude accounts this Machine may use.
+
+The ops machines (smd-ops and every client workspace) run Claude on the
+Captain's subscription. He has two accounts, A and B, each with its own usage
+limit. On 2026-11-08 the A&P workspace's account hit its weekly limit and every
+window sat at Claude's limit prompt until the reset. This file is the per-Machine
+memory of which account is exhausted and until when, read by the claude shim
+(bin/claude) before every launch and written by the watcher
+(bin/ops-claude-failover) when a session shows the limit message.
+
+State: ~/state/claude-accounts.json (OPS_CLAUDE_STATE overrides). Per Machine,
+never shared: each Machine learns an account is exhausted from its own sessions.
+Names only, never a token: tokens are read by the shim, not here.
+
+  pick <acct>...        print the first account not exhausted, in the order given
+                        (exit 0); when every one is exhausted print the one that
+                        resets first and exit 3.
+  mark <acct> <text>    record <acct> exhausted until the reset in <text> (Claude's
+                        own "You've hit your weekly limit · resets Mon 12:00am").
+                        Unreadable reset: one hour, so it is retried soon.
+  page-due <acct>...    exit 0 and print a one-line summary when every account is
+                        exhausted and nobody has been paged since; else exit 1.
+  paged <acct>...       record the page, so it is not repeated before the
+                        earliest reset.
+  status [acct...]      one line per account, for people and the selftest.
+  parse <text>          print the reset epoch parsed from <text> (tests).
+
+OPS_CLAUDE_NOW (epoch) stands in for the clock in tests.
+"""
+import datetime as dt
+import json
+import os
+import re
+import sys
+import time
+from zoneinfo import ZoneInfo
+
+STATE = os.environ.get("OPS_CLAUDE_STATE") or os.path.join(os.environ["HOME"], "state", "claude-accounts.json")
+UNREADABLE_RESET_SECONDS = 3600
+WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+
+
+def now() -> int:
+    return int(os.environ.get("OPS_CLAUDE_NOW") or time.time())
+
+
+def local_zone():
+    name = os.environ.get("TZ") or "America/Phoenix"
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo("America/Phoenix")
+
+
+def load() -> dict:
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save(data: dict) -> None:
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    tmp = f"{STATE}.{os.getpid()}"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1, sort_keys=True)
+    os.replace(tmp, STATE)
+
+
+def until(data: dict, acct: str) -> int:
+    v = data.get("accounts", {}).get(acct, {}).get("exhausted_until", 0)
+    return int(v) if isinstance(v, (int, float)) else 0
+
+
+def parse_reset(text: str, now_ts: int):
+    """Epoch of the reset named in Claude's limit message, or None."""
+    m = re.search(r"resets\s+(?:at\s+)?([^·|\n]+)", text, re.I)
+    if not m:
+        return None
+    s = m.group(1).strip()
+    zone = local_zone()
+    zm = re.search(r"\(([A-Za-z_]+(?:/[A-Za-z_+-]+)*)\)", s)
+    if zm:
+        try:
+            zone = ZoneInfo(zm.group(1))
+        except Exception:
+            pass
+        s = s[: zm.start()]
+    s = re.sub(r"\s+", " ", s).strip(" .,").lower()
+    rel = re.fullmatch(r"in (?:(\d+) ?d(?:ays?)? ?)?(?:(\d+) ?h(?:ours?|rs?)? ?)?(?:(\d+) ?m(?:in(?:utes?)?)?)?", s)
+    if rel and any(rel.groups()):
+        d, h, mi = (int(x or 0) for x in rel.groups())
+        return now_ts + d * 86400 + h * 3600 + mi * 60
+    tm = re.search(r"(\d{1,2})(?::(\d{2}))? ?(am|pm)\b", s)
+    if tm:
+        hour = int(tm.group(1)) % 12 + (12 if tm.group(3) == "pm" else 0)
+        minute = int(tm.group(2) or 0)
+    else:
+        tm = re.search(r"\b(\d{1,2}):(\d{2})\b", s)
+        if not tm:
+            return None
+        hour, minute = int(tm.group(1)), int(tm.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    base = dt.datetime.fromtimestamp(now_ts, zone)
+    cand = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    md = re.search(r"\b(" + "|".join(MONTHS) + r")[a-z]*\.? (\d{1,2})\b", s)
+    wd = re.match(r"(" + "|".join(WEEKDAYS) + r")", s)
+    if md:
+        try:
+            cand = cand.replace(month=MONTHS.index(md.group(1)) + 1, day=int(md.group(2)))
+        except ValueError:
+            return None
+        if cand <= base:
+            cand = cand.replace(year=cand.year + 1)
+    elif wd:
+        cand = cand + dt.timedelta(days=(WEEKDAYS.index(wd.group(1)) - base.weekday()) % 7)
+        if cand <= base:
+            cand = cand + dt.timedelta(days=7)
+    elif cand <= base:
+        cand = cand + dt.timedelta(days=1)
+    return int(cand.timestamp())
+
+
+def iso(ts: int) -> str:
+    return dt.datetime.fromtimestamp(ts, local_zone()).strftime("%a %Y-%m-%d %H:%M %Z")
+
+
+def pick(data: dict, accts: list) -> int:
+    if not accts:
+        print("login")
+        return 0
+    t = now()
+    for a in accts:
+        if until(data, a) <= t:
+            print(a)
+            return 0
+    print(min(accts, key=lambda a: until(data, a)))
+    return 3
+
+
+def main(argv: list) -> int:
+    if not argv:
+        print(__doc__)
+        return 2
+    cmd, args = argv[0], argv[1:]
+    data = load()
+    t = now()
+    if cmd == "pick":
+        return pick(data, args)
+    if cmd == "mark":
+        if len(args) != 2:
+            return 2
+        acct, text = args
+        reset = parse_reset(text, t)
+        guessed = reset is None or reset <= t
+        if guessed:
+            reset = t + UNREADABLE_RESET_SECONDS
+        data.setdefault("accounts", {})[acct] = {
+            "exhausted_until": reset,
+            "marked_at": t,
+            "reset_guessed": guessed,
+            "limit_text": text.strip()[:160],
+        }
+        save(data)
+        print(f"{acct} exhausted until {iso(reset)}{' (reset unreadable; retry in 1h)' if guessed else ''}")
+        return 0
+    if cmd == "page-due":
+        if not args or any(until(data, a) <= t for a in args):
+            return 1
+        if int(data.get("paged_until", 0)) > t:
+            return 1
+        print("every Claude account on this Machine is at its usage limit: "
+              + "; ".join(f"{a} resets {iso(until(data, a))}" for a in args))
+        return 0
+    if cmd == "paged":
+        if not args:
+            return 2
+        data["paged_until"] = min(until(data, a) for a in args)
+        save(data)
+        return 0
+    if cmd == "status":
+        accts = args or sorted(data.get("accounts", {}))
+        for a in accts:
+            u = until(data, a)
+            print(f"{a}: " + (f"exhausted until {iso(u)}" if u > t else "available"))
+        return 0
+    if cmd == "parse":
+        r = parse_reset(" ".join(args), t)
+        print(r if r is not None else "none")
+        return 0 if r is not None else 1
+    print(f"unknown command {cmd}", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

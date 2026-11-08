@@ -60,7 +60,7 @@ Pausing or rebuilding a seat, rotating a key and clearing a stop all need an age
 |---|---|---|
 | The GitHub organization has one member | Only the Captain can grant anyone access to SMD's code and settings | When an administrator is named, they get their own membership |
 | All of SMD's Fly.io apps (every client seat and the ops machines) are in the Captain's personal Fly account | No one else can see or act on a seat directly | Move the apps to an SMD-owned Fly organization when an administrator is named |
-| AI agents, the ops machine and every client ops workspace run Claude on the Captain's personal login | No agent session can start without that login | The administrator gets their own seat on every vendor, Claude included |
+| AI agents, the ops machine and every client ops workspace run Claude on the Captain's personal logins (two accounts; the ops machines switch to the other one at a usage limit) | No agent session can start without those logins, and the account tokens expire after a year unless he renews them | The administrator gets their own seat on every vendor, Claude included |
 | The GitHub organization, the Cloudflare account and the secrets vault are shared with Venture Crane, another venture, and a required merge check calls a Venture Crane service | A change on that side can stop SMD from merging or deploying | A written agreement that SMD keeps that access |
 
 Who holds each account, its recovery method and how it transfers is in the private companion's `admin/accounts.md` and `admin/recovery-contacts.md` ([Handoff Companion](/admin/playbook/handoff-companion)); `admin/crane-dependency.md` lists every point where SMD depends on Venture Crane.

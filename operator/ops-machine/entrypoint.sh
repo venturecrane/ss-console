@@ -45,7 +45,7 @@ if [ -n "${OPS_WORKSPACE:-}" ]; then
   printf '%s\n' "$OPS_WORKSPACE" > /etc/smd-ops-workspace
   umask 077
   {
-    for v in OPS_WORKSPACE OPS_SEAT_APP OPS_SEAT_TOKEN_EXPIRES FLY_API_TOKEN CRANE_CONTEXT_KEY; do
+    for v in OPS_WORKSPACE OPS_SEAT_APP OPS_SEAT_TOKEN_EXPIRES FLY_API_TOKEN CRANE_CONTEXT_KEY OPS_HC_URL; do
       [ -n "${!v:-}" ] && printf 'export %s=%q\n' "$v" "${!v}"
     done
     [ -n "${OPS_TOOL_ANTHROPIC_API_KEY:-}" ] && printf 'export ANTHROPIC_API_KEY=%q\n' "$OPS_TOOL_ANTHROPIC_API_KEY"
@@ -58,8 +58,33 @@ if [ -n "${OPS_WORKSPACE:-}" ]; then
   [ -f "$HOME_DIR/.crontab" ] || install -o ops -g ops -m 0600 /opt/ops/crontab-workspace "$HOME_DIR/.crontab"
 fi
 
-# The ops user's crontab is kept on the volume and re-installed each boot.
-if [ -f "$HOME_DIR/.crontab" ]; then
+# The Captain's two Claude account tokens (CLAUDE_OAUTH_TOKEN_A / _B, Fly
+# secrets on a workspace, staged by bin/ops-workspace) go to ~/.claude-oauth,
+# which only the claude shim reads. Never into ~/.ops-secrets: the tools source
+# that. Absent tokens remove the file, so the shim falls back to the stored
+# /login. smd-ops gets them from /ss through crane and ss-env instead.
+if [ -n "${CLAUDE_OAUTH_TOKEN_A:-}${CLAUDE_OAUTH_TOKEN_B:-}" ]; then
+  umask 077
+  {
+    for v in CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B; do
+      [ -n "${!v:-}" ] && printf 'export %s=%q\n' "$v" "${!v}"
+    done
+  } > "$HOME_DIR/.claude-oauth"
+  umask 022
+  chown ops:ops "$HOME_DIR/.claude-oauth"
+else
+  rm -f "$HOME_DIR/.claude-oauth"
+fi
+
+# The ops user's crontab is kept on the volume and re-installed each boot. The
+# limit watcher (bin/ops-claude-failover) is added to it here, on every Machine
+# (smd-ops and each workspace), so a volume whose crontab predates it gets it.
+if [ -f "$HOME_DIR/.crontab" ] || [ -n "${OPS_WORKSPACE:-}" ]; then
+  touch "$HOME_DIR/.crontab"; chown ops:ops "$HOME_DIR/.crontab"
+  grep -q ops-claude-failover "$HOME_DIR/.crontab" || cat >> "$HOME_DIR/.crontab" <<'EOF'
+# Move a Claude session stuck at its account's usage limit to the other account.
+* * * * * /opt/ops/bin/ops-claude-failover >> /home/ops/logs/claude-failover.log 2>&1
+EOF
   crontab -u ops "$HOME_DIR/.crontab"
 fi
 service cron start >/dev/null

@@ -1,0 +1,123 @@
+#!/bin/bash
+# ops-claude-failover (cron, every minute, smd-ops and every client workspace):
+# move a Claude session that is stuck at its account's usage limit onto the
+# Captain's other account, resuming the same conversation, with no person typing.
+#
+# Why: on 2026-11-08 the A&P workspace's Claude account hit its weekly limit and
+# every window sat at Claude's limit prompt (stop / wait / switch to usage
+# credits) until the reset, while the Captain's second account sat unused.
+#
+# How (logic, not a model):
+#   * The claude shim registers every interactive session it runs inside tmux
+#     in ~/state/claude-panes/pane-<n>: its own pid, the tmux pane, the account,
+#     the session id and the Machine's account order. Only sessions on an
+#     account token are registered; with no token this script finds nothing.
+#   * Each run reads the bottom of each registered pane. Claude's limit message
+#     is "You've hit your <session|weekly|Opus|...> limit · resets <when>"
+#     (Claude Code docs, errors page, 2026-11-08). Spend, budget and fast-mode
+#     limits are not account limits and are ignored.
+#   * Seen once is not enough: a session can print those words while working
+#     (an agent discussing this very script). Only a pane showing the message on
+#     two runs in a row with an unchanged screen is stuck. Then the account is
+#     marked exhausted until its stated reset (ops-claude-accounts mark), and if
+#     another account is available the pane gets a .restart file and its Claude
+#     is sent TERM; the shim resumes the conversation on the next account.
+#   * Every account exhausted: no restart (it would land on a spent account),
+#     and team@ is paged ONCE with the reset times, through the alert path this
+#     Machine already has: smd-ops emails through Resend as ops-triage does; a
+#     workspace fails its own healthchecks.io check (OPS_HC_URL), which emails.
+#     When the earliest reset passes, a still-stuck pane is restarted onto it.
+# Test seams: OPS_FAILOVER_DRY=1 prints the actions instead of taking them.
+set -uo pipefail
+S="$HOME/state"; P="$S/claude-panes"
+mkdir -p "$P" "$HOME/logs"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+acct="$here/ops-claude-accounts"
+dry="${OPS_FAILOVER_DRY:-}"
+now=$(date +%s)
+log() { echo "$(date -u +%FT%TZ) $*"; }
+
+# One run at a time (a slow tmux must not stack runs). A directory, not a
+# ~/locks/*.lock file: those keep a workspace awake (ops-idle-stop).
+lock="$S/claude-failover.lockdir"
+if ! mkdir "$lock" 2>/dev/null; then
+  [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] && rm -rf "$lock"
+  exit 0
+fi
+trap 'rmdir "$lock" 2>/dev/null' EXIT
+
+page() {
+  local msg="$1"
+  if [ -n "$dry" ]; then echo "would page: $msg"; return 0; fi
+  if [ -x "$HOME/bin/ss-env" ] && [ -f "$HOME/.infisical-ua" ]; then
+    "$HOME/bin/ss-env" python3 - "$msg" <<'PY'
+import json, os, socket, sys, urllib.request
+msg = sys.argv[1]
+req = urllib.request.Request(
+    "https://api.resend.com/emails",
+    data=json.dumps({"from": "SMD Services Ops <team@smd.services>", "to": ["team@smd.services"],
+                     "subject": "[SMD Ops] Claude: every account at its usage limit on " + socket.gethostname(),
+                     "text": msg + "\n\nSessions wait at the limit prompt and move on their own when the first account resets."}).encode(),
+    headers={"Authorization": "Bearer " + os.environ["RESEND_API_KEY"], "Content-Type": "application/json",
+             "User-Agent": "smd-ops-claude-failover/1"},
+)
+print("resend", urllib.request.urlopen(req, timeout=30).status)
+PY
+    return $?
+  fi
+  # shellcheck disable=SC1091
+  [ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
+  if [ -n "${OPS_HC_URL:-}" ]; then
+    curl -fsS -m 10 --retry 3 --data-raw "$msg" "$OPS_HC_URL/fail" >/dev/null
+    return $?
+  fi
+  log "no alert path on this Machine (no ss-env, no OPS_HC_URL): $msg"
+  return 1
+}
+
+for f in "$P"/pane-*; do
+  case "$f" in *.*|*'*') continue ;; esac
+  [ -f "$f" ] || continue
+  pid=$(sed -n 's/^pid=//p' "$f") pane=$(sed -n 's/^pane=//p' "$f")
+  account=$(sed -n 's/^account=//p' "$f") accounts=$(sed -n 's/^accounts=//p' "$f")
+  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then rm -f "$f" "$f".*; continue; fi
+  [ "$account" = login ] && continue   # the stored /login: no other account to move to from here
+  screen=$(tmux capture-pane -p -J -t "$pane" 2>/dev/null | tail -n 30) || continue
+  hit=$(printf '%s\n' "$screen" | grep -E "You.ve hit your [A-Za-z0-9 .-]*limit" \
+        | grep -v -i -E "spend|budget|fast limit" | grep -i "resets" | tail -1)
+  if [ -z "$hit" ]; then rm -f "$f.seen"; continue; fi
+  h=$(printf '%s' "$screen" | cksum | cut -d' ' -f1)
+  prev=$(cat "$f.seen" 2>/dev/null || true)
+  echo "$h" > "$f.seen"
+  if [ "$prev" != "$h" ]; then log "pane $pane ($account): limit message on screen; confirming next run"; continue; fi
+
+  # Stuck. Mark the account once per stuck screen (a stale screen must not
+  # re-mark an account whose reset has already passed).
+  if [ "$(cat "$f.handled" 2>/dev/null)" != "$h" ]; then
+    log "pane $pane: $("$acct" mark "$account" "$hit")"
+    echo "$h" > "$f.handled"
+  fi
+  # shellcheck disable=SC2086
+  next=$("$acct" pick $accounts); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    # shellcheck disable=SC2086
+    if summary=$("$acct" page-due $accounts); then
+      log "pane $pane: every account exhausted; paging team@"
+      # shellcheck disable=SC2086
+      page "$summary" && "$acct" paged $accounts
+    fi
+    continue
+  fi
+  last=$(cat "$f.restarted" 2>/dev/null || echo 0)
+  if [ $((now - last)) -lt 300 ]; then log "pane $pane: restarted $((now - last))s ago; waiting"; continue; fi
+  child=$(pgrep -P "$pid" 2>/dev/null | head -1)
+  log "pane $pane: moving the session from $account to $next"
+  if [ -n "$dry" ]; then
+    echo "would: restart pane $pane on $next (TERM claude ${child:-none})"
+  else
+    : > "$f.restart"
+    [ -n "$child" ] && kill -TERM "$child"
+  fi
+  echo "$now" > "$f.restarted"
+done
+exit 0

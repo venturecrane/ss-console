@@ -55,11 +55,24 @@ mint_and_stage() {
   expires=$(date -u -v+365d +%F 2>/dev/null || date -u -d '+365 days' +%F)
   seat_tok=$(fly tokens create deploy -a "$seat" --expiry 8760h --name "workspace $app" 2>/dev/null | tail -1)
   [ "${seat_tok:0:6}" = "FlyV1 " ] || { echo "could not mint a deploy token for $seat"; exit 1; }
+  # The Captain's two Claude account tokens (`claude setup-token`, one per
+  # account, kept in /ss prod as CLAUDE_OAUTH_TOKEN_A / _B): Claude runs on the
+  # first one not at its usage limit (bin/claude, bin/ops-claude-failover).
+  # Missing ones are skipped and the workspace stays on the stored /login.
+  local extra=() a hc
+  for a in A B; do
+    local tv="CLAUDE_OAUTH_TOKEN_$a"
+    if [ -n "${!tv:-}" ]; then extra+=("$tv=${!tv}"); else log "WARN $tv not in /ss prod; account $a not available here"; fi
+  done
+  # The workspace's own healthchecks.io ping url, so the limit watcher can page
+  # when every account is spent (its /fail emails, as a failed sweep does).
+  hc=$(hc_ping_url) && [ -n "$hc" ] && extra+=("OPS_HC_URL=$hc")
   printf '%s\n' \
     "OPS_WORKSPACE=$slug" "OPS_SEAT_APP=$seat" "OPS_SEAT_TOKEN_EXPIRES=$expires" \
     "FLY_API_TOKEN=$seat_tok" "OPS_TOOL_ANTHROPIC_API_KEY=${!k}" "CRANE_CONTEXT_KEY=$CRANE_CONTEXT_KEY" \
+    ${extra[@]+"${extra[@]}"} \
     | fly secrets import --stage -a "$app" >/dev/null
-  log "staged secrets (seat token for $seat until $expires)"
+  log "staged secrets (seat token for $seat until $expires; Claude account tokens: $(printf '%s\n' ${extra[@]+"${extra[@]}"} | grep -c '^CLAUDE_OAUTH_TOKEN_'))"
   # The daily sweep's own token reaches this workspace only.
   sweep_tok=$(fly tokens create deploy -a "$app" --expiry 8760h --name "ops-workspace-sweep" 2>/dev/null | tail -1)
   [ "${sweep_tok:0:6}" = "FlyV1 " ] || { echo "could not mint the sweep token for $app"; exit 1; }
@@ -68,13 +81,20 @@ mint_and_stage() {
   log "sweep token stored in $repo (OPS_FLY_TOKEN__${suffix}, until $expires)"
 }
 
+# The workspace's check (created if missing; unique on name and tags, so a
+# second call returns the same check) and its ping url.
+hc_ping_url() {
+  [ -n "${HEALTHCHECKS_API_KEY:-}" ] || return 1
+  jq -n --arg n "$app" --arg t "ops-workspace $slug" \
+        '{name:$n, tags:$t, timeout:86400, grace:21600, unique:["name","tags"]}' \
+    | curl -fsS -X POST https://healthchecks.io/api/v3/checks/ -H "X-Api-Key: $HEALTHCHECKS_API_KEY" \
+        -H 'Content-Type: application/json' -d @- | jq -r '.ping_url // empty'
+}
+
 healthcheck() {
   [ -n "${HEALTHCHECKS_API_KEY:-}" ] || { log "WARN HEALTHCHECKS_API_KEY not set; no check"; return 0; }
   local url
-  url=$(jq -n --arg n "$app" --arg t "ops-workspace $slug" \
-        '{name:$n, tags:$t, timeout:86400, grace:21600, unique:["name","tags"]}' \
-    | curl -fsS -X POST https://healthchecks.io/api/v3/checks/ -H "X-Api-Key: $HEALTHCHECKS_API_KEY" \
-        -H 'Content-Type: application/json' -d @- | jq -r '.ping_url // empty')
+  url=$(hc_ping_url)
   [ -n "$url" ] || { echo "healthchecks.io returned no ping url"; exit 1; }
   printf '%s' "$url" | gh secret set "OPS_HC_URL__${suffix}" --repo "$repo" >/dev/null
   log "healthchecks.io check $app (daily, 6h grace) wired to the sweep"
