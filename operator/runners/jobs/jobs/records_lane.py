@@ -213,7 +213,7 @@ def _gateway_ids(name: str = GATEWAY_USER) -> tuple[int, int]:
 
 @dataclass
 class RecordsLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-medchron/records-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/records-queue"))
     inputs_dir: str | None = None
     state_dir: str | None = None
     index_dir: str | None = None

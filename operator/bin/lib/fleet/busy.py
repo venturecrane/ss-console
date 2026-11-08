@@ -21,7 +21,7 @@ BUSY means any of:
     the last few minutes (its turn may still be running in the gateway);
   * a store the probe needed could not be read (cannot evaluate is not idle).
 
-QUEUED work is not busy: the queues live on the volume (/run/smd-medchron is a
+QUEUED work is not busy: the queues live on the volume (/run/smd-jobs is a
 bind mount of it) and survive the restart.
 
 Busy -> write the quiesce marker (no new claims; expires on its own) and poll

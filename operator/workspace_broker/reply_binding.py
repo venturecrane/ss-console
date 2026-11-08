@@ -228,20 +228,20 @@ def _ops(broker: BrokerContext) -> MsGraphOps:
 
 def _demand_ledger(broker: BrokerContext) -> DemandLedger:
     # Read-only here; the queue dir is never written on this path.
-    queue = os.environ.get("SMD_DEMAND_QUEUE_DIR") or "/run/smd-medchron/demand-queue"
+    queue = os.environ.get("SMD_DEMAND_QUEUE_DIR") or "/run/smd-jobs/demand-queue"
     return DemandLedger(str(broker.audit_db_path), queue)
 
 
 def _drafting_ledger(broker: BrokerContext) -> DraftingLedger:
     # Read-only here; the queue dir is never written on this path.
-    queue = os.environ.get("SMD_DRAFTING_QUEUE_DIR") or "/run/smd-medchron/drafting-queue"
+    queue = os.environ.get("SMD_DRAFTING_QUEUE_DIR") or "/run/smd-jobs/drafting-queue"
     drafting = DraftingLedger(str(broker.audit_db_path), queue)
     return DraftingOrSetup(drafting, of_drafting(drafting))  # type: ignore[return-value]  # same reads
 
 
 def _litigation_ledger(broker: BrokerContext) -> LitigationLedger:
     # Read-only here; the queue dir is never written on this path.
-    queue = os.environ.get("SMD_LITIGATION_QUEUE_DIR") or "/run/smd-medchron/litigation-queue"
+    queue = os.environ.get("SMD_LITIGATION_QUEUE_DIR") or "/run/smd-jobs/litigation-queue"
     return LitigationLedger(str(broker.audit_db_path), queue)
 
 
@@ -257,13 +257,13 @@ def scheduled_subject(request_ref: str) -> str:
 
 def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
     # Read here; the binding marks a notice replied, never writes the queue.
-    queue = os.environ.get("SMD_NEGOTIATION_QUEUE_DIR") or "/run/smd-medchron/negotiation-queue"
+    queue = os.environ.get("SMD_NEGOTIATION_QUEUE_DIR") or "/run/smd-jobs/negotiation-queue"
     return NegotiationLedger(str(broker.audit_db_path), queue)
 
 
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
     # Read-only here; the queue dir is never written on this path.
-    queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-medchron/queue"
+    queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or "/run/smd-jobs/queue"
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 

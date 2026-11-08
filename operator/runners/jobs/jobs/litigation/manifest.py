@@ -38,7 +38,7 @@ from .firm import LitigationFirm
 
 STATE_ENV = "JOBS_LITIGATION_STATE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/medchron"
+DEFAULT_DATA_DIR = "/opt/data/jobs"
 EMAIL_EXTS = (".msg", ".eml")
 #: Per-matter fetch caps (``fetch_caps`` in the firm config overrides any).
 FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "settlement": 10, "total": 180}

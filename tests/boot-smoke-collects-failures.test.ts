@@ -281,7 +281,7 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
   // medchron authored). This case authors one, proves the three controls
   // checks run, and that the presence check can go red.
   it('a seat that authors medchron must carry the seeded controls tree, and the check can fail', () => {
-    const { out, code } = run(['/run/smd-medchron/controls/controls.json'], {
+    const { out, code } = run(['/run/smd-jobs/controls/controls.json'], {
       medchronAuthored: true,
     })
     expect(out).toContain('FAIL: medchron-controls-present')

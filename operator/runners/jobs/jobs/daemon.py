@@ -52,7 +52,7 @@ from .proof import watch as proof_watch
 logger = logging.getLogger("jobs.daemon")
 
 RUN_DIR_ENV = "SMD_JOBS_RUN_DIR"
-DEFAULT_RUN_DIR = "/run/smd-medchron"
+DEFAULT_RUN_DIR = "/run/smd-jobs"
 SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 STICKY_DB_ENV = "SMD_STICKY_STOP_DB_PATH"
 DEFAULT_STICKY_DB = "/opt/data/smd/sticky_stop.db"
@@ -75,6 +75,7 @@ THREAD_CHECKED_LANES = frozenset({"drafting"})
 STOPPED_EXIT = 130
 CHILD_UID_NAME = "jobs"
 CHILD_ENV_PASS = (
+    "JOBS_DATA_DIR",
     "ANTHROPIC_API_KEY",
     "SMOKEBALL_REGION",
     "SMOKEBALL_ENVIRONMENT",

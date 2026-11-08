@@ -36,7 +36,7 @@ from typing import Any
 
 from . import lane_proof, proof_run
 
-DEFAULT_RUN_DIR = "/run/smd-medchron"
+DEFAULT_RUN_DIR = "/run/smd-jobs"
 #: Each daemon lane's queue under the run dir (the entrypoints' exports).
 QUEUES = {
     "medchron": "queue",

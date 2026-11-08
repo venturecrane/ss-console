@@ -121,7 +121,7 @@ def test_a_resume_keeps_its_own_checkpoint_and_a_run_is_never_seeded(tmp_path):
 
 
 def test_the_child_reads_named_jobs_by_path_in_a_dir_it_cannot_list(tmp_path):
-    """2026-10-25: the first proof run listed /run/smd-medchron/jobs from the
+    """2026-10-25: the first proof run listed /run/smd-jobs/jobs from the
     child's uid (0710 root:jobs) and died on PermissionError. The daemon
     names the jobs; the child only enters them. Falsifier: listing the same
     unlistable dir finds nothing, and does not raise."""
