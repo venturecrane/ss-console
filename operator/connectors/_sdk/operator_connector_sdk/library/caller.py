@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import roster as roster_mod
+from . import readers as readers_mod, roster as roster_mod
 from .ledger import LedgerRead
 from .resolver import NONE_ACCEPTED, RESOLVED, Attorney, Resolution
 from .store import FiledVersion, LibraryFile, LibraryStore, LibraryUnavailable, VersionListing
@@ -71,6 +71,9 @@ SOURCES = (ACCEPTED, *FALLBACKS, NOT_STARTED)
 FIRM_MADE = "firm_made"
 #: The optional record key a considered firm edit adds, and its own keys.
 FIRM_EDIT = "firm_edit"
+#: The optional record key naming the document's reader and the profile in
+#: effect (``readers.record``, design piece 7).
+READER = "reader"
 _RECORD_KEYS = frozenset({"schema_version", "path", "kind", "resolution", "base", "overridden"})
 _EDIT_KEYS = frozenset({"status", "code", "version", "replaces_version", "sha256", "accepted_at", "install"})
 EDIT_USED = "used"
@@ -234,10 +237,13 @@ def build_record(
     base: BaseUsed,
     overridden: BaseUsed | None = None,
     firm_edit: dict[str, Any] | None = None,
+    reader: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The record beside the document. ``overridden``: the pinned input the
     accepted file replaced, while both exist (the migration window).
     ``firm_edit``: the firm's own saved version considered, only when there was one.
+    ``reader``: who the document is written for and the profile in effect
+    (``readers.record``).
     Raises ``ValueError`` when ``base`` is not what the answer allows."""
     if path not in PATHS:
         raise ValueError(f"unknown path {path!r}")
@@ -246,6 +252,8 @@ def build_record(
         problems.append("only an accepted file overrides a pinned input")
     if firm_edit is not None:
         problems += edit_problems(firm_edit)
+    if reader is not None:
+        problems += readers_mod.record_problems(reader)
     if problems:
         raise ValueError("; ".join(problems))
     out = {
@@ -258,14 +266,20 @@ def build_record(
     }
     if firm_edit is not None:
         out[FIRM_EDIT] = dict(firm_edit)
+    if reader is not None:
+        out[READER] = dict(reader)
     return out
 
 
 def record_problems(doc: Any) -> list[str]:
     """Every reason ``doc`` is not a record a later check can read."""
-    if not isinstance(doc, dict) or set(doc) - {FIRM_EDIT} != _RECORD_KEYS:
-        return [f"a record's keys are exactly {sorted(_RECORD_KEYS)}, and {FIRM_EDIT} when an edit was considered"]
+    if not isinstance(doc, dict) or set(doc) - {FIRM_EDIT, READER} != _RECORD_KEYS:
+        return [
+            f"a record's keys are exactly {sorted(_RECORD_KEYS)}, and {FIRM_EDIT} when an edit was "
+            f"considered, and {READER} when the reader was named"
+        ]
     out = edit_problems(doc[FIRM_EDIT]) if FIRM_EDIT in doc else []
+    out += readers_mod.record_problems(doc[READER]) if READER in doc else []
     if doc["schema_version"] != RECORD_SCHEMA_VERSION:
         out.append(f"schema {doc['schema_version']!r}")
     if doc["path"] not in PATHS:
@@ -307,6 +321,7 @@ __all__ = [
     "NOT_STARTED",
     "PATHS",
     "PINNED",
+    "READER",
     "RECORD_NAME",
     "RECORD_SCHEMA_VERSION",
     "SOURCES",

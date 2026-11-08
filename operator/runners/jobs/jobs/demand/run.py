@@ -44,6 +44,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
+from operator_connector_sdk.library import readers
+
 from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode
 from ..ledger import Ledger
 from ..llm import Doorway
@@ -553,7 +555,6 @@ class DemandRun:
         self._stage("facts", self._facts)
         self._check_facts()
         self._stage("destination", self._destination)
-        firm_wording.freeze_or_hold(self.data, firm_wording.demand_kind(self.job), self._json("facts.json"), DemandHold)
         self._stage("pull", self._pull)
         self._stage("preflight", lambda: preflight.run(self.data, self.firm, self._json("facts.json"), self.log))
         self._estimate()
@@ -566,7 +567,16 @@ class DemandRun:
         if not self._json("premise.json")["passed"]:
             return self._coverage((self.data / "coverage-report.md").read_text(encoding="utf-8"), gated=False)
         self._select_format()
+        # Frozen once the variant is read: a demand's reader is its variant's (an
+        # adjuster pre-suit, defense counsel in litigation). Still before anything is paid.
+        self._freeze_wording()
         return self._paid()
+
+    def _freeze_wording(self) -> None:
+        kind = firm_wording.demand_kind(self.job)
+        variant = self.firm.data.get("_variant") if kind else None
+        reader = readers.reader_for(kind, str(variant) if variant else None) if kind else None
+        firm_wording.freeze_or_hold(self.data, kind, self._json("facts.json"), DemandHold, reader)
 
     def _select_format(self) -> None:
         """The demand's variant, read off the file (premise.py: a filed action

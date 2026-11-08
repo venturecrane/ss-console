@@ -64,7 +64,7 @@ from operator_connector_sdk.library.caller import (
     matter_attorney,
     write_record,
 )
-from operator_connector_sdk.library import roster as roster_mod
+from operator_connector_sdk.library import readers, roster as roster_mod
 from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
@@ -104,8 +104,15 @@ def _attorneys(run: Any, firm: Any, who: str | None) -> tuple[Attorney | None, l
     return found.attorney, known_attorneys(roster, known)
 
 
+def _reader(run: Any) -> dict[str, Any]:
+    """Who this demand is written for and the profile in effect (``readers.record``):
+    the variant's reader once a variant is selected, else the kind's."""
+    variant = run.firm.data.get("_variant")
+    return readers.record(readers.DEMAND_JOB, KIND, str(variant) if variant else None)
+
+
 def _stop(run: Any, res: Resolution) -> DemandFailed:
-    write_record(run.data, build_record(DEMAND_JOB, res, BaseUsed(NOT_STARTED)))
+    write_record(run.data, build_record(DEMAND_JOB, res, BaseUsed(NOT_STARTED), reader=_reader(run)))
     return DemandFailed(
         f"the firm's document library cannot give this demand's file ({res.status}: {res.reason}); "
         "it was not written on another file. Nothing was spent."
@@ -167,7 +174,7 @@ def pick_reference(run: Any) -> Path | None:
     library_edit.leave(run.data, asked, considered)
     res = considered.resolution
     if res.status == NONE_ACCEPTED:
-        write_record(run.data, build_record(DEMAND_JOB, res, pinned_used))
+        write_record(run.data, build_record(DEMAND_JOB, res, pinned_used, reader=_reader(run)))
         return pinned
     if res.status != RESOLVED or res.data is None or res.file is None:
         raise _stop(run, res)
@@ -185,7 +192,10 @@ def pick_reference(run: Any) -> Path | None:
     part.write_bytes(res.data)
     part.replace(dest)
     used = BaseUsed.of(ACCEPTED, dest.read_bytes(), contract=res.file.contract)
-    write_record(run.data, build_record(DEMAND_JOB, res, used, overridden=pinned_used, firm_edit=considered.note))
+    write_record(
+        run.data,
+        build_record(DEMAND_JOB, res, used, overridden=pinned_used, firm_edit=considered.note, reader=_reader(run)),
+    )
     return dest
 
 

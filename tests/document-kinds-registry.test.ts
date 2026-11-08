@@ -19,6 +19,8 @@ interface Kind {
   library_title: string
   variants: string[]
   produced_by: string[]
+  reader: string
+  variant_readers?: Record<string, string>
 }
 
 const PRODUCERS = ['chat_tool', 'drafting_job', 'demand_job'] as const
@@ -131,15 +133,57 @@ describe('the registry itself', () => {
     }
   })
 
-  it('carries no reader or audience field until something reads one', () => {
+  it('names each kind its reader, from the wording rules readers or a letter addressee', () => {
+    const readers = members(
+      'operator/runners/jobs/jobs/wording_rules_store.py',
+      /^READERS: tuple\[str, \.\.\.\] = \(([\s\S]*?)\)/m,
+      DQ
+    )
     for (const k of registry.kinds) {
-      expect(Object.keys(k).sort(), k.key).toEqual([
+      const keys = Object.keys(k).filter((x) => x !== 'variant_readers')
+      expect(keys.sort(), k.key).toEqual([
         'key',
         'library_title',
         'produced_by',
+        'reader',
         'variants',
       ])
+      expect([...readers, 'addressee'], k.key).toContain(k.reader)
+      for (const [variant, reader] of Object.entries(k.variant_readers ?? {})) {
+        expect(k.variants, `${k.key}.${variant}`).toContain(variant)
+        expect(readers, `${k.key}.${variant}`).toContain(reader)
+      }
     }
+    expect(registry.kinds.find((k) => k.key === 'letter')?.reader).toBe('addressee')
+  })
+
+  it("the resolver's reader copy is the registry's, and its readers are the wording rules'", () => {
+    const READERS_PY = 'operator/connectors/_sdk/operator_connector_sdk/library/readers.py'
+    const src = read(READERS_PY)
+    const kindReaders = src.match(/^KIND_READERS: dict\[str, str\] = \{([\s\S]*?)\}/m)
+    if (!kindReaders) throw new Error('KIND_READERS not found')
+    const pairs = [...kindReaders[1].matchAll(/"([a-z_]+)":\s*"([a-z_]+)"/g)].map((x) => [
+      x[1],
+      x[2],
+    ])
+    expect(pairs).toEqual(registry.kinds.map((k) => [k.key, k.reader]))
+    const variantReaders = src.match(
+      /^VARIANT_READERS: dict\[str, dict\[str, str\]\] = \{([\s\S]*?)^\}/m
+    )
+    if (!variantReaders) throw new Error('VARIANT_READERS not found')
+    const got: Record<string, Record<string, string>> = {}
+    for (const x of variantReaders[1].matchAll(/"([a-z_]+)":\s*\{([^}]*)\}/g))
+      got[x[1]] = Object.fromEntries(
+        [...x[2].matchAll(/"([a-z_]+)":\s*"([a-z_]+)"/g)].map((y) => [y[1], y[2]])
+      )
+    const want = Object.fromEntries(
+      registry.kinds.filter((k) => k.variant_readers).map((k) => [k.key, k.variant_readers])
+    )
+    expect(got).toEqual(want)
+    const tuple = /^READERS: tuple\[str, \.\.\.\] = \(([\s\S]*?)\)/m
+    expect(members(READERS_PY, tuple, DQ)).toEqual(
+      members('operator/runners/jobs/jobs/wording_rules_store.py', tuple, DQ)
+    )
   })
 })
 

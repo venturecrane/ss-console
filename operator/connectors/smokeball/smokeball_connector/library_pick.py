@@ -70,7 +70,7 @@ from operator_connector_sdk.library.caller import (
     needs_matter_attorney,
 )
 from operator_connector_sdk.library.caller import matter_attorney as check_attorney
-from operator_connector_sdk.library import roster as roster_mod
+from operator_connector_sdk.library import readers, roster as roster_mod
 from operator_connector_sdk.library.resolver import replace_status
 
 from .library import LibraryConfig
@@ -226,7 +226,9 @@ def chat_record(pick: ChatPick, base: bytes | None, name: str = "") -> dict[str,
         used = BaseUsed.of(ACCEPTED, base, contract=res.file.contract if res.file else "")
     else:
         used = BaseUsed.of(BY_NAME, base, name=name) if base is not None else BaseUsed(STARTER)
-    return build_record(CHAT_TOOL, res, used)
+    # Who it is written for: the registry's reader; a letter's addressee is not
+    # named to this tool, so a letter is carried by the firm's base (readers.record).
+    return build_record(CHAT_TOOL, res, used, reader=readers.record(readers.CHAT_TOOL, res.kind))
 
 
 __all__ = [
