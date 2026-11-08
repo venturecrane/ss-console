@@ -38,9 +38,9 @@ def finding_ids(audit_md: str) -> set[FindingId]:
     out: set[FindingId] = set()
     for head, body in d.audit_sections(audit_md).items():
         for ln in body.splitlines():
-            m = compose.FINDING.search(ln)
-            if m:
-                out.add((head, compose.row_item(ln), m.group(1).upper()))
+            v = compose.row_verdict(ln)
+            if v:
+                out.add((head, compose.row_item(ln), v))
     mech = _MECH.search(audit_md)
     for ln in (mech.group(0) if mech else "").splitlines():
         if ln.startswith("- "):
