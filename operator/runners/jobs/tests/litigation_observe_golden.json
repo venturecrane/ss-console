@@ -1,0 +1,6235 @@
+{
+  "runs": {
+    "a check writes a future answer date and the gates hold": {
+      "changes.json": null,
+      "final.json": [
+        {
+          "case_name": "Gamma Example v. Delta Example",
+          "case_number": "CV-0001",
+          "case_status": {
+            "detail": "no dismissal in the file",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            },
+            "value": "Active"
+          },
+          "complaint_filed": {
+            "date": "2026-03-02",
+            "source": {
+              "doc_date": "2026-03-02",
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            }
+          },
+          "court": "Superior Court of Exampletown",
+          "defendants": [
+            {
+              "answered": {
+                "date": "2027-01-01",
+                "source": null
+              },
+              "flags": [],
+              "name": "Delta Example",
+              "out_for_service": {
+                "source": null,
+                "value": "no"
+              },
+              "sent_for_service": {
+                "date": "2026-03-20",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "served": {
+                "date": "2026-04-10",
+                "method": "personal",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "status": "Answered"
+            }
+          ],
+          "discovery_propounded": [],
+          "discovery_served_on_client": [],
+          "fields_read": ["case", "defendants", "discovery"],
+          "firm_role": "plaintiff",
+          "integrity": [],
+          "matter_flags": [],
+          "matter_id": "11111111-1111-4111-8111-111111111111",
+          "next_court_date": {
+            "date": null,
+            "event": "",
+            "source": null
+          },
+          "number": "100001",
+          "overturns": [
+            {
+              "new": {
+                "date": "2027-01-01",
+                "source": null
+              },
+              "old": {
+                "date": "2026-04-30",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-a1",
+                  "name": "Answer Delta.pdf"
+                }
+              },
+              "pass": "verify",
+              "path": "defendants[Delta Example].answered",
+              "source": null,
+              "why": null
+            }
+          ],
+          "responsible": "Alpha Example",
+          "settlement_reviewed": [],
+          "title": "Gamma v. Delta"
+        }
+      ],
+      "gates.json": {
+        "issues": {
+          "date without source": [["100001", "Delta Example: answered"]],
+          "future date": [["100001", "Delta Example: answered", "2027-01-01"]]
+        },
+        "notes": {},
+        "passed": false
+      },
+      "reason": "gate_refused: the gates refused the list: future date (1); date without source (1)",
+      "verdict": "held"
+    },
+    "a first read, with events beside its statuses": {
+      "changes.json": {
+        "11111111-1111-4111-8111-111111111111": [
+          {
+            "explained": true,
+            "new": "added to the list",
+            "old": null,
+            "path": "matter",
+            "why": "new matter"
+          }
+        ]
+      },
+      "final.json": [
+        {
+          "case_name": "Gamma Example v. Delta Example",
+          "case_number": "CV-0001",
+          "case_status": {
+            "detail": "no dismissal in the file",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            },
+            "value": "Active"
+          },
+          "complaint_filed": {
+            "date": "2026-03-02",
+            "source": {
+              "doc_date": "2026-03-02",
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            }
+          },
+          "court": "Superior Court of Exampletown",
+          "defendants": [
+            {
+              "answered": {
+                "date": "2026-04-30",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-a1",
+                  "name": "Answer Delta.pdf"
+                }
+              },
+              "flags": [],
+              "name": "Delta Example",
+              "out_for_service": {
+                "source": null,
+                "value": "no"
+              },
+              "sent_for_service": {
+                "date": "2026-03-20",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "served": {
+                "date": "2026-04-10",
+                "method": "personal",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "status": "Answered"
+            }
+          ],
+          "discovery_propounded": [],
+          "discovery_served_on_client": [],
+          "fields_read": ["case", "defendants", "discovery"],
+          "firm_role": "plaintiff",
+          "integrity": [],
+          "matter_flags": [],
+          "matter_id": "11111111-1111-4111-8111-111111111111",
+          "next_court_date": {
+            "date": null,
+            "event": "",
+            "source": null
+          },
+          "number": "100001",
+          "overturns": [],
+          "responsible": "Alpha Example",
+          "settlement_reviewed": [],
+          "title": "Gamma v. Delta"
+        }
+      ],
+      "gates.json": {
+        "issues": {},
+        "notes": {},
+        "passed": true
+      },
+      "reason": null,
+      "verdict": "delivered"
+    },
+    "a note states a default the status does not": {
+      "changes.json": {
+        "11111111-1111-4111-8111-111111111111": [
+          {
+            "explained": true,
+            "new": "added to the list",
+            "old": null,
+            "path": "matter",
+            "why": "new matter"
+          }
+        ]
+      },
+      "final.json": [
+        {
+          "case_name": "Gamma Example v. Delta Example",
+          "case_number": "CV-0001",
+          "case_status": {
+            "detail": "no dismissal in the file",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            },
+            "value": "Active"
+          },
+          "complaint_filed": {
+            "date": "2026-03-02",
+            "source": {
+              "doc_date": "2026-03-02",
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            }
+          },
+          "court": "Superior Court of Exampletown",
+          "defendants": [
+            {
+              "answered": {
+                "date": null,
+                "source": null
+              },
+              "flags": ["Default entered 2026-06-01."],
+              "name": "Delta Example",
+              "out_for_service": {
+                "source": null,
+                "value": "no"
+              },
+              "sent_for_service": {
+                "date": "2026-03-20",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "served": {
+                "date": "2026-04-10",
+                "method": "personal",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "status": "Default entered"
+            }
+          ],
+          "discovery_propounded": [],
+          "discovery_served_on_client": [],
+          "fields_read": ["case", "defendants", "discovery"],
+          "firm_role": "plaintiff",
+          "integrity": [],
+          "matter_flags": [],
+          "matter_id": "11111111-1111-4111-8111-111111111111",
+          "next_court_date": {
+            "date": null,
+            "event": "",
+            "source": null
+          },
+          "number": "100001",
+          "overturns": [
+            {
+              "new": "Default entered",
+              "old": "Served, no answer in file",
+              "pass": "status-note",
+              "path": "defendants[Delta Example].status",
+              "source": null,
+              "why": "the defendant's own note states this status"
+            }
+          ],
+          "responsible": "Alpha Example",
+          "settlement_reviewed": [],
+          "title": "Gamma v. Delta"
+        }
+      ],
+      "gates.json": {
+        "issues": {},
+        "notes": {},
+        "passed": true
+      },
+      "reason": null,
+      "verdict": "delivered"
+    },
+    "an update whose read moves a status": {
+      "changes.json": {
+        "11111111-1111-4111-8111-111111111111": [
+          {
+            "explained": false,
+            "label": "defendants[Delta Example].status",
+            "new": "Dismissed",
+            "old": "Answered",
+            "path": "defendants[deltaexample].status",
+            "why": "changed with no document cited"
+          }
+        ]
+      },
+      "final.json": [
+        {
+          "case_name": "Gamma Example v. Delta Example",
+          "case_number": "CV-0001",
+          "case_status": {
+            "detail": "no dismissal in the file",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            },
+            "value": "Active"
+          },
+          "complaint_filed": {
+            "date": "2026-03-02",
+            "source": {
+              "doc_date": "2026-03-02",
+              "file_id": "f-c1",
+              "name": "Complaint Gamma.pdf"
+            }
+          },
+          "court": "Superior Court of Exampletown",
+          "defendants": [
+            {
+              "answered": {
+                "date": "2026-04-30",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-a1",
+                  "name": "Answer Delta.pdf"
+                }
+              },
+              "flags": [],
+              "name": "Delta Example",
+              "out_for_service": {
+                "source": null,
+                "value": "no"
+              },
+              "sent_for_service": {
+                "date": "2026-03-20",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "served": {
+                "date": "2026-04-10",
+                "method": "personal",
+                "source": {
+                  "doc_date": null,
+                  "file_id": "f-p1",
+                  "name": "POS Delta.pdf"
+                }
+              },
+              "status": "Dismissed"
+            }
+          ],
+          "discovery_propounded": [],
+          "discovery_served_on_client": [],
+          "fields_read": ["case", "defendants", "discovery"],
+          "firm_role": "plaintiff",
+          "integrity": [],
+          "matter_flags": [],
+          "matter_id": "11111111-1111-4111-8111-111111111111",
+          "next_court_date": {
+            "date": null,
+            "event": "",
+            "source": null
+          },
+          "number": "100001",
+          "overturns": [],
+          "provenance": {
+            "job_id": "01KTJ0BX0000000000000000AA",
+            "read": "full",
+            "read_at": "2026-10-07",
+            "two_pass": false
+          },
+          "responsible": "Alpha Example",
+          "settlement_reviewed": [],
+          "title": "Gamma v. Delta"
+        }
+      ],
+      "gates.json": {
+        "issues": {},
+        "notes": {},
+        "passed": true
+      },
+      "reason": "parity_hold: 1 values changed from the last list with no document cited: 100001 defendants[deltaexample].status",
+      "verdict": "held"
+    },
+    "what the lane stored": {
+      "case_name": "Gamma Example v. Delta Example",
+      "case_number": "CV-0001",
+      "case_status": {
+        "detail": "no dismissal in the file",
+        "source": {
+          "doc_date": null,
+          "file_id": "f-c1",
+          "name": "Complaint Gamma.pdf"
+        },
+        "value": "Active"
+      },
+      "complaint_filed": {
+        "date": "2026-03-02",
+        "source": {
+          "doc_date": "2026-03-02",
+          "file_id": "f-c1",
+          "name": "Complaint Gamma.pdf"
+        }
+      },
+      "court": "Superior Court of Exampletown",
+      "defendants": [
+        {
+          "answered": {
+            "date": "2026-04-30",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-a1",
+              "name": "Answer Delta.pdf"
+            }
+          },
+          "flags": [],
+          "name": "Delta Example",
+          "out_for_service": {
+            "source": null,
+            "value": "no"
+          },
+          "sent_for_service": {
+            "date": "2026-03-20",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-p1",
+              "name": "POS Delta.pdf"
+            }
+          },
+          "served": {
+            "date": "2026-04-10",
+            "method": "personal",
+            "source": {
+              "doc_date": null,
+              "file_id": "f-p1",
+              "name": "POS Delta.pdf"
+            }
+          },
+          "status": "Answered"
+        }
+      ],
+      "discovery_propounded": [],
+      "discovery_served_on_client": [],
+      "fields_read": ["case", "defendants", "discovery"],
+      "firm_role": "plaintiff",
+      "matter_flags": [],
+      "matter_id": "11111111-1111-4111-8111-111111111111",
+      "next_court_date": {
+        "date": null,
+        "event": "",
+        "source": null
+      },
+      "number": "100001",
+      "provenance": {
+        "job_id": "01KTJ0BX0000000000000000AA",
+        "read": "full",
+        "read_at": "2026-10-07",
+        "two_pass": false
+      },
+      "settlement_reviewed": [],
+      "title": "Gamma v. Delta"
+    }
+  },
+  "shapes": {
+    "a check pass could not settle it | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a check pass could not settle it | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "a check pass could not settle it | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a check pass could not settle it | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a dated event with no document | a check overturns the status": {
+      "gates": {
+        "date without source": [["100001", "Delta Example: served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a dated event with no document | over a stored list": {
+      "gates": {
+        "date without source": [["100001", "Delta Example: served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a dated event with no document | stated as keyed": {
+      "gates": {
+        "date without source": [["100001", "Delta Example: served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a dated event with no document | stated otherwise": {
+      "gates": {
+        "date without source": [["100001", "Delta Example: served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a default and an answer neither undone is unclear | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a default and an answer neither undone is unclear | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a default and an answer neither undone is unclear | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a default and an answer neither undone is unclear | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no answer is no answer | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no answer is no answer | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a document cited for no answer is no answer | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no answer is no answer | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no dismissal is no dismissal | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no dismissal is no dismissal | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a document cited for no dismissal is no dismissal | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a document cited for no dismissal is no dismissal | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note naming only the amended complaint is a plain answer | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Amended complaint filed 2026-04-01."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note naming only the amended complaint is a plain answer | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Amended complaint filed 2026-04-01."
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "a note naming only the amended complaint is a plain answer | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Amended complaint filed 2026-04-01."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note naming only the amended complaint is a plain answer | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Amended complaint filed 2026-04-01."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note says the default was set aside, no set aside event | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          "Default later set aside by the court."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note says the default was set aside, no set aside event | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          "Default later set aside by the court."
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a note says the default was set aside, no set aside event | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          "Default later set aside by the court."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a note says the default was set aside, no set aside event | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          "Default later set aside by the court."
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role the vocabulary does not know | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role the vocabulary does not know | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a role the vocabulary does not know | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role the vocabulary does not know | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role with no document | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role with no document | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "a role with no document | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a role with no document | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a set aside with no default moves nothing | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a set aside with no default moves nothing | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "a set aside with no default moves nothing | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "a set aside with no default moves nothing | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer dated today counts | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-10-07",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer dated today counts | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-10-07",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "an answer dated today counts | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-10-07",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer dated today counts | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-10-07",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer outranks an appearance | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer outranks an appearance | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "an answer outranks an appearance | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an answer outranks an appearance | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an event dated after today has not happened | a check overturns the status": {
+      "gates": {
+        "future date": [["100001", "Delta Example: answered", "2026-10-08"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-10-08",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an event dated after today has not happened | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "future date": [["100001", "Delta Example: answered", "2026-10-08"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-10-08",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "an event dated after today has not happened | stated as keyed": {
+      "gates": {
+        "future date": [["100001", "Delta Example: answered", "2026-10-08"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-10-08",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "an event dated after today has not happened | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ],
+        "future date": [["100001", "Delta Example: answered", "2026-10-08"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-10-08",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered and served | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered and served | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "answered and served | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered and served | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered the original, not the amended | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Answered the original complaint; no answer to the amended complaint."
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered the original, not the amended | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Answered the original complaint; no answer to the amended complaint."
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "answered the original, not the amended | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered original complaint, not the amended complaint",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Answered the original complaint; no answer to the amended complaint."
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered the original, not the amended | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          "Answered the original complaint; no answer to the amended complaint."
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered with no service date | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered with no service date | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "answered with no service date | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "answered with no service date | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared outranks service | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared outranks service | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "appeared outranks service | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Appeared, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared outranks service | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared, service never proved | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared, service never proved | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "appeared, service never proved | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Appeared, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "appeared, service never proved | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default entered again after a set aside stands | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default entered again after a set aside stands | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "default entered again after a set aside stands | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Default entered",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default entered again after a set aside stands | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default outranks service | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default outranks service | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "default outranks service | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Default entered",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default outranks service | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, served only | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, served only | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "default set aside later, served only | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, served only | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, then answered | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, then answered | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "default set aside later, then answered | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside later, then answered | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside the same day is undone | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside the same day is undone | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "default set aside the same day is undone | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "default set aside the same day is undone | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a default | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a default | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "dismissal outranks a default | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dismissed",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a default | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a settlement, an answer and service | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a settlement, an answer and service | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "dismissal outranks a settlement, an answer and service | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dismissed",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dismissal outranks a settlement, an answer and service | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks a default | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks a default | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "dropped outranks a default | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dropped by amendment",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks a default | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks an answer | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks an answer | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]],
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "dropped outranks an answer | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dropped by amendment",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "dropped outranks an answer | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "firm client role outranks an answer | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "firm client role outranks an answer | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "firm client role outranks an answer | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Firm's client (firm is defense counsel)",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "firm client role outranks an answer | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "nothing in the file | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "nothing in the file | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "nothing in the file | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "nothing in the file | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service unknown | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service unknown | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "out for service unknown | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service unknown | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service with no document is no evidence | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service with no document is no evidence | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "out for service with no document is no evidence | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service with no document is no evidence | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service, cited | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service, cited | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "out for service, cited | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Out for service",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "out for service, cited | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, no return in file | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, no return in file | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "papers sent out, no return in file | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Out for service",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, no return in file | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, the read says not out | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, the read says not out | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "papers sent out, the read says not out | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "papers sent out, the read says not out | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected and not served | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected and not served | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "rejected and not served | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Service rejected (not served)",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected and not served | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected, then served again | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected, then served again | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "rejected, then served again | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejected, then served again | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejection outranks being out for service | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejection outranks being out for service | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "rejection outranks being out for service | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Service rejected (not served)",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "rejection outranks being out for service | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served and rejected the same day | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served and rejected the same day | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "served and rejected the same day | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served and rejected the same day | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served beside papers sent out | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "2026-03-20",
+          "doc-3.pdf",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served beside papers sent out | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "2026-03-20",
+          "doc-3.pdf",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "served beside papers sent out | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "2026-03-20",
+          "doc-3.pdf",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served beside papers sent out | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "2026-03-20",
+          "doc-3.pdf",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "served | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served, then the service rejected | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served, then the service rejected | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "served, then the service rejected | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "served, then the service rejected | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks a default beside an answer | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks a default beside an answer | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "settlement outranks a default beside an answer | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks a default beside an answer | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks being dropped | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks being dropped | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "settlement outranks being dropped | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "settlement outranks being dropped | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored answered original keeps its reading | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored answered original keeps its reading | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored answered original keeps its reading | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered original complaint, not the amended complaint",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored answered original keeps its reading | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored appeared, service arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored appeared, service arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored appeared, service arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Appeared, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored appeared, service arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, a set aside arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, a set aside arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "stored default, a set aside arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, a set aside arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, an answer arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, an answer arrives | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored default, an answer arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Unclear",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored default, an answer arrives | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dismissed, an answer arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dismissed, an answer arrives | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored dismissed, an answer arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dismissed",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dismissed, an answer arrives | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-04-30",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dropped, a paper sent out arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dropped, a paper sent out arrives | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored dropped, a paper sent out arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dropped by amendment",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored dropped, a paper sent out arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "2026-03-20",
+          "doc-3.pdf",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored firm client stays, a paper arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored firm client stays, a paper arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored firm client stays, a paper arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Firm's client (firm is defense counsel)",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored firm client stays, a paper arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored not served, a proof of service arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored not served, a proof of service arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored not served, a proof of service arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored not served, a proof of service arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored out for service stays out | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored out for service stays out | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored out for service stays out | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Out for service",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored out for service stays out | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored rejected, a proof of service arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored rejected, a proof of service arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored rejected, a proof of service arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored rejected, a proof of service arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored served with no date, an answer arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored served with no date, an answer arrives | over a stored list": {
+      "gates": {
+        "answer date but status says no answer": [["100001", "Delta Example", "Not served"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored served with no date, an answer arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Answered",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored served with no date, an answer arrives | stated otherwise": {
+      "gates": {
+        "answer date but status says no answer": [
+          ["100001", "Delta Example", "Served, no answer in file"]
+        ]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "2026-07-15",
+          "doc-2.pdf",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored settled, a dismissal arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored settled, a dismissal arrives | over a stored list": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored settled, a dismissal arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Dismissed",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored settled, a dismissal arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored uim stays, a paper arrives | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored uim stays, a paper arrives | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored uim stays, a paper arrives | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "UIM arbitration respondent (not a court defendant)",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored uim stays, a paper arrives | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored unclear yields to a cited event | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored unclear yields to a cited event | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].served", "defendants[deltaexample].status"]
+    },
+    "stored unclear yields to a cited event | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "stored unclear yields to a cited event | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-09-01",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "uim role outranks a dismissal | a check overturns the status": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Settled",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "uim role outranks a dismissal | over a stored list": {
+      "gates": {
+        "served date but status says not served": [["100001", "Delta Example"]]
+      },
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Not served",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": ["defendants[deltaexample].status"]
+    },
+    "uim role outranks a dismissal | stated as keyed": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "UIM arbitration respondent (not a court defendant)",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    },
+    "uim role outranks a dismissal | stated otherwise": {
+      "gates": {},
+      "printed": [
+        [
+          "Alpha Example",
+          "2026-11-20 (CMC)",
+          "100001",
+          "Gamma Example v. Delta Example",
+          "Superior Court of Exampletown CV-0001",
+          "2026-03-02",
+          "Active",
+          "Delta Example",
+          "Served, no answer in file",
+          "Not read yet",
+          "",
+          "2026-04-10",
+          "doc-1.pdf",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "unexplained": []
+    }
+  }
+}

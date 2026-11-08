@@ -44,10 +44,10 @@ def _thread(conversations: dict[str, str]):
     return lambda ref: conversations.get(ref, "conv-other")
 
 
-def _list(broker, ref="<setup1@mail.firm.example>", **over) -> str:
+def _list(broker, ref="<setup1@mail.firm.example>", donors=None, **over) -> str:
     jid = submit(broker, request_ref=ref, **over)["job_id"]
     call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
-    report = {"setup_outcome": "candidates", "candidates": CANDIDATES}
+    report = {"setup_outcome": "candidates", "candidates": CANDIDATES, **({"chart_donors": donors} if donors else {})}
     call(
         broker,
         "drafting_job_record",
@@ -244,7 +244,7 @@ def test_the_made_file_is_spooled_in_the_writers_shape(live, tmp_path):
     assert sub["scope"] == "library_accept" and sub["phase"] == "install"
     acc = sub["acceptance"]
     assert set(acc) == {"kind", "attorney", "file_id", "version", "contract", "accepted_by", "accepted_at", "sha256",
-                        "fixed_strings", "replaces"}  # fmt: skip
+                        "fixed_strings", "replaces", "chart_source"}  # fmt: skip
     assert (acc["kind"], acc["file_id"], acc["version"], acc["contract"], acc["accepted_by"]) == (
         "memo", "lib-1", "v1", "marked", ADMIN)  # fmt: skip
     pending = call(broker, "library_setup_accept_status", pid=1, uid=0, job_id=jid)
@@ -252,6 +252,33 @@ def test_the_made_file_is_spooled_in_the_writers_shape(live, tmp_path):
     _intake_answers(broker.establishment, out["run_id"], "installed")
     done = call(broker, "library_setup_accept_status", pid=1, uid=0, job_id=jid)
     assert done["status"] == "complete" and done["result"]["status"] == "installed"
+
+
+DONORS = [{"file_id": "d-1", "matter_id": "m-3", "sha256": "d" * 64, "extra": "dropped"}]
+
+
+def test_the_hunts_chart_donors_ride_the_choice_and_the_chart_source_rides_the_acceptance(live, tmp_path):
+    """The coordinator's decision on #3876: the accept job takes a chartless memo's
+    tables' look from the firm's own chart memos the hunt named; the broker hands it
+    the ids, and the acceptance carries which one was used."""
+    broker, db, *_ = live
+    broker.establishment = _store(tmp_path, broker)
+    _list(broker, donors=DONORS)
+    jid = choose(broker)["job_id"]
+    conn = sqlite3.connect(db)
+    try:
+        (raw,) = conn.execute("SELECT choice_json FROM library_setup_jobs WHERE id=?", (jid,)).fetchone()
+    finally:
+        conn.close()
+    assert json.loads(raw)["chart_donors"] == [{"file_id": "d-1", "matter_id": "m-3", "sha256": "d" * 64}]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
+    data = b"made file bytes"
+    chart = {"from": "firm_memo", "file_id": "d-1", "sha256": "d" * 64}
+    filed = {"file_id": "lib-1", "version": "v1", "sha256": hashlib.sha256(data).hexdigest()}
+    out = call(broker, "library_setup_accept_submit", pid=1, uid=0, job_id=jid, data_b64=base64.b64encode(data).decode(),
+               filed=filed, fixed_strings=[], replaces=None, chart_source=chart)  # fmt: skip
+    sub = json.loads((broker.establishment.runs_dir / out["run_id"] / "submission.json").read_text())
+    assert sub["acceptance"]["chart_source"] == chart
 
 
 def test_bytes_that_are_not_the_filed_ones_are_refused(live, tmp_path):

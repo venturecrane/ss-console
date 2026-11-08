@@ -49,6 +49,7 @@ _KEYS = frozenset(
         "sha256",
         "fixed_strings",
         "replaces",
+        "chart_source",
     }
 )
 _TEXT = ("kind", "file_id", "version", "contract", "accepted_by", "accepted_at", "sha256")
@@ -78,6 +79,8 @@ def _problems(acc: Any, data: bytes) -> list[str]:
         out.append("a firm's save replaces the accepted entry of the same file")
     elif rep.get("version") == acc["version"]:
         out.append("a firm's save is a newer version than the one it replaces")
+    if acc["chart_source"] is not None and not isinstance(acc["chart_source"], dict):
+        out.append("acceptance.chart_source must be null or where a memo's tables' look came from")
     if hashlib.sha256(data).hexdigest() != acc["sha256"]:
         out.append("the bytes do not hash to the acceptance's sha256")
     return out

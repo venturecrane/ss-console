@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..limits import LimitHold
-from . import extract as extract_mod, fetch as fetch_mod, inventory
+from . import eventmode, extract as extract_mod, fetch as fetch_mod, inventory
 from .outcome import LitigationFailed
 from .progress import Progress
 from .tools import dump
@@ -106,6 +106,15 @@ class RunBase:
         st = self._state()
         st[key] = value
         dump(self.data / "state.json", st)
+
+    def _frozen_events_mode(self) -> bool:
+        """The seat's ``status_from_events`` switch, read fresh when a job first
+        starts and kept in its state, so one job is one mode however it resumes."""
+        mode = self._state().get(eventmode.STATE_KEY)
+        if mode is None:
+            mode = eventmode.current(self.log)
+            self._put(eventmode.STATE_KEY, mode)
+        return mode == eventmode.ENFORCE
 
     def _is_done(self, stage: str) -> bool:
         return self._state().get(stage, {}).get("status") == "done"

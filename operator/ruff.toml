@@ -112,7 +112,6 @@ select = [
 # cross-repo change (ss-console first, then the overlay, then the pin bump),
 # not a one-repo chore, so the formatter skips them until that pair ships.
 exclude = [
-    "adapter/voice/transform.py",
     "adapter/audit_log.py",
     "adapter/namespace_assertion.py",
     "adapter/d1_env.py",

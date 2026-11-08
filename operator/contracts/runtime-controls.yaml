@@ -199,15 +199,13 @@ controls:
       path that no ledger listed. It is wired (enforce.py invokes it on an
       autonomous outside external_send) but unprobed — nothing demonstrates it
       withholds on a live turn.
-      Its current pass condition is bound to mechanism B: it requires the
-      structural-diff transform to have run this turn, and binds only when
-      `voice_library` is non-empty — authored on all eight customer.yaml files.
-      Since no seat carries any transform samples, the gate is presently
-      DOWNGRADING every autonomous outside send to draft on every one of them,
-      fail-closed and correct but for a reason nobody chose. ADR 0083 repoints it
-      at output-class conformance; that rewrite MUST land in the same change that
-      removes mechanism B, or the marker it waits on becomes permanently absent
-      and every voice-authored seat freezes at draft silently.
+      Since mechanism B's removal (ss ADR 0083 decision 6, 2026-11-07) a class
+      declaring `voice_spec: expected` is held to its installed spec, read this
+      turn, and every other class DOWNGRADES an autonomous outside send to draft
+      (reason no_voice_spec_declared), chosen: nothing certifies its voice. Before
+      the removal the same sends downgraded for a reason nobody chose (the
+      transform never ran on a seat with no samples); the never-weaker sweep is
+      hermes-smd-overlay tests/test_voice_gate_binding_coverage.py.
 
   spec_applier:
     control: spec_applier

@@ -21,7 +21,9 @@ ask :func:`chat_base` first, before today's newest-by-name lookup
 
 The matter's attorney is looked up only when the ledger accepts an attorney's
 own file of the kind (``caller.needs_matter_attorney``): with nothing accepted,
-the tool makes no call it does not make today. The tool has no parameter naming
+the tool makes no call it does not make today. A looked-up attorney is checked
+against the firm's attorney roster when one is installed
+(``caller.matter_attorney``): someone it does not list as an attorney is refused. The tool has no parameter naming
 an attorney, so no requester-named attorney is passed.
 
 The accepted bytes come from the seat's own kept copy (``copies_dir``); the
@@ -61,11 +63,14 @@ from operator_connector_sdk.library.caller import (
     NOT_STARTED,
     STARTER,
     BaseUsed,
+    ROSTER_UNREADABLE,
     LazyStore,
     attorney_key,
     build_record,
     needs_matter_attorney,
 )
+from operator_connector_sdk.library.caller import matter_attorney as check_attorney
+from operator_connector_sdk.library import roster as roster_mod
 from operator_connector_sdk.library.resolver import replace_status
 
 from .library import LibraryConfig
@@ -159,6 +164,14 @@ def chat_base(
             res = Resolution(
                 CANNOT_LOOK, kind, reason=f"the matter's attorney could not be read ({type(exc).__name__})"
             )
+            return ChatPick(res, _refusal(res))
+        # The firm's attorney roster, when one is installed, says whether that
+        # person is an attorney at all (caller.matter_attorney): an attorney not
+        # on the roster cannot be signed for; an unreadable roster cannot look.
+        checked = check_attorney(matter.name, matter.name, roster_mod.load()) if matter is not None else None
+        if checked is not None and checked.hold:
+            code = CANNOT_LOOK if checked.hold == ROSTER_UNREADABLE else REFUSED
+            res = Resolution(code, kind, reason=checked.reason)
             return ChatPick(res, _refusal(res))
     store = LazyStore(lambda: open_store(client_factory, cfg))
     res = resolve(store, ledger_read, kind, matter_attorney=matter, copies_dir=copies_dir(spec))

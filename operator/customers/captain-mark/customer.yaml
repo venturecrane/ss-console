@@ -284,10 +284,6 @@ telegram:
     - '-5461624424'
   group_sessions_per_user: false
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/captain-mark/voice/samples/'
-
 # ---- MEMORY ----
 memory:
   d1_namespace: captain-mark

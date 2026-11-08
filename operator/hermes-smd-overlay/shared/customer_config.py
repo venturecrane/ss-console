@@ -261,20 +261,6 @@ class CustomerConfig:
         return {str(k): dict(v) if isinstance(v, dict) else {} for k, v in raw.items()}
 
     # ------------------------------------------------------------------
-    # Voice library
-    # ------------------------------------------------------------------
-
-    @property
-    def voice_library(self) -> dict[str, Any]:
-        """Return the voice library mapping (samples path, etc.)."""
-        raw = self._data.get("voice_library") or {}
-        if not isinstance(raw, dict):
-            raise CustomerConfigError(
-                f"customer.yaml: voice_library must be a mapping; got {type(raw).__name__}"
-            )
-        return dict(raw)
-
-    # ------------------------------------------------------------------
     # Output classes (ss ADR 0083)
     # ------------------------------------------------------------------
 

@@ -119,13 +119,7 @@ vars:
     requirement: optional
     agent_env: held
     custody: infra
-    note: endpoint URL (NOT a credential) read by skill_capture + the voice reader path; intentionally kept across the R2 strip
-  SMD_VOICE_VAULT_DIR:
-    stage: agent
-    requirement: optional
-    agent_env: held
-    custody: infra
-    note: local voice-vault dir set by bootstrap Step 2a; the voice plugin reads samples from here so the agent holds NO R2 credential (OP-P0-2)
+    note: endpoint URL (NOT a credential) read by skill_capture; intentionally kept across the R2 strip
   SMD_SPEC_DIR:
     stage: agent
     requirement: optional

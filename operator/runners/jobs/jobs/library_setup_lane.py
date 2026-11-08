@@ -56,6 +56,8 @@ _FIELDS = (
     "counts",
     "candidates",
     "dropped_files",
+    "chart_donors",
+    "chart_source",
     "attorney_key",
     "attorney_name",
     "unusable",

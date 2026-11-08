@@ -66,7 +66,9 @@ def test_full_lane_a_short_wrong_magnesium_value_is_caught_and_the_loop_converge
 
     def reply(p, _):
         if _is_repair(p):
-            return text_msg("Magnesium was measured on the panel. (Exhibit 1 - p. 2)")
+            # The finding's corrected value: words the finding carries may be
+            # added (repair.added_words, 2026-11-07).
+            return text_msg("Magnesium was 1.9 mg/dL. (Exhibit 1 - p. 2)")
         if _is_control(p):
             return tool_msg(CONTRADICTED)
         graded.append(_claim_of(p))
@@ -79,6 +81,7 @@ def test_full_lane_a_short_wrong_magnesium_value_is_caught_and_the_loop_converge
     paths = AuditPaths(sr.slug_dir, "alpha")
     doc = paths.doc.read_text()
     assert "9.9" not in doc, "a short claim with a wrong value must be caught, never passed through"
+    assert "Magnesium was 1.9 mg/dL." in doc  # the finding's corrected value applies
     assert SHORT_OK in doc  # a short supported value is graded and kept
     assert any("Phosphorus was 2.6" in c for c in graded) and any("9.9" in c for c in graded)
     ok, summary = coverage.check(paths, lambda *_: None)

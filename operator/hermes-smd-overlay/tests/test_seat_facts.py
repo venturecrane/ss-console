@@ -179,7 +179,6 @@ def _raw_config(**overrides) -> dict:
             "work_product": {"voice_spec": "expected"},
             "staff": {"voice_spec": "none"},
         },
-        "voice_cohorts": {"cohorts": ["client", "adjuster"]},
     }
     base.update(overrides)
     return base
@@ -386,7 +385,6 @@ def test_no_matter_or_client_content_reaches_the_result(sf, tmp_path):
     raw["connectors"]["PracticeManagement"]["last_matter"] = _MATTER_MARKERS[0]
     raw["webhook_triggers"][0]["matter"] = _MATTER_MARKERS[1]
     raw["output_classes"]["work_product"]["example_matter"] = _MATTER_MARKERS[0]
-    raw["voice_cohorts"]["example_client"] = _MATTER_MARKERS[2]
 
     _write_jobs(
         tmp_path,
@@ -721,22 +719,15 @@ def test_a_format_spec_does_not_satisfy_the_voice_question(sf, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# Cohort discrepancies
+# The audience block is gone (ss ADR 0083 decision 6)
 # --------------------------------------------------------------------------- #
 
 
-def test_cohort_directories_outside_the_authored_vocabulary_are_reported(sf, tmp_path):
-    _write_jobs(tmp_path, [])
-    for name in ("client", "adjuster", "court"):
-        (tmp_path / "voice" / "cohort" / name).mkdir(parents=True, exist_ok=True)
-    facts = _build(sf, tmp_path)
-    assert facts["cohort_discrepancies"]["unauthorized_dirs"] == ["court"]
-
-
-def test_no_cohort_tree_is_an_empty_result_not_a_degraded_one(sf, tmp_path):
+def test_the_facts_carry_no_cohort_section(sf, tmp_path):
     _write_jobs(tmp_path, [])
     facts = _build(sf, tmp_path)
-    assert facts["cohort_discrepancies"] == {"read": True, "unauthorized_dirs": []}
+    assert "cohort_discrepancies" not in facts
+    assert not hasattr(sf, "_cohort_section")
 
 
 # --------------------------------------------------------------------------- #
@@ -750,7 +741,6 @@ def test_no_cohort_tree_is_an_empty_result_not_a_degraded_one(sf, tmp_path):
         ("_identity_section", "identity"),
         ("_connections_section", "connections"),
         ("_voice_section", "voice"),
-        ("_cohort_section", "cohorts"),
         ("_routine_items", "routines"),
     ],
 )

@@ -1,7 +1,7 @@
 # Voice sample ingestion pipeline
 
-**Status:** Draft (issue #856). Sibling pipeline to memory ingestion (issue #860).
-**Code:** `operator/adapter/voice/`
+**Status:** RETIRED 2026-11-07 (ss ADR 0083 decision 6). The pipeline, its code (`operator/adapter/voice/`, the overlay `hermes-smd-voice` plugin, the ingest tools) and its seat config were removed; this page is the record of what it was.
+**Code:** none (removed)
 **Migration:** `operator/migrations/0005_voice_ingestion.sql`
 
 ---

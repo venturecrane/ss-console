@@ -44,8 +44,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import roster as roster_mod
 from .ledger import LedgerRead
-from .resolver import NONE_ACCEPTED, RESOLVED, Resolution
+from .resolver import NONE_ACCEPTED, RESOLVED, Attorney, Resolution
 from .store import FiledVersion, LibraryFile, LibraryStore, LibraryUnavailable, VersionListing
 
 RECORD_SCHEMA_VERSION = 1
@@ -82,6 +83,51 @@ def attorney_key(name: str | None) -> str:
     """The key an attorney is filed under in the ledger: the name with case and
     spacing folded. "" for no name."""
     return re.sub(r"\s+", " ", name or "").strip().casefold()
+
+
+#: The matter's responsible attorney is someone the firm's roster does not list as
+#: an attorney: the document holds and says so (design 2026-11-06: an attorney not
+#: on the roster cannot be signed for; identity, not style).
+NOT_ROSTERED = "attorney_not_rostered"
+#: A roster is installed and cannot be read: "could not look", never "nobody".
+ROSTER_UNREADABLE = "roster_unreadable"
+NOT_ROSTERED_REASON = (
+    "the matter's responsible attorney is not an attorney on the firm's roster, "
+    "and a document is never signed for someone who is not"
+)
+
+
+@dataclass(frozen=True)
+class MatterAttorney:
+    """Who the resolver is told the matter's attorney is, or why nobody may be.
+    ``hold`` is "" (``attorney`` may still be None: no attorney on the matter),
+    :data:`NOT_ROSTERED` or :data:`ROSTER_UNREADABLE`."""
+
+    attorney: Attorney | None
+    hold: str = ""
+    reason: str = ""
+
+
+def matter_attorney(name: str | None, display: str, roster: roster_mod.Roster | None) -> MatterAttorney:
+    """The matter's responsible attorney (``name``, as the staff record gives it;
+    ``display``, the name that goes on the document) checked against the roster.
+    With no roster installed (``absent``, or None) the answer is exactly today's:
+    the matter's name, unchecked."""
+    if roster is not None and roster.status == roster_mod.UNUSABLE:
+        return MatterAttorney(None, ROSTER_UNREADABLE, roster.reason)
+    if not (name or "").strip():
+        return MatterAttorney(None)
+    if roster is not None and roster.status == roster_mod.OK and not roster.is_attorney(name):
+        return MatterAttorney(None, NOT_ROSTERED, NOT_ROSTERED_REASON)
+    return MatterAttorney(Attorney(attorney_key(name), display))
+
+
+def known_attorneys(roster: roster_mod.Roster | None, today: list[Attorney]) -> list[Attorney]:
+    """The attorneys a requester may name: the roster's when one is installed,
+    else ``today`` (the caller's own list)."""
+    if roster is None or roster.status != roster_mod.OK:
+        return today
+    return [Attorney(attorney_key(p.name), p.name) for p in roster.attorneys]
 
 
 def needs_matter_attorney(ledger_read: LedgerRead, kind: str) -> bool:
@@ -267,10 +313,15 @@ __all__ = [
     "STARTER",
     "BaseUsed",
     "LazyStore",
+    "MatterAttorney",
+    "NOT_ROSTERED",
+    "ROSTER_UNREADABLE",
     "attorney_key",
     "build_record",
     "check_used",
     "edit_problems",
+    "known_attorneys",
+    "matter_attorney",
     "needs_matter_attorney",
     "record_problems",
     "write_record",

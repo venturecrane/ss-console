@@ -58,7 +58,15 @@ DEFAULT_LANE_RUN_DIR = "/run/smd-medchron"
 DEFAULT_BUNDLE_STATE_DIR = "/run/smd-bundles"
 DEFAULT_FIRM_INPUTS_STATE = "/run/smd-firm-inputs/state.json"
 #: What the ingest accepts for ``firm_inputs`` (src/lib/operator/heartbeat-parsers.ts).
-FIRM_INPUT_LANES = ("demand", "drafting", "litigation", "casefile", "records", "medchron")
+FIRM_INPUT_LANES = (
+    "demand",
+    "drafting",
+    "litigation",
+    "casefile",
+    "records",
+    "medchron",
+    "attorneys",
+)
 FIRM_INPUT_VERDICTS = ("fetched", "rejected")
 _ETAG8 = re.compile(r"\A[0-9a-f]{8}\Z")
 _ISO_Z = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")

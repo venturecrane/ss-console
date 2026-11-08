@@ -23,7 +23,7 @@ WHAT THIS MODULE READS, AND WHAT IT REFUSES TO.
 Config-derived and seat-local facts only:
 
 * identity, declared connections, the routine roster and its scheduler pairing,
-  installed-voice status, cohort discrepancies, and the counts line;
+  installed-voice status, and the counts line;
 * on depth ``help`` only (ss-console#3423), the ``metadata.smd.help`` block of
   every enabled skill that authors one, each marked for whether the turn's
   platform-resolved sender may ask for it (roster, and ``scope.admins`` for an
@@ -118,7 +118,6 @@ SECTIONS = (
     "inbox",
     "routines",
     "voice",
-    "cohort_discrepancies",
     "counts",
     "working_rules",
 )
@@ -242,10 +241,6 @@ def hermes_home() -> str:
 
 def _jobs_path(persona_slug: str, home: str | None = None) -> Path:
     return Path(home or hermes_home()) / "profiles" / persona_slug / "cron" / "jobs.json"
-
-
-def _cohort_root(home: str | None = None) -> Path:
-    return Path(home or hermes_home()) / "voice" / "cohort"
 
 
 #: The image's read-only skill tree. A skills-only release lands under
@@ -599,28 +594,6 @@ def _learned_from(verified: list[Any]) -> dict[str, Any] | None:
     }
 
 
-def _cohort_section(cfg: Any, home: str | None = None) -> dict[str, Any]:
-    """Cohort directories on disk that the authored vocabulary does not authorize.
-
-    An unreadable root is NOT an empty result: "I could not look" must never
-    render as "there was nothing there", so the caller degrades this section
-    rather than reporting no discrepancies.
-    """
-    block = _raw_block(cfg, "voice_cohorts")
-    authored = block.get("cohorts") if isinstance(block, dict) else None
-    authorized = {str(c) for c in authored} if isinstance(authored, list) else set()
-    root = _cohort_root(home)
-    if not root.is_dir():
-        # A seat with no cohort tree has nothing on disk to be unauthorized —
-        # a determinable fact, not a failed read.
-        return {"read": True, "unauthorized_dirs": []}
-    found = sorted(entry.name for entry in root.iterdir() if entry.is_dir())
-    return {
-        "read": True,
-        "unauthorized_dirs": [name for name in found if name not in authorized],
-    }
-
-
 def _routine_items(
     cfg: Any,
     persona: dict[str, Any],
@@ -907,7 +880,6 @@ def _empty(section: str) -> dict[str, Any]:
         "connections": {"declared": [], "note": None},
         "routines": {"items": []},
         "voice": {"manifest_state": None, "classes": []},
-        "cohort_discrepancies": {"unauthorized_dirs": []},
         "working_rules": {
             "send_posture": [],
             "send_posture_note": None,
@@ -1063,13 +1035,6 @@ def build_facts(
     except Exception as exc:  # noqa: BLE001
         facts["voice"] = _empty("voice")
         unreadable.append({"section": "voice", "reason": f"output_classes unreadable ({exc})"})
-
-    # cohorts ----------------------------------------------------------------
-    try:
-        facts["cohort_discrepancies"] = _cohort_section(cfg, home)
-    except Exception as exc:  # noqa: BLE001
-        facts["cohort_discrepancies"] = _empty("cohort_discrepancies")
-        unreadable.append({"section": "cohorts", "reason": f"cohort tree unreadable ({exc})"})
 
     # working rules ----------------------------------------------------------
     try:

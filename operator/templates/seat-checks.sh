@@ -713,6 +713,11 @@ fi
 # FALSIFIER: re-point a lane's symlink, delete its version, or delete the state.
 if any_lane_runs; then
 check_file "jobs-firm-inputs-current" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "firm-inputs-current-probe.py"
+# The firm's attorney roster (2026-11-07, jobs.attorneys.agree): once installed it
+# wins over each lane's own attorney list, and any list that still says something
+# else fails here, which pages SMD. No roster installed passes (nothing to compare).
+# FALSIFIER: install a roster that gives a demand signer another title.
+check_file "attorney-roster-agrees" "${SEAT_ROOT}/opt/jobs/.venv/bin/python" "attorney-roster-agrees-probe.py"
 fi
 # The negotiation watch (2026-10-09): its own daemon thread, the same checks,
 # and its state dir (file cursors: the child's alone, 0700).

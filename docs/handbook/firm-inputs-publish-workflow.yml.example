@@ -46,6 +46,8 @@ on:
       - 'operator/customers/*/casefile/**'
       - 'operator/customers/*/records/**'
       - 'operator/customers/*/medchron/**'
+      # The firm's attorney roster (attorneys.json), read by every document path.
+      - 'operator/customers/*/attorneys/**'
   # A by-hand re-publish of one seat (every lane it authors), e.g. after the
   # seat moves to a runner that accepts a setting it refused before.
   workflow_dispatch:
@@ -79,7 +81,7 @@ jobs:
           DISPATCH_SLUG: ${{ inputs.slug }}
         run: |
           set -euo pipefail
-          lanes='demand|drafting|litigation|casefile|records|medchron'
+          lanes='demand|drafting|litigation|casefile|records|medchron|attorneys'
           if [ -n "${DISPATCH_SLUG:-}" ]; then
             [[ "$DISPATCH_SLUG" =~ ^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$ ]] || { echo "::error::not a seat slug"; exit 1; }
             changed="$(find "operator/customers/${DISPATCH_SLUG}" -mindepth 1 -maxdepth 1 -type d | sed 's#^operator/customers/##')"

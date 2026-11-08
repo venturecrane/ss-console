@@ -7,7 +7,7 @@
  * names — `reconstructFromProjection` in customer-yaml-editor.ts and
  * `reconstructProjection` in the customer-yaml-update route — with no shared
  * source and no drift test. They had already drifted: one defaulted every
- * `scope` sub-field individually and carried `voice_cohorts`, the other passed
+ * `scope` sub-field individually and carried an audience block, the other passed
  * `row.scope` through whole and omitted `inbound_allow_from` from its fallback.
  * The next field added to the projection would have been added to one of them.
  *
@@ -126,8 +126,6 @@ export function reconstructFromProjection(row: CustomerConfigRow): unknown {
     connectors: row.connectors ?? {},
     scope: reconstructScope(row.scope),
     escalation: reconstructEscalation(row.escalation),
-    voice_library: row.voice_library ?? null,
-    voice_cohorts: null,
     business_hours: row.business_hours ?? null,
     memory: {
       d1_namespace: row.customer_slug,

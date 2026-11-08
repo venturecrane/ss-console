@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from ..attorneys.seat import roster_for
 from . import attorneys, caption as caption_mod, caption_fix, caption_read
 
 
@@ -83,6 +84,7 @@ def run(
     facts: dict[str, Any],
     requester: str,
     log: Callable[[str], None],
+    roster: Any = None,
 ) -> dict[str, Any]:
     model, firm_domains = firm.model("transcription"), firm.firm_domains
     doc = caption_mod.source_document(data)
@@ -132,6 +134,11 @@ def run(
             if isinstance(p, dict) and p.get("name")
         ],
         # The firm's authored attorney block for this job: the responsible
-        # attorney's, else the requester's, else none (attorneys.py).
-        "attorney_block": attorneys.pick(firm.attorneys, record.get("attorney_email"), requester),
+        # attorney's, else the requester's, else none (attorneys.py); from the
+        # firm's attorney roster when one is installed (attorneys.entries).
+        "attorney_block": attorneys.pick(
+            attorneys.entries(firm.attorneys, roster if roster is not None else roster_for(seat)),
+            record.get("attorney_email"),
+            requester,
+        ),
     }

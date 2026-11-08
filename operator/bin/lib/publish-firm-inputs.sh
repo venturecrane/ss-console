@@ -11,7 +11,8 @@
 #     configuration reaches its seat without a reprovision. The seat's live
 #     applier adopts what lands here.
 #
-# <lane> is demand | drafting | litigation | casefile | records | medchron.
+# <lane> is demand | drafting | litigation | casefile | records | medchron | attorneys
+# (attorneys: the firm's attorney roster, one attorneys.json; not a job lane).
 # <src-dir> is engagements operator/customers/<slug>/<lane>/ (for medchron, the
 # directory holding firm.yaml). Nothing here reads git: whoever calls this
 # decides that <src-dir> is reviewed (engagements origin/main).
@@ -67,6 +68,7 @@ done
 [[ "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$ ]] || _usage "not a seat slug: ${SLUG}"
 case "${LANE}" in
   demand|drafting|litigation|casefile|records) MARKER="${LANE}-firm.yaml" ;;
+  attorneys) MARKER="attorneys.json" ;;
   medchron) MARKER="firm.yaml" ;;
   *) _usage "not a lane: ${LANE}" ;;
 esac
@@ -96,6 +98,7 @@ case "${LANE}" in
   litigation) FILTERS=(--exclude "eval/*" --exclude "*.md") ;;
   casefile) FILTERS=(--exclude "eval/*" --exclude "*.md" --include "prompts/*.md") ;;
   records) FILTERS=(--exclude "*" --include "records-firm.yaml") ;;
+  attorneys) FILTERS=(--exclude "*" --include "attorneys.json") ;;
 esac
 
 _included() { # <relpath> -> 0 when the filters keep it
@@ -203,7 +206,7 @@ else
     rel="${f#"${STAGE}"/}"
     _included "${rel}" || continue
     key="${PREFIX}${rel}"
-    if [[ ! "${key}" =~ ^vaults/${SLUG}/(demand|drafting|litigation|casefile|records)/[A-Za-z0-9._/-]+$ || "/${rel}/" == */../* ]]; then
+    if [[ ! "${key}" =~ ^vaults/${SLUG}/(demand|drafting|litigation|casefile|records|attorneys)/[A-Za-z0-9._/-]+$ || "/${rel}/" == */../* ]]; then
       _say "refusing to write R2 key outside vaults/${SLUG}/${LANE}/: ${key}"
       keys_ok=0
     fi

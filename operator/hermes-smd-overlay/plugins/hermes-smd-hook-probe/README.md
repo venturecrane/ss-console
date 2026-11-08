@@ -4,7 +4,7 @@ Runtime verification probe for the documented Hermes hook surface. Installs agai
 
 This is the belt-and-suspenders companion to the static-analysis citations in `docs/hook-surface.md`. If the probe runs and the expected log lines appear in the expected order against an unmodified Hermes container, the citations are load-bearing.
 
-Unlike the four production sibling plugins (`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-voice`, `hermes-smd-memory-mirror`) which are stubs pending §7 of the build plan, this probe is real. It runs as-is.
+Unlike the three production sibling plugins (`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-memory-mirror`) which are stubs pending §7 of the build plan, this probe is real. It runs as-is.
 
 ## Hooks attached
 

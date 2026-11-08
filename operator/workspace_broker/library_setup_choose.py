@@ -217,6 +217,11 @@ def choose(verbs: Any, db: SetupLedger, request: dict[str, Any], audit: Any) -> 
     parent, index = checked
     c = _report(parent)["candidates"][index]
     choice = {"n": index + 1, **{k: c.get(k) for k in ("file_id", "matter_id", "matter_number", "saved_on", "sha256")}}
+    donors = _report(parent).get("chart_donors")
+    if isinstance(donors, list) and donors:  # a memo's chart look, by rank (memo_charts): ids only
+        choice["chart_donors"] = [
+            {k: str(d.get(k) or "") for k in ("file_id", "matter_id", "sha256")} for d in donors if isinstance(d, dict)
+        ]
     live = sw.error is None
     job_id = _insert_accept(db, parent, choice, env, live)
     if not live:
@@ -253,6 +258,7 @@ def submission(
 ) -> dict[str, Any]:
     fixed = request.get("fixed_strings")
     replaces = request.get("replaces")
+    chart = request.get("chart_source")
     return {
         "scope": SCOPE,
         "phase": "install",
@@ -269,6 +275,8 @@ def submission(
             "sha256": hashlib.sha256(data).hexdigest(),
             "fixed_strings": [str(s) for s in fixed] if isinstance(fixed, list) else [],
             "replaces": replaces if isinstance(replaces, dict) else None,
+            # A memo whose tables take another file's look (memo_charts): which, by id.
+            "chart_source": chart if isinstance(chart, dict) else None,
         },
     }
 

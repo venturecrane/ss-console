@@ -35,6 +35,7 @@ from typing import Any, Callable
 from ..firmbase import Source
 from . import file as file_mod, make as make_mod
 from .plan import PLAN_ERROR
+from .roster import ROSTER_UNREADABLE, RosterUnusable
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -62,13 +63,20 @@ def _client() -> Any:
 
 
 def identity(inputs_dir: str | None) -> list[str]:
-    """The allow list: ``firm_identity`` and the authored attorney blocks."""
+    """The allow list: ``firm_identity`` and the authored attorney blocks (the
+    firm's attorney roster's when one is installed, ``drafting/attorneys.entries``)."""
+    from operator_connector_sdk.library import roster as roster_mod
     from smokeball_connector.letterhead import load_firm_identity
 
+    from ..drafting.attorneys import entries
     from .job import _inputs
 
+    read = roster_mod.load()
+    if read.status == roster_mod.UNUSABLE:
+        raise RosterUnusable(ROSTER_UNREADABLE)
     inputs = _inputs(inputs_dir)
-    blocks = [a.get("block") or [] for a in (inputs.attorneys if inputs is not None else [])]
+    authored = inputs.attorneys if inputs is not None else []
+    blocks = [a.get("block") or [] for a in entries(authored, read)]
     return make_mod.identity_pieces(load_firm_identity(), blocks)
 
 
@@ -94,10 +102,40 @@ def _told(outcome: str, **more: Any) -> dict[str, Any]:
     return {"outcome": "delivered", "live": True, "setup_outcome": outcome, **more}
 
 
-def _made(job: dict[str, Any], blob: bytes, choice: dict[str, Any], inputs_dir: str | None, pieces: Any) -> Any:
+def _donor(kind: str, blob: bytes, choice: dict[str, Any], client: Any) -> tuple[bytes | None, str]:
+    """(the firm's own highest-ranked chart memo's bytes, its file id) for a chosen
+    memo with no chart of its own, by the hunt's rank (``job.chart_donors``); a donor
+    that will not read, was saved again, or has no chart the plan reads is skipped.
+    (None, "") for a brief, for a memo with its own chart, and when no donor serves."""
+    from ..drafting.memo_charts import donor_charts
+
+    if kind != "memo" or donor_charts(blob):
+        return None, ""
+    for d in choice.get("chart_donors") or []:
+        if not isinstance(d, dict) or not (d.get("file_id") and d.get("matter_id")):
+            continue
+        try:
+            data = client.download_file(str(d["matter_id"]), str(d["file_id"]))[1]
+        except Exception:  # noqa: BLE001 - a donor that will not read is skipped; the next one is tried
+            continue
+        if hashlib.sha256(data).hexdigest() == d.get("sha256") and donor_charts(data):
+            return data, str(d["file_id"])
+    return None, ""
+
+
+def _made(
+    job: dict[str, Any], blob: bytes, choice: dict[str, Any], inputs_dir: str | None, pieces: Any, client: Any
+) -> tuple[Any, dict[str, str] | None]:
+    """(the made file, where a memo's tables' look came from, or None when its own)."""
+    from ..drafting import memo_charts
+
     kind = str(job["setup_kind"])
     source = Source(str(choice["matter_id"]), str(choice["file_id"]), "", hashlib.sha256(blob).hexdigest())
-    return make_mod.make(kind, blob, source, identity(inputs_dir) if pieces is None else pieces)
+    donor, donor_id = _donor(kind, blob, choice, client)
+    made = make_mod.make(kind, blob, source, identity(inputs_dir) if pieces is None else pieces, chart_from=donor)
+    if made.chart == memo_charts.FIRM_MEMO:
+        return made, memo_charts.source(memo_charts.FIRM_MEMO, donor, donor_id)
+    return made, memo_charts.source(memo_charts.BODY_LOOK) if made.chart == memo_charts.BODY_LOOK else None
 
 
 def run(
@@ -128,7 +166,9 @@ def run(
     if hashlib.sha256(blob).hexdigest() != choice["sha256"]:
         return _told(CHANGED)
     try:
-        made = _made(job, blob, choice, inputs_dir, pieces)
+        made, chart_source = _made(job, blob, choice, inputs_dir, pieces, limited)
+    except RosterUnusable as exc:  # the roster could not be read: SMD's to look at, nothing made
+        return _held(exc.code)
     except make_mod.Unusable as exc:
         if exc.code in ("header_picture_lost", PLAN_ERROR):  # our plan's fault, never the firm's: SMD looks
             return _held(exc.code)
@@ -155,6 +195,7 @@ def run(
         "fixed_strings": list(made.fixed_strings),
         "residue": made.residue,
         "replaces": slot,
+        "chart_source": chart_source,
     }
 
 

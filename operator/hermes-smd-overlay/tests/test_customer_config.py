@@ -3,7 +3,7 @@
 Covers:
 
 * :class:`CustomerConfig` loads a valid file from a path and exposes
-  typed accessors (slug, personas, scope, connectors, voice_library).
+  typed accessors (slug, personas, scope, connectors).
 * The loader rejects missing files, empty files, and YAML that does
   not parse as a mapping.
 * Schema validation catches the required-field set, vertical
@@ -71,8 +71,6 @@ VALID_YAML = dedent(
       email_keyword_blocks: []
       domain_blocks: []
 
-    voice_library:
-      samples_path: 'r2://vaults/acme/voice/samples/'
 
     memory:
       d1_namespace: acme
@@ -126,11 +124,11 @@ def test_customer_config_connectors(tmp_path):
     assert connectors["Email"]["backend"] == "mcp:gmail"
 
 
-def test_customer_config_voice_library(tmp_path):
-    path = _write(tmp_path, VALID_YAML)
-    cfg = CustomerConfig.from_volume(str(path))
-    voice = cfg.voice_library
-    assert voice["samples_path"] == "r2://vaults/acme/voice/samples/"
+def test_customer_config_has_no_voice_library_accessor():
+    """Retired with the sample-transform voice mechanism (ss ADR 0083 decision 6)."""
+    from shared.customer_config import CustomerConfig
+
+    assert not hasattr(CustomerConfig, "voice_library")
 
 
 def test_customer_config_raw(tmp_path):
@@ -268,6 +266,7 @@ def _with_logic_in_code(block: str) -> str:
         "fixed_wording",
         "wording_rules",
         "library_setup",
+        "status_from_events",
     ],
 )
 @pytest.mark.parametrize("mode", ["observe", "enforce"])

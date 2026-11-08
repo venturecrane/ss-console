@@ -11,7 +11,7 @@ plugin when a spec file is read, and consulted by the spec gate at the moment a
 send would leave. No read this turn, no send this turn.
 
 Same producer/consumer split and the same module-level-singleton shape as
-``shared.voice_status`` and ``shared.inbound.SESSION_TAINT``, for the same
+``shared.inbound.SESSION_TAINT``, for the same
 reason: two plugins cannot import each other (hyphenated package dirs are not
 dotted module paths), so ``shared/`` is the only seam. Process-wide singleton;
 one tenant per Machine (AGENTS.md #5).

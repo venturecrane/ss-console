@@ -59,16 +59,19 @@ from operator_connector_sdk.library.caller import (
     PINNED,
     STARTER,
     BaseUsed,
+    NOT_ROSTERED,
     LazyStore,
-    attorney_key,
     build_record,
+    matter_attorney,
     write_record,
 )
 from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
+from ..attorneys.seat import roster_for
 from .brief_base import unfit
 from .firm_rules import _spec_dir
+from .outcome import DraftingFailed, DraftingHold
 
 #: Where an accepted marked file is written for the class's plan to open.
 BASE_NAME = "library-base.docx"
@@ -94,11 +97,26 @@ def open_store(seat: Any) -> LibraryStore:
     return SmokeballLibrary(seat.client, load_library_config())
 
 
-def _matter_attorney(run: Any) -> Attorney | None:
+def matter_attorney_or_stop(run: Any) -> Attorney | None:
+    """The matter's responsible attorney, checked against the firm's roster when
+    one is installed (``caller.matter_attorney``). Someone the roster does not
+    list as an attorney holds the job (``attorney_not_rostered``, the firm is
+    told); a roster that cannot be read fails it for SMD (``roster_unreadable``).
+    Either way the record says nothing was started. The job asks this once
+    right after the matter's facts are read, before anything is paid
+    (``run._walk``), and the resolver's caller asks it again at render."""
     p = run.data / "facts.json"
     facts = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
     who = str(facts.get("responsible_attorney") or "").strip()
-    return Attorney(attorney_key(who), who) if who else None
+    found = matter_attorney(who, who, roster_for(run))
+    if not found.hold:
+        return found.attorney
+    write_record(
+        run.data, build_record(DRAFTING_JOB, Resolution(REFUSED, run.cls, found.reason), BaseUsed(NOT_STARTED))
+    )
+    if found.hold == NOT_ROSTERED:
+        raise DraftingHold(f"{NOT_ROSTERED}: {found.reason}; nothing was filed")
+    raise DraftingFailed(f"{found.hold}: the firm's attorney roster could not be read ({found.reason})")
 
 
 def _pinned(run: Any) -> tuple[tuple[Path, dict[str, str]] | None, BaseUsed | None]:
@@ -153,7 +171,7 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     store = LazyStore(lambda: open_store(run.seat))
     spec = _spec_dir()
     asked = resolve(
-        store, read_installed(spec), run.cls, matter_attorney=_matter_attorney(run), copies_dir=copies_dir(spec)
+        store, read_installed(spec), run.cls, matter_attorney=matter_attorney_or_stop(run), copies_dir=copies_dir(spec)
     )
     considered = library_edit.consider(asked, store, run.cls)
     library_edit.leave(run.data, asked, considered)
@@ -174,4 +192,4 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     return out
 
 
-__all__ = ["BASE_NAME", "DraftBase", "open_store", "pick_base"]
+__all__ = ["BASE_NAME", "DraftBase", "matter_attorney_or_stop", "open_store", "pick_base"]

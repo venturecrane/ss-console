@@ -1,17 +1,17 @@
 """Which attorneys a "set up Dana's memos" request may name, and the name each is
 filed under. ONE call site for the roster, on purpose.
 
-WHY ONE FUNCTION. There is no single list of a firm's attorneys yet (design
-2026-11-06, "Unified: who an attorney is"). This is the THIRD partial list, beside
-the drafting inputs' caption blocks (``drafting/attorneys.py``, by email) and the
-demand inputs' signer map (``demand/library_pick.py``, by name). It reads the
-firm's AUTHORED drafting attorneys, by email, and maps each email to the name the
-case system's staff record gives that person ("first last"), because that is the
-name the drafting resolver files a matter's attorney under
-(``operator_connector_sdk.library.caller.attorney_key`` of
-``facts.json``'s ``responsible_attorney``, itself the staff record's first and
-last name). The unified roster replaces this one function later; nothing else
-here knows where attorneys come from.
+THE FIRM'S ROSTER FIRST (2026-11-07). When the firm's attorney roster is
+installed (``operator_connector_sdk.library.roster``, design 2026-11-06,
+"Unified: who an attorney is"), it IS the list: every attorney on it, by the
+name the case system gives them, which is the name the drafting resolver files
+a matter's attorney under (``caller.attorney_key`` of ``facts.json``'s
+``responsible_attorney``). No staff listing is read. A roster that cannot be
+read raises ``RosterUnusable(ROSTER_UNREADABLE)``.
+
+WITH NO ROSTER INSTALLED, exactly as before it existed: the firm's AUTHORED
+drafting attorneys, by email (``drafting/attorneys.py``), each mapped to the
+name the case system's staff record gives that person ("first last").
 
 FAIL CLOSED, NEVER A GUESS. An authored email the case system has no staff
 member for raises ``RosterUnusable(ROSTER_UNMATCHED)``; a staff listing that
@@ -30,12 +30,14 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from operator_connector_sdk.library import roster as roster_mod
 from operator_connector_sdk.library.caller import attorney_key
 
 #: Hold codes: SMD's to fix, the firm is told nothing.
 ROSTER_INPUTS_MISSING = "roster_inputs_missing"
 ROSTER_UNMATCHED = "roster_unmatched"
 COULD_NOT_LOOK = "could_not_look"
+ROSTER_UNREADABLE = "roster_unreadable"
 #: Outcomes the firm is told.
 ATTORNEY_NOT_ROSTERED = "attorney_not_rostered"
 ATTORNEY_AMBIGUOUS = "attorney_ambiguous"
@@ -76,11 +78,16 @@ def _name(row: dict[str, Any]) -> str:
     return " ".join(str(row.get(k) or "").strip() for k in ("firstName", "lastName")).strip()
 
 
-def attorneys(inputs: Any, client: Any) -> list[Attorney]:
-    """The firm's attorneys: each authored drafting attorney (``inputs``, a
-    loaded ``drafting.firm`` config, or None when it did not load) with the name
-    the case system gives the staff member of that email. Raises
-    ``RosterUnusable``."""
+def attorneys(inputs: Any, client: Any, roster: roster_mod.Roster | None = None) -> list[Attorney]:
+    """The firm's attorneys: the installed roster's (``roster``, read from the
+    seat when None), else each authored drafting attorney (``inputs``, a loaded
+    ``drafting.firm`` config, or None when it did not load) with the name the
+    case system gives the staff member of that email. Raises ``RosterUnusable``."""
+    read = roster if roster is not None else roster_mod.load()
+    if read.status == roster_mod.UNUSABLE:
+        raise RosterUnusable(ROSTER_UNREADABLE)
+    if read.status == roster_mod.OK:
+        return [Attorney(p.emails[0] if p.emails else "", p.name, attorney_key(p.name)) for p in read.attorneys]
     if inputs is None:
         raise RosterUnusable(ROSTER_INPUTS_MISSING)
     authored = [str(a.get("email") or "").strip().lower() for a in inputs.attorneys]
@@ -123,6 +130,7 @@ __all__ = [
     "COULD_NOT_LOOK",
     "ROSTER_INPUTS_MISSING",
     "ROSTER_UNMATCHED",
+    "ROSTER_UNREADABLE",
     "Attorney",
     "RosterUnusable",
     "attorneys",

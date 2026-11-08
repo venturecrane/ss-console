@@ -9,6 +9,7 @@ customer.yaml on every call (ADR 0104).
       wording_rules: observe          # or enforce
       library_setup: observe          # or enforce
       library_edit_notice: observe    # or enforce
+      status_from_events: observe     # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -29,7 +30,9 @@ config applier treats the block as rebuild-class, so a change arrives with a
 release, behind the busy gate, never as a live edit.
 
 ONE FILE, THREE COPIES. The connector, the overlay and the broker run in separate
-virtualenvs, and none of them imports another. So this module imports nothing
+virtualenvs, and none of them imports another. (The jobs runner reads the
+connector's copy: its venv carries that package, and the bundle ships the two
+together.) So this module imports nothing
 but the standard library and PyYAML (which all three already carry) and it lives
 byte for byte in three places:
 
@@ -70,6 +73,10 @@ LIBRARY_SETUP = "library_setup"
 #: library file was not used (``library_setup_wording.EDIT_NOT_USED``). Observe:
 #: the firm is told nothing; SMD is paged either way. The Captain's call.
 LIBRARY_EDIT_NOTICE = "library_edit_notice"
+#: Whether the litigation lane prints a defendant's status worked out from its
+#: dated, cited events (``jobs/litigation/eventmode.py``). Observe: the lane
+#: prints what it printed before and records what the events would have said.
+STATUS_FROM_EVENTS = "status_from_events"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
@@ -78,6 +85,7 @@ KEYS = (
     WORDING_RULES,
     LIBRARY_SETUP,
     LIBRARY_EDIT_NOTICE,
+    STATUS_FROM_EVENTS,
 )
 
 #: The same file by either name: the entrypoint exports both, the gateway and
@@ -164,6 +172,7 @@ __all__ = [
     "PATH_ENVS",
     "POST_RECORD_DERIVATION",
     "PRINTED_SOURCE_CHECK",
+    "STATUS_FROM_EVENTS",
     "Switch",
     "WORDING_RULES",
     "live_path",

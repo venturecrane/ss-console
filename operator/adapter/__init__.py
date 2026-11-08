@@ -3,11 +3,10 @@
 Per the 2026-05-24 architectural realignment (ADRs 0015, 0016, 0017
 rewrites), the runtime Hermes integration moved to the separate plugin
 overlay at `venturecrane/hermes-smd-overlay`. The plugins there
-(`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-voice`,
-`hermes-smd-memory-mirror`, `hermes-smd-hook-probe`) own everything
-that runs inside the customer Machine: trust-ceiling enforcement,
-audit emission, voice transformation, memory mirroring, and hook
-probing.
+(`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-memory-mirror`,
+`hermes-smd-hook-probe`) own everything that runs inside the customer
+Machine: trust-ceiling enforcement, audit emission, memory mirroring,
+and hook probing.
 
 What survives in this package is the control-plane substrate —
 modules used by operator-side tools (`bin/lib/decommission.py`,
@@ -26,10 +25,9 @@ ADR-0043 runtime-read seam; see `bin/lib/seam_pull.py`.) Specifically:
 * The audit-log D1 client (`audit_log.py`) — read/write surface used by
   decommission and evidence-packet generation, both of which run
   outside the customer Machine after pause.
-* The evidence-packet generator (`evidence/`) and the voice corpus
-  toolchain that survives in `voice/` (structural diff, filters,
-  corrections, transform — consumed by `bin/lib/voice_corpus.py` and
-  the voice gate).
+* The evidence-packet generator (`evidence/`). (The sample-transform
+  voice toolchain that lived in `voice/` was removed with ss ADR 0083
+  decision 6, 2026-11-07.)
 * Cost telemetry (`cost_ingest.py`, `cost_rollup.py`,
   `cost_telemetry/`) — billing rollup against per-customer Machines.
 * Trust-ceiling enforcement primitive (`trust_ceiling.py`) — pure-data

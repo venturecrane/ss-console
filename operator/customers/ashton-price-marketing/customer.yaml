@@ -357,10 +357,6 @@ safety:
     cost_cap_daily_cents: 2000
     inbound_daily_cap: 100
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/ashton-price-marketing/voice/samples/'
-
 # ---- MEMORY (isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: ashton-price-marketing

@@ -18,27 +18,22 @@ class:
   ``shared.spec_manifest`` verified the file, so the mark IS all three
   conditions). Reasons: ``no_spec`` | ``spec_hash_mismatch`` | ``spec_not_read``.
 
-* **MECHANISM-B fallback** — the class is NOT declared ``expected`` (undeclared
-  class, ``output_classes`` absent entirely, or ``voice_spec: none``). The
-  ORIGINAL binding applies EXACTLY as before this repoint: the gate binds iff
-  the config authors a non-empty ``voice_library`` block, and passes iff the
-  sample-driven voice transform demonstrably ran on this turn
-  (``shared.voice_status``). Reasons: ``no_samples`` | ``transform_not_applied``.
+* **UNDECLARED** (since Mechanism B's removal, ss ADR 0083 decision 6,
+  2026-11-07) — the class is NOT declared ``expected`` (undeclared class,
+  ``output_classes`` absent entirely, ``voice_spec: none``, or a config this
+  process cannot read). Nothing certifies the send's voice, so it FAILS CLOSED:
+  downgraded to draft-for-review with reason ``no_voice_spec_declared``. This
+  replaced the sample-transform fallback, which bound every seat (all seven
+  authored a sample library) and passed only on a turn the transform reshaped;
+  with no transform the old fallback downgraded every such send, so the new rule
+  is never weaker on any (seat x class). ``tests/test_voice_gate_binding_coverage.py``
+  asserts that over a checked-in snapshot of every real seat's config.
 
-The resolution is ADDITIVE, never substitutive: a seat that declares specs for
-SOME classes keeps the Mechanism-B fallback on every class it did not declare.
-A seat declaring only ``work_product`` still has its autonomous
-``outbound_client`` sends governed by the B fallback — no (seat × class) loses
-its downgrade relative to the pre-repoint gate. ``resolve_binding_regime`` is
-the single pure function that decides this, and
-``tests/test_voice_gate_binding_coverage.py`` asserts the never-weaker property
-over a checked-in snapshot of every real seat's config.
+The gate is never unbound for an autonomous outside send: ADR 0028, a seat must
+not send autonomously in a voice nothing certifies.
 
-Failure to read the config keeps the ORIGINAL posture: an unresolvable config
-reads as "not authored / not declared" and the gate stays silent (ADR 0035 — an
-unauthored capability is never imposed; the ceiling resolver already fail-closes
-an unresolvable config upstream). A resolvable config whose ``output_classes``
-is malformed falls back to the B regime — never silently unbound.
+A config whose ``output_classes`` is unreadable or malformed reads as undeclared
+and downgrades: never silently unbound.
 
 Firing site (``enforce.evaluate_tool_call``)
 --------------------------------------------
@@ -56,8 +51,7 @@ plumbing the content floor uses (a ``{"action": "block", ...}`` return that the
 agent turns into a draft) — and write a ``VOICE_GATE_TRIGGERED`` audit row. The
 action_type and row shape are UNCHANGED by the repoint; the new reason strings
 ride the existing ``reason`` field (``no_spec`` | ``spec_not_read`` |
-``spec_hash_mismatch`` alongside the fallback's ``no_samples`` |
-``transform_not_applied`` | ``gate_error``). ANY internal error in a bound gate
+``spec_hash_mismatch`` alongside ``no_voice_spec_declared`` | ``gate_error``). ANY internal error in a bound gate
 downgrades. The gate never silently passes.
 
 Overlay-only (like the content floor, ADR 0031 §5). NOT mirrored into
@@ -74,15 +68,13 @@ from shared.audit_status import NoAuditWarner
 from shared.customer_config import CustomerConfig
 from shared.spec_gate import resolve_output_class, spec_read_instruction
 from shared.spec_status import SPEC_STATUS
-from shared.voice_status import VOICE_STATUS
 
 logger = logging.getLogger(__name__)
 
 
 # Fail reasons (audit + the operator-facing draft message).
-# Mechanism-B fallback regime:
-_REASON_NO_SAMPLES = "no_samples"
-_REASON_TRANSFORM_NOT_APPLIED = "transform_not_applied"
+# Undeclared regime (the sample-transform fallback's replacement):
+_REASON_NO_VOICE_SPEC_DECLARED = "no_voice_spec_declared"
 # Spec regime (ss#2086 step 1):
 _REASON_NO_SPEC = "no_spec"
 _REASON_SPEC_NOT_READ = "spec_not_read"
@@ -101,87 +93,43 @@ _REASON_GATE_ERROR = "gate_error"
 
 #: The class's declared spec governs (ss ADR 0083 binding).
 REGIME_SPEC = "spec"
-#: The original voice_library / transform-ran binding governs, exactly as
-#: before the ss#2086 repoint.
-REGIME_MECHANISM_B = "mechanism_b"
-#: The gate does not fire for this (seat × class).
-REGIME_UNBOUND = "unbound"
+#: Nothing certifies the class's voice: the send downgrades (fail closed).
+REGIME_UNDECLARED = "undeclared"
 
 #: The one declaration value that selects the spec regime. ``none`` is the
-#: other legal authored value and deliberately falls through to the B fallback.
+#: other legal authored value and falls to the undeclared regime.
 _EXPECTED = "expected"
 
 
-def resolve_binding_regime(*, voice_library_authored: bool, class_declaration: Any) -> str:
-    """Which regime binds this (seat × resolved-output-class) send. PURE.
+def resolve_binding_regime(*, class_declaration: Any) -> str:
+    """Which regime binds this (seat x resolved-output-class) send. PURE.
 
-    The additive rule (ss#2086 step 1, ss plan Decision 4), in full:
+    * declaration is a mapping with ``voice_spec: expected`` -> ``REGIME_SPEC``;
+    * any other state (absent class, absent or malformed ``output_classes``,
+      ``voice_spec: none``) -> ``REGIME_UNDECLARED``, which downgrades.
 
-    * declaration is a mapping with ``voice_spec: expected`` → ``REGIME_SPEC``;
-    * ANY other declaration state (absent class, absent/malformed
-      ``output_classes``, ``voice_spec: none``) → the ORIGINAL predicate,
-      verbatim: ``voice_library`` authored ⇒ ``REGIME_MECHANISM_B``, else
-      ``REGIME_UNBOUND``.
-
-    Additivity, stated as the invariant the coverage test enforces: for every
-    input where the OLD predicate bound the gate (``voice_library_authored``),
-    this function returns a bound regime — never ``REGIME_UNBOUND``. A
-    substitutive variant ("seat declares specs somewhere ⇒ spec logic only")
-    cannot be expressed through these inputs without violating that invariant,
-    which is what makes the extraction of this function the enforcement seam.
+    There is no unbound answer: every autonomous outside send is governed.
     """
     if isinstance(class_declaration, dict):
         if str(class_declaration.get("voice_spec", "")).strip().lower() == _EXPECTED:
             return REGIME_SPEC
-    return REGIME_MECHANISM_B if voice_library_authored else REGIME_UNBOUND
-
-
-# ---------------------------------------------------------------------------
-# Binding condition — voice authored for this seat?
-# ---------------------------------------------------------------------------
-
-
-def _voice_authored() -> bool:
-    """True iff the seat's live config authors a non-empty ``voice_library`` block.
-
-    The gate BINDS only when voice is positively confirmed part of the
-    engagement (ADR 0035 — an unauthored capability is never imposed). Any
-    failure to confirm (missing / unreadable config) reads as NOT authored, so
-    the gate stays silent rather than imposing a voice downgrade on a seat that
-    may not use voice at all.
-
-    This "positively-confirm-or-silent" posture governs BINDING; it is distinct
-    from the gate's INTERNAL fail-closed posture (ADR 0028 §4) which, once bound,
-    downgrades to draft on any evaluation error. The two are reconcilable because
-    the gate only runs after the ceiling resolver ALREADY read the same config
-    to resolve an autonomous exposure — a config the resolver read is a config
-    this check can read, so the silent path here is not a fail-open hole."""
-    try:
-        return bool(CustomerConfig.from_volume().voice_library)
-    except Exception:  # noqa: BLE001 — unconfirmed ⇒ not authored ⇒ gate silent
-        logger.debug(
-            "voice gate: voice_library unresolved; treating as not authored (gate silent)",
-            exc_info=True,
-        )
-        return False
+    return REGIME_UNDECLARED
 
 
 def _class_declaration(output_class: str | None) -> Any:
     """The seat's ``output_classes.<class>`` declaration, or ``None``.
 
-    ``None`` means "no declaration I can positively confirm" — unresolved class,
-    absent block, unreadable config — and ``resolve_binding_regime`` reads it as
-    "the B fallback applies". A read failure here therefore lands on the OLD
-    regime's exact behavior, never on a silently unbound gate and never on the
-    spec regime: fail-closed toward what shipped before the repoint.
+    ``None`` means "no declaration I can positively confirm" (unresolved class,
+    absent block, unreadable config) and ``resolve_binding_regime`` reads it as
+    undeclared: the send downgrades, never a silently unbound gate.
     """
     if not output_class:
         return None
     try:
         return CustomerConfig.from_volume().output_classes.get(output_class)
-    except Exception:  # noqa: BLE001 — unconfirmed ⇒ undeclared ⇒ B fallback binds
+    except Exception:  # noqa: BLE001 — unconfirmed ⇒ undeclared ⇒ downgrade
         logger.debug(
-            "voice gate: output_classes unresolved; falling back to the voice_library binding",
+            "voice gate: output_classes unresolved; reading the class as undeclared",
             exc_info=True,
         )
         return None
@@ -301,9 +249,7 @@ def _spec_draft_message(output_class: str, reason: str) -> str:
 def _spec_fail_reason(output_class: str) -> str:
     """Distinguish WHY the spec pass condition failed. Off the happy path only.
 
-    ``was_read`` being False is the refusal; this probe only names it — the same
-    shape as the fallback regime consulting the samples probe only to pick
-    between ``no_samples`` and ``transform_not_applied``.
+    ``was_read`` being False is the refusal; this probe only names it.
 
     Manifest unreadable ⇒ ``spec_unprovable``, and that check comes FIRST.
     Without it a lost ``SMD_SPEC_DIR`` reports as ``no_spec`` — the seat would
@@ -386,20 +332,13 @@ def check_voice_gate(
 
     ``action_class_value`` is the resolved ``ActionClass`` value (post recipient
     reclassification); its output class comes from the same map the spec gate
-    uses. An empty / unresolvable value yields no output class, which resolves
-    to the ORIGINAL voice_library binding — the pre-repoint behavior, exactly.
+    uses. An empty / unresolvable value yields no output class, which reads as
+    undeclared and downgrades.
 
     Fail-closed (ADR 0028 §4): a bound seat that cannot certify its regime's
     pass condition this turn downgrades; any internal error downgrades."""
     output_class = resolve_output_class(action_class_value) if action_class_value else None
-    regime = resolve_binding_regime(
-        voice_library_authored=_voice_authored(),
-        class_declaration=_class_declaration(output_class),
-    )
-    if regime == REGIME_UNBOUND:
-        # Not bound for this (seat × class) — voice is not part of the engagement.
-        return None
-
+    regime = resolve_binding_regime(class_declaration=_class_declaration(output_class))
     if regime == REGIME_SPEC and output_class is not None:
         return _check_spec_regime(
             output_class=output_class,
@@ -408,28 +347,9 @@ def check_voice_gate(
             tool_call_id=tool_call_id,
         )
 
-    # Mechanism-B fallback — the ORIGINAL evaluation, verbatim (ss#2086 keeps
-    # this until Mechanism B's removal PR, which lands only after the repointed
-    # gate is observed passing live sends).
-    try:
-        if VOICE_STATUS.was_applied(session_id):
-            # The transform demonstrably reshaped this turn's output. A successful
-            # transform implies samples were retrieved, so both pass conditions hold.
-            return None
-        # The transform did NOT apply this turn. Distinguish the reason so the
-        # audit review separates a no-samples seat from a transform-skipped turn.
-        reason = (
-            _REASON_TRANSFORM_NOT_APPLIED
-            if VOICE_STATUS.samples_available()
-            else _REASON_NO_SAMPLES
-        )
-    except Exception:  # noqa: BLE001 — a bound-seat evaluation fault fails closed
-        logger.exception(
-            "voice gate: bound-seat evaluation failed for %s; failing toward draft (ADR 0028 §4)",
-            tool_name,
-        )
-        reason = _REASON_GATE_ERROR
-
+    # Undeclared: nothing certifies this class's voice, so the send is a draft
+    # (the sample-transform fallback's fail-closed replacement, ADR 0083 decision 6).
+    reason = _REASON_NO_VOICE_SPEC_DECLARED
     _emit_voice_gate_audit(
         tool_name=tool_name,
         reason=reason,
@@ -440,9 +360,8 @@ def check_voice_gate(
 
 
 __all__ = [
-    "REGIME_MECHANISM_B",
     "REGIME_SPEC",
-    "REGIME_UNBOUND",
+    "REGIME_UNDECLARED",
     "check_voice_gate",
     "resolve_binding_regime",
 ]

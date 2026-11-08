@@ -1005,3 +1005,8 @@ def test_on_pre_tool_call_pause_wall_fails_open_on_read_error(tmp_path, monkeypa
         tool_call_id="c",
     )
     assert result is None
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

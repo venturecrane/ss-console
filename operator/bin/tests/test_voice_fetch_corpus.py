@@ -89,27 +89,16 @@ def test_unauthored_cohort_is_rejected_before_any_fetch():
     assert "adjustor" in str(exc.value)
 
 
-def test_authored_cohorts_replace_the_base_vocabulary(tmp_path: Path):
-    """Mirrors resolveCohortVocabulary: an authored list REPLACES the base set."""
+def test_a_seats_retired_cohort_block_is_ignored_and_the_vocabulary_is_fixed(tmp_path: Path):
+    """The seat's audience block was retired with the sample-transform mechanism
+    (ss ADR 0083 decision 6); the bridge's vocabulary is fixed in code."""
     yaml_path = tmp_path / "customer.yaml"
-    yaml_path.write_text(
-        "customer_id: pilot\n"
-        "voice_cohorts:\n"
-        "  cohorts:\n"
-        "    - client\n"
-        "    - adjuster       # comment tolerated\n"
-        "    - opposing-counsel\n"
-        "  min_samples_per_cohort: 5\n"
-        "memory:\n"
-        "  d1_namespace: pilot\n",
-        encoding="utf-8",
-    )
+    yaml_path.write_text("customer_id: pilot\nmemory:\n  d1_namespace: pilot\n", encoding="utf-8")
     vocab = vfc.load_cohort_vocabulary(str(yaml_path))
-    assert vocab == frozenset({"client", "adjuster", "opposing-counsel"})
-    assert "court" not in vocab  # base member NOT authored -> not in the vocabulary
+    assert vocab == vfc.BASE_COHORTS and "adjuster" in vocab
     vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "adjuster")], vocab)  # no raise
     with pytest.raises(ValueError):
-        vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "court")], vocab)
+        vfc.validate_cohorts([vfc.ManifestEntry("m", "f", "mediator-panel")], vocab)
 
 
 def test_no_customer_yaml_falls_back_to_base_vocabulary():
@@ -259,27 +248,14 @@ def test_provenance_ties_documents_to_corpus_ids(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_emitted_corpus_feeds_the_real_ingester_leak_guard(tmp_path: Path):
-    """The bridge's output must produce content-free samples through the REAL
-    differ + leak invariant — the join this whole script exists to make."""
-    from bin.lib.voice_corpus import build_sample
-
-    docs = [
-        vfc.FetchedDoc(
-            "id-1",
-            "client",
-            "Dear Errol,\n\nThe demand went out May 12. Bayline has it.\n\nYours,\nLuisa",
-            "Nakashima",
-            "m-1",
-            "june.docx",
-            "f-1",
-            "smokeball:m-1/f-1",
-        )
-    ]
+def test_emitted_corpus_carries_each_document_whole_under_its_cohort(tmp_path: Path):
+    """The bridge's output is what a person distils the firm's voice from (ADR 0083,
+    mechanism A): one row per document, its text whole, filed under its audience.
+    (Until 2026-11-07 this fed the sample-transform ingester, removed with
+    decision 6; the join to the reader of the corpus is what is tested now.)"""
+    text = "Dear Errol,\n\nThe demand went out May 12. Bayline has it.\n\nYours,\nLuisa"
+    docs = [vfc.FetchedDoc("id-1", "client", text, "Nakashima", "m-1", "june.docx", "f-1", "smokeball:m-1/f-1")]
     written = vfc.write_corpus(docs, str(tmp_path / "corpus.jsonl"))
-    row = json.loads(Path(written["client"]).read_text().splitlines()[0])
-    sample = build_sample(row["text"], slug="pilot-smokeball", cohort="client")
-    assert sample.r2_key.startswith("vaults/pilot-smokeball/voice/cohort/client/")
-    blob = sample.diff_bytes.decode()
-    for leaked in ("Errol", "Bayline", "Luisa", "demand"):
-        assert leaked not in blob
+    assert set(written) == {"client"}
+    rows = [json.loads(line) for line in Path(written["client"]).read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]["text"] == text and rows[0]["id"] == "id-1"

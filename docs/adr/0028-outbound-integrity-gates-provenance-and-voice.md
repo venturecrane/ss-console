@@ -44,6 +44,8 @@ The voice transform applies to live deliverables (not just fixtures), and the vo
 
 > **Realized (2026-07-13, overlay#153, OVERLAY_REF 8806099).** The runtime voice gate now runs in the trust plugin's outbound path (same `pre_tool_call` seam as the provenance gate and the ADR 0031 content floor). Binding: seats whose live config authors a `voice_library` block. Firing: allowed **outside** `EXTERNAL_SEND` resolved `autonomous` (post-ADR 0072 scoping). Pass requires samples retrievable + the transform demonstrably applied on this turn (per-turn `shared/voice_status.py` marker); no-samples / transform-skipped / gate-error all downgrade to draft with a `VOICE_GATE_TRIGGERED` audit row (§4 fail-closed). The sequencing rule above is thereby code-enforced for voice-authored seats: an autonomous send cannot bypass an unproven voice pipeline. Residual for full #855 closure: the offline blind-test quality gate (#823 harness live mode) and per-seat anchor-pack ingestion.
 
+> **Re-bound (2026-11-07, ss ADR 0083 decision 6).** The sample transform and its `voice_library` binding are removed. A class declaring `output_classes.<class>.voice_spec: expected` is held to its installed, hash-verified spec read this turn (ADR 0083 decision 5); every other class downgrades an autonomous outside send to draft with reason `no_voice_spec_declared`. This section's doctrine is unchanged and is now enforced on every seat: no autonomous external send in a voice nothing certifies.
+
 ### 3. The gates are engine-independent and sit in the Gates stratum
 
 Provenance and voice enforcement are harness controls, invoked by the overlay on documented firing sites, not Hermes features we hope are on. If the engine changes, the gates still run.

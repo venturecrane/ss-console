@@ -116,11 +116,13 @@ def tool_input(message: Any, name: str) -> dict[str, Any] | None:
     return None
 
 
-def tool_for(role: str) -> dict[str, Any]:
-    return sections.RECORD_RESULT if role == "read" else sections.RECORD_VERDICTS
+def tool_for(role: str, enforcing: bool = False) -> dict[str, Any]:
+    if role == "read":
+        return sections.RECORD_RESULT if enforcing else sections.RECORD_RESULT_OBSERVE
+    return sections.RECORD_VERDICTS if enforcing else sections.RECORD_VERDICTS_OBSERVE
 
 
-def shape(role: str) -> dict[str, Any]:
+def shape(role: str, enforcing: bool = False) -> dict[str, Any]:
     """The request shape for a pass: its one tool, chosen by the model.
 
     2026-10-29: the proof's every batched read was refused, "tool_choice: type
@@ -128,7 +130,7 @@ def shape(role: str) -> dict[str, Any]:
     ``auto`` plus the system prompt's ``ONLY_BY_TOOL`` line asks for the call;
     an answer that does not call it is no result (``tool_input`` is None), so
     the case is marked unread and the gates hold it, never filled in."""
-    return {"tools": [tool_for(role)], "tool_choice": {"type": "auto"}}
+    return {"tools": [tool_for(role, enforcing)], "tool_choice": {"type": "auto"}}
 
 
 def only_by_tool(role: str) -> str:

@@ -122,6 +122,24 @@ CASES = [
     ("date not YYYY-MM-DD", ("defendants", 0, "sent_for_service", "date"), "3/20/2026"),
     ("date without source", ("defendants", 0, "sent_for_service", "source"), None),
     ("source is not a file on the matter", ("defendants", 0, "sent_for_service", "source"), src("zz", "Else.pdf")),
+    # A status marked derived must be what its events give (2026-11-05).
+    (
+        gates.DERIVED_RULE,
+        ("defendants", 0),
+        {
+            "name": "Delta Example",
+            "status": vocab.D_DISMISSED,
+            "status_from": vocab.FROM_DERIVED,
+            "served": {"date": "2026-04-10", "method": "personal", "source": src()},
+            "answered": {"date": "2026-04-30", "source": src("f3", "Answer.pdf")},
+            "flags": [],
+        },
+    ),
+    # Every dated event is judged like every other date (2026-11-05).
+    ("future date", ("defendants", 0, "dismissed"), {"date": "2027-01-01", "source": src()}),
+    ("date not YYYY-MM-DD", ("defendants", 0, "settled"), {"date": "3/20/2026", "source": src()}),
+    ("date without source", ("defendants", 0, "default_entered"), {"date": "2026-05-01", "source": None}),
+    ("source is not a file on the matter", ("defendants", 0, "dropped"), {"date": "2026-05-01", "source": src("zz")}),
 ]
 
 

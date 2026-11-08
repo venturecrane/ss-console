@@ -135,6 +135,39 @@ def candidates(hunted: hunt_mod.Hunted, client: Any, kind: str = "") -> list[dic
     ]
 
 
+#: How many of the firm's own chart memos the hunt names, best first, and how many
+#: in-band files it reads at most to find them (memo only; ``drafting/memo_charts``).
+DONORS = 3
+DONOR_READS = 30
+
+
+def _donor(kind: str, c: hunt_mod.Candidate, client: Any) -> bool:
+    from ..drafting.memo_charts import donor_charts
+    from ..firmbase import Source
+    from .plan import fits
+
+    try:
+        blob = client.download_file(c.matter_id, c.file_id)[1]
+        return bool(donor_charts(blob)) and not fits(kind, blob, Source(c.matter_id, c.file_id, "", c.sha256))
+    except Exception:  # noqa: BLE001 - a file that will not read or parse is no donor; the next one is tried
+        return False
+
+
+def chart_donors(hunted: hunt_mod.Hunted, client: Any, kind: str) -> list[dict[str, str]]:
+    """The firm's own highest-ranked memos whose charts the memo plan reads, best
+    first, by id: where a chosen memo with no chart takes its tables' look (the
+    coordinator's decision on #3876). Empty for any other kind."""
+    if kind != "memo":
+        return []
+    out: list[dict[str, str]] = []
+    for reads, c in enumerate(x for x in hunted.candidates if _in_band(x)):
+        if len(out) >= DONORS or reads >= DONOR_READS:
+            break
+        if _donor(kind, c, client):
+            out.append({"file_id": c.file_id, "matter_id": c.matter_id, "sha256": c.sha256})
+    return out
+
+
 def _verdict(live: bool, **fields: Any) -> dict[str, Any]:
     """Delivered when live, observed when the switch is off: the same facts either way."""
     return {"outcome": DELIVERED if live else OBSERVED, "live": live, **fields}
@@ -188,7 +221,10 @@ def run(
     counts = dict(sorted(hunted.counts.items()))
     outcome = CANDIDATES if found else NONE_FOUND
     dropped = {k: list(v) for k, v in sorted(hunted.files.items())}
-    return _verdict(live, setup_outcome=outcome, counts=counts, candidates=found, dropped_files=dropped, **who)
+    donors = {"chart_donors": chart_donors(hunted, client, kind)} if found and kind == "memo" else {}
+    return _verdict(
+        live, setup_outcome=outcome, counts=counts, candidates=found, dropped_files=dropped, **donors, **who
+    )
 
 
 def run_dir(job_dir: Path, *, inputs_dir: str | None = None, **kw: Any) -> dict[str, Any]:

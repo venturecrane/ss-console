@@ -456,24 +456,6 @@ top_level:
       counts only the Operator's reviewed replies that were approved and sent;
       a rejected, expired or waiting one, or a reply SMD wrote itself, counts
       for nothing).
-  voice_library:
-    status: implemented
-    materializer: bootstrap Step 2a (R2 voice-vault sync) + translate _persona_config (config.yaml)
-  voice_cohorts:
-    status: inert
-    materializer: >-
-      console-side only — checkVoiceCohorts / resolveCohortVocabulary
-      (src/lib/operator/customer-yaml/sections-voice.ts) validate and resolve the
-      vocabulary, and bin/voice-fetch-corpus.py reads it as a pre-flight guard so
-      an unauthored cohort cannot mint an orphan vault directory at ingest.
-    note: >-
-      INERT AT RUNTIME BY DESIGN. The vocabulary partitions the vault keys
-      (vaults/<slug>/voice/cohort/<cohort>/) that the ingest step writes and the
-      runtime reader consumes; nothing in translate.py or bootstrap renders this
-      block into seat config, because the cohort is carried in the sample's own
-      recipient_cohort field, not in a config value. The runtime effect is
-      therefore real but indirect — the block governs WHERE samples land, not
-      what the Machine is told.
   telegram:
     status: implemented
     materializer: translate _materialize_telegram_platform (config.yaml platforms)
@@ -505,7 +487,8 @@ top_level:
       pinned by operator/tests/test_logic_in_code_sync.py); validated on-box by
       bootstrap/validate.py _validate_logic_in_code and in the console by
       src/lib/operator/customer-yaml/sections-logic-in-code.ts (ADR 0104). Absent is
-      observe, an unreadable value is enforce. Rebuild-class in the config applier.
+      observe, an unreadable value is enforce. Rebuild-class in the config applier. The jobs
+      runner reads status_from_events through the connector's copy in its own venv.
   gmail_push:
     status: inert
     materializer: src/lib/operator/customer-yaml/sections-gmail-push.ts (validation only)

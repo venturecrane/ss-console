@@ -260,7 +260,7 @@ def validate_customer_yaml(customer_yaml: Path) -> list[str]:
     _validate_connectors(cfg, errors)
     _validate_email_seam(cfg, errors)
     _validate_memory(cfg, errors)
-    _validate_voice_library(cfg, errors)
+    _validate_retired_fields(cfg, errors)
     _validate_custody_guard(cfg, errors)
     _validate_logic_in_code(cfg, errors)
 
@@ -1451,12 +1451,13 @@ LOGIC_IN_CODE_SWITCHES = (
     "wording_rules",
     "library_setup",
     "library_edit_notice",
+    "status_from_events",
 )
 LOGIC_IN_CODE_MODES = ("observe", "enforce")
 
 
 def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
-    """``logic_in_code``: optional, a mapping of the seven switches, each
+    """``logic_in_code``: optional, a mapping of the eight switches, each
     ``observe`` or ``enforce``. An unknown key is refused because a misspelled
     switch would otherwise read as observe, the door left open with the file
     saying it was shut. A key with no value is absent, as the readers treat it."""
@@ -1727,15 +1728,21 @@ def _validate_memory(cfg: dict[str, Any], errors: list[str]) -> None:
             )
 
 
-def _validate_voice_library(cfg: dict[str, Any], errors: list[str]) -> None:
-    voice = cfg.get("voice_library")
-    if voice is None:
-        return  # voice_library is optional
-    if not isinstance(voice, dict):
-        _err(
-            f"voice_library must be a mapping; got {type(voice).__name__}",
-            errors,
-        )
+#: Top-level keys retired with the sample-transform voice mechanism (ss ADR 0083
+#: decision 6, 2026-11-07). A file that still authors one is refused, so the
+#: mechanism cannot come back through config. Mirrors ss-console
+#: ``RETIRED_TOP_LEVEL_FIELDS`` in ``src/lib/operator/customer-yaml/types.ts``.
+RETIRED_TOP_LEVEL_FIELDS = ("voice_library", "voice_cohorts")
+
+
+def _validate_retired_fields(cfg: dict[str, Any], errors: list[str]) -> None:
+    for key in RETIRED_TOP_LEVEL_FIELDS:
+        if key in cfg:
+            _err(
+                f"{key} was retired with the sample-transform voice mechanism "
+                "(ADR 0083 decision 6); remove it",
+                errors,
+            )
 
 
 __all__ = [
@@ -1753,6 +1760,7 @@ __all__ = [
     "LOGIC_IN_CODE_MODES",
     "LOGIC_IN_CODE_SWITCHES",
     "REQUIRED_TOP_LEVEL_FIELDS",
+    "RETIRED_TOP_LEVEL_FIELDS",
     "SEND_ACTION_CLASSES",
     "validate_customer_yaml",
 ]

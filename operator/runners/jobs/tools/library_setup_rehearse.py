@@ -157,19 +157,27 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
     }
 
 
-def accept_dry(kind: str, client: Any, candidate: dict[str, Any], matter_id: str, inputs: str | None) -> dict[str, Any]:
+def accept_dry(
+    kind: str,
+    client: Any,
+    candidate: dict[str, Any],
+    matter_id: str,
+    inputs: str | None,
+    donors: list[Any] | None = None,
+) -> dict[str, Any]:
     """The accept job's checks on one candidate, writing nothing: adopt and clean,
     custom XML dropped, headers and footers judged against the firm's identity
     (the residue by category, never the words), marked places proven, the root
     writer's no-client-text check with the fixed strings that remained, and the
-    look comparison."""
-    from jobs import firmbase
+    look comparison. A memo with no chart takes its tables' look as the accept job
+    does (``accept._made``): the hunt's ``chart_donors`` by rank, else its body look,
+    and ``chart_source`` names which."""
     from jobs.library_setup import accept as accept_mod, make as make_mod
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
-    source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
+    choice = {"file_id": candidate["file_id"], "matter_id": matter_id, "chart_donors": list(donors or [])}
     try:
-        made = make_mod.make(kind, blob, source, accept_mod.identity(inputs))
+        made, chart_source = accept_mod._made({"setup_kind": kind}, blob, choice, inputs, None, client)
     except make_mod.Unusable as exc:
         residue = dict(item.rsplit(" ", 1) for item in str(exc).split(": ", 1)[-1].split(", ") if " " in item)
         return {
@@ -179,6 +187,7 @@ def accept_dry(kind: str, client: Any, candidate: dict[str, Any], matter_id: str
         }
     return {
         "accept_dry": "would_file",
+        "chart_source": chart_source,
         "residue": made.residue,
         "dropped": made.dropped,
         "fixed_strings": len(made.fixed_strings),
@@ -213,7 +222,9 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
         args.kind, client, closed_since=args.closed_since or "", person=attorney.case_system_name if attorney else None
     )
     shown = job_mod.candidates(hunted, client, args.kind)
+    donors = job_mod.chart_donors(hunted, client, args.kind) if shown else []
     report.update(
+        chart_donors=[d["file_id"] for d in donors],
         counts=dict(sorted(hunted.counts.items())),
         dropped_files={k: list(v) for k, v in sorted(hunted.files.items())},
         candidates=[{k: c[k] for k in ("file_id", "saved_on", "score")} for c in shown],
@@ -223,7 +234,7 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     pick = shown[args.choose - 1]
     by_id = {c.file_id: c.matter_id for c in hunted.candidates}
     if args.accept_dry:
-        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs)
+        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs, donors)
     else:
         result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
     made = result.pop("made", None)

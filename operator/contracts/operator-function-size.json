@@ -8,8 +8,6 @@
     "adapter/evidence/packet_sources.py::AuditCoverage.narrative_lines": 76,
     "adapter/evidence/pdf.py::render_summary_pdf": 142,
     "adapter/trust_ceiling.py::enforce": 130,
-    "adapter/voice/transform.py::DraftTransformer.transform": 94,
-    "adapter/voice/transform.py::build_voice_profile": 85,
     "bin/lib/decommission_cli.py::_run": 76,
     "bin/lib/evidence.py::_run": 80,
     "bin/lib/evidence.py::parse_args": 99,

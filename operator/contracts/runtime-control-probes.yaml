@@ -291,17 +291,17 @@ probes:
     control: voice_gate
     kind: seat
     violation: >-
-      Attempt an autonomous outside external_send on a seat with a non-empty
-      voice_library and no transform run this turn, and require the downgrade to
-      draft.
+      Attempt an autonomous outside external_send of a class that declares no
+      voice spec, and require the downgrade to draft (reason
+      no_voice_spec_declared).
     expect: flag
     seat_command: []
     expect_pattern: ''
     proves: >-
       Nothing yet. No driver is authored, so the runner HOLDS.
     limits: >-
-      The gate is being repointed at output-class conformance by ADR 0083; a
-      probe authored against mechanism B would have to be rewritten with it.
+      Mechanism B is removed (ADR 0083 decision 6); a driver is authored against
+      the spec and undeclared regimes.
 
   seat_spec_applier_refuses_bad_hash:
     probe: seat_spec_applier_refuses_bad_hash

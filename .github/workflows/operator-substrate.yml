@@ -198,7 +198,7 @@ jobs:
         # per-connector venv conformance step further down.
         # bin/tests/test_ci_coverage_conformance.py asserts this invocation
         # covers every test_*.py under operator/ (connectors excepted).
-        run: python3 -m pytest adapter/tests adapter/evidence/tests adapter/voice/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q -rs
+        run: python3 -m pytest adapter/tests adapter/evidence/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q -rs
 
       # (The SEC-32 "fetch the overlay at its pin and hash the runtime twins" step
       # that stood here until 2026-10-22 is gone with the pin: the overlay is

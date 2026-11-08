@@ -259,16 +259,6 @@ escalation:
   failure_recipients:
     - team@smd.services
 
-# ---- VOICE LIBRARY ----
-# Actual R2 layout: vaults/smd/voice/cohort/{cohort-id}/{ulid}.json
-# (written by voice-ingest-corpus.py; read by samples.retrieve_relevant_samples).
-# The runtime derives the prefix from the customer slug — this block is metadata only.
-voice_library:
-  samples_path: 'r2://vaults/smd/voice/cohort/'
-  cohorts:
-    - id: general
-      label: General
-
 # ---- MEMORY (per-customer isolation invariants; must match customer_id) ----
 # Phase 1 runs on Hermes' flat-file memory core (MEMORY.md/USER.md). Inferred memory
 # (Honcho) is deferred to Phase 2 — see ADR 0016 (revised 2026-05-30).

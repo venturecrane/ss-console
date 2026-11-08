@@ -1,6 +1,6 @@
 /**
  * Remaining section validators: escalation, memory, and the
- * optional voice_library / business_hours / logging / pause / observability
+ * optional business_hours / logging / pause / observability
  * blocks. Scope validation lives in sections-scope.ts.
  */
 
@@ -9,6 +9,7 @@ import {
   ACCEPTED_LOG_SHIPS,
   AUDIT_LOG_DAYS_MAX,
   VERTICAL_AUDIT_LOG_DAYS_DEFAULTS,
+  RETIRED_TOP_LEVEL_FIELDS,
   type BusinessHours,
   type Digest,
   type LogLevel,
@@ -19,7 +20,6 @@ import {
   type Pause,
   type ValidationError,
   type Vertical,
-  type VoiceLibrary,
 } from './types'
 import { isPlainObject, optionalNonEmptyString } from './helpers'
 
@@ -249,30 +249,22 @@ function checkMemoryVectorize(
   return v
 }
 
-export function checkVoiceLibrary(
-  root: Record<string, unknown>,
-  errors: ValidationError[]
-): VoiceLibrary | null {
-  const raw = root['voice_library']
-  if (raw === undefined || raw === null) return null
-  if (!isPlainObject(raw)) {
-    errors.push({
-      code: 'TypeMismatch',
-      path: 'voice_library',
-      message: 'voice_library must be an object when present',
-    })
-    return null
+/**
+ * Refuse the keys retired with the sample-transform voice mechanism (ss ADR
+ * 0083 decision 6, 2026-11-07). Nothing reads them; authoring one is an error,
+ * so the mechanism cannot return through a seat's file. Mirrors the overlay's
+ * `bootstrap/validate.py` `_validate_retired_fields`.
+ */
+export function checkRetiredFields(root: Record<string, unknown>, errors: ValidationError[]): void {
+  for (const key of RETIRED_TOP_LEVEL_FIELDS) {
+    if (key in root) {
+      errors.push({
+        code: 'BannedFieldName',
+        path: key,
+        message: `${key} was retired with the sample-transform voice mechanism (ADR 0083 decision 6); remove it`,
+      })
+    }
   }
-  const samples = raw['samples_path']
-  if (samples !== undefined && samples !== null && typeof samples !== 'string') {
-    errors.push({
-      code: 'TypeMismatch',
-      path: 'voice_library.samples_path',
-      message: 'samples_path must be a string when present',
-    })
-    return { samples_path: null }
-  }
-  return { samples_path: typeof samples === 'string' ? samples : null }
 }
 
 export function checkBusinessHours(

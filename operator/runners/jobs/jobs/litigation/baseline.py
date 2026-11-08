@@ -178,6 +178,7 @@ def from_firm(row: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any
             {
                 "name": str(d.get("name") or ""),
                 "status": def_status(d.get("status")),
+                "status_from": vocab.FROM_SEED,
                 "out_for_service": {
                     "value": (d.get("out_for_service") or {}).get("value"),
                     "source": r((d.get("out_for_service") or {}).get("source")),
@@ -219,6 +220,7 @@ def from_two_pass(rows: list[dict[str, Any]], files: list[dict[str, Any]]) -> di
             {
                 "name": str(x.get("defendant") or ""),
                 "status": def_status(x.get("status")),
+                "status_from": vocab.FROM_SEED,
                 "out_for_service": {"value": None, "source": None},
                 "served": {
                     "date": served,

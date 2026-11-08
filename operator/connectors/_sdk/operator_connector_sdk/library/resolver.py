@@ -92,6 +92,8 @@ class UsedFile:
     scope: str  # ATTORNEY_FILE | FIRM_FILE
     accepted_by: str
     accepted_at: str
+    #: A memo whose tables take another file's look (``ledger.Entry.chart_source``), else None.
+    chart_source: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,7 @@ def _used(entry: Entry, scope: str) -> UsedFile:
         scope=scope,
         accepted_by=entry.accepted_by,
         accepted_at=entry.accepted_at,
+        chart_source=entry.chart_source,
     )
 
 

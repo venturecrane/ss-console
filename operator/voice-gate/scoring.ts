@@ -51,7 +51,8 @@ export const VOICE_GATE_MIN_DAYS_BETWEEN_CYCLES = 7
 
 /**
  * Cohorts the v1 model recognizes. Aligned with the schema's
- * `BASE_VOICE_COHORTS` (`src/lib/operator/customer-yaml/types.ts`).
+ * audience vocabulary (`operator/bin/lib/voice_corpus.py` BASE_COHORTS; the schema's
+ * cohort block was retired with ADR 0083 decision 6).
  * Issue #857 added `court` and `internal` here when the cohort
  * vocabulary was lifted into the schema; `internal-team` is the
  * legacy alias retained for archived blind-test runs and is included

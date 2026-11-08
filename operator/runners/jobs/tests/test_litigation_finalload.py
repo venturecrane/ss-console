@@ -194,3 +194,39 @@ def test_the_cli_dry_run_prints_one_line(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["loaded"] == 1 and out["dry_run"] is True and _hash(state) == before
     assert baseline.main(["final", str(fj)]) == 2
+
+
+def test_a_status_a_person_corrected_stays_corrected(tmp_path):
+    """A derived status its events do not give was typed on a hand finish. The
+    next run would work it out from the events and put it back, so it loads as
+    a stated status; one its events do give stays derived."""
+    final = _final()
+    final["defendants"][0].update(status=vocab.D_SETTLED, status_from=vocab.FROM_DERIVED)
+    state, fj, files = _setup(tmp_path, [final])
+    finalload.load_final(state, fj, files)
+    d = manifest.load_prior(state, M1)["defendants"][0]
+    assert d["status"] == vocab.D_SETTLED and "status_from" not in d
+    final["defendants"][0].update(status=vocab.ANSWERED)
+    state, fj, files = _setup(tmp_path / "again", [final])
+    finalload.load_final(state, fj, files)
+    assert manifest.load_prior(state, M1)["defendants"][0]["status_from"] == vocab.FROM_DERIVED
+
+
+def test_the_court_list_goes_with_the_court_group(tmp_path):
+    rows = [{"date": "2026-12-01", "event": "Trial", "source": _src("f-c1")}]
+    stored = {**copy.deepcopy(STORED), "court_dates_read": rows}
+    # The case group is replaced: a stale list is gone with it, or it would move the loaded date.
+    state, fj, files = _setup(tmp_path, stored=stored)
+    finalload.load_final(state, fj, files)
+    assert "court_dates_read" not in manifest.load_prior(state, M1)
+    # The source's own list comes with its date.
+    new = [{"date": "2026-11-20", "event": "CMC", "source": _src("f-c1")}]
+    state, fj, files = _setup(tmp_path / "b", [{**_final(), "court_dates_read": new}], stored=stored)
+    finalload.load_final(state, fj, files)
+    assert manifest.load_prior(state, M1)["court_dates_read"] == new
+    # The case group refused: the stored list stands beside the stored date.
+    bad = _final()
+    bad["complaint_filed"] = {"date": "2026-03-02", "source": None}
+    state, fj, files = _setup(tmp_path / "c", [{**bad, "court_dates_read": new}], stored=stored)
+    finalload.load_final(state, fj, files)
+    assert manifest.load_prior(state, M1)["court_dates_read"] == rows

@@ -78,8 +78,6 @@ VALID_YAML = dedent(
       email_keyword_blocks: []
       domain_blocks: []
 
-    voice_library:
-      samples_path: 'r2://vaults/acme/voice/samples/'
 
     memory:
       d1_namespace: acme
@@ -2092,8 +2090,6 @@ _ESCALATOR_YAML = dedent(
       email_keyword_blocks: []
       domain_blocks: []
 
-    voice_library:
-      samples_path: 'r2://vaults/acme/voice/samples/'
 
     memory:
       d1_namespace: acme

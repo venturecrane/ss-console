@@ -173,3 +173,50 @@ def test_every_broken_store_is_unusable_never_empty(tmp_path, case) -> None:
     assert read.status == L.UNUSABLE
     assert read.ledger is None, "an unusable read carries no ledger to be mistaken for an empty one"
     assert read.reason
+
+
+# ---- a memo's chart source (the coordinator's decision on #3876) --------------------------
+
+CHART = {"from": "firm_memo", "file_id": "d-2", "sha256": SHA_B}
+
+
+def test_a_chart_source_is_optional_and_a_ledger_without_one_dumps_as_before() -> None:
+    plain = L.accept(L.Ledger(), _acc())
+    raw = L.dump_ledger(plain)
+    assert b"chart_source" not in raw and L.parse_ledger(raw) == plain
+    memo = L.accept(L.Ledger(), _acc(kind="memo", chart_source=CHART))
+    back = L.parse_ledger(L.dump_ledger(memo))
+    assert back.entry_for("memo", None).chart_source == CHART
+    body = L.accept(L.Ledger(), _acc(kind="memo", chart_source={"from": "body_look", "file_id": "", "sha256": ""}))
+    assert L.parse_ledger(L.dump_ledger(body)).entry_for("memo", None).chart_source["from"] == "body_look"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"from": "firm_memo", "file_id": "", "sha256": SHA_B},
+        {"from": "firm_memo", "file_id": "d-2", "sha256": "nope"},
+        {"from": "invented", "file_id": "", "sha256": ""},
+        {"from": "body_look"},
+        "body_look",
+    ],
+)
+def test_a_chart_source_that_does_not_say_where_is_refused(bad) -> None:
+    with pytest.raises(L.AcceptanceInvalid):
+        L.accept(L.Ledger(), _acc(kind="memo", chart_source=bad))
+
+
+def test_the_same_file_with_another_chart_source_is_a_new_acceptance() -> None:
+    first = L.accept(L.Ledger(), _acc(kind="memo", chart_source=None))
+    again = L.accept(first, _acc(kind="memo", chart_source=CHART))
+    assert again != first and again.entry_for("memo", None).chart_source == CHART
+
+
+def test_the_resolver_carries_the_chart_source_into_the_record() -> None:
+    from operator_connector_sdk.library import LedgerRead, MemoryLibrary, resolve
+
+    lib = MemoryLibrary()
+    version = lib.add("f-1", "Template - Memo.docx", "memo", b"a")
+    ledger = L.accept(L.Ledger(), _acc(kind="memo", version=version, sha256=SHA_A, chart_source=CHART))
+    res = resolve(lib, LedgerRead("ok", ledger), "memo", matter_attorney=None)
+    assert res.status == "resolved" and res.to_json()["file"]["chart_source"] == CHART

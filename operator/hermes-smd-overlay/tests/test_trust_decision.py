@@ -707,3 +707,8 @@ def test_populating_the_two_columns_does_not_break_the_existing_chain():
     assert report["ok"] is True, report["breaks"]
     assert report["chained"] == 6
     assert report["legacy"] == 0
+
+
+#: These test other gates on the autonomous outside-send path; the voice gate is
+#: certified here (conftest.voice_certified) and tested in its own files.
+pytestmark = pytest.mark.usefixtures("voice_certified")

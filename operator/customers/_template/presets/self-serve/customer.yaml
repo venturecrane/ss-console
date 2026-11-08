@@ -189,10 +189,6 @@ telegram:
   allow_from:
     - '[BUYER TELEGRAM NUMERIC ID — resolve from the handle at go-live]'
 
-# ---- VOICE LIBRARY ----
-voice_library:
-  samples_path: 'r2://vaults/[SLUG]/voice/samples/'
-
 # ---- MEMORY (isolation invariants; must match customer_id) ----
 memory:
   d1_namespace: '[SLUG]'

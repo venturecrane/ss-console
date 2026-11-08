@@ -120,6 +120,8 @@ are we on 100123") is not this skill.
 
 ## DELIVER mode (the job's completion wake)
 
+**When the broker words this reply.** If `reply_bind` returned `fixed_wording`, or the status read returned `reply_text` or `reply_texts`, the reply's whole body is that text, word for word (one of them, when there are several): no greeting, no sign-off, no sentence of your own, no changed word. The broker enforces this: the send refuses any other words, sends nothing, keeps the one reply unspent and quotes the text to send. Who hears, when to send nothing and when to stop stay as this section says; only its composing rules give way. If none of those keys came back, the broker has not worded this reply: compose it exactly as the rest of this section says.
+
 The runner wakes this skill with a task whose first line is "Run the
 case-file-manager skill's DELIVER mode for casefile job <id>." followed by `Kind:`,
 `Mode:` (`full`, `recheck` or `apply`), `Trigger:` (`request` or `scheduled`),
