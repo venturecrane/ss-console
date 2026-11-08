@@ -238,7 +238,7 @@ def _drop_at_gate(sr: StageRun, paths: AuditPaths) -> bool:
     the claim count does not reconcile."""
     full = paths.doc.read_text(encoding="utf-8")
     if CL.BODY_START not in full or CL.BODY_END not in full.split(CL.BODY_START, 1)[1]:
-        return
+        return False
     head, rest = full.split(CL.BODY_START, 1)
     body, tail = rest.split(CL.BODY_END, 1)
     pdfs = set(exhibit_paths(paths.out))
