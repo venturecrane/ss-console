@@ -18,14 +18,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
+from ..daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV
 from . import SCORE_NAME, TESTS, VERDICTS
 from .lane import LANES, LOG, log_line
-
-DEFAULT_RUN_DIR = "/run/smd-medchron"
 
 
 def _lines(run_dir: Path) -> dict[str, dict[str, Any]]:
@@ -119,7 +119,7 @@ def add(sub: Any) -> None:
     p = sub.add_parser("library-readback", help="the read-back of filed firm documents: status, or replay one job")
     p.add_argument("action", choices=["status", "replay"])
     p.add_argument("job_dir", nargs="?", default="", help="replay: a saved job folder")
-    p.add_argument("--run-dir", default=DEFAULT_RUN_DIR)
+    p.add_argument("--run-dir", default=os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
     p.add_argument("--json", action="store_true", help="status: the summary as JSON")
     p.add_argument("--spec", default=None, help="replay: the spec store holding the kept copies")
     p.add_argument("--roster", default=None, help="replay: the roster's directory (absent when omitted)")
