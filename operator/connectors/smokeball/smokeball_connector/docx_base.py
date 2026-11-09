@@ -233,16 +233,39 @@ def usable_paragraph_style(doc, name: str) -> str | None:
 
 def _ensure_named_styles(doc, report: FormatReport) -> None:
     """Define the named-style contract in a document WE own (the stock base /
-    a starter). Never called on a firm's file: their styles are theirs."""
+    a starter). On a firm's file only by ``ensure_role_styles``, for a caller
+    that asks."""
+    _define_missing_roles(doc)
+    report.notes.append("named styles defined on the starter base")
+
+
+def _define_missing_roles(doc) -> int:
     from docx.enum.style import WD_STYLE_TYPE
 
+    added = 0
     for name in NAMED_STYLES:
         if has_style(doc, name):
             continue
         style = doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
         style.base_style = doc.styles["Normal"]
         _apply_default_style_spec(style, name)
-    report.notes.append("named styles defined on the starter base")
+        added += 1
+    return added
+
+
+def ensure_role_styles(doc, report: FormatReport) -> None:
+    """Our role styles (``NAMED_STYLES``) defined in a firm's styles file where
+    it lacks them, each on the firm's Normal, as the starter defines them; the
+    firm's own styles, page setup, headers and footers are untouched. Called
+    only when the caller asks (``render_document(role_styles=True)``: the
+    drafting job, which checks its document by these roles in
+    ``jobs/drafting/format_check``). Without them a body rendered on a firm's
+    file is plain Normal paragraphs and that check reads no body at all, so an
+    attorney's stated spacing, justification and indent went unchecked on every
+    firm's file (found 2026-11-09)."""
+    added = _define_missing_roles(doc)
+    if added:
+        report.notes.append(f"{added} role style(s) defined in the firm's file, on its Normal")
 
 
 def _apply_default_style_spec(style, name: str) -> None:

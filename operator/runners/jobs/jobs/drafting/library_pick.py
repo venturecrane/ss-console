@@ -8,7 +8,10 @@ plan), else SMD's starter (``render.render`` with no base). This module asks the
 resolver first, with the class and the matter's responsible attorney:
 
 * ``none_accepted`` (every seat today): exactly today's choice, by today's code:
-  the pinned firm base when there is one, else the starter.
+  the pinned firm base when there is one, else the starter. A pin whose
+  ``contract`` is ``styles`` (``firm.styles_base``) is the renderer's base on
+  both the composing and the placing path, and the record names it
+  (``pinned_firm_input``, its sha256, its name, contract ``styles``).
 * ``resolved``, a "styles" file: it is the base the renderer opens in place of
   the starter (``render.render(base=...)``); a pinned firm base is not used.
 * ``resolved``, a "marked" file: it goes where the pinned firm base goes today
@@ -138,11 +141,21 @@ def matter_attorney_or_stop(run: Any) -> Attorney | None:
     raise DraftingFailed(f"{found.hold}: the firm's attorney roster could not be read ({found.reason})")
 
 
-def _pinned(run: Any) -> tuple[tuple[Path, dict[str, str]] | None, BaseUsed | None]:
+def _pinned(run: Any) -> tuple[tuple[Path, dict[str, str]] | None, BaseUsed | None, bytes | None]:
+    """(the pinned marked base, what the record says was pinned, the pinned
+    styles file's bytes). A class pins one or the other (``firm.py``); a styles
+    pin is the renderer's base on the composing and the placing path alike,
+    because its body is written fresh and no plan lays it."""
     held = run.firm.firm_base(run.cls)
-    if held is None:
-        return None, None
-    return held, BaseUsed.of(PINNED, held[0].read_bytes(), name=held[1].get("name", ""), contract=MARKED)
+    if held is not None:
+        name = held[1].get("name", "")
+        return held, BaseUsed.of(PINNED, held[0].read_bytes(), name=name, contract=MARKED), None
+    styles = run.firm.styles_base(run.cls)
+    if styles is None:
+        return None, None, None
+    blob = styles[0].read_bytes()
+    name = styles[1].get("name", "") or styles[0].name  # file names carry client names; a pin may name none
+    return None, BaseUsed.of(PINNED, blob, name=name, contract=STYLES), blob
 
 
 def _stop(run: Any, res: Resolution) -> Exception:
@@ -186,7 +199,7 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     kept = getattr(run, _MEMO, None)
     if kept is not None:
         return kept
-    held, pinned = _pinned(run)
+    held, pinned, styles = _pinned(run)
     store = LazyStore(lambda: open_store(run.seat))
     spec = _spec_dir()
     asked = resolve(
@@ -197,14 +210,14 @@ def pick_base(run: Any, *, marked_ok: bool = True) -> DraftBase:
     res, edit = considered.resolution, considered.note
     if res.status == NONE_ACCEPTED:
         today = held if marked_ok else None
-        used = pinned if today is not None and pinned is not None else BaseUsed(STARTER)
+        used = pinned if (today is not None or styles is not None) and pinned is not None else BaseUsed(STARTER)
         write_record(run.data, build_record(DRAFTING_JOB, res, used, reader=_reader(run)))
-        out = DraftBase(res, held=today)
+        out = DraftBase(res, styles=styles, held=today)
     elif res.status == RESOLVED and res.file is not None and res.data is not None:
         met = edit is not None and edit.get("status") == EDIT_USED
         out = replace(_accepted(run, res, marked_ok), edit=edit, replaced=asked.data if met else None)
         used = BaseUsed.of(ACCEPTED, res.data, contract=res.file.contract)
-        overridden = pinned if marked_ok else None
+        overridden = pinned if (marked_ok or styles is not None) else None
         write_record(
             run.data, build_record(DRAFTING_JOB, res, used, overridden=overridden, firm_edit=edit, reader=_reader(run))
         )

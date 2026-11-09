@@ -48,6 +48,7 @@ import io
 from . import docgrammar as g
 from .docx_base import (
     add_page_field,
+    ensure_role_styles,
     footer_has_any_field,
     footer_has_page_field,
     has_style,
@@ -98,6 +99,7 @@ def render_document(
     report: FormatReport | None = None,
     firm_identity: FirmIdentity | None = None,
     house: HouseStyle | None = None,
+    role_styles: bool = False,
 ) -> tuple[bytes, FormatReport]:
     """Render ``markdown`` for ``document_class`` into ``base_bytes`` (the firm's
     template) or the stock starter base. Pure: no network, no client.
@@ -111,12 +113,18 @@ def render_document(
     ``house`` is a FIRM-AUTHORED house style (``docx_classes.HouseStyle``),
     passed only by a caller holding one (the drafting job, from the firm's
     ``drafting-firm.yaml``). It is enforced in-class, over the base's styles.
-    Without it the render is the product default, unchanged."""
+    Without it the render is the product default, unchanged.
+
+    ``role_styles``: define our role styles in a firm's file where it lacks
+    them (``docx_base.ensure_role_styles``), so the body is laid by role as on
+    the starter; the drafting job asks, the chat tool does not."""
     if document_class not in CLASS_RULES:
         raise ValueError(f"unknown document_class {document_class!r}; known: {', '.join(DOCUMENT_CLASSES)}")
     rules = apply_house(CLASS_RULES[document_class], house)
     report = report or FormatReport(document_class=document_class)
     doc = open_as_base(base_bytes, report)
+    if role_styles and base_bytes is not None:
+        ensure_role_styles(doc, report)
     if rules.letter_paper:
         plain_letter_paper(doc, report)
     _letterhead(doc, document_class, base_bytes is not None, firm_identity, report)

@@ -578,7 +578,9 @@ def render(md: str, cls: str, out: Path, fmt: dict[str, Any], base: bytes | None
     from .house import house_for
 
     md = re.sub(r"`+(\{\{[^{}]*\}\})`+", r"\1", md)  # a slot never carries stray backticks
-    blob, report = render_document(md, cls, base, house=house_for(fmt, cls))
+    # role_styles: on a firm's styles file the body is laid by role, as on the starter,
+    # so format_check reads it (docx_base.ensure_role_styles).
+    blob, report = render_document(md, cls, base, house=house_for(fmt, cls), role_styles=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(f".{out.name}.tmp")
     part.write_bytes(blob)

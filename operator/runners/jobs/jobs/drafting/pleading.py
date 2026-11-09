@@ -227,10 +227,52 @@ def _court_and_attachments(doc: Any) -> None:
             p.paragraph_format.page_break_before = True
 
 
+#: The fewest consecutive numbers a header text box must hold to be a firm's
+#: own line numbering (California pleading paper numbers 26 or 28).
+MIN_DRAWN_LINES = 10
+BOX_DRAWN, SETTING_DRAWN = "text_box", "line_numbering"
+_TXBX = re.compile(r"<w:txbxContent\b[^>]*>(.*?)</w:txbxContent>", re.S)
+_T = re.compile(r"<w:t(?:\s[^>]*)?>([^<]*)</w:t>")
+
+
+def drawn_numbers(blob: bytes) -> tuple[str, int] | None:
+    """How the file's own paper already numbers its lines, read from its XML:
+    (``text_box``, N) when a header part holds a text box whose only words are
+    the numbers 1 to N in order (N >= ``MIN_DRAWN_LINES``; Word's pleading
+    template and a firm's pleading paper both draw it so, ours included), or
+    (``line_numbering``, 0) when the section turns on Word's line numbering
+    (``w:lnNumType``). None when it draws none: then ``apply`` lays ours."""
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    for name in z.namelist():
+        if not re.fullmatch(r"word/header\d*\.xml", name):
+            continue
+        for box in _TXBX.findall(z.read(name).decode("utf-8", "replace")):
+            words = " ".join(_T.findall(box)).split()
+            if len(words) >= MIN_DRAWN_LINES and words == [str(n) for n in range(1, len(words) + 1)]:
+                return BOX_DRAWN, len(words)
+    if "word/document.xml" in z.namelist() and b"<w:lnNumType" in z.read("word/document.xml"):
+        return SETTING_DRAWN, 0
+    return None
+
+
+def _header_xml(blob: bytes) -> bytes:
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    return b"".join(z.read(n) for n in z.namelist() if re.fullmatch(r"word/header\d*\.xml", n))
+
+
 def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     """Lay the rendered file at ``path`` onto pleading paper, in place. The
     footer carries ``title`` (the firm's authored one) when given, else the
-    title the paper's caption prints (``title_of``)."""
+    title the paper's caption prints (``title_of``).
+
+    A file rendered on a firm's styles base whose paper already numbers its
+    lines (``drawn_numbers``) keeps the firm's header and its numbering, and
+    gets no second set: only the margins, the line pitch, the court line and
+    the footer are laid."""
     import docx
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import parse_xml
@@ -239,6 +281,9 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
 
     from smokeball_connector.docx_base import add_page_field, set_run_font
 
+    blob = Path(path).read_bytes()
+    # Our own paper laid before is laid afresh, as it always was; only the firm's is kept.
+    drawn = None if f'name="{BOX_NAME}"'.encode() in _header_xml(blob) else drawn_numbers(blob)
     doc = docx.Document(str(path))
     if len(doc.sections) != 1:
         raise ValueError("pleading paper: the rendered file has more than one section")
@@ -251,28 +296,30 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
         Inches(left),
     )
     sec.header_distance, sec.footer_distance = Inches(min(0.5, top / 2)), Inches(min(0.3, bottom / 2))
-    for ln in sec._sectPr.findall(qn("w:lnNumType")):
-        sec._sectPr.remove(ln)
+    if drawn is None:
+        for ln in sec._sectPr.findall(qn("w:lnNumType")):
+            sec._sectPr.remove(ln)
     for p in _all_paragraphs(doc):
         _exact(p.paragraph_format, spec.pitch_pt)
     _court_and_attachments(doc)
-    header = sec.header
-    header.is_linked_to_previous = False
-    hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-    for r in list(hp.runs):
-        r._r.getparent().remove(r._r)
-    hp.paragraph_format.line_spacing = Pt(1)
-    hp.paragraph_format.space_before, hp.paragraph_format.space_after = Pt(0), Pt(0)
-    text_w = int((8.5 - left - right) * EMU_PER_INCH)
-    shapes = [
-        _numbers(spec),
-        _rule(2, RULE_NAMES[0], -int(0.08 * EMU_PER_INCH)),
-        _rule(3, RULE_NAMES[1], -int(0.12 * EMU_PER_INCH)),
-        _rule(4, RULE_NAMES[2], text_w + int(0.06 * EMU_PER_INCH)),
-    ]
-    for xml in shapes:
-        run = hp.add_run()
-        run._r.append(parse_xml(xml))
+    if drawn is None:
+        header = sec.header
+        header.is_linked_to_previous = False
+        hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+        for r in list(hp.runs):
+            r._r.getparent().remove(r._r)
+        hp.paragraph_format.line_spacing = Pt(1)
+        hp.paragraph_format.space_before, hp.paragraph_format.space_after = Pt(0), Pt(0)
+        text_w = int((8.5 - left - right) * EMU_PER_INCH)
+        shapes = [
+            _numbers(spec),
+            _rule(2, RULE_NAMES[0], -int(0.08 * EMU_PER_INCH)),
+            _rule(3, RULE_NAMES[1], -int(0.12 * EMU_PER_INCH)),
+            _rule(4, RULE_NAMES[2], text_w + int(0.06 * EMU_PER_INCH)),
+        ]
+        for xml in shapes:
+            run = hp.add_run()
+            run._r.append(parse_xml(xml))
     footer = sec.footer
     footer.is_linked_to_previous = False
     for p in list(footer.paragraphs):
@@ -299,6 +346,8 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     notes = [
         f"laid on the firm's pleading paper ({spec.lines} numbered lines at {spec.pitch_pt:g} point), as requested"
     ]
+    if drawn is not None:
+        notes.append(f"pleading paper: the firm's own file numbers the lines ({drawn[0]}); no second set was added")
     if not title:
         notes.append("pleading paper: no title was found for the footer; the footer carries the page number only")
     return notes
@@ -311,8 +360,7 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
     rule skips."""
     import zipfile
 
-    from docx.enum.text import WD_LINE_SPACING
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches
 
     fails: list[str] = []
     sec = doc.sections[0]
@@ -322,6 +370,13 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
         fails.append("pleading: margins are not the firm's pleading paper")
     z = zipfile.ZipFile(io.BytesIO(blob))
     headers = "".join(z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.startswith("word/header"))
+    theirs = drawn_numbers(blob) if not re.search(rf'name="{BOX_NAME}"', headers) else None
+    if theirs is not None:
+        # The firm's own paper numbers the lines (a styles base): its count is
+        # checked, and its box and rules are its own, so ours are not required.
+        if theirs[0] == BOX_DRAWN and theirs[1] != spec.lines:
+            fails.append(f"pleading: the firm's paper numbers {theirs[1]} lines, the authored paper {spec.lines}")
+        return fails + _pitch_and_page(doc, z, spec, off_pitch)
     box = re.search(r"<w:txbxContent>(.*?)</w:txbxContent>", headers, re.S)
     nums = re.findall(r"<w:t>(\d+)</w:t>", box.group(1)) if box else []
     if nums != [str(n) for n in range(1, spec.lines + 1)]:
@@ -336,6 +391,15 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
         fails.append("pleading: the margin rules are missing")
     if not re.search(rf'name="{BOX_NAME}"', headers):
         fails.append("pleading: no line-number box")
+    return fails + _pitch_and_page(doc, z, spec, off_pitch)
+
+
+def _pitch_and_page(doc: Any, z: Any, spec: Spec, off_pitch: list[Any] | None) -> list[str]:
+    """Every line of the body at the paper's pitch, and a page number in the footer."""
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.shared import Pt
+
+    fails: list[str] = []
     held = list(off_pitch or [])
     skip = {id(p._p) for p in held}
     off = [

@@ -133,6 +133,10 @@ WORD_WRITERS = {
         "makes the firm's library file from a document the administrator chose (drops its custom XML); "
         "it is the file later drafts are made in, never a document made from one"
     ),
+    f"{JOBS}/library_setup/styles_make.py": (
+        "makes a firm's styles base from one of its filed documents (`jobs firmbase make`), the body "
+        "cleared; it is the file later drafts are made in, never a document made from one"
+    ),
     f"{JOBS}/firmbase/base.py": "repackages a firm base's document part",
     f"{JOBS}/stages/render.py": "a record product (the chronology), which reads no library file",
     f"{JOBS}/stages/billing_docx.py": "a record product (the billing summary)",
@@ -447,7 +451,10 @@ def _drafting(monkeypatch, tmp_path) -> tuple[bytes | None, dict]:
     from jobs.drafting import library_pick, render
 
     run = SimpleNamespace(
-        cls="memo", data=tmp_path / "data", seat=None, firm=SimpleNamespace(firm_base=lambda _c: None)
+        cls="memo",
+        data=tmp_path / "data",
+        seat=None,
+        firm=SimpleNamespace(firm_base=lambda _c: None, styles_base=lambda _c: None),
     )
     run.data.mkdir()
     made_in = library_pick.pick_base(run)
