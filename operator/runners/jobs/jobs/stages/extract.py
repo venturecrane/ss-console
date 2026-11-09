@@ -167,61 +167,60 @@ def vision_pages(path: Path, pages: list[tuple[int, str]]) -> list[int]:
     typed record (an 834-page file held 64) is never read when the document as
     a whole has text, and a garbled OCR layer turned Z94.0 into 294.0 and a
     client's own date of birth into "another person". A thin page with no
-    image is a short typed page or a blank one: vision would read nothing more."""
-    cand = [n for n, t in pages if thin(t) or garbled(t)]
+    image is a short typed page or a blank one: vision would read nothing more,
+    unless its words are drawn as shapes (``drawn_text``), which is checked on
+    every image-free page whose text layer is short, thin or not: a print
+    header and a URL line carried 285 characters over a drawn office visit
+    (2026-11-09)."""
+    text = dict(pages)
+    short = {n for n, t in pages if len(re.sub(r"\s", "", t or "")) < DRAWN_TEXT_CHARS}
+    cand = [n for n, t in pages if thin(t) or garbled(t) or n in short]
     if not cand:
         return []
     import pymupdf
 
+    out: list[int] = []
     with pymupdf.open(str(path)) as doc:
-        return [n for n in cand if 1 <= n <= len(doc) and (doc[n - 1].get_images() or drawn_text(doc[n - 1]))]
+        for n in cand:
+            if not 1 <= n <= len(doc):
+                continue
+            page = doc[n - 1]
+            if page.get_images():
+                if thin(text[n]) or garbled(text[n]):
+                    out.append(n)
+            elif drawn_text(page):
+                out.append(n)
+    return out
 
 
-#: Ink outside the text layer's words, as a share of the page, at which a thin
-#: page with no embedded image carries text drawn as shapes (a print-to-PDF
-#: that outlined its fonts). Measured 2026-11-09 on an A&P update: see
-#: ``drawn_text``.
-INK_DRAWN = 0.04
-_INK_DPI = 36
-_INK_DARK = 200
+#: A page's text layer under this many non-space characters is short enough
+#: that its words may be drawn as shapes instead (a full typed page carries
+#: 2,000 or more).
+DRAWN_TEXT_CHARS = 1000
+#: Filled curve segments at which an image-free page carries text drawn as
+#: glyph outlines (a print-to-PDF that outlined its fonts). Rules, boxes and
+#: check boxes are straight lines and rectangles; a letterhead logo is tens
+#: to a few hundred curves; a page of outlined words is thousands.
+DRAWN_CURVES = 1500
+
+
+def glyph_curves(page: Any) -> int:
+    """Curve segments in the page's filled vector paths."""
+    n = 0
+    for path in page.get_drawings():
+        if path.get("fill") is None:
+            continue
+        n += sum(1 for item in path.get("items", ()) if item and item[0] == "c")
+    return n
 
 
 def drawn_text(page: Any) -> bool:
-    """True when a page shows ink its text layer does not carry: rendered at a
-    low resolution, the share of dark pixels outside the text layer's word
-    boxes is at least ``INK_DRAWN``. A blank page, a short typed page and a
-    ruled blank form stay under it; a page whose words are vector paths does
-    not. WHY (2026-11-09): an orthopaedic office visit printed with outlined
-    fonts reached an A&P update as two pages whose text layer was only the
-    print header, with no image to send to vision, so the composer never read
-    the visit and the chronology left it out."""
-    return ink_share(page) >= INK_DRAWN
-
-
-def ink_share(page: Any) -> float:
-    """The share of the page, rendered at ``_INK_DPI``, that is dark ink at
-    least two pixels thick both ways and outside the text layer's word boxes."""
-    pix = page.get_pixmap(dpi=_INK_DPI, colorspace="gray", alpha=False)
-    w, h, buf = pix.width, pix.height, pix.samples
-    if not w or not h:
-        return 0.0
-    scale = _INK_DPI / 72
-    masked = bytearray(w * h)
-    for x0, y0, x1, y1, *_ in page.get_text("words"):
-        for y in range(max(0, int(y0 * scale) - 1), min(h, int(y1 * scale) + 2)):
-            row = y * w
-            for x in range(max(0, int(x0 * scale) - 1), min(w, int(x1 * scale) + 2)):
-                masked[row + x] = 1
-    ink = bytes(1 if v < _INK_DARK and not masked[i] else 0 for i, v in enumerate(buf))
-    # Only ink at least two pixels thick both ways counts: a form's rules and
-    # box edges render one pixel wide at this resolution, glyphs as blocks.
-    dark = sum(
-        1
-        for y in range(h - 1)
-        for x in range(w - 1)
-        if ink[y * w + x] and ink[y * w + x + 1] and ink[(y + 1) * w + x] and ink[(y + 1) * w + x + 1]
-    )
-    return dark / (w * h)
+    """True when an image-free page draws its words as shapes the text layer
+    does not carry. WHY (2026-11-09): an orthopaedic office visit printed with
+    outlined fonts reached an A&P update as two pages whose text layer was
+    only the print header, with no image to send to vision, so the composer
+    never read the visit and the chronology left it out."""
+    return glyph_curves(page) >= DRAWN_CURVES
 
 
 def live_rows(rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:

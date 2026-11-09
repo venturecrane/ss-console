@@ -432,7 +432,12 @@ def _vector_pdf(tmp_path, name, draw):  # noqa: D103
 
     doc = pymupdf.open()
     page = doc.new_page(width=612, height=792)
-    page.insert_text((40, 30), "Printed 05/06/26 Office Visit", fontsize=8)
+    # A print header and URL line: over 200 characters, so the page is not
+    # "thin", the way the real drawn visit was not (2026-11-09).
+    header = "Encounter - Office Visit Date of service 05/06/26 Weiss Orthopaedics Sacramento Noah Weiss MD SOAP Note"
+    page.insert_text((40, 20), header, fontsize=7)
+    page.insert_text((40, 30), "https://portal.example.test/encounters/print?id=" + "a1b2c3d4" * 12, fontsize=5)
+    page.insert_text((40, 40), "Printed 11/9/26, 11:52 AM  Page 1 of 2", fontsize=7)
     draw(page)
     out = tmp_path / name
     doc.save(str(out))
@@ -443,12 +448,12 @@ def _vector_pdf(tmp_path, name, draw):  # noqa: D103
 def _outlined_words(page):
     """Body text as filled shapes, the way a print-to-PDF that outlined its
     fonts draws it: rows of glyph-sized marks, no text layer under them."""
-    for row in range(60):
+    for row in range(30):
         y = 60 + row * 11
         for col in range(70):
             x = 40 + col * 7.5
             if (row * 7 + col) % 9:
-                page.draw_rect((x, y, x + 5, y + 7), color=None, fill=(0, 0, 0))
+                page.draw_circle((x + 2.5, y + 3.5), 2.5, color=None, fill=(0, 0, 0))
 
 
 def _ruled_form(page):
@@ -464,11 +469,16 @@ def test_a_page_whose_words_are_drawn_as_shapes_goes_to_vision(tmp_path):
     from jobs.stages import extract
 
     pdf = _vector_pdf(tmp_path, "drawn.pdf", _outlined_words)
-    assert extract.thin(extract.pdf_text(pdf)[0][1])
+    assert not extract.thin(extract.pdf_text(pdf)[0][1]), "the header alone keeps it out of the thin gate"
     assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == [1]
 
 
-@pytest.mark.parametrize("draw", [lambda p: None, _ruled_form], ids=["blank", "ruled-blank-form"])
+def _logo(page):
+    for k in range(40):
+        page.draw_circle((80 + k, 80), 12 - k % 6, color=None, fill=(0.2, 0.2, 0.6))
+
+
+@pytest.mark.parametrize("draw", [lambda p: None, _ruled_form, _logo], ids=["blank", "ruled-blank-form", "logo"])
 def test_a_blank_or_ruled_blank_page_does_not_go_to_vision(tmp_path, draw):
     from jobs.stages import extract
 
