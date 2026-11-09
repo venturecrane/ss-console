@@ -136,6 +136,7 @@ RANK = {
     "job_stuck": 20,
     "job_held": 22,
     "job_failed": 24,
+    "job_hand_step": 26,
     "auth_failed": 30,
     "connector_alert": 31,
     "heartbeat_stale": 32,
@@ -241,6 +242,10 @@ class Job:
     events: list[tuple[datetime, str, Optional[str]]] = field(default_factory=list)
     matter: Optional[str] = None
     scheduled: bool = False
+    #: When a person asked the lane to resume this job (``*_JOB_RESUME_REQUESTED``).
+    #: Not a state, so it never enters ``events``; it is how a delivered job is
+    #: known to have needed a hand.
+    resumes: list[datetime] = field(default_factory=list)
 
     @property
     def submitted_at(self) -> datetime:
@@ -253,14 +258,15 @@ class Job:
 
 def jobs_from_rows(rows: list[dict]) -> list[Job]:
     """Every job the window shows, keyed (lane, job_id), events in ledger order.
-    A resume note (``*_JOB_RESUME_REQUESTED``) is not a state and is skipped."""
+    A resume note (``*_JOB_RESUME_REQUESTED``) is not a state: it goes to
+    ``resumes``, never ``events``."""
     jobs: dict[tuple[str, str], Job] = {}
     for ts, row in stamped(rows):
         match = _JOB_TYPE.match(str(row.get("action_type") or ""))
         if not match:
             continue
         state = match.group(2)
-        if state not in IN_FLIGHT and state not in ENDED_BAD and state != "DELIVERED":
+        if state not in IN_FLIGHT and state not in ENDED_BAD and state not in ("DELIVERED", "RESUME_REQUESTED"):
             continue
         md = meta(row)
         job_id = md.get("job_id")
@@ -268,12 +274,31 @@ def jobs_from_rows(rows: list[dict]) -> list[Job]:
             continue
         lane = LANE_PREFIXES[match.group(1)]
         job = jobs.setdefault((lane, job_id), Job(lane=lane, job_id=job_id))
+        if state == "RESUME_REQUESTED":
+            job.resumes.append(ts)
+            continue
         job.events.append((ts, state, reason_token(md.get("reason"))))
         if isinstance(md.get("matter_number"), str) and md["matter_number"]:
             job.matter = md["matter_number"][:40]
         if md.get("trigger") == "scheduled" or str(md.get("request_ref") or "").startswith("scheduled:"):
             job.scheduled = True
-    return list(jobs.values())
+    # A resume whose job's state rows fell outside the window has no state to judge.
+    return [job for job in jobs.values() if job.events]
+
+
+def hand_steps(job: Job) -> list[str]:
+    """Each point a person had to step in before this job delivered, in ledger
+    order: a hold or failure it came back from (only a person releases a held
+    job or resumes a failed one), and every resume a person asked for. Empty for
+    a job that ran straight through."""
+    steps: list[tuple[datetime, str]] = []
+    for ts, state, reason in job.events[:-1]:
+        if state in ENDED_BAD:
+            steps.append((ts, f"{ENDED_BAD[state]}{f' ({reason})' if reason else ''} {hhmm(ts)}"))
+        elif reason and reason.startswith("lane_unproven"):
+            steps.append((ts, f"held for SMD's lane proof {hhmm(ts)}"))
+    steps += [(ts, f"resumed by hand {hhmm(ts)}") for ts in job.resumes]
+    return [text for _ts, text in sorted(steps, key=lambda pair: pair[0])]
 
 
 def _job_name(job: Job, cfg: Config) -> str:
@@ -401,6 +426,27 @@ def job_items(
                     ts,
                     f"The {name} {ENDED_BAD[state]}{why} at {hhmm(ts)}.",
                     "Decide: rerun, release, or tell the requester why; nothing reaches them until someone does.",
+                )
+            )
+        elif state == "DELIVERED":
+            # Delivered, but only because a person stepped in: the requester got
+            # the work, and the cause of the hand step is still in the code.
+            # Every manual fix becomes code, so this is work too, not a success.
+            if now - ts > timedelta(hours=cfg.ended_job_hours):
+                continue
+            steps = hand_steps(job)
+            if not steps:
+                continue
+            out.append(
+                item(
+                    seat,
+                    "job_hand_step",
+                    f"{job.lane}:{job.job_id}:DELIVERED",
+                    ts,
+                    f"The {name} delivered at {hhmm(ts)}, but only after a person stepped in "
+                    f"{len(steps)} time{'s' if len(steps) != 1 else ''}: {'; '.join(steps)}.",
+                    "Find why each step was needed and make it code, proven at $0 on this job's saved inputs; "
+                    "the next job like it will stop the same way.",
                 )
             )
     return out
