@@ -119,7 +119,9 @@ launch() {   # launch <exec|run> <account> <args...>
     return 0
   fi
   local tok=''
-  [ "$acct" != login ] && { v="CLAUDE_OAUTH_TOKEN_$acct"; tok="${!v}"; }
+  # A token copied out of a terminal can carry the line the terminal wrapped it
+  # at; Claude refuses an Authorization header with a line break in it.
+  [ "$acct" != login ] && { v="CLAUDE_OAUTH_TOKEN_$acct"; tok="${!v}"; tok="${tok//[$'\r\n\t ']/}"; }
   if [ "$how" = exec ]; then
     unset CLAUDE_CODE_OAUTH_TOKEN
     [ -n "$tok" ] && export CLAUDE_CODE_OAUTH_TOKEN="$tok"
