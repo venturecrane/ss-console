@@ -16,7 +16,9 @@ Three terms, used precisely:
 
 - **Built** - the code exists and its own tests pass. The weakest of the three and the easiest to mistake for done, because it produces the most visible evidence.
 - **Wired** - every gate between a real client's finger and the effect is open on the deployment that client uses. Not "would work once configured." Configured. Secrets and config authoring are part of the deliverable, not prerequisites belonging to someone else.
-- **Tested** - someone performed the act as the client, on the real seat, and observed the far end change. A green unit test against a fake token is not this.
+- **READY** - all five hold, each with evidence (a probe output, a `file:line`, or a `vfy_` id): (1) built and merged, its own tests passing; (2) rehearsed on real saved inputs, through the same code path the seat runs, against an answer key, at $0; (3) running on the seat, which reports the release that contains it; (4) ready to fire, every gate between the client's email and the job (config, secrets, switches, firm files) open on that seat by a probe of the seat; (5) watched by code, not by a session: the hourly work-health triage on smd-ops (`operator/ops-machine/bin/ops-triage`, `operator/bin/work-health.py`) reads job outcomes and flags a run that failed, held or stalled. A green unit test against a fake token is none of these.
+
+When all five hold, the session writes its handoff and closes, however long it is until the first real request. A session never stays open waiting for a real request; the first real run is watched by the hourly triage. READY replaced "Tested" (the act performed as the client on the real seat) on 2026-11-09 (CLAUDE.md, "Done means the client can do it"; doctrine Law 9).
 
 ## Where state lives in this venture
 

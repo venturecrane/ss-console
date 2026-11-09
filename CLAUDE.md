@@ -122,7 +122,7 @@ The rule, mechanically:
 
 ### Done means the client can do it (reachability discipline)
 
-The positive twin of "gone means gone", and the same enumeration in the other direction. **A feature is done when a real client can perform the act on the deployment they use, proven by an observation of the running system.** Not when the PR merged, not when tests passed, not when the component exists.
+The positive twin of "gone means gone", and the same enumeration in the other direction. **A feature is done when it is READY: a real client can perform the act on the deployment they use, proven by observations of the running system.** Not when the PR merged, not when tests passed, not when the component exists. And not, either, only after a real client request has happened to arrive and been watched end to end.
 
 The lesson (the entitlement-control incident, 2026-07-28): four PRs, each individually honest, each defining "done" as the artifact it added. One wrote "Next slices, unbuilt and not implied here." Nobody lied. The artifacts summed to less than the feature, the epic closed green, and a Named Administrator could not change a routine's level. That is a definition problem, not a diligence problem, which is why asking for more care would not have caught it.
 
@@ -130,7 +130,14 @@ Three claims, kept distinct:
 
 - **Built** — the code exists and its own tests pass. The weakest of the three and the easiest to mistake for done, because it produces the most visible evidence.
 - **Wired** — every gate between a real client's finger and the effect is open on the deployment that client uses. Configured, not configurable. Secrets and config authoring are part of the deliverable, not prerequisites belonging to someone else.
-- **Tested** — someone performed the act as the client, on the real seat, and observed the far end change. A green unit test against a fake token is not this.
+- **READY**: all five of the following hold, each with evidence (a probe output, a `file:line`, or a `vfy_` id). A green unit test against a fake token is none of them.
+  1. **Built and merged**, its own tests passing.
+  2. **Rehearsed** on real saved inputs, through the same code path the seat runs, against an answer key, at $0. This proves the logic.
+  3. **Running on the seat**: the seat reports the release that contains it. This proves it is wired.
+  4. **Ready to fire**: every gate between the client's email and the job is open on that seat (config, secrets, switches, firm files), checked by a probe of the seat. This proves nothing blocks it when the client asks.
+  5. **Watched by code, not by a session**: the standing hourly work-health triage on smd-ops (`operator/ops-machine/bin/ops-triage` running `operator/bin/work-health.py`) reads job outcomes and flags a run that failed, held or stalled.
+
+**When all five hold, the session writes its handoff and closes, however long it is until the first real request.** A session never stays open waiting for a real request to arrive; the request for a given document may not come for a week. The first real run is watched by the hourly triage, not by a session. READY replaced "Tested" (someone performed the act as the client on the real seat and observed the far end change) on 2026-11-09, after the Captain named the pattern of sessions that would not close until they had monitored a real request from end to end: "We're not gonna leave sessions open monitoring for a week."
 
 **Run `/wired` before planning any work whose effect is observable outside this repo** (a client, the Captain on a live surface, an Operator seat, a prospect on a marketing page). It produces the contract: the act as a sentence, the terminal seam, the gate chain enumerated backwards from that seam, and a feasibility probe that escalates unclosable gates **before** the closable ones get built. Then plan against the contract, then `/critique`. Internal refactors, tests, and docs skip it.
 
