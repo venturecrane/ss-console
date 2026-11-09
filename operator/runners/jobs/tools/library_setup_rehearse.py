@@ -64,6 +64,20 @@ ids and key names only:
     python operator/runners/jobs/tools/library_setup_rehearse.py --kind mediation_brief \\
         --layout <compiled layout rules file> --accepted <accepted brief.docx> --inputs <drafting inputs dir>
 
+``--kind library`` runs "set up the document library" exactly as the job does:
+ONE listing of the firm's matters, then each kind's hunt, the candidates the
+library file can be made from (``plan.contract_for``: the marked plan where it
+fits, else a styles base, with the firm's identity from ``--customer`` and the
+attorney blocks of ``--inputs``) and each candidate's contract. Every kind the
+drafting job makes (discovery sets and responses, mediation briefs, memos,
+deposition outlines) can also be named alone, and ``--accept-dry`` then makes
+the chosen candidate with the contract the list named:
+
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind library \\
+        --customer <customer.yaml> --inputs <drafting inputs dir>
+    python operator/runners/jobs/tools/library_setup_rehearse.py --kind discovery_response \\
+        --customer <customer.yaml> --inputs <drafting inputs dir> --choose 1 --accept-dry
+
 Exit 0 when every step ran (whatever it found), 2 when a step could not run.
 """
 
@@ -149,7 +163,9 @@ def look_compare(source: bytes, made: bytes) -> dict[str, Any]:
     }
 
 
-def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter_id: str) -> dict[str, Any]:
+def rehearse_candidate(
+    kind: str, client: Any, candidate: dict[str, Any], matter_id: str, pieces: list[str] | None = None
+) -> dict[str, Any]:
     """Adopt, clean, check and compare one candidate."""
     from jobs import firmbase
     from jobs.drafting.outcome import DraftingFailed
@@ -157,6 +173,21 @@ def rehearse_candidate(kind: str, client: Any, candidate: dict[str, Any], matter
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
     source = firmbase.Source(matter_id, candidate["file_id"], "", hashlib.sha256(blob).hexdigest())
+    if candidate.get("contract") == "styles":  # the body is cleared, so the look is all there is to compare
+        from jobs.library_setup.make import Unusable
+        from jobs.library_setup.styles_make import make_styles
+
+        try:
+            styled = make_styles(kind, blob, pieces or [])
+        except Unusable as exc:
+            return {"adopted": False, "contract": "styles", "why": exc.code}
+        return {
+            "adopted": True,
+            "contract": "styles",
+            "blank": blank_problems(styled.data, styled.fixed_strings),
+            "look": look_compare(blob, styled.data),
+            "made": styled.data,
+        }
     try:
         made, notes = plan_mod.adopter(kind)(blob, source)
     except (DraftingFailed, firmbase.FirmBaseUnfit, ValueError, KeyError) as exc:
@@ -177,6 +208,7 @@ def accept_dry(
     matter_id: str,
     inputs: str | None,
     donors: list[Any] | None = None,
+    pieces: list[str] | None = None,
 ) -> dict[str, Any]:
     """The accept job's checks on one candidate, writing nothing: adopt and clean,
     custom XML dropped, headers and footers judged against the firm's identity
@@ -189,8 +221,10 @@ def accept_dry(
 
     blob = client.download_file(matter_id, candidate["file_id"])[1]
     choice = {"file_id": candidate["file_id"], "matter_id": matter_id, "chart_donors": list(donors or [])}
+    if candidate.get("contract"):
+        choice["contract"] = candidate["contract"]
     try:
-        made, chart_source = accept_mod._made({"setup_kind": kind}, blob, choice, inputs, None, client)
+        made, chart_source = accept_mod._made({"setup_kind": kind}, blob, choice, inputs, pieces, client)
     except make_mod.Unusable as exc:
         residue = dict(item.rsplit(" ", 1) for item in str(exc).split(": ", 1)[-1].split(", ") if " " in item)
         return {
@@ -200,6 +234,7 @@ def accept_dry(
         }
     return {
         "accept_dry": "would_file",
+        "contract": accept_mod.contract_of(choice),
         "chart_source": chart_source,
         "residue": made.residue,
         "dropped": made.dropped,
@@ -220,10 +255,45 @@ def _roster_attorney(name: str, inputs: str | None, client: Any) -> tuple[Any, s
     return found, outcome
 
 
+def _pieces(args: argparse.Namespace) -> list[str]:
+    """The allow list the job judges headers and footers by: the firm's identity
+    (``--customer``, else the seat's) and the attorney blocks of ``--inputs``."""
+    from jobs.firmbase.cli import _identity
+
+    return _identity(args.customer, args.inputs)
+
+
+def rehearse_library(args: argparse.Namespace, client: Any) -> dict[str, Any]:
+    """Every kind over one listing, as the "set up the document library" job runs it."""
+    from jobs.firmbase import hunt as hunt_mod
+    from jobs.library_setup import KINDS, job as job_mod
+
+    client = ReadOnly(client)
+    pieces = _pieces(args)
+    hunts = hunt_mod.hunt_all(KINDS, client, closed_since=args.closed_since or "")
+    out: dict[str, Any] = {"kind": "library", "kinds": []}
+    for kind in KINDS:
+        entry = job_mod._one_kind(kind, hunts[kind], client, pieces, None)
+        out["kinds"].append(
+            {
+                "kind": kind,
+                "found": entry["found"],
+                "counts": entry["counts"],
+                "dropped_files": entry["dropped_files"],
+                "candidates": [
+                    {k: c.get(k) for k in ("file_id", "saved_on", "score", "contract")} for c in entry["candidates"]
+                ],
+            }
+        )
+    return out
+
+
 def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     from jobs.firmbase import hunt as hunt_mod
     from jobs.library_setup import job as job_mod
 
+    if args.kind == "library":
+        return rehearse_library(args, client)
     client = ReadOnly(client)
     report: dict[str, Any] = {"kind": args.kind, "attorney_named": bool(args.attorney)}
     attorney = None
@@ -234,22 +304,23 @@ def rehearse(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     hunted = hunt_mod.hunt(
         args.kind, client, closed_since=args.closed_since or "", person=attorney.case_system_name if attorney else None
     )
-    shown = job_mod.candidates(hunted, client, args.kind)
+    pieces = _pieces(args)
+    shown = job_mod.candidates(hunted, client, args.kind, pieces)
     donors = job_mod.chart_donors(hunted, client, args.kind) if shown else []
     report.update(
         chart_donors=[d["file_id"] for d in donors],
         counts=dict(sorted(hunted.counts.items())),
         dropped_files={k: list(v) for k, v in sorted(hunted.files.items())},
-        candidates=[{k: c[k] for k in ("file_id", "saved_on", "score")} for c in shown],
+        candidates=[{k: c.get(k) for k in ("file_id", "saved_on", "score", "contract")} for c in shown],
     )
     if not shown or args.choose < 1 or args.choose > len(shown):
         return {**report, "chosen": None}
     pick = shown[args.choose - 1]
     by_id = {c.file_id: c.matter_id for c in hunted.candidates}
     if args.accept_dry:
-        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs, donors)
+        result = accept_dry(args.kind, client, pick, by_id[pick["file_id"]], args.inputs, donors, pieces)
     else:
-        result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]])
+        result = rehearse_candidate(args.kind, client, pick, by_id[pick["file_id"]], pieces)
     made = result.pop("made", None)
     if made is not None and args.keep:
         Path(args.keep).mkdir(parents=True, exist_ok=True)
@@ -304,7 +375,10 @@ def _print(step: Any) -> int:
 
 def main(argv: list[str] | None = None, client: Any = None) -> int:
     p = argparse.ArgumentParser(prog="library_setup_rehearse", description=(__doc__ or "").split("\n", 1)[0])
-    p.add_argument("--kind", required=True, choices=("mediation_brief", "memo"))
+    from jobs.library_setup import KINDS, LIBRARY
+
+    p.add_argument("--kind", required=True, choices=(*KINDS, LIBRARY))
+    p.add_argument("--customer", default=None, help="customer.yaml with firm_identity (default: the seat's)")
     p.add_argument("--attorney", default="", help="one attorney's own files: a name on the roster")
     p.add_argument("--inputs", default=None, help="the drafting firm-inputs dir (the roster's source)")
     p.add_argument("--closed-since", default="", help="also read matters closed on or after this date")

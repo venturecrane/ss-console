@@ -61,6 +61,12 @@ _FIELDS = (
     "attorney_key",
     "attorney_name",
     "unusable",
+    # "set up the document library": one entry per kind (``library_setup/job.py``)
+    "kinds",
+    "found",
+    "current",
+    "pointed",
+    "contract",
 )
 
 
