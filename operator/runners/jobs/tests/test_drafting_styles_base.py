@@ -416,3 +416,73 @@ def test_firmbase_make_refuses_a_file_of_more_than_one_section(tmp_path, capsys)
     code, out = _make(tmp_path, _filed_discovery("Deposition Outline", sections=2), kind="depo_outline")
     assert code == 1 and not out.exists()
     assert json.loads(capsys.readouterr().out)["code"] == "multi_section"
+
+
+# ---- 6. the footer's running title is the draft's, not the example's ----------------------
+
+SOURCE_TITLE = "Plaintiff's Special Interrogatories, Set One"
+DRAFT_TITLE = "PLAINTIFF'S REQUESTS FOR PRODUCTION OF DOCUMENTS, SET TWO"
+DRAFT = f"**{DRAFT_TITLE}**\n\nA first paragraph of the draft.\n\nA second paragraph of the draft.\n"
+
+
+def _titled_footer_base(title: str = SOURCE_TITLE) -> bytes:
+    """A firm's base whose footer prints a page number, its example's running
+    title in 9-point Arial, and the firm's name."""
+    d = docx.Document()
+    footer = d.sections[0].footer
+    footer.paragraphs[0].add_run()._r.append(parse_xml(
+        '<w:fldSimple xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:instr=" PAGE ">'
+        "<w:r><w:t>1</w:t></w:r></w:fldSimple>"
+    ))  # fmt: skip
+    run = footer.add_paragraph().add_run(title)
+    run.font.name, run.font.size = "Arial", Pt(9)
+    footer.add_paragraph("EXAMPLE FIRM LLP")
+    return _save(d)
+
+
+def _footer_lines(path: Path) -> list[str]:
+    return [p.text.strip() for p in docx.Document(str(path)).sections[0].footer.paragraphs if p.text.strip()]
+
+
+def _lay(tmp_path: Path, base: bytes, fmt: dict | None = None, md: str = DRAFT, paper: str = "plain"):
+    fmt = fmt or copy.deepcopy(firm_data()["format"])
+    return base_lay.lay_out(md, tmp_path / "d.docx", "discovery_set", fmt, paper, None, None, styles=base)
+
+
+def test_a_draft_of_another_kind_and_set_prints_its_own_title_not_the_examples(tmp_path):
+    path, _r, laid, _c = _lay(tmp_path, _titled_footer_base())
+    lines = _footer_lines(path)
+    assert DRAFT_TITLE in lines and SOURCE_TITLE not in lines
+    assert "EXAMPLE FIRM LLP" in lines
+    footer = docx.Document(str(path)).sections[0].footer
+    title_run = next(r for p in footer.paragraphs for r in p.runs if r.text == DRAFT_TITLE)
+    assert title_run.font.name == "Arial" and title_run.font.size == Pt(9)  # the firm's footer look stays
+    assert 'w:instr=" PAGE "' in zipfile.ZipFile(path).read("word/footer1.xml").decode()
+    assert any("running-title" in n for n in laid)
+
+
+def test_the_authored_footer_title_wins_over_the_examples(tmp_path):
+    fmt = copy.deepcopy(firm_data()["format"])
+    fmt["layout"]["discovery_set"]["footer_title"] = "Plaintiff's Requests for Admission, Set Three"
+    path, _r, _l, _c = _lay(tmp_path, _titled_footer_base(), fmt)
+    lines = _footer_lines(path)
+    assert "Plaintiff's Requests for Admission, Set Three" in lines and SOURCE_TITLE not in lines
+
+
+def test_with_no_title_for_the_draft_the_examples_title_is_cleared_never_kept(tmp_path):
+    path, _r, _l, _c = _lay(tmp_path, _titled_footer_base(), md="A paragraph with no title.\n")
+    assert SOURCE_TITLE not in _footer_lines(path)
+    assert "EXAMPLE FIRM LLP" in _footer_lines(path)
+
+
+def test_on_pleading_paper_the_footer_is_the_drafts_title_too(tmp_path):
+    path, _r, _l, _c = _lay(tmp_path, _titled_footer_base(), paper="pleading")
+    lines = _footer_lines(path)
+    assert DRAFT_TITLE in lines and SOURCE_TITLE not in lines
+
+
+def test_firmbase_make_counts_the_examples_running_title(tmp_path, capsys):
+    for sub, footer, want in (("a", SOURCE_TITLE, 1), ("b", "Confidential", 0)):
+        (tmp_path / sub).mkdir()
+        code, _out = _make(tmp_path / sub, _filed_discovery(footer))
+        assert code == 0 and json.loads(capsys.readouterr().out)["running_title_lines"] == want

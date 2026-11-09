@@ -203,6 +203,66 @@ def authored_title(fmt: dict[str, Any], cls: str) -> str | None:
     return ((fmt.get("layout") or {}).get(cls) or {}).get("footer_title") or None
 
 
+#: A footer line that names a document's kind (its running title): "Special
+#: Interrogatories, Set One", "Responses to Requests for Admission", "Deposition
+#: Outline", "Mediation Brief". A confidentiality legend or the firm's name is not one.
+RUNNING_TITLE = re.compile(
+    r"(?i)\binterrogator(y|ies)\b|\brequests?\s+for\s+(admissions?|production)\b|\bresponses?\s+to\b|"
+    r"\bdeposition\b|\bmemorandum\b|\bmediation\s+brief\b|\bsettlement\s+conference\s+(brief|statement)\b|"
+    r"\bset\s+(no\.\s*)?(one|two|three|four|five|\d+)\b"
+)
+
+
+def running_title_lines(blob: bytes) -> int:
+    """How many footer lines of the file name a document's kind (``RUNNING_TITLE``): counts only."""
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    n = 0
+    for name in z.namelist():
+        if re.fullmatch(r"word/footer\d*\.xml", name):
+            for p in re.findall(r"<w:p\b.*?</w:p>", z.read(name).decode("utf-8", "replace"), re.S):
+                n += bool(RUNNING_TITLE.search("".join(_T.findall(p))))
+    return n
+
+
+def retitle_footer(path: Path, fmt: dict[str, Any], cls: str) -> list[str]:
+    """On a document rendered on a firm's styles base: every footer line that
+    names a document's kind (the base's source document's own running title,
+    "Special Interrogatories, Set One") is replaced by THIS draft's title, the
+    one the pleading-paper footer writes (``authored_title``, else
+    ``title_of``), in the line's own first run, so the firm's footer layout,
+    fonts and page number stay. With no title found the stale one is cleared,
+    never kept: a wrong title is worse than none. In place; returns notes."""
+    import docx
+
+    doc = docx.Document(str(path))
+    title = authored_title(fmt, cls) or title_of(doc)
+    changed = 0
+    for sec in doc.sections:
+        parts = [sec.footer, sec.first_page_footer, sec.even_page_footer]
+        for part in parts:
+            if part.is_linked_to_previous:
+                continue
+            for p in part.paragraphs:
+                runs = [r for r in p.runs if r.text]
+                if not runs or not RUNNING_TITLE.search(p.text) or p.text.strip() == title:
+                    continue
+                runs[0].text = title
+                for r in runs[1:]:
+                    r.text = ""
+                changed += 1
+    if not changed:
+        return []
+    buf = io.BytesIO()
+    doc.save(buf)
+    part_path = path.with_name(f".{path.name}.retitle.tmp")
+    part_path.write_bytes(buf.getvalue())
+    part_path.replace(path)
+    what = "this draft's title" if title else "nothing (no title found for this draft)"
+    return [f"the firm's footer: {changed} running-title line(s) from its example replaced with {what}"]
+
+
 _ATTACHMENT_TITLE = re.compile(r"(?i)^\s*(proof of service|declaration for additional discovery)\b")
 
 

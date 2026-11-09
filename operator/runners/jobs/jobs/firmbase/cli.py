@@ -66,6 +66,7 @@ def cmd_make(args: argparse.Namespace) -> int:
         sha256=hashlib.sha256(made.data).hexdigest(),
         residue=made.residue,
         dropped=made.dropped,
+        running_title_lines=made.running_title_lines,
     )
     print(json.dumps(out, sort_keys=True))
     return 0
