@@ -1,8 +1,8 @@
 ---
 name: document-library-establishment
 description: >-
-  Sets up and refreshes the firm's DOCUMENT LIBRARY: the Word files every draft the Operator makes
-  is made in. On a Named Administrator's "set up the document library" (or "refresh the document
+  Sets up and refreshes the firm's document library. The library is the Word files every draft the
+  Operator makes is made in. On a Named Administrator's "set up the document library" (or "refresh the document
   library", or "initialize yourself and set up for our firm"), it queues ONE job, in code, that
   hunts the firm's own documents of every kind the drafting job makes and replies with one
   numbered list per kind. The classes the drafting renderer knows (discovery set, discovery
@@ -245,7 +245,7 @@ anything to anyone.
 
 The reasoning is owned in the repository, not on the seat:
 `docs/adr/0083-authorship-model-output-classes.md` (output classes and class templates as the
-format base), `operator/runners/jobs/jobs/library_setup/` (the job: the hunt per kind, the
-contract each kind is made with, the accept), and `operator/workspace_broker/library_setup_wording.py`
+format base), the library setup job on the drafting lane (the hunt per kind, the contract each
+kind is made with, the accept), and `operator/workspace_broker/library_setup_wording.py`
 (every sentence the firm reads). Those paths are where the rules are maintained; every rule you
 need at runtime is stated above, because the image does not carry the documentation tree.
