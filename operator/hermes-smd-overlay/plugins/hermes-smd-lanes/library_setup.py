@@ -1,5 +1,6 @@
-"""Agent-facing tool for "set up our mediation briefs" (or memos): the drafting
-lane's second kind of job (ss-console library_setup_verbs.py).
+"""Agent-facing tool for "set up the document library" (or "refresh" it), and for
+"set up our discovery responses" (any one kind the drafting job makes): the
+drafting lane's second kind of job (ss-console library_setup_verbs.py).
 
 WHO ASKED IS NEVER THE MODEL'S TO SAY. ``requested_by``, ``request_ref`` and
 ``request_text`` are filled HERE from the turn's verified inbound origin, as the
@@ -26,7 +27,9 @@ from .demand import STRING, _origin, _refuse, _schema
 logger = logging.getLogger(__name__)
 
 #: ss-console library_setup_ledger.KINDS, in its order.
-KINDS = ("mediation_brief", "memo")
+KINDS = ("discovery_set", "discovery_response", "mediation_brief", "memo", "depo_outline")
+#: ss-console library_setup_ledger.LIBRARY: every kind at once.
+LIBRARY = "library"
 
 
 def library_setup_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
@@ -48,6 +51,11 @@ def library_setup_submit(args: dict[str, Any], session_id: str = "", **_: Any) -
         "request_ref": origin.internet_message_id,
         "request_text": origin.reply_text,
     }
+    # What the request points at; the broker refuses words the email does not hold.
+    for key in ("matter", "document"):
+        value = " ".join(str(args.get(key) or "").split())
+        if value:
+            envelope[key] = value
     try:
         resp = JobsBrokerClient().library_setup_submit(envelope)
     except JobsBrokerError as exc:
@@ -103,9 +111,11 @@ def library_setup_choose(args: dict[str, Any], session_id: str = "", **_: Any) -
 
 TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     "library_setup_submit": (
-        "A Named Administrator asked to set up the firm's mediation briefs or memos (or one attorney's) "
-        "from the firm's own documents. This queues a job that reads the firm's own files of that kind "
-        "across its matters and names the best by file; it never runs in the turn. Who asked and the "
+        "A Named Administrator asked to set up or refresh the firm's document library (kind `library`, "
+        'every kind at once; also part of "initialize yourself and set up for our firm"), or one kind '
+        "of it (discovery sets, discovery responses, mediation briefs, memos, deposition outlines), for "
+        "the firm or one attorney. This queues a job that reads the firm's own files across its matters "
+        "and lists the best by file for each kind; it never runs in the turn. Who asked and the "
         "request's words are taken from the email itself, never from you. When `live` is false, answer "
         "the request exactly as you would have without this tool. When `live` is true, relay `say` as "
         "given and nothing else about the setup. A refusal's `reason` is relayed as given.",
@@ -113,13 +123,25 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
             {
                 "kind": {
                     "type": "string",
-                    "enum": list(KINDS),
-                    "description": "Which kind of document the request asks to set up.",
+                    "enum": [*KINDS, LIBRARY],
+                    "description": "Which kind of document the request asks to set up; `library` for the "
+                    'whole document library ("set up the document library", "refresh the document '
+                    'library").',
                 },
                 "attorney": {
                     **STRING,
                     "description": "Only when the request names one attorney's own documents: that "
                     "attorney's name exactly as the request gives it. Omit for the firm's own file.",
+                },
+                "matter": {
+                    **STRING,
+                    "description": "Only when the request points at the document on one matter for "
+                    "one kind: that matter's number exactly as the request gives it.",
+                },
+                "document": {
+                    **STRING,
+                    "description": "Only when the request points at one document by its name for one "
+                    "kind: the words of the name exactly as the request gives them.",
                 },
             },
             ["kind"],
@@ -127,10 +149,11 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         library_setup_submit,
     ),
     "library_setup_choose": (
-        "The email that opened this turn answers a list of the firm's own documents the Operator sent for "
-        "setting up a library file, by naming one of them. Pass at most the list's kind: the sender, the "
-        "thread and the reader's own words are taken from the email itself, and code reads which document "
-        "was chosen. When `live` is false and there is no `reason`, answer the email exactly as you would "
+        "The email that opened this turn answers a list (or the document library's lists, one per kind) of "
+        "the firm's own documents the Operator sent for setting up library files: it names a document per "
+        "kind, says to keep the current one, or points at another document by matter or name. Pass at "
+        "most the list's kind: the sender, the thread and the reader's own words are taken from the email "
+        "itself, and code reads every choice. When `live` is false and there is no `reason`, answer the email exactly as you would "
         "have without this tool. Otherwise relay `say` or `reason` as given and nothing else.",
         _schema(
             {
@@ -146,4 +169,4 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
     ),
 }
 
-__all__ = ["KINDS", "TOOLS", "library_setup_choose", "library_setup_submit"]
+__all__ = ["KINDS", "LIBRARY", "TOOLS", "library_setup_choose", "library_setup_submit"]

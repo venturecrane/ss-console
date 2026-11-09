@@ -4,7 +4,9 @@ setup job's id (``drafting_verbs.drafting_dispatch`` hands those here).
 
 THE SUBMIT CHECKS, in order, none of which spends anything:
 
-1. the kind is one a firm can set up this way (a mediation brief or a memo);
+1. the kind is one a firm can set up this way (every kind the drafting job
+   makes, ``library_setup_ledger.KINDS``), or ``library``: "set up the document
+   library" (or "refresh" it), every kind at once;
 2. the drafting lane runs on this seat (its ledger and queue exist) and the
    ``document-library-establishment`` skill is listed and enabled;
 3. the requester is one of the firm's Named Administrators (``scope.admins``);
@@ -98,7 +100,7 @@ def _refused(key: str, **values: Any) -> dict[str, Any]:
 def _checks(verbs: Any, raw: dict[str, Any]) -> dict[str, Any] | str:
     """The library matter number, or the refusal's wording key."""
     path = str(verbs.customer_yaml)
-    if str(raw.get("kind") or "") not in wording.KIND_NAMES:
+    if str(raw.get("kind") or "") not in (*wording.KIND_NAMES, wording.LIBRARY):
         return "refused_kind"
     if ledger_of(verbs) is None or not skill_enabled(path):
         return "refused_seat"
@@ -122,6 +124,8 @@ def submit(verbs: Any, request: dict[str, Any]) -> dict[str, Any]:
     try:
         job_id = db.submit(raw, library_number=checked["library"], live=on)
     except Underway as exc:
+        if kind == wording.LIBRARY:
+            return {**_refused("refused_underway_library"), "job_id": exc.job_id}
         return {**_refused("refused_underway", **wording.names(kind)), "job_id": exc.job_id}
     except EnvelopeError as exc:
         if "attorney" in str(exc):
@@ -130,7 +134,13 @@ def submit(verbs: Any, request: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {"ok": True, "accepted": True, "job_id": job_id, "live": on, "state": "submitted"}
     if on:
         audit(verbs)("LIBRARY_SETUP_SUBMITTED", {"job_id": job_id, "document_class": kind})
-        out["say"] = wording.ack(kind, " ".join(str(raw.get("attorney") or "").split()) or None)
+        attorney = " ".join(str(raw.get("attorney") or "").split()) or None
+        if kind == wording.LIBRARY:
+            out["say"] = wording.ack_library(attorney)
+        elif raw.get("matter") or raw.get("document"):
+            out["say"] = wording.ack_pointed(kind, raw.get("matter") or None, bool(raw.get("document")))
+        else:
+            out["say"] = wording.ack(kind, attorney)
     return out
 
 
