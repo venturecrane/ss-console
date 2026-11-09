@@ -9,7 +9,7 @@ description: >-
   awaits a blessing, and exactly what to reply. Re-running it is safe by construction, because
   status is derived live each time and established acts report as established. Firm-level
   initiation is refused for anyone who is not an Operator admin.
-version: 0.1.0
+version: 0.2.0
 author: SMD Services
 license: MIT
 platforms: [linux, macos]
@@ -157,9 +157,12 @@ What each act contributes on the kickoff turn:
   firm-authored vs received vs unreadable, propose the cohort-partitioned corpus, then
   STOP, exactly as its §1b defines. Nothing is staged, nothing is submitted. The blessing
   is the admin's own later turn.
-- **document-library-establishment** - **turn one only**: survey, classify types, propose
-  the template list and the storage location, then STOP, exactly as its body defines.
-  Nothing is created. The blessing is the admin's own later turn.
+- **document-library-establishment** - call `library_setup_submit` with `kind: library`,
+  exactly as that skill defines, and put its `say` (or its `reason`) on the board's library
+  line. The job replies in this thread with one list per kind; nothing is made until the
+  admin answers it. On a seat where `live` comes back false, the line says that setting up
+  the library from the firm's own documents is not turned on yet. Never survey, propose or
+  build templates yourself for it.
 
 Every gate the underlying procedure carries - the blessing boundaries, the broker's
 server-side refusals, the possession ceremony where the seat's custody requires it - is
@@ -183,14 +186,13 @@ OPERATOR SELF-INITIATION | [seat display name] | [date, time, timezone]
 
 1. Self-test          [ran this turn / see results below]
 2. Voice              [established / partial (open classes named) / proposal below | awaiting your blessing / not started]
-3. Document library   [established, N templates at <location> / proposal below | awaiting your blessing / not started / unknown | ask the admin]
+3. Document library   [established, N files at <location> / the tool's sentence: lists follow in this thread / not turned on yet / not started / unknown | ask the admin]
 
 [the self-test report, if it ran]
 [the voice survey proposal, if one was produced]
-[the document library proposal, if one was produced]
 
 To continue: [exactly what to reply, per open item | e.g. "reply approving or
-amending the voice corpus", "reply approving or amending the template list",
+amending the voice corpus", "answer the document library's lists when they arrive, one line per kind",
 "reply 'continue initiation'"]
 ```
 
