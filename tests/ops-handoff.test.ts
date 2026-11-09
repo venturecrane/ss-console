@@ -31,7 +31,7 @@ function tasks(): string[] {
 /**
  * A stub fly: machine list says started, ssh answers, `cat > ~/inbox/pending-<stamp>.md`
  * writes its stdin to a file, `wc -c` reports that file's size, and the tmux
- * probe answers "opened" only when TMUX_RUNNING=1.
+ * step answers "opened" unless TMUX_FAIL=1 (tmux itself cannot start).
  */
 function stubFly(dir: string): void {
   const bin = path.join(dir, 'bin')
@@ -44,7 +44,7 @@ case "$*" in
   *"machine list"*) echo '[{"id":"m1","state":"started"}]' ;;
   *"cat > ~/inbox/pending-"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); cat > "${inbox}/$f" ;;
   *"wc -c"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); wc -c < "${inbox}/$f" ;;
-  *"tmux has-session"*) [ "\${TMUX_RUNNING:-0}" = 1 ] && echo opened ;;
+  *"tmux has-session"*) [ "\${TMUX_FAIL:-0}" = 1 ] || echo opened ;;
   *"sh -s"*) cat > "${home}/say.sh"; echo "\${SAY_RESULT:-1}" ;;
   *) : ;;
 esac
@@ -135,7 +135,7 @@ describe('ops-handoff', () => {
   })
 
   it('opens the task in a new window when a workspace session is already running', () => {
-    const out = handoff(['ap', 'check the facilities'], { TMUX_RUNNING: '1' })
+    const out = handoff(['ap', 'check the facilities'])
     expect(out).toContain('opened in a new window')
     // The window is opened on THIS handoff's file, never on whatever is waiting.
     expect(fs.readFileSync(calls, 'utf8')).toMatch(
@@ -143,8 +143,16 @@ describe('ops-handoff', () => {
     )
   })
 
-  it('tells the Captain to run ops when no session is running', () => {
+  it('starts the session itself when none is running (after a restart), on this task', () => {
     const out = handoff(['ap', 'check the facilities'])
+    expect(out).toContain('opened in a new window')
+    expect(fs.readFileSync(calls, 'utf8')).toMatch(
+      /else tmux new-session -d -s main -n task \\?"\/opt\/ops\/bin\/ops-start \$HOME\/inbox\/pending-\d{8}T\d{6}-\d+\.md/
+    )
+  })
+
+  it('tells the Captain to run ops only when tmux itself cannot start', () => {
+    const out = handoff(['ap', 'check the facilities'], { TMUX_FAIL: '1' })
     expect(out).toContain('type `ops ap`')
     expect(out).not.toContain('opened in a new window')
   })
