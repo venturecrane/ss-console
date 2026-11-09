@@ -36,6 +36,10 @@ app=$(jq -r --arg s "$slug" '.workspaces[$s].app // empty' "$reg")
 seat=$(jq -r --arg s "$slug" '.workspaces[$s].seat_app // empty' "$reg")
 region=$(jq -r --arg s "$slug" '.workspaces[$s].region // "sjc"' "$reg")
 gb=$(jq -r --arg s "$slug" '.workspaces[$s].volume_gb // 50' "$reg")
+# A workspace's memory lives here, not only on the Machine: a deploy sizes the
+# Machine from fly.toml (4 GB), so a hand `fly scale memory` was undone by the
+# next update (2026-11-09, A&P went 8 GB -> 4 GB with four sessions running).
+mem=$(jq -r --arg s "$slug" '.workspaces[$s].memory_mb // 4096' "$reg")
 [ -n "$app" ] && [ -n "$seat" ] || { echo "$slug is not in $reg; add it there first (a reviewed change)"; exit 2; }
 suffix=$(printf '%s' "$slug" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
 log() { printf '[ops-workspace %s] %s\n' "$slug" "$*"; }
@@ -107,7 +111,7 @@ healthcheck() {
 
 deploy() {
   # One shared image for smd-ops and every workspace; -a picks the app.
-  (cd "$here" && fly deploy -a "$app" -c fly.toml --remote-only --ha=false --yes)
+  (cd "$here" && fly deploy -a "$app" -c fly.toml --remote-only --ha=false --vm-memory "$mem" --yes)
   log "deployed; selftest:"
   fly ssh console -a "$app" -u ops -C "/opt/ops/bin/ops-selftest" 2>/dev/null || true
 }
