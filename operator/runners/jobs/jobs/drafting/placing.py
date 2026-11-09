@@ -65,7 +65,8 @@ class Placing(Finish):
         out, fmt, paper = deliver.out_dir(self.data), self.firm.data["format"], self.paper()
         made_in = library_pick.pick_base(self, marked_ok=False)
         path, _report = render.render(placed.markdown, self.cls, out / self._names(u)["draft"], fmt, made_in.styles)
-        laid = pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
+        laid = pleading.retitle_footer(path, fmt, self.cls) if made_in.styles is not None else []
+        laid += pleading.apply(path, pleading.spec_for(fmt)) if paper == "pleading" else []  # type: ignore[arg-type]
         res = format_check.check(path, self.cls, fmt, "", None, paper)
         ours = [f for f in res.fails if not HIS.match(f)]
         if ours:

@@ -47,4 +47,5 @@ def lay_out(
     from . import pleading, render
 
     path, report = render.render(doc, cls, dest, fmt, styles)
-    return path, report, pleading.apply_for(path, fmt, cls) if paper == "pleading" else [], fmt
+    titled = pleading.retitle_footer(path, fmt, cls) if styles is not None else []
+    return path, report, titled + (pleading.apply_for(path, fmt, cls) if paper == "pleading" else []), fmt

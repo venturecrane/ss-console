@@ -275,7 +275,9 @@ def test_a_prototypes_file_is_not_a_drafting_base(spec, tmp_path, monkeypatch):
 def _fake_run(tmp_path: Path, cls: str, held=None) -> SimpleNamespace:
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
-    return SimpleNamespace(cls=cls, data=data, seat=None, firm=SimpleNamespace(firm_base=lambda _c: held))
+    return SimpleNamespace(
+        cls=cls, data=data, seat=None, firm=SimpleNamespace(firm_base=lambda _c: held, styles_base=lambda _c: None)
+    )
 
 
 def test_placing_lays_no_firm_base_today_and_takes_no_marked_file(spec, tmp_path, monkeypatch, tmpl):

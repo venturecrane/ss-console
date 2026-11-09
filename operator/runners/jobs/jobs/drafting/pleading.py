@@ -203,6 +203,66 @@ def authored_title(fmt: dict[str, Any], cls: str) -> str | None:
     return ((fmt.get("layout") or {}).get(cls) or {}).get("footer_title") or None
 
 
+#: A footer line that names a document's kind (its running title): "Special
+#: Interrogatories, Set One", "Responses to Requests for Admission", "Deposition
+#: Outline", "Mediation Brief". A confidentiality legend or the firm's name is not one.
+RUNNING_TITLE = re.compile(
+    r"(?i)\binterrogator(y|ies)\b|\brequests?\s+for\s+(admissions?|production)\b|\bresponses?\s+to\b|"
+    r"\bdeposition\b|\bmemorandum\b|\bmediation\s+brief\b|\bsettlement\s+conference\s+(brief|statement)\b|"
+    r"\bset\s+(no\.\s*)?(one|two|three|four|five|\d+)\b"
+)
+
+
+def running_title_lines(blob: bytes) -> int:
+    """How many footer lines of the file name a document's kind (``RUNNING_TITLE``): counts only."""
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    n = 0
+    for name in z.namelist():
+        if re.fullmatch(r"word/footer\d*\.xml", name):
+            for p in re.findall(r"<w:p\b.*?</w:p>", z.read(name).decode("utf-8", "replace"), re.S):
+                n += bool(RUNNING_TITLE.search("".join(_T.findall(p))))
+    return n
+
+
+def retitle_footer(path: Path, fmt: dict[str, Any], cls: str) -> list[str]:
+    """On a document rendered on a firm's styles base: every footer line that
+    names a document's kind (the base's source document's own running title,
+    "Special Interrogatories, Set One") is replaced by THIS draft's title, the
+    one the pleading-paper footer writes (``authored_title``, else
+    ``title_of``), in the line's own first run, so the firm's footer layout,
+    fonts and page number stay. With no title found the stale one is cleared,
+    never kept: a wrong title is worse than none. In place; returns notes."""
+    import docx
+
+    doc = docx.Document(str(path))
+    title = authored_title(fmt, cls) or title_of(doc)
+    changed = 0
+    for sec in doc.sections:
+        parts = [sec.footer, sec.first_page_footer, sec.even_page_footer]
+        for part in parts:
+            if part.is_linked_to_previous:
+                continue
+            for p in part.paragraphs:
+                runs = [r for r in p.runs if r.text]
+                if not runs or not RUNNING_TITLE.search(p.text) or p.text.strip() == title:
+                    continue
+                runs[0].text = title
+                for r in runs[1:]:
+                    r.text = ""
+                changed += 1
+    if not changed:
+        return []
+    buf = io.BytesIO()
+    doc.save(buf)
+    part_path = path.with_name(f".{path.name}.retitle.tmp")
+    part_path.write_bytes(buf.getvalue())
+    part_path.replace(path)
+    what = "this draft's title" if title else "nothing (no title found for this draft)"
+    return [f"the firm's footer: {changed} running-title line(s) from its example replaced with {what}"]
+
+
 _ATTACHMENT_TITLE = re.compile(r"(?i)^\s*(proof of service|declaration for additional discovery)\b")
 
 
@@ -227,35 +287,50 @@ def _court_and_attachments(doc: Any) -> None:
             p.paragraph_format.page_break_before = True
 
 
-def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
-    """Lay the rendered file at ``path`` onto pleading paper, in place. The
-    footer carries ``title`` (the firm's authored one) when given, else the
-    title the paper's caption prints (``title_of``)."""
-    import docx
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+#: The fewest consecutive numbers a header text box must hold to be a firm's
+#: own line numbering (California pleading paper numbers 26 or 28).
+MIN_DRAWN_LINES = 10
+BOX_DRAWN, SETTING_DRAWN = "text_box", "line_numbering"
+_TXBX = re.compile(r"<w:txbxContent\b[^>]*>(.*?)</w:txbxContent>", re.S)
+_T = re.compile(r"<w:t(?:\s[^>]*)?>([^<]*)</w:t>")
+
+
+def drawn_numbers(blob: bytes) -> tuple[str, int] | None:
+    """How the file's own paper already numbers its lines, read from its XML:
+    (``text_box``, N) when a header part holds a text box whose only words are
+    the numbers 1 to N in order (N >= ``MIN_DRAWN_LINES``; Word's pleading
+    template and a firm's pleading paper both draw it so, ours included), or
+    (``line_numbering``, 0) when the section turns on Word's line numbering
+    (``w:lnNumType``). None when it draws none: then ``apply`` lays ours."""
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    for name in z.namelist():
+        if not re.fullmatch(r"word/header\d*\.xml", name):
+            continue
+        for box in _TXBX.findall(z.read(name).decode("utf-8", "replace")):
+            words = " ".join(_T.findall(box)).split()
+            if len(words) >= MIN_DRAWN_LINES and words == [str(n) for n in range(1, len(words) + 1)]:
+                return BOX_DRAWN, len(words)
+    if "word/document.xml" in z.namelist() and b"<w:lnNumType" in z.read("word/document.xml"):
+        return SETTING_DRAWN, 0
+    return None
+
+
+def _header_xml(blob: bytes) -> bytes:
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    return b"".join(z.read(n) for n in z.namelist() if re.fullmatch(r"word/header\d*\.xml", n))
+
+
+def _lay_numbers(sec: Any, spec: Spec) -> None:
+    """Our line-number box and margin rules, anchored in the section's header
+    (its first paragraph's runs replaced)."""
     from docx.oxml import parse_xml
-    from docx.oxml.ns import qn
-    from docx.shared import Inches, Pt
+    from docx.shared import Pt
 
-    from smokeball_connector.docx_base import add_page_field, set_run_font
-
-    doc = docx.Document(str(path))
-    if len(doc.sections) != 1:
-        raise ValueError("pleading paper: the rendered file has more than one section")
-    sec = doc.sections[0]
-    top, right, bottom, left = spec.margins_in
-    sec.top_margin, sec.right_margin, sec.bottom_margin, sec.left_margin = (
-        Inches(top),
-        Inches(right),
-        Inches(bottom),
-        Inches(left),
-    )
-    sec.header_distance, sec.footer_distance = Inches(min(0.5, top / 2)), Inches(min(0.3, bottom / 2))
-    for ln in sec._sectPr.findall(qn("w:lnNumType")):
-        sec._sectPr.remove(ln)
-    for p in _all_paragraphs(doc):
-        _exact(p.paragraph_format, spec.pitch_pt)
-    _court_and_attachments(doc)
+    _top, right, _bottom, left = spec.margins_in
     header = sec.header
     header.is_linked_to_previous = False
     hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
@@ -273,6 +348,48 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     for xml in shapes:
         run = hp.add_run()
         run._r.append(parse_xml(xml))
+
+
+def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
+    """Lay the rendered file at ``path`` onto pleading paper, in place. The
+    footer carries ``title`` (the firm's authored one) when given, else the
+    title the paper's caption prints (``title_of``).
+
+    A file rendered on a firm's styles base whose paper already numbers its
+    lines (``drawn_numbers``) keeps the firm's header and its numbering, and
+    gets no second set: only the margins, the line pitch, the court line and
+    the footer are laid."""
+    import docx
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import qn
+    from docx.shared import Inches
+
+    from smokeball_connector.docx_base import add_page_field, set_run_font
+
+    blob = Path(path).read_bytes()
+    # Our own paper laid before is laid afresh, as it always was; only the firm's is kept.
+    drawn = None if f'name="{BOX_NAME}"'.encode() in _header_xml(blob) else drawn_numbers(blob)
+    doc = docx.Document(str(path))
+    if len(doc.sections) != 1:
+        raise ValueError("pleading paper: the rendered file has more than one section")
+    sec = doc.sections[0]
+    top, right, bottom, left = spec.margins_in
+    sec.top_margin, sec.right_margin, sec.bottom_margin, sec.left_margin = (
+        Inches(top),
+        Inches(right),
+        Inches(bottom),
+        Inches(left),
+    )
+    sec.header_distance, sec.footer_distance = Inches(min(0.5, top / 2)), Inches(min(0.3, bottom / 2))
+    if drawn is None:
+        for ln in sec._sectPr.findall(qn("w:lnNumType")):
+            sec._sectPr.remove(ln)
+    for p in _all_paragraphs(doc):
+        _exact(p.paragraph_format, spec.pitch_pt)
+    _court_and_attachments(doc)
+    if drawn is None:
+        _lay_numbers(sec, spec)
     footer = sec.footer
     footer.is_linked_to_previous = False
     for p in list(footer.paragraphs):
@@ -299,6 +416,8 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     notes = [
         f"laid on the firm's pleading paper ({spec.lines} numbered lines at {spec.pitch_pt:g} point), as requested"
     ]
+    if drawn is not None:
+        notes.append(f"pleading paper: the firm's own file numbers the lines ({drawn[0]}); no second set was added")
     if not title:
         notes.append("pleading paper: no title was found for the footer; the footer carries the page number only")
     return notes
@@ -311,8 +430,7 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
     rule skips."""
     import zipfile
 
-    from docx.enum.text import WD_LINE_SPACING
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches
 
     fails: list[str] = []
     sec = doc.sections[0]
@@ -322,6 +440,13 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
         fails.append("pleading: margins are not the firm's pleading paper")
     z = zipfile.ZipFile(io.BytesIO(blob))
     headers = "".join(z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.startswith("word/header"))
+    theirs = drawn_numbers(blob) if not re.search(rf'name="{BOX_NAME}"', headers) else None
+    if theirs is not None:
+        # The firm's own paper numbers the lines (a styles base): its count is
+        # checked, and its box and rules are its own, so ours are not required.
+        if theirs[0] == BOX_DRAWN and theirs[1] != spec.lines:
+            fails.append(f"pleading: the firm's paper numbers {theirs[1]} lines, the authored paper {spec.lines}")
+        return fails + _pitch_and_page(doc, z, spec, off_pitch)
     box = re.search(r"<w:txbxContent>(.*?)</w:txbxContent>", headers, re.S)
     nums = re.findall(r"<w:t>(\d+)</w:t>", box.group(1)) if box else []
     if nums != [str(n) for n in range(1, spec.lines + 1)]:
@@ -336,6 +461,15 @@ def check(doc: Any, blob: bytes, spec: Spec, off_pitch: list[Any] | None = None)
         fails.append("pleading: the margin rules are missing")
     if not re.search(rf'name="{BOX_NAME}"', headers):
         fails.append("pleading: no line-number box")
+    return fails + _pitch_and_page(doc, z, spec, off_pitch)
+
+
+def _pitch_and_page(doc: Any, z: Any, spec: Spec, off_pitch: list[Any] | None) -> list[str]:
+    """Every line of the body at the paper's pitch, and a page number in the footer."""
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.shared import Pt
+
+    fails: list[str] = []
     held = list(off_pitch or [])
     skip = {id(p._p) for p in held}
     off = [

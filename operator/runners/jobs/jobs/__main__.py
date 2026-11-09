@@ -595,10 +595,12 @@ def main(argv: list[str] | None = None) -> int:
     dr.set_defaults(fn=_cmd_draft)
     _add_litigate(sub)
     from .casefile.cli import add_parser as _casefile_parser
+    from .firmbase.cli import add_parser as _firmbase_parser
     from .library_setup.cli import add_parser as _library_setup_parser
     from .records.cli import add_parser as _records_parser
 
     _casefile_parser(sub)
+    _firmbase_parser(sub)
     _library_setup_parser(sub)
     _records_parser(sub)
     ng = sub.add_parser("negotiate", help="run one negotiation-watch job: new offer documents to Negotiation Details")
