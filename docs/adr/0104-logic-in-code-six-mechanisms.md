@@ -129,4 +129,4 @@ Wave 1 (connector, broker, overlay, skills; no runner file): the SDK token flag 
 - [ ] (runtime) A probe post bundle on the pilot yields one outcome row per act, a derived record, and a daily list rendered from it; a comma-typed vendor amount stages at the printed figure
 - [ ] (runtime) A probe inbound from a non-roster sender naming an adverse party yields a hit, exactly one clearance task and no write or send; a roster-forwarded carrier letter yields clear
 - [ ] (runtime) A delivered lane-proof twin's bind returns the broker's `reply_text`; other words are refused; the exact text sends
-- [ ] (runtime) Litigation, casefile and chronology $0 rehearsals in the client ops workspace match their answer keys; one capped dry-run per lane on the client seat after the Captain's yes
+- [ ] (runtime) Litigation, casefile and chronology $0 rehearsals in the client ops workspace match their answer keys; each lane is then READY on the client seat (release probe, every gate probed open) and its first real request is watched by the hourly work-health triage (amended 2026-11-09: the Captain retired the capped dry-run; see Law 9 and Law 18)
