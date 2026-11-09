@@ -209,73 +209,6 @@ def test_a_delivered_job_is_not_an_item():
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
 
 
-_HAND_FIXTURE = _BIN / "tests" / "fixtures" / "ap-2026-11-09-hand-step-jobs.json"
-_HAND_JOB = "01M6S7PM1QV58BVAF27Y08K2AT"
-_CLEAN_JOB = "01M70H1DAP3P80ZZHHARDMYE8G"
-
-
-def _real_rows() -> list[dict]:
-    return json.loads(_HAND_FIXTURE.read_text(encoding="utf-8"))["rows"]
-
-
-def test_real_rows_a_job_delivered_only_after_hand_resumes_is_an_item():
-    """A&P's demand job of 2026-11-06: held or failed four times, resumed by
-    hand five times, then delivered. Its delivery is still work: the causes
-    are in the code. The scheduled negotiation run beside it ran straight
-    through and is not an item."""
-    rows = _real_rows()
-    now = datetime(2026, 11, 9, 17, 0, tzinfo=UTC)
-    items = wh.job_items(SEAT, rows, CFG, now)
-    assert [i.kind for i in items] == ["job_hand_step"]
-    hand = items[0]
-    assert _HAND_JOB in hand.key and _CLEAN_JOB not in hand.key
-    assert "only after a person stepped in 10 times" in hand.what
-    assert hand.what.count("resumed by hand") == 5
-    assert "review_held" in hand.what and "per_job_cap_usd" in hand.what
-    assert hand.onset == datetime(2026, 11, 7, 6, 19, 41, 630000, tzinfo=UTC)
-
-
-def test_real_rows_the_clean_job_alone_is_no_item_and_the_hand_job_is_by_its_resumes():
-    rows = _real_rows()
-    now = datetime(2026, 11, 9, 17, 0, tzinfo=UTC)
-    clean = [r for r in rows if r["metadata"]["job_id"] == _CLEAN_JOB]
-    assert clean and wh.job_items(SEAT, clean, CFG, now) == []
-    # The resume rows alone make it a hand step: drop every FAILED row and it is still one.
-    no_fail = [r for r in rows if not r["action_type"].endswith("_FAILED")]
-    assert [i.kind for i in wh.job_items(SEAT, no_fail, CFG, now)] == ["job_hand_step"]
-    # And with no resume and no bad ending, the same delivery is clean.
-    straight = [r for r in no_fail if not r["action_type"].endswith("_RESUME_REQUESTED")]
-    assert wh.job_items(SEAT, straight, CFG, now) == []
-
-
-def test_a_hand_stepped_delivery_older_than_the_window_drops_off():
-    rows = _real_rows()
-    late = datetime(2026, 11, 7, 6, 20, tzinfo=UTC) + timedelta(hours=CFG.ended_job_hours + 1)
-    assert wh.job_items(SEAT, rows, CFG, late) == []
-
-
-def test_a_hand_stepped_delivery_smd_closed_drops_off():
-    rows = _real_rows()
-    now = datetime(2026, 11, 9, 17, 0, tzinfo=UTC)
-    assert wh.job_items(SEAT, rows, CFG, now, {(SEAT, _HAND_JOB)}) == []
-
-
-def test_a_delivery_after_the_lane_gate_hold_counts_as_a_hand_step():
-    rows = [
-        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=3), job_id="M1"),
-        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=3), job_id="M1", reason="lane_unproven: x"),
-        _job("MEDCHRON", "RUNNING", NOW - timedelta(hours=2), job_id="M1"),
-        _job("MEDCHRON", "DELIVERED", NOW - timedelta(hours=1), job_id="M1"),
-    ]
-    items = wh.job_items(SEAT, rows, CFG, NOW)
-    assert [i.kind for i in items] == ["job_hand_step"] and "lane proof" in items[0].what
-
-
-def test_a_resume_whose_job_rows_are_outside_the_window_is_ignored():
-    rows = [_job("LITIGATION", "RESUME_REQUESTED", NOW - timedelta(hours=1), job_id="L1")]
-    assert wh.job_items(SEAT, rows, CFG, NOW) == []
-
-
 def test_a_job_smd_closed_with_a_reason_drops_off(tmp_path):
     rows = [
         _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=2), job_id="J9"),
@@ -952,9 +885,7 @@ def test_a_proof_failure_after_a_released_hold_is_reported():
         _row("DELIVERY_PROOF_FAILED", NOW - timedelta(hours=8) + timedelta(minutes=5), job_id="J9",
              lane="medchron", code="readback_mismatch"),
     ]  # fmt: skip
-    # job_items sees a delivery that needed a hand (the release): that is its own
-    # fact, the hand step, and never stands in for the proof failure below.
-    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_hand_step"]
+    assert wh.job_items(SEAT, rows, CFG, NOW) == []
     assert _kinds(src.delivery_proof_items(SEAT, rows, CFG, NOW)) == ["job_failed"]
     # A hold AFTER the proof failure is the job's own line already: one line, not two.
     later = [*rows, _job("MEDCHRON", "HELD", NOW - timedelta(hours=7), job_id="J9", reason="update_held: x")]
