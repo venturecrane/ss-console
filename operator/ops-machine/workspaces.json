@@ -6,7 +6,8 @@
       "seat_app": "hermes-ashton-price",
       "aliases": ["ap"],
       "region": "sjc",
-      "volume_gb": 150
+      "volume_gb": 150,
+      "memory_mb": 8192
     }
   }
 }
