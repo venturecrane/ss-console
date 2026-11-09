@@ -493,3 +493,35 @@ def test_a_review_hold_ends_the_unit_held_with_a_paged_reason_and_nothing_filed(
     o = _driver(_whole, firm_config_path, pricing_path, client=_HoldingReviewer(), seat_factory=lambda: seat).run()[0]
     assert o.outcome == "held" and o.stage == "review" and o.reason.startswith("review_held:"), o
     assert not seat.created and not seat.sent and o.proof is None
+
+
+
+_SLIP = ("01/20/2099 (date as written on referral form) Clinic", "01/21/2099 Clinic")
+
+
+def _future(found):
+    return {f.cite: (f.grade, f.check) for f in found if "future date" in f.check}
+
+
+def test_a_future_date_the_cited_page_writes_is_should_fix_not_a_hold():
+    """A referral slip dated "11-17-26" beside the 11/17/2025 visit it belongs
+    to (A&P update, 2026-11-09): the entry says the date is the form's own and
+    the page it cites carries it, so the attorney reads it and nothing holds."""
+    rows = [("01/20/2099 (date as written on referral form)", "Clinic"), ("01/21/2099", "Clinic")]
+    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    assert _future(found)[f"entry {_SLIP[0]}"] == (proof_review.MUST, "5 future date"), "code alone holds"
+    bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)", _SLIP[1]: "Seen. (Exhibit 1 - p. 4)"}
+    page = {(1, 3): "Date: 1-20-99  Treatment requested", (1, 4): "Date: 1-20-99"}
+    out = _future(review.as_written_on_page(found, bodies, lambda ex, pg: page.get((ex, pg), "")))
+    assert out[f"entry {_SLIP[0]}"] == (proof_review.SHOULD, "5 future date as written")
+    assert out[f"entry {_SLIP[1]}"] == (proof_review.MUST, "5 future date"), "no 'as written': still a hold"
+
+
+def test_as_written_without_the_date_on_the_cited_page_still_holds():
+    """The drafter's hedge decides nothing: the cited page must carry the date."""
+    rows = [("01/20/2099 (date as written on referral form)", "Clinic")]
+    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)"}
+    for text in ("Date: 1-20-98", "Date: 11-20-99", ""):
+        out = _future(review.as_written_on_page(found, bodies, lambda ex, pg, t=text: t))
+        assert out[f"entry {_SLIP[0]}"] == (proof_review.MUST, "5 future date"), text

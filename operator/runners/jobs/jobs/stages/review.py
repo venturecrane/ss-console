@@ -71,6 +71,7 @@ from typing import Any
 from .. import llm
 from ..medchron import prompts
 from ..medchron.audit.claims import CITE
+from ..medchron.audit.claims import parse_pages as _pages
 from ..proof import checks, review
 from . import review_notes, review_policy, review_settle, update_review_settle
 from .base import StageRun
@@ -101,6 +102,8 @@ NOTES_TEMPLATE = "{CLIENT} - Chronology Review Notes {MM-DD-YY}.docx"
 _NOTES_TAG = " - Chronology Review Notes "
 _REVIEW_LIST_TAG = " - Records Review "
 _DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
+# An entry's date line that says its date is the page's own, copied as written.
+_AS_WRITTEN = re.compile(r"(?i)^\d{2}/\d{2}/\d{4}\s*\([^)]*\bas written\b")
 _EXHIBIT_NO = re.compile(r"^Exhibit (\d+)\b")
 # The words that only the system writes. A hit is settled: no medical record
 # says "this chunk" or names a placeholder provider.
@@ -159,6 +162,66 @@ def entries(path: Path) -> list[tuple[str, str]]:
             paras = [p.text.strip() for p in row.cells[0].paragraphs]
             if paras and _DATE_HEAD.match(paras[0]) and len(row.cells) == 2:
                 out.append((paras[0], paras[1] if len(paras) > 1 else ""))
+    return out
+
+
+def entry_bodies(path: Path) -> dict[str, str]:
+    """``"MM/DD/YYYY ... provider"`` (the finding's cite, less ``entry ``) to
+    the entry's right cell text, off the same rendered entry table."""
+    from docx import Document
+
+    out: dict[str, str] = {}
+    for t in Document(str(path)).tables:
+        for row in t.rows:
+            paras = [p.text.strip() for p in row.cells[0].paragraphs]
+            if paras and _DATE_HEAD.match(paras[0]) and len(row.cells) == 2:
+                key = f"{paras[0]} {paras[1] if len(paras) > 1 else ''}".strip()
+                out[key] = out.get(key, "") + "\n" + row.cells[1].text
+    return out
+
+
+def _date_forms(d: date) -> str:
+    """A pattern for the numeric ways a page may write ``d``: 11/17/2026,
+    11-17-26, 11.17.26, 11/17/26, with or without leading zeros."""
+    out: list[str] = []
+    for mo in dict.fromkeys((f"{d.month:02d}", str(d.month))):
+        for dy in dict.fromkeys((f"{d.day:02d}", str(d.day))):
+            for yr in (str(d.year), f"{d.year % 100:02d}"):
+                out.append(rf"(?<!\d){mo}\s*[/.-]\s*{dy}\s*[/.-]\s*{yr}(?!\d)")
+    return "|".join(out)
+
+
+def as_written_on_page(found: list[review.Finding], bodies: dict[str, str], page_text: Any) -> list[review.Finding]:
+    """An entry dated after today stays a MUST-FIX unless code confirms the
+    record writes that date: the entry's date line says the date is copied as
+    written, AND a page the entry cites carries that date in a numeric form.
+    Then it is the record's own (mis)dating, a SHOULD-FIX the attorney reads
+    in the notes, never a hold. The drafter's "as written" alone decides
+    nothing (2026-11-09, a referral slip dated "11-17-26" beside the
+    11/17/2025 visit it belongs to held an A&P update). ``page_text`` is
+    ``(exhibit, page) -> text`` (``review_evidence.Pages.text``)."""
+    out: list[review.Finding] = []
+    for f in found:
+        key = f.cite[len("entry ") :] if f.cite.startswith("entry ") else ""
+        d = _as_date(key)
+        if f.check != "5 future date" or d is None or not _AS_WRITTEN.match(key):
+            out.append(f)
+            continue
+        rx = re.compile(_date_forms(d))
+        pages = dict.fromkeys(
+            (int(c.group(1)), pg) for c in CITE.finditer(bodies.get(key, "")) for pg in (_pages(c.group(2)) or [1])
+        )
+        if any(rx.search(page_text(ex, pg) or "") for ex, pg in pages):
+            out.append(
+                review.code(
+                    review.SHOULD,
+                    "5 future date as written",
+                    f"an entry is dated {key[:10]}, after today, as the cited page itself writes it",
+                    f.cite,
+                )
+            )
+        else:
+            out.append(f)
     return out
 
 
@@ -509,7 +572,16 @@ def _code(
         if m["name"].endswith(".docx") and _REVIEW_LIST_TAG not in m["name"]
     }
     dob = _as_date(sr.unit.dob or "")
-    return code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob), chron, names
+    found = code_findings(chron, entries(chron_path), names, others, today=today or date.today(), dob=dob)
+    if any(f.check == "5 future date" and "as written" in f.cite.lower() for f in found):
+        from . import review_evidence
+
+        pages = review_evidence.Pages(sr)
+        try:
+            found = as_written_on_page(found, entry_bodies(chron_path), pages.text)
+        finally:
+            pages.close()
+    return found, chron, names
 
 
 def run(

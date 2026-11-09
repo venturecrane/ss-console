@@ -174,7 +174,54 @@ def vision_pages(path: Path, pages: list[tuple[int, str]]) -> list[int]:
     import pymupdf
 
     with pymupdf.open(str(path)) as doc:
-        return [n for n in cand if 1 <= n <= len(doc) and doc[n - 1].get_images()]
+        return [n for n in cand if 1 <= n <= len(doc) and (doc[n - 1].get_images() or drawn_text(doc[n - 1]))]
+
+
+#: Ink outside the text layer's words, as a share of the page, at which a thin
+#: page with no embedded image carries text drawn as shapes (a print-to-PDF
+#: that outlined its fonts). Measured 2026-11-09 on an A&P update: see
+#: ``drawn_text``.
+INK_DRAWN = 0.04
+_INK_DPI = 36
+_INK_DARK = 200
+
+
+def drawn_text(page: Any) -> bool:
+    """True when a page shows ink its text layer does not carry: rendered at a
+    low resolution, the share of dark pixels outside the text layer's word
+    boxes is at least ``INK_DRAWN``. A blank page, a short typed page and a
+    ruled blank form stay under it; a page whose words are vector paths does
+    not. WHY (2026-11-09): an orthopaedic office visit printed with outlined
+    fonts reached an A&P update as two pages whose text layer was only the
+    print header, with no image to send to vision, so the composer never read
+    the visit and the chronology left it out."""
+    return ink_share(page) >= INK_DRAWN
+
+
+def ink_share(page: Any) -> float:
+    """The share of the page, rendered at ``_INK_DPI``, that is dark ink at
+    least two pixels thick both ways and outside the text layer's word boxes."""
+    pix = page.get_pixmap(dpi=_INK_DPI, colorspace="gray", alpha=False)
+    w, h, buf = pix.width, pix.height, pix.samples
+    if not w or not h:
+        return 0.0
+    scale = _INK_DPI / 72
+    masked = bytearray(w * h)
+    for x0, y0, x1, y1, *_ in page.get_text("words"):
+        for y in range(max(0, int(y0 * scale) - 1), min(h, int(y1 * scale) + 2)):
+            row = y * w
+            for x in range(max(0, int(x0 * scale) - 1), min(w, int(x1 * scale) + 2)):
+                masked[row + x] = 1
+    ink = bytes(1 if v < _INK_DARK and not masked[i] else 0 for i, v in enumerate(buf))
+    # Only ink at least two pixels thick both ways counts: a form's rules and
+    # box edges render one pixel wide at this resolution, glyphs as blocks.
+    dark = sum(
+        1
+        for y in range(h - 1)
+        for x in range(w - 1)
+        if ink[y * w + x] and ink[y * w + x + 1] and ink[(y + 1) * w + x] and ink[(y + 1) * w + x + 1]
+    )
+    return dark / (w * h)
 
 
 def live_rows(rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:

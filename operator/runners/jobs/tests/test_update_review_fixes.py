@@ -6,6 +6,8 @@ value is invented."""
 from __future__ import annotations
 
 import json
+
+import pytest
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -423,3 +425,52 @@ def test_form_questions_about_the_patient_never_hold_and_another_person_still_do
         assert "a patient name without the client's surname" in got, other
         assert "a date of birth 05/05/1990 that is not the client's" in got, other
     assert FI.findings("Name: Alpha Example  Patient: Jane Roe", *client)  # a label after a field gap
+
+
+def _vector_pdf(tmp_path, name, draw):  # noqa: D103
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((40, 30), "Printed 05/06/26 Office Visit", fontsize=8)
+    draw(page)
+    out = tmp_path / name
+    doc.save(str(out))
+    doc.close()
+    return out
+
+
+def _outlined_words(page):
+    """Body text as filled shapes, the way a print-to-PDF that outlined its
+    fonts draws it: rows of glyph-sized marks, no text layer under them."""
+    for row in range(60):
+        y = 60 + row * 11
+        for col in range(70):
+            x = 40 + col * 7.5
+            if (row * 7 + col) % 9:
+                page.draw_rect((x, y, x + 5, y + 7), color=None, fill=(0, 0, 0))
+
+
+def _ruled_form(page):
+    for row in range(40):
+        y = 60 + row * 17
+        page.draw_line((40, y), (572, y), color=(0, 0, 0), width=0.5)
+    page.draw_rect((40, 60, 572, 740), color=(0, 0, 0), width=0.75)
+
+
+def test_a_page_whose_words_are_drawn_as_shapes_goes_to_vision(tmp_path):
+    """2026-11-09: an office visit printed with outlined fonts held only its
+    print header as text and no image, so it was never read."""
+    from jobs.stages import extract
+
+    pdf = _vector_pdf(tmp_path, "drawn.pdf", _outlined_words)
+    assert extract.thin(extract.pdf_text(pdf)[0][1])
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == [1]
+
+
+@pytest.mark.parametrize("draw", [lambda p: None, _ruled_form], ids=["blank", "ruled-blank-form"])
+def test_a_blank_or_ruled_blank_page_does_not_go_to_vision(tmp_path, draw):
+    from jobs.stages import extract
+
+    pdf = _vector_pdf(tmp_path, "blank.pdf", draw)
+    assert extract.vision_pages(pdf, extract.pdf_text(pdf)) == []
