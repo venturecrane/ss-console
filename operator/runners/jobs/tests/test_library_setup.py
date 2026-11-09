@@ -50,6 +50,15 @@ def _memo(author: str, words: int = 1000, sign: str = "") -> bytes:
     return buf.getvalue()
 
 
+def _with_case_header(blob: bytes) -> bytes:
+    """``blob`` with a header naming a case: no library file can keep it."""
+    d = docx.Document(io.BytesIO(blob))
+    d.sections[0].header.paragraphs[0].text = "Rivera v. Northwind Freight, Case No. 24-CV-0001"
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
 def _firm_memo_by(author: str, sign: str = "") -> bytes:
     """A made-up firm memo the memo plan can adopt (the memo kit's), saved by
     ``author``, long enough for a memo's length band, signed when ``sign``."""
@@ -260,15 +269,41 @@ def test_a_matter_that_could_not_be_listed_holds_rather_than_says_none():
     assert out["outcome"] == "held" and out["hold"] == R.COULD_NOT_LOOK
 
 
-def test_a_document_the_kinds_plan_cannot_adopt_is_never_listed_and_is_counted_by_reason():
+def test_a_document_no_library_file_can_be_made_from_is_never_listed_and_is_counted_by_reason():
     """The A&P rehearsal, 2026-11-07: every memo the firm would have been shown was
-    refused by the memo plan, so a pick would have been told the wrong reason."""
-    plain = _memo("Alex Example")  # a memo with no heading for the plan to read roles from
+    refused by the memo plan, so a pick would have been told the wrong reason. A
+    document neither the marked plan nor a styles base can be made from (its
+    header names a case) is not listed, and each refusal is counted by its code."""
+    cased = _with_case_header(_memo("Alex Example"))  # no heading for the plan, a case in its header
     client = _client()
-    client.files["f-plain"] = (MATTER_A, _row("f-plain", "Plain memo.docx", 0.1), plain)
+    client.files["f-cased"] = (MATTER_A, _row("f-cased", "Plain memo.docx", 0.1), cased)
     out, _ = _run(client=client)
     assert [c["file_id"] for c in out["candidates"]] == ["f-old", "f-new"]
-    assert out["counts"]["plan_refused"] == 1 and out["counts"]["plan_refused_no_heading"] == 1
+    assert out["counts"]["plan_refused"] == 1
+    assert out["dropped_files"]["marked_refused_plan_no_heading"] == ["f-cased"]
+    assert out["dropped_files"]["styles_refused_case_words_remain"] == ["f-cased"]
+
+
+def test_a_memo_the_marked_plan_refuses_is_listed_as_a_styles_base():
+    """2026-11-09: every kind can be made. A memo with no heading for the memo plan
+    is made as a styles base (the firm's page, headers and styles; the body written
+    fresh), and the list says which contract each candidate would be made with."""
+    client = _client()
+    client.files["f-plain"] = (MATTER_A, _row("f-plain", "Plain memo.docx", 0.1), _memo("Alex Example"))
+    out, _ = _run(client=client)
+    by_id = {c["file_id"]: c["contract"] for c in out["candidates"]}
+    assert by_id == {"f-old": "marked", "f-plain": "styles", "f-new": "marked"}
+    assert out["dropped_files"]["marked_refused_plan_no_heading"] == ["f-plain"]
+    assert "plan_refused" not in out["counts"]
+
+
+def test_the_list_puts_the_recommended_one_first_then_the_rest_newest_first():
+    client = _client()
+    client.files["f-plain"] = (MATTER_A, _row("f-plain", "Plain memo.docx", 0.1), _memo("Alex Example"))
+    out, _ = _run(client=client)
+    shown = out["candidates"]
+    assert shown[0]["score"] == max(c["score"] for c in shown)  # what we recommend
+    assert [c["saved_on"] for c in shown[1:]] == sorted((c["saved_on"] for c in shown[1:]), reverse=True)
 
 
 def _chartless_memo_by(author: str, sign: str = "") -> bytes:
@@ -296,14 +331,15 @@ def test_memos_with_no_chart_are_listed_in_rank_order_with_the_chart_ones():
     )
     client.files["f-last"] = (MATTER_B, _row("f-last", "Case Memo.docx", 6.0), _chartless_memo_by("Someone Else"))
     out, _ = _run(client=client)
-    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-new"]  # f-last ranks fourth
+    # f-best ranks first and is recommended; the rest newest first (f-last ranks fourth)
+    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-new", "f-old"]
     assert "plan_refused_no_chart" not in out["counts"] and "plan_refused" not in out["counts"]
     # The chart memos a chartless pick takes its tables' look from, best first, ids only.
     assert [d["file_id"] for d in out["chart_donors"]] == ["f-old", "f-new"]
     assert set(out["chart_donors"][0]) == {"file_id", "matter_id", "sha256"}
     del client.files["f-new"]
     out, _ = _run(client=client)
-    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-last"]
+    assert [c["file_id"] for c in out["candidates"]] == ["f-best", "f-old", "f-last"]  # f-old newer than f-last
 
 
 def test_a_plan_that_crashes_on_one_file_refuses_that_file_and_the_hunt_goes_on(monkeypatch):
@@ -327,16 +363,17 @@ def test_a_plan_that_crashes_on_one_file_refuses_that_file_and_the_hunt_goes_on(
 
     monkeypatch.setattr(plan, "adopter", adopter)
     out, _ = _run(client=client)
+    # refused by the marked plan and counted with its id; its header names a matter, so no styles base either
     assert [c["file_id"] for c in out["candidates"]] == ["f-new"]
-    assert out["counts"]["plan_refused_plan_error"] == 1
-    assert out["dropped_files"]["plan_refused_plan_error"] == ["f-old"]
+    assert out["dropped_files"]["marked_refused_plan_plan_error"] == ["f-old"]
+    assert out["dropped_files"]["styles_refused_case_words_remain"] == ["f-old"]
 
 
 def test_a_kind_whose_every_candidate_the_plan_refuses_is_none_found():
     client = ReadOnlyClient(
         {
-            "a": (MATTER_A, _row("a", "Memo one.docx", 0.5), _memo("Alex Example")),
-            "b": (MATTER_B, _row("b", "Memo two.docx", 1.5), _memo("Blair Sample")),
+            "a": (MATTER_A, _row("a", "Memo one.docx", 0.5), _with_case_header(_memo("Alex Example"))),
+            "b": (MATTER_B, _row("b", "Memo two.docx", 1.5), _with_case_header(_memo("Blair Sample"))),
         }
     )
     out, _ = _run(client=client)

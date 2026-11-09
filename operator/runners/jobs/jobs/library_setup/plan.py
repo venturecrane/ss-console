@@ -71,4 +71,69 @@ def fits(kind: str, blob: bytes, source: Source) -> str:
     return ""
 
 
-__all__ = ["PLAN_ERROR", "REASONS", "adopter", "fits", "reason_code"]
+def styles_fits(kind: str, blob: bytes, pieces: list[str]) -> str:
+    """The empty string when a styles base can be made from ``blob``
+    (``styles_make.make_styles``, the very make the accept job runs, with the
+    firm's identity), else the refusal's code. Writes nothing."""
+    from .make import Unusable
+    from .styles_make import make_styles
+
+    try:
+        make_styles(kind, blob, pieces)
+    except Unusable as exc:
+        return exc.code
+    except Exception:  # noqa: BLE001 - any other fault on one file refuses that file, never the hunt
+        return PLAN_ERROR
+    return ""
+
+
+def marked_fits(kind: str, blob: bytes, source: Source, pieces: list[str]) -> str:
+    """The empty string when the kind's marked plan makes the whole library file
+    from ``blob`` (adopt, then ``make.make``'s headers and footers judgment and
+    marked places proof), else ``plan_<code>`` or ``made_<code>``."""
+    from .make import Unusable, make
+
+    why = fits(kind, blob, source)
+    if why:
+        return f"plan_{why}"
+    try:
+        make(kind, blob, source, pieces)
+    except Unusable as exc:
+        return f"made_{exc.code}"
+    except Exception:  # noqa: BLE001 - any other fault on one file refuses that file, never the hunt
+        return f"made_{PLAN_ERROR}"
+    return ""
+
+
+def contract_for(kind: str, blob: bytes, source: Source, pieces: list[str]) -> tuple[str, list[str]]:
+    """(the contract the library file would be made with, the refusals on the way).
+
+    A kind with a marked plan (``MARKED_KINDS``) is made marked when the firm's
+    document fits that plan, keeping the firm's own words where they are
+    boilerplate; otherwise, and for every other kind, it is made as a styles
+    base: the firm's page, headers, footers and styles, the body written fresh.
+    ("", refusals) when neither can be made, so the document is never listed."""
+    from . import MARKED, MARKED_KINDS, STYLES
+
+    refused: list[str] = []
+    if kind in MARKED_KINDS:
+        why = marked_fits(kind, blob, source, pieces)
+        if not why:
+            return MARKED, refused
+        refused.append(f"marked_refused_{why}")
+    why = styles_fits(kind, blob, pieces)
+    if not why:
+        return STYLES, refused
+    return "", [*refused, f"styles_refused_{why}"]
+
+
+__all__ = [
+    "PLAN_ERROR",
+    "REASONS",
+    "adopter",
+    "contract_for",
+    "fits",
+    "marked_fits",
+    "reason_code",
+    "styles_fits",
+]

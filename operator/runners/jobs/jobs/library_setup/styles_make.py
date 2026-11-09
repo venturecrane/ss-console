@@ -53,6 +53,9 @@ class StylesMade:
     #: Footer lines naming the source document's kind (its running title); each
     #: draft made in the base prints its own title there (``pleading.retitle_footer``).
     running_title_lines: int = 0
+    #: The firm's identity lines the headers and footers kept (``judge_stories``):
+    #: the acceptance's fixed strings, so the root writer's own check passes them.
+    fixed_strings: tuple[str, ...] = ()
 
 
 def _cleared_body(kind: str, blob: bytes) -> bytes:
@@ -125,10 +128,10 @@ def make_styles(kind: str, blob: bytes, identity: Iterable[str] = ()) -> StylesM
         raise Unusable("header_picture_lost", f"{lost} picture(s) of a header or footer")
     if _body_words(made):
         raise Unusable("body_not_cleared")
-    _fixed, residue = make_mod.judge_stories(made, identity)
+    fixed, residue = make_mod.judge_stories(made, identity)
     from ..drafting.pleading import running_title_lines
 
-    return StylesMade(made, residue, removed, running_title_lines(made))
+    return StylesMade(made, residue, removed, running_title_lines(made), fixed)
 
 
 __all__ = ["StylesMade", "make_styles"]

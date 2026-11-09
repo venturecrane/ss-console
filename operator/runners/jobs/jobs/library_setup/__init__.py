@@ -1,6 +1,7 @@
-"""Setting up one kind of document from the firm's own files (design 2026-11-06,
-piece 3): an administrator says "set up our mediation briefs" (or memos), for the
-firm or for one of its attorneys, and the job finds the firm's own finished
+"""Setting up the firm's document library from its own files (design 2026-11-06,
+piece 3): an administrator says "set up the document library" (every kind at
+once), or "set up our discovery responses" (one kind), for the firm or for one
+of its attorneys, and the job finds the firm's own finished
 documents of that kind across its matters and names the best candidates by file.
 
 THIS PIECE (3a) READS AND COUNTS. It never writes to a library, a ledger or a
@@ -17,9 +18,20 @@ makes the library file is piece 3b.
 
 from __future__ import annotations
 
-#: The kinds a firm can set up this way: the two whose firm-base plans exist
-#: (``drafting/brief_base.py``, ``drafting/memo_base.py``) and whose hunt rules
-#: exist (``firmbase/hunt.RULES``).
-KINDS = ("mediation_brief", "memo")
+#: The kinds a firm can set up this way: every kind the drafting job makes
+#: (``drafting/firm.py`` CLASSES), in the document-kind registry's order
+#: (``operator/contracts/document-kinds.yaml``). A brief or a memo is made with
+#: its marked plan (``drafting/brief_base.py``, ``drafting/memo_base.py``) when
+#: the firm's document fits it, else as a styles base (``styles_make.py``); the
+#: other three are always styles bases. A demand letter is not here: the demand
+#: job already writes in the firm's own demand (its prototypes file).
+KINDS = ("discovery_set", "discovery_response", "mediation_brief", "memo", "depo_outline")
+#: The kinds with a marked plan.
+MARKED_KINDS = ("mediation_brief", "memo")
+#: ``setup_kind`` for "set up the document library": one hunt per kind, one
+#: list per kind in one reply.
+LIBRARY = "library"
+#: The library file contracts this job makes (``operator_connector_sdk.library``).
+MARKED, STYLES = "marked", "styles"
 
-__all__ = ["KINDS"]
+__all__ = ["KINDS", "LIBRARY", "MARKED", "MARKED_KINDS", "STYLES"]
