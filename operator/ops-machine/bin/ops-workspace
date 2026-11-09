@@ -40,10 +40,12 @@ gb=$(jq -r --arg s "$slug" '.workspaces[$s].volume_gb // 50' "$reg")
 suffix=$(printf '%s' "$slug" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')
 log() { printf '[ops-workspace %s] %s\n' "$slug" "$*"; }
 
-# Secrets come from /ss prod. Re-exec under Infisical when they are not loaded.
+# Secrets come from /ss prod, read fresh every run. A shell that already holds
+# /ss values may hold an older copy: on 2026-11-09 one loaded before the Claude
+# account tokens were stored skipped this read, and the update staged no tokens.
 need_vault() {
   local k="ANTHROPIC_API_KEY__${suffix}"
-  if [ -z "${!k:-}" ] && [ -z "${OPS_WS_IN_VAULT:-}" ]; then
+  if [ -z "${OPS_WS_IN_VAULT:-}" ]; then
     OPS_WS_IN_VAULT=1 exec infisical run --env=prod --path=/ss --silent -- "$0" "$@"
   fi
   [ -n "${!k:-}" ] || { echo "ANTHROPIC_API_KEY__${suffix} is not in /ss prod; the client needs its own key first"; exit 1; }
