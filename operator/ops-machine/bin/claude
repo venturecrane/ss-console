@@ -42,7 +42,9 @@
 # (print the launch, names only, instead of running it).
 set -o pipefail   # not -u: empty arrays are normal here (bash < 4.4 calls them unbound)
 real="${OPS_CLAUDE_BIN:-/usr/local/bin/claude}"
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve a symlink first: ~/bin/<name> may point here (ops-home-bin-sync), and
+# the helpers beside this script live in the image directory, not ~/bin.
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 dry="${OPS_CLAUDE_SHIM_DRY:-}"
 envfile=()
 [ -f "$HOME/.ops-secrets" ] && envfile=(CLAUDE_ENV_FILE="$HOME/.ops-secrets")
