@@ -319,7 +319,7 @@ Using conversation history and gathered context, the agent generates a summary c
 - Questions for PM
 - Decisions needed
 - External dependencies
-- **Unwired seams:** any producer→consumer seam this session touched but did not observe working on the real runtime. Per the Definition of Done ("Done means wired", `crane_doc('global', 'team-workflow.md')`), these are NOT done — name the seam and use `status:blocked` rather than implying completion. The EOS verify-coverage gate (Layer 4c) enforces this mechanically when `status=done`; see `docs/instructions/eos-gate.md`.
+- **Unwired seams:** any producer→consumer seam this session touched that is not READY (CLAUDE.md, "Done means the client can do it": built and merged, rehearsed at $0 on real inputs against an answer key, running on the seat, every gate probed open on the seat, watched by the hourly work-health triage). A seam that is READY is done even though no real client request has run through it yet; the first real run is the triage's to watch, so it never holds this session open. Per the Definition of Done ("Done means wired", `crane_doc('global', 'team-workflow.md')`), these are NOT done: name the seam and use `status:blocked` rather than implying completion. The EOS verify-coverage gate (Layer 4c) enforces this mechanically when `status=done`; see `docs/instructions/eos-gate.md`.
 
 **Next Session:** Recommended focus - write as an ordered action plan
 
