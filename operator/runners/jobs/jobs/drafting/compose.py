@@ -25,6 +25,7 @@ from typing import Any
 from ..demand import draft as d
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
+from . import quote_tail
 
 AUDIT_MAX_TOKENS = 32_000
 #: A served set's requests are read this many at a time (``Drafter._chunked``).
@@ -114,7 +115,15 @@ def repair_scope(draft: str, audit: str, digest: str) -> tuple[list[tuple[str, s
     for head, body in d.sections(draft):
         lines = [ln for ln in audits.get(head, "").splitlines() if FINDING.search(ln)]
         flat = " ".join(body.split())
-        lines += [f"- quotation not found verbatim in the record | INVENTED | {q}" for q in unfound if q[:60] in flat]
+        lines += [
+            (
+                f"- words after a quotation change the record's own words | DRIFTS | {q}"
+                if f" | {quote_tail.TAG} | " in q
+                else f"- quotation not found verbatim in the record | INVENTED | {q}"
+            )
+            for q in unfound
+            if quote_tail.anchor(q) in flat
+        ]
         if lines:
             flagged.append((head, body, "\n".join(lines)))
     if not flagged:
@@ -417,16 +426,27 @@ class Drafter:
             results = dict(ex.map(one, enumerate(secs)))
         body = "\n\n".join(results[i] for i in sorted(results))
         tallies = tally(body)
-        nf = [c["quote"] for c in mech["quotes"] if not c["found"]]
+        nf = [f"- {c['quote']}" for c in mech["quotes"] if not c["found"]]
+        # A served set's quotations also may not carry the record's next words
+        # on with a word changed (2026-11-09, "where the [alleged] incident").
+        tails = (
+            quote_tail.findings(corpus_text, draft.partition("=== ATTORNEY NOTES ===")[0])
+            if self.cls in STRICT_CLASSES
+            else []
+        )
+        nf += quote_tail.lines(tails)
         nf_block = (
-            ("## MECHANICAL: quotations not found verbatim in the corpus\n" + "\n".join(f"- {q}" for q in nf) + "\n\n")
-            if nf
-            else ""
+            ("## MECHANICAL: quotations not found verbatim in the corpus\n" + "\n".join(nf) + "\n\n") if nf else ""
         )
         self._commit(
             f"audit-v{version}.md", f"# Audit v{version}\n\nTallies: {json.dumps(tallies)}\n\n{nf_block}{body}"
         )
-        out = {"tallies": tallies, "quotes": len(mech["quotes"]), "quotes_not_found": mech["quotes_not_found"]}
+        out = {
+            "tallies": tallies,
+            "quotes": len(mech["quotes"]),
+            "quotes_not_found": mech["quotes_not_found"],
+            "quote_tails_changed": len(tails),
+        }
         self._commit(f"audit-v{version}.json", json.dumps(out, indent=1))
         return out
 
