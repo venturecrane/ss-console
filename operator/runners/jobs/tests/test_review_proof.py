@@ -495,7 +495,6 @@ def test_a_review_hold_ends_the_unit_held_with_a_paged_reason_and_nothing_filed(
     assert not seat.created and not seat.sent and o.proof is None
 
 
-
 _SLIP = ("01/20/2099 (date as written on referral form) Clinic", "01/21/2099 Clinic")
 
 
@@ -508,7 +507,9 @@ def test_a_future_date_the_cited_page_writes_is_should_fix_not_a_hold():
     to (A&P update, 2026-11-09): the entry says the date is the form's own and
     the page it cites carries it, so the attorney reads it and nothing holds."""
     rows = [("01/20/2099 (date as written on referral form)", "Clinic"), ("01/21/2099", "Clinic")]
-    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    found = review.code_findings(
+        "Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None
+    )
     assert _future(found)[f"entry {_SLIP[0]}"] == (proof_review.MUST, "5 future date"), "code alone holds"
     bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)", _SLIP[1]: "Seen. (Exhibit 1 - p. 4)"}
     page = {(1, 3): "Date: 1-20-99  Treatment requested", (1, 4): "Date: 1-20-99"}
@@ -520,7 +521,9 @@ def test_a_future_date_the_cited_page_writes_is_should_fix_not_a_hold():
 def test_as_written_without_the_date_on_the_cited_page_still_holds():
     """The drafter's hedge decides nothing: the cited page must carry the date."""
     rows = [("01/20/2099 (date as written on referral form)", "Clinic")]
-    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    found = review.code_findings(
+        "Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None
+    )
     bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)"}
     for text in ("Date: 1-20-98", "Date: 11-20-99", ""):
         out = _future(review.as_written_on_page(found, bodies, lambda ex, pg, t=text: t))
@@ -532,7 +535,9 @@ def test_an_as_written_date_the_delivered_chronology_already_carries_is_should_f
     delivered page has no text; the delivered chronology giving the same date
     line word for word confirms it instead (A&P update, 2026-11-09)."""
     rows = [("01/20/2099 (date as written on referral form)", "Clinic")]
-    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    found = review.code_findings(
+        "Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None
+    )
     bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)"}
     base = "## Medical Summary\n\n01/20/2099 (date as written on referral form)\nClinic\n\nReferral slip.\n"
     out = _future(review.as_written_on_page(found, bodies, lambda ex, pg: "", base))

@@ -158,7 +158,7 @@ def test_a_firms_own_english_is_not_system_vocabulary(clean):
         "The diagnosis was recorded by code alone. (Exhibit 7 - p. 2)",
         "The form gives the procedure by code number. (Exhibit 2 - p. 4)",
         "A physical therapy prescription dated 12/2/25 lists the diagnoses by code along with a handwritten entry. (Exhibit 7 - p. 1)",
-        "The referral lists the diagnosis by code and the handwritten entry \"cuff tear\". (Exhibit 7 - p. 2)",
+        'The referral lists the diagnosis by code and the handwritten entry "cuff tear". (Exhibit 7 - p. 2)',
     ],
 )
 def test_a_records_own_by_code_wording_is_not_system_vocabulary(record):

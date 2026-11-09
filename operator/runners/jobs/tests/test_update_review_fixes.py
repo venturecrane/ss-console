@@ -427,7 +427,7 @@ def test_form_questions_about_the_patient_never_hold_and_another_person_still_do
     assert FI.findings("Name: Alpha Example  Patient: Jane Roe", *client)  # a label after a field gap
 
 
-def _vector_pdf(tmp_path, name, draw):  # noqa: D103
+def _vector_pdf(tmp_path, name, draw):
     import pymupdf
 
     doc = pymupdf.open()
