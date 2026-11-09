@@ -324,6 +324,32 @@ def _header_xml(blob: bytes) -> bytes:
     return b"".join(z.read(n) for n in z.namelist() if re.fullmatch(r"word/header\d*\.xml", n))
 
 
+def _lay_numbers(sec: Any, spec: Spec) -> None:
+    """Our line-number box and margin rules, anchored in the section's header
+    (its first paragraph's runs replaced)."""
+    from docx.oxml import parse_xml
+    from docx.shared import Pt
+
+    _top, right, _bottom, left = spec.margins_in
+    header = sec.header
+    header.is_linked_to_previous = False
+    hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    for r in list(hp.runs):
+        r._r.getparent().remove(r._r)
+    hp.paragraph_format.line_spacing = Pt(1)
+    hp.paragraph_format.space_before, hp.paragraph_format.space_after = Pt(0), Pt(0)
+    text_w = int((8.5 - left - right) * EMU_PER_INCH)
+    shapes = [
+        _numbers(spec),
+        _rule(2, RULE_NAMES[0], -int(0.08 * EMU_PER_INCH)),
+        _rule(3, RULE_NAMES[1], -int(0.12 * EMU_PER_INCH)),
+        _rule(4, RULE_NAMES[2], text_w + int(0.06 * EMU_PER_INCH)),
+    ]
+    for xml in shapes:
+        run = hp.add_run()
+        run._r.append(parse_xml(xml))
+
+
 def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     """Lay the rendered file at ``path`` onto pleading paper, in place. The
     footer carries ``title`` (the firm's authored one) when given, else the
@@ -337,7 +363,7 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import parse_xml
     from docx.oxml.ns import qn
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches
 
     from smokeball_connector.docx_base import add_page_field, set_run_font
 
@@ -363,23 +389,7 @@ def apply(path: Path, spec: Spec, title: str | None = None) -> list[str]:
         _exact(p.paragraph_format, spec.pitch_pt)
     _court_and_attachments(doc)
     if drawn is None:
-        header = sec.header
-        header.is_linked_to_previous = False
-        hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-        for r in list(hp.runs):
-            r._r.getparent().remove(r._r)
-        hp.paragraph_format.line_spacing = Pt(1)
-        hp.paragraph_format.space_before, hp.paragraph_format.space_after = Pt(0), Pt(0)
-        text_w = int((8.5 - left - right) * EMU_PER_INCH)
-        shapes = [
-            _numbers(spec),
-            _rule(2, RULE_NAMES[0], -int(0.08 * EMU_PER_INCH)),
-            _rule(3, RULE_NAMES[1], -int(0.12 * EMU_PER_INCH)),
-            _rule(4, RULE_NAMES[2], text_w + int(0.06 * EMU_PER_INCH)),
-        ]
-        for xml in shapes:
-            run = hp.add_run()
-            run._r.append(parse_xml(xml))
+        _lay_numbers(sec, spec)
     footer = sec.footer
     footer.is_linked_to_previous = False
     for p in list(footer.paragraphs):
