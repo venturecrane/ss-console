@@ -168,7 +168,7 @@ def test_the_library_reply_has_one_section_per_kind_and_says_what_each_uses_now(
     assert W.SENTENCES["now_pinned"] in text and W.SENTENCES["now_accepted"] in text
     assert W.SENTENCES["demand_not_listed"] in text and W.SENTENCES["library_question"] in text
     assert text.endswith(W.SENTENCES["outside"])
-    assert "—" not in text  # no em dash
+    assert chr(0x2014) not in text  # no em dash
 
 
 def test_a_pointed_list_says_what_it_looked_at(live):
