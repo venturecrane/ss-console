@@ -7,6 +7,7 @@
       "aliases": ["ap"],
       "region": "sjc",
       "volume_gb": 150,
+      "vm_size": "shared-cpu-4x",
       "memory_mb": 8192
     }
   }
