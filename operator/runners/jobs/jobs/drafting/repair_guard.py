@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from ..demand import draft as d
-from . import compose, newfacts
+from . import compose, newfacts, quote_tail
 
 if TYPE_CHECKING:
     from .compose import Drafter
@@ -204,7 +204,7 @@ class Guard:
     def _on(self, fid: FindingId, keys: list[Key], texts: dict[Key, str]) -> bool:
         head, n, kind = fid
         if head == "MECHANICAL":  # a quotation: on the request that carries it
-            q = _flat(kind)[:60]
+            q = quote_tail.anchor(_flat(kind))
             return any(q and q in _flat(texts.get(k, "")) for k in keys)
         return any(k[0] == head and (k[1] is None or k[1] == n) for k in keys)
 
