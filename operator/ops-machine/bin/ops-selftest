@@ -11,6 +11,16 @@ claude --version >/dev/null 2>&1 && ok "claude installed" || bad "claude"
 { [ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ]; } && ok "claude login present" || bad "claude login missing (claude, then /login)"
 gh auth status >/dev/null 2>&1 && ok "github login" || bad "github login missing (gh auth login)"
 
+# No ~/bin copy of an image script may shadow the image's own (2026-11-09:
+# smd-ops ran a 10-16 claude shim from ~/bin and missed the account switch).
+stale=""
+for f in /opt/ops/bin/*; do
+  t="$HOME/bin/$(basename "$f")"
+  if [ -e "$t" ] && [ "$(readlink "$t" 2>/dev/null)" != "$f" ]; then stale="$stale $(basename "$f")"; fi
+done
+[ -z "$stale" ] && ok "no ~/bin copy shadows an image script" \
+  || bad "~/bin shadows the image's$stale (reboot runs ops-home-bin-sync)"
+
 # Two Claude accounts (2026-11-08): which one the shim would run on now, that the
 # watcher which moves a limit-stuck session to the other one is scheduled, and
 # that no account token can reach a tool. Names only; the dry launch prints the

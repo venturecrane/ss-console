@@ -1,0 +1,23 @@
+#!/bin/bash
+# ops-home-bin-sync [image_bin] [home_bin]: make every ~/bin script that shares
+# a name with an image script a symlink to the image copy.
+#
+# Why (2026-11-09): smd-ops kept hand-installed copies from 2026-10-16 in
+# ~/bin (claude, ss-env, ops-triage, ...). ss-env puts ~/bin first on PATH, so
+# every `ss-env claude` ran the old shim and never reached the two-account
+# switch; a session ran on the spent account while account B was idle. The
+# volume outlives the image, so a copy there silently pins old behaviour. The
+# entrypoint runs this on every boot; the selftest fails if one comes back.
+# A ~/bin file with no image counterpart is the operator's own and is left alone.
+set -euo pipefail
+img="${1:-/opt/ops/bin}"
+home_bin="${2:-$HOME/bin}"
+[ -d "$home_bin" ] || exit 0
+for f in "$img"/*; do
+  n=$(basename "$f")
+  t="$home_bin/$n"
+  [ -e "$t" ] || [ -L "$t" ] || continue
+  [ "$(readlink "$t" 2>/dev/null || true)" = "$f" ] && continue
+  ln -sfn "$f" "$t"
+  echo "ops-home-bin-sync: $t now points at $f"
+done
