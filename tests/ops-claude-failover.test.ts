@@ -19,6 +19,7 @@
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import {
+  symlinkSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -164,6 +165,19 @@ describe('the claude shim', () => {
       })
     )
     expect(readFileSync(seen, 'utf8')).toBe('test-token-b')
+  })
+
+  it('run through a ~/bin symlink, still finds its helpers beside the real script', () => {
+    const home = makeHome()
+    mkdirSync(join(home, 'bin'), { recursive: true })
+    symlinkSync(SHIM, join(home, 'bin', 'claude'))
+    const out = run(
+      'bash',
+      [join(home, 'bin', 'claude'), '-p', 'hi'],
+      baseEnv(home, { OPS_CLAUDE_SHIM_DRY: '1', ...TOKENS })
+    ).trim()
+    expect(out).toMatch(/^account=B /)
+    expect(out).toContain('env_file=' + TOOL_ENV)
   })
 
   it('a token session drops Remote Control and gets a known session id', () => {

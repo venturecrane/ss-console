@@ -31,7 +31,9 @@
 set -uo pipefail
 S="$HOME/state"; P="$S/claude-panes"
 mkdir -p "$P" "$HOME/logs"
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve a symlink first: ~/bin/<name> may point here (ops-home-bin-sync), and
+# the helpers beside this script live in the image directory, not ~/bin.
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 acct="$here/ops-claude-accounts"
 dry="${OPS_FAILOVER_DRY:-}"
 now=$(date +%s)
