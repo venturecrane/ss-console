@@ -147,6 +147,25 @@ describe('the claude shim', () => {
     expect(shim(home, ['-p', 'hi'])).toMatch(/^account=A /)
   })
 
+  it('strips the line break a terminal copy leaves in a token before Claude sees it', () => {
+    const home = makeHome()
+    const seen = join(home, 'seen')
+    writeFileSync(
+      join(home, 'fakebin', 'real-claude'),
+      `#!/bin/bash\nprintf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" > "${seen}"\n`
+    )
+    chmodSync(join(home, 'fakebin', 'real-claude'), 0o755)
+    run(
+      'bash',
+      [SHIM, '-p', 'hi'],
+      baseEnv(home, {
+        OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude'),
+        CLAUDE_OAUTH_TOKEN_B: 'test-tok\nen-b\r ',
+      })
+    )
+    expect(readFileSync(seen, 'utf8')).toBe('test-token-b')
+  })
+
   it('a token session drops Remote Control and gets a known session id', () => {
     const out = shim(
       makeHome(),

@@ -62,7 +62,10 @@ mint_and_stage() {
   local extra=() a hc
   for a in A B; do
     local tv="CLAUDE_OAUTH_TOKEN_$a"
-    if [ -n "${!tv:-}" ]; then extra+=("$tv=${!tv}"); else log "WARN $tv not in /ss prod; account $a not available here"; fi
+    # Strip the line break a terminal copy can leave in it: fly secrets import
+    # reads one NAME=VALUE per line, and Claude refuses a header with a break.
+    local tval="${!tv:-}"; tval="${tval//[$'\r\n\t ']/}"
+    if [ -n "$tval" ]; then extra+=("$tv=$tval"); else log "WARN $tv not in /ss prod; account $a not available here"; fi
   done
   # The workspace's own healthchecks.io ping url, so the limit watcher can page
   # when every account is spent (its /fail emails, as a failed sweep does).
