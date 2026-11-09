@@ -103,6 +103,7 @@ _NOTES_TAG = " - Chronology Review Notes "
 _REVIEW_LIST_TAG = " - Records Review "
 _DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 # An entry's date line that says its date is the page's own, copied as written.
+_DATE_LINE = re.compile(r"^\d{2}/\d{2}/\d{4}\s*\([^)]*\)")
 _AS_WRITTEN = re.compile(r"(?i)^\d{2}/\d{2}/\d{4}\s*\([^)]*\bas written\b")
 _EXHIBIT_NO = re.compile(r"^Exhibit (\d+)\b")
 # The words that only the system writes. A hit is settled: no medical record
@@ -191,7 +192,9 @@ def _date_forms(d: date) -> str:
     return "|".join(out)
 
 
-def as_written_on_page(found: list[review.Finding], bodies: dict[str, str], page_text: Any) -> list[review.Finding]:
+def as_written_on_page(
+    found: list[review.Finding], bodies: dict[str, str], page_text: Any, delivered: str = ""
+) -> list[review.Finding]:
     """An entry dated after today stays a MUST-FIX unless code confirms the
     record writes that date: the entry's date line says the date is copied as
     written, AND a page the entry cites carries that date in a numeric form.
@@ -199,7 +202,13 @@ def as_written_on_page(found: list[review.Finding], bodies: dict[str, str], page
     in the notes, never a hold. The drafter's "as written" alone decides
     nothing (2026-11-09, a referral slip dated "11-17-26" beside the
     11/17/2025 visit it belongs to held an A&P update). ``page_text`` is
-    ``(exhibit, page) -> text`` (``review_evidence.Pages.text``)."""
+    ``(exhibit, page) -> text`` (``review_evidence.Pages.text``).
+
+    ``delivered`` is an update's delivered chronology (``update/base.md``):
+    an "as written" date line it already carries word for word is one the
+    firm holds, carried by the update's proofs, and is confirmed the same
+    way. An update keeps no transcript of a delivered exhibit, so a delivered
+    page that is only an image (the slip above) has no text to read."""
     out: list[review.Finding] = []
     for f in found:
         key = f.cite[len("entry ") :] if f.cite.startswith("entry ") else ""
@@ -211,12 +220,15 @@ def as_written_on_page(found: list[review.Finding], bodies: dict[str, str], page
         pages = dict.fromkeys(
             (int(c.group(1)), pg) for c in CITE.finditer(bodies.get(key, "")) for pg in (_pages(c.group(2)) or [1])
         )
-        if any(rx.search(page_text(ex, pg) or "") for ex, pg in pages):
+        line = _DATE_LINE.match(key)
+        held = line is not None and line.group(0).strip() in {ln.strip() for ln in delivered.splitlines()}
+        if held or any(rx.search(page_text(ex, pg) or "") for ex, pg in pages):
+            why = "as the delivered chronology already gives it" if held else "as the cited page itself writes it"
             out.append(
                 review.code(
                     review.SHOULD,
                     "5 future date as written",
-                    f"an entry is dated {key[:10]}, after today, as the cited page itself writes it",
+                    f"an entry is dated {key[:10]}, after today, {why}",
                     f.cite,
                 )
             )
@@ -578,7 +590,9 @@ def _code(
 
         pages = review_evidence.Pages(sr)
         try:
-            found = as_written_on_page(found, entry_bodies(chron_path), pages.text)
+            base = rd / "update" / "base.md"
+            delivered = base.read_text(encoding="utf-8") if base.is_file() else ""
+            found = as_written_on_page(found, entry_bodies(chron_path), pages.text, delivered)
         finally:
             pages.close()
     return found, chron, names

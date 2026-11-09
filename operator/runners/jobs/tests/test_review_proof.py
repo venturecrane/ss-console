@@ -525,3 +525,18 @@ def test_as_written_without_the_date_on_the_cited_page_still_holds():
     for text in ("Date: 1-20-98", "Date: 11-20-99", ""):
         out = _future(review.as_written_on_page(found, bodies, lambda ex, pg, t=text: t))
         assert out[f"entry {_SLIP[0]}"] == (proof_review.MUST, "5 future date"), text
+
+
+def test_an_as_written_date_the_delivered_chronology_already_carries_is_should_fix():
+    """An update keeps no transcript of a delivered exhibit, so an image-only
+    delivered page has no text; the delivered chronology giving the same date
+    line word for word confirms it instead (A&P update, 2026-11-09)."""
+    rows = [("01/20/2099 (date as written on referral form)", "Clinic")]
+    found = review.code_findings("Seen. (Exhibit 1 - p. 1)", rows, ["Exhibit 1 - Clinic.pdf"], {}, today=TODAY, dob=None)
+    bodies = {_SLIP[0]: "Referral slip. (Exhibit 1 - p. 3)"}
+    base = "## Medical Summary\n\n01/20/2099 (date as written on referral form)\nClinic\n\nReferral slip.\n"
+    out = _future(review.as_written_on_page(found, bodies, lambda ex, pg: "", base))
+    assert out[f"entry {_SLIP[0]}"] == (proof_review.SHOULD, "5 future date as written")
+    other = base.replace("referral form", "intake form")
+    out = _future(review.as_written_on_page(found, bodies, lambda ex, pg: "", other))
+    assert out[f"entry {_SLIP[0]}"] == (proof_review.MUST, "5 future date"), "not word for word: still a hold"
