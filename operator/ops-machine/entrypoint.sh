@@ -11,6 +11,9 @@ chmod 0700 "$HOME_DIR"
 for d in .ssh .config dev bin logs state inbox locks; do
   install -d -o ops -g ops -m 0700 "$HOME_DIR/$d"
 done
+# A copy of an image script left in ~/bin shadows the image's (ss-env puts ~/bin
+# first): point each one at the image copy (bin/ops-home-bin-sync, 2026-11-09).
+/opt/ops/bin/ops-home-bin-sync /opt/ops/bin "$HOME_DIR/bin"
 if [ ! -f "$HOME_DIR/.bashrc" ]; then
   cat > "$HOME_DIR/.bashrc" <<'EOF'
 export PATH="$HOME/bin:/opt/ops/bin:$HOME/.local/bin:$PATH"
