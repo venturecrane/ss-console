@@ -429,27 +429,32 @@ def job_items(
                 )
             )
         elif state == "DELIVERED":
-            # Delivered, but only because a person stepped in: the requester got
-            # the work, and the cause of the hand step is still in the code.
-            # Every manual fix becomes code, so this is work too, not a success.
-            if now - ts > timedelta(hours=cfg.ended_job_hours):
-                continue
-            steps = hand_steps(job)
-            if not steps:
-                continue
-            out.append(
-                item(
-                    seat,
-                    "job_hand_step",
-                    f"{job.lane}:{job.job_id}:DELIVERED",
-                    ts,
-                    f"The {name} delivered at {hhmm(ts)}, but only after a person stepped in "
-                    f"{len(steps)} time{'s' if len(steps) != 1 else ''}: {'; '.join(steps)}.",
-                    "Find why each step was needed and make it code, proven at $0 on this job's saved inputs; "
-                    "the next job like it will stop the same way.",
-                )
-            )
+            hand = _hand_step_item(seat, job, name, cfg, now)
+            if hand is not None:
+                out.append(hand)
     return out
+
+
+def _hand_step_item(seat: str, job: Job, name: str, cfg: Config, now: datetime) -> Optional[Item]:
+    """Delivered, but only because a person stepped in: the requester got the
+    work, and the cause of the hand step is still in the code. Every manual fix
+    becomes code, so this is work too, not a success."""
+    ts = job.last[0]
+    if now - ts > timedelta(hours=cfg.ended_job_hours):
+        return None
+    steps = hand_steps(job)
+    if not steps:
+        return None
+    return item(
+        seat,
+        "job_hand_step",
+        f"{job.lane}:{job.job_id}:DELIVERED",
+        ts,
+        f"The {name} delivered at {hhmm(ts)}, but only after a person stepped in "
+        f"{len(steps)} time{'s' if len(steps) != 1 else ''}: {'; '.join(steps)}.",
+        "Find why each step was needed and make it code, proven at $0 on this job's saved inputs; "
+        "the next job like it will stop the same way.",
+    )
 
 
 # ---------------------------------------------------------------------------
