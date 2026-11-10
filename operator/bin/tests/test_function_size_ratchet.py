@@ -114,6 +114,36 @@ def test_the_counter_can_fail(tmp_path: Path) -> None:
     assert not any(k.startswith("test_") for k in result["length"]), "test files must be exempt"
 
 
+def test_the_seat_runtime_is_counted_and_its_growth_fails(tmp_path: Path) -> None:
+    """The overlay was skipped by name until 2026-11-10. Prove the census reaches it,
+    exempts its tests_e2e harness, and that a grown baselined function and a new
+    over-ceiling one are each rejected there."""
+    shared = tmp_path / "hermes-smd-overlay" / "shared"
+    shared.mkdir(parents=True)
+    e2e = tmp_path / "hermes-smd-overlay" / "tests_e2e"
+    e2e.mkdir(parents=True)
+
+    def fn(name: str, n: int) -> str:
+        return f"def {name}():\n" + "\n".join(f"    x{i} = {i}" for i in range(n)) + "\n    return x0\n"
+
+    (shared / "gate.py").write_text(fn("relay", 90) + "\n" + fn("fresh", 80), encoding="utf-8")
+    (e2e / "harness.py").write_text(fn("drive", 200), encoding="utf-8")
+    current = fs.census(tmp_path, _ruff())["length"]
+    assert current == {
+        "hermes-smd-overlay/shared/gate.py::relay": 92,
+        "hermes-smd-overlay/shared/gate.py::fresh": 82,
+    }, current
+
+    problems = _compare("length", {"hermes-smd-overlay/shared/gate.py::relay": 85}, current)
+    assert any(p.startswith("GREW: hermes-smd-overlay/shared/gate.py::relay length 85 -> 92") for p in problems), (
+        problems
+    )
+    assert any(
+        p.startswith("NEW over the length ceiling: hermes-smd-overlay/shared/gate.py::fresh") for p in problems
+    ), problems
+    assert len(problems) == 2, problems
+
+
 def test_docstrings_and_comments_do_not_count() -> None:
     lines = ["def f():", '    """doc', "    more doc", '    """', "    # comment", "", "    return 1"]
     import ast
