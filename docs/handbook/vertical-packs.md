@@ -55,15 +55,15 @@ The Pack Production Operating Model defines a pack as five concrete artifacts, a
 | 4 | **GTM surface** (landing page + intake hook) | `src/pages/packs/<slug>.astro` + the interest allow-list in `src/lib/booking/config.ts` |
 | 5 | **Delivery SOP** (honed per client) | `docs/templates/delivery-sops/` + spec notes |
 
-The vertical-specific skill **bodies** are not in this list. They live in this repo under `operator/skills/<skill>/SKILL.md` (72 skill directories on 2026-10-21, a count that includes the self-serve and couples skills), not in the overlay, and are baked into the fleet image; the vertical's `operator/verticals/<slug>/vertical.yaml` (and an add-on's `addon.yaml`) declares which of them the pack uses. The operating model document still says skill bodies go in the overlay; that line predates the move and is out of date. See [Operator Platform Architecture](/admin/playbook/operator-platform) for the overlay boundary.
+The vertical-specific skill **bodies** are not in this list. They live in this repo under `operator/skills/<skill>/SKILL.md` (87 skill directories on 2026-11-09, a count that includes the self-serve and couples skills), not in the overlay, and are baked into the fleet image; the vertical's `operator/verticals/<slug>/vertical.yaml` (and an add-on's `addon.yaml`) declares which of them the pack uses. The operating model document still says skill bodies go in the overlay; that line predates the move and is out of date. See [Operator Platform Architecture](/admin/playbook/operator-platform) for the overlay boundary.
 
 ## The shared spine
 
-A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `email-reply`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists eighteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-six more.
+A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `email-reply`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists eighteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-seven more.
 
 ## The documented verticals
 
-Twelve verticals are specified under `docs/specs/verticals/` (plus a `_template`), each with a matching `operator/verticals/<slug>/` directory. Law (personal-injury) is the one built end-to-end and the worked reference every later pack is skinned from.
+Twelve verticals are specified under `docs/specs/verticals/` (plus a `_template`), each with a matching `operator/verticals/<slug>/` directory. A thirteenth directory, `operator/verticals/real-estate/`, holds only a manifest: it has no written spec and no public page, and exists so one of SMD's own seats can name it. Law (personal-injury) is the one built end-to-end and the worked reference every later pack is skinned from.
 
 - `accounting`
 - `dental`
@@ -80,7 +80,7 @@ Twelve verticals are specified under `docs/specs/verticals/` (plus a `_template`
 
 A documented spec is a brief, not a shipped pack. A pack page is published from its written spec, and building the pack out (its seat configuration and skills) starts with the first client in that vertical. The Captain amended the operating model to this on 2026-10-21 to match practice: all twelve pack pages are public, and only law has been delivered (`docs/pm/pack-production-operating-model.md`).
 
-Current state, checked against the repo: all twelve pack pages are published (`src/pages/packs/<slug>.astro` exists for every vertical above), and only the law-firm pack has a live seat (`vertical: law-firm` is the only vertical any `operator/customers/*/customer.yaml` names; the other seats are `vertical: mixed`). The published pages therefore run ahead of the rule as written; which of the two should change is a decision for the Captain and is not recorded.
+Current state, checked against the repo: all twelve pack pages are published (`src/pages/packs/<slug>.astro` exists for every vertical above), and only the law-firm pack serves a client (`vertical: law-firm` is the only vertical a client seat's `operator/customers/*/customer.yaml` names; one seat SMD pays for itself names `vertical: real-estate`, and the other seats are `vertical: mixed`). The published pages therefore run ahead of the rule as written; which of the two should change is a decision for the Captain and is not recorded.
 
 ## How a pack is built (the motion, proven on Law)
 

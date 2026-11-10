@@ -36,7 +36,7 @@ Captain's directive: add this offering to SMD's catalog. Two front doors, one fi
 
 ### Four locks
 
-**1. Productize as a flat-rate retainer SKU.** Operator is a named offering with a fixed monthly price. The customer signs up for a productized service, not a scoped engagement. Pricing shape is flat retainer (not metered, not credit-based, not scoped per-engagement). The specific monthly price is deferred to follow-on work pending stack cost analysis; the _shape_ of the pricing is locked here.
+**1. Productize as a flat-rate retainer SKU.** Operator is a named offering with a fixed monthly price. The customer signs up for a productized service, not a scoped engagement. Pricing shape is flat retainer (not metered, not credit-based, not scoped per-engagement). The specific monthly price is deferred to follow-on work pending stack cost analysis; the _shape_ of the pricing is locked here. **[Amended 2026-11-09: the retainer is still flat, but it is no longer true that nothing is metered. Some kinds of job are counted against an allowance per billing cycle that the engagement authors: chronology package pages ([ADR 0087](./0087-chronology-package-content-control.md), amendment of 2026-09-09) and, where a seat sets it, litigation status lists (`litigation_list_allowance_per_cycle`, read by `operator/workspace_broker/litigation_allowance.py`).]**
 
 **2. Second front door, not replacement.** The scope-based assessment funnel (Decision #16, #18) remains the primary path for prospects whose objectives the firm needs to surface through conversation. Operator is the entry point for prospects who already know they want an agent. Two front doors, one firm — the firm-level voice and solutions-consulting positioning are unchanged.
 

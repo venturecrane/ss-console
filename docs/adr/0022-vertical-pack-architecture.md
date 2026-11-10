@@ -13,6 +13,8 @@ related-issue: '#1091'
 
 **Status:** Accepted (Captain decision, 2026-05-25).
 
+> **Amendment (2026-11-09): what is built differs from the Layer 2 and Layer 3 layout below.** A pack directory under `operator/verticals/<slug>/` holds a manifest (`vertical.yaml`, and `addon.yaml` for an add-on), reference documents and fixtures. It has no `skills/`, `connectors/` or `personas/` subdirectories: skill bodies are flat and shared under `operator/skills/<skill>/SKILL.md`, and a manifest names the ones its pack uses. `vertical:` in `customer.yaml` is an unversioned label checked against an accepted list (`operator/hermes-smd-overlay/bootstrap/validate.py`, `src/lib/operator/customer-yaml/types.ts`); only an add-on line carries a version. No bootstrap code reads a pack manifest to fetch, merge or materialize a profile: what a seat runs is what its own `customer.yaml` lists. The layout below is the original design and is kept as history.
+
 **Source:** A strategic design conversation on how to package the Operator
 SKU for multiple business verticals (law, accounting, home services,
 healthcare, etc.) without scattering vertical-specific changes across the

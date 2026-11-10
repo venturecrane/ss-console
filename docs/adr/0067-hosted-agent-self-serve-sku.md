@@ -53,7 +53,7 @@ Launch **Hosted Agent** (working name; route `/agent`, product slug `hosted-agen
 ## Consequences
 
 - Revenue can arrive before automation exists; every sale costs Captain minutes, bounded by selling in small waves.
-- The COGS/MRR kill gate (ADR 0062) gains a second SKU: seat cost is a Fly Machine (~shared-cpu-1x/1024 + 10GB volume) plus support minutes; LLM spend is the customer's by design.
+- The COGS/MRR kill gate (ADR 0062) gains a second SKU: seat cost is a Fly Machine (~shared-cpu-1x/1024 + 10GB volume) **[Amended 2026-11-09: no seat runs at 1024 MB. The smallest authored size is `shared-cpu-1x` with 2048 MB, which a seat's `customer.yaml` records as the floor after the 2026-09-01 crash loop, and the largest is `shared-cpu-4x` with 8192 MB (`machine:` in each `operator/customers/<slug>/customer.yaml`).]** plus support minutes; LLM spend is the customer's by design.
 - The security posture marketed is the shipped one (invariants, isolation, audit, fail-closed entitlements). Outbound send-caps and DMARC remain honestly unbuilt and unmarketed; the channel constraint stands in for them at launch.
 
 ## Verification

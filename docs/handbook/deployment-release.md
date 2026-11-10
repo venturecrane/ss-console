@@ -312,8 +312,10 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
 3. **Prove it on the rig, then release:** `fleet release <release-id> --only
    pilot-smokeball`, drive the shadow firm against the rig and cite the run id
    (below), then `fleet release <release-id>` for the rings. Rings live in
-   `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `pilot-smokeball`, 2 `scott`
-   `brokery` `captain-mark`, 3 `ashton-price` (always one at a time). That file
+   `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `ashton-price`, 2
+   `pilot-smokeball` `scott` `brokery` `captain-mark` (the last ring always one
+   at a time). The client seat has been ring 1 since 2026-10-30; the reason is
+   under "The release controller" below. That file
    is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
    (`npm run gen:seat-registries`); a seat in no ring would join the last. A
    seat authored with `fly_app: null` (`ashton-price-marketing` until the firm
