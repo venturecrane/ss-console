@@ -33,11 +33,14 @@ Best-effort throughout: a failed write or read loses a name, never a reply.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import re
 import time
+from collections.abc import Iterable
+from email.utils import parseaddr
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -155,10 +158,27 @@ def _valid_number(n: object) -> bool:
     return isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 999
 
 
+def recipient_digest(address: str) -> str:
+    """sha256 of a recipient's bare lower-cased address. Kept beside a dispatch's
+    labels so a person's purge (``workspace_broker/person_purge.py``, which
+    carries the same function) can find the files sent to them; the address
+    itself is never written here. ``"Name <a@b.example>"`` and ``a@b.example``
+    are the same person."""
+    bare = parseaddr(address)[1] or address
+    return hashlib.sha256(bare.strip().lower().encode("utf-8")).hexdigest()
+
+
 def record(
-    dispatch_ref: object, labels: dict[int, str], kinds: dict[int, str] | None = None
+    dispatch_ref: object,
+    labels: dict[int, str],
+    kinds: dict[int, str] | None = None,
+    recipients: Iterable[str] = (),
 ) -> bool:
-    """Keep the labels (and line kinds) one successful send carried. Never raises."""
+    """Keep the labels (and line kinds) one successful send carried. Never raises.
+
+    ``recipients`` (2026-11-10): who the send went to, kept only as
+    :func:`recipient_digest` values, so removing a person can remove the label
+    files of the sends they received."""
     try:
         if not (isinstance(dispatch_ref, str) and _REF_RE.match(dispatch_ref)):
             return False
@@ -181,6 +201,9 @@ def record(
         payload: dict = {"labels": kept}
         if kept_kinds:
             payload["kinds"] = kept_kinds
+        to = sorted({recipient_digest(r) for r in recipients if isinstance(r, str) and r.strip()})
+        if to:
+            payload["to_sha256"] = to
         tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, target)
         _prune(directory, time.time())
@@ -297,6 +320,7 @@ __all__ = [
     "name_numbers",
     "named_in",
     "numbered_lines",
+    "recipient_digest",
     "record",
     "seed_provenance",
     "usable",

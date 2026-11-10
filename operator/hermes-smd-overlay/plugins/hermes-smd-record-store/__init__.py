@@ -189,8 +189,7 @@ PARTITION_REFUSED = (
 )
 #: The model-facing write on a store only code writes.
 MANAGED_REFUSED = (
-    "This store is kept by the seat itself; its records are written by the seat, "
-    "not by this tool."
+    "This store is kept by the seat itself; its records are written by the seat, not by this tool."
 )
 
 

@@ -53,7 +53,9 @@ def test_an_authored_seat_registers_what_it_registered_before(seat: Path) -> Non
     added = sorted(set(actual["tools"]) - set(expected["tools"]))
     removed = sorted(set(expected["tools"]) - set(actual["tools"]))
     assert not added and not removed, f"{seat.parent.name}: tools added {added}, removed {removed}"
-    assert actual["tools"] == expected["tools"], f"{seat.parent.name}: a tool moved plugin or toolset"
+    assert actual["tools"] == expected["tools"], (
+        f"{seat.parent.name}: a tool moved plugin or toolset"
+    )
     assert actual["hooks"] == expected["hooks"], (
         f"{seat.parent.name}: hooks changed: added "
         f"{sorted(map(tuple, actual['hooks']), key=str)} vs {sorted(map(tuple, expected['hooks']), key=str)}"

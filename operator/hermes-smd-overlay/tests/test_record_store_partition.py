@@ -76,7 +76,9 @@ def _seat_yaml(volume: Path) -> str:
 
 
 def _enroll(path: Path, *addresses: str) -> None:
-    entries = [{"address": a, "label": "t", "code_id": "c_1", "enrolled_at": "x"} for a in addresses]
+    entries = [
+        {"address": a, "label": "t", "code_id": "c_1", "enrolled_at": "x"} for a in addresses
+    ]
     path.write_text(json.dumps({"schema": 1, "enrolled": entries}), encoding="utf-8")
 
 
@@ -447,7 +449,11 @@ def test_the_library_still_reads_and_a_partition_never_reads_by_path(seat, tmp_p
 def test_validators_refuse_a_partition_with_a_reader_across_it() -> None:
     from shared.customer_config import CustomerConfig
 
-    for extra in ({"owner_field": "agent"}, {"readers": ["x@example.test"]}, {"writers": ["x@y.z"]}):
+    for extra in (
+        {"owner_field": "agent"},
+        {"readers": ["x@example.test"]},
+        {"writers": ["x@y.z"]},
+    ):
         cfg = CustomerConfig(
             {
                 "customer_id": "s",
