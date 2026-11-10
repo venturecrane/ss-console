@@ -318,7 +318,7 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    under "The release controller" below. That file
    is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
    (`npm run gen:seat-registries`); a seat in no ring would join the last. A
-   seat authored with `fly_app: null` (`smd-guide` until it is provisioned, and `ashton-price-marketing` until the firm
+   seat authored with `fly_app: null` (`ashton-price-marketing` until the firm
    creates its mailbox) is in no ring at all, in the generator and in
    `rings.py` alike: it has no app to release to. `--parallel N` widens a ring; `--dry-run` runs every
    check and touches nothing.

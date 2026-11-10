@@ -41,5 +41,5 @@ rings:
     bake_minutes: 0
     max_parallel: 20
   - ring: 2
-    seats: [pilot-smokeball, scott, brokery, captain-mark]
+    seats: [pilot-smokeball, scott, brokery, captain-mark, smd-guide]
     max_parallel: 1

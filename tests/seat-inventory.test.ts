@@ -72,7 +72,7 @@ describe('generated registries are current (drift)', () => {
         'pilot-smokeball': 'hermes-pilot-smokeball',
         scott: 'hermes-scott',
         // Authored, not yet provisioned (provisioning is the Captain's act).
-        'smd-guide': null,
+        'smd-guide': 'hermes-smd-guide',
         'smd-staging': 'hermes-smd-staging',
       }
     )
