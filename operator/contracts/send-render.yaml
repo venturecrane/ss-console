@@ -309,6 +309,18 @@ skills:
       the send is the woken turn's, not a pre_run dispatch, so the body-hash
       stamps do not apply; the cross-run invariants (one recipient) do.
 
+  # ---- smd-guide cron rows ----
+  rep-training:
+    render: templated
+    template: operator/hermes-smd-overlay/shared/training_report.py
+    note: >-
+      The weekly progress and readiness report to the seat's administrators.
+      Code renders the whole body from the progress store (training_report.py)
+      and the overlay's prerendered-dispatch hook sends it out of turn; the
+      model composes nothing, and the envelope's in_turn declares the skeleton
+      as the only body the woken turn may send. Stamps: body_sha256 entries on
+      EMITTED_WAKE (full and skeleton).
+
   # ---- scott seat cron rows ----
   status-report-assembler:
     render: compositional

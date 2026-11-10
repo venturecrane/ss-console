@@ -89,6 +89,9 @@ def seat_yaml(volume: Path) -> str:
         # Request cards carry who and what happened, never words.
         "request_card_text": False,
     }
+    # The real guide seat switches per-sender memory off; the rehearsal keeps
+    # it on, because removing a person's memory rows is part of what it proves.
+    doc["memory"].pop("peer_memory_enabled", None)
     # A held reply ends in the fixed line; redrafts capped at the default.
     doc["send_policy"]["reply"]["held_notice"] = True
     # One listed sender gets DAILY_LIMIT emails a day answered.
