@@ -20,6 +20,8 @@ export const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze
 
 /** Seats authored with `fly_app: null`, each with its unprovisioned_reason. */
 export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({
+  'ap-staging':
+    "The Fly app hermes-ap-staging is not created yet, and the twin's Operator Library matter ids and expense staff id in SMD's staging tenant are PENDING in customer.yaml; the Captain provisions it by the runbook in docs/handbook/deployment-release.md.",
   'ashton-price-marketing':
     "The firm has not yet created the seat's mailbox, its two Microsoft Graph app registrations or the WordPress Contributor user; the seat is provisioned the week the firm engages (scope letter 385, 2026-10-15).",
 })

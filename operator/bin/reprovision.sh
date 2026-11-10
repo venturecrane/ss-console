@@ -27,6 +27,15 @@ SLUG="${1:-}"
 [ -n "${SLUG}" ] || { echo "Usage: $0 <customer-slug>" >&2; exit 1; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# An exact twin of a client seat (operator/customers/<slug>/twin.yaml, ADR 0107)
+# is never provisioned here: this path injects every /ss key un-isolated, so the
+# twin would take any customer-owned name that is set globally. Its wrapper
+# blanks them: reprovision-staging.sh (--pre-flip before its flip).
+if [ -f "${HERE}/../customers/${SLUG}/twin.yaml" ]; then
+  echo "reprovision: refusing ${SLUG}: it is an exact twin of a client seat (operator/customers/${SLUG}/twin.yaml); provision it with operator/bin/reprovision-staging.sh, which isolates the client's secrets" >&2
+  exit 1
+fi
+
 # Never restart a seat in the middle of a job (fleet release, 2026-10-19). The
 # same live busy gate `fleet release` uses: a running lane job, pending wakes,
 # a managed cron firing within 10 minutes or a stale heartbeat all mean busy;

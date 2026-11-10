@@ -36,7 +36,16 @@ import yaml
 
 INFRA = "infra"
 CUSTOMER = "customer"
+# The two classes env-consumption.yaml may author (`custody:`).
 VALID_CUSTODY = frozenset({INFRA, CUSTOMER})
+# SMD's OWN sandbox-app credentials: they reach only SMD's own vendor sandbox
+# (no client's data or tenant), so a release twin keeps them; they are not
+# shared infra either, since a client seat must never run on them by accident.
+# Assigned only by _SMD_SANDBOX_EXACT below, never by the contract.
+# reprovision-staging.sh isolates customer-owned names only, so a twin authored
+# on a vendor's staging environment boots with its connector.
+SANDBOX = "sandbox"
+ALL_CLASSES = VALID_CUSTODY | {SANDBOX}
 
 # Placeholder sentinel a keyless build stamps into every customer-owned slot.
 # Deliberately unmistakable so `looks_like_placeholder` can never false-positive
@@ -72,12 +81,10 @@ _CUSTOMER_EXACT: frozenset[str] = frozenset(
         # override is supplied — the poller signs its loopback with it and the
         # in-Machine Hermes adapter re-verifies. Customer custody (per-seat).
         "WEBHOOK_SECRET_MSGRAPH",
-        # Smokeball connector (provision-customer.sh:560-575). Both the
-        # environment-specific SOURCE names in /ss and the env-agnostic runtime
-        # names the connector reads.
-        "SMOKEBALL_STAGING_CLIENT_ID",
-        "SMOKEBALL_STAGING_CLIENT_SECRET",
-        "SMOKEBALL_STAGING_API_KEY",
+        # Smokeball connector (bin/lib/stage-smokeball.sh). The production
+        # SOURCE names in /ss (the firm-sponsored app a client seat runs on) and
+        # the env-agnostic runtime names the connector reads. The STAGING source
+        # names are SMD's own sandbox app: _SMD_SANDBOX_EXACT below.
         "SMOKEBALL_PROD_CLIENT_ID",
         "SMOKEBALL_PROD_CLIENT_SECRET",
         "SMOKEBALL_PROD_API_KEY",
@@ -103,6 +110,20 @@ _CUSTOMER_EXACT: frozenset[str] = frozenset(
         "MSGRAPH_CLIENT_ID",
         "MSGRAPH_CLIENT_SECRET",
         "MSGRAPH_MAILBOX",
+    }
+)
+
+# SMD-owned SANDBOX credentials by EXACT name: SMD's own vendor sandbox app,
+# reaching only SMD's own sandbox tenant. bin/lib/stage-smokeball.sh reads these
+# three for a seat whose Smokeball connector says `environment: staging` (the
+# pilot, and the A&P twin ap-staging). Exact names, checked ahead of the customer
+# SMOKEBALL_STAGING_ prefix, so a NEW name in that family still classifies
+# customer (fail closed) until someone decides it is SMD's.
+_SMD_SANDBOX_EXACT: frozenset[str] = frozenset(
+    {
+        "SMOKEBALL_STAGING_CLIENT_ID",
+        "SMOKEBALL_STAGING_CLIENT_SECRET",
+        "SMOKEBALL_STAGING_API_KEY",
     }
 )
 
@@ -218,7 +239,7 @@ def load_contract_custody(path: Path | None = None) -> dict[str, str]:
 
 
 def classify(name: str, contract_custody: dict[str, str] | None = None) -> str:
-    """Classify a provisioning secret NAME as INFRA or CUSTOMER. Fails closed
+    """Classify a provisioning secret NAME as INFRA, SANDBOX or CUSTOMER. Fails closed
     (`UnclassifiedSecret`) on an unrecognized name so a new customer secret
     cannot silently reach the build path unclassified."""
     contract = load_contract_custody() if contract_custody is None else contract_custody
@@ -226,6 +247,8 @@ def classify(name: str, contract_custody: dict[str, str] | None = None) -> str:
         return contract[name]
     if name in _INFRA_EXACT:
         return INFRA
+    if name in _SMD_SANDBOX_EXACT:
+        return SANDBOX
     if name in _CUSTOMER_EXACT:
         return CUSTOMER
     if any(name.startswith(p) for p in _CUSTOMER_PREFIX):

@@ -18,6 +18,7 @@ export interface SeatPurposeEntry {
 
 /** Seat slug -> what it is for. */
 export const SEAT_PURPOSES: Readonly<Record<string, SeatPurposeEntry>> = Object.freeze({
+  'ap-staging': { purpose: 'internal', twinOf: null, provisioned: false },
   'ashton-price': { purpose: 'client', twinOf: null, provisioned: true },
   'ashton-price-marketing': { purpose: 'client', twinOf: null, provisioned: false },
   brokery: { purpose: 'client', twinOf: null, provisioned: true },

@@ -187,7 +187,9 @@ describe('vendor-invoice-intake: where it is bound', () => {
   // the 2026-09-21 list told the firm the Smokeball permission is live, and
   // Christa's 2026-10-01 "Mail" letter asked for the bills in the day's post
   // to reach the Expenses tab. A seat not listed here must not carry it.
-  const CLIENT_SEATS_BOUND = ['ashton-price']
+  // ap-staging is ashton-price's exact twin (tests/twin-drift.test.ts), so it
+  // carries every skill ashton-price does, this one included.
+  const CLIENT_SEATS_BOUND = ['ashton-price', 'ap-staging']
 
   it('is enabled on ashton-price, person-initiated only', () => {
     const skill = (personaSkills('ashton-price').get('operator') ?? []).find(

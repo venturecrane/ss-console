@@ -1,0 +1,17 @@
+# The kinds of job PROVEN on this seat (the lane-proof gate,
+# operator/runners/jobs/jobs/lane_proof.py; runbook
+# docs/runbooks/operator/lane-proof.md).
+#
+# None yet, deliberately: a proof is evidence from THIS seat, and ashton-price's
+# proofs were earned on ashton-price. Until a lane is proven here, every job this
+# seat is asked for waits (queued, never failed) and SMD is paged with the
+# request and its lane; SMD proves it with a proof run and accepts it on the
+# seat (`operator/bin/lane-proof.sh ap-staging dry-run|accept <job id>`), which
+# is itself the first rehearsal of that lane on the twin. An in-turn skill not
+# listed here pages SMD once, on its first live use, and is never held.
+#
+# Add a lane here only with evidence from THIS seat (job ids, PR numbers, a
+# vfy_ id), never a client, matter or file name: this repo is public.
+schema: 1
+lanes: {}
+revoked: []

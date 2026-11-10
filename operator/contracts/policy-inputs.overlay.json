@@ -1,7 +1,11 @@
 {
   "_comment": "Policy inputs for every live seat, generated from ss-console operator/customers/*/customer.yaml (seat.role) and operator/roles/<role>/role.yaml (the policy: block, verbatim) by tests/policy-matrix.test.ts (ADR 0093). Underscore-prefixed scaffolds and .decommissioned. tombstones are excluded. role is null when the seat selects no role; role_policy is null when the role authors no policy: block (both resolve to the platform default). Do not hand-edit: regenerate with UPDATE_POLICY_MATRIX=1, then copy this file over hermes-smd-overlay tests/contract/policy_inputs.json in the same change, where tests/test_policy_matrix.py resolves it against tests/contract/policy_matrix_expected.json.",
-  "generated_from": "venturecrane/ss-console@7ee7a176db5c059547f82c6533a6f0dbb85f59e0",
+  "generated_from": "venturecrane/ss-console@b5f4cbb2260299491017ae63947e2b48f9dfcf41",
   "seats": {
+    "ap-staging": {
+      "role": null,
+      "role_policy": null
+    },
     "ashton-price": {
       "role": null,
       "role_policy": null
