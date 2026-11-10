@@ -42,8 +42,7 @@ function run(day: string, env: Record<string, string> = {}) {
   return spawnSync('python3', ['-I', digest, day], {
     env: {
       ...process.env,
-      SMD_REQUESTS_DB: path.join(dir, 'requests.db'),
-      SMD_AUDIT_DB: path.join(dir, 'audit.db'),
+      SMD_SEAT_LAYOUT: path.join(dir, 'layout.json'),
       ...env,
     },
     encoding: 'utf8',
@@ -52,6 +51,16 @@ function run(day: string, env: Record<string, string> = {}) {
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ops-requests-'))
+  // The seat's layout file, in the generated file's own shape, pointing at dir.
+  fs.writeFileSync(
+    path.join(dir, 'layout.json'),
+    JSON.stringify({
+      paths: {
+        requests_db: { path: path.join(dir, 'requests.db') },
+        audit_volume_db: { path: path.join(dir, 'audit.db') },
+      },
+    })
+  )
 })
 
 describe('requests_digest.py (the read on the seat)', () => {
@@ -99,6 +108,24 @@ r.commit()`)
     expect(got.stdout).toContain('READ FAILED')
     expect(got.stdout).toContain('NOT zero requests')
     expect(got.stdout).not.toContain('REQUESTS RECEIVED')
+  })
+
+  it('reads both paths from the keys the real seat layout file carries', () => {
+    const real = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), 'operator', 'templates', 'seat-layout.generated.json'),
+        'utf8'
+      )
+    ) as { paths: Record<string, { path: string }> }
+    expect(real.paths.requests_db.path).toMatch(/requests\.db$/)
+    expect(real.paths.audit_volume_db.path).toMatch(/audit\.db$/)
+  })
+
+  it('a missing seat layout is READ FAILED, never zero requests', () => {
+    fs.rmSync(path.join(dir, 'layout.json'))
+    const got = run('2026-11-10')
+    expect(got.status).toBe(3)
+    expect(got.stdout).toContain('could not read the seat layout')
   })
 
   it('a missing job database is "could not look", never "no jobs"', () => {

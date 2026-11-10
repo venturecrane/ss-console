@@ -42,7 +42,7 @@ function publish(message: string): void {
 
 function runHook(): { stdout: string; status: number } {
   const got = spawnSync('bash', [hook], {
-    env: clean({ HOME: home, CLAUDE_PROJECT_DIR: repo, OPS_TOOLS_SYNC_NO_FETCH: '1' }),
+    env: clean({ HOME: home, OPS_TOOLS_SYNC_REPO: repo, OPS_TOOLS_SYNC_NO_FETCH: '1' }),
     encoding: 'utf8',
   })
   return { stdout: got.stdout, status: got.status ?? -1 }

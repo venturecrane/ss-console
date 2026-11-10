@@ -23,7 +23,9 @@
 set -u
 
 [ -x "$HOME/.local/bin/ops" ] || exit 0
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
+# The checkout this hook file sits in (a worktree or the primary): any of them
+# can read origin/main, which is all this needs.
+cd "${OPS_TOOLS_SYNC_REPO:-$(dirname "$0")/../..}" 2>/dev/null || exit 0
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 [ "${OPS_TOOLS_SYNC_NO_FETCH:-}" = 1 ] || GIT_TERMINAL_PROMPT=0 git fetch -q origin main 2>/dev/null || true
 sha=$(git rev-parse --short -q --verify origin/main 2>/dev/null) || exit 0

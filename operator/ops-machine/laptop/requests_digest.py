@@ -25,8 +25,11 @@ import sqlite3
 import sys
 
 PHOENIX = dt.timezone(dt.timedelta(hours=-7))  # Arizona keeps no daylight time
-REQUESTS_DB = os.environ.get("SMD_REQUESTS_DB", "/opt/data/requests.db")
-AUDIT_DB = os.environ.get("SMD_AUDIT_DB", "/opt/data/audit/audit.db")
+#: Where the two databases are comes from the seat's own layout file (generated
+#: from operator/contracts/seat-layout.yaml and baked into every seat image),
+#: never restated here: a path moved in the contract moves here with it.
+SEAT_LAYOUT = os.environ.get("SMD_SEAT_LAYOUT", "/app/seat-layout.generated.json")
+REQUESTS_DB = AUDIT_DB = ""
 TEXT_CHARS = 500
 JOB_FIELDS = ("job_id", "id", "kind", "state", "stage", "matter_id", "matter",
               "attempt", "reason", "hold_reason", "cents", "spent_cents")
@@ -53,6 +56,18 @@ def fail(why):
     print("READ FAILED: " + why)
     print("This is NOT zero requests. Nothing about today is known from this run.")
     sys.exit(3)
+
+
+def load_layout():
+    """Set the two database paths from the seat layout, or stop with the reason."""
+    global REQUESTS_DB, AUDIT_DB
+    try:
+        with open(SEAT_LAYOUT) as fh:
+            paths = json.load(fh)["paths"]
+        REQUESTS_DB = paths["requests_db"]["path"]
+        AUDIT_DB = paths["audit_volume_db"]["path"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        fail("could not read the seat layout %s (%s: %s)" % (SEAT_LAYOUT, type(exc).__name__, exc))
 
 
 def stamp(epoch):
@@ -199,6 +214,7 @@ def iso(epoch):
 
 def main(argv):
     day, start, end = day_window(argv[1] if len(argv) > 1 else "")
+    load_layout()
     try:
         con = open_ro(REQUESTS_DB)
         if con is None:
