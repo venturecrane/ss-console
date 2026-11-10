@@ -83,6 +83,7 @@ from ..medchron.update import (
     twins as TW,
 )
 from ..medchron.update import outcome as UO
+from ..medchron.audit.page_text import duplicate_exhibits
 from ..medchron.update.locate import vendor_name
 from . import prior_reading
 from .base import StageRun, read_json, read_jsonl
@@ -375,6 +376,7 @@ def run(sr: StageRun) -> int:
     ud = update_dir(sr)
     cdir = ud / "compose"
     cdir.mkdir(parents=True, exist_ok=True)
+    _clear_new_exhibits(sr, ud, int(p["top_exhibit"]))
     read_by_delivery = delivered_read(sr, p)
     listed = {e["exhibit"] for e in read_by_delivery}
     firm = {e["sha256"]: e for e in p["exhibits"] if e["exhibit"] not in listed}
@@ -424,6 +426,10 @@ def run(sr: StageRun) -> int:
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
         return 2
+    dupes = duplicate_exhibits(sr.slug_dir / "out" / sr.unit.unit)
+    if dupes:
+        sr.log(HELD + f"two files carry one exhibit number: {sorted(dupes)[:5]}")
+        return 2
     subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     _write(sr, ud, recs, units, skipped, subs, _readings(sr, read))
     pages = sum(len(r["read"]) for r in recs)
@@ -436,6 +442,69 @@ def run(sr: StageRun) -> int:
         f"{len(subs)} re-filed extract(s) cited in the whole document; skipped {skipped}"
     )
     return 0
+
+
+_NEW_EXHIBIT = re.compile(r"^Exhibit (\d+) - .*\.pdf$")
+
+
+def _clear_new_exhibits(sr: StageRun, ud: Path, top: int) -> None:
+    """Move every new-exhibit PDF (numbered above the delivered set) out of
+    ``out/<unit>`` before this selection numbers its own. WHY (2026-11-09): a
+    redo of an A&P update kept the first attempt's exhibit files; one newly
+    cited visit moved every later new exhibit up a number, so Exhibits 20 to
+    29 each had two files, and the audit and the review (which open an
+    exhibit by its number) read the first attempt's visits. Moved, never
+    deleted: ``update/stale/`` keeps them beside the run as evidence."""
+    out = sr.slug_dir / "out" / sr.unit.unit
+    if not out.is_dir():
+        return
+    stale = [q for q in out.iterdir() if (m := _NEW_EXHIBIT.match(q.name)) and int(m.group(1)) > top]
+    if not stale:
+        return
+    dest = ud / "stale"
+    dest.mkdir(parents=True, exist_ok=True)
+    for q in stale:
+        q.replace(dest / q.name)
+    graded = _clear_new_exhibit_grading(out, ud, dest, top)
+    sr.log(
+        f"update_select: moved {len(stale)} exhibit file(s) of an earlier attempt aside (update/stale/), "
+        f"with {graded} audit row(s) graded against them"
+    )
+
+
+def _clear_new_exhibit_grading(out: Path, ud: Path, dest: Path, top: int) -> int:
+    """Everything an earlier attempt graded against its new exhibits is keyed
+    by exhibit NUMBER, not by file, so it would be reused against whatever
+    file holds that number now (2026-11-09: the render cache kept the first
+    attempt's page images, and 38 audit rows would have carried their
+    verdicts into the redo ungraded). Moved to ``dest``: the page renders
+    (made again at $0), the audit rows for exhibits above ``top`` (rows for
+    the delivered exhibits stay), the repair history and dropped claims the
+    audit loop and the notes read back, and the update review's record.
+    Returns the number of audit rows moved."""
+    pages = out / "auditpages"
+    if pages.is_dir():
+        shutil.move(str(pages), str(dest / "auditpages"))
+    for name in ("repair-edits.jsonl", "audit-dropped-claims.json"):
+        if (out / name).is_file():
+            (out / name).replace(dest / name)
+    if (ud / "review_repair.json").is_file():
+        (ud / "review_repair.json").replace(dest / "review_repair.json")
+    results = out / "audit-results.jsonl"
+    if not results.is_file():
+        return 0
+    keep: list[str] = []
+    moved: list[str] = []
+    for line in results.read_text(encoding="utf-8").splitlines():
+        try:
+            ex = int(json.loads(line).get("exhibit"))
+        except (ValueError, TypeError, AttributeError):
+            ex = 0  # a row with no exhibit (a header or summary row) is kept
+        (moved if ex > top else keep).append(line)
+    if moved:
+        (dest / "audit-results.jsonl").write_text("".join(f"{x}\n" for x in moved), encoding="utf-8")
+        results.write_text("".join(f"{x}\n" for x in keep), encoding="utf-8")
+    return len(moved)
 
 
 def _set_aside(sr: StageRun, rec: dict[str, Any], skipped: dict[str, list[str]]) -> None:
