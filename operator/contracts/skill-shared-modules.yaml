@@ -1,0 +1,93 @@
+# ============================================================================
+# Shared skill modules: ONE source per module, and the skills that carry a copy.
+# ============================================================================
+#
+# WHY THIS EXISTS (2026-11-10). The scheduler stages one skill directory at a
+# time and a stdlib-only pre_run.py cannot install a package, so a skill that
+# uses a shared module needs the file beside its script on the seat. Until now
+# nothing produced those copies: a person edited the source and pasted it into
+# up to ten skill folders by hand, and nine sync tests caught a missed paste
+# after the fact (36 copies of nine modules at the time; 23 copies of six since
+# #3977 removed the case-manager routines that carried the rest).
+#
+# THE RULE. Edit the module's `source`, then run
+#     python3 operator/bin/gen-skill-shared.py
+# which writes the source's bytes, unchanged, to operator/skills/<skill>/<copy_as>
+# for every skill listed. Never edit a copy. `--check` exits 1 naming each copy
+# that differs from its source, each listed copy that is missing, and each copy
+# in a skill folder that this file does not list;
+# operator/bin/tests/test_skill_shared_generation.py runs it in CI.
+#
+# THE COPIES ARE COMMITTED AND BYTE-IDENTICAL TO THE SOURCE, with no generated
+# header: they are what the image (`COPY operator/skills/ /app/skills/`) and the
+# skills release (operator/bin/skills-manifest.py) ship, and a header would be a
+# byte change to every shipped skill. Step two of the plan moves the copying to
+# packaging time and takes the copies out of git.
+#
+# WHERE THE SOURCES LIVE. Four sources are outside operator/skills (the templates
+# and the workspace broker, which imports both ledgers itself). Two are the
+# copy in deadline-miss-escalator (routing.py, broker_writer.py), because that file's own text names it as the
+# canonical source and changing that text would change shipped bytes; step two
+# moves them to a home outside the skills tree. A source inside a skill folder
+# is never written by the generator.
+#
+# FIELDS
+#   source   repo-relative path of the one file to edit
+#   copy_as  file name inside each skill folder (the empty-seat gate is stamped
+#            under the name pre_run.py; every other module keeps its own name)
+#   skills   skill folder names under operator/skills that carry a copy
+# ============================================================================
+
+modules:
+  skill_helpers:
+    source: operator/templates/skill_helpers.py
+    copy_as: skill_helpers.py
+    skills:
+      - client-verification-tracker
+      - deadline-miss-escalator
+      - lien-ledger-tracker
+      - medical-records-chaser
+      - operator-help
+      - post-intake-daily-list
+      - records-order-chase
+      - statute-watch
+
+  pre_run_gate:
+    source: operator/templates/pre_run_gate.py
+    copy_as: pre_run.py
+    skills:
+      - daily-needs-you-digest
+      - discovery-response-tracker
+      - mediation-settlement-tracker
+      - minors-compromise-packet
+      - motion-calendar-tracker
+      - service-confirmation-watcher
+      - trial-binder-assembler
+
+  escalation_ledger:
+    source: operator/workspace_broker/escalation_ledger.py
+    copy_as: escalation_ledger.py
+    skills:
+      - client-verification-tracker
+      - daily-needs-you-digest
+      - deadline-miss-escalator
+      - lien-ledger-tracker
+      - medical-records-chaser
+
+  casework_ledger:
+    source: operator/workspace_broker/casework_ledger.py
+    copy_as: casework_ledger.py
+    skills:
+      - deadline-miss-escalator
+
+  routing:
+    source: operator/skills/deadline-miss-escalator/routing.py
+    copy_as: routing.py
+    skills:
+      - client-verification-tracker
+
+  broker_writer:
+    source: operator/skills/deadline-miss-escalator/broker_writer.py
+    copy_as: broker_writer.py
+    skills:
+      - client-verification-tracker

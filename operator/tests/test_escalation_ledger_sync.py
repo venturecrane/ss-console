@@ -1,9 +1,10 @@
-"""Sync gate for the vendored escalation_ledger.py copies (WP-A / WP-B).
+"""The overlay's copy of escalation_ledger.py agrees with the broker's (WP-A / WP-B).
 
-CANONICAL SOURCE is ``operator/workspace_broker/escalation_ledger.py``. Skills
-carry a byte-identical copy in their own dir so a stdlib-only ``pre_run.py`` and
-the agent's ``execute_code`` turn can import it without a package install. Edit
-the canonical, restamp the copies — never edit a copy.
+CANONICAL SOURCE is ``operator/workspace_broker/escalation_ledger.py``. The
+copies in skill folders are written by operator/bin/gen-skill-shared.py from
+operator/contracts/skill-shared-modules.yaml and checked by
+operator/bin/tests/test_skill_shared_generation.py; this file holds only the
+overlay's copy, which is not a skill.
 
 The overlay's copy, ``operator/hermes-smd-overlay/shared/escalation_ledger.py``,
 is what the agent's escalation tools import on a live seat. Since the 2026-10-22
@@ -18,25 +19,12 @@ import hashlib
 import json
 from pathlib import Path
 
-from vendored_sync import assert_byte_identical, discover_copies
-
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = _OPERATOR_ROOT / "workspace_broker" / "escalation_ledger.py"
 _PAIRS_MANIFEST = _OPERATOR_ROOT / "contracts" / "overlay-pairs.json"
 
 _CANONICAL_REL = "operator/workspace_broker/escalation_ledger.py"
 _OVERLAY_REL = "shared/escalation_ledger.py"
-
-# Every skill that imports the shared ledger carries a vendored copy. The
-# copies are discovered by glob (skills/*/escalation_ledger.py), so a sixth
-# skill that vendors the module is under the gate the moment its copy exists;
-# until 2026-09-11 this was a hand-maintained tuple (code review 2026-09-10,
-# Architecture 5). Five copies as of 2026-09-11: deadline-miss-escalator,
-# daily-needs-you-digest, client-verification-tracker, medical-records-chaser,
-# lien-ledger-tracker. Seven from 2026-09-25 to 2026-11-10, when the two
-# case-manager routines that also carried a copy were removed. A skill dropping
-# its copy lowers the floor on purpose.
-_FLOOR = 5
 
 
 def _escalation_pair() -> dict:
@@ -47,19 +35,6 @@ def _escalation_pair() -> dict:
     raise AssertionError(
         f"overlay-pairs.json has no entry for {_CANONICAL_REL}; the overlay's "
         f"{_OVERLAY_REL} is then pinned by nothing at all (ss #2289 fix 4)."
-    )
-
-
-def test_canonical_exists() -> None:
-    assert _CANONICAL.is_file(), f"canonical escalation_ledger.py missing at {_CANONICAL}"
-
-
-def test_vendored_copies_are_byte_identical() -> None:
-    assert_byte_identical(
-        _CANONICAL,
-        discover_copies("escalation_ledger.py"),
-        floor=_FLOOR,
-        restamp_hint="Edit workspace_broker/escalation_ledger.py and restamp, never the copy.",
     )
 
 
