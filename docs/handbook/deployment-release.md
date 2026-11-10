@@ -1048,12 +1048,12 @@ the new name and deletes.
    prints nothing about customer.yaml (it still names `fly_app: null` until
    step 4).
 3. **The Fly app and its volume.** `fly apps create hermes-ap-staging --org
-   personal` (a new app: Fly cannot rename `hermes-smd-staging`). A&P's volume
-   is 25 GB and provisioning creates 10 GB only when none exists, so create it
-   first at A&P's size: `fly volumes create hermes_state --size 25 --region sjc
-   -a hermes-ap-staging --yes`.
-   Probe: `fly volumes list -a hermes-ap-staging` shows one `hermes_state`,
-   25GB, sjc; `fly volumes list -a hermes-ashton-price` is the size to match.
+   personal` (a new app: Fly cannot rename `hermes-smd-staging`). The twin is
+   sized like smd-staging, not A&P (2 shared CPUs, 4 GB, a 10 GB volume,
+   declared in `twin.yaml`): it proves each release boots and passes its checks
+   and never runs A&P's heavy jobs. Provisioning creates the 10 GB volume.
+   Probe: `fly volumes list -a hermes-ap-staging` after step 7 shows one
+   `hermes_state`, 10GB, sjc.
 4. **The app, authored, and the release tick.** One PR: `fly_app:
    hermes-ap-staging` in `ap-staging/seat.yaml` with `unprovisioned_reason`
    removed (purpose stays `internal`, ring 2, so it takes releases after A&P
