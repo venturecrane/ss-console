@@ -100,6 +100,7 @@ on:
           [
             none,
             smd-staging,
+            ap-staging,
             pilot-smokeball,
             scott,
             brokery,
@@ -212,6 +213,7 @@ jobs:
           # One line per seat in operator/fleet/rings.yaml; the conformance
           # test fails when a ringed seat has no line here.
           FLY_DEPLOY_TOKEN__SMD_STAGING: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_STAGING }}
+          FLY_DEPLOY_TOKEN__AP_STAGING: ${{ secrets.FLY_DEPLOY_TOKEN__AP_STAGING }}
           FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL: ${{ secrets.FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL }}
           FLY_DEPLOY_TOKEN__SCOTT: ${{ secrets.FLY_DEPLOY_TOKEN__SCOTT }}
           FLY_DEPLOY_TOKEN__BROKERY: ${{ secrets.FLY_DEPLOY_TOKEN__BROKERY }}
