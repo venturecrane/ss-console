@@ -109,6 +109,67 @@ def test_an_absent_lane_is_skipped_and_an_unreadable_ledger_raises(tmp_path):
         help_signals.read_rows(None, days=7, now=NOW)
 
 
+def _holdable_job_lanes() -> set[str]:
+    """Every lane whose broker ledger creates a ``<lane>_jobs`` table and whose
+    STATES include held or failed, found by importing the ledgers, so a lane
+    added later is found too."""
+    import importlib
+    import pkgutil
+    import re
+
+    import workspace_broker
+
+    lanes: set[str] = set()
+    for info in pkgutil.iter_modules(workspace_broker.__path__):
+        # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import - names come from this package's own directory listing
+        module = importlib.import_module(f"workspace_broker.{info.name}")
+        if not {"held", "failed"} & set(getattr(module, "STATES", ()) or ()):
+            continue
+        for value in vars(module).values():
+            match = re.match(r"\s*CREATE TABLE IF NOT EXISTS (\w+)_jobs \(", value) if isinstance(value, str) else None
+            if match:
+                lanes.add(match.group(1))
+    return lanes
+
+
+def test_every_job_lane_that_can_hold_or_fail_is_read():
+    """FALSIFIER: a lane added without a statement here (records, 2026-11-03)
+    reads as "nothing held" in the review, because it was never asked."""
+    lanes = _holdable_job_lanes()
+    assert {"demand", "medchron", "records", "library_setup"} <= lanes, lanes
+    assert lanes <= set(help_signals.LANES), sorted(lanes - set(help_signals.LANES))
+
+
+def test_held_and_failed_records_and_library_setup_jobs_are_counted(tmp_path):
+    """Each table built by its ledger's own CREATE statement."""
+    from workspace_broker import library_setup_ledger, records_ledger
+
+    path = tmp_path / "audit.db"
+    conn = sqlite3.connect(path)
+    conn.execute(records_ledger.CREATE_SQL)
+    conn.execute(library_setup_ledger.CREATE_SQL)
+    conn.execute(
+        "INSERT INTO records_jobs (job_id, request_ref, message_ref, requester, state, created_at, updated_at,"
+        " trigger, ack, envelope_digest, reason) VALUES ('r1', '<r@x>', 'm', 'a@firm.example', 'held',"
+        " ?, ?, 'request', 'ack', 'd', 'refused: something')",
+        (_iso(1), _iso(1)),
+    )
+    conn.execute(
+        "INSERT INTO library_setup_jobs (id, created_at, updated_at, state, document_class, matter_number,"
+        " requester, request_ref, envelope_digest, live, reason) VALUES ('l1', ?, ?, 'failed', 'brief',"
+        " '1', 'a@firm.example', '<l@x>', 'd', 1, 'runner exited 1')",
+        (_iso(1), _iso(1)),
+    )
+    conn.commit()
+    conn.close()
+
+    rows = help_signals.read_rows(str(path), days=7, now=NOW)["rows"]
+    assert sorted((r["lane"], r["state"], r["request_ref"]) for r in rows) == [
+        ("library_setup", "failed", "<l@x>"),
+        ("records", "held", "<r@x>"),
+    ]
+
+
 def test_the_window_is_clamped():
     assert help_signals._window({}) == 7
     assert help_signals._window({"days": 0}) == 1
