@@ -416,6 +416,19 @@ DATE_TABLE: list[tuple[str, str | None]] = [
     ("after the launch at 10am", None),  # OLD: today
     ("the week after at 9am", None),  # OLD: today
     ("the 32nd", None),
+    # A bare hour after "at" (second review): business hours, unless the
+    # phrase says morning, afternoon, evening or tonight.
+    ("Thursday at 4", "Thursday, November 12, 2026 at 4:00 PM"),  # OLD: no time kept
+    ("this afternoon at 4", "Tuesday, November 10, 2026 at 4:00 PM"),  # OLD: no time kept
+    ("tomorrow at 10", "Wednesday, November 11, 2026 at 10:00 AM"),  # OLD: no time kept
+    ("tomorrow at 12", "Wednesday, November 11, 2026 at 12:00 PM"),  # OLD: no time kept
+    ("tomorrow morning at 7", "Wednesday, November 11, 2026 at 7:00 AM"),  # OLD: no time kept
+    ("Friday evening at 8", "Friday, November 13, 2026 at 8:00 PM"),  # OLD: no time kept
+    ("tonight at 9", "Tuesday, November 10, 2026 at 9:00 PM"),  # OLD: no time kept
+    ("at 4", "Tuesday, November 10, 2026 at 4:00 PM"),  # OLD: refused
+    ("at 4 on the 20th", "Friday, November 20, 2026 at 4:00 PM"),  # OLD: no time kept
+    ("in 4 days", "Saturday, November 14, 2026"),
+    ("the 4th", "Friday, December 4, 2026"),
 ]
 
 

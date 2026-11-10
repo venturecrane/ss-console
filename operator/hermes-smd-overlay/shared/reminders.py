@@ -214,6 +214,11 @@ _MONTH_NAMES = "|".join(sorted(_MONTHS, key=len, reverse=True))
 _WEEKDAY_NAMES = "|".join(sorted(_WEEKDAYS, key=len, reverse=True))
 _TIME_MERIDIEM = re.compile(r"\b(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)(?![a-z])")
 _TIME_24 = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+#: A bare hour, only right after "at" ("Thursday at 4"), never a day number
+#: ("the 4th") or a count ("in 4 days"). Group 2 is absent, for _TIME_24's shape.
+_AT_HOUR = re.compile(r"(?<=\bat )([1-9]|1\d|2[0-3])()(?![\d:./]|\s*(?:st|nd|rd|th)\b)\b")
+_MORNING = re.compile(r"\bmorning\b")
+_LATER_IN_DAY = re.compile(r"\b(afternoon|evening|tonight)\b")
 _NOON = re.compile(r"\b(noon|midday)\b")
 _MIDNIGHT = re.compile(r"\bmidnight\b")
 _ISO = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
@@ -268,6 +273,22 @@ def clock_words(at: time) -> str:
     return f"{hour}:{at.minute:02d} {'AM' if at.hour < 12 else 'PM'}"
 
 
+def _business_hour(hour: int, text: str) -> int:
+    """The 24-hour hour of a time said with no AM or PM. "morning" in the
+    phrase means AM and "afternoon", "evening" or "tonight" PM. Otherwise
+    business hours decide: 8 to 11 is the morning, 1 to 7 the afternoon, 12
+    is noon, and 13 and later are already 24-hour. The receipt line shows AM
+    or PM, so the person can correct it."""
+    if 1 <= hour <= 12:
+        if _MORNING.search(text):
+            return hour % 12
+        if _LATER_IN_DAY.search(text):
+            return hour % 12 + 12
+        if hour <= 7:
+            return hour + 12
+    return hour
+
+
 def _take_time(text: str) -> tuple[time | None, str]:
     """The clock time in ``text`` and ``text`` without it."""
     m = _TIME_MERIDIEM.search(text)
@@ -278,15 +299,11 @@ def _take_time(text: str) -> tuple[time | None, str]:
         pm = m.group(3).startswith("p")
         hour = (hour % 12) + (12 if pm else 0)
         return time(hour, minute), text[: m.start()] + " " + text[m.end() :]
-    m = _TIME_24.search(text)
+    m = _TIME_24.search(text) or _AT_HOUR.search(text)
     if m:
-        # No AM or PM: business hours decide. 8:00 to 11:59 is the morning,
-        # 1:00 to 7:59 the afternoon (12:00 is noon), 13:00 and later are
-        # 24-hour. The receipt line shows AM or PM, so the person can correct it.
-        hour = int(m.group(1))
-        if 1 <= hour <= 7:
-            hour += 12
-        return time(hour, int(m.group(2))), text[: m.start()] + " " + text[m.end() :]
+        minute = int(m.group(2)) if m.group(2) else 0
+        hour = _business_hour(int(m.group(1)), text)
+        return time(hour, minute), text[: m.start()] + " " + text[m.end() :]
     m = _NOON.search(text)
     if m:
         return time(12, 0), text[: m.start()] + " " + text[m.end() :]
