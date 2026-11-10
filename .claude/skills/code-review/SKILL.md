@@ -91,6 +91,8 @@ A carried `STILL-OPEN` is first **re-checked against its instrument**: before fi
 
 **Invariant pass** — `grep -c`-shaped checks across each whole tree. Absence findings are always full-scope.
 
+**Sprawl pass** (added 2026-11-10, after a one-name rename touched 795 files) — run `npx tsx scripts/sprawl-audit.ts --compare scripts/sprawl/snapshot.json` and report every line under `ROSE:` as a finding, with the command as its probe. On the diff, ask of each new literal, block or file: *is this the second copy of something?* A restated seat path, env-var name or shared key, or a block copied rather than referenced, is a finding even when the code is correct (Shotgun Surgery; connascence of meaning). Fix it the `/sprawl-audit` way (`.claude/skills/sprawl-audit/SKILL.md`): one home, generated across languages when it crosses one.
+
 ## Step 3 — The bar for a finding
 
 **A finding carries a command, or it is not a finding.** No command → `## Judgment`, no severity.

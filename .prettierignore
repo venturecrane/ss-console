@@ -80,3 +80,8 @@ docs/api/README.md
 docs/enablement/how-the-operator-works.html
 docs/enablement/designer-brief/figures-brief.html
 docs/enablement/figures-src/gen3.body.html
+
+# Written by scripts/sprawl-audit.ts (--out / --write-literal-baseline). Reformatting
+# would make the committed snapshot disagree with what the audit writes.
+scripts/sprawl/snapshot.json
+scripts/sprawl/literal-baseline.json

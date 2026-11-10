@@ -1,0 +1,112 @@
+# Weekly sprawl audit: did copied code, restated literals, change coupling or
+# dead code GROW since the accepted snapshot?
+#
+# WHY (2026-11-10). The ADR 0103 rename touched 795 files, and nothing we ran
+# measured the kind of sprawl that made it so. scripts/sprawl-audit.ts runs the
+# industry-standard instruments (jscpd for clones, vulture for dead Python, a
+# restated-literal census, code-maat-style change coupling) and compares the
+# headline numbers against scripts/sprawl/snapshot.json, the last state a PR
+# accepted. The per-PR gate for restated literals is tests/sprawl-ratchet.test.ts
+# in verify; this workflow watches the slower measures that are too costly to
+# run on every PR.
+#
+# ONE ROLLING ISSUE, the handbook-review shape: rewritten in place when a number
+# rose, closed when none did. Never fails the run: growth is work for the
+# /sprawl-audit skill (.claude/skills/sprawl-audit/SKILL.md), not a broken build.
+
+name: sprawl-audit
+
+on:
+  schedule:
+    # Monday 14:43 UTC (07:43 Phoenix), after the handbook review.
+    - cron: '43 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  packages: read
+
+concurrency:
+  group: sprawl-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Change coupling reads six months of history; a shallow clone has none.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@venturecrane'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+          python -m pip install vulture==2.14
+
+      - name: Measure against the accepted snapshot
+        id: report
+        env:
+          SPRAWL_VULTURE: python
+        run: |
+          set -o pipefail
+          STATUS=0
+          npx tsx scripts/sprawl-audit.ts --compare scripts/sprawl/snapshot.json --strict > report.txt || STATUS=$?
+          { echo '```'; cat report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # 0 = nothing rose, 1 = something rose; anything else is the script failing.
+          if [ "$STATUS" -gt 1 ]; then echo "sprawl-audit.ts failed ($STATUS)"; exit "$STATUS"; fi
+          echo "rose=$([ "$STATUS" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the rolling issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ROSE: ${{ steps.report.outputs.rose }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          SERIES='sprawl-audit'
+          EXISTING="$(gh issue list --repo "$REPO" --state all --limit 200 \
+                       --search "\"review-series: ${SERIES}\" in:body" \
+                       --json number,state \
+                       --jq 'if length == 0 then "" else (sort_by(.number) | last | "\(.number) \(.state)") end' || true)"
+          NUM="${EXISTING%% *}"; STATE="${EXISTING##* }"
+          {
+            echo "The weekly sprawl audit found a number that rose since the accepted snapshot."
+            echo "Run /sprawl-audit: fix the growth, then accept the lower state in a PR."
+            echo
+            echo '```'
+            cat report.txt
+            echo '```'
+            echo
+            echo "Series key, do not edit: \`review-series: ${SERIES}\`"
+            echo "Last run: ${RUN_URL}"
+          } > body.md
+          if [ "$ROSE" = "true" ]; then
+            if [ -n "$NUM" ]; then
+              [ "$STATE" = "CLOSED" ] && gh issue reopen "$NUM" --repo "$REPO"
+              gh issue edit "$NUM" --repo "$REPO" --body-file body.md
+            else
+              gh issue create --repo "$REPO" --title "Sprawl: a measure grew this week (rolling)" \
+                --label "prio:P2" --body-file body.md
+            fi
+          elif [ -n "$NUM" ] && [ "$STATE" = "OPEN" ]; then
+            gh issue comment "$NUM" --repo "$REPO" --body "Nothing rose this week. ${RUN_URL}"
+            gh issue close "$NUM" --repo "$REPO"
+          fi
