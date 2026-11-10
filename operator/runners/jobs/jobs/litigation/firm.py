@@ -53,12 +53,13 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..firm_inputs import pin
 
 from . import vocab
 
 ENV_DIR = "JOBS_LITIGATION_INPUTS"
-DEFAULT_DIR = "/var/lib/smd-config/litigation"
+DEFAULT_DIR = seat_layout.LITIGATION_INPUTS
 CONFIG_NAME = "litigation-firm.yaml"
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 

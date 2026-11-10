@@ -37,6 +37,8 @@ import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
+from shared import seat_layout
+
 logger = logging.getLogger("hermes_smd.oauth_callback")
 
 # The egress webhook reconciler orchestrator (ss-console image code at /app), run
@@ -44,7 +46,7 @@ logger = logging.getLogger("hermes_smd.oauth_callback")
 # so a newly-connected firm's webhook subscriptions are ensured NOW, without
 # waiting for a reboot (boot is only the change-hash-gated backstop).
 _RECONCILE_ORCHESTRATOR = "/app/webhook_reconcile.py"
-_HERMES_PY = "/opt/hermes/.venv/bin/python3"
+_HERMES_PY = seat_layout.HERMES_PYTHON3
 
 
 def _trigger_webhook_reconcile(env: dict) -> None:
@@ -53,7 +55,7 @@ def _trigger_webhook_reconcile(env: dict) -> None:
     succeeded — a reconcile hiccup must not fail the connect or stall the user's
     browser, and the boot backstop retries regardless. Launched detached
     (``Popen``, no wait); the child inherits stdout/stderr → the Machine logs."""
-    yaml_path = env.get("SMD_CUSTOMER_YAML_PATH") or "/opt/data/customer.yaml"
+    yaml_path = env.get("SMD_CUSTOMER_YAML_PATH") or seat_layout.VOLUME_CUSTOMER_YAML
     try:
         subprocess.Popen([_HERMES_PY, _RECONCILE_ORCHESTRATOR, yaml_path, "--trigger", "connect"])
     except Exception as exc:  # noqa: BLE001 — never fail the connect on reconcile

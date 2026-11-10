@@ -201,7 +201,10 @@ export function literalCensus(files: SourceFile[], minFiles = LITERAL_MIN_FILES)
   const env = envNames(code)
   const paths = new Map<string, Set<string>>()
   const envHits = new Map<string, Set<string>>()
-  const word = /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/g
+  // `seat_layout.CUSTOMER_YAML` reads the generated layout module (operator/bin/
+  // gen-seat-layout.py): the cure for a restated path, not a restated env name,
+  // even when a constant shares its spelling with one.
+  const word = /(?<!\bseat_layout\.)\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/g
   for (const f of code) {
     const text = codeLines(f.text)
     // A path that ends a sentence, trailing period and all, is the same path.

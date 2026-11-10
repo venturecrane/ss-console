@@ -43,6 +43,7 @@ from typing import Any
 from config_applier.applier import atomic_write
 from establish_intake import gates
 from establish_intake.intake import EstablishIntake
+from shared import seat_layout
 from shared.ids import iso_utc
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ _ENV_SPEC_DIR = "SMD_SPEC_DIR"
 _ENV_SPOOL_DIR = "SMD_ESTABLISH_SPOOL_DIR"
 _ENV_POLL_SECONDS = "SMD_ESTABLISH_POLL_SECONDS"
 
-_DEFAULT_SPEC_DIR = "/var/lib/smd-config/specs"
+_DEFAULT_SPEC_DIR = seat_layout.SPECS
 #: NOT under ``/opt/data``. The Hermes gateway chmods its home (``/opt/data``)
 #: to 0700 MID-BOOT, which strips every group-traverse the entrypoint granted
 #: before it — so a spool under that tree is reachable by root (which ignores

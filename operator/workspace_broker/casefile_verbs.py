@@ -56,7 +56,14 @@ from typing import Any
 
 import yaml
 
-from . import casefile_casework as casework, casefile_schedule as schedule, casework_ledger, delivery_proof, hold_class
+from . import (
+    casefile_casework as casework,
+    casefile_schedule as schedule,
+    casework_ledger,
+    delivery_proof,
+    hold_class,
+    seat_layout,
+)
 from .casefile_scheduled import Refused as _Refused, ScheduledSubmit, refusal as _refusal
 from .broker_context import BrokerContext
 from .casefile_ledger import (
@@ -88,7 +95,7 @@ AUDIT_TYPES = {
 RESUME_AUDIT_TYPE = "CASEFILE_JOB_RESUME_REQUESTED"
 APPLY_AUDIT_TYPE = "CASEFILE_APPLY_SUBMITTED"
 FIRM_CONFIG_ENV = "SMD_CASEFILE_FIRM_CONFIG"
-DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/casefile-broker-firm.yaml"
+DEFAULT_FIRM_CONFIG = seat_layout.CASEFILE_BROKER_FIRM_YAML
 FILE_TO_KEY = "file_to_matter_id"
 FOLDER_KEY = "folder_name"
 LIBRARY_NUMBER_KEY = "library_matter_number"

@@ -49,6 +49,7 @@ from shared import (
     read_volume,
     request_index,
     rewake_outcome,
+    seat_layout,
     send_anchor,
     sender_auth,
     sender_enrollment,
@@ -69,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 
 # Default path; overridden at register time from SMD_CUSTOMER_YAML_PATH.
-_DEFAULT_CUSTOMER_YAML_PATH = "/opt/data/customer.yaml"
+_DEFAULT_CUSTOMER_YAML_PATH = seat_layout.VOLUME_CUSTOMER_YAML
 
 # Module-level state - populated by ``register()``.
 #

@@ -1,62 +1,62 @@
-"""The jobs runner's seat-path defaults resolve to the values they always had.
+"""The seat-layout migration changed no path the jobs runner resolves (W2-W4).
 
-The runner reads its jobs-family paths from the generated ``jobs.seat_layout``
-(operator/contracts/seat-layout.yaml). Each row below is a default that was a
-hand-written literal before the migration, with that literal: a regenerated
-module or a wrong constant name changes a resolved value and fails here.
+Each default below was a string spelled in its module until it was pointed at
+the generated ``jobs.seat_layout``. ``fixtures/seat_layout_golden.json`` holds the
+value each one had BEFORE the change, captured by importing the modules at the
+pre-migration commit; every one must still be exactly that.
 """
 
 from __future__ import annotations
 
-from dataclasses import fields
+import json
 from pathlib import Path
-from typing import Any
+from types import ModuleType
 
 import pytest
 
-from jobs import arrivals, daemon, lane_proof_cli
-from jobs.casefile import state as casefile_state
-from jobs.casefile_lane import CasefileLane
-from jobs.demand_lane import DemandLane
-from jobs.drafting_lane import DraftingLane
-from jobs.litigation import manifest as litigation_manifest, textcache
-from jobs.litigation_lane import LitigationLane
-from jobs.negotiation_lane import NegotiationLane
-from jobs.records import parse as records_parse
-from jobs.records_lane import RecordsLane
+import jobs.casefile.book
+import jobs.casefile.firm
+import jobs.demand.firm
+import jobs.drafting.firm
+import jobs.drafting.firm_rules
+import jobs.firm_wording
+import jobs.litigation.firm
+import jobs.medchron.config
+import jobs.note_by_smd
+import jobs.records.firm
+import jobs.records_lane
+import jobs.rewake
 
-# (resolved value, the literal it replaced), captured before the migration.
-CONSTANTS = {
-    "arrivals.DEFAULT_DATA_DIR": (arrivals.DEFAULT_DATA_DIR, "/opt/data/jobs"),
-    "casefile.state.DEFAULT_DATA_DIR": (casefile_state.DEFAULT_DATA_DIR, "/opt/data/jobs"),
-    "litigation.manifest.DEFAULT_DATA_DIR": (litigation_manifest.DEFAULT_DATA_DIR, "/opt/data/jobs"),
-    "litigation.textcache.DEFAULT_DATA_DIR": (textcache.DEFAULT_DATA_DIR, "/opt/data/jobs"),
-    "daemon.DEFAULT_RUN_DIR": (daemon.DEFAULT_RUN_DIR, "/run/smd-jobs"),
-    "daemon.RUNNER_BIN": (daemon.RUNNER_BIN, "/opt/jobs/.venv/bin/jobs"),
-    "lane_proof_cli.DEFAULT_RUN_DIR": (lane_proof_cli.DEFAULT_RUN_DIR, "/run/smd-jobs"),
-    "records.parse.DEFAULT_STATE_DIR": (records_parse.DEFAULT_STATE_DIR, "/opt/data/jobs/records-state"),
+#: Imported by name (never from a string), one per golden module.
+MODULES: dict[str, ModuleType] = {
+    m.__name__: m
+    for m in (
+        jobs.casefile.book,
+        jobs.casefile.firm,
+        jobs.demand.firm,
+        jobs.drafting.firm,
+        jobs.drafting.firm_rules,
+        jobs.firm_wording,
+        jobs.litigation.firm,
+        jobs.medchron.config,
+        jobs.note_by_smd,
+        jobs.records.firm,
+        jobs.records_lane,
+        jobs.rewake,
+    )
 }
 
-# (lane class, the queue_dir default it replaced).
-QUEUES: dict[str, tuple[Any, str]] = {
-    "DemandLane": (DemandLane, "/run/smd-jobs/demand-queue"),
-    "DraftingLane": (DraftingLane, "/run/smd-jobs/drafting-queue"),
-    "LitigationLane": (LitigationLane, "/run/smd-jobs/litigation-queue"),
-    "NegotiationLane": (NegotiationLane, "/run/smd-jobs/negotiation-queue"),
-    "CasefileLane": (CasefileLane, "/run/smd-jobs/casefile-queue"),
-    "RecordsLane": (RecordsLane, "/run/smd-jobs/records-queue"),
-}
+GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "seat_layout_golden.json").read_text("utf-8"))
 
 
-@pytest.mark.parametrize("name", sorted(CONSTANTS))
-def test_a_constant_resolves_to_its_old_literal(name: str) -> None:
-    value, literal = CONSTANTS[name]
-    assert value == literal
-    assert type(value) is str
+@pytest.mark.parametrize("key", sorted(GOLDEN))
+def test_a_module_default_is_the_literal_it_replaced(key: str) -> None:
+    module, attr = key.split(":")
+    assert getattr(MODULES[module], attr) == GOLDEN[key]
 
 
-@pytest.mark.parametrize("name", sorted(QUEUES))
-def test_a_lane_queue_default_resolves_to_its_old_literal(name: str) -> None:
-    lane, literal = QUEUES[name]
-    (queue,) = [f for f in fields(lane) if f.name == "queue_dir"]
-    assert queue.default_factory() == Path(literal)
+def test_the_golden_covers_every_migrated_default() -> None:
+    # jobs/attorneys/roster.py keeps its literal: it is the connector SDK's
+    # library/roster.py byte for byte (tests/test_attorney_roster.py).
+    assert len(GOLDEN) == 12
+    assert sorted(MODULES) == sorted({k.split(":")[0] for k in GOLDEN})

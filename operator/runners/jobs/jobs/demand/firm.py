@@ -23,10 +23,11 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..firm_inputs import pin
 
 ENV_DIR = "JOBS_DEMAND_INPUTS"
-DEFAULT_DIR = "/var/lib/smd-config/demand"
+DEFAULT_DIR = seat_layout.DEMAND_INPUTS
 CONFIG_NAME = "demand-firm.yaml"
 
 #: The files every demand job reads. Every one is required; a firm without a

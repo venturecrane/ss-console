@@ -27,10 +27,11 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..firm_inputs import pin
 
 ENV_DIR = "JOBS_RECORDS_INPUTS_DIR"
-DEFAULT_DIR = "/var/lib/smd-config/records"
+DEFAULT_DIR = seat_layout.RECORDS_INPUTS
 CONFIG_NAME = "records-firm.yaml"
 KEYS = ("per_job_cap_usd", "monthly_budget_usd", "usd_per_page")
 

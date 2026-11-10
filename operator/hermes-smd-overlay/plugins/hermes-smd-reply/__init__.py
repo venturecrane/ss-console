@@ -103,6 +103,7 @@ from shared import (
     reply_could_not,
     report_render,
     request_index,
+    seat_layout,
     send_policy,
     silence,
     space,
@@ -169,7 +170,7 @@ def _email_adapter(cfg: CustomerConfig) -> str:
     return "agentmail"
 
 
-_DEFAULT_CUSTOMER_YAML_PATH = "/opt/data/customer.yaml"
+_DEFAULT_CUSTOMER_YAML_PATH = seat_layout.VOLUME_CUSTOMER_YAML
 
 
 # Module-level state — populated by ``register()``. ``_INFRA_READY`` is the

@@ -1,0 +1,7 @@
+{
+  "workspace_broker.casefile_scheduled:DEFAULT_FIRM_CONFIG": "/var/lib/smd-config/casefile-broker-firm.yaml",
+  "workspace_broker.casefile_verbs:DEFAULT_FIRM_CONFIG": "/var/lib/smd-config/casefile-broker-firm.yaml",
+  "workspace_broker.litigation_intake:DEFAULT_FIRM_CONFIG": "/var/lib/smd-config/litigation-broker-firm.yaml",
+  "workspace_broker.ops_close:DEFAULT_SOCKET": "/run/smd-workspace-broker/broker.sock",
+  "workspace_broker.records_verbs:DEFAULT_FIRM_CONFIG": "/var/lib/smd-config/records-broker-firm.yaml"
+}

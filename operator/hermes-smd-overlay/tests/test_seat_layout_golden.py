@@ -1,48 +1,106 @@
-"""The overlay's jobs-family path constants resolve to the values they always had.
+"""The seat-layout migration changed no path the overlay resolves (W2-W4).
 
-The overlay reads its jobs-family paths from the generated ``shared.seat_layout``
-(operator/contracts/seat-layout.yaml). Each row is a constant that was a
-hand-written literal before the migration, with that literal: a regenerated
-module or a wrong constant name changes a resolved value and fails here.
+Each default below was a string spelled in its module until it was pointed at
+the generated ``shared.seat_layout``. ``fixtures/seat_layout_golden.json`` holds
+the value each one had BEFORE the change, captured by importing the modules at
+the pre-migration commit, and this test asserts every one still resolves to
+exactly that string. A yaml edit that moves one of these paths fails here first,
+which is the point: a moved seat path is a decision with a seat-side rollout.
 """
 
 from __future__ import annotations
 
+import inspect
+import json
+from pathlib import Path
+from types import ModuleType
+
 import pytest
 
-from bundle_installer import installer, manifest
-from firm_inputs_applier import applier
-from shared import fleet_facts, lane_proofs, record_store
+import bootstrap.cli
+import config_applier.__main__
+import establish_intake.__main__
+import firm_inputs_applier.applier
+import shared.customer_config
+import shared.fleet_facts
+import shared.oauth_callback
+import shared.policy_profile
+import shared.review_job
+import shared.scheduler_check
+import shared.selftest_check
+import skills_applier.__main__
+import spec_applier.__main__
+from tests.conftest import load_plugin
 
-# (resolved value, the literal it replaced), captured before the migration.
-GOLDEN: dict[str, tuple[object, object]] = {
-    "fleet_facts.DEFAULT_LANE_RUN_DIR": (fleet_facts.DEFAULT_LANE_RUN_DIR, "/run/smd-jobs"),
-    "lane_proofs.DEFAULT_DIR": (lane_proofs.DEFAULT_DIR, "/run/smd-jobs"),
-    "record_store.RESERVED_PREFIXES": (
-        record_store.RESERVED_PREFIXES,
-        (
-            "/opt/data/profiles",
-            "/opt/data/attachment-spool",
-            "/opt/data/smokeball-extract-cache",
-            "/opt/data/.smd",
-            "/opt/data/medchron",
-            "/opt/data/jobs",
-        ),
-    ),
-    "applier.DEFAULT_VALIDATOR_PYTHON": (
-        applier.DEFAULT_VALIDATOR_PYTHON,
-        "/opt/jobs/.venv/bin/python",
-    ),
-    "installer._LINK_ROOTS": (installer._LINK_ROOTS, ("/usr/", "/opt/jobs/", "/opt/connectors/")),
-    "manifest.JOBS.mounts": (
-        manifest.JOBS.mounts,
-        (("jobs", "/opt/jobs"), ("connectors/smokeball", "/opt/connectors/smokeball")),
-    ),
+#: Imported by name (never from a string), one per golden module.
+MODULES: dict[str, ModuleType] = {
+    m.__name__: m
+    for m in (
+        bootstrap.cli,
+        config_applier.__main__,
+        establish_intake.__main__,
+        firm_inputs_applier.applier,
+        shared.customer_config,
+        shared.fleet_facts,
+        shared.oauth_callback,
+        shared.policy_profile,
+        shared.review_job,
+        shared.scheduler_check,
+        shared.selftest_check,
+        skills_applier.__main__,
+        spec_applier.__main__,
+    )
 }
 
+GOLDEN = json.loads(
+    (Path(__file__).parent / "fixtures" / "seat_layout_golden.json").read_text("utf-8")
+)
 
-@pytest.mark.parametrize("name", sorted(GOLDEN))
-def test_a_constant_resolves_to_its_old_literal(name: str) -> None:
-    value, literal = GOLDEN[name]
-    assert value == literal
-    assert type(value) is type(literal)
+_ATTRS = sorted(k for k in GOLDEN if ":" in k and "(" not in k and not k.startswith("plugins/"))
+_PLUGINS = sorted(k for k in GOLDEN if k.startswith("plugins/"))
+
+
+@pytest.mark.parametrize("key", _ATTRS)
+def test_a_module_default_is_the_literal_it_replaced(key: str) -> None:
+    module, attr = key.split(":")
+    assert str(getattr(MODULES[module], attr)) == GOLDEN[key]
+
+
+@pytest.mark.parametrize("key", _PLUGINS)
+def test_a_plugin_default_is_the_literal_it_replaced(key: str) -> None:
+    plugin, attr = key.removeprefix("plugins/").split(":")
+    assert getattr(load_plugin(plugin), attr) == GOLDEN[key]
+
+
+def test_the_config_applier_default_volume_is_the_literal_it_replaced() -> None:
+    from config_applier import applier
+
+    default = inspect.signature(applier.apply).parameters["volume_path"].default
+    assert str(default) == GOLDEN["config_applier.applier:apply(volume_path=)"]
+
+
+def test_the_connect_reconcile_launches_the_same_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    from shared import oauth_callback
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(oauth_callback.subprocess, "Popen", lambda argv, *a, **k: seen.append(argv))
+    oauth_callback._trigger_webhook_reconcile({})
+    assert seen == [GOLDEN["shared.oauth_callback:_trigger_webhook_reconcile({}) argv"]]
+
+
+def test_review_job_reads_the_live_audit_db_not_the_path_every_boot_moves_away() -> None:
+    # The ONE intended change in this golden (2026-11-10). entrypoint.sh renames
+    # /opt/data/audit.db to /opt/data/audit/audit.db on every boot; on smd-staging
+    # only the second exists. review_job read the first, so a root `approve` of a
+    # held reply was refused. FALSIFIER: point DEFAULT_AUDIT_DB back at
+    # seat_layout.LEGACY_AUDIT_DB and this fails.
+    from shared import review_job, seat_layout
+
+    assert review_job.DEFAULT_AUDIT_DB == seat_layout.AUDIT_VOLUME_DB == "/opt/data/audit/audit.db"
+    assert review_job.DEFAULT_AUDIT_DB != seat_layout.LEGACY_AUDIT_DB
+
+
+def test_the_golden_covers_every_migrated_default() -> None:
+    # 13 module constants, 2 plugin constants, 1 parameter default, 1 inline default.
+    assert len(GOLDEN) == 17
+    assert sorted(MODULES) == sorted({k.split(":")[0] for k in _ATTRS})

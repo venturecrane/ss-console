@@ -18,13 +18,13 @@ from typing import Any
 
 import yaml
 
-from . import casefile_schedule as schedule, delivery_proof
+from . import casefile_schedule as schedule, delivery_proof, seat_layout
 from .broker_context import BrokerContext
 from .casefile_ledger import AUDIT_TYPE, EnvelopeError, SubmitRefused, normalize_scope, scope_key, validate_envelope
 from .litigation_intake import scheduled_recipients
 
 FIRM_CONFIG_ENV = "SMD_CASEFILE_FIRM_CONFIG"
-DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/casefile-broker-firm.yaml"
+DEFAULT_FIRM_CONFIG = seat_layout.CASEFILE_BROKER_FIRM_YAML
 _ENVELOPE_KEYS = {"trigger", "smokeball_token_age_seconds"}
 
 

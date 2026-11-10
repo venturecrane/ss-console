@@ -1,89 +1,35 @@
-"""The broker's jobs-family path defaults resolve to the values they always had.
+"""The seat-layout migration changed no path the broker resolves (W2-W4).
 
-The broker reads its queue defaults from the generated
-``workspace_broker.seat_layout`` (operator/contracts/seat-layout.yaml). Each row
-is a default that was a hand-written literal before the migration, with that
-literal; the env override still wins when set and non-empty.
+Each default below was a string spelled in its module until it was pointed at
+the generated ``workspace_broker.seat_layout``. ``fixtures/seat_layout_golden.json``
+holds the value each one had BEFORE the change, captured by importing the
+modules at the pre-migration commit; every one must still be exactly that.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
 from pathlib import Path
-from typing import Any
+from types import ModuleType
 
 import pytest
 
-from workspace_broker import casefile_casework, records_store, reply_binding
+from workspace_broker import casefile_scheduled, casefile_verbs, litigation_intake, ops_close, records_verbs
 
-
-class _Broker:
-    audit_db_path = Path("/nonexistent/audit.db")
-
-
-def _ledger_queue(monkeypatch: pytest.MonkeyPatch, module: Any, cls: str, call: Callable[[], Any]) -> str:
-    seen: list[str] = []
-
-    def record(_db: str, queue: str) -> object:
-        seen.append(queue)
-        return object()
-
-    monkeypatch.setattr(module, cls, record)
-    call()
-    (queue,) = seen
-    return queue
-
-
-# (env override, module, ledger class the function constructs, the call, the literal it replaced)
-QUEUES: dict[str, tuple[str, Any, str, str, str]] = {
-    "demand": ("SMD_DEMAND_QUEUE_DIR", reply_binding, "DemandLedger", "_demand_ledger", "/run/smd-jobs/demand-queue"),
-    "drafting": (
-        "SMD_DRAFTING_QUEUE_DIR",
-        reply_binding,
-        "DraftingLedger",
-        "_drafting_ledger",
-        "/run/smd-jobs/drafting-queue",
-    ),
-    "litigation": (
-        "SMD_LITIGATION_QUEUE_DIR",
-        reply_binding,
-        "LitigationLedger",
-        "_litigation_ledger",
-        "/run/smd-jobs/litigation-queue",
-    ),
-    "negotiation": (
-        "SMD_NEGOTIATION_QUEUE_DIR",
-        reply_binding,
-        "NegotiationLedger",
-        "_negotiation_ledger",
-        "/run/smd-jobs/negotiation-queue",
-    ),
-    "medchron": ("SMD_MEDCHRON_QUEUE_DIR", reply_binding, "MedchronLedger", "_medchron_ledger", "/run/smd-jobs/queue"),
-    "casefile": (
-        "SMD_CASEFILE_QUEUE_DIR",
-        casefile_casework,
-        "CasefileLedger",
-        "casefile_ledger_of",
-        "/run/smd-jobs/casefile-queue",
-    ),
+#: Imported by name (never from a string), one per golden module.
+MODULES: dict[str, ModuleType] = {
+    m.__name__: m for m in (casefile_scheduled, casefile_verbs, litigation_intake, ops_close, records_verbs)
 }
 
-
-@pytest.mark.parametrize("lane", sorted(QUEUES))
-def test_a_queue_default_resolves_to_its_old_literal(lane: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    env, module, cls, fn, literal = QUEUES[lane]
-    if lane == "drafting":
-        monkeypatch.setattr(reply_binding, "of_drafting", lambda _d: None)
-        monkeypatch.setattr(reply_binding, "DraftingOrSetup", lambda _d, _s: None)
-    call = getattr(module, fn)
-    monkeypatch.delenv(env, raising=False)
-    assert _ledger_queue(monkeypatch, module, cls, lambda: call(_Broker())) == literal
-    monkeypatch.setenv(env, "")
-    assert _ledger_queue(monkeypatch, module, cls, lambda: call(_Broker())) == literal
-    monkeypatch.setenv(env, "/tmp/elsewhere")
-    assert _ledger_queue(monkeypatch, module, cls, lambda: call(_Broker())) == "/tmp/elsewhere"
+GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "seat_layout_golden.json").read_text("utf-8"))
 
 
-def test_the_records_queue_default_resolves_to_its_old_literal() -> None:
-    assert records_store.DEFAULT_QUEUE_DIR == "/opt/data/jobs/records-queue"
-    assert type(records_store.DEFAULT_QUEUE_DIR) is str
+@pytest.mark.parametrize("key", sorted(GOLDEN))
+def test_a_module_default_is_the_literal_it_replaced(key: str) -> None:
+    module, attr = key.split(":")
+    assert getattr(MODULES[module], attr) == GOLDEN[key]
+
+
+def test_the_golden_covers_every_migrated_default() -> None:
+    assert len(GOLDEN) == 5
+    assert sorted(MODULES) == sorted({k.split(":")[0] for k in GOLDEN})

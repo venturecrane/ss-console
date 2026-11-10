@@ -1,14 +1,14 @@
 {
-  "measuredAt": "2026-11-10T18:36:44.007Z",
-  "commit": "025d9f5cd0ecfdee28eb7ef3f1dc7df2171ce9ed",
+  "measuredAt": "2026-11-10T18:59:47.932Z",
+  "commit": "4fd91edd538316d103ea7d69de75691cf4a17408",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2324
+    "commits": 2325
   },
   "clones": {
-    "duplicatedPct": 4.24,
+    "duplicatedPct": 4.25,
     "copiedFiles": 64,
     "copiedLines": 32881,
     "partialClones": 239,
@@ -746,24 +746,6 @@
       ]
     },
     {
-      "literal": "/var/lib/smd-config/customer.yaml",
-      "kind": "path",
-      "files": 15,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 7,
-      "sample": [
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/bin/participant-fence-replay.py",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
-        "operator/connectors/smokeball/smokeball_connector/library.py",
-        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py"
-      ]
-    },
-    {
       "literal": "JOBS_DATA_DIR",
       "kind": "env",
       "files": 15,
@@ -916,7 +898,7 @@
       "literal": "/opt/data/audit/escalation-ledger.jsonl",
       "kind": "path",
       "files": 11,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "config",
         "python"
@@ -931,21 +913,21 @@
       ]
     },
     {
-      "literal": "/opt/data/customer.yaml",
+      "literal": "/var/lib/smd-config/customer.yaml",
       "kind": "path",
       "files": 11,
-      "testFiles": 5,
+      "testFiles": 2,
       "languages": [
         "config",
         "python"
       ],
-      "areas": 3,
+      "areas": 6,
       "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/hermes-smd-overlay/bootstrap/cli.py",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/hermes-smd-overlay/config_applier/__main__.py",
-        "operator/hermes-smd-overlay/config_applier/applier.py"
+        "operator/bin/lib/boot_harness/collect.py",
+        "operator/bin/participant-fence-replay.py",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
+        "operator/connectors/smokeball/smokeball_connector/library.py",
+        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py"
       ]
     },
     {
@@ -990,7 +972,7 @@
       "literal": "CUSTOMER_YAML",
       "kind": "env",
       "files": 10,
-      "testFiles": 17,
+      "testFiles": 18,
       "languages": [
         "python",
         "shell"
@@ -1136,7 +1118,7 @@
       "literal": "/opt/data/profiles",
       "kind": "path",
       "files": 9,
-      "testFiles": 6,
+      "testFiles": 5,
       "languages": [
         "python",
         "shell"
@@ -1373,7 +1355,7 @@
       "literal": "/opt/connectors/smokeball",
       "kind": "path",
       "files": 7,
-      "testFiles": 4,
+      "testFiles": 3,
       "languages": [
         "python",
         "shell"
@@ -1385,24 +1367,6 @@
         "operator/hermes-smd-overlay/bundle_installer/manifest.py",
         "operator/templates/Dockerfile",
         "operator/templates/entrypoint-bundles.sh"
-      ]
-    },
-    {
-      "literal": "/opt/hermes/.venv/bin/python3",
-      "kind": "path",
-      "files": 7,
-      "testFiles": 6,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/hermes-smd-overlay/shared/oauth_callback.py",
-        "operator/templates/Dockerfile",
-        "operator/templates/bootstrap.sh"
       ]
     },
     {
@@ -1612,7 +1576,7 @@
       "literal": "SMD_DRAFTING_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 4,
+      "testFiles": 3,
       "languages": [
         "python",
         "shell"
@@ -1630,7 +1594,7 @@
       "literal": "SMD_LITIGATION_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 2,
+      "testFiles": 1,
       "languages": [
         "python",
         "shell"
@@ -1648,7 +1612,7 @@
       "literal": "SMD_NEGOTIATION_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 2,
+      "testFiles": 1,
       "languages": [
         "python",
         "shell"
@@ -1760,7 +1724,7 @@
       "literal": "/opt/data/audit/casework-ledger.jsonl",
       "kind": "path",
       "files": 6,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "config",
         "python"
@@ -1775,10 +1739,28 @@
       ]
     },
     {
+      "literal": "/opt/data/customer.yaml",
+      "kind": "path",
+      "files": 6,
+      "testFiles": 6,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/hermes-smd-overlay/bootstrap/translate.py",
+        "operator/hermes-smd-overlay/config_applier/applier.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/customer_config.py"
+      ]
+    },
+    {
       "literal": "/opt/data/medchron",
       "kind": "path",
       "files": 6,
-      "testFiles": 5,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell",
@@ -1794,20 +1776,21 @@
       ]
     },
     {
-      "literal": "/var/lib/smd-config",
+      "literal": "/opt/hermes/.venv/bin/python3",
       "kind": "path",
       "files": 6,
-      "testFiles": 1,
+      "testFiles": 7,
       "languages": [
-        "python"
+        "python",
+        "shell"
       ],
-      "areas": 3,
+      "areas": 2,
       "sample": [
-        "operator/hermes-smd-overlay/firm_inputs_applier/__init__.py",
-        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
-        "operator/runners/jobs/jobs/firm_inputs.py",
-        "operator/runners/jobs/tools/draft_attorney_roster.py",
-        "operator/templates/firm-inputs-current-probe.py"
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/lib/boot_harness/collect.py",
+        "operator/templates/Dockerfile",
+        "operator/templates/bootstrap.sh",
+        "operator/templates/r2-account-key-strip-probe.py"
       ]
     },
     {
@@ -1888,7 +1871,7 @@
       "literal": "SMD_CASEFILE_QUEUE_DIR",
       "kind": "env",
       "files": 6,
-      "testFiles": 3,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -1924,7 +1907,7 @@
       "literal": "SMD_DEMAND_QUEUE_DIR",
       "kind": "env",
       "files": 6,
-      "testFiles": 3,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -2032,7 +2015,7 @@
       "literal": "/opt/data/attachment-spool",
       "kind": "path",
       "files": 5,
-      "testFiles": 3,
+      "testFiles": 2,
       "languages": [
         "config",
         "python"
@@ -2067,7 +2050,7 @@
       "literal": "/opt/hermes",
       "kind": "path",
       "files": 5,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -2103,7 +2086,7 @@
       "literal": "/opt/hermes/.venv/bin/python",
       "kind": "path",
       "files": 5,
-      "testFiles": 3,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell"
@@ -2121,7 +2104,7 @@
       "literal": "/opt/jobs",
       "kind": "path",
       "files": 5,
-      "testFiles": 7,
+      "testFiles": 6,
       "languages": [
         "python",
         "shell"
@@ -2190,20 +2173,20 @@
       ]
     },
     {
-      "literal": "/var/lib/smd-config/specs",
+      "literal": "/var/lib/smd-config",
       "kind": "path",
       "files": 5,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "python"
       ],
       "areas": 3,
       "sample": [
-        "operator/connectors/smokeball/smokeball_connector/library_pick.py",
-        "operator/hermes-smd-overlay/establish_intake/__main__.py",
-        "operator/hermes-smd-overlay/spec_applier/__main__.py",
-        "operator/runners/jobs/jobs/drafting/firm_rules.py",
-        "operator/runners/jobs/jobs/firm_wording.py"
+        "operator/hermes-smd-overlay/firm_inputs_applier/__init__.py",
+        "operator/runners/jobs/jobs/firm_inputs.py",
+        "operator/runners/jobs/tools/draft_attorney_roster.py",
+        "operator/templates/firm-inputs-current-probe.py",
+        "operator/templates/lane-memory-caps-probe.py"
       ]
     },
     {

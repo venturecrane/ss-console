@@ -71,7 +71,7 @@ const ALLOWED: Record<string, string> = {
     'the sprawl census of the tree, which counts the old path where it still appears',
   'operator/templates/tests/fixtures/seat-checks-golden.txt':
     'the seat check list as composed, captured: its old-tree checks name the old path',
-  'operator/hermes-smd-overlay/tests/test_seat_layout_golden.py':
+  'operator/hermes-smd-overlay/tests/test_seat_layout_jobs_golden.py':
     "pins the record-store fence's reserved prefixes, the old name among them",
   'tests/record-stores-seat-layout.test.ts':
     'pins the console fence refusing a store under the old name',

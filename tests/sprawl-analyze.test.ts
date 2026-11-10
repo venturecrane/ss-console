@@ -54,6 +54,14 @@ describe('literalCensus', () => {
     expect(literalCensus(files(9, 'docs/a', 'md', 'see /opt/data/jobs'))).toEqual([])
   })
 
+  it('does not count a seat_layout constant that shares an env name, but does count the name', () => {
+    const reader = { path: 'operator/r.sh', text: 'echo "${CUSTOMER_YAML}"' }
+    const viaLayout = files(6, 'operator/a', 'py', 'P = seat_layout.CUSTOMER_YAML')
+    expect(literalCensus([reader, ...viaLayout])).toEqual([])
+    const restated = files(6, 'operator/a', 'py', 'P = os.environ.get("CUSTOMER_YAML")')
+    expect(literalCensus([reader, ...restated]).map((r) => r.literal)).toEqual(['CUSTOMER_YAML'])
+  })
+
   it('does not match a path-like fragment that is not anchored at a seat root', () => {
     expect(literalCensus(files(6, 'src/a', 'ts', 'const u = "a/optional/run"'))).toEqual([])
   })

@@ -59,10 +59,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from shared import seat_layout
+
 logger = logging.getLogger("hermes-smd-scheduler-check")
 
 DEFAULT_HERMES_HOME = "/opt/data"
-DEFAULT_CUSTOMER_YAML_PATH = "/var/lib/smd-config/customer.yaml"
+DEFAULT_CUSTOMER_YAML_PATH = seat_layout.CUSTOMER_YAML
 
 # Post-restart window during which overdue math is suppressed (the volume's
 # persisted next_run_at values for non-managed jobs can be legitimately stale
