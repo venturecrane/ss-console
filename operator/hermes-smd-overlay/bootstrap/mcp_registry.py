@@ -199,6 +199,33 @@ MCP_CONNECTOR_REGISTRY: dict[str, McpConnectorSpec] = {
             "list_list_entries",
             "list_providers",
             "search_providers",
+            # SURFACE REDUCTION, round three (2026-11-10). Named by the seat
+            # again: the sweep on smd-guide's first real email turn reported
+            # "36 registered, 16 unclassified", and these are the sixteen. The
+            # vendor added a calendar, a file store, a "labs" programme, an
+            # inbox-authorization verb and a feedback verb. No Operator routine
+            # uses AgentMail for any of them (a seat's calendar is its own
+            # connector, and files reach a reply through the broker), so they
+            # sat on the menu refusing on every call and costing prompt-cache
+            # tokens every turn. authorize_inbox, join_labs and send_feedback
+            # are account-level acts against our mail vendor and belong off the
+            # menu at any ceiling, same reasoning as connect_provider above.
+            "authorize_inbox",
+            "create_event",
+            "delete_event",
+            "delete_file",
+            "get_agenda",
+            "get_calendar",
+            "get_event",
+            "get_file",
+            "get_labs",
+            "join_labs",
+            "list_files",
+            "respond_to_invitation",
+            "send_feedback",
+            "update_calendar",
+            "update_event",
+            "upload_file",
         ),
     ),
     # Clio (oktopeak/clio-mcp v2.0.0, MIT) — practice-management system of record

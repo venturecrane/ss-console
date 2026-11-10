@@ -1393,6 +1393,26 @@ def test_translate_does_not_exclude_agentmail_sends(tmp_path, monkeypatch):
         "list_list_entries",
         "list_providers",
         "search_providers",
+        # surface reduction round three (2026-11-10). The sixteen the sweep
+        # named on smd-guide's first real email turn ("36 registered, 16
+        # unclassified"): the vendor's calendar, file store, labs programme,
+        # inbox authorization and feedback verbs. No Operator routine uses any.
+        "authorize_inbox",
+        "create_event",
+        "delete_event",
+        "delete_file",
+        "get_agenda",
+        "get_calendar",
+        "get_event",
+        "get_file",
+        "get_labs",
+        "join_labs",
+        "list_files",
+        "respond_to_invitation",
+        "send_feedback",
+        "update_calendar",
+        "update_event",
+        "upload_file",
     }
     # Reads and drafts MUST stay: the no-send key still performs them, the reply
     # channel triggers on create_draft, and the intake skill authors it. Dropping
@@ -2841,3 +2861,21 @@ def test_a_section_whose_only_line_is_gated_away_renders_nothing():
     assert _send_posture_soul_section(persona, {"connectors": {}}) == ""
     smokeball = {"connectors": {"smokeball": {"backend": "mcp:smokeball"}}}
     assert "mcp_smokeball_delete_events" in _send_posture_soul_section(persona, smokeball)
+
+
+def test_agentmail_email_prompt_carries_the_inbox_id():
+    """The draft tool needs the seat's own inbox id, and nothing else on an
+    email turn states it. Without this line the model guessed one, the vendor
+    answered "Inbox not found", and the turn spent a list_inboxes call and a
+    second draft to recover (smd-guide, 2026-11-10 13:48Z). The id comes from
+    the webhook payload (``message.inbox_id``), above the untrusted-body line so
+    a body cannot supply its own."""
+    from bootstrap.translate import _INBOUND_EMAIL_PROMPT
+
+    line = "inbox_id: {message.inbox_id}\n"
+    assert line in _INBOUND_EMAIL_PROMPT
+    delimiter = "--- untrusted email body below"
+    assert _INBOUND_EMAIL_PROMPT.index(line) < _INBOUND_EMAIL_PROMPT.index(delimiter)
+    # message_id keeps its own line directly above: the reply channel's parser
+    # binds the turn's origin on it.
+    assert "message_id: {message.message_id}\ninbox_id:" in _INBOUND_EMAIL_PROMPT
