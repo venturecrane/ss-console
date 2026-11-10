@@ -74,7 +74,7 @@ providers:
     fax: (602) 555-0162
     match: nandakumar|valley medical
     custodian: Lorraine Begay
-    style: { font: helv, accent: [0.05, 0.40, 0.30], layout: band }
+    style: { face: helv, accent: [0.05, 0.40, 0.30], layout: band }
   okonkwo:
     facility: Okonkwo Orthopedic Associates
     address: 2222 E. Highland Avenue, Suite 300, Phoenix, AZ 85016
@@ -82,7 +82,7 @@ providers:
     fax: (602) 555-0135
     match: okonkwo
     custodian: Desiree Halvorsen
-    style: { font: tiro, accent: [0.15, 0.20, 0.50], layout: box, size: 10 }
+    style: { face: tiro, accent: [0.15, 0.20, 0.50], layout: box, size: 10 }
   rap:
     facility: Radiology Associates of Phoenix
     address: 1501 E. Thomas Road, Phoenix, AZ 85014
@@ -90,7 +90,7 @@ providers:
     fax: (602) 555-0118
     match: liang|radiology associates
     custodian: Film Library
-    style: { font: tiro, accent: [0.2, 0.2, 0.2], layout: rule, size: 10 }
+    style: { face: tiro, accent: [0.2, 0.2, 0.2], layout: rule, size: 10 }
   desert:
     facility: Desert Physical Therapy
     address: 5025 N. Central Avenue, Suite 110, Phoenix, AZ 85012
@@ -98,21 +98,21 @@ providers:
     fax: (602) 555-0157
     match: desert physical|brightwater
     custodian: Ana Lucero
-    style: { font: helv, accent: [0.80, 0.35, 0.10], layout: band }
+    style: { face: helv, accent: [0.80, 0.35, 0.10], layout: band }
   rx:
     facility: Camelback Community Pharmacy
     address: 1340 E. Camelback Road, Phoenix, AZ 85014
     phone: (602) 555-0129
     fax: (602) 555-0130
     custodian: Ravi Menon, PharmD
-    style: { font: cour, accent: [0.2, 0.2, 0.2], layout: rule }
+    style: { face: cour, accent: [0.2, 0.2, 0.2], layout: rule }
   bsh:
     facility: Blue Sage Health
     address: Claims, P.O. Box 31170, Phoenix, AZ 85046
     phone: (602) 555-0109
     fax: (602) 555-0108
     custodian: Member Services
-    style: { font: helv, accent: [0.1, 0.3, 0.6], layout: rule }
+    style: { face: helv, accent: [0.1, 0.3, 0.6], layout: rule }
 
 series:
   pt:

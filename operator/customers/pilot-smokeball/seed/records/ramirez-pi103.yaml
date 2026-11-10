@@ -68,7 +68,7 @@ providers:
     fax: (562) 555-0142
     match: hollings|tanaka
     custodian: Renata Velez
-    style: { font: helv, accent: [0.10, 0.42, 0.55], layout: band }
+    style: { face: helv, accent: [0.10, 0.42, 0.55], layout: band }
   pcps:
     facility: Pacific Coast Pediatric Plastic Surgery
     address: 2801 Atlantic Avenue, Suite 610, Long Beach, CA 90806
@@ -76,21 +76,21 @@ providers:
     fax: (562) 555-0187
     match: abernathy
     custodian: Dolores Kim
-    style: { font: tiro, accent: [0.38, 0.18, 0.40], layout: box, size: 10 }
+    style: { face: tiro, accent: [0.38, 0.18, 0.40], layout: box, size: 10 }
   rx:
     facility: Bixby Knolls Community Pharmacy
     address: 3901 Atlantic Avenue, Long Beach, CA 90807
     phone: (562) 555-0122
     fax: (562) 555-0123
     custodian: Paul Okafor, PharmD
-    style: { font: cour, accent: [0.2, 0.2, 0.2], layout: rule }
+    style: { face: cour, accent: [0.2, 0.2, 0.2], layout: rule }
   animal:
     facility: Long Beach Animal Care Services
     address: 7700 E. Spring Street, Long Beach, CA 90815
     phone: (562) 555-0164
     fax: (562) 555-0165
     custodian: Records Unit
-    style: { font: helv, accent: [0.15, 0.35, 0.15], layout: rule }
+    style: { face: helv, accent: [0.15, 0.35, 0.15], layout: rule }
 
 documents:
   - id: vpa

@@ -65,7 +65,7 @@ def _wrap(text: str, font: str, size: float, width: float) -> list[str]:
 def _style(plan: Plan, doc: Document) -> dict[str, Any]:
     st = plan.providers[doc.provider].style
     return {
-        "font": str(st.get("font", "helv")),
+        "face": str(st.get("face", "helv")),
         "accent": tuple(float(x) for x in st.get("accent", (0.15, 0.25, 0.45))),
         "layout": str(st.get("layout", "rule")),
         "size": float(st.get("size", 9.5)),
@@ -74,7 +74,7 @@ def _style(plan: Plan, doc: Document) -> dict[str, Any]:
 
 def _draw_header(pg: pymupdf.Page, plan: Plan, doc: Document, st: dict[str, Any], top: float) -> float:
     head = layout.header(plan, doc)
-    accent, font = st["accent"], st["font"]
+    accent, font = st["accent"], st["face"]
     if st["layout"] == "band":
         pg.draw_rect(pymupdf.Rect(0, top, W, top + 44), color=accent, fill=accent)
         pg.insert_text((M, top + 22), head[0], fontname="hebo", fontsize=13, color=(1, 1, 1))
@@ -119,18 +119,18 @@ def draw(pg: pymupdf.Page, plan: Plan, doc: Document, page: Page, *, scan: bool)
         pg.insert_text((M, y), page.title.upper(), fontname="hebo", fontsize=10.5)
         y += 18
     size = st["size"]
-    lines = _body_lines(page, st["font"], size)
+    lines = _body_lines(page, st["face"], size)
     room = H - y - 70
     while len(lines) * size * 1.32 > room and size > 6.5:
         size -= 0.5
-        lines = _body_lines(page, st["font"], size)
+        lines = _body_lines(page, st["face"], size)
     if page.hand:
         pg.insert_font(fontname="hand", fontfile=str(_font_dir() / "DejaVuSans-Oblique.ttf"))
     for text, hand in lines:
         if hand:
             _hand(pg, M, y, text.strip(), size + 1.5, gen)
         else:
-            pg.insert_text((M, y), text, fontname=st["font"], fontsize=size)
+            pg.insert_text((M, y), text, fontname=st["face"], fontsize=size)
         y += size * 1.32
     foot = layout.footer(plan, doc, page)
     pg.draw_line((M, H - 58), (W - M, H - 58), color=(0.6, 0.6, 0.6), width=0.5)

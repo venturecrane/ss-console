@@ -86,7 +86,7 @@ providers:
     fax: (916) 555-0111
     match: ochoa|metro fire
     custodian: Kendra Lowe
-    style: { font: helv, accent: [0.70, 0.10, 0.10], layout: rule }
+    style: { face: helv, accent: [0.70, 0.10, 0.10], layout: rule }
   kaiser:
     facility: Kaiser Permanente Sacramento
     address: 6100 Alhambra Boulevard, Sacramento, CA 95819
@@ -94,7 +94,7 @@ providers:
     fax: (916) 555-0182
     match: kaiser|sepulveda|oyelaran|mensah
     custodian: Marisol Duenas
-    style: { font: helv, accent: [0.0, 0.33, 0.62], layout: band }
+    style: { face: helv, accent: [0.0, 0.33, 0.62], layout: band }
   sierra:
     facility: Sierra Imaging Associates
     address: 2440 Capitol Avenue, Suite 300, Sacramento, CA 95816
@@ -102,7 +102,7 @@ providers:
     fax: (916) 555-0151
     match: sierra imaging|achebe
     custodian: Tom Ridley
-    style: { font: tiro, accent: [0.25, 0.25, 0.25], layout: rule, size: 10 }
+    style: { face: tiro, accent: [0.25, 0.25, 0.25], layout: rule, size: 10 }
   ragh:
     facility: Raghunathan Orthopedic Spine
     address: 1919 J Street, Suite 210, Sacramento, CA 95811
@@ -110,7 +110,7 @@ providers:
     fax: (916) 555-0194
     match: raghunathan
     custodian: Priscilla Navarro
-    style: { font: tiro, accent: [0.10, 0.30, 0.20], layout: box, size: 10 }
+    style: { face: tiro, accent: [0.10, 0.30, 0.20], layout: box, size: 10 }
   capital:
     facility: Capital Physical Therapy
     address: 5150 Folsom Boulevard, Sacramento, CA 95819
@@ -118,28 +118,28 @@ providers:
     fax: (916) 555-0127
     match: capital physical|mbeki
     custodian: Jared Funk
-    style: { font: helv, accent: [0.85, 0.45, 0.05], layout: band }
+    style: { face: helv, accent: [0.85, 0.45, 0.05], layout: band }
   kfhp:
     facility: Kaiser Foundation Health Plan
     address: Third Party Liability Unit, P.O. Box 5500, Oakland, CA 94604
     phone: (510) 555-0101
     fax: (510) 555-0102
     custodian: TPL Unit
-    style: { font: helv, accent: [0.0, 0.33, 0.62], layout: rule }
+    style: { face: helv, accent: [0.0, 0.33, 0.62], layout: rule }
   dhcs:
     facility: California Department of Health Care Services
     address: Personal Injury Program, P.O. Box 997425, Sacramento, CA 95899
     phone: (916) 555-0140
     fax: (916) 555-0141
     custodian: Personal Injury Program
-    style: { font: cour, accent: [0.1, 0.1, 0.1], layout: rule }
+    style: { face: cour, accent: [0.1, 0.1, 0.1], layout: rule }
   medfin:
     facility: MedFin Capital LLC
     address: 400 Capitol Mall, Suite 900, Sacramento, CA 95814
     phone: (916) 555-0170
     fax: (916) 555-0171
     custodian: Account Services
-    style: { font: helv, accent: [0.30, 0.10, 0.50], layout: box }
+    style: { face: helv, accent: [0.30, 0.10, 0.50], layout: box }
 
 series:
   pt:
