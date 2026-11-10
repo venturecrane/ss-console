@@ -16,6 +16,10 @@
       "path": "/run/smd-audit",
       "when": "always"
     },
+    "audit_volume_db": {
+      "path": "/opt/data/audit/audit.db",
+      "when": "always"
+    },
     "broker_python": {
       "path": "/opt/workspace-broker/.venv/bin/python",
       "when": "always"

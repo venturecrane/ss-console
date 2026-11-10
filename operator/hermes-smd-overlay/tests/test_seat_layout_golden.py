@@ -88,6 +88,18 @@ def test_the_connect_reconcile_launches_the_same_command(monkeypatch: pytest.Mon
     assert seen == [GOLDEN["shared.oauth_callback:_trigger_webhook_reconcile({}) argv"]]
 
 
+def test_review_job_reads_the_live_audit_db_not_the_path_every_boot_moves_away() -> None:
+    # The ONE intended change in this golden (2026-11-10). entrypoint.sh renames
+    # /opt/data/audit.db to /opt/data/audit/audit.db on every boot; on smd-staging
+    # only the second exists. review_job read the first, so a root `approve` of a
+    # held reply was refused. FALSIFIER: point DEFAULT_AUDIT_DB back at
+    # seat_layout.LEGACY_AUDIT_DB and this fails.
+    from shared import review_job, seat_layout
+
+    assert review_job.DEFAULT_AUDIT_DB == seat_layout.AUDIT_VOLUME_DB == "/opt/data/audit/audit.db"
+    assert review_job.DEFAULT_AUDIT_DB != seat_layout.LEGACY_AUDIT_DB
+
+
 def test_the_golden_covers_every_migrated_default() -> None:
     # 13 module constants, 2 plugin constants, 1 parameter default, 1 inline default.
     assert len(GOLDEN) == 17

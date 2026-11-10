@@ -193,7 +193,14 @@ paths:
     path: '{hermes_root}/.playwright'
   legacy_audit_db:
     # The pre-/run/smd-audit audit db on the volume (entrypoint.sh LEGACY_AUDIT_DB).
+    # Every boot MOVES it to audit_volume_db (entrypoint.sh: mv), so nothing may
+    # read it: it exists only for the move and its refusal.
     path: '{data}/audit.db'
+  audit_volume_db:
+    # The live audit db on the volume (entrypoint.sh AUDIT_DB); /run/smd-audit is
+    # its bind for the broker. Measured on smd-staging 2026-11-10: this file exists
+    # and /opt/data/audit.db does not.
+    path: '{data}/audit/audit.db'
 
 # Files that must spell a path rather than import it, each with the reason. The
 # generation test pins each named path in each file to the value above.

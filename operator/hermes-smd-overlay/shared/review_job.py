@@ -36,7 +36,10 @@ from records_contract.review_row import JOB_ID_RE, JOB_KINDS, ReviewError
 from shared import request_index, seat_layout
 
 AUDIT_DB_ENV = "SMD_AUDIT_DB_PATH"
-DEFAULT_AUDIT_DB = seat_layout.LEGACY_AUDIT_DB
+# The live db. Until 2026-11-10 this read /opt/data/audit.db, the pre-move path
+# every boot renames away (entrypoint.sh), so a root `approve` run without
+# SMD_AUDIT_DB_PATH was refused with "the seat's audit db is not at ...".
+DEFAULT_AUDIT_DB = seat_layout.AUDIT_VOLUME_DB
 #: The ledgers a requested job's reply is marked on (``reply_sent_at`` /
 #: ``reply_key``), by kind. A medchron job carries no mark (its once-only is the
 #: broker's claim alone) and a negotiation or note job has no request thread of

@@ -6,6 +6,7 @@
 SMD_LAYOUT_ATTACHMENT_SPOOL='/opt/data/attachment-spool'
 SMD_LAYOUT_AUDIT_DB='/run/smd-audit/audit.db'
 SMD_LAYOUT_AUDIT_RUN='/run/smd-audit'
+SMD_LAYOUT_AUDIT_VOLUME_DB='/opt/data/audit/audit.db'
 SMD_LAYOUT_BROKER_PYTHON='/opt/workspace-broker/.venv/bin/python'
 SMD_LAYOUT_BROKER_ROOT='/opt/workspace-broker'
 SMD_LAYOUT_BROKER_SOCKET='/run/smd-workspace-broker/broker.sock'

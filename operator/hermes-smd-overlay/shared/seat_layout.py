@@ -13,6 +13,7 @@ from __future__ import annotations
 ATTACHMENT_SPOOL = "/opt/data/attachment-spool"
 AUDIT_DB = "/run/smd-audit/audit.db"
 AUDIT_RUN = "/run/smd-audit"
+AUDIT_VOLUME_DB = "/opt/data/audit/audit.db"
 BROKER_PYTHON = "/opt/workspace-broker/.venv/bin/python"
 BROKER_ROOT = "/opt/workspace-broker"
 BROKER_SOCKET = "/run/smd-workspace-broker/broker.sock"
@@ -61,6 +62,7 @@ PATHS: dict[str, str] = {
     "attachment_spool": ATTACHMENT_SPOOL,
     "audit_db": AUDIT_DB,
     "audit_run": AUDIT_RUN,
+    "audit_volume_db": AUDIT_VOLUME_DB,
     "broker_python": BROKER_PYTHON,
     "broker_root": BROKER_ROOT,
     "broker_socket": BROKER_SOCKET,

@@ -17,7 +17,7 @@
     "connect"
   ],
   "shared.policy_profile:MARKETING_REGISTERS_DEFAULT": "/var/lib/smd-config/marketing/marketing-firm.yaml",
-  "shared.review_job:DEFAULT_AUDIT_DB": "/opt/data/audit.db",
+  "shared.review_job:DEFAULT_AUDIT_DB": "/opt/data/audit/audit.db",
   "shared.scheduler_check:DEFAULT_CUSTOMER_YAML_PATH": "/var/lib/smd-config/customer.yaml",
   "shared.selftest_check:RESULTS_PATH": "/run/smd-selftest/results.json",
   "skills_applier.__main__:_DEFAULT_CUSTOMER_YAML": "/var/lib/smd-config/customer.yaml",
