@@ -57,7 +57,7 @@ fly_region: lax # nearest to Phoenix; Fly has no phx region — pick per custome
 model: claude-sonnet-4-6
 
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----

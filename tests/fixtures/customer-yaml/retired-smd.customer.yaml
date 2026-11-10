@@ -48,7 +48,7 @@ model: claude-sonnet-4-6
 escalation_model: claude-opus-4-8
 
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- GOOGLE WORKSPACE AUTHORITY ----

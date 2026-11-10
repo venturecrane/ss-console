@@ -45,7 +45,7 @@ function validInput(): ProvisioningInput {
     practice_areas: ['personal-injury'],
     fly_region: 'lax',
     model: 'claude-opus-4-7',
-    machine_size: 'shared-cpu-1x',
+    machine_size: 'shared-cpu-2x',
     machine_memory_mb: 2048,
     user_email: 'partner@firm.com',
     user_role: 'principal',
@@ -91,7 +91,7 @@ describe('parseProvisioningForm', () => {
     form.set('practice_areas', 'personal-injury, workers-comp')
     form.set('fly_region', 'lax')
     form.set('model', 'claude-opus-4-7')
-    form.set('machine_size', 'shared-cpu-1x')
+    form.set('machine_size', 'shared-cpu-2x')
     form.set('machine_memory_mb', '1024')
     form.set('user_email', 'partner@firm.com')
     form.set('user_role', 'principal')
@@ -190,7 +190,7 @@ describe('serializeCustomerYaml', () => {
     // empty list renders inline
     expect(yaml).toContain('addons: []')
     // nested map
-    expect(yaml).toMatch(/machine:\n {2}size: 'shared-cpu-1x'\n {2}memory_mb: 2048/)
+    expect(yaml).toMatch(/machine:\n {2}size: 'shared-cpu-2x'\n {2}memory_mb: 2048/)
   })
 
   it('single-quotes strings and doubles internal quotes', () => {
