@@ -123,12 +123,19 @@ def _ledger_events() -> list[dict]:
     ]
 
 
-def _capture(tmp_path: Path, monkeypatch) -> dict:
+_MINIMAL_YAML = "escalation:\n  red_flag_recipients:\n    - triage@example-firm.test\n"
+
+#: A&P-shaped config (the frozen ap-shaped-seat fixture, case_manager removed):
+#: matter-staff routing, the firm's personas and scope. Its golden was captured
+#: 2026-11-10 from origin/main e645e95b4, BEFORE the case-manager feature was
+#: removed, so that removal is proven to leave an unconfigured seat untouched.
+_AP_SHAPED_YAML = _SKILL / "tests" / "fixtures" / "ap-shaped-no-case-manager.customer.yaml"
+_AP_SHAPED_GOLDEN = _SKILL / "tests" / "fixtures" / "golden-ap-shaped-no-case-manager.json"
+
+
+def _capture(tmp_path: Path, monkeypatch, yaml_text: str = _MINIMAL_YAML) -> dict:
     yaml_path = tmp_path / "customer.yaml"
-    yaml_path.write_text(
-        "escalation:\n  red_flag_recipients:\n    - triage@example-firm.test\n",
-        encoding="utf-8",
-    )
+    yaml_path.write_text(yaml_text, encoding="utf-8")
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(yaml_path))
     deadlines, problem, _stats = _pre_run.parse_pull(_raw_pull(), now=NOW)
@@ -159,5 +166,17 @@ def test_no_case_manager_block_is_byte_identical_to_before(tmp_path, monkeypatch
     want = json.loads(_GOLDEN.read_text(encoding="utf-8"))
     assert got == want
     # Byte-identical bodies, not merely equal-after-parse.
+    for sent, golden in zip(got["envelope"]["dispatches"], want["envelope"]["dispatches"]):
+        assert sent["full_body"].encode("utf-8") == golden["full_body"].encode("utf-8")
+
+
+def test_ap_shaped_seat_without_the_block_is_byte_identical_to_before(tmp_path, monkeypatch):
+    got = _capture(tmp_path, monkeypatch, _AP_SHAPED_YAML.read_text(encoding="utf-8"))
+    if os.environ.get("UPDATE_ESCALATOR_GOLDEN") == "1":
+        _AP_SHAPED_GOLDEN.write_text(json.dumps(got, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    want = json.loads(_AP_SHAPED_GOLDEN.read_text(encoding="utf-8"))
+    # The check can fail: the capture rendered at least one digest body.
+    assert want["envelope"]["dispatches"], "the A&P-shaped golden rendered no digest"
+    assert got == want
     for sent, golden in zip(got["envelope"]["dispatches"], want["envelope"]["dispatches"]):
         assert sent["full_body"].encode("utf-8") == golden["full_body"].encode("utf-8")

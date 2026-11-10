@@ -1,0 +1,709 @@
+# Frozen 2026-11-10 from tests/fixtures/ap-shaped-seat/customer.yaml, minus the
+# case_manager block and every entry naming a skill removed on 2026-11-10: the
+# A&P-shaped input for the no-case_manager escalator golden.
+schema_version: 1
+customer_id: pilot-smokeball
+customer_name: Pilot Law (Smokeball Staging)
+seat:
+  kind: proving
+  product: operator
+output_classes:
+  staff:
+    voice_spec: expected
+    format_spec: none
+  work_product:
+    voice_spec: expected
+    format_spec: none
+vertical: law-firm
+addons:
+  - law-firm/pi@0.3.0
+practice_areas:
+  - personal-injury-plaintiff
+fly_region: lax
+model: claude-sonnet-4-6
+escalation_model: claude-opus-5-5
+machine:
+  size: shared-cpu-4x
+  memory_mb: 8192
+  lane_memory_mb:
+    medchron: 4096
+    demand: 2048
+users:
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+  - email: ss-probe-admin@agentmail.to
+    role: staff
+    full_name: SS Probe Admin (staging rehearsal)
+  - email: smdurgan@smdurgan.com
+    role: staff
+    full_name: Scott Durgan
+personas:
+  - slug: operator
+    status: active
+    name: Operator
+    title: AI Case Coordinator
+    tone:
+      - Lead with the fact. Name the matter and the event in the first sentence. Never
+        open with a pleasantry, a preamble, or "I hope this finds you well."
+      - Say what you need, specifically. A closed question with a real answer ("Confirm
+        August 28, or tell me the date you want"), never "please advise." One message,
+        one purpose.
+      - 'When unsure, do not guess and do not proceed: state what you found, what you
+        need, and stop. A refusal is a normal outcome, never an apology. Bad news, including
+        your own error, goes in the first sentence.'
+      - Numbers and dates bare, no hedging wrapped around them. No filler, no flattery,
+        no announcing your own diligence. Never speculate about law, merits, strategy,
+        or valuation. No em dashes.
+      - "Use the firm's own words (matter, served, propounded, verification, lien), never
+        software vocabulary. You are a case manager working every open file: you carry
+        the work, the attorneys decide it, and you never confuse the two."
+    entitlements:
+      exposure:
+        internal_write: autonomous
+        external_send: draft_for_review
+        external_send_internal: autonomous
+        external_send_client: draft_for_review
+        external_send_vendor: draft_for_review
+        destructive: confirm
+        commitment: confirm
+      exposure_ceiling:
+        external_send: draft_for_review
+        external_send_client: autonomous
+        external_send_vendor: autonomous
+    skills:
+      - name: matter-inbox-router
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: matter-status-digest
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: operator-introduce
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: operator-help
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: scott@smd.services
+      - name: operator-self-test
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: connector-auth-check
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: voice-establishment
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: document-library-establishment
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: operator-self-initiation
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: new-matter-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: conflict-intake-router
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: consult-scheduler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: engagement-letter-chaser
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: trust-balance-nudge
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-status-responder
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: document-receipt-logger
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: stalled-matter-nudge
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-memo-on-update
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: matter-document-review
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: deadline-and-sol-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: deadline-miss-escalator
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: discovery-served-watch
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: discovery-response-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: client-verification-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          chase_cadence_days: 5
+          escalate_after_attempts: 3
+      - name: separate-statement-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: opposing-response-deficiency-review
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+        settings:
+          review_threshold_pages: 20
+      - name: meet-and-confer-drafter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: discovery-response-staging
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-initiation-setup
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: service-confirmation-watcher
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: medical-records-chaser
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          chase_cadence_days: 7
+      - name: medical-chronology-maintainer
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          treatment_gap_flag_days: 45
+          chronology_package_page_allowance_per_month: 40
+          chronology_package_cycle_anchor_day: 15
+          chronology_package_cycle_effective_from: '2026-09-11'
+      - name: motion-calendar-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: motion-package-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: minors-compromise-packet
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: trial-binder-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: mediation-settlement-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: lien-ledger-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          trigger_status: Pending
+          chase_cadence_days: 14
+          stall_days: 60
+          register_days: 7
+      - name: settlement-statement-feeder
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: daily-needs-you-digest
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: demand-letter-drafter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: vendor-invoice-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: combined-post-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: post-intake-daily-list
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: ss-probe-admin@agentmail.to
+      - name: file-work-requests
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: smd-note
+        version: pending
+        initiation:
+          manual: false
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: case-file-manager
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: Case File Manager
+          library_matter_number: 2026-OPS-LIBRARY
+          scheduled_caseloads: Scott Durgan
+          scheduled_recipients: ss-probe-admin@agentmail.to
+    cron:
+      - skill: deadline-miss-escalator
+        schedule: 0 7 * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: daily-needs-you-digest
+        schedule: 23 6 * * 1-5
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: operator-help
+        schedule: 17 14 * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: post-intake-daily-list
+        schedule: 41 * * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: connector-auth-check
+        schedule: 13 * * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+    skills_disabled:
+      - google-workspace
+      - himalaya
+mcp_connector:
+  enabled: true
+  data_posture: open
+  access:
+    - email: scott@smd.services
+      profile: operator
+      clerk_subjects:
+        - user_3EEs0aMBRgu6PRxBa4g5YhHjggD
+        - user_3E1RPGrTMxkSqciXMTyybUNSJWu
+authority:
+  default: managed
+  overrides:
+    trust: client
+    runtime: client
+connectors:
+  PracticeManagement:
+    adapter: smokeball
+    backend: mcp:smokeball
+    enabled: true
+    environment: staging
+    auth_mode: authorization_code
+    token_ref: infisical:/operator/pilot-smokeball/practice-management/smokeball-oauth
+    webhook_url: https://hermes-pilot-smokeball.fly.dev/webhooks/smokeball
+  Email:
+    adapter: agentmail
+    backend: mcp:agentmail
+    enabled: true
+    webhook_url: https://hermes-pilot-smokeball.fly.dev/webhooks/agentmail
+  WebSearch:
+    adapter: brave
+    backend: native:brave-free
+    enabled: true
+webhook_triggers:
+  - source: smokeball
+    event_type: matter.updated
+    skill: matter-memo-on-update
+    persona: operator
+    exclude:
+      matters:
+        - 3c191bed-cdda-48b9-a6ed-a51a349f3f94
+    throttle:
+      cooldown_minutes: 30
+  - source: agentmail
+    event_type: message.received
+    skill: matter-inbox-router
+    persona: operator
+  - source: smokeball
+    event_type: responses.served
+    skill: opposing-response-deficiency-review
+    persona: operator
+    vendor_emitted: false
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  inbound_allow_from:
+    - scott@smd.services
+    - smdurgan@smdurgan.com
+    - scott+help-probe-1@smd.services
+    - scott+help-probe-2@smd.services
+    - scott+help-probe-3@smd.services
+    - scott+help-probe-4@smd.services
+    - scott+roster-live-probe@smd.services
+    - ss-probe-runner@agentmail.to
+    - ss-probe-admin@agentmail.to
+  admins:
+    - scott@smd.services
+    - ss-probe-admin@agentmail.to
+  rule_requests_to:
+    - ss-probe-admin@agentmail.to
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
+  outbound_roster:
+    - address: ap-client-standin@agentmail.to
+      class: client
+      note: client stand-in inbox for the live send probes
+    - address: ap-records-standin@agentmail.to
+      class: records_vendor
+      note: records vendor stand-in inbox for the live send probes
+    - address: scott@smd.services
+      class: firm_staff
+      note: SMD operations desk (cards are addressed here); outbound classification
+        only, never inbound trust
+    - address: team@smd.services
+      class: firm_staff
+      note: SMD operations desk; outbound classification only, never inbound trust
+digest:
+  home_matter_id: 3c191bed-cdda-48b9-a6ed-a51a349f3f94
+business_hours:
+  timezone: America/Los_Angeles
+  days:
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+  start: 08:00
+  end: '18:00'
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+escalation:
+  red_flag_recipients:
+    - scott@smd.services
+  failure_recipients:
+    - scott@smd.services
+  refire_days: 3
+  ack_snooze_days: 7
+  case_alert_routing:
+    mode: matter_staff
+    fallback_recipients:
+      - scott@smd.services
+routine_names:
+  discovery-served-watch: Served discovery caught
+  discovery-response-tracker: Response deadlines
+  client-verification-tracker: Client verification
+  separate-statement-assembler: Separate statement
+  opposing-response-deficiency-review: Opposing responses reviewed
+  meet-and-confer-drafter: Meet-and-confer letter
+  discovery-response-staging: Response inputs staged
+  matter-initiation-setup: New matter setup
+  service-confirmation-watcher: Service confirmation
+  medical-records-chaser: Records chase
+  medical-chronology-maintainer: Medical chronology
+  motion-calendar-tracker: Motion calendar
+  motion-package-assembler: Motion package
+  minors-compromise-packet: Minor's compromise packet
+  trial-binder-assembler: Trial binder
+  mediation-settlement-tracker: Mediation and settlement
+  lien-ledger-tracker: Lien ledger
+  settlement-statement-feeder: Settlement statement
+  daily-needs-you-digest: Daily "what needs you"
+self_initiation:
+  sequence:
+    - operator-self-test
+    - voice-establishment
+    - document-library-establishment
+  document_library:
+    matter_hint: 2026-OPS-001 (the internal operations matter)
+    folder_name: Document Library
+    matter_number: 2026-OPS-001
+    templates:
+      demand_letter: Template - Demand Letter (Policy Limits)
+      first_party_rep_letter: Form - 1st Party Rep Letter.docx
+      third_party_rep_letter: Form - 3rd Party Rep Letter.docx
+      discovery_response: Template - Discovery Responses (RFP and FROG Combined)
+    operator_matter:
+      number: 2026-OPS-LIBRARY
+      description: Operator Library (rehearsal)
+      client_contact_id: 7236214f-628e-412b-ad0e-099c61371cd4
+      matter_type_id: 42cc724c-f046-451c-8452-4284f7a82b66_CA
+      client_contact_name: SMD Operations
+      matter_type_name: Personal Injury - Plaintiff
+memory:
+  d1_namespace: pilot-smokeball
+  r2_vault_path: vaults/pilot-smokeball/
+  vectorize_index: hermes-pilot-smokeball-vault
+smokeball_layouts:
+  settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca
+form_letters:
+  forms:
+    first_party_rep:
+      label: 1st party rep letter
+      document_class: first_party_rep_letter
+      default_template: Form - 1st Party Rep Letter.docx
+      file_name: 1st party letter.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: 'VIA FAX: '
+      email_label: 'Email: '
+      paragraph_fields:
+        - delivery_lines
+      signer_name_from: authored
+      facts_kind: rep
+    third_party_rep:
+      label: 3rd party rep letter
+      document_class: third_party_rep_letter
+      default_template: Form - 3rd Party Rep Letter.docx
+      file_name: 3rd Party Letter.docx
+      side: Defendants
+      client_side: false
+      fax_label: 'Via Fax: '
+      email_label: 'Via Email: '
+      paragraph_fields:
+        - delivery_lines
+        - carrier_address
+      signer_name_from: staff
+      facts_kind: rep
+    health_blue_shield:
+      label: health insurer notice (Blue Shield)
+      document_class: health_notice_blue_shield
+      default_template: Form - Med Ins Blue Shield.docx
+      file_name: Med Ins Req. Blue Shield.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: health
+    dec_page_fax:
+      label: dec page request (fax cover)
+      document_class: dec_page_fax
+      default_template: Form - Fax Dec Page.docx
+      file_name: Fax Cover Sheet - Req Dec Page.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    med_pay_fax:
+      label: med pay request (fax cover)
+      document_class: med_pay_fax
+      default_template: Form - Fax Medpay.docx
+      file_name: Fax Cover Sheet Medpay.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    wage_loss:
+      label: wage loss letter
+      document_class: wage_loss_letter
+      default_template: Form - Wage Loss Letter.docx
+      file_name: Wage Loss Letter.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields:
+        - employer_address
+      signer_name_from: preparer
+      facts_kind: wage
+matter_file_delivery:
+  recipients:
+    - '@smd.services'
+logic_in_code:
+  library_setup: enforce
