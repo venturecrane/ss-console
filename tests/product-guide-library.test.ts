@@ -357,10 +357,12 @@ describe('product guide answer key (ADR 0105)', () => {
   // needs the same reason written here. 29 (2026-11-10): r07 added, a
   // non-administrator asking WHO issues codes, so the reply that must not
   // reveal the capability is graded on the question path too, not only on
-  // the tool path (r06).
-  it('has 29 questions with unique ids, 7 of them refusals of the six kinds', () => {
-    expect(qs.length).toBe(29)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(29)
+  // the tool path (r06). 31 (2026-11-10, ss-console #3946): q26 and q27 added
+  // for the new prospect-fit page (who-smd-sells-to.md), which the training
+  // curriculum's fit lesson reads.
+  it('has 31 questions with unique ids, 7 of them refusals of the six kinds', () => {
+    expect(qs.length).toBe(31)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(31)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
     expect(refusals.length).toBe(7)

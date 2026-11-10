@@ -692,6 +692,24 @@ def _enrollment_attempt(source: str, payload: Any) -> dict | None:
     return {"action": "skip"}
 
 
+def _start_training(cfg: Any, address: str) -> bool:
+    """On a seat that authors representative training (ss-console #3946),
+    create the person's progress record by code, at enrollment, and say so,
+    so the welcome points them at the learning path. Every other seat: False,
+    nothing written, the welcome unchanged. Never raises."""
+    try:
+        from shared import training
+
+        if not training.authored(cfg):
+            return False
+        if not training.start_progress(address, config=cfg):
+            logger.warning("hermes-smd-webhook-router: progress record not created at enrollment")
+        return True
+    except Exception as exc:  # noqa: BLE001 - the enrollment stands; the first lesson creates it
+        logger.warning("hermes-smd-webhook-router: training start failed (%s)", type(exc).__name__)
+        return False
+
+
 def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
     """Ask the broker to redeem; on an enrollment send the fixed welcome and
     tell SMD. Logs name the outcome only, never the code. Never raises."""
@@ -721,10 +739,11 @@ def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
         return
     name = result.get("name") if isinstance(result.get("name"), str) else None
     demo = sender_enrollment.is_demo(cfg.raw)
+    trains = False if demo else _start_training(cfg, dto.from_addr)
     try:
         agentmail_broker.send_reply(
             dto.message_id,
-            text=sender_enrollment.welcome_text(name, demo=demo),
+            text=sender_enrollment.welcome_text(name, demo=demo, training=trains),
             anchor=send_anchor.message_anchor(dto.message_id, "agentmail"),
         )
     except Exception as exc:  # noqa: BLE001 - the enrollment stands; SMD is told below

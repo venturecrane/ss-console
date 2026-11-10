@@ -26,8 +26,12 @@ person's address:
 * every sent-line label file (``.smd/sent_lines/<ref>.json``) whose recorded
   recipients include them;
 * every scheduled-send envelope (``.smd/pre_run/*.dispatch*.json``, pending or
-  consumed) that names them as a recipient: the entries addressed to them are
-  removed, and a file left with none is deleted;
+  consumed) that names them as a recipient or in its words (the weekly
+  representative progress report to SMD's administrators names each
+  representative in its body): those entries are removed, and a file left
+  with none is deleted;
+* their progress record in the training progress store (``rep-progress``),
+  which is a store walled per person and so is covered by the first item;
 * their rows in the per-sender daily count ``smd/sender_daily.db`` on the
   volume (``sender_enrollment.daily_limit``), keyed by the sha256 of their
   address (:func:`sender_hash`).
@@ -364,6 +368,14 @@ def _labelled_files(vol: Volume, address: str, run: _Run) -> None:
                 run.cannot(layer, exc, where)
 
 
+#: The fields of a scheduled-send entry that carry its words. An entry whose
+#: words name the person is theirs to purge too: the weekly representative
+#: progress report (overlay ``shared/training_report.py``) goes to SMD's
+#: administrators and names each representative in its body, so a recipient
+#: match alone would leave the removed person's address in it.
+_ENVELOPE_TEXT_FIELDS = ("subject", "full_body", "skeleton_body", "body_without_attachment")
+
+
 def _envelope_mentions(entry: Any, address: str) -> bool:
     if not isinstance(entry, dict):
         return False
@@ -374,7 +386,12 @@ def _envelope_mentions(entry: Any, address: str) -> bool:
             people.extend(value)
         elif isinstance(value, str):
             people.append(value)
-    return any(_bare(p) == address for p in people)
+    if any(_bare(p) == address for p in people):
+        return True
+    return any(
+        isinstance(entry.get(key), str) and address in entry[key].lower()
+        for key in _ENVELOPE_TEXT_FIELDS
+    )
 
 
 # ---------------------------------------------------------------------------

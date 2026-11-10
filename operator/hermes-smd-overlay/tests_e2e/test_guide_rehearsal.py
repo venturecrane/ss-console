@@ -23,6 +23,7 @@ layer in the purge) and are judged by it.
 
 from __future__ import annotations
 
+import atexit
 import importlib.util
 import json
 import os
@@ -108,8 +109,27 @@ def _take(root: Path, marker: str, address: str) -> Inventory:
     return inventory(marker, surfaces(root), purge_set(_slug(address)), RETAINED)
 
 
+#: The one rehearsal of this process, shared by every test module that reads
+#: it (the training and desk slices add their own test files), so the seat is
+#: driven once per pytest run, not once per module.
+_STATE: dict[str, Any] = {}
+
+
+def guide_rehearsal() -> dict[str, Any]:
+    """The rehearsal's state, run on first use and kept for the process; its
+    temp seat is removed when the process exits."""
+    if not _STATE:
+        _STATE.update(_run_rehearsal())
+        atexit.register(shutil.rmtree, _STATE["root"], True)
+    return _STATE
+
+
 @pytest.fixture(scope="module")
 def rehearsal() -> Any:
+    return guide_rehearsal()
+
+
+def _run_rehearsal() -> dict[str, Any]:
     # AF_UNIX paths are capped near 104 bytes on macOS; keep the root short.
     root = Path(tempfile.mkdtemp(prefix="e2eg", dir="/tmp"))
     out = root / "evidence.json"
@@ -144,10 +164,7 @@ def rehearsal() -> Any:
     state["purge_report"] = purge.purge(A, targets)
     state["after_a"] = _take(root, A_MARK, A)
     state["after_b"] = _take(root, B_MARK, B)
-    try:
-        yield state
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
+    return state
 
 
 def _turn(rehearsal: dict, label: str) -> dict:

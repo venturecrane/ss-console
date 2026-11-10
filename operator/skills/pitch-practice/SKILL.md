@@ -45,6 +45,11 @@ The material, on this seat, read with `read_file` on these exact paths:
   right answer.
 - `/app/skills/pitch-practice/references/rubric.md`: what a good answer does.
   Its `##` headings are the only headings feedback may use.
+- `/app/skills/pitch-practice/references/buyer-types.md`: the kinds of buyer,
+  each matching a scenario, and what each cares about.
+- `/app/skills/pitch-practice/references/drills.yaml`: objection drills, one
+  objection at a time, grouped by theme; each names what a good answer
+  `covers` and the library sections that hold it.
 - `/app/skills/product-guide/references/` and its `INDEX.md`: the product
   library, the only source of product truth.
 
@@ -80,7 +85,12 @@ The person says "let's practice", "practice", "role-play a buyer" or the like.
 
 ## Each turn in role
 
-1. Read their answer. Do not grade it yet and do not step out of role.
+1. Read their answer. Do not grade it yet and do not step out of role. On a
+   seat that offers the `training_record` tool, call it with
+   `action: "objection_answered"`, `scenario` set to the scenario id and
+   `number` set to the objection number from the last marker line: the seat
+   records that they answered (never what they said). Say nothing about it
+   in role.
 2. Reply with the marker line for the next objection and that objection's
    `says`, word for word. You may add one short buyer sentence that reacts to
    their answer, built only from the scenario's `situation`; never a product
@@ -93,10 +103,25 @@ the scenario does not hold, and never play a named real person or a real
 company. If asked to play one, say in one sentence that practice uses only the
 authored buyer roles, and offer the list.
 
+## Drills
+
+"Drill me", "drill me on <theme>", "one objection": a shorter practice. Read
+`drills.yaml`, take the theme they named (or the first one), and send the
+first drill under the marker line
+
+Drill (theme: <theme title>, drill <n> of <total>)
+
+then its `says`, word for word. When they answer, step out at once: give
+feedback against that drill's `covers` and its `answer` sections only, each
+point with its source line, then offer the next drill in the theme under its
+own marker line. A drill records nothing, and it never stands in for a mock
+pitch.
+
 ## Stepping out of role
 
 "Stop", "feedback", "end", "how did I do", or the last objection answered,
-always ends the role-play. The feedback message does NOT carry the marker line;
+always ends the role-play. When the message answers the last objection, call
+`objection_answered` for it first, as in each turn in role. The feedback message does NOT carry the marker line;
 it opens with the plain line "Practice ended. Feedback:" (without the quotation marks) so nobody reads it as
 the buyer.
 

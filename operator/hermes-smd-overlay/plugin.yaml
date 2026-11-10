@@ -51,3 +51,6 @@ plugins:
   - plugins/hermes-smd-drafting
   - plugins/hermes-smd-establishment
   - plugins/hermes-smd-lanes
+  # Representative training: registers only on a guide seat that authors it
+  # (ss-console #3946).
+  - plugins/hermes-smd-training

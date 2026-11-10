@@ -98,6 +98,9 @@ def seat_yaml(volume: Path) -> str:
         {"name": name, "path": str(volume / "rep" / name.removeprefix("rep-")), **policy}
         for name, policy in STORES.items()
     ]
+    from tests_e2e._training_turns import author_training
+
+    author_training(doc)
     return yaml.safe_dump(doc, sort_keys=False)
 
 
@@ -186,6 +189,8 @@ class Rehearsal:
         self.volume = root / "opt-data"
         self.turns: list[dict[str, Any]] = []
         self.model_log: list[dict[str, Any]] = []
+        #: Each later slice's own evidence, by slice name.
+        self.extra: dict[str, Any] = {}
 
     # -- the seat -----------------------------------------------------------
 
@@ -498,6 +503,10 @@ def run(root: Path) -> dict[str, Any]:
         r.turn("a-over-again", [], sender=A, body=f"And another. {A_MARK}")
         cards = r.post_cards()
         rows = r.ledger_rows()
+
+        from tests_e2e._training_turns import run_training
+
+        r.extra["training"] = run_training(r, A, B, A_MARK, B_MARK)
     finally:
         r.stop()
     (root / "cards.json").write_text(json.dumps(cards, default=str), encoding="utf-8")
@@ -514,6 +523,7 @@ def run(root: Path) -> dict[str, Any]:
         "cards": cards,
         "ledger_rows": rows,
         "overlay_tools": sorted(n for n, o in r.owners.items() if o == "hermes-smd-overlay"),
+        **r.extra,
     }
 
 
