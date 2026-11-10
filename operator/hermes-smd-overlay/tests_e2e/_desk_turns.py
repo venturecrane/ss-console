@@ -57,8 +57,12 @@ DESK_CRON: dict[str, Any] = {
 def author_desk(doc: dict[str, Any]) -> None:
     """The rehearsal seat authors the desk (mutates ``doc``)."""
     persona = doc["personas"][0]
+    # The real guide seat authors both since its switch-on; the rehearsal pins
+    # its own copies (zone UTC, hour 0) so it does not depend on the seat's.
+    persona["skills"] = [s for s in persona["skills"] if s["name"] != SKILL]
+    persona["cron"] = [c for c in persona.get("cron", []) if c["skill"] != SKILL]
     persona["skills"].append(json.loads(json.dumps(DESK_SKILL)))
-    persona.setdefault("cron", []).append(dict(DESK_CRON))
+    persona["cron"].append(dict(DESK_CRON))
 
 
 def _lead(company: str, mark: str) -> str:

@@ -108,7 +108,33 @@ personas:
           scheduled: true
           webhook: true
         enabled: true
+      # The desk (issue #3946): notes, leads and a pipeline view the
+      # representative alone can read, dated reminders, a brief built only from
+      # their own records, a follow-up draft returned to them as text, critique
+      # and debrief. Reached from product-guide on email; scheduled for the
+      # digest below. The seat never emails a prospect.
+      - name: rep-desk
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+        settings:
+          reminder_store: rep-reminders
+          # One email on a morning when something of theirs is due, sent at
+          # 7:00 AM Arizona time. Nothing due means no email and no model call.
+          digest_hour: 7
+          timezone: America/Phoenix
+          recipients: roster
     cron:
+      # Hourly check for the digest above. Code renders one email per person
+      # from that person's own records; the hour and the per-day mark decide
+      # who is due.
+      - skill: rep-desk
+        schedule: '7 * * * *'
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
       # Weekly progress and readiness report to scope.admins, Mondays 8:00 MST
       # (15:00 UTC). Code renders it from the progress store only; a week with
       # nobody enrolled wakes no model and sends nothing.
@@ -245,5 +271,18 @@ record_stores:
   # counts only. The weekly report to administrators is rendered from this.
   - name: rep-progress
     path: /opt/data/rep/progress
+    partition: sender
+    managed: true
+  # What a representative asks the guide to keep. Theirs alone.
+  - name: rep-notes
+    path: /opt/data/rep/notes
+    partition: sender
+  - name: rep-leads
+    path: /opt/data/rep/leads
+    partition: sender
+  # Dated reminders and the per-day digest mark. Written by code only
+  # (reminder_set resolves and checks the date).
+  - name: rep-reminders
+    path: /opt/data/rep/reminders
     partition: sender
     managed: true

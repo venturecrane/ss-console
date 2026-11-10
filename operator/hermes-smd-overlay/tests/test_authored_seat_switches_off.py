@@ -74,8 +74,8 @@ AUTHORED_ON = {
         "request_card_text": False,
         "held_notice": True,
         "daily_limit": 60,
-        "partitioned_stores": ["rep-progress"],
-        "managed_stores": ["rep-progress"],
+        "partitioned_stores": ["rep-leads", "rep-notes", "rep-progress", "rep-reminders"],
+        "managed_stores": ["rep-progress", "rep-reminders"],
         "peer_memory_off": True,
     }
 }
