@@ -65,6 +65,10 @@ const ALLOWED: Record<string, string> = {
   'docs/handbook/deployment-release.md': 'the R2 move and its hand rollback',
   'operator/bin/tests/fixtures/boot-harness/': 'boot logs recorded from real seats before the move',
   '.stitch/audits/backlog-snapshot-2026-08-31.json': 'a dated snapshot of issue bodies',
+  'scripts/sprawl/snapshot.json':
+    'the sprawl census of the tree, which counts the old path where it still appears',
+  'scripts/sprawl/literal-baseline.json':
+    'the restated-literal ratchet, which caps the old path at its remaining count',
 }
 
 function tracked(pattern: string): string[] {

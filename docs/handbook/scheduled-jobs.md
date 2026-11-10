@@ -35,6 +35,7 @@ Each schedule is a cron expression read in the time zone shown: GitHub and Cloud
 | GitHub Actions | `.github/workflows/ops-workspace-sweep.yml` | `17 13 * * *` | UTC |
 | GitHub Actions | `.github/workflows/release-tick.yml` | `*/5 * * * *` | UTC |
 | GitHub Actions | `.github/workflows/security.yml` | `0 13 * * *` | UTC |
+| GitHub Actions | `.github/workflows/sprawl-audit.yml` | `43 14 * * 1` | UTC |
 | GitHub Actions | `.github/workflows/terminal-state-reconcile.yml` | `41 6 * * *` | UTC |
 | GitHub Actions | `.github/workflows/unaudited-send-reconcile.yml` | `17 13 * * *` | UTC |
 | GitHub Actions | `.github/workflows/work-health.yml` | `23 * * * *` | UTC |
