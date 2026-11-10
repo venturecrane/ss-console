@@ -502,3 +502,71 @@ def test_an_administrator_of_the_demo_seat_gets_a_code(tool, fake_ctx) -> None:
     out = mod.issue_handler({"name": "Jane Smith"}, session_id="s-admin-demo")
     assert out.startswith("DONE: invite code c_9 for Jane Smith")
     assert issued and issued[0]["admin"] == ADMIN
+
+
+# -- the training welcome (ss-console #3946; the Captain's text, 2026-11-10) ----
+
+TRAINING_WELCOME = """{greeting}
+
+I'm the SMD Services guide. I'm here to help you understand how the Operator works, and to be useful to you while you're out talking to people about it.
+
+There's nothing to learn about using me. Just talk to me the way you'd talk to a colleague who knows the product well.
+
+A few things you can try:
+
+- Ask me anything about the Operator. What it does, how it fits into a business, how to explain it to someone.
+- Let me walk you through it. Say "start training" and I'll take you through it a piece at a time, with a little practice along the way.
+- Practice a conversation. I'll play a business owner with questions and doubts, then tell you how it went.
+- Keep your notes and leads with me. Tell me who you met and what they said, and ask for it back whenever you need it.
+- Have me remind you. "Remind me Thursday at 4 to call them back" is all it takes.
+- Get ready for a meeting, or follow up after one. I'll pull together what you've told me, or draft a follow-up for you to send.
+
+Start wherever you like. If you're not sure, just say hello and tell me what you're working on.
+"""
+
+
+def _training_seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    from shared import record_store
+
+    volume = tmp_path / "opt-data"
+    volume.mkdir()
+    monkeypatch.setattr(record_store, "VOLUME_ROOT", volume)
+    training = (
+        dedent(GUIDE).strip()
+        + "\npersonas:\n  - slug: guide\n    skills:\n"
+        + "      - {name: product-guide, enabled: true}\n"
+        + "      - {name: rep-training, enabled: true}\n"
+        + "record_stores:\n"
+        + f"  - {{name: rep-progress, path: {volume}/rep/progress, partition: sender, managed: true}}\n"
+    )
+    (tmp_path / "customer.yaml").write_text(training)
+    return volume
+
+
+@pytest.mark.parametrize(("name", "greeting"), [("Chance Example", "Hi Chance,"), (None, "Hi,")])
+def test_a_rep_on_a_training_seat_gets_the_guides_own_welcome(
+    router, monkeypatch, enrolled_file, name, greeting
+) -> None:
+    from shared.person_prefs import person_slug
+
+    mod, _fake, broker, tmp_path = router
+    volume = _training_seat(tmp_path, monkeypatch)
+    broker.name = name
+    real_redeem = broker.redeem
+
+    def redeem(**kw):  # the broker writes the enrolled list before it answers
+        _write_enrolled(enrolled_file, {"address": REP, "label": "x", "code_id": "c_1"})
+        return real_redeem(**kw)
+
+    monkeypatch.setattr(se, "redeem", redeem)
+    assert _dispatch(mod, _mail(REP, f"my code {CODE}")) == {"action": "skip"}
+    [(_mid, text, _anchor)] = broker.replies
+    assert text == TRAINING_WELCOME.format(greeting=greeting)
+    lowered = text.lower()
+    for absent in ("code", "invite", "email", "library", "source", "did not expect", "smd sees"):
+        assert absent not in lowered, absent
+    assert "—" not in text and "!" not in text and "$" not in text
+    assert (volume / "rep" / "progress" / person_slug(REP) / "progress.json").is_file()
+    # The plain guide seat's welcome is the one it always was.
+    plain = "Hello Chance Example," if name else "Hello,"
+    assert se.welcome_text(name) == se._WELCOME_BODY.format(greeting=plain)

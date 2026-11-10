@@ -117,7 +117,7 @@ def test_every_tool_a_procedure_names_is_on_the_email_surface(rehearsal) -> None
 
 
 # ---------------------------------------------------------------------------
-# enrollment: the progress record by code, the welcome with the approved words
+# enrollment: the progress record by code, and the guide's own welcome
 # ---------------------------------------------------------------------------
 
 
@@ -126,7 +126,8 @@ def test_enrollment_creates_the_progress_record_and_sends_the_training_welcome(r
     assert redeem["router_verdict"] == {"action": "skip"}, "no model turn for a code"
     [welcome] = [r for r in redeem["broker"] if r["action"] == "agentmail_reply"]
     text = welcome["payload"]["text"]
-    assert sender_enrollment.PRIVACY_NOTICE in text and '"start training"' in text
+    assert text == sender_enrollment.welcome_text("Casey Example", training=True)
+    assert text.startswith("Hi Casey,") and '"start training"' in text
     assert "code" not in text.lower() and "invite" not in text.lower()
     volume = Path(rehearsal["root"]) / "opt-data"
     slug = _person_purge().person_slug(C)
