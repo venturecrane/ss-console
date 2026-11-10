@@ -37,10 +37,15 @@ fly_region: lax # Phoenix-adjacent; Fly has no phx region
 # model, no escalation tier.
 model: claude-sonnet-5-5
 
-# A light seat: one gateway, no lanes; two shared CPUs, the fleet floor (#3917).
+# One gateway, no lanes; two shared CPUs, the fleet floor (#3917). Memory is
+# twice the floor: SMD's three comparable seats (scott, brokery, captain-mark;
+# same gateway, mail and chat) measured 859 to 1,055 MB used of 1,970 while
+# IDLE on 2026-11-09, with no swap, so a working turn has under 1.1 GB before
+# the kernel kills a process. This seat is what a prospective representative
+# meets first; 4,096 MB is what smd-staging runs.
 machine:
   size: shared-cpu-2x
-  memory_mb: 2048
+  memory_mb: 4096
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:
