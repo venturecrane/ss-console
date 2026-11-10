@@ -75,8 +75,8 @@ def _lanes_run(paths: dict) -> bool:
     """True when the seat runs a job lane; unknown counts as yes, as in selftest.sh."""
     yaml_path = paths.get("customer_yaml", {}).get("path", "")
     try:
-        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args - fixed argv and no shell; the one env-derived token, SMD_SEAT_ROOT, is unset on a seat and set only by the self-test fixtures to a tmp tree
         done = subprocess.run(  # noqa: S603 - the seat's own interpreter and module
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args - fixed argv and no shell; the one env-derived token, SMD_SEAT_ROOT, is unset on a seat and set only by the self-test fixtures to a tmp tree
             [f"{ROOT}{HERMES_PYTHON3}", "-I", "-m", "shared.capabilities", "lanes", f"{ROOT}{yaml_path}"],
             capture_output=True,
             text=True,
@@ -127,8 +127,8 @@ def check_trees(paths: dict) -> tuple[list[str], list[str]]:
         if not os.access(exe, os.X_OK):
             continue
         try:
-            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args - fixed argv and no shell; the one env-derived token, SMD_SEAT_ROOT, is unset on a seat and set only by the self-test fixtures to a tmp tree
             done = subprocess.run(  # noqa: S603 - the seat's own interpreter and generated module
+                # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args - fixed argv and no shell; the one env-derived token, SMD_SEAT_ROOT, is unset on a seat and set only by the self-test fixtures to a tmp tree
                 [exe, "-I", "-c", IMPORT, module, f"{ROOT}{extra}" if extra else ""],
                 capture_output=True,
                 text=True,
