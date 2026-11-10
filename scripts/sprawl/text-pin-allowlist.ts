@@ -145,8 +145,6 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
     'Privacy: translate never authors a debug logging level.',
   'operator/hermes-smd-overlay/tests/test_calendar_tools.py':
     'Security: the calendar plugin has no transmit path.',
-  'operator/hermes-smd-overlay/tests/test_brief_taint_exemption.py':
-    'Security: only casework mints CodeFixedRecipients.',
   'operator/hermes-smd-overlay/tests/test_advertising_gate_outbound.py':
     'Security: the image ships the advertising checker where the outbound gate loads it.',
   'operator/hermes-smd-overlay/tests/test_couples_surface.py':
@@ -390,8 +388,6 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
     'Model-read rule: the digest escalation line names no person, routine or ledger date.',
   'tests/voice-corrections.test.ts':
     'Model-read rule: no path from a captured correction to a spec file; promoted text is authored.',
-  'operator/skills/date-prep-brief/tests/test_date_prep_pre_run.py':
-    'Model-read rule: run exactly the approved job; finalized lists are a captioned .docx.',
   'operator/runners/jobs/tests/test_allowance_decide.py':
     'Model-read rule: never name one client of a joint delivery alone.',
   'operator/runners/jobs/tests/test_update_page_context.py':

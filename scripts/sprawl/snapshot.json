@@ -1,14 +1,14 @@
 {
-  "measuredAt": "2026-11-10T21:14:47.240Z",
-  "commit": "b6f0fc84c12ed990454bfec429b8641d8307517b",
+  "measuredAt": "2026-11-10T21:38:44.025Z",
+  "commit": "7d844e65f094c5e0b090afb11d7e0edff380a9a4",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2344
+    "commits": 2347
   },
   "clones": {
-    "duplicatedPct": 3.28,
+    "duplicatedPct": 3.26,
     "copiedFiles": 46,
     "copiedLines": 23937,
     "partialClones": 221,
@@ -290,7 +290,7 @@
       "literal": "CUSTOMER_SLUG",
       "kind": "env",
       "files": 82,
-      "testFiles": 22,
+      "testFiles": 21,
       "languages": [
         "config",
         "python",
@@ -426,7 +426,7 @@
       "literal": "R2_BUCKET_CONFIG",
       "kind": "env",
       "files": 37,
-      "testFiles": 11,
+      "testFiles": 12,
       "languages": [
         "config",
         "python",
@@ -986,7 +986,7 @@
       "literal": "MANIFEST_KEY",
       "kind": "env",
       "files": 10,
-      "testFiles": 5,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell"
@@ -1706,7 +1706,7 @@
       "literal": "/opt/hermes/.venv/bin/python3",
       "kind": "path",
       "files": 6,
-      "testFiles": 7,
+      "testFiles": 6,
       "languages": [
         "python",
         "shell"
@@ -2643,7 +2643,7 @@
       "a": "docs/handbook/connectors-channels.md",
       "b": "operator/connectors/smokeball/smokeball_connector/attachment_tools.py",
       "shared": 12,
-      "degree": 63
+      "degree": 62
     },
     {
       "a": "src/lib/admin/fleet-status.ts",
