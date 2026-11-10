@@ -141,7 +141,7 @@ Three claims, kept distinct:
 
 **Run `/wired` before planning any work whose effect is observable outside this repo** (a client, the Captain on a live surface, an Operator seat, a prospect on a marketing page). It produces the contract: the act as a sentence, the terminal seam, the gate chain enumerated backwards from that seam, and a feasibility probe that escalates unclosable gates **before** the closable ones get built. Then plan against the contract, then `/critique`. Internal refactors, tests, and docs skip it.
 
-**Enforcement.** Law 9 in `docs/doctrine/agent-operating-doctrine.md` (primer tier, always on). Merge gate is `.github/workflows/runtime-ac-proof.yml`: an AC tagged `(runtime)` cannot be marked `met` without a `crane_verify` ID in the PR's Evidence column. That gate exists because `tick-acs-on-merge` ticks whatever the merging PR declares about itself and `unmet-ac-on-close` skips PR-driven closes, so without it the system certifies the author's own definition of done.
+**Enforcement.** Law 9 in `docs/doctrine/agent-operating-doctrine.md` (primer tier, always on). Merge gate is `.github/workflows/runtime-ac-proof.yml`: an AC tagged `(runtime)` cannot be marked `met` without a `crane_verify` ID in the PR's Evidence column, and one not met must be `deferred` with `owner: <who>; enforce_by: YYYY-MM-DD` in its row ("not met" and "pending" fail). That gate exists because `tick-acs-on-merge` ticks whatever the merging PR declares about itself and `unmet-ac-on-close` skips PR-driven closes, so without it the system certifies the author's own definition of done.
 
 ### No fabricated client-facing content
 

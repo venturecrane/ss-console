@@ -297,9 +297,10 @@ ruleset: the `Verify` job (`Typecheck, Lint, Format, Test`), `Security Summary`
 of `operator-substrate.yml`; `overlay` joined the required list the day the
 overlay fold merged, ADR 0095, and `runner`, the jobs runner's suite, became
 its own parallel job on 2026-11-04), and `Runtime ACs carry
-a verification ID` (`runtime-ac-proof.yml`, which refuses to mark an acceptance
-criterion tagged `(runtime)` as met without a `crane_verify` ID in the PR's
-Evidence column). The same ruleset puts main behind a merge queue (2026-10-21):
+a verification ID` (`runtime-ac-proof.yml`, which refuses an acceptance
+criterion tagged `(runtime)` unless it is met with a `crane_verify` ID in the
+PR's Evidence column, deferred with an owner and an enforce_by date, or n/a;
+the accepted form is under "The runtime AC table" below). The same ruleset puts main behind a merge queue (2026-10-21):
 a green PR is queued and the queue re-runs the seven checks on the `merge_group`
 event against main plus the PRs ahead of it, running only the suites the
 group's changed paths touch (`merge_group.base_sha`), so every one of those
@@ -308,6 +309,29 @@ required (`gh api repos/venturecrane/ss-console/rules/branches/main`), and
 confirm the legacy surface stays empty
 (`gh api repos/venturecrane/ss-console/branches/main/protection` returns 404
 once it is retired); a check on either surface is enforced.
+
+### The runtime AC table
+
+`runtime-ac-proof.yml` reads every markdown table in the PR description whose
+header has a Status (or State) column, under any heading, and finds the status
+and evidence columns by their header names. A row is a runtime AC when its AC
+text carries `(runtime)` or a Layer or Kind column says `runtime`. Each such
+row's Status is one of three words:
+
+| Status     | What the row must carry                                                    |
+| ---------- | -------------------------------------------------------------------------- |
+| `met`      | a `crane_verify` ID, `live_state` or `fresh_process`, in the Evidence cell |
+| `deferred` | `owner: <who switches it on>; enforce_by: YYYY-MM-DD`, anywhere in the row |
+| `n/a`      | nothing; the AC does not apply to this PR                                  |
+
+For example:
+`| (runtime) Seat adopts it | deferred | owner: release lead; enforce_by: 2026-11-20 |`.
+An `enforce_by` date already passed fails, because the switch-on is overdue.
+"not met", "unmet", "pending", "not yet" and "open" fail. Until 2026-11-09
+they passed: the check read only a section headed exactly
+"## Acceptance criteria status" and skipped rows not marked met, so #3852
+merged with two runtime rows "not met" and no owner. Parser and tests:
+`scripts/runtime-ac-proof.mjs`, `tests/runtime-ac-proof.test.ts`.
 
 Beyond those, this repo carries domain-specific gates that act on policy, not
 just on tests. They enforce the no-fabricated-client-facing-content policy in
