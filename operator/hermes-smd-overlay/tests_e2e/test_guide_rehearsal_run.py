@@ -1,6 +1,10 @@
 """The guide-role rehearsal: two enrolled people email a guide seat, at $0.
 
-Run as its own process (``python -m tests_e2e._guide_rehearsal --root DIR --out
+Named ``test_*`` because it is test-harness code (the repository's literal
+census recognizes test code by name); it defines no test of its own, so pytest
+collects nothing from it.
+
+Run as its own process (``python -m tests_e2e.test_guide_rehearsal_run --root DIR --out
 FILE``) by ``test_guide_rehearsal.py``, because Hermes' plugin manager and tool
 registry are process globals and the harness's other seat (the self-serve
 template, ``conftest.py``) already owns them in the pytest process.

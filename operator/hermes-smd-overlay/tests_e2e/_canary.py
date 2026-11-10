@@ -118,6 +118,20 @@ def _is_sqlite(path: Path) -> bool:
         return False
 
 
+def quote_identifier(name: str) -> str:
+    """An SQLite identifier, double-quoted, with any embedded double quote
+    doubled, so a table name read from ``sqlite_master`` is always one name."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _select_all(table: str) -> str:
+    """The one statement the scan composes. A scan of every table must name
+    each table; the names come from the database's own ``sqlite_master`` and
+    pass through :func:`quote_identifier`, in a test-only, read-only reader."""
+    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query, python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+    return "SELECT * FROM " + quote_identifier(table)
+
+
 def _table_hits(db: Path, needle: str) -> set[str]:
     """Tables of ``db`` with a row whose any value contains ``needle``. Read
     through a copy-free immutable URI so the scan cannot change the file."""
@@ -129,13 +143,8 @@ def _table_hits(db: Path, needle: str) -> set[str]:
     try:
         tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
         for table in tables:
-            quoted = '"' + table.replace('"', '""') + '"'
             try:
-                # A scan of every table must name each table; the names come
-                # from the database's own sqlite_master, quoted as identifiers,
-                # in a test-only instrument opened read-only.
-                # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query, python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
-                rows = conn.execute("SELECT * FROM " + quoted)
+                rows = conn.execute(_select_all(table))
             except sqlite3.Error:
                 continue
             for row in rows:

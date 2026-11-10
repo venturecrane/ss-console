@@ -1,6 +1,6 @@
 """The guide seat at $0: two people, a wall between them, and a canary inventory.
 
-``_guide_rehearsal.py`` runs in its own process (Hermes' plugin manager is a
+``test_guide_rehearsal_run.py`` runs in its own process (Hermes' plugin manager is a
 process global this pytest process already gave to the harness seat) and drives
 the authored guide seat through the webhook router's real intake and Hermes'
 own agent loop with a scripted model: person A keeps a note and a lead and
@@ -37,7 +37,7 @@ from typing import Any
 import pytest
 
 from tests_e2e._canary import Inventory, Location, classify, inventory, search
-from tests_e2e._guide_rehearsal import A_MARK, B_MARK, STORES, A, B
+from tests_e2e.test_guide_rehearsal_run import A_MARK, B_MARK, STORES, A, B
 
 OVERLAY = Path(__file__).resolve().parents[1]
 PURGE_MODULE = OVERLAY.parent / "workspace_broker" / "person_purge.py"
@@ -102,7 +102,7 @@ def rehearsal() -> Any:
         [
             sys.executable,
             "-m",
-            "tests_e2e._guide_rehearsal",
+            "tests_e2e.test_guide_rehearsal_run",
             "--root",
             str(root),
             "--out",

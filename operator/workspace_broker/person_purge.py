@@ -15,13 +15,13 @@ person's address:
 * their directory in every store the seat authors with ``partition: sender``,
   ``<store path>/<person_slug(address)>/``;
 * their rows in the per-sender memory table, ``peer_preferences`` in
-  ``/opt/data/agent-state.db`` (``peer_id`` is the lower-cased address);
-* their rows in the request index ``/opt/data/requests.db``: every request they
+  ``agent-state.db`` on the volume (``peer_id`` is the lower-cased address);
+* their rows in the request index ``requests.db`` on the volume: every request they
   sent (sender, subject, their words, the reply's words) and every row of the
   ``replies`` table answering one of those requests;
-* their rows in the held-reply store ``/opt/data/held_replies.db`` (a reply held
+* their rows in the held-reply store ``held_replies.db`` on the volume (a reply held
   for them, its text until it is released);
-* their rows in the help-pointer state ``/opt/data/smd/help_state.db``, keyed by
+* their rows in the help-pointer state ``smd/help_state.db`` on the volume, keyed by
   a salted hash of their address (the salt is in that file);
 * every sent-line label file (``.smd/sent_lines/<ref>.json``) whose recorded
   recipients include them;
@@ -41,7 +41,7 @@ report and the probe never claim them):
   which include full copies of what the person sent and what was stored;
 * the mail itself, at the mail vendor (their messages and the seat's replies);
 * logs (the seat's log stream and Sentry) and the Fly volume's snapshots;
-* the audit ledger (``/opt/data/audit``): append-only and hash-chained; it
+* the audit ledger (``audit/`` on the volume): append-only and hash-chained; it
   holds a hash of an address, never the text;
 * the enrollment store's attempt rows (``private/codes.db``): a hash of the
   sender, pruned after 48 hours;
@@ -227,11 +227,39 @@ def _tables(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
+#: Every table this module names. A table name reaches SQL only through
+#: :func:`_known`, which refuses anything not listed here.
+KNOWN_TABLES: frozenset[str] = frozenset(
+    {
+        "peer_preferences",
+        "requests",
+        "replies",
+        "held_replies",
+        "help_meta",
+        "help_senders",
+        "help_threads",
+        "help_events",
+    }
+)
+#: Every statement key this module runs (a table, or a table's older shape).
+_STATEMENT_KEYS: frozenset[str] = KNOWN_TABLES | {"held_replies_old"}
+
+
+def _known(name: str, allowed: frozenset[str] = KNOWN_TABLES) -> str:
+    """``name`` if it is on the allowlist; raises ``ValueError`` otherwise. The
+    one gate every table name passes before it selects a statement."""
+    if not isinstance(name, str) or name not in allowed:
+        raise ValueError(f"person_purge: {name!r} is not a table this purge knows")
+    return name
+
+
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {r[0] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
+    rows = conn.execute("SELECT name FROM pragma_table_info(?)", (_known(table),))
+    return {r[0] for r in rows}
 
 
-#: Every statement this module runs, as literals: no SQL is ever composed.
+#: Every statement this module runs, as literals: no SQL is ever composed, and
+#: a statement is chosen only by a name :func:`_known` accepted.
 _SELECT = {
     "peer_preferences": "SELECT rowid, peer_id FROM peer_preferences",
     "requests": "SELECT rowid, sender, vendor_message_id, internet_message_id FROM requests",
@@ -263,7 +291,7 @@ def _peer_rows(conn: sqlite3.Connection, address: str) -> list[Any]:
         return []
     return [
         row[0]
-        for row in conn.execute(_SELECT["peer_preferences"])
+        for row in conn.execute(_SELECT[_known("peer_preferences")])
         if isinstance(row[1], str) and row[1].strip().lower() == address
     ]
 
@@ -273,12 +301,12 @@ def _request_rows(conn: sqlite3.Connection, address: str) -> tuple[list[Any], li
     tables = _tables(conn)
     if "requests" not in tables:
         return [], []
-    rows = conn.execute(_SELECT["requests"]).fetchall()
+    rows = conn.execute(_SELECT[_known("requests")]).fetchall()
     mine = [r for r in rows if _bare(r[1]) == address]
     ids = {v for r in mine for v in r[2:] if isinstance(v, str) and v}
     replies: list[Any] = []
     if "replies" in tables and ids:
-        replies = [row[0] for row in conn.execute(_SELECT["replies"]) if row[1] in ids]
+        replies = [row[0] for row in conn.execute(_SELECT[_known("replies")]) if row[1] in ids]
     return [r[0] for r in mine], replies
 
 
@@ -286,7 +314,11 @@ def _held_rows(conn: sqlite3.Connection, address: str) -> list[Any]:
     if "held_replies" not in _tables(conn):
         return []
     query = "held_replies" if "reply_to" in _columns(conn, "held_replies") else "held_replies_old"
-    return [row[0] for row in conn.execute(_SELECT[query]) if _bare(row[1]) == address or _bare(row[2]) == address]
+    return [
+        row[0]
+        for row in conn.execute(_SELECT[_known(query, _STATEMENT_KEYS)])
+        if _bare(row[1]) == address or _bare(row[2]) == address
+    ]
 
 
 def _help_key(conn: sqlite3.Connection, address: str) -> str | None:
@@ -306,7 +338,7 @@ def _help_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
     if key is None:
         return {}
     present = _tables(conn)
-    return {t: [r[0] for r in conn.execute(_SELECT[t], (key,))] for t in _HELP_TABLES if t in present}
+    return {t: [r[0] for r in conn.execute(_SELECT[_known(t)], (key,))] for t in _HELP_TABLES if t in present}
 
 
 def _envelope_mentions(entry: Any, address: str) -> bool:
@@ -418,7 +450,7 @@ class _closing:
 def _delete_rowids(conn: sqlite3.Connection, table: str, ids: Iterable[Any]) -> int:
     ids = list(ids)
     for rowid in ids:
-        conn.execute(_DELETE[table], (rowid,))
+        conn.execute(_DELETE[_known(table)], (rowid,))
     return len(ids)
 
 

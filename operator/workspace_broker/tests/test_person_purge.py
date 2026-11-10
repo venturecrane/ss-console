@@ -248,6 +248,23 @@ def test_a_still_enrolled_address_fails_the_probe(seat: dict) -> None:
     assert cli_main(argv, store=seat["store"]) == 3
 
 
+@pytest.mark.parametrize("name", ["sqlite_master", "requests; DROP TABLE requests", "", "Requests", None])
+def test_a_table_outside_the_allowlist_is_refused(tmp_path: Path, name) -> None:
+    """Every table name reaches SQL only through the allowlist: the real delete
+    and column readers refuse any other name before a statement runs."""
+    conn = sqlite3.connect(str(tmp_path / "x.db"))
+    conn.execute("CREATE TABLE requests (sender TEXT)")
+    conn.execute("INSERT INTO requests VALUES ('a@example.test')")
+    try:
+        with pytest.raises(ValueError, match="not a table this purge knows"):
+            person_purge._delete_rowids(conn, name, [1])
+        with pytest.raises(ValueError, match="not a table this purge knows"):
+            person_purge._columns(conn, name)
+        assert conn.execute("SELECT count(*) FROM requests").fetchone() == (1,)
+    finally:
+        conn.close()
+
+
 def test_the_purge_slug_is_the_overlays_slug() -> None:
     prefs = _overlay("shared/person_prefs.py", "_purge_person_prefs")
     addresses = [

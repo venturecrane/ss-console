@@ -179,7 +179,7 @@ def build_seat_home(
 
     ``customer_yaml_text``, ``hermes_root`` and ``persona`` let a rehearsal
     build a different seat the same way (the guide rehearsal,
-    ``_guide_rehearsal.py``, lays its profiles under a temp seat volume)."""
+    ``test_guide_rehearsal_run.py``, lays its profiles under a temp seat volume)."""
     from bootstrap.translate import translate_customer_yaml
 
     customer_yaml = root / "customer.yaml"
