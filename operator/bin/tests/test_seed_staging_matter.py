@@ -306,3 +306,18 @@ def test_the_runner_lists_records_without_uploading(tmp_path: Path) -> None:
     for n in record_names(fx):
         (tmp_path / n).write_bytes(b"%PDF-1.4")
     assert seed.main(["ramirez-pi103", "--records", str(tmp_path), "--list"]) == 0
+
+
+def test_a_stored_pdf_counts_as_already_on_the_matter() -> None:
+    """Smokeball stores ``Report.pdf`` as name ``Report`` plus fileExtension ``.pdf``.
+    A re-run must skip it, not upload it again (42 duplicate copies, 2026-11-10)."""
+    pdf = record_names(FIXTURES["ramirez-pi103"])[0]
+    stored = [
+        {"name": pdf[:-4], "fileExtension": ".pdf"},
+        {"name": "Intake note", "fileExtension": ""},
+        {"name": "Gone", "fileExtension": ".pdf", "isDeleted": True},
+    ]
+    have = seed.names_on_matter(stored)
+    assert pdf in have
+    assert "Intake note" in have
+    assert "Gone.pdf" not in have

@@ -92,6 +92,25 @@ def record_files(fixture: Fixture, records: Path) -> list[tuple[str, bytes]]:
     return [(name, (records / name).read_bytes()) for name in want]
 
 
+def names_on_matter(files: list[dict]) -> set[str]:
+    """Every name a file already on the matter answers to.
+
+    Smokeball stores ``Report.pdf`` as name ``Report`` plus fileExtension ``.pdf``,
+    so comparing an upload name to ``name`` alone never matches a PDF, and a
+    re-run uploaded every record a second time (2026-11-10, 42 copies on the
+    demo tenant). Deleted files do not count as present."""
+    out: set[str] = set()
+    for f in files:
+        if f.get("isDeleted"):
+            continue
+        name = str(f.get("name") or "")
+        out.add(name)
+        ext = str(f.get("fileExtension") or "")
+        if ext:
+            out.add(name + (ext if ext.startswith(".") else "." + ext))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument("slug", choices=sorted(FIXTURES), help="which matter's record to seed")
@@ -117,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
 
     c = _client()
     existing = c.get(f"/matters/{fixture.matter_id}/documents/files", Limit=200, Offset=0)
-    have = {f.get("name") for f in (existing.get("value") if isinstance(existing, dict) else existing) or []}
+    have = names_on_matter((existing.get("value") if isinstance(existing, dict) else existing) or [])
     print(f"already on matter: {len(have)}")
 
     added = skipped = failed = 0
