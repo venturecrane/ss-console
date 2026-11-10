@@ -488,3 +488,79 @@ def test_orphans_never_reads_a_planted_link_as_a_store(seat: dict) -> None:
     seat["leads"].symlink_to(elsewhere, target_is_directory=True)
     result = person_orphans.orphan_partitions(seat["targets"], [A, B])
     assert not result.clean and result.problems
+
+
+AA = "aa@example.test"
+DATA = "data@example.test"
+SHORT = "a@example.test"
+
+
+def _named(*people: str) -> list[str]:
+    return sorted(person_purge.recipient_digest(p) for p in people)
+
+
+def test_an_entry_names_a_person_only_by_their_exact_digest() -> None:
+    """Removing ``a@x.com`` matches only its own digest: an entry naming
+    ``aa@x.com`` or ``data@x.com`` is not theirs, and words are never searched,
+    so an entry with no named list is untouched by a body that mentions them."""
+    admin = ["admin@example.test"]
+    assert person_purge._envelope_mentions({"recipients": admin, "named_sha256": _named(SHORT)}, SHORT)
+    for other in (AA, DATA):
+        entry = {"recipients": admin, "full_body": f"Progress for {other}", "named_sha256": _named(other)}
+        assert not person_purge._envelope_mentions(entry, SHORT), other
+    body_only = {"recipients": admin, "subject": f"About {SHORT}", "full_body": f"Progress for {SHORT}."}
+    assert not person_purge._envelope_mentions(body_only, SHORT)
+    assert not person_purge._envelope_mentions({"recipients": admin, "named_sha256": SHORT}, SHORT)
+
+
+def test_purge_of_one_address_leaves_entries_naming_lookalikes(seat: dict) -> None:
+    envelope = seat["home"] / ".smd" / "pre_run" / "client-digest.dispatch.json"
+    envelope.parent.mkdir(parents=True, exist_ok=True)
+    entries = [
+        {"recipients": ["admin@example.test"], "full_body": f"{AA} is due", "named_sha256": _named(AA)},
+        {"recipients": ["admin@example.test"], "full_body": f"{DATA} is due", "named_sha256": _named(DATA)},
+        {"recipients": ["admin@example.test"], "subject": f"{SHORT} today", "full_body": f"{SHORT} is due"},
+    ]
+    envelope.write_text(json.dumps({"skill": "client-digest", "dispatches": entries}), encoding="utf-8")
+    targets = person_purge.PurgeTargets(data_root=seat["data"], partition_roots=[])
+    assert person_purge.purge(SHORT, targets).clean
+    assert json.loads(envelope.read_text(encoding="utf-8"))["dispatches"] == entries
+
+
+def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(seat: dict) -> None:
+    """Training (ss-console #3946): a representative's progress record lives in
+    a store walled per person (``rep-progress``), and the weekly report to SMD's
+    administrators names each representative in its body and lists their
+    digests in ``named_sha256``, never as a recipient. Purging A removes A's
+    progress directory and every report entry listing A (the pending or
+    consumed envelope on the seat; the email already sent is retained by design);
+    B's progress stays, and the probe reads both before and after."""
+    progress = seat["data"] / "rep" / "progress"
+    for person in (A, B):
+        directory = progress / person_purge.person_slug(person)
+        directory.mkdir(parents=True)
+        (directory / "progress.json").write_text('{"schema":1,"lessons_complete":["l01"]}', encoding="utf-8")
+    report = {
+        "recipients": ["admin@example.test"],
+        "cc": [],
+        "subject": "Representative progress and readiness",
+        "full_body": f"Hello,\n\nAvery Example ({A})\n- Readiness: ready\n\n{B}\n- Readiness: not ready yet",
+        "skeleton_body": "Hello,\n\nThis week's representative progress report could not be sent in full.",
+        "named_sha256": _named(A, B),
+    }
+    other = {**report, "full_body": f"{B}\n- Readiness: not ready yet", "named_sha256": _named(B)}
+    envelope = seat["home"] / ".smd" / "pre_run" / "rep-training.dispatch.consumed.json"
+    envelope.parent.mkdir(parents=True, exist_ok=True)
+    envelope.write_text(json.dumps({"skill": "rep-training", "dispatches": [report, other]}), encoding="utf-8")
+    targets = person_purge.PurgeTargets(data_root=seat["data"], partition_roots=[progress])
+
+    before = person_purge.probe(A, targets)
+    assert {"partitioned store directory", "scheduled-send envelope"} <= _layers(before)
+
+    result = person_purge.purge(A, targets)
+
+    assert result.clean, [f.line() for f in result.remaining]
+    assert not (progress / person_purge.person_slug(A)).exists()
+    assert (progress / person_purge.person_slug(B) / "progress.json").is_file()
+    kept = json.loads(envelope.read_text(encoding="utf-8"))["dispatches"]
+    assert kept == [other] and A not in envelope.read_text(encoding="utf-8")

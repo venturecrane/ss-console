@@ -45,6 +45,12 @@ const ROLE_DIR = resolve('operator/roles/guide')
 const PRACTICE_DIR = resolve('operator/skills/pitch-practice')
 const SCENARIOS = join(PRACTICE_DIR, 'references', 'scenarios.yaml')
 const RUBRIC = join(PRACTICE_DIR, 'references', 'rubric.md')
+/** Objection drills and buyer types (ss-console #3946). */
+const DRILLS = join(PRACTICE_DIR, 'references', 'drills.yaml')
+const BUYER_TYPES = join(PRACTICE_DIR, 'references', 'buyer-types.md')
+/** The representative training skill (ss-console #3946). Its tone-rules.yaml
+ * holds the phrases it forbids, so it is the one file of the skill not scanned. */
+const TRAINING_DIR = resolve('operator/skills/rep-training')
 /** The seat's own send gate's banned markers (fabrication gate, every email reply). */
 const MARKERS_JSON = resolve('operator/hermes-smd-overlay/shared/fabrication_markers.json')
 /** The router's invite-code detector (ADR 0106); its CODE_PATTERN literal is read, not copied. */
@@ -357,10 +363,12 @@ describe('product guide answer key (ADR 0105)', () => {
   // needs the same reason written here. 29 (2026-11-10): r07 added, a
   // non-administrator asking WHO issues codes, so the reply that must not
   // reveal the capability is graded on the question path too, not only on
-  // the tool path (r06).
-  it('has 29 questions with unique ids, 7 of them refusals of the six kinds', () => {
-    expect(qs.length).toBe(29)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(29)
+  // the tool path (r06). 31 (2026-11-10, ss-console #3946): q26 and q27 added
+  // for the new prospect-fit page (who-smd-sells-to.md), which the training
+  // curriculum's fit lesson reads.
+  it('has 31 questions with unique ids, 7 of them refusals of the six kinds', () => {
+    expect(qs.length).toBe(31)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(31)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
     expect(refusals.length).toBe(7)
@@ -565,6 +573,11 @@ describe('pitch practice material (ADR 0105)', () => {
   for (const [label, file] of [
     ['scenarios.yaml', SCENARIOS],
     ['rubric.md', RUBRIC],
+    ['drills.yaml', DRILLS],
+    ['buyer-types.md', BUYER_TYPES],
+    ['rep-training SKILL.md', join(TRAINING_DIR, 'SKILL.md')],
+    ['curriculum.yaml', join(TRAINING_DIR, 'references', 'curriculum.yaml')],
+    ['discovery.md', join(TRAINING_DIR, 'references', 'discovery.md')],
     ['pitch-practice SKILL.md', join(PRACTICE_DIR, 'SKILL.md')],
     ['product-guide SKILL.md', join(SKILL_DIR, 'SKILL.md')],
   ] as const) {

@@ -1,0 +1,124 @@
+# Objection drills (ss-console #3946): one objection at a time, any buyer.
+#
+# A drill is shorter than a scenario: the guide raises one objection, the
+# person answers, and the guide gives feedback against `covers` with the
+# library sections in `answer`, then offers the next drill in the theme. No
+# industry, business or person is named; any buyer type in buyer-types.md
+# may say any of these.
+#
+# tests/product-guide-library.test.ts checks every citation exists and that
+# every line clears the seat's content rules.
+schema_version: 1
+themes:
+  - id: trust
+    title: Trusting it to act
+    drills:
+      - says: 'What stops it from sending something to a customer that I would never have sent?'
+        covers:
+          - sends to people outside the business are drafted for a person unless the client writes otherwise
+          - the client writes the limits, and anything not written down is refused
+        answer:
+          - document: permission-model.md
+            section: Ceilings from least to most restrictive
+          - document: permission-model.md
+            section: What is in use today
+      - says: 'If something goes wrong on a busy day, how fast can we stop it?'
+        covers:
+          - a principal can pause it from the Client portal where that area is handed to the client, and otherwise asks SMD
+          - a pause refuses every tool call and survives a restart
+        answer:
+          - document: permission-model.md
+            section: Pause, stop and safety
+          - document: client-controls.md
+            section: Direct
+      - says: 'How would I even know what it did while I was out?'
+        covers:
+          - every tool call writes one audit entry to a record the agent cannot rewrite
+          - the record is tamper-evident, with stated limits, never tamper-proof
+        answer:
+          - document: isolation-and-data-custody.md
+            section: The audit record
+
+  - id: data
+    title: Our data
+    drills:
+      - says: 'Is our information mixed in with your other customers somewhere?'
+        covers:
+          - each client gets its own seat, machine and storage volume
+          - a seat refuses to start if it is bound to another client's storage
+        answer:
+          - document: isolation-and-data-custody.md
+            section: Isolation between clients
+      - says: 'Does anyone at your company read what goes through it?'
+        covers:
+          - SMD's console never shows business content
+          - SMD staff see content only through request notices and the logged per-client ops workspace
+        answer:
+          - document: isolation-and-data-custody.md
+            section: What SMD can see beyond the console
+      - says: "Will our information be used to train someone else's AI?"
+        covers:
+          - what the agreement says about how client data is used and never used
+        answer:
+          - document: what-smd-commits-to.md
+            section: How client data is used, and what it is never used for
+
+  - id: value
+    title: Worth and fit
+    drills:
+      - says: 'Why not just hire another person?'
+        covers:
+          - it is sold against the next hire, a coordinator or an assistant
+          - SMD builds, runs, watches and changes it as a managed service
+        answer:
+          - document: how-the-operator-works.md
+            section: One worker, configured for one business
+          - document: how-the-operator-works.md
+            section: What managed means
+      - says: 'We already pay for plenty of software. Is this one more?'
+        covers:
+          - the business's existing tools are things it connects to, not things it replaces
+          - staff email it like a colleague, with nothing new to log in to
+        answer:
+          - document: what-it-is.md
+            section: Definition
+          - document: how-the-operator-works.md
+            section: 'Before and after: what changes for the business'
+      - says: 'Can you tell me what it would cost us?'
+        covers:
+          - pricing is set by SMD for each engagement and the representative brings the buyer to SMD for it
+          - no figure, range or comparison is given in practice
+        answer:
+          - document: what-smd-commits-to.md
+            section: How to read this document
+
+  - id: adoption
+    title: Will people use it
+    drills:
+      - says: 'My team is stretched already. Who is going to teach it how we work?'
+        covers:
+          - onboarding is done together, the client decides and SMD records
+          - it learns working preferences from the people who direct it
+        answer:
+          - document: managed-service.md
+            section: Onboarding phases
+          - document: memory.md
+            section: Learned working preferences
+      - says: 'What happens when it gets stuck on a big piece of work?'
+        covers:
+          - big work runs as a queued job with its own checks and proof of delivery
+          - the client hears when a job stops
+        answer:
+          - document: jobs.md
+            section: From request to delivery
+          - document: jobs.md
+            section: What the client hears when a job stops
+      - says: 'Can people reach it some way other than email?'
+        covers:
+          - email is the main channel today
+          - which other channels exist and which are not available
+        answer:
+          - document: connections-and-channels.md
+            section: Email channels
+          - document: connections-and-channels.md
+            section: Other channels

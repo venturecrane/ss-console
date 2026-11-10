@@ -158,6 +158,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     "Answers a listed person's emailed question about the Operator from the product library, naming the document and section. Never discusses pricing or clients.",
   'press-release-draft':
     'Drafts a press release only from facts your firm approved, at most two a month. Your firm approves, picks the wire and submits.',
+  'rep-training':
+    'Teaches a listed sales representative the Operator through lessons, an open-book quiz and a mock pitch, and keeps their progress. Readiness is counted by the seat, never by the model.',
   'referral-source-acknowledgment':
     'Drafts a courtesy thank-you to whoever referred a new matter. Never discloses client identity. Drafted for review, never auto-sent.',
   'review-reply-draft':

@@ -1,0 +1,8 @@
+name: hermes-smd-training
+version: "0.1.0"
+description: "Representative training on a guide seat (ss-console #3946): training_record (lesson order, completion, the open-book quiz graded from the representative's own email, mock pitch objections answered, readiness) and tone_check (deterministic rules authored as the rep-training skill's data). Progress is kept by code in a record store walled per person that only code writes; it holds ids and counts, never the representative's words. Registered only on a guide seat that enables rep-training and authors the rep-progress store."
+author: VentureCrane
+# Empty on purpose: the gate is register(), which asks whether the seat
+# authors representative training. A failing requires_env would drop the
+# tools silently.
+requires_env: []

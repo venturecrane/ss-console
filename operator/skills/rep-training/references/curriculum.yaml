@@ -1,0 +1,274 @@
+# The representative training curriculum (ss-console #3946).
+#
+# Read by code (overlay shared/training.py) and by the guide when it teaches.
+# Every lesson reads sections of the product library
+# (/app/skills/product-guide/references/), the only source of product truth;
+# `guide` names a page of this skill's own references when a lesson has one.
+# `requires` is what code checks before a lesson can be marked complete:
+#   none        the guide marks it once the exercise is answered
+#   tone_check  a tone check of the representative's own draft is on record
+#   mock_pitch  every objection of one buyer scenario is answered
+#
+# The quiz is open-book. The answer letters are graded by code against
+# `answer`; the guide never tells a representative a correct letter. Each
+# question names the library section that answers it.
+#
+# tests/rep-training.test.ts checks every citation exists and that every line
+# a representative can be shown clears the seat's reply checks.
+schema_version: 1
+progress_store: rep-progress
+
+lessons:
+  - id: l01
+    title: What the Operator is
+    read:
+      - document: what-it-is.md
+        section: Definition
+      - document: how-the-operator-works.md
+        section: One worker, configured for one business
+    exercise: >-
+      In two or three sentences of your own, tell a business owner what the
+      Operator is, as you would if they asked you across a table.
+    requires: none
+
+  - id: l02
+    title: What changes for the business
+    read:
+      - document: how-the-operator-works.md
+        section: 'Before and after: what changes for the business'
+    exercise: >-
+      Describe the before and the after for a kind of business you call on.
+      Use no real business or person, and say what stays the same as well as
+      what changes.
+    requires: none
+
+  - id: l03
+    title: The life of a request
+    read:
+      - document: how-the-operator-works.md
+        section: The life of a request
+      - document: request-lifecycle.md
+        section: How a request arrives
+      - document: request-lifecycle.md
+        section: Delivery paths
+    exercise: >-
+      Explain, in a short numbered list, what happens when a staff member
+      emails the Operator a request, from the moment it arrives to the reply.
+    requires: none
+
+  - id: l04
+    title: Limits the client writes
+    read:
+      - document: permission-model.md
+        section: Ceilings from least to most restrictive
+      - document: permission-model.md
+        section: Pause, stop and safety
+      - document: client-controls.md
+        section: Direct
+    exercise: >-
+      An owner asks how they can be sure the Operator will not do something on
+      its own that embarrasses them with a customer. Write your answer.
+    requires: none
+
+  - id: l05
+    title: Data, isolation and what SMD can see
+    read:
+      - document: isolation-and-data-custody.md
+        section: Isolation between clients
+      - document: isolation-and-data-custody.md
+        section: What SMD can see beyond the console
+      - document: what-smd-commits-to.md
+        section: Who owns the data
+    exercise: >-
+      A security reviewer asks whether SMD staff can read the business's
+      email. Write an answer that is accurate and does not overclaim.
+    requires: none
+
+  - id: l06
+    title: What is real today
+    read:
+      - document: what-it-is.md
+        section: How to read the maturity labels
+      - document: built-versus-planned.md
+        section: In production
+      - document: built-versus-planned.md
+        section: Built, not yet in client use
+    exercise: >-
+      Name three things that are in production and one that is built but not
+      yet in client use, each with the label you would use for it with a
+      prospect.
+    requires: none
+
+  - id: l07
+    title: The managed service
+    read:
+      - document: how-the-operator-works.md
+        section: What managed means
+      - document: managed-service.md
+        section: Who does what
+    exercise: >-
+      Explain who does what between the business and SMD once the Operator
+      is running, in a few short sentences.
+    requires: none
+
+  - id: l08
+    title: Who SMD sells to
+    read:
+      - document: who-smd-sells-to.md
+        section: The buyer
+      - document: who-smd-sells-to.md
+        section: Signs of a good fit
+      - document: who-smd-sells-to.md
+        section: Not a fit today
+      - document: who-smd-sells-to.md
+        section: Yellow flags to probe
+    exercise: >-
+      Describe a prospect you have met or expect to meet, without naming the
+      business or the person, and say which good signs, hard stops and yellow
+      flags apply and what you would probe.
+    requires: none
+
+  - id: l09
+    title: Discovery and words that land
+    read:
+      - document: who-smd-sells-to.md
+        section: How to read this document
+    guide: discovery.md
+    exercise: >-
+      Write the opening email you would send a new prospect, or the first
+      three questions you would ask them, objectives first. Send it to the
+      guide in your own email so the guide can check its tone.
+    requires: tone_check
+
+  - id: l10
+    title: The mock pitch
+    read:
+      - document: what-smd-commits-to.md
+        section: What SMD does not promise
+    exercise: >-
+      Run one whole mock pitch: say "let's practice", choose a buyer, and
+      answer every objection that buyer raises.
+    requires: mock_pitch
+
+quiz:
+  pass_correct: 8
+  questions:
+    - id: q01
+      ask: What happens to a capability that is not written down for a client's seat?
+      choices:
+        A: It runs, with a warning to SMD
+        B: It is refused
+        C: It asks the owner first
+        D: It runs only for administrators
+      answer: B
+      source:
+        document: what-it-is.md
+        section: Definition
+
+    - id: q02
+      ask: What is the Operator sold against?
+      choices:
+        A: A software subscription
+        B: A chat assistant the staff already use
+        C: The next hire, a coordinator or an assistant
+        D: An outsourced answering service
+      answer: C
+      source:
+        document: how-the-operator-works.md
+        section: One worker, configured for one business
+
+    - id: q03
+      ask: Once an Operator is working, what changes for the business's staff?
+      choices:
+        A: Nothing new to log in to; they email it like a colleague
+        B: They learn a new dashboard
+        C: They move their records into a new system
+        D: They stop using email for internal work
+      answer: A
+      source:
+        document: how-the-operator-works.md
+        section: 'Before and after: what changes for the business'
+
+    - id: q04
+      ask: Which statement about commitments and deletions is accurate?
+      choices:
+        A: They run on their own once a client allows acting on its own
+        B: They are always drafted for SMD to send
+        C: They are on the banned list for every client
+        D: They never run on the Operator's word alone; a person approves them in the current exchange
+      answer: D
+      source:
+        document: permission-model.md
+        section: Ceilings from least to most restrictive
+
+    - id: q05
+      ask: What does a client pause do?
+      choices:
+        A: Every tool call is refused, the pause survives a restart, and queued jobs wait until it lifts
+        B: It deletes the queued jobs
+        C: It stops email but lets other work continue
+        D: It lifts by itself after a short while
+      answer: A
+      source:
+        document: permission-model.md
+        section: Pause, stop and safety
+
+    - id: q06
+      ask: How are clients kept apart?
+      choices:
+        A: One shared machine with a folder per client
+        B: A separate login per client on SMD's machine
+        C: Each client gets its own seat, with its own machine and its own storage volume
+        D: By the industry pack each client uses
+      answer: C
+      source:
+        document: isolation-and-data-custody.md
+        section: Isolation between clients
+
+    - id: q07
+      ask: Which is the accurate statement about what SMD can see?
+      choices:
+        A: SMD never sees any client content
+        B: SMD's console never shows business content, and SMD staff see content only through request notices and the logged per-client ops workspace
+        C: SMD staff read every email the Operator handles
+        D: SMD sees content only when the client sends it records
+      answer: B
+      source:
+        document: isolation-and-data-custody.md
+        section: What SMD can see beyond the console
+
+    - id: q08
+      ask: What may you describe to a prospect as something a client has today?
+      choices:
+        A: Anything that is built
+        B: Anything that is specified
+        C: Only capabilities marked in production
+        D: Anything on the plan for the year
+      answer: C
+      source:
+        document: what-it-is.md
+        section: How to read the maturity labels
+
+    - id: q09
+      ask: Which of these is a hard stop, not a fit today?
+      choices:
+        A: The owner wants to grow the business
+        B: The business runs on spreadsheets
+        C: More than three people have to agree
+        D: The business is in crisis, with active layoffs or a pending closure
+      answer: D
+      source:
+        document: who-smd-sells-to.md
+        section: Not a fit today
+
+    - id: q10
+      ask: Who is the buyer SMD wants to reach?
+      choices:
+        A: The owner or managing principal who signs and decides without a committee
+        B: The office manager, who signs for the owner
+        C: The IT reviewer
+        D: Whichever staff member replies first
+      answer: A
+      source:
+        document: who-smd-sells-to.md
+        section: The buyer

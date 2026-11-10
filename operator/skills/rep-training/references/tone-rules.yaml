@@ -1,0 +1,82 @@
+# Tone rules for a representative's own drafts (ss-console #3946).
+#
+# SEAT DATA, not code: overlay shared/training.py loads this file and counts
+# every match; the tone_check tool returns each rule broken, how many times, and
+# its `fix`. Readiness needs the most recent check to have no misses.
+#
+# Drawn from SMD's tone and positioning standard and from the pitch-practice
+# rubric (pitch-practice/references/rubric.md): objectives over problems,
+# collaborative rather than diagnostic, no fixed timeframes, no amounts,
+# "solution" in positioning talk, no claim to know a prospect's business, and
+# the seat's own plain-text rules (no long dashes, no exclamation marks, no
+# words in capitals for emphasis).
+#
+# kind: literal (case-insensitive) or regex (case-insensitive unless
+# `case: sensitive`). Each `fix` is shown to the representative as written.
+#
+# This file holds the phrases it forbids, so it is never shown to a prospect
+# and the library hygiene checks do not scan it.
+schema_version: 1
+rules:
+  - id: no-amount
+    kind: regex
+    pattern: '\$\s?\d|\b\d[\d,.]*\s*(dollars?|usd|k\b)|\b(dollars|usd)\b'
+    fix: Leave out every price, fee or amount. Pricing is set by SMD for each engagement, and SMD discusses it.
+
+  - id: no-timeframe
+    kind: regex
+    pattern: '\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)[- ](minute|hour|day|week|month)s?\b'
+    fix: Leave out fixed durations. How long anything takes is scoped with each business; say "we start with a conversation" instead.
+
+  - id: no-ai-employee
+    kind: regex
+    pattern: '\bAI[- ](employee|worker|staff member)s?\b'
+    fix: Do not open with "AI employee". Lead with the outcome for the business and a worker configured for one business, run by SMD.
+
+  - id: no-ai-powered
+    kind: regex
+    pattern: '\bAI[- ](powered|driven|first)\b'
+    fix: Do not brand SMD or the work as AI-powered. Name AI only where it is the right answer for the job.
+
+  - id: solution-not-systems
+    kind: regex
+    pattern: '\b(better|new|smarter)\s+systems?\b|\bbuild(?:ing)?\s+(?:you\s+)?(?:a\s+)?systems?\b'
+    fix: Say "solution" for what the business gets. Keep "system" for a specific tool the business already uses.
+
+  - id: collaborative-not-diagnostic
+    kind: regex
+    pattern: '\baudit(?:ing)?\s+your\b|\bwe(?:\s+will|''ll)?\s+tell\s+you\s+what\s+to\s+fix\b|\bfix\s+your\s+(business|operations|problems)\b'
+    fix: Work alongside the owner. Say "we work alongside you" or "let's figure out what needs to change", never that you will audit them or tell them what to fix.
+
+  - id: no-claim-to-know
+    kind: regex
+    pattern: '\byour\s+business\s+needs\b|\bwhat(?:''s|\s+is)\s+wrong\s+with\s+your\b|\bI\s+know\s+(?:what\s+)?your\b'
+    fix: Do not claim to know what the prospect's business needs before they have told you. Ask where the business is trying to go.
+
+  - id: no-replace-people
+    kind: regex
+    pattern: '\breplac(?:e|es|ing)\s+(?:your\s+)?(staff|people|team|employees|paralegals?|assistants?)\b'
+    fix: Never frame the Operator as replacing their people. It takes on the connecting work, and their people direct and judge it.
+
+  - id: no-guarantee
+    kind: regex
+    pattern: '\bguarantee[sd]?\b|\bpromise\s+you\b'
+    fix: Do not promise a result. Describe what the product does today, with its maturity label.
+
+  - id: no-long-dash
+    kind: literal
+    pattern: '—'
+    fix: Use a comma or a full stop instead of a long dash.
+
+  - id: no-exclamation
+    kind: literal
+    pattern: '!'
+    fix: Leave out exclamation marks. Plain, calm sentences read as more confident.
+
+  - id: no-shouting
+    kind: regex
+    case: sensitive
+    # Shouting is a run of capitalized words. One acronym alone (HIPAA, OSHA,
+    # SMD) is ordinary writing and never a miss.
+    pattern: '\b[A-Z]{2,}(?:[ \t]+[A-Z]{2,})+\b'
+    fix: Do not write words in capitals for emphasis.

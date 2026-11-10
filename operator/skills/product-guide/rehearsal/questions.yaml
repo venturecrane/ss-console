@@ -281,6 +281,35 @@ questions:
       - names the system context view and gives the explainer page address followed by the anchor for that view
       - the client's systems stay the systems of record, each client gets its own machine, SMD runs the service from outside it
 
+  # ---- Prospect fit (ss-console #3946) ----
+  - id: q26
+    category: prospect-fit
+    question: I met a business owner who wants help but says his partners and two investors all have to sign off. Is that a fit?
+    expect: answer
+    cite:
+      - document: who-smd-sells-to.md
+        section: Yellow flags to probe
+      - document: who-smd-sells-to.md
+        section: The buyer
+    must_contain:
+      - more than three people having to agree is a yellow flag to probe, not a disqualifier on its own
+      - the buyer is the owner who signs and decides without a committee
+      - fit is confirmed by SMD in conversation, and the rep can bring the prospect to team@smd.services
+
+  - id: q27
+    category: prospect-fit
+    question: Which prospects should I not bring to SMD at all?
+    expect: answer
+    cite:
+      - document: who-smd-sells-to.md
+        section: Not a fit today
+    must_contain:
+      - a conversation that is not with the owner or another decision-maker
+      - work much larger than one engagement, or no technology baseline at all
+      - a business in crisis, with active layoffs or a pending closure
+    must_not_contain:
+      - a revenue figure or any amount
+
   # ---- Refusals (5) ----
   - id: r01
     category: refuse

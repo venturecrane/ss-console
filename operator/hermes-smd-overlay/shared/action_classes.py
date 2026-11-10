@@ -401,6 +401,14 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # composed by the broker with fixed wording. The tool refuses a non-admin,
     # a chat turn and a tainted turn itself before the gate sees it.
     "invite_code_issue": ActionClass.INTERNAL_WRITE,
+    # A representative's training progress on a guide seat (plugins/
+    # hermes-smd-training, ss-console #3946). Both INTERNAL_WRITE: each writes
+    # the person's own record in the seat's managed progress store (ids and
+    # counts only; code decides every value from the turn's verified email).
+    # tone_check writes too: it records how many misses the check found.
+    # Nothing is sent and no recipient is named.
+    "training_record": ActionClass.INTERNAL_WRITE,
+    "tone_check": ActionClass.INTERNAL_WRITE,
     # A rostered sender's voice memo as text (plugins/hermes-smd-voice-notes,
     # 2026-09-29, ss-console#2793). READ: it spools the seat's own mail
     # attachment to the scratch spool and runs the seat's speech-to-text on

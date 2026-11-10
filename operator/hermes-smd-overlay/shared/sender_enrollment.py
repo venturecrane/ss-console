@@ -86,6 +86,28 @@ _DEMO_WELCOME_BODY = (
     "address.\n"
 )
 
+#: On a guide seat that authors representative training (``shared.training``),
+#: the welcome also points the person at the learning path and says, in the
+#: owner's approved words (2026-11-10), who sees what. Fixed text, no model turn.
+PRIVACY_NOTICE = (
+    "SMD sees your progress and readiness. Your notes and leads are not shown to other "
+    "representatives and are not included in any report. SMD runs this service, and its "
+    "staff can reach stored data when fixing a fault."
+)
+_TRAINING_WELCOME_BODY = (
+    "{greeting}\n\n"
+    "This address is now connected to the SMD Services product guide. Reply here, or "
+    "write a new email to this address, with any question about the Operator. Each "
+    "answer comes from the guide's product library and names the document and section "
+    "it came from.\n\n"
+    'To learn the product step by step, reply with "start training". The guide takes '
+    "you through short lessons, an open-book quiz and a practice pitch, one at a time, "
+    'and tells you where you stand whenever you ask "where am I".\n\n'
+    f"{PRIVACY_NOTICE}\n\n"
+    "If you did not expect this message, tell SMD Services and we will disconnect this "
+    "address.\n"
+)
+
 NOTICE_SUBJECT = "Guide seat: a new person connected with an invite code"
 DEMO_NOTICE_SUBJECT = "Demo seat: a new person connected with an invite code"
 _NOTICE_BODY = (
@@ -173,9 +195,18 @@ def valid_name(value: Any) -> bool:
     )
 
 
-def welcome_text(name: str | None, *, demo: bool = False) -> str:
+def welcome_text(name: str | None, *, demo: bool = False, training: bool = False) -> str:
+    """The fixed welcome. ``demo`` is the demo seat's; ``training`` (a guide
+    seat that authors representative training) adds the learning path and
+    :data:`PRIVACY_NOTICE`. Every other seat's welcome is unchanged."""
     greeting = f"Hello {name}," if valid_name(name) else "Hello,"
-    return (_DEMO_WELCOME_BODY if demo else _WELCOME_BODY).format(greeting=greeting)
+    if demo:
+        body = _DEMO_WELCOME_BODY
+    elif training:
+        body = _TRAINING_WELCOME_BODY
+    else:
+        body = _WELCOME_BODY
+    return body.format(greeting=greeting)
 
 
 def notice_subject(*, demo: bool = False) -> str:
@@ -240,6 +271,7 @@ __all__ = [
     "CODE_PATTERN",
     "NAME_PATTERN",
     "NAME_REFUSAL",
+    "PRIVACY_NOTICE",
     "enabled_in",
     "enrolled",
     "enrolled_addresses",
