@@ -51,7 +51,7 @@ import {
   readTestFiles,
   trackedFiles,
 } from './sprawl/sources'
-import { TEXT_PIN_POLICY_SCANS } from './sprawl/text-pin-allowlist'
+import { TEXT_PIN_FALSE_POSITIVES, TEXT_PIN_POLICY_SCANS } from './sprawl/text-pin-allowlist'
 import { sourceTextPinLines } from './sprawl/text-pins'
 
 const JSCPD = 'jscpd@4.3.0'
@@ -284,21 +284,28 @@ function print(s: Snapshot, prev?: Snapshot): void {
 }
 
 /** Every source-text pin outside the allowlist, one `file:line` per assertion, then the total. */
+/** Every source-text pin as `file:line [kind]`: guard, false-positive, or UNEXPLAINED (fails the ratchet). */
 function printTextPins(): void {
-  let total = 0
+  const tally: Record<string, number> = { guard: 0, 'false-positive': 0, UNEXPLAINED: 0 }
   for (const f of readTestFiles(trackedFiles())) {
-    if (TEXT_PIN_POLICY_SCANS[f.path]) continue
+    const kind = TEXT_PIN_POLICY_SCANS[f.path]
+      ? 'guard'
+      : TEXT_PIN_FALSE_POSITIVES[f.path]
+        ? 'false-positive'
+        : 'UNEXPLAINED'
     for (const line of sourceTextPinLines(f.path, f.text)) {
-      console.log(`${f.path}:${line}`)
-      total++
+      console.log(`${f.path}:${line} [${kind}]`)
+      tally[kind]++
     }
   }
-  console.log(`${total} source-text pins outside the allowlist`)
+  console.log(
+    `source-text pins: ${tally.guard} in allowlisted guards, ${tally['false-positive']} known false positives, ${tally.UNEXPLAINED} unexplained`
+  )
 }
 
+/** Cap every file at its current count (guards included). Run only after a count fell. */
 function writePinBaseline(): void {
-  const allow = new Set(Object.keys(TEXT_PIN_POLICY_SCANS))
-  const census = textPinCensus(readTestFiles(trackedFiles()), allow)
+  const census = textPinCensus(readTestFiles(trackedFiles()))
   const doc = {
     $comment:
       'Written by scripts/sprawl-audit.ts --write-text-pin-baseline; gated by tests/text-pin-ratchet.test.ts. Lower only.',

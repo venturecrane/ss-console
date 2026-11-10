@@ -22,6 +22,7 @@ import {
   summarizeVulture,
   textPinCensus,
   textPinRatchet,
+  unexplainedPinFiles,
 } from '../scripts/sprawl/analyze'
 import { pinLangOf, sourceTextPins } from '../scripts/sprawl/text-pins'
 
@@ -429,16 +430,36 @@ describe('textPinCensus and textPinRatchet', () => {
   const pin =
     "const s = readFileSync(join(process.cwd(), 'src/a.ts'), 'utf8')\nexpect(s).toContain('a')\n"
 
-  it('counts per file and leaves allowlisted policy scans out', () => {
-    const census = textPinCensus(
-      [
-        { path: 'tests/a.test.ts', text: pin },
-        { path: 'tests/policy.test.ts', text: pin },
-        { path: 'tests/clean.test.ts', text: 'expect(f()).toBe(1)\n' },
-      ],
-      new Set(['tests/policy.test.ts'])
-    )
-    expect(census).toEqual({ 'tests/a.test.ts': 1 })
+  it('counts every file with pins, allowlisted policy scans included, and none without', () => {
+    const census = textPinCensus([
+      { path: 'tests/a.test.ts', text: pin },
+      { path: 'tests/policy.test.ts', text: pin + pin },
+      { path: 'tests/clean.test.ts', text: 'expect(f()).toBe(1)\n' },
+    ])
+    expect(census).toEqual({ 'tests/a.test.ts': 1, 'tests/policy.test.ts': 2 })
+  })
+
+  it('caps an allowlisted file: a pin added to it fails, a pin removed without lowering fails', () => {
+    const baseline = { 'tests/policy.test.ts': 2 }
+    const added = textPinCensus([{ path: 'tests/policy.test.ts', text: pin + pin + pin }])
+    expect(textPinRatchet(added, baseline).rose).toEqual([
+      'tests/policy.test.ts: 3 pins (allowed 2)',
+    ])
+    const removed = textPinCensus([{ path: 'tests/policy.test.ts', text: pin }])
+    expect(textPinRatchet(removed, baseline).fell).toEqual([
+      'tests/policy.test.ts: 1 pins (baseline 2)',
+    ])
+    expect(
+      textPinRatchet(textPinCensus([{ path: 'tests/policy.test.ts', text: pin + pin }]), baseline)
+    ).toEqual({ rose: [], fell: [] })
+  })
+
+  it('names every file holding pins without a stated reason', () => {
+    const census = { 'tests/a.test.ts': 1, 'tests/policy.test.ts': 2 }
+    expect(unexplainedPinFiles(census, new Set(['tests/policy.test.ts']))).toEqual([
+      'tests/a.test.ts',
+    ])
+    expect(unexplainedPinFiles(census, new Set(Object.keys(census)))).toEqual([])
   })
 
   it('fails a rise, a new file with pins, and a fall the baseline was not lowered for', () => {

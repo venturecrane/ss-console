@@ -284,16 +284,12 @@ function countRatchet(
 }
 
 /**
- * Source-text pin assertions per test file, the allowlisted policy scans left
- * out (scripts/sprawl/text-pin-allowlist.ts). Files with none are omitted.
+ * Source-text pin assertions per test file, every test file (allowlisted policy
+ * scans included, so each is capped too). Files with none are omitted.
  */
-export function textPinCensus(
-  files: SourceFile[],
-  allowlist: ReadonlySet<string>
-): Record<string, number> {
+export function textPinCensus(files: SourceFile[]): Record<string, number> {
   const out: Record<string, number> = {}
   for (const f of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
-    if (allowlist.has(f.path)) continue
     const n = sourceTextPins(f.path, f.text)
     if (n > 0) out[f.path] = n
   }
@@ -301,9 +297,26 @@ export function textPinCensus(
 }
 
 /**
- * The fitness function for source-text pins: no file may gain a pin past
- * scripts/sprawl/text-pin-baseline.json, a file not in it may have none, and a
- * count that fell fails until the baseline is lowered.
+ * Files that hold pins with no stated reason: in the census but in neither the
+ * allowlist of guards nor the list of known detector false positives
+ * (scripts/sprawl/text-pin-allowlist.ts). A pin needs a reason AND a cap.
+ *
+ * @public Merge-gate check. tests/text-pin-ratchet.test.ts imports it.
+ */
+export function unexplainedPinFiles(
+  census: Record<string, number>,
+  reasons: ReadonlySet<string>
+): string[] {
+  return Object.keys(census)
+    .filter((path) => !reasons.has(path))
+    .sort()
+}
+
+/**
+ * The fitness function for source-text pins: every file is capped at its count
+ * in scripts/sprawl/text-pin-baseline.json, allowlisted guards included, so a
+ * new pin in a guard file fails like a new pin anywhere; a file not in it may
+ * have none; and a count that fell fails until the baseline is lowered.
  *
  * @public Merge-gate check. tests/text-pin-ratchet.test.ts imports it and fails a PR that adds a source-text pin.
  */

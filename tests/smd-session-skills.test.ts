@@ -98,6 +98,18 @@ describe('the forked session skills live where crane cannot reach them', () => {
   })
 })
 
+describe('client-confidentiality fences in the session skills', () => {
+  // Session transcripts persist under ~/.claude and go to model providers, and
+  // this repo is public: client text must never be printed into one or pasted here.
+  it('/sos never prints obligation text into the transcript', () => {
+    expect(skillBody('sos')).toMatch(/no `what` field and there must not be/)
+  })
+
+  it("/wired cites what the client was told and never pastes the client's text into this repo", () => {
+    expect(skillBody('wired')).toMatch(/Never paste the client's text into this repo/)
+  })
+})
+
 describe('/sos points at the stance surfaces instead of restating the laws', () => {
   it('no doctrine primer_line is pasted into /sos (no second rulebook to drift)', () => {
     const body = skillBody('sos')

@@ -1,7 +1,9 @@
 /**
- * The test files that read repo source as text ON PURPOSE, left out of the
- * source-text pin census (scripts/sprawl/analyze.ts textPinCensus, gated by
- * tests/text-pin-ratchet.test.ts). Four kinds, and only these:
+ * The test files that read repo source as text ON PURPOSE: the REASON half of
+ * the source-text pin gate (tests/text-pin-ratchet.test.ts). The CAP half is
+ * scripts/sprawl/text-pin-baseline.json, which holds every file's count, these
+ * included, so a new pin inside a guard file fails like one anywhere else.
+ * Five kinds, and only these:
  *
  * - POLICY SCAN: a rule over a tree or a class of files (no em dashes, no
  *   fabricated client content, no dollar amounts, no secret in source, every
@@ -14,6 +16,9 @@
  *   ownership before the swap, auth middleware before the routes). Running a
  *   seat boot in a test is not cheap; the text is the cheapest faithful probe,
  *   and removing an access control is the Captain's call.
+ * - CLIENT CONTENT OR MONEY: CLAUDE.md "No fabricated client-facing content"
+ *   (P0): no Pattern A/B sentence, hourly rate, fixed timeframe or placeholder
+ *   reaches a client; client text never lands in a transcript or this repo.
  * - MODEL-READ RULE: a SKILL.md, router, reply-shape or prompt the Operator's
  *   model reads IS the program. A test that the text states a hold, route,
  *   send, fence, money or reply-content rule is a behaviour guard.
@@ -67,7 +72,7 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
   'tests/admin-astro-boundaries.test.ts':
     'Policy: the heavy admin pages do no direct DOM wiring and stay under their line caps.',
   'tests/smd-session-skills.test.ts':
-    'Contract: the forked session skills live where crane cannot overwrite them; /wired READY matches docs/doctrine/wired-contract.md.',
+    'Client content: /sos never prints obligation text into a transcript and /wired never pastes client text here; the forks live where crane cannot overwrite them.',
 
   // ---- Security, auth and access control (removing one is the Captain's call)
   'tests/middleware.test.ts':
@@ -417,4 +422,19 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
     'Client content: an empty proposing state renders nothing, never a placeholder sentence.',
   'tests/advanced-settings-surface.test.ts':
     'Honesty: no success state for a write that did not happen; one reconstruction across src.',
+}
+
+/**
+ * Files the detector counts but that run the code they cover: its known false
+ * positives, each with why. Like the guards above, each is capped at its count
+ * in scripts/sprawl/text-pin-baseline.json; fix the detector to drop an entry.
+ */
+export const TEXT_PIN_FALSE_POSITIVES: Readonly<Record<string, string>> = {
+  'tests/customer-yaml-firm-identity.test.ts':
+    'Asserts on validate() output for a firm-identity block built from the yaml text.',
+  'operator/bin/tests/test_spec_fixed_strings.py':
+    'Runs the fixed-strings extractor on the committed seed corpus and checks its output.',
+  'operator/bin/tests/test_spec_leak_check.py': 'Runs the leak checker on the seed corpus.',
+  'operator/bin/tests/test_seat_readiness.py': 'Checks a set parsed from TOML.',
+  'tests/ops-handoff.test.ts': "Extracts ops-start's naming lines and runs them.",
 }

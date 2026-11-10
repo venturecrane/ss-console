@@ -34,7 +34,18 @@ const read = (p: string) => readFileSync(p, 'utf8')
 const flat = (s: string) => s.replace(/\s+/g, ' ')
 
 const HOLDS_PY = read(resolve(import.meta.dirname, '../operator/runners/jobs/jobs/proof/holds.py'))
-const CLASSES = [...HOLDS_PY.matchAll(/^[A-Z_]+ = "([a-z_]+)" {2}#/gm)].map((m) => m[1])
+// The closed set is holds.CLASSES = frozenset({NAME, ...}); each NAME is a
+// module-level `NAME = "token"`. Read both, comment or not, so a class cannot
+// leave the "every class worded or silenced" check by losing its comment.
+const TOKEN_OF = new Map(
+  [...HOLDS_PY.matchAll(/^([A-Z][A-Z0-9_]*) = "([a-z_]+)"/gm)].map((m) => [m[1], m[2]])
+)
+const CLASS_NAMES = [
+  ...(/^CLASSES = frozenset\(\s*\{([^}]*)\}/m.exec(HOLDS_PY)?.[1] ?? '').matchAll(
+    /[A-Z][A-Z0-9_]*/g
+  ),
+].map((m) => m[0])
+const CLASSES = CLASS_NAMES.map((n) => TOKEN_OF.get(n) ?? `<unresolved ${n}>`)
 
 const SKILLS = {
   litigation: {
@@ -98,8 +109,18 @@ function wording(section: string, cls: string): string {
 }
 
 describe('hold classes: the closed set', () => {
-  it('reads the tokens from holds.py (the check is not vacuous)', () => {
-    expect(CLASSES.length).toBeGreaterThan(3)
+  it('reads every member of holds.CLASSES and resolves each to its token', () => {
+    // Not vacuous: the frozenset was found and is non-empty.
+    expect(CLASS_NAMES.length).toBeGreaterThan(0)
+    // Every member is a module-level string constant (a name that does not
+    // resolve shows as <unresolved NAME> and fails here).
+    expect(CLASSES.filter((c) => c.startsWith('<unresolved'))).toEqual([])
+    // And every module-level token that looks like a hold class is in the set:
+    // a new constant cannot be added beside CLASSES and skip the wording check.
+    const declared = [...TOKEN_OF.entries()]
+      .filter(([name]) => HOLDS_PY.indexOf(`${name} = `) < HOLDS_PY.indexOf('CLASSES = frozenset'))
+      .map(([, token]) => token)
+    expect(new Set(declared)).toEqual(new Set(CLASSES))
   })
 
   it('every token is worded by litigation or silenced by the chronology delivered-only rule', () => {
