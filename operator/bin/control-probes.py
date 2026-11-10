@@ -343,7 +343,48 @@ def _calls_symbol(path: Path, symbol: str) -> bool:
     return False
 
 
+def _enrollment_store(ctx: ProbeContext, root: Path):
+    """The broker's enrollment store in a throwaway dir; when the context is
+    neutered, one whose redeem enrolls whatever it is handed (the falsifier)."""
+    if str(OPERATOR) not in sys.path:
+        sys.path.insert(0, str(OPERATOR))
+    from workspace_broker import sender_enrollment as se
+
+    store = se.EnrollmentStore(root)
+    if not ctx.neutered:
+        return se, store
+
+    class _Open(se.EnrollmentStore):
+        def redeem(self, *, sender, code, authenticated, now=None):
+            with self._locked():
+                entries = self.enrolled()
+                entries.append({"address": sender, "label": "x", "code_id": "c_x", "enrolled_at": "x"})
+                self._write_enrolled(entries)
+            return se.Attempt(se.ENROLLED, "x", "c_x")
+
+    return se, _Open(root)
+
+
+def probe_sender_enrollment_wrong_code(spec: dict, ctx: ProbeContext) -> tuple[bool, str]:
+    """A wrong code, and a valid code from an unauthenticated sender: fired =
+    both refused, nobody enrolled, no use consumed."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="control-probe-enroll-") as tmp:
+        se, store = _enrollment_store(ctx, Path(tmp))
+        code, _ = store.issue(label="probe", days=1)
+        wrong = "SMD-AAAA-BBBB-CCCC" if code != "SMD-AAAA-BBBB-CCCC" else "SMD-CCCC-BBBB-AAAA"
+        first = store.redeem(sender="probe@outside.example", code=wrong, authenticated=True)
+        second = store.redeem(sender="other@outside.example", code=code, authenticated=False)
+        enrolled = sorted(store.enrolled_addresses())
+        uses = [row.uses for row in store.codes()]
+    detail = f"wrong code -> {first.outcome}; unauthenticated valid code -> {second.outcome}; enrolled={enrolled}; uses={uses}"
+    fired = first.outcome == se.WRONG_CODE and second.outcome == se.UNAUTHENTICATED and not enrolled and uses == [0]
+    return fired, detail
+
+
 LOCAL_PROBES: dict[str, Callable[[dict, ProbeContext], tuple[bool, str]]] = {
+    "sender_enrollment_wrong_code": probe_sender_enrollment_wrong_code,
     "sticky_stop_cost_ladder": probe_sticky_stop_cost_ladder,
     "sticky_stop_pause_pin": probe_sticky_stop_pause_pin,
     "sticky_stop_arm_unwired": probe_sticky_stop_arm_unwired,

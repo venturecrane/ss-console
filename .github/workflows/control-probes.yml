@@ -43,6 +43,7 @@ on:
       - 'operator/contracts/runtime-control-probes.yaml'
       - 'operator/contracts/runtime-controls.yaml'
       - 'operator/safety_substrate/sticky_stop.py'
+      - 'operator/workspace_broker/sender_enrollment.py'
       - '.github/workflows/control-probes.yml'
 
 permissions:

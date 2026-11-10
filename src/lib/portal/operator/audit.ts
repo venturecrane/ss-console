@@ -208,6 +208,10 @@ export const AUDIT_ACTION_TYPES = [
   'LIBRARY_SETUP_ACCEPTED',
   'LIBRARY_SETUP_HELD',
   'LIBRARY_SETUP_FAILED',
+  // Invite-code enrollment on a guide seat (ADR 0106). Written by the
+  // workspace broker (enrollment_verbs.py); never the code.
+  'SENDER_ENROLLMENT_ATTEMPT',
+  'SENDER_ENROLLMENT_CODE_ISSUED',
   'LITIGATION_JOB_SUBMITTED',
   'LITIGATION_JOB_RUNNING',
   'LITIGATION_JOB_HELD',

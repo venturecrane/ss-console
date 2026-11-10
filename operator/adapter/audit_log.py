@@ -357,6 +357,10 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "LIBRARY_SETUP_ACCEPTED",
         "LIBRARY_SETUP_HELD",
         "LIBRARY_SETUP_FAILED",
+        # Invite-code enrollment on a guide seat (ADR 0106), broker-written
+        # (operator/workspace_broker/enrollment_verbs.py). Never the code.
+        "SENDER_ENROLLMENT_ATTEMPT",
+        "SENDER_ENROLLMENT_CODE_ISSUED",
         # The litigation status job (the firm's open-matter status workbook),
         # the drafting job's shape (operator/workspace_broker/litigation_verbs.py).
         "LITIGATION_JOB_SUBMITTED",

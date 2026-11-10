@@ -1,0 +1,7 @@
+name: hermes-smd-enrollment
+version: "0.1.0"
+description: "Guide role invite codes (ADR 0106): an administrator of a guide seat asks for a code for a named person and the workspace broker mints it and emails it to that administrator in the same thread. invite_code_issue is the one tool; its result names the code's id, never the code. Registered only on a guide seat that authors sender_enrollment.enabled: true. The redeem side is the webhook router's, before any model turn."
+author: VentureCrane
+# Empty on purpose: the gate is register(), which asks whether the seat
+# switches enrollment on. A failing requires_env would drop the tool silently.
+requires_env: []

@@ -263,6 +263,7 @@ def validate_customer_yaml(customer_yaml: Path) -> list[str]:
     _validate_retired_fields(cfg, errors)
     _validate_custody_guard(cfg, errors)
     _validate_logic_in_code(cfg, errors)
+    _validate_sender_enrollment(cfg, errors)
 
     return errors
 
@@ -1477,6 +1478,34 @@ def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
             )
         elif raw is not None and raw not in LOGIC_IN_CODE_MODES:
             _err(f"logic_in_code.{key}: must be one of {list(LOGIC_IN_CODE_MODES)}", errors)
+
+
+def _validate_sender_enrollment(cfg: dict[str, Any], errors: list[str]) -> None:
+    """``sender_enrollment`` (ADR 0106): optional, ``{enabled: <bool>}`` only,
+    and only on a seat with ``seat.role: guide``. On any other seat who is
+    listed is the client's own decision, made in ``scope.inbound_allow_from``.
+    Mirrors ss-console ``checkSenderEnrollment``."""
+    block = cfg.get("sender_enrollment")
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        _err(f"sender_enrollment: must be a mapping; got {type(block).__name__}", errors)
+        return
+    for key in block:
+        if key != "enabled":
+            _err(
+                f"sender_enrollment.{key}: unknown key; sender_enrollment takes only enabled",
+                errors,
+            )
+    if not isinstance(block.get("enabled"), bool):
+        _err("sender_enrollment.enabled: must be true or false", errors)
+    seat = cfg.get("seat")
+    if not isinstance(seat, dict) or seat.get("role") != "guide":
+        _err(
+            "sender_enrollment: accepted only on a seat with seat.role: guide; on any other "
+            "seat who is listed is the client's own decision, made in scope.inbound_allow_from",
+            errors,
+        )
 
 
 def _validate_sealed_reader(key: str, conn: dict[str, Any], errors: list[str]) -> None:

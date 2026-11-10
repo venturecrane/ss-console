@@ -726,6 +726,16 @@
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/library_setup_verbs.py",
       "reason": "Broker-written when a switched-on seat's setup job ended without a verdict. The reason code."
+    },
+    "SENDER_ENROLLMENT_ATTEMPT": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/enrollment_verbs.py",
+      "reason": "Broker-written (operator/workspace_broker/enrollment_verbs.py, ADR 0106) for every invite-code redeem on a guide seat: the outcome, the sender's hashed key, the message id, and on a matched code its id and label. Never the code."
+    },
+    "SENDER_ENROLLMENT_CODE_ISSUED": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/enrollment_verbs.py",
+      "reason": "Broker-written (operator/workspace_broker/enrollment_verbs.py, ADR 0106) when an administrator of a guide seat is sent an invite code: the administrator's hashed key, the code id, its terms and whether the message went. Never the code."
     }
   }
 }

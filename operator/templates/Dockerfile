@@ -792,6 +792,9 @@ COPY operator/templates/entrypoint-negotiation.sh /app/entrypoint-negotiation.sh
 # A marketing seat's advertising-gate registers (ADR 0098) from
 # vaults/<slug>/marketing/, root:hermes 0640 under /var/lib/smd-config/marketing/.
 COPY operator/templates/entrypoint-marketing.sh /app/entrypoint-marketing.sh
+# The invite-code enrollment store (ADR 0106): broker-owned on the volume,
+# bind-mounted for the broker, read-only to the agent uid.
+COPY operator/templates/entrypoint-sender-enrollment.sh /app/entrypoint-sender-enrollment.sh
 # The lane-proof gate's seed and modes (lane-proofs.yaml from the vault, the
 # holds and proof-run trees), after the lanes' own trees.
 COPY operator/templates/entrypoint-lane-proofs.sh /app/entrypoint-lane-proofs.sh

@@ -49,12 +49,14 @@ from shared import (
     read_volume,
     request_index,
     rewake_outcome,
+    send_anchor,
     sender_auth,
+    sender_enrollment,
 )
 from shared.audit_client import audit_client_from_env
 from shared.audit_contract import INSERT_SQL as _INSERT_SQL
 from shared.audit_contract import agent_event_params, sender_key
-from shared.customer_config import CustomerConfig
+from shared.customer_config import OPS_REPLY_DOMAINS, CustomerConfig
 from shared.secrets import get_secret, require
 from shared.webhook_read_surface import (
     WEBHOOK_READ_TOOLSET,
@@ -652,6 +654,101 @@ def _consumed_by_calendar(payload: Any) -> bool:
         return False
 
 
+def _enrollment_attempt(source: str, payload: Any) -> dict | None:
+    """An invite-code enrollment (ADR 0106), handled here and never by a model.
+
+    Returns ``{"action": "skip"}`` when this delivery is an enrollment attempt:
+    an AgentMail email, on a guide seat that switches enrollment on, from a
+    sender who is neither listed (the authored roster or an earlier
+    enrollment) nor an admin, carrying a code-shaped token in its subject or
+    body. Every such delivery is dropped before dispatch, valid or not, so the
+    code (a valid one an unauthenticated sender sent, too) never reaches the
+    model, the transcript, the request cards or the inbound audit row; the
+    broker writes the attempt's own row. Returns ``None`` for everything else,
+    which then flows exactly as it did before this existed.
+
+    A fault before the decision (an unreadable config, an unparseable payload)
+    returns ``None``: the message is then handled as any unknown sender's is.
+    """
+    if source != inbound_message.PROVIDER_AGENTMAIL:
+        return None
+    try:
+        cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        if not sender_enrollment.enabled_in(cfg.raw):
+            return None
+        dto = inbound_message.normalize_inbound(source, payload)
+        if dto is None or not dto.from_addr or not dto.message_id:
+            return None
+        if cfg.sender_on_roster(dto.from_addr) or cfg.sender_is_admin(dto.from_addr):
+            return None
+        code = sender_enrollment.find_code(dto.subject, dto.reply_text, dto.body_text)
+        if code is None:
+            return None
+    except Exception:  # noqa: BLE001 - undecidable is not an enrollment
+        logger.debug("hermes-smd-webhook-router: enrollment check skipped", exc_info=True)
+        return None
+    _redeem_enrollment(cfg, dto, code)
+    return {"action": "skip"}
+
+
+def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
+    """Ask the broker to redeem; on an enrollment send the fixed welcome and
+    tell SMD. Logs name the outcome only, never the code. Never raises."""
+    try:
+        authenticated, reason = sender_auth.sender_authenticated(dto)
+    except Exception:  # noqa: BLE001 - could not tell is not authenticated
+        authenticated, reason = False, sender_auth.READ_FAILED
+    try:
+        result = sender_enrollment.redeem(
+            message_id=dto.message_id,
+            sender=dto.from_addr,
+            code=code,
+            authenticated=authenticated,
+            auth_reason=reason,
+        )
+    except Exception as exc:  # noqa: BLE001 - nothing enrolled; the message is dropped
+        logger.warning(
+            "hermes-smd-webhook-router: invite-code redeem failed (%s); nothing enrolled",
+            type(exc).__name__,
+        )
+        return
+    outcome = result.get("outcome") if isinstance(result, dict) else None
+    logger.info(
+        "hermes-smd-webhook-router: invite-code attempt from %s: %s", dto.from_addr, outcome
+    )
+    if not (isinstance(result, dict) and result.get("enrolled") is True):
+        return
+    name = result.get("name") if isinstance(result.get("name"), str) else None
+    try:
+        agentmail_broker.send_reply(
+            dto.message_id,
+            text=sender_enrollment.welcome_text(name),
+            anchor=send_anchor.message_anchor(dto.message_id, "agentmail"),
+        )
+    except Exception as exc:  # noqa: BLE001 - the enrollment stands; SMD is told below
+        logger.warning("hermes-smd-webhook-router: welcome not sent (%s)", type(exc).__name__)
+    smd = [a for a in cfg.admins if a.rsplit("@", 1)[-1] in OPS_REPLY_DOMAINS]
+    if not smd:
+        return
+    try:
+        agentmail_broker.send_message(
+            {
+                "to": smd,
+                "subject": sender_enrollment.NOTICE_SUBJECT,
+                "text": sender_enrollment.notice_text(
+                    address=dto.from_addr,
+                    slug=cfg.slug,
+                    code_id=str(result.get("code_id") or ""),
+                    name=name,
+                ),
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 - the audit row and heartbeat still say it
+        logger.warning(
+            "hermes-smd-webhook-router: enrollment notice to SMD not sent (%s)", type(exc).__name__
+        )
+
+
 def on_pre_gateway_dispatch(**kwargs: Any) -> dict | None:
     """The hook: :func:`_dispatch`, plus the outcome of an SMD re-wake.
 
@@ -815,6 +912,12 @@ def _dispatch(**kwargs: Any) -> dict | None:
         if _rewake_id is not None:
             rewake_outcome.record(_rewake_id, rewake_outcome.STATE_REFUSED, reason=failure)
         return {"action": "skip"}
+
+    # ADR 0106: an invite code from an unlisted sender on a guide seat that
+    # switches enrollment on is decided here, in code, and never dispatched.
+    enrollment = _enrollment_attempt(source, payload)
+    if enrollment is not None:
+        return enrollment
 
     # ADR 0027 — attach an inbound provenance envelope to the dispatched
     # content and record it for the pre_llm_call quarantine chokepoint. The

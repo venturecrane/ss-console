@@ -393,6 +393,14 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # or the broker's ``space`` lane (exactly ``people[].email``) by email. The
     # tool refuses a tainted turn itself before the gate ever sees it.
     "partner_message_send": ActionClass.INTERNAL_WRITE,
+    # An administrator's invite code for a named person (plugins/
+    # hermes-smd-enrollment, ADR 0106). INTERNAL_WRITE, not a send class, for
+    # the reason partner_message_send is: the model names no recipient. The
+    # write is a code row in the seat's own enrollment store; the one message
+    # it causes goes to the administrator who asked, in their own thread,
+    # composed by the broker with fixed wording. The tool refuses a non-admin,
+    # a chat turn and a tainted turn itself before the gate sees it.
+    "invite_code_issue": ActionClass.INTERNAL_WRITE,
     # A rostered sender's voice memo as text (plugins/hermes-smd-voice-notes,
     # 2026-09-29, ss-console#2793). READ: it spools the seat's own mail
     # attachment to the scratch spool and runs the seat's speech-to-text on

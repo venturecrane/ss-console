@@ -86,6 +86,12 @@ export interface FleetStatusRow {
    * on the type for the same reason as selftest_json.
    */
   spec_json?: string | null
+  /**
+   * Migration 0151: a guide seat's invite-code enrollment counts. Read by
+   * ./enrollment-guessing. Optional on the type for the same reason as
+   * selftest_json.
+   */
+  sender_enrollment_json?: string | null
 }
 
 export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]> {
@@ -103,7 +109,8 @@ export async function listFleetStatus(db: D1Database): Promise<FleetStatusRow[]>
               tool_failures_json,
               shortfalls, shortfalls_last_ts, shortfalls_json, audit_write_failures,
               audit_write_failures_rose_at,
-              image_ref, config_digest, skills_version, selftest_json, spec_json
+              image_ref, config_digest, skills_version, selftest_json, spec_json,
+              sender_enrollment_json
          FROM fleet_status`
     )
     .all<FleetStatusRow>()

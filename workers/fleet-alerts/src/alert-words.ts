@@ -60,6 +60,12 @@ const WORDS: Record<string, AlertWords> = {
     happened: 'The website and portal are not answering from outside.',
     todo: AGENT_NOW,
   },
+  enrollment_guessing: {
+    subject: 'someone may be guessing invite codes',
+    happened:
+      'The product guide is receiving many wrong invite codes, or has locked itself and is refusing every code, real ones included.',
+    todo: 'Give this email to an agent today to see who is sending them and revoke any code that leaked.',
+  },
 }
 
 export function alertWords(condition: string): AlertWords {

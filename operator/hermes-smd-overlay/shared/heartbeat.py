@@ -44,6 +44,7 @@ import re
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -1733,6 +1734,105 @@ def read_audit_timestamps(db_path: str | None) -> tuple[str | None, str | None]:
     return (facts.last_audit_ts, facts.last_skill_ts)
 
 
+#: The broker's attempt row (ss-console workspace_broker/enrollment_verbs.py
+#: AUDIT_TYPE) and its failure outcomes (workspace_broker/sender_enrollment.py
+#: FAILURES). Two repos' worth of strings in one tree; the pin lives in
+#: tests/test_heartbeat.py, which reads the broker's own module.
+SENDER_ENROLLMENT_ACTION = "SENDER_ENROLLMENT_ATTEMPT"
+SENDER_ENROLLMENT_FAILURES = frozenset(
+    {
+        "unauthenticated",
+        "wrong_code",
+        "expired",
+        "used_up",
+        "revoked",
+        "code_not_in_message",
+        "sender_mismatch",
+    }
+)
+#: The broker's seat-wide lockout (sender_enrollment.py SEAT_MAX_FAILURES in
+#: SEAT_WINDOW): at this many failures in the trailing hour it refuses every
+#: attempt, so the beat reports the seat as locked.
+SENDER_ENROLLMENT_SEAT_MAX_FAILURES = 20
+SENDER_ENROLLMENT_SEAT_WINDOW = timedelta(hours=1)
+SENDER_ENROLLMENT_WINDOW = timedelta(hours=24)
+
+
+def count_sender_enrollment(conn: sqlite3.Connection, now: datetime, enrolled: int) -> dict:
+    """``{"enrolled", "failed_24h", "locked"}`` from the audit ledger.
+
+    ``failed_24h`` counts ``SENDER_ENROLLMENT_ATTEMPT`` rows in the trailing day
+    whose ``outcome`` is a failure; ``locked`` is true when the trailing hour
+    holds the broker's seat-wide limit of them. A ``sender_locked`` or
+    ``seat_locked`` refusal is not itself a failure (the broker does not count
+    it toward a lockout either). Metadata is parsed here rather than with
+    ``json_extract`` so a ledger without JSON1 still answers. Raises on a ledger
+    this cannot read; the caller omits the field (hold), never zero.
+    """
+    cutoff = _iso_floor(_as_utc(now).isoformat())
+    day = _iso_floor((_as_utc(now) - SENDER_ENROLLMENT_WINDOW).isoformat())
+    hour = _iso_floor((_as_utc(now) - SENDER_ENROLLMENT_SEAT_WINDOW).isoformat())
+    rows = conn.execute(
+        "SELECT ts, metadata FROM audit_log WHERE action_type = ? AND ts >= ?",
+        (SENDER_ENROLLMENT_ACTION, day),
+    ).fetchall()
+    failed_day = failed_hour = 0
+    for ts, metadata in rows:
+        moment = _iso_floor(ts if isinstance(ts, str) else None)
+        if not (day <= moment <= cutoff):
+            continue
+        try:
+            meta = json.loads(metadata) if isinstance(metadata, str) else None
+        except ValueError:
+            meta = None
+        if not isinstance(meta, dict) or meta.get("outcome") not in SENDER_ENROLLMENT_FAILURES:
+            continue
+        failed_day += 1
+        if moment >= hour:
+            failed_hour += 1
+    return {
+        "enrolled": enrolled,
+        "failed_24h": failed_day,
+        "locked": failed_hour >= SENDER_ENROLLMENT_SEAT_MAX_FAILURES,
+    }
+
+
+def read_sender_enrollment(
+    db_path: str | None,
+    *,
+    config: dict | None,
+    enrolled_count: Callable[[], int] | None = None,
+    now: datetime | None = None,
+) -> dict | None:
+    """The ``sender_enrollment`` heartbeat field, or None (absent).
+
+    None on every seat whose ``config`` does not switch invite-code enrollment
+    on (``shared.sender_enrollment.enabled_in``), so the field exists only where
+    a guessing run can happen. None too when the ledger cannot be read: a seat
+    that cannot look holds the console, and is never reported as zero failures.
+    """
+    from shared import sender_enrollment
+
+    if not sender_enrollment.enabled_in(config):
+        return None
+    if not db_path or not os.path.exists(db_path):
+        return None
+    count_fn = enrolled_count or (lambda: len(sender_enrollment.enrolled_addresses()))
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error as exc:
+        logger.debug("heartbeat: sender-enrollment ledger read unavailable: %s", exc)
+        return None
+    try:
+        conn.execute("PRAGMA busy_timeout=2000")
+        return count_sender_enrollment(conn, now or datetime.now(timezone.utc), count_fn())
+    except sqlite3.Error as exc:
+        logger.debug("heartbeat: sender-enrollment ledger read unavailable: %s", exc)
+        return None
+    finally:
+        conn.close()
+
+
 def _scalar(conn: sqlite3.Connection, sql: str) -> str | None:
     row = conn.execute(sql).fetchone()
     return row[0] if row and row[0] is not None else None
@@ -1782,6 +1882,7 @@ def build_payload(
     wakes_pending: int | None = None,
     bundles: dict[str, str] | None = None,
     firm_inputs: dict[str, dict[str, str | None]] | None = None,
+    sender_enrollment: dict | None = None,
     selftest: dict | None = None,
     spec: dict | None = None,
 ) -> dict[str, object]:
@@ -1958,6 +2059,13 @@ def build_payload(
     # the validator refused (firm_inputs_applier). Absent on a seat with none.
     if firm_inputs:
         payload["firm_inputs"] = firm_inputs
+    # Invite-code enrollment on a guide seat (ADR 0106): how many people are
+    # enrolled and how many attempts failed, so the pager sees a guessing run.
+    # is-not-None: {"failed_24h": 0} is the value that resolves the alert. None
+    # on every seat that does not switch enrollment on, and on a seat that
+    # cannot read its ledger, so the console holds.
+    if sender_enrollment is not None:
+        payload["sender_enrollment"] = sender_enrollment
     # The in-image self-test's verdict (shared/selftest_check.py). None is
     # "nothing to say yet" (the boot run has not finished) and stays absent so
     # the console holds; a dead loop or an unreadable file is not None, it ships
@@ -2447,6 +2555,7 @@ class HeartbeatEmitter:
             wakes_pending=fleet.wakes_pending if fleet is not None else None,
             bundles=fleet.bundles if fleet is not None else None,
             firm_inputs=fleet.firm_inputs if fleet is not None else None,
+            sender_enrollment=_read_sender_enrollment(self._audit_db_path_fn()),
             selftest=self._read_selftest(),
             spec=self._read_spec(),
         )
@@ -2480,6 +2589,23 @@ def _read_fleet_facts():
         return read_fleet_facts()
     except Exception as exc:  # noqa: BLE001 — heartbeat stays fail-soft
         logger.debug("heartbeat: fleet facts read failed: %s", exc)
+        return None
+
+
+def _read_sender_enrollment(db_path: str | None) -> dict | None:
+    """The ``sender_enrollment`` field for this seat, or None. An unreadable
+    customer.yaml reads as enrollment off (the field stays absent)."""
+    try:
+        from shared.customer_config import CustomerConfig
+
+        config = CustomerConfig.from_volume().raw
+    except Exception as exc:  # noqa: BLE001 — heartbeat stays fail-soft
+        logger.debug("heartbeat: customer config unreadable for sender enrollment: %s", exc)
+        return None
+    try:
+        return read_sender_enrollment(db_path, config=config)
+    except Exception as exc:  # noqa: BLE001 — heartbeat stays fail-soft
+        logger.debug("heartbeat: sender-enrollment read failed: %s", exc)
         return None
 
 
@@ -2608,10 +2734,12 @@ __all__ = [
     "ShortfallFacts",
     "build_payload",
     "count_send_refusals",
+    "count_sender_enrollment",
     "count_shortfalls",
     "count_tool_failures",
     "emitter_from_env",
     "read_audit_facts",
     "read_audit_timestamps",
+    "read_sender_enrollment",
     "read_uptime_seconds",
 ]

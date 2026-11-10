@@ -14,6 +14,7 @@
  */
 
 import { parseFirmInputs } from './heartbeat-firm-inputs'
+import { parseSenderEnrollment } from './heartbeat-sender-enrollment'
 
 export interface HeartbeatBody {
   heartbeat_ts: string
@@ -60,6 +61,7 @@ export interface HeartbeatBody {
   spec?: unknown
   bundles?: unknown
   firm_inputs?: unknown
+  sender_enrollment?: unknown
 }
 
 // The breaker ladder vocabulary (overlay shared/cost_breaker.read_stop_state).
@@ -726,6 +728,8 @@ export interface ParsedFleetRelease {
   bundlesJson: string | null
   /** Migration 0149. `{lane: {etag8, verdict, applied_at}}` as JSON text, or NULL. Plain overwrite. */
   firmInputsJson: string | null
+  /** Migration 0151. `{enrolled, failed_24h, locked}` as JSON text, or NULL. Plain overwrite. */
+  senderEnrollmentJson: string | null
 }
 
 // The receiver's own bound on the three identity strings, for the same reason
@@ -759,6 +763,7 @@ export function parseFleetRelease(body: HeartbeatBody): ParsedFleetRelease {
     wakesPending: parseNonNegInt(body.wakes_pending),
     bundlesJson: parseBundles(body.bundles),
     firmInputsJson: parseFirmInputs(body.firm_inputs),
+    senderEnrollmentJson: parseSenderEnrollment(body.sender_enrollment),
   }
 }
 

@@ -60,9 +60,23 @@ describe('smd-guide seat config (ADR 0105)', () => {
   })
 
   it('authors one send class only: the reply to a rostered sender', () => {
+    // internal_write is needed twice (ADR 0106): the reply path's own
+    // create_draft is INTERNAL_WRITE (shared/action_classes.py, run through the
+    // trust gate by hermes-smd-reply/text_delivery.py), so without it every
+    // email reply on this seat was refused (a correction to ADR 0105's config);
+    // and the administrator's invite_code_issue tool. No other class is authored.
     for (const p of seat.personas) {
-      expect(p.entitlements.exposure).toEqual({ external_send_internal: 'autonomous' })
+      expect(p.entitlements.exposure).toEqual({
+        external_send_internal: 'autonomous',
+        internal_write: 'autonomous',
+      })
     }
+  })
+
+  it('switches invite-code enrollment on (ADR 0106)', () => {
+    expect((seat as unknown as { sender_enrollment?: unknown }).sender_enrollment).toEqual({
+      enabled: true,
+    })
   })
 
   it('answers only listed people, has no outside source, and keeps no memory', () => {

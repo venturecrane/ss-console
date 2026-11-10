@@ -36,6 +36,7 @@ const ALL_NULL = {
   wakesPending: null,
   bundlesJson: null,
   firmInputsJson: null,
+  senderEnrollmentJson: null,
 }
 
 describe('parseFleetRelease', () => {
@@ -58,6 +59,7 @@ describe('parseFleetRelease', () => {
       wakesPending: 1,
       bundlesJson: null,
       firmInputsJson: null,
+      senderEnrollmentJson: null,
     })
   })
 

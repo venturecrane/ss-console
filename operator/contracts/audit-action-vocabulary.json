@@ -158,6 +158,8 @@
     "LIBRARY_SETUP_CHOSEN": "Broker-written on library_setup_choose when the administrator's reply named exactly one listed document and every check passed. The job ids and the number; never the words.",
     "LIBRARY_SETUP_ACCEPTED": "Broker-written when the made library file was filed in the firm's Document Library and accepted by the root writer (installed or pending install). Ids and codes.",
     "LIBRARY_SETUP_HELD": "Broker-written when a switched-on seat's setup job stopped for SMD (an unreadable switch, a roster or listing that could not be read, a filing or acceptance that did not prove out). The hold code.",
-    "LIBRARY_SETUP_FAILED": "Broker-written when a switched-on seat's setup job ended without a verdict. The reason code."
+    "LIBRARY_SETUP_FAILED": "Broker-written when a switched-on seat's setup job ended without a verdict. The reason code.",
+    "SENDER_ENROLLMENT_ATTEMPT": "Broker-written (operator/workspace_broker/enrollment_verbs.py, ADR 0106) for every invite-code redeem on a guide seat: the outcome, the sender's hashed key, the message id, and on a matched code its id and label. Never the code.",
+    "SENDER_ENROLLMENT_CODE_ISSUED": "Broker-written (operator/workspace_broker/enrollment_verbs.py, ADR 0106) when an administrator of a guide seat is sent an invite code: the administrator's hashed key, the code id, its terms and whether the message went. Never the code."
   }
 }

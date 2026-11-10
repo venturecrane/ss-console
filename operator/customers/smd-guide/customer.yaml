@@ -71,6 +71,13 @@ personas:
         # unauthored class is refused: no send to anyone off the roster, no
         # write, no commitment, no code.
         external_send_internal: autonomous
+        # Internal writes (ADR 0106): the email reply path's own create_draft
+        # is INTERNAL_WRITE and runs through the trust gate, so without this
+        # every reply was refused; and the administrator's invite-code request
+        # (invite_code_issue). The tool itself refuses anyone not on scope.admins, a chat
+        # turn and a turn that read outside content; the code goes only to the
+        # administrator who asked, in their thread, written by the broker.
+        internal_write: autonomous
     skills:
       # Every email to the seat lands here (webhook_triggers below); a
       # practice request is handed to pitch-practice in the same turn.
@@ -156,6 +163,16 @@ safety:
   sticky_stop:
     cost_cap_daily_cents: 1000
     inbound_daily_cap: 100
+
+# ---- INVITE-CODE ENROLLMENT (ADR 0106) ----
+# A person holding an invite code emails this seat from an address not listed
+# above, with the code in the message; the seat checks it in code before any
+# model sees the message, lists the address, sends a fixed welcome and tells
+# SMD. Codes come from an administrator emailing "I need a code for <name>"
+# (or SMD's sender_enrollment_cli on the seat); only salted hashes are kept, on
+# the seat, never here. Accepted on guide seats only (both validators).
+sender_enrollment:
+  enabled: true
 
 # ---- TELEGRAM (chat) ----
 # Chat, mainly so pitch practice runs turn by turn. Per-seat bot (BotFather);
