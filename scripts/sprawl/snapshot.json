@@ -1,14 +1,14 @@
 {
-  "measuredAt": "2026-11-10T16:56:12.285Z",
-  "commit": "b5f4cbb2260299491017ae63947e2b48f9dfcf41",
+  "measuredAt": "2026-11-10T17:25:18.092Z",
+  "commit": "ab0a92c888777d121fa9deab4c6913e59c9d899c",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2313
+    "commits": 2317
   },
   "clones": {
-    "duplicatedPct": 4.26,
+    "duplicatedPct": 4.24,
     "copiedFiles": 64,
     "copiedLines": 32881,
     "partialClones": 241,
@@ -750,6 +750,25 @@
       ]
     },
     {
+      "literal": "MSGRAPH_CLIENT_SECRET",
+      "kind": "env",
+      "files": 16,
+      "testFiles": 9,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 6,
+      "sample": [
+        "operator/bin/killtest-msgraph-send.py",
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/bin/rehearse-card.py",
+        "operator/connectors/msgraph-mail/manifest.toml"
+      ]
+    },
+    {
       "literal": "AGENTMAIL_API_KEY",
       "kind": "env",
       "files": 15,
@@ -784,25 +803,6 @@
         "operator/runners/jobs/jobs/daemon.py",
         "operator/runners/jobs/jobs/litigation/manifest.py",
         "operator/runners/jobs/jobs/litigation/textcache.py"
-      ]
-    },
-    {
-      "literal": "MSGRAPH_CLIENT_SECRET",
-      "kind": "env",
-      "files": 15,
-      "testFiles": 8,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 6,
-      "sample": [
-        "operator/bin/killtest-msgraph-send.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/rehearse-card.py",
-        "operator/connectors/msgraph-mail/manifest.toml"
       ]
     },
     {
@@ -2169,7 +2169,7 @@
       "literal": "SMOKEBALL_STAGING_API_KEY",
       "kind": "env",
       "files": 6,
-      "testFiles": 0,
+      "testFiles": 2,
       "languages": [
         "config",
         "python",
@@ -2827,12 +2827,6 @@
     },
     {
       "a": "docs/adr/0096-release-controller-and-fleet-credentials.md",
-      "b": "docs/handbook/deployment-release.md",
-      "shared": 17,
-      "degree": 50
-    },
-    {
-      "a": "docs/adr/0096-release-controller-and-fleet-credentials.md",
       "b": "operator/bin/lib/fleet/tick.py",
       "shared": 14,
       "degree": 85
@@ -3307,9 +3301,9 @@
     }
   ],
   "dead": {
-    "candidates": 537,
+    "candidates": 539,
     "byKind": {
-      "variable": 128,
+      "variable": 130,
       "property": 4,
       "method": 110,
       "attribute": 112,
