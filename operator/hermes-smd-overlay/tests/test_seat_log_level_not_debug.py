@@ -52,7 +52,18 @@ def test_translate_never_authors_a_logging_level() -> None:
 def test_the_guide_seats_translated_profile_logs_at_info(tmp_path: Path) -> None:
     from bootstrap.translate import translate_customer_yaml
 
-    seat = next(p for p in CUSTOMERS if p.parent.name == "smd-guide")
+    authored = next(p for p in CUSTOMERS if p.parent.name == "smd-guide")
+    # The log level does not depend on the seat's schedules, and resolving a
+    # cron expression needs Hermes' scheduler extra, which this suite does not
+    # install; translate the same seat without its cron rows.
+    doc = yaml.safe_load(authored.read_text(encoding="utf-8"))
+    for persona in doc["personas"]:
+        persona.pop("cron", None)
+        for skill in persona["skills"]:
+            skill["initiation"]["scheduled"] = False
+    seat = tmp_path / "smd-guide" / "customer.yaml"
+    seat.parent.mkdir()
+    seat.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
     slugs = translate_customer_yaml(
         str(seat),
         str(tmp_path / "home"),

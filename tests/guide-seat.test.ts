@@ -43,7 +43,7 @@ describe('smd-guide seat config (ADR 0105)', () => {
       .map((s: Doc) => s.name)
       .sort()
     expect(enabled).toEqual(role.skills.map((s: Doc) => s.name).sort())
-    expect(enabled).toEqual(['pitch-practice', 'product-guide'])
+    expect(enabled).toEqual(['pitch-practice', 'product-guide', 'rep-training'])
   })
 
   it('routes every inbound email to product-guide, which hands practice to pitch-practice', () => {
@@ -76,13 +76,22 @@ describe('smd-guide seat config (ADR 0105)', () => {
   it('switches invite-code enrollment on (ADR 0106)', () => {
     expect((seat as unknown as { sender_enrollment?: unknown }).sender_enrollment).toEqual({
       enabled: true,
+      daily_limit: 60,
     })
   })
 
   it('answers only listed people, has no outside source, and keeps no memory', () => {
     expect(seat.scope.inbound_allow_from).toEqual(['scott@smd.services'])
     expect(Object.keys(seat.connectors)).toEqual(['Email'])
-    expect(seat.record_stores).toBeUndefined()
+    // Every store is walled per person (issue #3946): one representative's
+    // records are never another's source, and none is open to the model's
+    // write unless the procedure for it ships.
+    const stores = (seat.record_stores ?? []) as Doc[]
+    expect(stores.map((s) => s.name)).toEqual(['rep-progress'])
+    for (const s of stores) expect(s.partition).toBe('sender')
+    expect(stores[0].managed).toBe(true)
+    expect((seat.memory as Doc).peer_memory_enabled).toBe(false)
+    expect((seat.escalation as Doc).request_card_text).toBe(false)
     expect(seat.memory.memory_enabled).toBe(false)
     expect(seat.memory.user_profile_enabled).toBe(false)
   })

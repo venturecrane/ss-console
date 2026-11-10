@@ -63,6 +63,10 @@ def author_training(doc: dict[str, Any]) -> None:
     persona and its weekly report job. The progress store (``rep-progress``,
     walled per person, managed) is already in the rehearsal's ``STORES``."""
     persona = doc["personas"][0]
+    # The real guide seat authors both since its switch-on; the rehearsal pins
+    # its own copies so it does not depend on the seat's schedule.
+    persona["skills"] = [s for s in persona["skills"] if s["name"] != "rep-training"]
+    persona["cron"] = [c for c in persona.get("cron", []) if c["skill"] != "rep-training"]
     persona["skills"].append(
         {
             "name": "rep-training",
@@ -71,7 +75,7 @@ def author_training(doc: dict[str, Any]) -> None:
             "enabled": True,
         }
     )
-    persona.setdefault("cron", []).append(
+    persona["cron"].append(
         {
             "skill": "rep-training",
             "schedule": REPORT_SCHEDULE,

@@ -63,21 +63,22 @@ def test_an_authored_seat_registers_what_it_registered_before(seat: Path) -> Non
 
 
 def test_the_collector_sees_a_change(tmp_path: Path) -> None:
-    """The falsifier: the guide seat with per-sender memory switched off does
-    not match its snapshot. If this passed with no difference, the snapshot
-    test above could not have failed either."""
+    """The falsifier: the guide seat authors per-sender memory off, so the
+    same seat with that key taken out does not match its snapshot. If this
+    passed with no difference, the snapshot test above could not have failed
+    either."""
     guide = next(p for p in authored_seats() if p.parent.name == "smd-guide")
     doc = yaml.safe_load(guide.read_text(encoding="utf-8"))
-    doc["memory"]["peer_memory_enabled"] = False
+    assert doc["memory"].pop("peer_memory_enabled") is False
     changed = tmp_path / "smd-guide" / "customer.yaml"
     changed.parent.mkdir()
     changed.write_text(yaml.safe_dump(doc), encoding="utf-8")
     actual = collect(changed, load_plugin)
     expected = _snapshot()["smd-guide"]
-    assert "record_peer_preference" in expected["tools"]
-    assert "record_peer_preference" not in actual["tools"]
-    assert ["pre_llm_call", "hermes-smd-peer-memory"] in expected["hooks"]
-    assert ["pre_llm_call", "hermes-smd-peer-memory"] not in actual["hooks"]
+    assert "record_peer_preference" not in expected["tools"]
+    assert "record_peer_preference" in actual["tools"]
+    assert ["pre_llm_call", "hermes-smd-peer-memory"] not in expected["hooks"]
+    assert ["pre_llm_call", "hermes-smd-peer-memory"] in actual["hooks"]
 
 
 def test_a_guide_seat_that_authors_training_gains_exactly_the_training_tools(
@@ -88,40 +89,35 @@ def test_a_guide_seat_that_authors_training_gains_exactly_the_training_tools(
     person, written only by code) registers the two training tools, plus the
     record-store trio its new store brings, and nothing else changes. No
     authored seat in the snapshot, the real guide seat included, registers them."""
+    # The guide seat authors training since the switch-on, so the falsifier
+    # runs the other way: the same seat with the skill and the store taken out
+    # registers everything else it does today and none of the five.
     guide = next(p for p in authored_seats() if p.parent.name == "smd-guide")
     doc = yaml.safe_load(guide.read_text(encoding="utf-8"))
-    doc["personas"][0]["skills"].append(
-        {
-            "name": "rep-training",
-            "version": "pending",
-            "initiation": {"manual": True, "scheduled": True, "webhook": True},
-            "enabled": True,
-        }
-    )
-    doc["record_stores"] = [
-        {
-            "name": "rep-progress",
-            "path": "/opt/data/rep/progress",
-            "partition": "sender",
-            "managed": True,
-        }
-    ]
+    persona = doc["personas"][0]
+    persona["skills"] = [s for s in persona["skills"] if s["name"] != "rep-training"]
+    persona["cron"] = [c for c in persona.get("cron", []) if c["skill"] != "rep-training"]
+    doc["record_stores"] = [s for s in doc.get("record_stores", []) if s["name"] != "rep-progress"]
     changed = tmp_path / "smd-guide" / "customer.yaml"
     changed.parent.mkdir()
     changed.write_text(yaml.safe_dump(doc), encoding="utf-8")
-    actual = collect(changed, load_plugin)
-    expected = _snapshot()["smd-guide"]
-    assert set(actual["tools"]) - set(expected["tools"]) == {
+    without = collect(changed, load_plugin)
+    authored = _snapshot()["smd-guide"]
+    gained = set(authored["tools"]) - set(without["tools"])
+    assert {"training_record", "tone_check"} <= gained
+    assert gained <= {
         "training_record",
         "tone_check",
         "record_store_list",
         "record_store_read",
         "record_store_write",
     }
-    assert set(expected["tools"]) <= set(actual["tools"])
-    assert actual["tools"]["training_record"] == {
+    assert set(without["tools"]) <= set(authored["tools"])
+    assert authored["tools"]["training_record"] == {
         "plugin": "hermes-smd-training",
         "toolset": "training",
     }
-    for seat in _snapshot().values():
+    for name, seat in _snapshot().items():
+        if name == "smd-guide":
+            continue
         assert "training_record" not in seat["tools"] and "tone_check" not in seat["tools"]
