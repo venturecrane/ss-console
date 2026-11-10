@@ -593,7 +593,7 @@ controller not enabled" and the build job is skipped, and neither enters the
 environment (a job's `if:` is checked first, so GitHub never auto-creates
 `fleet-release` without its branch policy). Set the variable only after the
 `fleet-release` environment exists with its main-only deployment branch policy
-and all seven Fly tokens. Then immediately dispatch `release-tick.yml` with
+and all eight Fly tokens. Then immediately dispatch `release-tick.yml` with
 `dry_run: true` and read the plan in its log before the first scheduled tick
 acts.
 
