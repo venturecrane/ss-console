@@ -295,13 +295,6 @@ def transmit(
     return stamped, kept
 
 
-def discard_spooled(spool: Path, payload: dict[str, Any]) -> None:
-    """The reply is decided: drop its handles from the broker's spool."""
-    for entry in payload.get("attachments") or []:
-        if isinstance(entry, dict):
-            attachment_intake.discard(spool, entry.get("handle"))
-
-
 __all__ = [
     "CONFIG_BLOCK",
     "FilesRefused",

@@ -71,7 +71,6 @@ def env(monkeypatch, tmp_path):
 _FUNCTIONAL = {
     "hermes-smd-audit",
     "hermes-smd-trust",
-    "hermes-smd-memory-mirror",
     "hermes-smd-webhook-router",
     "hermes-smd-workspace",
 }
@@ -97,7 +96,6 @@ def test_fanout_registers_all_functional_plugins_and_their_hooks(env):
     assert "post_llm_call" in ctx.hooks  # audit + voice
     assert "subagent_stop" in ctx.hooks  # audit
     assert "pre_llm_call" in ctx.hooks  # voice + inbound
-    assert "on_session_end" in ctx.hooks  # memory-mirror
     assert "pre_gateway_dispatch" in ctx.hooks  # webhook-router
     tool_names = {kwargs["name"] for _, kwargs in ctx.tools}
     assert "workspace_docs_create" in tool_names

@@ -1,7 +1,7 @@
 """Gateway-startup activation gate for the SMD overlay (ss-console#1285).
 
 THE BUG THIS CLOSES (World 1, confirmed at runtime). The overlay's agent-plugins
-(audit, trust, voice, memory-mirror, webhook-router) register their hooks into the
+(audit, trust, webhook-router, inbound) register their hooks into the
 PluginManager *singleton* that the agent fire sites dispatch from
 (``model_tools``/``run_agent`` -> ``invoke_hook`` -> ``get_plugin_manager()._hooks``).
 But Hermes discovers plugins idempotently: ``discover_and_load`` early-returns once
@@ -76,7 +76,7 @@ from typing import Any
 logger = logging.getLogger("hermes_smd.overlay.activation")
 
 # The hook types the overlay must have in the live singleton for the governance
-# layer to be complete (union across the five functional plugins). Mirrors the
+# layer to be complete (union across the four functional plugins). Mirrors the
 # pre-gateway invariant's _REQUIRED_HOOKS so the two gates assert the same surface.
 _REQUIRED_HOOKS = {
     "pre_tool_call",  # trust ceiling gate — the safety-critical one
@@ -84,7 +84,6 @@ _REQUIRED_HOOKS = {
     "post_llm_call",  # audit + voice
     "pre_llm_call",  # voice
     "subagent_stop",  # audit
-    "on_session_end",  # memory-mirror
     "pre_gateway_dispatch",  # webhook-router
 }
 

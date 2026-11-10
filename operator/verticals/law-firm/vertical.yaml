@@ -59,10 +59,6 @@ skills:
   - deadline-and-sol-tracker # tracks authored dates; never computes a limitation
   - deadline-miss-escalator # escalates an approaching/missed authored date; internal-only, cron
   - statute-watch # monthly email of open cases with a statute date in the next three months and nothing filed; internal-only, cron
-  # proactive
-  - client-matter-digest
-  - referral-source-acknowledgment
-  - intake-to-system-sync
 
 # Vertical-default connectors (capability + adapter + backend). MCP-first per
 # ADR 0020; the pilot's system of record (Clio) has an MCP, so the pilot needs

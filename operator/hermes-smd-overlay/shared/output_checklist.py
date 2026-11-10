@@ -327,12 +327,6 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
-def _line_text(text: str, pos: int) -> str:
-    start = text.rfind("\n", 0, pos) + 1
-    end = text.find("\n", pos)
-    return text[start : end if end != -1 else len(text)]
-
-
 def _first(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
     return pattern.search(text)
 

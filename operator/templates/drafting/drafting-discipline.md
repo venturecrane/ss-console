@@ -1,8 +1,8 @@
 # Drafting discipline (shared) — the work-product lane
 
-Shared discipline for the four PI drafting skills (`discovery-response-drafter`,
-`follow-up-discovery-drafter`, `demand-letter-drafter`, `mediation-brief-drafter`).
-Every drafting skill loads this file into its drafting context verbatim, and no
+Shared discipline for the PI work-product drafting skill (`demand-letter-drafter`;
+the three in-turn drafters it once served were removed 2026-11-10, their work
+now the queued `document-drafter` lane). Every drafting skill loads this file into its drafting context verbatim, and no
 draft surfaces to the attorney without passing the mechanical checker
 (`operator/templates/drafting/drafting_gate_check.py`).
 

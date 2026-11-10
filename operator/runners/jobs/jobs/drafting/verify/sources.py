@@ -115,9 +115,6 @@ class Sources:
         d = self.docs.get(name)
         return d.pages.get(p) if d else None
 
-    def has_page(self, name: str, p: int) -> bool:
-        return self.page(name, p) is not None
-
     def window(self, name: str, pages: Iterable[int], pad: int = 1) -> list[int]:
         """The cited pages and the pages either side, in range."""
         d = self.docs.get(name)
@@ -131,25 +128,6 @@ class Sources:
     def thin(self, name: str, p: int) -> bool:
         t = self.page(name, p)
         return t is None or len(t.strip()) < THIN_CHARS
-
-    def form_behind(self, name: str, p: int, statement: str) -> bool:
-        """A form or signature page behind a "verified" or "signed" claim."""
-        t = self.page(name, p) or ""
-        return bool(_SIGNED_CLAIM.search(statement) and _FORM.search(t))
-
-    def quote_pages(self, name: str, quote: str) -> list[int]:
-        """The pages of ``name`` that carry ``quote`` (normalized)."""
-        q = norm(quote)
-        d = self.docs.get(name)
-        if not q or d is None:
-            return []
-        return [p for p, t in d.normed.items() if q in t]
-
-    def quote_anywhere(self, quote: str) -> list[tuple[str, int]]:
-        q = norm(quote)
-        if not q:
-            return []
-        return [(d.name, p) for d in self.docs.values() for p, t in d.normed.items() if q in t]
 
     def search(self, terms: list[str], skip: set[tuple[str, int]], limit: int = SEARCH_PAGES) -> list[tuple[str, int]]:
         """Pages, not already read for the item, carrying the most of its

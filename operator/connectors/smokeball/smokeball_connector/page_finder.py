@@ -700,17 +700,6 @@ def _result(built: dict[str, Any], what: str, base: Path | None) -> dict[str, An
     return out
 
 
-def _compress(numbers: list[int]) -> str:
-    numbers = sorted(set(numbers))
-    spans: list[list[int]] = []
-    for n in numbers:
-        if spans and spans[-1][1] == n - 1:
-            spans[-1][1] = n
-        else:
-            spans.append([n, n])
-    return ", ".join(f"{a}-{b}" if a != b else str(a) for a, b in spans)
-
-
 __all__ = [
     "CALL_HOOK",
     "REFUSAL_TRIES",

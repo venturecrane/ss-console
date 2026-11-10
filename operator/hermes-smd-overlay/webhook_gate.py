@@ -1031,17 +1031,6 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _json_headers(self, status: int, obj: dict, extra: dict | None = None) -> None:
-        """``_json`` plus optional extra response headers (e.g. WWW-Authenticate)."""
-        data = json.dumps(obj).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        for name, value in (extra or {}).items():
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
     def _json_nostore(self, status: int, obj: dict) -> None:
         """Like ``_json`` but with ``Cache-Control: no-store`` — runtime reads
         return tenant audit data that must never be cached by any proxy."""

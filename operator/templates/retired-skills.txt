@@ -21,3 +21,14 @@ paid-media-anomaly-watcher
 proposal-drafter
 retainer-hours-reconciler
 scope-creep-flagger
+# Removed 2026-11-10 (Captain-approved, code audit of that day): skills no seat
+# enabled. The in-turn drafters, superseded by the queued document-drafter lane:
+discovery-response-drafter
+follow-up-discovery-drafter
+mediation-brief-drafter
+# Catalog-only skills, named by no seat, role or preset:
+client-matter-digest
+email-reply
+intake-to-system-sync
+referral-source-acknowledgment
+shape-establishment

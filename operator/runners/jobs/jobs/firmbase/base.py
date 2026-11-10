@@ -122,11 +122,6 @@ def _is_member(name: str) -> bool:
     return name.startswith("body.")
 
 
-def _pour_table(tbl: Any) -> bool:
-    """A table of per-column slots, poured in place: a caption."""
-    return len(set(markers.marked(tbl))) > 1
-
-
 def scan(root: Any) -> dict[str, Slot]:
     """Every slot the file's body marks."""
     body = root.find(f"{W}body")

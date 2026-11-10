@@ -98,12 +98,6 @@ and complete, under its exact original heading line, in the same order, and noth
 """
 
 
-def lint_repair_user(sections: str, brief: str) -> str:
-    """The one scoped repair: the sections that carry findings, and the
-    findings (``lint.repair_brief``)."""
-    return LINT_REPAIR + "\n## FINDINGS\n" + brief + "\n\n## SECTIONS TO REPAIR\n\n" + sections
-
-
 def signed_question(claim: str) -> str:
     return (
         f"This page is cited for: {json.dumps(claim)}. Look only at its signature and date lines. Is it "

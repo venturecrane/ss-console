@@ -12,7 +12,6 @@ A customer Machine is a single Fly.io Machine running one container that supervi
   - `hermes-smd-audit` — per-tool / per-LLM audit emission to per-customer SQLite.
   - `hermes-smd-trust` — trust-ceiling enforcement + Composio per-connection guard.
   - `hermes-smd-voice` — sample-driven voice transformation.
-  - `hermes-smd-memory-mirror` — mirrors Honcho conclusions to per-customer SQLite with provenance. Inert in Phase 1 (no Honcho to poll); active in Phase 2.
 - **customer-sync sidecar** (from the overlay's `bootstrap/` package) — polls R2 for non-structural `customer.yaml` changes at a 5-minute cadence.
 
 No public HTTP. All inbound traffic is SSH via `fly ssh console -a hermes-<slug>`.
@@ -81,7 +80,7 @@ The 10GB Fly volume mounts at `/opt/data` and hosts everything stateful. `custom
 | `/opt/data/honcho/pg/`       | Postgres data dir — **Phase 2** (Honcho's store; unused in Phase 1).                                                        |
 | `/opt/data/honcho/redis/`    | Redis AOF — **Phase 2** (Honcho's cache; unused in Phase 1).                                                                |
 | `/opt/data/audit.db`         | Per-customer audit log SQLite (`hermes-smd-audit` writes).                                                                  |
-| `/opt/data/observations.db`  | Honcho-mirror SQLite (`hermes-smd-memory-mirror` writes) — **Phase 2**. ADR 0016.                                           |
+| `/opt/data/observations.db`  | Honcho-mirror SQLite — **Phase 2** (its writer plugin was removed 2026-11-10 until Phase 2 is built). ADR 0016.             |
 | `/opt/data/profiles/<slug>/` | Hermes per-persona profiles + flat-file memory (`MEMORY.md`/`USER.md`), one per `customer.yaml.personas[]`. ADR 0011, 0019. |
 | `/opt/data/oauth/`           | Per-provider OAuth token files. ADR 0010.                                                                                   |
 | `/opt/data/voice/`           | Voice samples warm cache (R2-backed).                                                                                       |

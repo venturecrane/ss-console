@@ -3525,12 +3525,6 @@ def _load_config() -> Any | None:
         return None
 
 
-def _resolve_is_admin(sender_id: Any) -> bool:
-    """Resolve a turn's sender against the LIVE ``scope.admins`` list."""
-    cfg = _load_config()
-    return bool(cfg is not None and cfg.sender_is_admin(sender_id))
-
-
 def _admin_names(cfg: Any) -> str:
     """The authored admins, for a reply that says who can release a rule.
 

@@ -7,10 +7,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-memory-mirror"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-peer-memory"
    ],
    [
@@ -446,10 +442,6 @@
    [
     "on_session_end",
     "hermes-smd-hook-probe"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-memory-mirror"
    ],
    [
     "on_session_end",
@@ -891,10 +883,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-memory-mirror"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-peer-memory"
    ],
    [
@@ -1265,10 +1253,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-memory-mirror"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-peer-memory"
    ],
    [
@@ -1632,10 +1616,6 @@
    [
     "on_session_end",
     "hermes-smd-hook-probe"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-memory-mirror"
    ],
    [
     "on_session_end",
@@ -2049,10 +2029,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-memory-mirror"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-peer-memory"
    ],
    [
@@ -2416,10 +2392,6 @@
    [
     "on_session_end",
     "hermes-smd-hook-probe"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-memory-mirror"
    ],
    [
     "on_session_end",
@@ -2789,10 +2761,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-memory-mirror"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-reply"
    ],
    [
@@ -3156,10 +3124,6 @@
    [
     "on_session_end",
     "hermes-smd-hook-probe"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-memory-mirror"
    ],
    [
     "on_session_end",

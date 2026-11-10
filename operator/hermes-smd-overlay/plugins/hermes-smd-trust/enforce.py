@@ -738,16 +738,6 @@ def _resolve_current_turn_approval(args: dict | None) -> bool:
     return False
 
 
-def _resolve_skill_name(args: dict | None) -> str:
-    """Best-effort skill-name for the audit reason string only (never an
-    entitlement input)."""
-    if isinstance(args, dict):
-        name = args.get("_skill_name")
-        if isinstance(name, str) and name:
-            return name
-    return "(unknown)"
-
-
 # ---------------------------------------------------------------------------
 # Vertical-pack safety floors (ADR 0022 / ADR 0037 Tenet 3)
 #

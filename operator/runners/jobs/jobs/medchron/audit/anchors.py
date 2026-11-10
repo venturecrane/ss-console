@@ -3,7 +3,7 @@
 A claim is supported or not by specific things on a page: a date, a dose, a
 blood pressure, a drug name, a proper name. Those are what an auditor can
 look for, so they are what this module pulls out of a claim (find_anchors),
-counts on a page (score_pages), and uses to widen a citation window to the
+finds on a page (found_on), and uses to widen a citation window to the
 neighbouring page that carries the value the cited page does not
 (choose_window). Anchors are typed and normalised so 04/03/2021 in the claim
 matches "April 3, 2021" on the page: date, num (with a clinical unit, and
@@ -295,14 +295,6 @@ def page_features(text: str) -> dict[str, set[str]]:
 def found_on(anchors: list[str], text: str, feats: dict[str, set[str]] | None = None) -> list[str]:
     feats = feats or page_features(text)
     return [a for a in anchors if a.partition(":")[2] in feats.get(a.partition(":")[0], ())]
-
-
-def score_pages(anchors: list[str], page_texts: dict[int, str]) -> dict[int, tuple[int, list[str]]]:
-    out = {}
-    for p, t in page_texts.items():
-        hit = found_on(anchors, t or "")
-        out[p] = (len(hit), hit)
-    return out
 
 
 def choose_window(

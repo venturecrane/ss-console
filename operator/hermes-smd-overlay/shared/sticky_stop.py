@@ -448,17 +448,6 @@ def _parse_iso(s: str) -> datetime:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _Decision:
-    """Internal value object describing a transition computed but not yet
-    persisted. Lets test code assert against the decision separately from
-    the write."""
-
-    next_state: StickyStopState
-    transitioned: bool
-    condition: StickyStopCondition | None
-
-
 class StickyStopMachine:
     """The sticky-stop state machine.
 

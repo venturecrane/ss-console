@@ -79,10 +79,6 @@ def disk_check(data: Path, pending: int) -> tuple[bool, int, int]:
     return needed <= free, needed, free
 
 
-class FetchError(RuntimeError):
-    """Files a retry can fix are still not fetched."""
-
-
 def matter_dir(data: Path, matter_id: str) -> Path:
     d = data / "m" / matter_id
     d.mkdir(parents=True, exist_ok=True)

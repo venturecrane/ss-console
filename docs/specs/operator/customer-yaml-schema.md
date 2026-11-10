@@ -314,7 +314,7 @@ personas:
         description: 'Triage inbox + draft replies in one pass'
         skills:
           - inbox-triage
-          - email-reply
+          - status-report-assembler
         instruction: 'Optional shared context prepended to every bundled skill invocation'
 ```
 

@@ -59,7 +59,7 @@ The vertical-specific skill **bodies** are not in this list. They live in this r
 
 ## The shared spine
 
-A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `email-reply`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists eighteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-seven more.
+A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29, and email-reply on 2026-11-10: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists eighteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-seven more.
 
 ## The documented verticals
 

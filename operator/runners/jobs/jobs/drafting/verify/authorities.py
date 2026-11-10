@@ -52,10 +52,6 @@ def slug(citation: str) -> str:
     return s[:80].rstrip("-")
 
 
-def is_slug(s: str) -> bool:
-    return bool(_SLUG.match(s or ""))
-
-
 @dataclass(frozen=True)
 class Entry:
     slug: str

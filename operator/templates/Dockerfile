@@ -9,8 +9,8 @@
 # is deferred to Phase 2, when it is vendored as the real plastic-labs/honcho
 # v3.0.7 source (api + deriver, pgvector). The earlier in-container `honcho-ai`
 # server install was fictional (that package is the client SDK, not the server)
-# and is removed. Postgres + Redis remain installed below but are NOT started
-# at boot in Phase 1 — they exist only to serve Honcho and are reused in Phase 2.
+# and is removed. The Postgres + Redis packages installed for it were never
+# started on any seat and were removed 2026-11-10; Phase 2 installs its own.
 #
 # The container runs a multi-process startup under tini (PID 1, zombie
 # reaper). bootstrap.sh fetches customer.yaml, materializes profiles, runs the
@@ -126,7 +126,7 @@ FROM debian:13.4
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
 ENV HERMES_HOME=/opt/data
-ENV PATH="/opt/data/.local/bin:/usr/lib/postgresql/17/bin:${PATH}"
+ENV PATH="/opt/data/.local/bin:${PATH}"
 # Pin every uv invocation to the SYSTEM interpreter (Hermes v0.20.4 promotion,
 # ss-console#2444). The v2026.8.18 tree ships `.python-version: 3.11`; because
 # this Dockerfile copies the WHOLE tree before `uv sync` (upstream copies only
@@ -148,17 +148,16 @@ ENV UV_PYTHON=/usr/bin/python3
 
 # ---------- System packages ----------
 # tini: PID 1 zombie reaper (signals + orphaned MCP stdio subprocesses).
-# postgresql-17 + redis: installed for Phase 2 Honcho's data plane but NOT
-# started at boot in Phase 1 (Debian 13 trixie ships PostgreSQL 17 as default;
-# postgresql-16 is not in trixie's repos — keep 17 so the Phase-2 vendor lands
-# cleanly). awscli: bootstrap.sh fetches customer.yaml from R2 (S3-compat).
+# awscli: bootstrap.sh fetches customer.yaml from R2 (S3-compat).
+# (postgresql-17 + redis-server, installed for a Phase-2 Honcho data plane and
+# never started on any seat, were removed 2026-11-10.)
 # curl + ca-certificates: R2 fetch + general TLS.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential curl unzip python3 python3-pip python3-venv \
       ripgrep ffmpeg gcc python3-dev libffi-dev procps git openssh-client \
       docker-cli tini ca-certificates util-linux \
-      postgresql-17 postgresql-client-17 redis-server awscli \
+      awscli \
       poppler-utils fonts-dejavu-core antiword \
       libreoffice-writer-nogui fonts-liberation2 \
       libssl3t64 libsqlite3-0 libffi8 libbz2-1.0 liblzma5 libzstd1 zlib1g \
@@ -602,10 +601,9 @@ COPY operator/roles/ /app/roles/
 
 # Drafting discipline + the mechanical gate checker (ss-console #2083).
 #
-# The destination mirrors the repo path on purpose. Four work-product skills
-# (demand-letter-drafter, discovery-response-drafter, follow-up-discovery-drafter,
-# mediation-brief-drafter) load `operator/templates/drafting/drafting-discipline.md`
-# verbatim into every drafting run, and their SKILL.md bodies invoke
+# The destination mirrors the repo path on purpose. The work-product skill
+# (demand-letter-drafter) loads `operator/templates/drafting/drafting-discipline.md`
+# verbatim into every drafting run, and its SKILL.md body invokes
 # `python3 operator/templates/drafting/drafting_gate_check.py` by that literal
 # relative path. The final WORKDIR below is /app, so ONLY this destination makes
 # the cited path resolve. A tidier /app/drafting/ would put both files in the
@@ -920,13 +918,11 @@ RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-capabilities.py /app/image-c
 # first boot if the volume copy is absent. See §6 of the build plan and
 # the customer.yaml -> per-profile config translation ADR.
 
-# ---------- Volume data dirs for Postgres + Redis ----------
-# The volume mounts at /opt/data, but initdb (run on first boot in
-# bootstrap.sh) needs the parent dir to exist with hermes ownership. We
-# create them here so the directory tree is right before the volume mounts;
-# the volume mount will shadow them on first boot, then bootstrap.sh's
-# mkdir + initdb populate the mounted directories.
-RUN mkdir -p /opt/data/honcho/pg /opt/data/honcho/redis /opt/data/.local/bin
+# ---------- Volume data dirs ----------
+# The volume mounts at /opt/data and shadows these on first boot; created here
+# so the directory tree is right before the mount. (The Honcho Postgres/Redis
+# data dirs that stood here were removed with those packages, 2026-11-10.)
+RUN mkdir -p /opt/data/.local/bin
 
 # ---------- Permissions ----------
 # Everything Hermes / Honcho / bootstrap writes to must be owned by hermes

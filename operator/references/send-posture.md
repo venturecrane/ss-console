@@ -36,8 +36,7 @@ says so. Every outbound send resolves to one of two action classes by **recipien
 | On the human-authored roster (own staff)         | `external_send_internal` | **autonomous, recipient-locked**                                             | a coordinator that needs a click to answer staff isn't a coordinator             |
 | Anyone else (client / opposing / court / vendor) | `external_send`          | **draft_for_review**, graduating per recipient-class as the customer chooses | client- and tribunal-bound mail under a human while a new engagement earns trust |
 
-The recipient is classified in code (`operator/adapter/recipient_classifier.py`, the
-byte-identical twin of the overlay `shared/recipient_classifier.py`) with strict
+The recipient is classified in code (the overlay's `shared/recipient_classifier.py`) with strict
 matching. The roster is **human-authored OUTBOUND authorization** — never grown from
 inbound correspondents. An **unresolvable** recipient is routed OUTSIDE (draft),
 never internal; a send is never promoted to autonomous on an unknown recipient.

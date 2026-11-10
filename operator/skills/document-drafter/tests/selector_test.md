@@ -27,8 +27,8 @@ its near-neighbors?
 - "What should we ask for at mediation?" → no skill. Settlement authority and
   the target figure are the attorney's; surface it.
 - "Draft the responses to the served sets." on a seat where `document-drafter`
-  will not load → the attorney drafting class (`discovery-response-drafter`
-  where the seat carries it).
+  will not load → the attorney drafting class, which drafts nothing and says
+  this seat has no drafting lane for it.
 
 ## Refusals the selector must preserve
 

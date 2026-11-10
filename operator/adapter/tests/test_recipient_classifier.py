@@ -10,15 +10,23 @@ reverse).
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
-# operator/ root, so `adapter.*` imports resolve.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import pytest
 
-from adapter.recipient_classifier import (
+# The live classifier is the overlay's shared/recipient_classifier.py (stdlib
+# only). The adapter's former copy ran nowhere and was removed 2026-11-10; these
+# spoof vectors now hold the copy the seats run.
+_LIVE = Path(__file__).resolve().parents[2] / "hermes-smd-overlay" / "shared" / "recipient_classifier.py"
+_SPEC = importlib.util.spec_from_file_location("live_recipient_classifier", _LIVE)
+assert _SPEC is not None and _SPEC.loader is not None
+_MOD = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = _MOD
+_SPEC.loader.exec_module(_MOD)
+
+from live_recipient_classifier import (  # noqa: E402 - the module is path-loaded just above, so this import must follow it
     ACTION_CLASS_EXTERNAL_SEND,
     ACTION_CLASS_EXTERNAL_SEND_CLIENT,
     ACTION_CLASS_EXTERNAL_SEND_INTERNAL,
@@ -176,11 +184,11 @@ def test_typed_client_and_vendor_resolve_by_class():
     assert classify_recipients_typed(["records@radiology.com"], ROSTER, TYPED) is RecipientClass.VENDOR
 
 
-def test_typed_internal_outranks_typed_class():
-    # An address on the internal roster classifies INTERNAL even if it also appears
-    # as a typed entry (internal-first order).
+def test_typed_class_outranks_the_internal_roster():
+    # ss#2263: the typed outbound roster is read FIRST, so "may reply to you"
+    # (the internal roster) never makes a typed client into firm staff.
     typed = [("scott@smd.services", "client")]
-    assert classify_recipients_typed(["scott@smd.services"], ROSTER, typed) is RecipientClass.INTERNAL
+    assert classify_recipients_typed(["scott@smd.services"], ROSTER, typed) is RecipientClass.CLIENT
 
 
 def test_typed_unrostered_is_outside():

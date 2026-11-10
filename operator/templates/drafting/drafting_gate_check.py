@@ -406,10 +406,6 @@ class Draft:
                 fenced.add(index)
         return fenced
 
-    def line_of_offset(self, offset: int, in_body: bool = True) -> int:
-        text = self.body_text if in_body else self.text
-        return text.count("\n", 0, max(0, offset)) + 1
-
 
 # ---------------------------------------------------------------------------
 # Quote extraction

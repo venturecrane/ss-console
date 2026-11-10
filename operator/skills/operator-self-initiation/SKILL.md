@@ -288,5 +288,4 @@ conversation, on an admin's instruction). Every rule needed at runtime is stated
 
 Delegated procedures: `operator-self-test` (the plumbing proof), `voice-establishment` (how
 the firm writes, survey mode), `document-library-establishment` (the firm's template
-collection). Companion refinement: `shape-establishment` (structure of one output class) is
-deliberately NOT in the default sequence; it remains its own admin command.
+collection).

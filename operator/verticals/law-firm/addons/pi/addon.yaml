@@ -105,10 +105,7 @@ skills:
   - daily-needs-you-digest
   # work-product drafting lane (v0.3.0 — on-demand, attorney-initiated only;
   # bound to operator/templates/drafting/drafting-discipline.md)
-  - discovery-response-drafter
-  - follow-up-discovery-drafter
   - demand-letter-drafter
-  - mediation-brief-drafter
   # the queued drafting lane (v0.4.0, admin-initiated, a job on the Machine)
   - document-drafter
   # the queued litigation status lane (v0.5.0, admin-initiated or the weekday

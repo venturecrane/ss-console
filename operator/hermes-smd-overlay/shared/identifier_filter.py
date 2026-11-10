@@ -593,11 +593,6 @@ class ProvenanceRegister:
                 if case_canon and len(self._pairs) < _MAX_REGISTERED_PAIRS:
                     self._pairs.add(pair_key(case_canon, hit.canonical))
 
-    def add_pair(self, case_canonical: str, date_canonical: str) -> None:
-        """Register one already-canonical association directly."""
-        if case_canonical and date_canonical and len(self._pairs) < _MAX_REGISTERED_PAIRS:
-            self._pairs.add(pair_key(case_canonical, date_canonical))
-
     def matter_numbers(self) -> frozenset[str]:
         """The BARE-DIGIT matter numbers seeded via :meth:`add_record`. Feeds
         the register-anchored extraction pass in :func:`check` (ss#2458): a
