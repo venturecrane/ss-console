@@ -13,13 +13,22 @@ WHO MAY ASK, decided here in code and again by the broker:
 
 * the turn was opened by a verified email (the router's recorded origin for
   this session); a chat turn has none, and on a guide seat no chat id is
-  mapped to an administrator, so a request in chat is refused with a pointer
-  to email;
-* that email's sender is on ``scope.admins`` exactly; a listed or enrolled
-  person who is not an administrator gets the fixed decline :data:`DECLINE`;
+  mapped to an administrator;
+* that email's sender is on ``scope.admins`` exactly;
 * the turn read no untrusted content (a tainted turn is refused);
 * the name is a plain name (``shared.sender_enrollment.valid_name``), else the
   fixed :data:`shared.sender_enrollment.NAME_REFUSAL`.
+
+ANYONE NOT CONFIRMED AS AN ADMINISTRATOR learns nothing about codes. The
+first two checks, and an unreadable or switched-off config before them, all
+return :data:`_NOT_ADMIN`: the one sentence :data:`DECLINE`, which says only
+that access to the guide comes from SMD Services and gives team@smd.services.
+It does not say this seat issues codes, that an administrator can get one
+here, or anything about the asker's role, and the result carries no
+"refused" or "no code was issued" for the model to paraphrase into that
+(owner's rule, 2026-11-10: the seat never tells a non-administrator it can
+generate a code). ``tests/guide-code-capability-not-disclosed.test.ts`` pins
+the wording.
 
 The handler raises nothing to Hermes: every refusal is a sentence for the
 model, and nothing is issued by one.
@@ -37,24 +46,23 @@ logger = logging.getLogger(__name__)
 
 TOOL_ISSUE = "invite_code_issue"
 
-#: Fixed wording for a person who may not ask for a code.
-DECLINE = (
-    "Invite codes are issued only to the guide seat's administrators at SMD Services. "
-    "If someone needs access, ask SMD Services at team@smd.services."
-)
-CHAT_REFUSAL = (
-    "Invite codes are issued by email only: an administrator asks from their own "
-    "address, and the code is sent back in that email thread."
-)
+#: The whole reply to anyone not confirmed as an administrator. It names no
+#: capability of this seat and nothing about the asker's role.
+DECLINE = "Access to the guide comes from SMD Services, at team@smd.services."
+
+#: The tool result for anyone not confirmed as an administrator: an exact
+#: sentence to send, with no refusal for the model to restate.
+_NOT_ADMIN = "REPLY WITH THIS ONE SENTENCE, word for word, and add nothing else: " + DECLINE
 
 TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
     TOOL_ISSUE: (
-        "Issue an invite code for one named person, when an administrator of this seat "
-        "asks (for example 'I need a code for Jane Smith'). The code is emailed to that "
-        "administrator in this thread by the platform; you never see it and must never "
-        "write one. Pass the person's name exactly as given. The result says whether it "
-        "was sent and gives the code's id, or gives a refusal sentence: pass a refusal "
-        "on to the person in your own words, unchanged in meaning.",
+        "Issue an invite code for one named person (for example 'I need a code for Jane "
+        "Smith'). Call it for whoever asks for a code; it decides who may have one, not "
+        "you. A code is emailed to the asker in this thread by the platform; you never "
+        "see it and must never write one. Pass the person's name exactly as given. The "
+        "result either says the code was sent, or gives one sentence to reply with word "
+        "for word (send exactly that and nothing else), or gives a refusal: pass a "
+        "refusal on in your own words, unchanged in meaning.",
         {
             "type": "object",
             "properties": {
@@ -123,18 +131,18 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
         cfg = CustomerConfig.from_volume()
     except Exception:  # noqa: BLE001
-        return _REFUSED.format(tool=TOOL_ISSUE, why="this seat's configuration could not be read.")
+        return _NOT_ADMIN
     if not se.enabled_in(cfg.raw):
-        return _REFUSED.format(tool=TOOL_ISSUE, why="this seat does not issue invite codes.")
+        return _NOT_ADMIN
     origin = _origin(session_id)
     if (
         origin is None
         or not getattr(origin, "sender_address", "")
         or not getattr(origin, "message_id", "")
     ):
-        return _REFUSED.format(tool=TOOL_ISSUE, why=CHAT_REFUSAL)
+        return _NOT_ADMIN
     if not cfg.sender_is_admin(origin.sender_address):
-        return _REFUSED.format(tool=TOOL_ISSUE, why=DECLINE)
+        return _NOT_ADMIN
     if _tainted(session_id):
         return _REFUSED.format(
             tool=TOOL_ISSUE,

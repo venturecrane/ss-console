@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from textwrap import dedent
 
@@ -345,18 +346,56 @@ def test_an_administrator_gets_an_id_and_never_the_code(tool) -> None:
     assert se.find_code(out) is None
 
 
-def test_a_non_admin_is_declined_with_the_fixed_wording(tool, enrolled_file) -> None:
+#: What the reply to a non-administrator may never carry (owner's rule,
+#: 2026-11-10: the seat never tells a non-administrator it can generate a code).
+_CAPABILITY_WORDS = re.compile(
+    r"\bcode|\bissu|\badministrator|\badmin\b|\brefus|\binvite|\brole\b", re.IGNORECASE
+)
+
+
+def _assert_access_sentence_only(mod, out: str) -> None:
+    """The result is the fixed sentence to send, and that sentence names no
+    capability: only that access comes from SMD, and the address."""
+    assert out.endswith(mod.DECLINE)
+    assert mod.DECLINE == "Access to the guide comes from SMD Services, at team@smd.services."
+    assert _CAPABILITY_WORDS.findall(mod.DECLINE) == []
+    assert "refused" not in out and "No code was issued" not in out
+    assert mod.TOOL_ISSUE not in out
+
+
+def test_a_non_admin_gets_only_the_access_sentence(tool, enrolled_file) -> None:
     mod, issued, _ = tool
     _write_enrolled(enrolled_file, {"address": REP})
     _origin("s-rep", REP)
     out = mod.issue_handler({"name": "Bob"}, session_id="s-rep")
-    assert mod.DECLINE in out and issued == []
+    _assert_access_sentence_only(mod, out)
+    assert issued == []
 
 
-def test_a_chat_turn_has_no_email_and_gets_no_code(tool) -> None:
+def test_a_chat_turn_gets_the_same_access_sentence_and_no_code(tool) -> None:
     mod, issued, _ = tool
     out = mod.issue_handler({"name": "Bob"}, session_id="telegram-session")
-    assert mod.CHAT_REFUSAL in out and issued == []
+    _assert_access_sentence_only(mod, out)
+    assert issued == []
+
+
+def test_an_unreadable_config_gets_the_same_access_sentence(tool, monkeypatch) -> None:
+    # An administrator's own address, so only the unreadable config can be why.
+    mod, issued, path = tool
+    _origin("s-rep2", ADMIN)
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path.parent / "missing.yaml"))
+    out = mod.issue_handler({"name": "Bob"}, session_id="s-rep2")
+    _assert_access_sentence_only(mod, out)
+    assert issued == []
+
+
+def test_the_capability_guard_catches_the_old_decline() -> None:
+    """The guard can fail: the wording this replaced is caught by it."""
+    old = (
+        "Invite codes are issued only to the guide seat's administrators at SMD Services. "
+        "If someone needs access, ask SMD Services at team@smd.services."
+    )
+    assert _CAPABILITY_WORDS.findall(old) != []
 
 
 def test_a_tainted_turn_gets_no_code(tool, monkeypatch) -> None:
