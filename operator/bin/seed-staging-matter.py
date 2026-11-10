@@ -35,6 +35,15 @@ NO PERIODS IN DOCUMENT NAMES. Smokeball reads the tail after a "." as a file
 extension and drops it ("Dr. Okonkwo" materialized as "Dr"). Materialization is
 also asynchronous: a short count on the first read-back is not a failed upload.
 
+THE MEDICAL RECORDS ARE PDFs, GENERATED, NOT COMMITTED. ``--records DIR``
+uploads a matter's record set: the PDFs ``python -m jobs.medchron.sample``
+writes to ``<out>/<slug>/records/`` from the committed case spec
+(``Fixture.spec``). The folder must hold exactly the spec's documents, by
+name: a missing or extra file refuses before anything is sent, so a stale or
+half-built folder can never be half-uploaded. Those PDFs are tens of
+megabytes, so they reach the seat as files (``fly sftp``), not through the
+base64 command above.
+
 WHAT THIS CANNOT FIX. A matter carries no responsible-attorney assignment, and
 ``PATCH /matters`` accepts ``personAssistingStaffs`` with a 200 and applies
 nothing (both the object and bare-id shapes, on a token whose granted scopes
@@ -48,7 +57,9 @@ import argparse
 import os
 import sys
 
-from bin.lib.seed_fixtures import FIXTURES
+from pathlib import Path
+
+from bin.lib.seed_fixtures import FIXTURES, Fixture, record_names
 
 
 def _client():
@@ -63,18 +74,44 @@ def _client():
     return build_client_from_env()
 
 
+class RecordsMismatch(RuntimeError):
+    pass
+
+
+def record_files(fixture: Fixture, records: Path) -> list[tuple[str, bytes]]:
+    """``(file name, bytes)`` for every record PDF, in the spec's order.
+    Refuses unless the folder holds exactly the spec's set."""
+    want = record_names(fixture)
+    have = sorted(p.name for p in records.glob("*.pdf"))
+    missing = sorted(set(want) - set(have))
+    extra = sorted(set(have) - set(want))
+    if missing or extra:
+        raise RecordsMismatch(
+            f"{records} does not hold {fixture.slug}'s record set: missing {missing[:5]}, unexpected {extra[:5]}"
+        )
+    return [(name, (records / name).read_bytes()) for name in want]
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument("slug", choices=sorted(FIXTURES), help="which matter's record to seed")
     ap.add_argument("--list", action="store_true", dest="just_list", help="print the set and exit; uploads nothing")
+    ap.add_argument("--records", type=Path, help="the generated record PDFs for this matter (<out>/<slug>/records)")
     args = ap.parse_args(argv)
     fixture = FIXTURES[args.slug]
+    uploads = [(name, text.encode("utf-8")) for name, text in fixture.docs]
+    if args.records is not None:
+        try:
+            uploads += record_files(fixture, args.records)
+        except RecordsMismatch as exc:
+            print(f"REFUSED: {exc}")
+            return 2
 
-    print(f"{fixture.slug}  matter {fixture.matter_id}  ({len(fixture.docs)} documents)")
+    print(f"{fixture.slug}  matter {fixture.matter_id}  ({len(uploads)} documents)")
     print(f"PURPOSE: {fixture.purpose}\n")
     if args.just_list:
-        for name, text in fixture.docs:
-            print(f"  {name}  ({len(text)} chars)")
+        for name, data in uploads:
+            print(f"  {name}  ({len(data)} bytes)")
         print("\nNothing uploaded.")
         return 0
 
@@ -84,20 +121,20 @@ def main(argv: list[str] | None = None) -> int:
     print(f"already on matter: {len(have)}")
 
     added = skipped = failed = 0
-    for name, text in fixture.docs:
+    for name, data in uploads:
         if name in have:
             print(f"  SKIP (exists): {name}")
             skipped += 1
             continue
         try:
-            res = c.add_file(fixture.matter_id, name, text.encode("utf-8"))
+            res = c.add_file(fixture.matter_id, name, data)
             fid = res.get("fileId") if isinstance(res, dict) else res
             print(f"  ADDED: {name}  -> {fid}")
             added += 1
         except Exception as e:  # noqa: BLE001 — one bad upload must not strand the rest
             print(f"  FAILED: {name}  ({type(e).__name__}: {str(e)[:200]})")
             failed += 1
-    print(f"\nadded={added} skipped={skipped} failed={failed} of {len(fixture.docs)}")
+    print(f"\nadded={added} skipped={skipped} failed={failed} of {len(uploads)}")
     print("Materialization is async; re-read the matter before concluding a count is short.")
     return 1 if failed else 0
 

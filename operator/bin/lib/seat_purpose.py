@@ -11,6 +11,7 @@ Run as a script for shell callers (reprovision-staging.sh)::
 
     python3 operator/bin/lib/seat_purpose.py purpose <slug>    # prints the purpose
     python3 operator/bin/lib/seat_purpose.py twin-of <slug>    # prints the twin's client
+    python3 operator/bin/lib/seat_purpose.py declared-twin <slug>  # an exact twin's client (twin.yaml)
     python3 operator/bin/lib/seat_purpose.py release-twins     # one slug per line
 
 Stdlib plus PyYAML, no package-relative imports, so every script under
@@ -27,6 +28,7 @@ import yaml
 
 PURPOSES = ("client", "release-twin", "demo", "internal")
 SEATS_FILE = Path(__file__).resolve().parents[2] / "fleet" / "seats.yaml"
+CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "customers"
 
 
 class SeatPurposeError(ValueError):
@@ -80,6 +82,25 @@ def twin_of(slug: str, seats: dict[str, dict[str, Any]] | None = None) -> str:
     return str(table[slug]["twin_of"])
 
 
+def declared_twin_of(slug: str, customers: Path = CUSTOMERS_DIR) -> str:
+    """The client an EXACT twin copies, from its ``twin.yaml`` (``twin_of``).
+
+    Set before the flip too, while the seat is still ``purpose: internal`` (a
+    client has one release twin, ADR 0107): it is what the first provision of
+    a twin isolates on. tests/twin-drift.test.ts holds the twin's customer.yaml
+    equal to that client's. Raises when the seat declares no twin.
+    """
+    path = customers / slug / "twin.yaml"
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except OSError as exc:
+        raise SeatPurposeError(f"{slug} declares no exact twin ({path}: {exc.strerror})") from exc
+    client = raw.get("twin_of") if isinstance(raw, dict) else None
+    if not isinstance(client, str) or not client:
+        raise SeatPurposeError(f"{path}: no twin_of")
+    return client
+
+
 def _main(argv: list[str]) -> int:
     try:
         if len(argv) == 3 and argv[1] == "purpose":
@@ -88,6 +109,9 @@ def _main(argv: list[str]) -> int:
         if len(argv) == 3 and argv[1] == "twin-of":
             print(twin_of(argv[2]))
             return 0
+        if len(argv) == 3 and argv[1] == "declared-twin":
+            print(declared_twin_of(argv[2]))
+            return 0
         if len(argv) == 2 and argv[1] == "release-twins":
             for slug in release_twins():
                 print(slug)
@@ -95,7 +119,10 @@ def _main(argv: list[str]) -> int:
     except SeatPurposeError as exc:
         print(f"seat_purpose: {exc}", file=sys.stderr)
         return 1
-    print("usage: seat_purpose.py {purpose <slug>|twin-of <slug>|release-twins}", file=sys.stderr)
+    print(
+        "usage: seat_purpose.py {purpose <slug>|twin-of <slug>|declared-twin <slug>|release-twins}",
+        file=sys.stderr,
+    )
     return 2
 
 

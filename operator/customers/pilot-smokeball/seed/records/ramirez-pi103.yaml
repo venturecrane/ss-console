@@ -1,0 +1,552 @@
+# [SEED] Case spec: Ramirez v. Ortiz, staging matter 2026-PI-103 (minor dog bite).
+#
+# FICTIONAL. Every person, provider, number and address below is invented for
+# SMD's own demo tenant (Brannock & Ferreira LLP, a fictional firm). Nothing is
+# drawn from any client's records.
+#
+# Consistent with what is already seeded on the matter
+# (seed/seed_data.py, docs "records-ramirez" and "offer-ramirez"): Sofia
+# Ramirez, DOB 09/12/2015; bitten 03/04/2026 on the left forearm, two puncture
+# wounds of 1.5 cm and 0.8 cm, irrigated and closed with adhesive strips, Tdap
+# current; follow-up 03/18/2026 healing well with scarring noted and a plastic
+# surgery consult offered and declined; Valley Pediatric billed $2,340.00 to
+# date. Western Mutual claim 26-44812-K.
+#
+# DELIBERATE: the family later took the consult after all, on 05/20/2026, 63
+# days after the last visit. That is the set's treatment gap over 45 days.
+#
+# How to read this file: operator/runners/jobs/jobs/medchron/sample/spec.py.
+# Regenerate: docs/handbook/sample-medical-records.md.
+
+matter:
+  slug: ramirez-pi103
+  unit: ramirez
+  number: 2026-PI-103
+  matter_id: 65108bdf-ae94-4f85-990f-152d6c8d6fa2
+  title: Ramirez v. Ortiz
+  seed: 103
+  target_pages: 150
+  scan_rate: 0.6
+  incident_date: '2026-03-04'
+  injuries: dog bite to the left forearm with two puncture wounds and resulting scarring
+  firm: Brannock & Ferreira LLP
+  firm_fax: (562) 555-0179
+  date_stamp: 06-15-26
+
+patient:
+  name: Sofia Ramirez
+  last: Ramirez
+  dob: 09/12/2015
+  sex: F
+  mrn:
+    vpa: VPA-0091377
+    pcps: PCPS-22841
+
+headings: &headings
+  - HPI & Prior Medical History
+  - Patient Complaints & Limitations
+  - Physical Examination
+  - Diagnostic Studies
+  - Medical Diagnoses
+  - Procedures
+  - Medications
+  - Treatment Recommendations
+  - Work Status
+
+icd:
+  S51.852A: Open bite of left forearm, initial encounter
+  S51.852D: Open bite of left forearm, subsequent encounter
+  S51.852S: Open bite of left forearm, sequela
+  W54.0XXA: Bitten by dog, initial encounter
+  L91.0: Hypertrophic scar
+
+providers:
+  vpa:
+    facility: Valley Pediatric Associates
+    address: 4410 Atlantic Avenue, Suite 200, Long Beach, CA 90807
+    phone: (562) 555-0141
+    fax: (562) 555-0142
+    match: hollings|tanaka
+    custodian: Renata Velez
+    style: { face: helv, accent: [0.10, 0.42, 0.55], layout: band }
+  pcps:
+    facility: Pacific Coast Pediatric Plastic Surgery
+    address: 2801 Atlantic Avenue, Suite 610, Long Beach, CA 90806
+    phone: (562) 555-0186
+    fax: (562) 555-0187
+    match: abernathy
+    custodian: Dolores Kim
+    style: { face: tiro, accent: [0.38, 0.18, 0.40], layout: box, size: 10 }
+  rx:
+    facility: Bixby Knolls Community Pharmacy
+    address: 3901 Atlantic Avenue, Long Beach, CA 90807
+    phone: (562) 555-0122
+    fax: (562) 555-0123
+    custodian: Paul Okafor, PharmD
+    style: { face: cour, accent: [0.2, 0.2, 0.2], layout: rule }
+  animal:
+    facility: Long Beach Animal Care Services
+    address: 7700 E. Spring Street, Long Beach, CA 90815
+    phone: (562) 555-0164
+    fax: (562) 555-0165
+    custodian: Records Unit
+    style: { face: helv, accent: [0.15, 0.35, 0.15], layout: rule }
+
+documents:
+  - id: vpa
+    name: 2026-06-10 Valley Pediatric Associates - Medical Records
+    provider: vpa
+    fax: { sent: '2026-06-10 14:22', from_name: VPA Medical Records }
+    pages:
+      - {
+          kind: fax_cover,
+          date: '2026-06-10',
+          re: 'Medical records, dates of service 03/04/2026 to 03/18/2026',
+        }
+      - { kind: custodian_cert, date: '2026-06-10', span: '03/04/2026 through 03/18/2026' }
+      - kind: intake_form
+        id: vpa-intake
+        date: '2026-03-04'
+        heading: 'SICK VISIT QUESTIONNAIRE (completed by parent)'
+        fields:
+          Patient name: Sofia Ramirez
+          Completed by: Elena Ramirez, mother
+          Reason for visit today: dog bite left arm this morning
+          Where did it happen: neighbors yard, his dog got out
+          Is the dog's rabies shot up to date: owner says yes
+          Medicines given at home: none, washed with soap
+          Allergies: none
+      - id: vpa-0304-a
+        title: Sick Visit Note
+        date: '2026-03-04'
+        body: |
+          Date of service: 03/04/2026   Time: 11:20   Provider: Lauren Hollings, MD
+          Accompanied by: mother, Elena Ramirez
+
+          HISTORY OF PRESENT ILLNESS
+          10-year-old girl bitten on the left forearm by a neighbor's dog at about 9:30 this
+          morning. The dog, a medium-sized mixed breed, got out of its yard and bit her once as
+          she walked past. Mother washed the wound with soap and water at home. No other
+          injuries. The owner reports the dog's rabies vaccination is current; animal control
+          has been notified by the family. No prior injury to this arm.
+
+          REVIEW OF SYSTEMS
+          No fever. No numbness or tingling in the hand. Able to move all fingers.
+
+          PHYSICAL EXAMINATION
+          Weight 33.1 kg. Temp 98.4 F. HR 92. BP 104/66.
+          Left volar forearm, mid-shaft: two puncture wounds, 1.5 cm and 0.8 cm, with
+          surrounding ecchymosis about 3 cm. No active bleeding. No exposed tendon. Full
+          active range of motion of wrist and fingers. Sensation intact in median, ulnar and
+          radial distributions. Capillary refill under 2 seconds.
+      - id: vpa-0304-b
+        title: Sick Visit Note (continued)
+        date: '2026-03-04'
+        body: |
+          PROCEDURE
+          Wounds irrigated with 500 mL normal saline under pressure. Wound culture obtained
+          from the larger puncture. Wound edges approximated with adhesive strips; the
+          punctures were not sutured, given the infection risk of a bite wound. Sterile
+          dressing applied. Patient tolerated well.
+
+          ASSESSMENT
+          1. Dog bite, left forearm, two puncture wounds
+          2. Tetanus immunization current (Tdap given at age 10 well visit)
+
+          PLAN
+          Ceftriaxone 50 mg/kg IM given once in clinic.
+          Amoxicillin-clavulanate 875 mg by mouth twice daily for 5 days, sent to pharmacy.
+          Keep dressing dry for 24 hours, then daily dressing change.
+          Nurse wound check in 3 days. Return sooner for spreading redness, fever or pus.
+          Rabies post-exposure prophylaxis not indicated if the dog remains healthy during the
+          10-day observation period; family to confirm with animal control.
+
+          Lauren Hollings, MD
+          Electronically signed 03/04/2026 12:48
+      - { kind: vitals, count: 1, date: '2026-03-04', start: '11:05' }
+      - { kind: orders, count: 1, date: '2026-03-04', start: '11:30' }
+      - { kind: education, count: 18, topic: 'Animal Bites: Caring for the Wound at Home' }
+      - id: vpa-0305
+        title: Telephone Encounter
+        date: '2026-03-05'
+        body: |
+          Date: 03/05/2026   Time: 16:10   Call taken by: Grace Tanaka, RN
+
+          Mother called. Reports mild pinkness around the larger wound, no streaking, no fever.
+          Child taking amoxicillin-clavulanate as prescribed, one dose missed this morning.
+          Advised to give the next dose on schedule, do not double. Warm compress 3 times a day.
+          Mark the edge of the redness with a pen and call back if it spreads past the line.
+          Keep the nurse visit on 03/07. Mother verbalized understanding.
+
+          Grace Tanaka, RN
+      - id: vpa-0307
+        title: Nurse Visit, Wound Check
+        date: '2026-03-07'
+        body: |
+          Date of service: 03/07/2026   Nurse: Grace Tanaka, RN   Supervising: Lauren Hollings, MD
+
+          Wound check, left forearm. Adhesive strips intact on the smaller wound and lifting on
+          the larger wound; removed and replaced. Pinkness reduced from 03/05, no drainage, no
+          warmth. Temp 98.2 F. Wound culture from 03/04: Pasteurella multocida, sensitive to
+          amoxicillin-clavulanate. Continue the antibiotic to complete 5 days.
+          Follow up with Dr. Hollings in 11 days.
+      - id: vpa-0318
+        title: Follow-Up Visit
+        date: '2026-03-18'
+        body: |
+          Date of service: 03/18/2026   Provider: Lauren Hollings, MD
+
+          INTERVAL HISTORY
+          Completed the antibiotic course. No fever. Sofia says the arm itches but does not hurt.
+          Mother reports she is shy about the marks and keeps her sleeve down at school.
+
+          EXAMINATION
+          Left forearm: both wounds closed and healing well with no sign of infection. The
+          larger site is raised and pink, 1.8 cm. The smaller site is flat, 0.7 cm.
+          Full range of motion. Neurovascularly intact.
+
+          ASSESSMENT
+          Healing dog bite, left forearm. Scarring noted at the larger site.
+
+          PLAN
+          Scar massage and sun protection discussed. Plastic surgery consult offered for scar
+          management; declined at this time by mother, who would like to wait and see.
+          Return as needed.
+
+          Lauren Hollings, MD
+      - { kind: education, count: 3, topic: 'Scar Care After a Wound Heals' }
+      - kind: health_summary
+        count: 22
+        as_of: '2026-06-09'
+        problems:
+          ['Dog bite, left forearm (03/04/2026)', 'Mild intermittent asthma, well controlled']
+        meds: ['Albuterol HFA 90 mcg, 2 puffs as needed (not used in past year)']
+      - { kind: lab_results, count: 8, as_of: '2026-06-09', dates: ['03/04/2026', '09/18/2025'] }
+      - { kind: access_log, count: 2, date: '2026-03-20' }
+      - { kind: blank, count: 6 }
+
+  - id: pcps
+    name: 2026-06-12 Pacific Coast Pediatric Plastic Surgery - Consultation Records
+    provider: pcps
+    fax: { sent: '2026-06-12 09:05', from_name: PCPS Records }
+    pages:
+      - { kind: fax_cover, date: '2026-06-12', re: 'Consultation records, 05/20/2026' }
+      - kind: intake_form
+        date: '2026-05-20'
+        heading: 'NEW PATIENT HISTORY (completed by parent)'
+        fields:
+          Patient: Sofia Ramirez, age 10
+          Referred by: Dr Hollings, Valley Pediatric
+          Concern: scar on left arm from dog bite in March
+          Has the scar changed: getting thicker and itchy
+          Treatments tried: lotion, massage
+          Does it bother your child: yes, kids at school ask about it
+      - id: pcps-0520-a
+        title: Consultation
+        date: '2026-05-20'
+        body: |
+          Date of service: 05/20/2026   Surgeon: Ines Abernathy, MD
+
+          HISTORY
+          Sofia is a 10-year-old girl seen with her mother for a scar of the left forearm after a
+          dog bite on 03/04/2026, treated at Valley Pediatric with irrigation and adhesive
+          strips. A consult was offered in March and the family chose to wait. Since then the
+          larger scar has become thicker, itchy and more noticeable. Sofia is self-conscious
+          about it and has stopped wearing short sleeves. No prior scars or keloids.
+
+          EXAMINATION
+          Left volar forearm: raised, erythematous scar 2.1 cm x 0.6 cm, firm, consistent in
+          appearance with a hypertrophic scar, confined to the original wound. Second scar
+          0.7 cm, flat and pale. No contracture. Full wrist and finger motion.
+          Vancouver Scar Scale 7 at the larger scar.
+          Photographs taken with parental consent.
+      - id: pcps-0520-b
+        title: Consultation (continued)
+        date: '2026-05-20'
+        body: |
+          IMPRESSION
+          1. Hypertrophic scar, left forearm, after dog bite
+          2. Second scar flat and mature
+
+          PLAN
+          Silicone gel sheeting 12 to 23 hours a day for at least 3 months.
+          Daily scar massage. Broad-spectrum sunscreen on the scar when outdoors.
+          Re-evaluate in 3 months. If the scar remains raised after 6 to 12 months of
+          conservative care, options include intralesional steroid injection and, later,
+          surgical scar revision. Surgical revision is not recommended before the scar
+          matures. Risks and expectations discussed with mother.
+
+          Ines Abernathy, MD
+      - { kind: education, count: 16, topic: 'Silicone Gel Sheeting and Scar Massage' }
+      - {
+          kind: health_summary,
+          count: 12,
+          as_of: '2026-06-11',
+          problems: ['Hypertrophic scar, left forearm'],
+          meds: ['Silicone gel sheeting, topical, daily'],
+        }
+      - kind: note
+        title: Consent for Clinical Photography
+        date: '2026-05-20'
+        scan: true
+        body: |
+          I consent to clinical photographs of my child for the medical record.
+          Patient: Sofia Ramirez
+          ~Elena Ramirez
+          Parent or guardian signature                     Date: 05/20/2026
+      - { kind: custodian_cert, date: '2026-06-12', span: '05/20/2026' }
+
+  - id: rx
+    name: 2026-06-08 Bixby Knolls Community Pharmacy - Dispensing History
+    provider: rx
+    pages:
+      - kind: pharmacy_log
+        fills:
+          - ['2026-03-04', 'Amoxicillin-clavulanate 875-125 mg', '10', '5', 'L Hollings']
+          - ['2026-05-21', 'Silicone gel sheets 5 x 15 cm', '1 box', '30', 'I Abernathy']
+          - ['2026-06-19', 'Silicone gel sheets 5 x 15 cm', '1 box', '30', 'I Abernathy']
+      - { kind: custodian_cert, date: '2026-06-08', span: '03/01/2026 through 06/08/2026' }
+
+  - id: animal
+    name: 2026-03-04 Long Beach Animal Care Services - Bite Report
+    provider: animal
+    pages:
+      - id: bite-report
+        title: Animal Bite Report
+        date: '2026-03-04'
+        body: |
+          Report no.: LBACS-26-01183   Date of bite: 03/04/2026   Time: approx. 09:30
+          Victim: Sofia Ramirez, age 10. Parent: Elena Ramirez.
+          Location: sidewalk in front of the 2900 block of Lime Avenue, Long Beach.
+          Animal: dog, mixed breed, tan, about 45 lb. Owner: Daniel Ortiz.
+          Rabies vaccination: current, certificate verified, tag LB-R-55120.
+          Disposition: 10-day home quarantine ordered 03/04/2026.
+          Officer: J. Whitcomb, Animal Control Officer
+      - id: bite-release
+        title: Quarantine Release
+        date: '2026-03-14'
+        body: |
+          Report no.: LBACS-26-01183
+          Animal observed 03/14/2026 at the end of the 10-day quarantine. Healthy, no signs of
+          illness. Released from quarantine.
+          Officer: J. Whitcomb, Animal Control Officer
+
+  - id: vpa-bill
+    name: 2026-06-10 Valley Pediatric Associates - Itemized Statement
+    provider: vpa
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-03-04', '99214', 'Office visit, established, moderate', 410.00]
+          - ['2026-03-04', '97597', 'Wound irrigation and debridement', 620.00]
+          - ['2026-03-04', '87070', 'Wound culture, aerobic', 240.00]
+          - ['2026-03-04', 'J0696', 'Ceftriaxone injection', 415.00]
+          - ['2026-03-04', '99070', 'Supplies, adhesive strips, dressing', 85.00]
+          - ['2026-03-05', '99441', 'Telephone evaluation by nurse', 95.00]
+          - ['2026-03-07', '99211', 'Nurse visit, wound check', 165.00]
+          - ['2026-03-18', '99213', 'Office visit, established, low', 310.00]
+        payments:
+          - ['2026-04-14', 'Golden Poppy Health Plan payment', 1288.40]
+      - kind: cms1500
+        icd: [S51.852A, W54.0XXA]
+        claims:
+          - [
+              ['2026-03-04', '99214', 'Office visit', 410.00],
+              ['2026-03-04', '97597', 'Wound irrigation', 620.00],
+              ['2026-03-04', '87070', 'Wound culture', 240.00],
+              ['2026-03-04', 'J0696', 'Ceftriaxone inj', 415.00],
+              ['2026-03-04', '99070', 'Supplies', 85.00],
+            ]
+          - [
+              ['2026-03-05', '99441', 'Telephone eval', 95.00],
+              ['2026-03-07', '99211', 'Nurse visit', 165.00],
+              ['2026-03-18', '99213', 'Office visit', 310.00],
+            ]
+
+  - id: vpa-eob
+    name: 2026-04-14 Golden Poppy Health Plan - EOB - Valley Pediatric
+    provider: vpa
+    pages:
+      - kind: eob
+        payer: Golden Poppy Health Plan
+        claims:
+          - [['2026-03-04', 'Office visit and wound care', 1770.00, 1185.20, 948.16]]
+          - [
+              ['2026-03-05', 'Telephone and nurse visits', 260.00, 174.30, 139.44],
+              ['2026-03-18', 'Office visit', 310.00, 251.00, 200.80],
+            ]
+
+  - id: pcps-bill
+    name: 2026-06-12 Pacific Coast Pediatric Plastic Surgery - Itemized Statement
+    provider: pcps
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-05-20', '99204', 'New patient consultation, moderate', 650.00]
+        payments: []
+
+resends:
+  - id: vpa-resend
+    of: vpa
+    name: 2026-06-24 Valley Pediatric Associates - Medical Records (re-sent)
+    pages: [3, 25]
+    fax: { sent: '2026-06-24 10:40', from_name: VPA Medical Records }
+  - id: pcps-resend
+    of: pcps
+    name: 2026-06-26 Pacific Coast Pediatric Plastic Surgery - Records (re-sent)
+    pages: [2, 10]
+    fax: { sent: '2026-06-26 15:12', from_name: PCPS Records }
+
+conflicts: []
+
+defects:
+  treatment_gap: { from: '2026-03-18', to: '2026-05-20', days: 63 }
+  duplicates: [vpa-resend, pcps-resend]
+  handwritten: [vpa-intake]
+
+encounters:
+  - date: '2026-03-04'
+    provider: vpa
+    signer: Lauren Hollings, MD
+    icd: [S51.852A, W54.0XXA]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          vpa-0304-a,
+          "bitten on the left forearm by a neighbor's dog",
+          "Ten-year-old patient bitten once on the left forearm by a neighbor's dog at about 9:30 a.m.; mother washed the wound with soap and water. The record states no prior injury to the arm and that the owner reported the dog's rabies vaccination as current.",
+        ]
+      - [
+          Patient Complaints & Limitations,
+          vpa-intake,
+          'dog bite left arm this morning',
+          "On the intake questionnaire the mother wrote the reason for the visit as a dog bite to the left arm that morning, in a neighbor's yard.",
+        ]
+      - [
+          Physical Examination,
+          vpa-0304-a,
+          'two puncture wounds, 1.5 cm and 0.8 cm',
+          'Left volar forearm with two puncture wounds of 1.5 cm and 0.8 cm and about 3 cm of surrounding bruising; no exposed tendon; full motion of the wrist and fingers with intact sensation.',
+        ]
+      - [
+          Medical Diagnoses,
+          vpa-0304-b,
+          'Dog bite, left forearm, two puncture wounds',
+          'Dog bite to the left forearm with two puncture wounds; tetanus immunization current.',
+        ]
+      - [
+          Procedures,
+          vpa-0304-b,
+          'Wounds irrigated with 500 mL normal saline',
+          'Wounds irrigated with 500 mL of normal saline, wound culture obtained, and the edges approximated with adhesive strips; the punctures were not sutured because of the infection risk of a bite wound.',
+        ]
+      - [
+          Medications,
+          vpa-0304-b,
+          'Ceftriaxone 50 mg/kg IM given once in clinic',
+          'Ceftriaxone 50 mg/kg intramuscular given once in clinic; amoxicillin-clavulanate 875 mg by mouth twice daily for 5 days prescribed.',
+        ]
+      - [
+          Treatment Recommendations,
+          vpa-0304-b,
+          'Nurse wound check in 3 days',
+          'Daily dressing changes, nurse wound check in 3 days, and return for spreading redness, fever or pus; rabies prophylaxis not indicated if the dog stays healthy through its 10-day observation.',
+        ]
+  - date: '2026-03-05'
+    provider: vpa
+    signer: Grace Tanaka, RN
+    icd: [S51.852D]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          vpa-0305,
+          'mild pinkness around the larger wound',
+          'Mother called reporting mild pinkness around the larger wound without streaking or fever; one antibiotic dose had been missed that morning.',
+        ]
+      - [
+          Treatment Recommendations,
+          vpa-0305,
+          'Warm compress 3 times a day',
+          'Advised to continue the antibiotic on schedule, apply warm compresses 3 times a day, mark the edge of the redness, and keep the 03/07 nurse visit.',
+        ]
+  - date: '2026-03-07'
+    provider: vpa
+    signer: Grace Tanaka, RN
+    icd: [S51.852D]
+    paras:
+      - [
+          Physical Examination,
+          vpa-0307,
+          'Pinkness reduced from 03/05',
+          'Wound check of the left forearm: pinkness reduced from 03/05, no drainage or warmth; adhesive strips on the larger wound replaced.',
+        ]
+      - [
+          Diagnostic Studies,
+          vpa-0307,
+          'Pasteurella multocida',
+          'Wound culture from 03/04/2026 grew Pasteurella multocida, sensitive to amoxicillin-clavulanate.',
+        ]
+      - [
+          Treatment Recommendations,
+          vpa-0307,
+          'Continue the antibiotic to complete 5 days',
+          'Continue the antibiotic to complete 5 days and follow up with the pediatrician in 11 days.',
+        ]
+  - date: '2026-03-18'
+    provider: vpa
+    signer: Lauren Hollings, MD
+    icd: [S51.852D]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          vpa-0318,
+          'keeps her sleeve down at school',
+          'Completed the antibiotic course; the arm itches but does not hurt. Mother reports the patient is shy about the marks and keeps her sleeve down at school.',
+        ]
+      - [
+          Physical Examination,
+          vpa-0318,
+          'The larger site is raised and pink, 1.8 cm',
+          'Both wounds closed without sign of infection; the larger site raised and pink at 1.8 cm, the smaller site flat at 0.7 cm.',
+        ]
+      - [
+          Medical Diagnoses,
+          vpa-0318,
+          'Scarring noted at the larger site',
+          'Healing dog bite of the left forearm with scarring at the larger site.',
+        ]
+      - [
+          Treatment Recommendations,
+          vpa-0318,
+          'declined at this time by mother',
+          'Scar massage and sun protection discussed; plastic surgery consult offered and declined at this time by the mother, who preferred to wait.',
+        ]
+  - date: '2026-05-20'
+    provider: pcps
+    signer: Ines Abernathy, MD
+    icd: [L91.0, S51.852S]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          pcps-0520-a,
+          'has stopped wearing short sleeves',
+          'Seen for the left forearm scar from the dog bite of 03/04/2026. Since March the larger scar has become thicker, itchy and more noticeable; the patient is self-conscious and has stopped wearing short sleeves. No prior scars or keloids.',
+        ]
+      - [
+          Physical Examination,
+          pcps-0520-a,
+          'Vancouver Scar Scale 7',
+          'Raised, red, firm scar of 2.1 cm by 0.6 cm on the left volar forearm, with a second flat, pale scar of 0.7 cm; full wrist and finger motion; Vancouver Scar Scale 7 at the larger scar.',
+        ]
+      - [
+          Medical Diagnoses,
+          pcps-0520-b,
+          'Hypertrophic scar, left forearm, after dog bite',
+          'Hypertrophic scar of the left forearm after a dog bite.',
+        ]
+      - [
+          Treatment Recommendations,
+          pcps-0520-b,
+          'Silicone gel sheeting 12 to 23 hours a day',
+          'Silicone gel sheeting 12 to 23 hours a day for at least 3 months, daily massage and sunscreen; re-evaluate in 3 months. Steroid injection and later surgical revision are options if the scar remains raised after 6 to 12 months; revision is not recommended before the scar matures.',
+        ]

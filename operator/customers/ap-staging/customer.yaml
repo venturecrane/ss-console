@@ -1,0 +1,872 @@
+# ============================================================================
+# ap-staging: the EXACT twin of ashton-price, on SMD's own lab accounts.
+# ============================================================================
+# Not a real customer. This seat exists so that every change is rehearsed on a
+# copy of the A&P seat before A&P sees it (ADR 0107): the same model, the same
+# escalation model, the same Machine size and lane memory, the same region,
+# skills, lanes, crons, webhook triggers, entitlements, send policy and output
+# classes. Everything that reaches a person, a mailbox or a tenant is SMD's:
+#   - Smokeball: SMD's own STAGING tenant (environment: staging), the tenant
+#     pilot-smokeball also uses, through SMD's sandbox app (SMOKEBALL_STAGING_*,
+#     the `sandbox` custody class in operator/bin/lib/secret_custody.py).
+#   - Mail: the smdopslab lab mailbox smd-staging uses, the same two Graph app
+#     registrations (read app below; send app staged as MSGRAPH_SEND_*__AP_STAGING).
+#   - People: SMD lab stand-ins in the shape A&P's people have. The office
+#     manager (admin, recipient of every scheduled email, the one send-as name)
+#     is the lab staff mailbox ScottDurgan@smdopslab; the principal (admin who is
+#     not paged) is SMD's ss-probe-admin AgentMail inbox; the office scanner is
+#     SMD's ss-probe-runner AgentMail inbox. The firm, its letterhead and its
+#     police agencies are fictional (SMD Lab Law, Labtown). No value below is
+#     A&P's.
+#
+# THE DRIFT GATE. tests/twin-drift.test.ts holds this file equal to
+# operator/customers/ashton-price/customer.yaml everywhere except the paths
+# declared in twin.yaml beside it. A change to A&P that is not made here too
+# fails CI, and so does a difference here that twin.yaml does not declare.
+# Change A&P and this file in the same PR.
+#
+# NOT YET PROVISIONED (seat.yaml fly_app: null, purpose: internal). The four
+# Operator Library matter ids and the expense staff id are nil-GUID PENDING
+# markers: they are ids in SMD's staging tenant, read from that tenant before
+# the first provision, and the provisioner refuses this seat while any remains
+# (scripts/refuse-pending-config.ts). The provisioning runbook, step by step
+# with a probe per step, is docs/handbook/deployment-release.md, "Provisioning
+# ap-staging, the exact twin of ashton-price".
+#
+# Validate:  npx tsx scripts/validate-customer-yaml.ts \
+#              operator/customers/ap-staging/customer.yaml
+
+schema_version: 1
+customer_id: ap-staging
+customer_name: 'SMD Lab Law (pre-production twin, not a real customer)'
+firm_identity:
+  name: SMD LAB LAW, LLP
+  street: 1 Rehearsal Way
+  city_state_zip: Labtown, CA 95000
+  phone: (916) 555-0100
+  fax: (916) 555-0101
+  website: www.smd-lab-law.invalid
+seat:
+  kind: preprod
+  product: operator
+output_classes:
+  staff:
+    voice_spec: expected
+    format_spec: none
+  work_product:
+    voice_spec: expected
+    format_spec: none
+vertical: law-firm
+addons:
+  - law-firm/pi@0.3.0
+practice_areas:
+  - personal-injury-plaintiff
+fly_region: sjc
+model: claude-sonnet-5-5
+escalation_model: claude-opus-5-5
+machine:
+  size: shared-cpu-4x
+  memory_mb: 8192
+  lane_memory_mb:
+    medchron: 4096
+    demand: 3072
+users:
+  - email: ss-probe-admin@agentmail.to
+    role: principal
+    full_name: Lab Principal (stand-in)
+  - email: ScottDurgan@smdopslab.onmicrosoft.com
+    role: staff
+    full_name: Scott Durgan (lab)
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+authority:
+  default: managed
+  overrides:
+    runtime: client
+    trust: client
+personas:
+  - slug: operator
+    status: active
+    name: Operator
+    title: AI Case Coordinator
+    tone:
+      - Lead with the fact. Name the matter and the event in the first sentence. Never open with a pleasantry, a preamble, or "I hope this finds you well."
+      - Say what you need, specifically. A closed question with a real answer ("Confirm August 28, or tell me the date you want"), never "please advise." One message, one purpose.
+      - 'When unsure, do not guess and do not proceed: state what you found, what you need, and stop. A refusal is a normal outcome, never an apology. Bad news, including your own error, goes in the first sentence.'
+      - Numbers and dates bare, no hedging wrapped around them. No filler, no flattery, no announcing your own diligence. Never speculate about law, merits, strategy, or valuation. No em dashes.
+      - "Use the firm's own words (matter, served, propounded, verification, lien), never software vocabulary. You are a case manager working every open file: you carry the work, the attorneys decide it, and you never confuse the two."
+    entitlements:
+      exposure:
+        internal_write: draft_for_review
+        external_send: draft_for_review
+        external_send_as_staff: confirm
+        external_send_internal: autonomous
+        external_send_client: draft_for_review
+        external_send_vendor: draft_for_review
+        commitment: confirm
+      exposure_ceiling:
+        external_send: draft_for_review
+        external_send_client: autonomous
+        external_send_vendor: autonomous
+    skills:
+      - name: operator-introduce
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: operator-help
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: scott@smd.services
+      - name: operator-self-test
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: voice-establishment
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: document-library-establishment
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: operator-self-initiation
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-inbox-router
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: matter-status-digest
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: new-matter-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: conflict-intake-router
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: consult-scheduler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: engagement-letter-chaser
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: trust-balance-nudge
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-status-responder
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: document-receipt-logger
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: combined-post-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: post-intake-daily-list
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: ScottDurgan@smdopslab.onmicrosoft.com
+      - name: vendor-invoice-intake
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: file-work-requests
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: stalled-matter-nudge
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-memo-on-update
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: matter-document-review
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: deadline-and-sol-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: deadline-miss-escalator
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: statute-watch
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: ScottDurgan@smdopslab.onmicrosoft.com
+      - name: discovery-served-watch
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      - name: discovery-response-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: client-verification-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          escalate_after_attempts: 3
+      - name: separate-statement-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: opposing-response-deficiency-review
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+        settings:
+          review_threshold_pages: 250
+      - name: meet-and-confer-drafter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: discovery-response-staging
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: matter-initiation-setup
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: service-confirmation-watcher
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: medical-records-chaser
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: records-order-chase
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          recipient: ScottDurgan@smdopslab.onmicrosoft.com
+      - name: medical-chronology-maintainer
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          treatment_gap_flag_days: 45
+          chronology_package_page_allowance_per_month: 15000
+          chronology_package_cycle_anchor_day: 15
+          chronology_package_cycle_effective_from: '2026-09-16'
+      - name: motion-calendar-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: motion-package-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: minors-compromise-packet
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: trial-binder-assembler
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: mediation-settlement-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: lien-ledger-tracker
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: settlement-statement-feeder
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: daily-needs-you-digest
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: demand-letter-drafter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          demand_allowance_per_cycle: 25
+          rehearsal_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+      - name: document-drafter
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          drafting_allowance_per_cycle: 25
+          enabled_classes: mediation_brief, discovery_set, discovery_response, memo, depo_outline
+          rehearsal_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+      - name: litigation-status
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: Litigation Status
+          deadlines_folder_name: Deadlines
+          staff_reassignment: enabled
+          discovery_breakdown: 'on'
+          file_to_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+          scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
+      - name: case-file-manager
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          folder_name: Case File Manager
+          file_to_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+      - name: matter-records
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      - name: negotiation-watch
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
+          monthly_budget_usd: 25
+          per_job_cap_usd: 10
+          matter_statuses: Open
+          firm_words: smd,lab
+          seed_saved_before: '2026-10-09T14:00:00Z'
+      - name: connector-auth-check
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+      - name: smd-note
+        version: pending
+        initiation:
+          manual: false
+          scheduled: false
+          webhook: false
+        enabled: true
+        settings:
+          scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
+    cron:
+      - skill: statute-watch
+        schedule: 7 12 1 * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: post-intake-daily-list
+        schedule: 47 16 * * 1-5
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: negotiation-watch
+        schedule: 7 8,12,16 * * 1-5
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: connector-auth-check
+        schedule: 13 * * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      - skill: operator-help
+        schedule: 17 14 * * *
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+    skills_disabled:
+      - google-workspace
+      - himalaya
+mcp_connector:
+  enabled: true
+  data_posture: open
+  access:
+    - email: scott@smd.services
+      profile: operator
+      clerk_subjects:
+        - user_3EEs0aMBRgu6PRxBa4g5YhHjggD
+        - user_3E1RPGrTMxkSqciXMTyybUNSJWu
+connectors:
+  PracticeManagement:
+    adapter: smokeball
+    backend: mcp:smokeball
+    enabled: true
+    environment: staging
+    auth_mode: authorization_code
+    token_ref: infisical:/operator/ap-staging/practice-management/smokeball-oauth
+    webhook_url: https://hermes-ap-staging.fly.dev/webhooks/smokeball
+  Email:
+    adapter: msgraph
+    backend: mcp:msgraph-mail
+    enabled: true
+    msgraph_auth:
+      tenant_id: f11d2887-b7f2-4464-a9c6-d4db2166b43c
+      client_id: 9301fd6f-1d97-4ed4-abc3-e99e3cf326f0
+      mailbox: operator@smdopslab.onmicrosoft.com
+      secret_ref: fly-secret:MSGRAPH_CLIENT_SECRET
+    poll_seconds: 45
+  WebSearch:
+    adapter: brave
+    backend: native:brave-free
+    enabled: true
+webhook_triggers:
+  - source: msgraph
+    event_type: message.received
+    skill: matter-inbox-router
+    persona: operator
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  inbound_allow_from:
+    - '@smdopslab.onmicrosoft.com'
+    - scott@smd.services
+    - ss-probe-admin@agentmail.to
+    - ss-probe-runner@agentmail.to
+  admins:
+    - ss-probe-admin@agentmail.to
+    - ScottDurgan@smdopslab.onmicrosoft.com
+    - scott@smd.services
+  rule_requests_to:
+    - ScottDurgan@smdopslab.onmicrosoft.com
+    - scott@smd.services
+  ops_reply_from:
+    - scott@smd.services
+    - team@smd.services
+    - smdurgan@smdurgan.com
+  outbound_roster:
+    - address: scott@smd.services
+      class: firm_staff
+      note: SMD operations desk (cards are addressed here); outbound classification only, never inbound trust
+    - address: team@smd.services
+      class: firm_staff
+      note: SMD operations desk; outbound classification only, never inbound trust
+  staff_send_as:
+    - address: ScottDurgan@smdopslab.onmicrosoft.com
+      name: Scott Durgan (lab)
+  device_senders:
+    - address: ss-probe-runner@agentmail.to
+      replies_to: ScottDurgan@smdopslab.onmicrosoft.com
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+business_hours:
+  timezone: America/Los_Angeles
+  days:
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+  start: 08:00
+  end: '18:00'
+escalation:
+  red_flag_recipients:
+    - ScottDurgan@smdopslab.onmicrosoft.com
+    - scott@smd.services
+  failure_recipients:
+    - scott@smd.services
+  case_alert_routing:
+    mode: central
+routine_names:
+  discovery-served-watch: Served discovery caught
+  discovery-response-tracker: Response deadlines
+  client-verification-tracker: Client verification
+  separate-statement-assembler: Separate statement
+  opposing-response-deficiency-review: Opposing responses reviewed
+  meet-and-confer-drafter: Meet-and-confer letter
+  discovery-response-staging: Response inputs staged
+  matter-initiation-setup: New matter setup
+  service-confirmation-watcher: Service confirmation
+  records-order-chase: Records chase
+  medical-chronology-maintainer: Medical chronology
+  motion-calendar-tracker: Motion calendar
+  motion-package-assembler: Motion package
+  minors-compromise-packet: Minor's compromise packet
+  trial-binder-assembler: Trial binder
+  mediation-settlement-tracker: Mediation and settlement
+  lien-ledger-tracker: Lien ledger
+  settlement-statement-feeder: Settlement statement
+  daily-needs-you-digest: Daily "what needs you"
+self_initiation:
+  sequence:
+    - operator-self-test
+    - voice-establishment
+    - document-library-establishment
+  document_library:
+    folder_name: Document Library
+    templates:
+      first_party_rep_letter: Form - 1st Party Rep Letter.docx
+      third_party_rep_letter: Form - 3rd Party Rep Letter.docx
+      health_notice_blue_shield: Form - Med Ins Blue Shield.docx
+      sr1_form: Form - DMV SR1.pdf
+      dec_page_fax: Form - Fax Dec Page.docx
+      med_pay_fax: Form - Fax Medpay.docx
+      sr19_form: Form - DMV SR19.pdf
+      wage_loss_letter: Form - Wage Loss Letter.docx
+      police_request_city: Form - Police Req City.docx
+      police_request_chp: Form - Police Req CHP.docx
+      funding_case_eval: Form - Funding Case Eval.pdf
+    operator_matter:
+      number: OPS-OPERATOR-LIBRARY
+      description: Operator Library
+      client_contact_id: 7236214f-628e-412b-ad0e-099c61371cd4
+      matter_type_id: 42cc724c-f046-451c-8452-4284f7a82b66_CA
+      client_contact_name: SMD Operations
+      matter_type_name: Personal Injury - Plaintiff
+memory:
+  d1_namespace: ap-staging
+  r2_vault_path: vaults/ap-staging/
+  vectorize_index: hermes-ap-staging-vault
+staff_mailbox_reads:
+  mailboxes:
+    - test-adjuster@smdopslab.onmicrosoft.com
+combined_post_intake:
+  medical_folder: MEDICAL RECORDS
+smokeball_layouts:
+  settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca
+records_orders:
+  pre_approved_custodian_fee: 100
+  authorization: e_auth
+form_letters:
+  preparer_title: Legal Assistant
+  firm:
+    name: SMD Lab Law, LLP
+    address:
+      - 1 Rehearsal Way
+      - Labtown, CA 95000
+  forms:
+    first_party_rep:
+      label: 1st party rep letter
+      document_class: first_party_rep_letter
+      default_template: Form - 1st Party Rep Letter.docx
+      file_name: 1st party letter.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: 'VIA FAX: '
+      email_label: 'Email: '
+      paragraph_fields:
+        - delivery_lines
+      signer_name_from: authored
+      facts_kind: rep
+    third_party_rep:
+      label: 3rd party rep letter
+      document_class: third_party_rep_letter
+      default_template: Form - 3rd Party Rep Letter.docx
+      file_name: 3rd Party Letter.docx
+      side: Defendants
+      client_side: false
+      fax_label: 'Via Fax: '
+      email_label: 'Via Email: '
+      paragraph_fields:
+        - delivery_lines
+        - carrier_address
+      signer_name_from: staff
+      facts_kind: rep
+    health_blue_shield:
+      label: health insurer notice (Blue Shield)
+      document_class: health_notice_blue_shield
+      default_template: Form - Med Ins Blue Shield.docx
+      file_name: Med Ins Req. Blue Shield.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: health
+    dec_page_fax:
+      label: dec page request (fax cover)
+      document_class: dec_page_fax
+      default_template: Form - Fax Dec Page.docx
+      file_name: Fax Cover Sheet - Req Dec Page.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    med_pay_fax:
+      label: med pay request (fax cover)
+      document_class: med_pay_fax
+      default_template: Form - Fax Medpay.docx
+      file_name: Fax Cover Sheet Medpay.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields: []
+      signer_name_from: preparer
+      facts_kind: fax
+    wage_loss:
+      label: wage loss letter
+      document_class: wage_loss_letter
+      default_template: Form - Wage Loss Letter.docx
+      file_name: Wage Loss Letter.docx
+      side: Plaintiffs
+      client_side: true
+      fax_label: ''
+      email_label: ''
+      paragraph_fields:
+        - employer_address
+      signer_name_from: preparer
+      facts_kind: wage
+  police_agencies:
+    lab_city_pd:
+      name: Labtown City Police Department
+      short: Labtown PD
+      reply_name: the Labtown police
+      kind: city
+      address:
+        - 100 Lab Plaza
+        - Labtown, CA 95000
+      channel: portal
+      route: labtown-pd.nextrequest.invalid
+      match:
+        - labtown police
+        - labtown city police
+        - labtown pd
+    lab_north_chp:
+      name: North Labtown CHP
+      short: North Labtown CHP
+      reply_name: the Highway Patrol's North Labtown office
+      kind: chp
+      address:
+        - 200 Patrol Way
+        - Labtown, CA 95001
+      channel: mail
+      match:
+        - north labtown area
+        - north labtown chp
+        - north labtown highway patrol
+    lab_heights_pd:
+      name: Lab Heights Police Department
+      short: Lab Heights PD
+      reply_name: the Lab Heights police
+      kind: city
+      address:
+        - 300 Heights Square
+        - Lab Heights, CA 95002
+      channel: email
+      # An SMD AgentMail stand-in OUTSIDE the lab domain, so a send to the
+      # agency classifies as outside mail here exactly as it does on A&P.
+      route: ap-records-standin@agentmail.to
+      match:
+        - lab heights police
+        - lab heights pd
+    lab_ridge_pd:
+      name: Labridge Police Department
+      short: Labridge PD
+      reply_name: the Labridge police
+      kind: city
+      address:
+        - 400 Ridge Blvd.
+        - Labridge, CA 95003
+      channel: portal
+      match:
+        - labridge police
+        - labridge pd
+    lab_lake_pd:
+      name: Lab Lake Police Department
+      short: Lab Lake PD
+      reply_name: the Lab Lake police
+      kind: city
+      channel: portal
+      route: lablake-pd.nextrequest.invalid
+      match:
+        - lab lake police
+        - lab lake pd
+vendor_invoice_intake:
+  is_billable: true
+  folder_name: INVOICES
+  staff_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+matter_file_delivery:
+  recipients:
+    - '@smdopslab.onmicrosoft.com'
+  review_first: 10
+logic_in_code:
+  library_setup: enforce

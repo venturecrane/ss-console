@@ -7,6 +7,9 @@
 # and whose secrets it isolates), and work-health (per-purpose overrides). Read
 # through operator/bin/lib/seat_purpose.py.
 seats:
+  ap-staging:
+    purpose: internal
+    provisioned: false
   ashton-price:
     purpose: client
     provisioned: true

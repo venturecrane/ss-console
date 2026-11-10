@@ -1,0 +1,92 @@
+# The twin declaration (ADR 0107): this seat's customer.yaml is ashton-price's,
+# exactly, except at the paths below. tests/twin-drift.test.ts (logic in
+# scripts/lib/twin-drift.ts) fails when the two differ anywhere not declared
+# here, and when a path here covers no difference (so the list stays minimal:
+# every line is a difference that exists, with the reason it must).
+#
+# A path is dotted keys; a list element is addressed by its identity key
+# (`[slug=...]`, `[name=...]`, `[address=...]`, `[email=...]`) and a path
+# covers everything beneath it. People are declared at the list, never by a
+# client's address, so no A&P value is repeated here.
+#
+# `twin_of` is also the intended twin before the flip:
+# `operator/bin/reprovision-staging.sh --pre-flip ap-staging` isolates the
+# secrets of the client named here (operator/bin/lib/seat_purpose.py
+# declared-twin). Read before adding a difference: every one is a place the twin
+# stops rehearsing the client, so it must be a value that cannot be the client's
+# (an identity, a tenant, a mailbox, a person, a vault), never a behaviour.
+twin_of: ashton-price
+differences:
+  # ---- identity ----
+  - path: customer_id
+    why: the seat's own slug
+  - path: customer_name
+    why: a fictional lab firm, never the client's name
+  - path: firm_identity
+    why: fictional letterhead (SMD Lab Law, 555 numbers, .invalid site)
+  - path: seat.kind
+    why: preprod, so fleet alert mail and rehearsal scope treat it as SMD's own seat, never a client waiting
+  - path: memory
+    why: the seat's own D1 namespace, R2 vault prefix and vector index
+  # ---- the tenant: SMD's Smokeball staging tenant ----
+  - path: connectors.PracticeManagement.environment
+    why: SMD's own staging tenant through SMD's sandbox app, never the client's production tenant
+  - path: connectors.PracticeManagement.token_ref
+    why: the twin's own refresh token, from its own consent into the staging tenant
+  - path: connectors.PracticeManagement.webhook_url
+    why: the twin's own Fly app
+  - path: personas[slug=operator].skills[name=demand-letter-drafter].settings.rehearsal_matter_id
+    why: the Operator Library matter's id in the staging tenant (PENDING until read from it)
+  - path: personas[slug=operator].skills[name=document-drafter].settings.rehearsal_matter_id
+    why: the Operator Library matter's id in the staging tenant (PENDING until read from it)
+  - path: personas[slug=operator].skills[name=litigation-status].settings.file_to_matter_id
+    why: the Operator Library matter's id in the staging tenant (PENDING until read from it)
+  - path: personas[slug=operator].skills[name=case-file-manager].settings.file_to_matter_id
+    why: the Operator Library matter's id in the staging tenant (PENDING until read from it)
+  - path: self_initiation.document_library.operator_matter.client_contact_id
+    why: the staging tenant's own SMD Operations contact (the one pilot-smokeball uses)
+  - path: self_initiation.document_library.operator_matter.client_contact_name
+    why: that contact's name as the staging tenant carries it
+  - path: vendor_invoice_intake.staff_id
+    why: the staging tenant's staff row (PENDING until read from it)
+  # ---- the mailbox: the smdopslab lab tenant ----
+  - path: connectors.Email.msgraph_auth
+    why: the lab tenant, its read app registration and its operator mailbox (the ones smd-staging uses)
+  - path: staff_mailbox_reads
+    why: a lab mailbox, never a client staff member's; never the send-as approver's, or the read-app fence check fails
+  # ---- people: SMD lab stand-ins in the client's shape ----
+  - path: users
+    why: stand-ins for the principal and the office manager
+  - path: scope.inbound_allow_from
+    why: the lab domain in place of the firm's, plus the two AgentMail stand-ins it does not cover
+  - path: scope.admins
+    why: the same three-admin shape, on stand-ins
+  - path: scope.rule_requests_to
+    why: the office-manager stand-in
+  - path: scope.staff_send_as
+    why: the lab staff mailbox, which holds Exchange Send As for the lab operator mailbox
+  - path: scope.device_senders
+    why: an SMD sender standing in for the office scanner, replies to the office-manager stand-in
+  - path: escalation.red_flag_recipients
+    why: the office-manager stand-in
+  - path: matter_file_delivery.recipients
+    why: the lab domain in place of the firm's
+  - path: personas[slug=operator].skills[name=post-intake-daily-list].settings.recipient
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=statute-watch].settings.recipient
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=records-order-chase].settings.recipient
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=litigation-status].settings.scheduled_recipients
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=negotiation-watch].settings.scheduled_recipients
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=smd-note].settings.scheduled_recipients
+    why: the office-manager stand-in
+  - path: personas[slug=operator].skills[name=negotiation-watch].settings.firm_words
+    why: the fictional firm's words
+  # ---- the firm's outside world, fictional ----
+  - path: form_letters.firm
+    why: the fictional firm's name and mailing lines
+  - path: form_letters.police_agencies
+    why: fictional agencies in the same shape (the one email route is an SMD AgentMail stand-in outside the lab domain, so it classifies as outside mail as A&P's does), so a rehearsal never writes to a real police department

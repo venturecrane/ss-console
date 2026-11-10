@@ -1003,6 +1003,141 @@ suite never touches a client seat or a client-visible address
 - **Flip secrets** on the website side if a release changes the per-customer
   seam keys.
 
+### Provisioning ap-staging, the exact twin of ashton-price
+
+The winning line: every change is rehearsed on an exact twin of the A&P seat
+before A&P sees it. `smd-staging` is the release twin today and is not an exact
+copy (no Smokeball connector, a different persona). `ap-staging` is the exact
+copy: `operator/customers/ap-staging/customer.yaml` equals A&P's except the paths
+`operator/customers/ap-staging/twin.yaml` declares (an identity, a tenant, a
+mailbox, a person, a vault, never a behaviour), held there by
+`tests/twin-drift.test.ts`. It is authored `purpose: internal` with
+`fly_app: null` because a client has at most one release twin (ADR 0107), and
+`smd-staging` stays the twin until `ap-staging` is provisioned and green. Every
+step below is the Captain's act and names the probe that shows it held. Values
+never pass through a terminal or a transcript: each copy below reads one
+Infisical name into a file that `crane_secret_set` (source `file`) writes under
+the new name and deletes.
+
+1. **The firm inputs in engagements.** For each lane A&P runs, author
+   `operator/customers/ap-staging/<lane>/` in `venturecrane/engagements`
+   (medchron `firm.yaml`; demand, drafting, litigation, casefile and records
+   `<lane>-firm.yaml` with what each pins), in A&P's shape with fictional
+   content: pilot-smokeball's fictional exemplars where engagements has them,
+   never an A&P document (Law 15). Merge to engagements main.
+   Probe: `git -C ~/dev/engagements show origin/main:operator/customers/ap-staging/medchron/firm.yaml >/dev/null && echo ok`,
+   once per lane. The medchron config is what the self-test count turns on: A&P
+   runs 101 checks, smd-staging 92, and the 9 between them are the medchron
+   firm-config, token, controls and gate checks `seat-checks.sh` runs only
+   where `lane_authored medchron` holds. With it staged `ap-staging` runs A&P's
+   101; without it, 92.
+2. **The staging tenant's ids (the PENDING markers).** `ap-staging` binds
+   SMD's Smokeball staging tenant, the one pilot-smokeball is connected to. Read,
+   through pilot-smokeball's connection and with no write, the id of the
+   matter numbered `OPS-OPERATOR-LIBRARY` (the twin keeps A&P's library number)
+   and the id of the tenant's staff row, then replace the four nil-GUID matter
+   ids and `vendor_invoice_intake.staff_id` in `ap-staging/customer.yaml` by PR.
+   `operator_matter.client_contact_id` is already the tenant's SMD Operations
+   contact pilot-smokeball authors.
+   Probe: `npx tsx scripts/refuse-pending-config.ts --slug ap-staging --config operator/customers/ap-staging/customer.yaml`
+   prints nothing about customer.yaml (it still names `fly_app: null` until
+   step 4).
+3. **The Fly app and its volume.** `fly apps create hermes-ap-staging --org
+   personal` (a new app: Fly cannot rename `hermes-smd-staging`). A&P's volume
+   is 25 GB and provisioning creates 10 GB only when none exists, so create it
+   first at A&P's size: `fly volumes create hermes_state --size 25 --region sjc
+   -a hermes-ap-staging --yes`.
+   Probe: `fly volumes list -a hermes-ap-staging` shows one `hermes_state`,
+   25GB, sjc; `fly volumes list -a hermes-ashton-price` is the size to match.
+4. **The app, authored, and the release tick.** One PR: `fly_app:
+   hermes-ap-staging` in `ap-staging/seat.yaml` with `unprovisioned_reason`
+   removed (purpose stays `internal`, ring 2, so it takes releases after A&P
+   until the flip), `npm run gen:seat-registries`, and the seat's option and
+   `FLY_DEPLOY_TOKEN__AP_STAGING` line in `.github/workflows/release-tick.yml`
+   (the name `seat_token_env_name` in `operator/bin/lib/fleet/fly.py` derives).
+   Mint that deploy token straight into the `fleet-release` environment, piped,
+   never printed (a new app's deploy token is necessarily new).
+   Probe: `tests/seat-inventory.test.ts` and the release-tick conformance test
+   pass in the PR's CI; `gh secret list --env fleet-release | grep FLY_DEPLOY_TOKEN__AP_STAGING`.
+5. **The first `customer_configs` row.** `npx tsx scripts/project-customer-config.ts
+   ap-staging <entity_id> --actor=<email>` with smd-staging's entity (both roll
+   up to smd-services), applied to remote D1 by the command its header gives.
+   Probe: `SELECT slug, entity_id FROM customer_configs WHERE slug IN ('ap-staging','smd-staging')`
+   returns both rows on one entity.
+6. **The per-seat Infisical names, values reused.** In `/ss` prod, each new
+   NAME holding a value `/ss` already holds (no new keys):
+   `MSGRAPH_CLIENT_SECRET__AP_STAGING`, `MSGRAPH_SEND_CLIENT_ID__AP_STAGING` and
+   `MSGRAPH_SEND_CLIENT_SECRET__AP_STAGING` from the `__SMD_STAGING` names (the
+   same lab apps and mailbox); `ANTHROPIC_API_KEY__AP_STAGING` from
+   `ANTHROPIC_API_KEY` (no `__SMD_STAGING` key exists to copy; an Anthropic
+   workspace of the twin's own would be a new key, the Captain's call).
+   Deliberately NOT created: anything `__ASHTON_PRICE` copied, any
+   `RECORDS_VENDOR_*__AP_STAGING` (a records vendor token is a real firm's
+   account; the records-order tools then say the vendor is not connected,
+   which is the twin's stated difference), and `SMOKEBALL_STAGING_*` (SMD's
+   sandbox app, already in `/ss`, kept by the wrapper as the `sandbox` custody
+   class).
+   Probe: `crane_secret_check` on `/ss` prod for the four names reports them
+   present, and the dry run `REPROVISION_STAGING_DRY_RUN=1 operator/bin/reprovision-staging.sh --pre-flip ap-staging`
+   lists every `__ASHTON_PRICE` name, `SMOKEBALL_PROD_*`, and none of
+   `SMOKEBALL_STAGING_*` or `ANTHROPIC_API_KEY__AP_STAGING`.
+7. **Provision, pre-flip.** From a clean checkout of current main, with the
+   engagements clone current: `operator/bin/reprovision-staging.sh --pre-flip ap-staging`.
+   It refuses any seat that is not `internal` with a `twin.yaml` naming a client
+   seat, blanks the declared client's customer-owned secrets and the global
+   ones, keeps the twin's own per-seat names (the new app has no earlier
+   Machine secret to fall back on), substitutes the isolated Google credential,
+   and runs `provision-customer.sh ap-staging`, ending in the boot smoke.
+   (`operator/bin/reprovision.sh ap-staging` refuses: it injects `/ss`
+   un-isolated.)
+   Probe: the boot smoke's last line, then `fleet status` shows `ap-staging`
+   on the newest completed release with a fresh heartbeat and a self-test of
+   101 checks, 0 failed (92 if step 1's medchron config is missing). The
+   staff-voice spec alert (`spec_control_broken:staff.voice`) is expected
+   until the twin's own voice is established, as it was on A&P.
+8. **Smokeball consent, into SMD's staging tenant.** `infisical run --env=prod
+   --path=/ss -- bin/connect-smokeball.sh ap-staging` prints the authorize URL
+   for the staging app (it reads `environment: staging`); sign in to SMD's
+   staging tenant, never A&P's, and Allow.
+   Probe: the next hourly `connector-auth-check` verdict on the seat is
+   connected (SMD's work-health email), and a read-only matter list through the
+   twin returns the staging tenant's matters, including `OPS-OPERATOR-LIBRARY`.
+9. **Lane proofs on the twin.** `ap-staging/lane-proofs.yaml` starts empty
+   (a proof is evidence from its own seat), so each lane's first job waits and
+   pages SMD. Prove and accept each lane A&P runs, on the twin, with
+   `operator/bin/lane-proof.sh ap-staging dry-run|accept <job id>`, and record
+   them in `lane-proofs.yaml` by PR. Prove negotiation-watch first: its cron
+   submits a job three times each weekday.
+   Probe: `lane-proofs.yaml` names every lane A&P's does.
+10. **The lab mailbox overlap.** Until step 12, `smd-staging` and `ap-staging`
+    both poll `operator@smdopslab.onmicrosoft.com`, so a lab message is
+    answered by both seats. Keep lab mail to the probes above in that window.
+11. **The flip.** One PR: in `ap-staging/seat.yaml` `purpose: release-twin`,
+    `twin_of: ashton-price`, the `ring:` line removed; in
+    `smd-staging/seat.yaml` a purpose other than `release-twin`; the
+    `smd-staging` entry removed from `STATED_GAPS` in `tests/twin-drift.test.ts`;
+    `npm run gen:seat-registries`; the release-tick bundle order note
+    updated. After it, `reprovision-staging.sh ap-staging` (no flag) is the
+    reprovision path.
+    Probe: `operator/fleet/rings.yaml` reads ring 0 `[ap-staging]` and
+    `twins: ashton-price: ap-staging`; the next release's rollout rows show
+    `ap-staging` done before `ashton-price` takes it.
+12. **Decommission smd-staging.** `infisical run --env=prod --path=/ss --
+    operator/bin/decommission-customer.sh smd-staging` (a dry run: the survey
+    of every layer `operator/bin/lib/decommission_inventory.py` names), then
+    `--live --confirm-slug smd-staging`, then the repo edits its residue
+    report prints (the tombstone rename and the registries). Gone means gone: a
+    negative probe per runtime layer, each recorded with `crane_verify`:
+    `fly apps list` has no `hermes-smd-staging`; R2 lists nothing under
+    `vaults/smd-staging/` and no `ss-operator-smd-staging-skills` bucket;
+    Vectorize has no `hermes-smd-staging-vault`; D1 `customer_configs`,
+    `fleet_holds` and the other slug-keyed tables return no `smd-staging` row;
+    `crane_secret_check` on `/ss` prod finds no `__SMD_STAGING` name
+    (after the `MSGRAPH_*__SMD_STAGING` names are deleted; their values live on
+    under `__AP_STAGING`); `gh secret list --env fleet-release` has no
+    `FLY_DEPLOY_TOKEN__SMD_STAGING`; and `fleet status` and the release-tick
+    workflow no longer name it.
+
 ## Never root-SSH a live Operator Machine
 
 `flyctl ssh console` runs as root. Running any overlay code there writes

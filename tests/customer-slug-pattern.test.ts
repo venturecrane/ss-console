@@ -96,6 +96,7 @@ const RUNTIME = (() => {
  */
 const CANDIDATES: readonly string[] = [
   // live seats
+  'ap-staging',
   'ashton-price',
   'ashton-price-marketing',
   'brokery',
@@ -138,6 +139,7 @@ const MUST_REJECT: readonly string[] = [
 
 /** The live seats, asserted separately so a regression names them. */
 const LIVE_SLUGS: readonly string[] = [
+  'ap-staging',
   'ashton-price',
   'ashton-price-marketing',
   'brokery',
