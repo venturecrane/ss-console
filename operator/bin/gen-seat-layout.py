@@ -12,6 +12,11 @@ Usage (from operator/):
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# Run from anywhere: `python3 operator/bin/gen-seat-layout.py` is the command the
+# generated headers and the out-of-sync message print, so put operator/ on the path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from bin.lib import seat_layout_gen as gen
 

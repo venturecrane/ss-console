@@ -25,9 +25,10 @@
 #
 # FIELDS (per id; ids are lower_snake and become SMD_LAYOUT_<ID> / <ID> constants):
 #   path          absolute, or "{parent_id}/child" to derive from another id
-#   env           runtime override vars that carry this path. Set means equal to
-#                 the path on a live seat; unset is fine (code reads
-#                 `os.environ.get(VAR) or DEFAULT`).
+#   env           runtime override vars that carry this path. Set and non-empty
+#                 means equal to the path on a live seat; unset or empty is fine
+#                 (code reads `os.environ.get(VAR) or DEFAULT`, and a lane that is
+#                 off gets its queue var set empty, entrypoint-lanes.sh).
 #   expect        what the probe asserts: present | absent | lazy (may not exist
 #                 yet, kind checked when it does). Omitted: declared, not probed.
 #   kind          dir | file (checked when expect is present or lazy)

@@ -731,6 +731,15 @@ def test_a_process_carrying_another_path_fails_the_layout(seat: dict[str, Path])
     assert found["ok"] is False and "pid 4242: JOBS_DATA_DIR is /tmp/elsewhere" in found["detail"], found
 
 
+def test_a_lane_var_set_empty_because_the_lane_is_off_passes_the_layout(seat: dict[str, Path]) -> None:
+    # entrypoint-lanes.sh passes SMD_MEDCHRON_QUEUE_DIR="" to the broker on every
+    # seat that authors no chronology lane, so its verbs fail closed. Empty is off.
+    root = _plant_layout(seat)
+    _write(root / "proc/4243/environ", "SMD_MEDCHRON_QUEUE_DIR=\0JOBS_DATA_DIR=/opt/data/jobs\0")
+    found = _layout(seat)
+    assert found["ok"] is True, found
+
+
 def _probe(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - the repo's own probe against a tmp tree
         [sys.executable, str(TEMPLATES / "seat-layout-probe.py"), *args],

@@ -161,6 +161,9 @@ def _environs() -> list[tuple[str, dict[str, str]]]:
 
 
 def check_env(paths: dict) -> tuple[list[str], int]:
+    """An EMPTY value is an unset one: entrypoint-lanes.sh passes every lane's
+    queue var to the broker and sets it empty when the lane is off, so its verbs
+    fail closed. Only a non-empty value that differs is a mismatch."""
     wanted = {name: spec["path"] for spec in paths.values() for name in spec.get("env", [])}
     problems, scanned = [], 0
     for pid, env in _environs():
@@ -168,7 +171,7 @@ def check_env(paths: dict) -> tuple[list[str], int]:
         problems += [
             f"pid {pid}: {name} is {env[name]}, the layout declares {path}"
             for name, path in sorted(wanted.items())
-            if name in env and env[name] != path
+            if env.get(name) and env[name] != path
         ]
     return problems, scanned
 
