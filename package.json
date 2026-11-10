@@ -24,6 +24,7 @@
     "test:workers": "for dir in workers/*/; do [ -f \"${dir}package.json\" ] || continue; echo \"Testing $dir\" && npm run test --prefix \"$dir\" || exit 1; done",
     "verify": "npm run typecheck && npm run typecheck:workers && npm run format:check && npm run lint && npm run deadcode && npm run build && npm run test && npm run test:workers",
     "handbook:drift": "npx tsx scripts/handbook-review.ts",
+    "rework": "npx tsx scripts/rework-measure.ts",
     "handbook:adr-index": "npx tsx scripts/handbook-adr-index.ts",
     "handbook:connectors": "npx tsx scripts/handbook-connector-inventory.ts",
     "handbook:roster": "npx tsx scripts/handbook-roster.ts",
