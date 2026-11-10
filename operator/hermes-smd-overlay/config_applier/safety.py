@@ -303,6 +303,13 @@ _LIVE_WRITABLE_PREFIXES: tuple[str, ...] = (
     # yaml, so a live write is complete on its own (2026-11-02: authoring it on
     # A&P otherwise needed a machine restart to reach the seat).
     "matter_file_delivery",
+    # ADR 0104: the logic-in-code switches (library_setup, fixed_wording, ...).
+    # Every reader (smokeball_connector.logic_in_code.load_switch and the
+    # broker's twin) opens this live yaml fresh on every call and caches
+    # nothing, so a live write is complete on its own. Before this entry a
+    # merged switch waited for the next boot: on 2026-11-09 ashton-price's
+    # library_setup merged and the seat kept reading it off until a restart.
+    "logic_in_code",
 )
 
 # Rebuild-class paths that must NEVER apply live, even if a future allow-list
