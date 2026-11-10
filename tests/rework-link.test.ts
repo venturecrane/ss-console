@@ -13,12 +13,13 @@ import { describe, it, expect } from 'vitest'
 import {
   kindOf,
   linkFixes,
+  parseBuiltBy,
   referencedNumbers,
   SHARED_FILE_PRS,
   WEAK_WINDOW_DAYS,
   type PrRecord,
 } from '../scripts/rework/link'
-import { measure, renderReport } from '../scripts/rework/report'
+import { measure, processLabels, renderReport } from '../scripts/rework/report'
 
 function pr(over: Partial<PrRecord> & { number: number }): PrRecord {
   return {
@@ -251,5 +252,75 @@ describe('measure', () => {
       ['unmapped', 1],
     ])
     expect(measure(snapshot, null).bySession).toBeNull()
+  })
+})
+
+describe('built-by: the per-PR process record labels features', () => {
+  const snapshot = { fetchedAt: '2026-09-20T00:00:00Z', repo: 'x/y', since: '2026-09-01', prs: ALL }
+  const line = (o: Record<string, unknown>) => JSON.stringify(o)
+  const LOG = [
+    line({
+      pr: 100,
+      repo: 'x/y',
+      session_id: 's1',
+      auto_build: false,
+      wired: true,
+      plan: true,
+      critique: false,
+    }),
+    // gh pr create retried in an auto-build session: any true wins.
+    line({
+      pr: 100,
+      repo: 'x/y',
+      session_id: 's2',
+      auto_build: true,
+      wired: true,
+      plan: true,
+      critique: true,
+    }),
+    // Same number in another repo: not this PR.
+    line({ pr: 200, repo: 'other/repo', session_id: 's3', auto_build: true }),
+    '{not json',
+    line({ pr: 'NaN' }),
+    '',
+  ].join('\n')
+
+  it('parses the log, skipping and counting malformed lines', () => {
+    const { records, skipped } = parseBuiltBy(LOG)
+    expect(records.map((r) => [r.pr, r.repo, r.auto_build])).toEqual([
+      [100, 'x/y', false],
+      [100, 'x/y', true],
+      [200, 'other/repo', true],
+    ])
+    expect(skipped).toBe(2)
+  })
+
+  it('labels from built-by first and falls back to the --sessions map', () => {
+    const labels = processLabels(
+      parseBuiltBy(LOG).records,
+      new Map([
+        [100, 'other'], // overridden: the hook recorded auto-build at PR creation
+        [200, 'other'], // kept: the only built-by row for 200 is another repo's
+      ]),
+      'x/y'
+    )
+    const m = measure(snapshot, labels)
+    expect(m.rows.map((r) => [r.number, r.session])).toEqual([
+      [100, 'auto-build'],
+      [200, 'other'],
+    ])
+  })
+
+  it('built-by alone labels what it names and leaves the rest unmapped', () => {
+    const m = measure(snapshot, processLabels(parseBuiltBy(LOG).records, null, 'x/y'))
+    expect(m.bySession?.map((g) => [g.key, g.features])).toEqual([
+      ['auto-build', 1],
+      ['unmapped', 1],
+    ])
+  })
+
+  it('no source at all prints no session table', () => {
+    expect(processLabels(null, null, 'x/y')).toBeNull()
+    expect(measure(snapshot, processLabels(null, null, 'x/y')).bySession).toBeNull()
   })
 })

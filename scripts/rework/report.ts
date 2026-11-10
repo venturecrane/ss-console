@@ -19,10 +19,40 @@ import {
   isFixCommit,
   linkFixes,
   STRUCTURAL_PRS,
+  type BuiltByRecord,
   type FixLink,
   type PrRecord,
   type Snapshot,
 } from './link'
+
+/** The process label for one PR, from its built-by records (any `true` wins). */
+export function builtByLabel(records: BuiltByRecord[]): string {
+  return records.some((r) => r.auto_build) ? 'auto-build' : 'other'
+}
+
+/**
+ * Feature PR number -> process label. A PR with a built-by record (written by
+ * the hook when the PR was opened) is labelled from it; a PR without one falls
+ * back to the --sessions map; a PR in neither is left out, and measure() calls
+ * it `unmapped`. Records for another repo are ignored: PR numbers are per repo.
+ * Returns null when there is no source at all, so the session table is not
+ * printed full of `unmapped`.
+ */
+export function processLabels(
+  builtBy: BuiltByRecord[] | null,
+  sessions: Map<number, string> | null,
+  repo: string
+): Map<number, string> | null {
+  if (builtBy === null && sessions === null) return null
+  const out = new Map<number, string>(sessions ?? [])
+  const byPr = new Map<number, BuiltByRecord[]>()
+  for (const r of builtBy ?? []) {
+    if (r.repo !== null && r.repo !== repo) continue
+    byPr.set(r.pr, [...(byPr.get(r.pr) ?? []), r])
+  }
+  for (const [pr, records] of byPr) out.set(pr, builtByLabel(records))
+  return out
+}
 
 export interface FeatureRow {
   number: number
@@ -168,8 +198,9 @@ function residueOf(
 
 /**
  * The whole measure. `sessions` is an optional map from feature PR number to
- * a session type (e.g. `auto-build` / `other`), built outside this repo from
- * local transcripts; features absent from it are `unmapped`.
+ * a process label (e.g. `auto-build` / `other`), from processLabels(): the
+ * built-by record first, the --sessions map second; features absent from it
+ * are `unmapped`.
  */
 export function measure(snapshot: Snapshot, sessions: Map<number, string> | null): ReworkMeasure {
   const { links, kinds } = linkFixes(snapshot.prs)
