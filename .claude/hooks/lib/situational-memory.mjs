@@ -224,7 +224,7 @@ export function loadTriggered(dir) {
  * The text a reply asserts: fenced and inline code removed, nothing else.
  * Quotes and blockquotes are deliberately kept: a client draft shown in chat
  * usually sits in one, and a post-mortem that quotes the forbidden sentence
- * costs one restatement, where a miss costs the Captain another correction.
+ * costs one correction line, where a miss costs the Captain another correction.
  */
 export function ownWords(msg) {
   return msg.replace(/(^|\n)[ \t]*(```|~~~)[\s\S]*?(\n[ \t]*\2[^\n]*|$)/g, '\n').replace(/`[^`\n]*`/g, ' ')
