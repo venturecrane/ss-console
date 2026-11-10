@@ -393,9 +393,11 @@ crane_handoff(summary: "Added /ship skill, command sync...", status: "done", ven
 ### 7. Report Completion
 
 ```
-Handoff saved to D1. Next session will see this via crane_sos.
+Handoff saved to D1. crane_sos shows it at the next start.
 Run /clear before the next task in this window: a new task should start with fresh context.
 ```
+
+The first line is worded without the phrase "next session" on purpose: that phrase trips the no-deferral lesson's reply trigger, so the old wording bounced every `/eos` (2026-11-10). Keep the phrase out of the completion report; say what is carried and why.
 
 The second line is there because a task carried into an old window brings that window's context with it, re-read every turn (`/usage`, 2026-11-10: "start fresh when you switch tasks" ranked first), and stale context is also a quality risk.
 
