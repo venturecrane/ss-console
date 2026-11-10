@@ -209,3 +209,12 @@ def register(ctx: Any) -> None:
         start_worker_thread()
     except Exception as exc:  # never let worker launch break plugin registration
         logger.warning("hermes-smd-jobs: worker thread launch failed: %s", exc)
+    # The skipped-cron session sweep (shared/cron_session_sweep.py): the empty
+    # sessions every gated cron fire leaves open are ended and deleted through
+    # Hermes' own APIs, a bounded pass every two hours, gateway process only.
+    try:
+        from shared.cron_session_sweep import start_sweeper_thread
+
+        start_sweeper_thread()
+    except Exception as exc:  # never let the sweep break plugin registration
+        logger.warning("hermes-smd-jobs: cron session sweep launch failed: %s", exc)

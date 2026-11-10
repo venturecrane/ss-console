@@ -288,8 +288,8 @@ vars:
     discovery: static
     stage: agent
     requirement: optional
-    consumed_by: [audit, bootstrap-cli]
-    note: Hermes home dir; defaults to /opt/data. Also read by the boot-helper CLI.
+    consumed_by: [audit, bootstrap-cli, jobs]
+    note: Hermes home dir; defaults to /opt/data. Also read by the boot-helper CLI, and by the skipped-cron session sweep (shared/cron_session_sweep.py) to find the seat's profile stores.
   HERMES_ACTIVE_PROFILE:
     discovery: static
     stage: agent
