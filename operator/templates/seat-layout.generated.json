@@ -165,6 +165,12 @@
       "kind": "dir",
       "when": "lanes"
     },
+    "jobs_spend_watch": {
+      "path": "/run/smd-jobs/spend-watch.json",
+      "expect": "lazy",
+      "kind": "file",
+      "when": "lanes"
+    },
     "lanes_run": {
       "path": "/run/smd-lanes",
       "when": "always"

@@ -1,86 +1,82 @@
 {
- "records": {
-  "records": [
-   [
-    "01KTJ0BX0000000000000000CF",
-    "running",
-    {}
-   ],
-   [
-    "01KTJ0BX0000000000000000CF",
-    "delivered",
-    {
-     "cents": 1234,
-     "files": [
-      {
-       "file_id": "up-1",
-       "name": "Case File Manager.xlsx",
-       "role": "workbook",
-       "sha256": "ab",
-       "size": 20480
-      },
-      {
-       "file_id": "up-2",
-       "name": "File Status 100001 2026-10-26.pdf",
-       "role": "file_status",
-       "sha256": "cd",
-       "size": 900
-      }
-     ],
-     "folder_id": "folder-7",
-     "line_outcomes": [
-      {
-       "kind": "task",
-       "n": 1,
-       "outcome": "completed"
-      },
-      {
-       "kind": "medicals",
-       "n": 2,
-       "outcome": "refused_changed"
-      }
-     ],
-     "lines": [
-      {
-       "kind": "task",
-       "matter_id": "m",
-       "n": 1,
-       "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-       "source_id": "t"
-      }
-     ],
-     "lines_proposed": 4,
-     "matters_current": 8,
-     "matters_held": 1,
-     "matters_read": 3,
-     "matters_total": 12,
-     "metrics": {
-      "matters": {},
-      "stages": {}
-     },
-     "stage": "report"
+  "records": {
+    "records": [
+      ["01KTJ0BX0000000000000000CF", "running", {}],
+      [
+        "01KTJ0BX0000000000000000CF",
+        "delivered",
+        {
+          "cents": 1234,
+          "files": [
+            {
+              "file_id": "up-1",
+              "name": "Case File Manager.xlsx",
+              "role": "workbook",
+              "sha256": "ab",
+              "size": 20480
+            },
+            {
+              "file_id": "up-2",
+              "name": "File Status 100001 2026-10-26.pdf",
+              "role": "file_status",
+              "sha256": "cd",
+              "size": 900
+            }
+          ],
+          "folder_id": "folder-7",
+          "line_outcomes": [
+            {
+              "kind": "task",
+              "n": 1,
+              "outcome": "completed"
+            },
+            {
+              "kind": "medicals",
+              "n": 2,
+              "outcome": "refused_changed"
+            }
+          ],
+          "lines": [
+            {
+              "kind": "task",
+              "matter_id": "m",
+              "n": 1,
+              "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "source_id": "t"
+            }
+          ],
+          "lines_proposed": 4,
+          "matters_current": 8,
+          "matters_held": 1,
+          "matters_read": 3,
+          "matters_total": 12,
+          "metrics": {
+            "matters": {},
+            "stages": {}
+          },
+          "stage": "report"
+        }
+      ]
+    ],
+    "tick": "delivered"
+  },
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "deferrals": 0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "reason": null,
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "state": "delivered",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the case-file-manager skill's DELIVER mode for casefile job 01KTJ0BX0000000000000000CF.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: delivered.\nMatters: 12; read this run: 3; already current: 8; not reviewed: 1; File Status filed: 1; changes proposed: 4.\nFolder id: folder-7.\nRequested by: admin@firm.example."
     }
-   ]
-  ],
-  "tick": "delivered"
- },
- "state": {
-  "attempts": 1,
-  "claimed": true,
-  "claimed_at": 1000000.0,
-  "deferrals": 0,
-  "finished_at": 1000000.0,
-  "held_paused": false,
-  "reason": null,
-  "resume_redo": [],
-  "resume_release": false,
-  "resume_release_held": false,
-  "retry_after": null,
-  "state": "delivered",
-  "wake": {
-   "attempts": 0,
-   "pending": true,
-   "task": "Run the case-file-manager skill's DELIVER mode for casefile job 01KTJ0BX0000000000000000CF.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: delivered.\nMatters: 12; read this run: 3; already current: 8; not reviewed: 1; File Status filed: 1; changes proposed: 4.\nFolder id: folder-7.\nRequested by: admin@firm.example."
   }
- }
 }

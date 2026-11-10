@@ -131,6 +131,6 @@ def test_an_ordinary_job_records_what_the_golden_holds(tmp_path, monkeypatch, ca
     got = _normal(tmp_path, {"records": records, "state": state})
     path = GOLDENS / f"{case}.json"
     if os.environ.get("JOBS_WRITE_LANE_GOLDENS"):
-        path.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        path.write_text(json.dumps(got, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     want = _normal(tmp_path, json.loads(path.read_text(encoding="utf-8")))
     assert [d for d in _diffs(want, got) if d not in ALLOWED[case]] == []

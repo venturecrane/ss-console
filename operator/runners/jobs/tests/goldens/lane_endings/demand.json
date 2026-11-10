@@ -1,52 +1,48 @@
 {
- "records": [
-  [
-   "01DEMAND0000000000000000AA",
-   "running",
-   {}
-  ],
-  [
-   "01DEMAND0000000000000000AA",
-   "delivered",
-   {
-    "cents": 650,
-    "delivery": {
-     "cents": 650,
-     "coverage_report": false,
-     "files": [
+  "records": [
+    ["01DEMAND0000000000000000AA", "running", {}],
+    [
+      "01DEMAND0000000000000000AA",
+      "delivered",
       {
-       "name": "Demand.Alpha Example.docx",
-       "role": "demand",
-       "size": 41000
-      },
-      {
-       "name": "Gap Audit - 100001 - 10-06-26.docx",
-       "role": "gap_audit",
-       "size": 9000
+        "cents": 650,
+        "delivery": {
+          "cents": 650,
+          "coverage_report": false,
+          "files": [
+            {
+              "name": "Demand.Alpha Example.docx",
+              "role": "demand",
+              "size": 41000
+            },
+            {
+              "name": "Gap Audit - 100001 - 10-06-26.docx",
+              "role": "gap_audit",
+              "size": 9000
+            }
+          ]
+        },
+        "folder_id": "folder-7"
       }
-     ]
-    },
-    "folder_id": "folder-7"
-   }
-  ]
- ],
- "state": {
-  "attempts": 1,
-  "claimed": true,
-  "claimed_at": 1000000.0,
-  "deferrals": 0,
-  "finished_at": 1000000.0,
-  "held_paused": false,
-  "reason": null,
-  "resume_redo": [],
-  "resume_release": false,
-  "resume_release_held": false,
-  "retry_after": null,
-  "state": "delivered",
-  "wake": {
-   "attempts": 0,
-   "pending": true,
-   "task": "Run the demand-letter-drafter skill's DELIVER mode for demand job 01DEMAND0000000000000000AA.\nLoad it first: your first call is read_file on demand-letter-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: demand.\nOutcome: delivered.\nSpend cents: 650.\nMatter number: 100001.\nFolder id: folder-7.\nFiles: demand (41000 bytes); gap_audit (9000 bytes).\nRequested by: admin@firm.example."
+    ]
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "deferrals": 0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "reason": null,
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "state": "delivered",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the demand-letter-drafter skill's DELIVER mode for demand job 01DEMAND0000000000000000AA.\nLoad it first: your first call is read_file on demand-letter-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: demand.\nOutcome: delivered.\nSpend cents: 650.\nMatter number: 100001.\nFolder id: folder-7.\nFiles: demand (41000 bytes); gap_audit (9000 bytes).\nRequested by: admin@firm.example."
+    }
   }
- }
 }

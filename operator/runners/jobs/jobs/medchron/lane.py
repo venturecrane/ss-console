@@ -227,13 +227,15 @@ class MedchronLane(Daemon):
     def _report(self, job_id: str, code: int, out: str) -> str:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
         stage: str | None = None
+        fields: dict[str, Any]
         if not outcomes:  # `verdict.read` always returns a list; empty is "no verdict from either source"
             state, fields = "failed", {"reason": verdict_mod.lost(code)[:500]}
         else:
             state, fields, stage = self._ledger_fields(outcomes)
         # What the job spent (``spend.py``): a lost verdict still records its
         # usage, and adds no figure at all when there is none to add.
-        cents = spend.recorded_cents(self.job_dir(job_id), fields.get("cents"))
+        reported = fields.get("cents")
+        cents = spend.recorded_cents(self.job_dir(job_id), reported if isinstance(reported, int) else None)
         if cents or "cents" in fields:
             fields["cents"] = cents
         # An infrastructure ending (network, model API, a slow index, a runner

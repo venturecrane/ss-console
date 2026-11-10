@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -564,6 +565,7 @@ _PROOF_WORDS = {
     "job_stopped": "it held, failed or is waiting on its lane's proof; the requester was told nothing, by design",
     "library_edit_refused": "the firm's own save of its library file was not used or not accepted; the firm was told nothing",
     "layout_rule_unplaced": "a layout rule could not be placed against the firm's own edit of its library file, so it stood; the firm was told nothing",
+    "spend_unrecorded": "its usage shows spend while its record shows $0, so the firm's allowance and SMD's cost read low; the firm was told nothing",
 }
 
 
@@ -578,6 +580,27 @@ def _found_reply_job(row: dict) -> str:
         return ""
     parts = str(md.get("reply_binding") or "").split(":")
     return parts[1] if len(parts) == 4 else ""
+
+
+_USAGE_CENTS = re.compile(r"\busage (\d{1,9}) cents\b")
+
+
+def _spend_item(seat: str, job_id: str, lane: str, md: dict, ts: datetime) -> Item:
+    """A ``spend_unrecorded`` row (the seat's hourly sweep, ``jobs/spend.py``):
+    the job ended with usage that prices above $0 and a row that records $0, so
+    the firm's allowance and SMD's cost read low. It is about money, not
+    delivery, so it is worded as such."""
+    m = _USAGE_CENTS.search(str(md.get("detail") or ""))
+    spent = f"${int(m.group(1)) / 100:.2f}" if m else "spend"
+    return item(
+        seat,
+        "job_failed",
+        f"proof:{job_id}:spend_unrecorded",
+        ts,
+        f"The {lane} job's record shows $0 while its usage shows {spent} ({hhmm(ts)}, ref {job_id[-8:]}); "
+        "the firm's allowance and SMD's cost read low.",
+        "Correct the job's recorded spend from its usage ledger before the month's figures are used.",
+    )
 
 
 def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
@@ -626,6 +649,9 @@ def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime
             continue
         code = reason_token(md.get("code")) or "unknown"
         lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
+        if code == "spend_unrecorded":
+            out.append(_spend_item(seat, job_id, lane, md, ts))
+            continue
         out.append(
             item(
                 seat,
