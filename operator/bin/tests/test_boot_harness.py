@@ -359,7 +359,7 @@ def test_the_small_fixture_is_a_2gb_seat_that_reaches_nobody() -> None:
     text = fixture.render(OPERATOR, fixture.SOURCE_SMALL)
     doc = yaml.safe_load(text)
     assert doc["customer_id"] == fixture.SLUG
-    assert doc["machine"] == {"size": "shared-cpu-1x", "memory_mb": 2048}
+    assert doc["machine"] == {"size": "shared-cpu-2x", "memory_mb": 2048}
     assert fixture.reachable_addresses(doc) == []
     for key in ("connectors", "webhook_triggers", "telegram", "record_stores"):
         assert key not in doc
