@@ -31,8 +31,20 @@ PHOENIX = dt.timezone(dt.timedelta(hours=-7))  # Arizona keeps no daylight time
 SEAT_LAYOUT = os.environ.get("SMD_SEAT_LAYOUT", "/app/seat-layout.generated.json")
 REQUESTS_DB = AUDIT_DB = ""
 TEXT_CHARS = 500
-JOB_FIELDS = ("job_id", "id", "kind", "state", "stage", "matter_id", "matter",
-              "attempt", "reason", "hold_reason", "cents", "spent_cents")
+JOB_FIELDS = (
+    "job_id",
+    "id",
+    "kind",
+    "state",
+    "stage",
+    "matter_id",
+    "matter",
+    "attempt",
+    "reason",
+    "hold_reason",
+    "cents",
+    "spent_cents",
+)
 JOB_TIMES = ("created_at", "submitted_at", "updated_at")
 #: One literal query per lane job table: a table name cannot be a bound
 #: parameter, and a formatted one is a query built from data. A lane table the
@@ -123,8 +135,7 @@ def day_window(arg):
 
 
 def replies_for(con, row, cols):
-    ids = [row[c] for c in ("vendor_message_id", "internet_message_id", "thread_ref")
-           if c in cols and row[c]]
+    ids = [row[c] for c in ("vendor_message_id", "internet_message_id", "thread_ref") if c in cols and row[c]]
     found = {}
     for one in ids:
         for s in con.execute("select * from replies where in_reply_to=?", (one,)):
@@ -144,7 +155,8 @@ def print_requests(con, start, end):
         print("%d. %s  from %s" % (n, clock(r["received_at"]), r["sender"] or "(no sender)"))
         print("   Subject: %s" % (r["subject"] or "(none)"))
         asked = (r["request_text"] if "request_text" in cols else None) or (
-            r["request_opening"] if "request_opening" in cols else None)
+            r["request_opening"] if "request_opening" in cols else None
+        )
         print("   Asked:   %s" % (clip(asked) or "(text not kept)"))
         sent = replies_for(con, r, cols)
         first = (r["reply_text"] if "reply_text" in cols else None) or r["reply_opening"]
@@ -176,8 +188,10 @@ def print_jobs(audit, start, end):
     if audit is None:
         print("JOBS: could not look (no %s). This is not 'no jobs'." % AUDIT_DB)
         return
-    tables = [r[0] for r in audit.execute(
-        "select name from sqlite_master where type='table' and name like '%_jobs' order by 1")]
+    tables = [
+        r[0]
+        for r in audit.execute("select name from sqlite_master where type='table' and name like '%_jobs' order by 1")
+    ]
     lines, attention = [], 0
     unread = [t for t in tables if t not in JOB_QUERIES]
     for t in tables:
@@ -192,18 +206,25 @@ def print_jobs(audit, start, end):
             flag = "  <-- needs a look" if state in ("held", "failed") else ""
             attention += 1 if flag else 0
             lines.append("  " + job_line(t, row, cols) + flag)
-    print("JOBS CREATED OR UPDATED THAT DAY: %d (%d held or failed), across %d lane table(s)"
-          % (len(lines), attention, len(tables)))
+    print(
+        "JOBS CREATED OR UPDATED THAT DAY: %d (%d held or failed), across %d lane table(s)"
+        % (len(lines), attention, len(tables))
+    )
     for line in lines:
         print(line)
     if unread:
-        print("NOT READ: lane table(s) this script does not know: %s. Their jobs are "
-              "missing above; that is not 'no jobs'." % ", ".join(unread))
-    held = audit.execute(
-        "select count(*) from audit_log where action_type='REPLY_HELD' and ts>=? and ts<?",
-        (iso(start), iso(end)),
-    ).fetchone()[0] if "audit_log" in [r[0] for r in audit.execute(
-        "select name from sqlite_master where type='table'")] else None
+        print(
+            "NOT READ: lane table(s) this script does not know: %s. Their jobs are "
+            "missing above; that is not 'no jobs'." % ", ".join(unread)
+        )
+    held = (
+        audit.execute(
+            "select count(*) from audit_log where action_type='REPLY_HELD' and ts>=? and ts<?",
+            (iso(start), iso(end)),
+        ).fetchone()[0]
+        if "audit_log" in [r[0] for r in audit.execute("select name from sqlite_master where type='table'")]
+        else None
+    )
     if held is not None:
         print("REPLIES HELD THAT DAY: %d" % held)
 
@@ -225,15 +246,19 @@ def main(argv):
             "select count(*) from requests where received_at>=? and received_at<?",
             (start - 86400, start),
         ).fetchone()[0]
-        print("Operator requests for %s (Phoenix time), read %s"
-              % (day.isoformat(), stamp(dt.datetime.now(PHOENIX).timestamp())))
+        print(
+            "Operator requests for %s (Phoenix time), read %s"
+            % (day.isoformat(), stamp(dt.datetime.now(PHOENIX).timestamp()))
+        )
         print()
         print_requests(con, start, end)
         print_jobs(open_ro(AUDIT_DB), start, end)
         print()
-        print("READ CHECK: %d requests in the index in all; newest of any date %s; "
-              "the day before had %d; index last written %s."
-              % (total, stamp(newest), before, stamp(os.stat(REQUESTS_DB).st_mtime)))
+        print(
+            "READ CHECK: %d requests in the index in all; newest of any date %s; "
+            "the day before had %d; index last written %s."
+            % (total, stamp(newest), before, stamp(os.stat(REQUESTS_DB).st_mtime))
+        )
     except sqlite3.Error as exc:
         fail("sqlite: %s" % exc)
     return 0
