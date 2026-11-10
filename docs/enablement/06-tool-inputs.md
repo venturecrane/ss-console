@@ -34,7 +34,7 @@ Look for: five columns or a left-to-right progression.
 
 Look for: a numbered path or eight cards, with beat 3 emphasized.
 
-> The conversation in eight beats. One: name their reality, and claim nothing about their firm. Two: describe what it is in employee terms. Three, the heart: it is built around how you work, you teach it, and it gets better at your firm every week. Four: you set the line. Five: confidentiality, because it runs in your own walled-off environment. Six: why it is not the cheap AI that burned people. Seven: we run it. Eight: close on scope, and price it like a hire.
+> The conversation in eight beats. One: name their reality, and claim nothing about their firm. Two: describe what it is in employee terms. Three, the heart: it is built around how you work, you teach it, and it gets better at your firm the longer it works with you. Four: you set the line. Five: confidentiality, because it runs in your own walled-off environment. Six: why it is not the cheap AI that burned people. Seven: we run it. Eight: close on scope, and price it like a hire.
 
 ### Also try: the whole kit as a deck
 
@@ -50,7 +50,7 @@ How to use: new file, choose AI diagram, paste one prompt. Spend each of the thr
 
 ### V4: The system in its world (C4 level 1)
 
-> System context diagram in the C4 style. Center: a boundary labelled "Firm's Operator seat: one isolated machine per firm, nothing shared with other clients", containing one box "The Operator". People: "Firm staff" sends email requests to The Operator; "Firm administrator" uses the "Client portal". External systems: "Practice-management system (e.g. Smokeball)"; The Operator reads matters and files work there. "Firm email (e.g. Microsoft 365)"; The Operator sends and drafts from its own mailbox. "Client portal" reads the record of actions from The Operator, never client files. "SMD Services" receives system health and the record of actions from The Operator, never client files. No cloud vendor icons.
+> System context diagram in the C4 style. Center: a boundary labelled "Firm's Operator seat: one isolated machine per firm, nothing shared with other clients", containing one box "The Operator". People: "Firm staff" sends email requests to The Operator; "Firm administrator" uses the "Client portal". External systems: "System of record (e.g. practice-management system)"; The Operator reads matters and files work there. "Firm email (e.g. Microsoft 365)"; The Operator sends and drafts from its own mailbox. "Client portal" reads the record of actions from The Operator, never client files. "SMD Services" receives system health and the record of actions from The Operator, never client files. No cloud vendor icons.
 
 ### V5: Inside the seat (C4 level 2)
 

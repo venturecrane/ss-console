@@ -129,7 +129,7 @@
     <li><span class="n">4</span><span><b>The whole record is checked daily.</b> A verifier pulls each seat's audit record once a day.</span></li>
     <li><span class="n">5</span><span><b>The check has an outside anchor.</b> The last fingerprint held in SMD's console must be present in the record that was pulled. A break raises an alarm at SMD.</span></li>
     <li><span class="n">6</span><span><b>A dated copy is kept.</b> The verifier writes each day's copy to an archive that refuses overwrites.</span></li>
-    <li><span class="n">7</span><span><b>SMD reads a notice per request.</b> Each notice carries who asked, the subject, and the opening of the reply.</span></li>
+    <li><span class="n">7</span><span><b>SMD reads a notice per request.</b> Each notice carries who asked, the subject, their words, the Operator's reply and what it ran. Never a document.</span></li>
   </ol>
   <div class="tbl"><table>
     <thead><tr><th>Kind of data</th><th>Where it lives</th></tr></thead>
@@ -145,7 +145,7 @@
   </table></div>
   <div class="cols3">
     <div><h4>The audit record</h4><ul><li>One entry per action.</li><li>Each entry is chained to the one before it, so a change shows.</li><li>The agent can read it and cannot rewrite it.</li><li>It holds what was done, by which skill, under which limit, and the outcome. It does not hold the text of the client's documents.</li><li>Say "tamper-evident." Do not say "tamper-proof."</li></ul></div>
-    <div><h4>What SMD can see</h4><ul><li>Health, settings, and the audit record of actions.</li><li>A notice per staff request: who asked, the subject, and the opening of the reply.</li><li>Client work itself only from a per-client ops workspace, with access logged.</li></ul></div>
+    <div><h4>What SMD can see</h4><ul><li>Health, settings, and the audit record of actions.</li><li>A notice per staff request: who asked, the subject, their words, the reply and what it ran. Never a document.</li><li>Client work itself only from a per-client ops workspace, with access logged.</li></ul></div>
     <div><h4 class="k4">What never happens</h4><ul><li>The client's files are not copied into SMD's systems.</li><li>Send credentials never reach the agent.</li><li>Client content is not used to train models.</li><li>The Operator does not send from a principal's own mailbox.</li></ul></div>
   </div>
   <h3>Standard terms</h3>

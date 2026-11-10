@@ -1,6 +1,6 @@
 # How an Engagement Goes
 
-_A generic story drawn from our first Operator client. Every name, number and date is removed. Read this in place of sitting in on a client call: this relationship runs almost entirely by email, so the email threads are the call._
+_A generic story drawn from our first Operator client. Every name and date is removed; the only figures kept are the proof figures from part 1. Read this in place of sitting in on a client call: this relationship runs almost entirely by email, so the email threads are the call._
 
 ## Summary
 

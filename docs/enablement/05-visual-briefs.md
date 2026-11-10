@@ -76,7 +76,7 @@ Recommended sequence: make rough versions in the AI tools from these briefs, put
 - **Elements:**
   - People: firm staff (send requests by email); firm administrator (uses the client portal).
   - The firm's Operator seat: one isolated machine for this firm only.
-  - The firm's practice-management system (example: Smokeball). The firm's own email (example: Microsoft 365).
+  - The firm's system of record (for a law firm, its practice-management system). The firm's own email.
   - The client portal: settings, the record of actions, controls.
   - SMD Services: builds, monitors and supports the seat.
 - **Connections:**
@@ -127,7 +127,7 @@ Recommended sequence: make rough versions in the AI tools from these briefs, put
 ## V8: The conversation in eight beats
 
 - **Goal:** a one-page cue card the rep can glance at before a meeting.
-- **Beats:** 1 Name their reality; claim nothing about their firm. 2 What it is, in employee terms. 3 The heart: built around how you work, you teach it, it gets better every week. 4 You set the line. 5 Confidentiality: your own walled-off environment. 6 Why it's not the cheap AI that burned people. 7 We run it. 8 Close: scope, and price it like a hire.
+- **Beats:** 1 Name their reality; claim nothing about their firm. 2 What it is, in employee terms. 3 The heart: built around how you work, you teach it, it gets better the longer it works with you. 4 You set the line. 5 Confidentiality: your own walled-off environment. 6 Why it's not the cheap AI that burned people. 7 We run it. 8 Close: scope, and price it like a hire.
 - **Emphasis:** beat 3, the line to land.
 - **Form:** Napkin (numbered path or card).
 

@@ -34,15 +34,15 @@ The industry-standard way to draw this is the C4 model: level 1 shows the system
 
 ### What a technical buyer will ask, and the answer
 
-| Question                               | Answer                                                                                                                                                                                            |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Is my data mixed with other clients'?  | No. Each client gets its own isolated machine. There is no shared runtime, so crossing clients is impossible by design, not just denied.                                                          |
-| Can SMD read my client files?          | No. We see system health and the record of actions, not the content. Any exception is with the firm's say-so and is logged.                                                                       |
-| Where do my login tokens live?         | On the firm's own seat, never in SMD's console.                                                                                                                                                   |
-| What does it connect to?               | Today: Smokeball (practice management), Microsoft 365 mail, the firm's website, analytics. Clio is specified. New systems connect through a standard protocol (MCP), vendor-built first.          |
-| Does the AI provider train on my data? | Ask the Captain for the current written terms before answering; this is in the procurement packet, not the pitch.                                                                                 |
-| Can it make things up?                 | Every chronology entry is checked against its source page before delivery, and drafts go to an attorney for judgment. The checks are built into the pipeline, not left to the model's discretion. |
-| What if it does something wrong?       | It only does what was authorized, everything is on the record, and corrections are remembered so they hold.                                                                                       |
+| Question                               | Answer                                                                                                                                                                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Is my data mixed with other clients'?  | No. Each client gets its own isolated machine. There is no shared runtime, so crossing clients is impossible by design, not just denied.                                                                                     |
+| Can SMD read my client files?          | No. We see system health and the record of actions, not the content. Any exception is with the firm's say-so and is logged.                                                                                                  |
+| Where do my login tokens live?         | On the firm's own seat, never in SMD's console.                                                                                                                                                                              |
+| What does it connect to?               | Today: one legal practice-management system, Microsoft 365 mail, the firm's website, analytics. A second practice-management system is specified. New systems connect through a standard protocol (MCP), vendor-built first. |
+| Does the AI provider train on my data? | Ask the Captain for the current written terms before answering; this is in the procurement packet, not the pitch.                                                                                                            |
+| Can it make things up?                 | Every chronology entry is checked against its source page before delivery, and drafts go to an attorney for judgment. The checks are built into the pipeline, not left to the model's discretion.                            |
+| What if it does something wrong?       | It only does what was authorized, everything is on the record, and corrections are remembered so they hold.                                                                                                                  |
 
 ## What a prospect would see (short version)
 

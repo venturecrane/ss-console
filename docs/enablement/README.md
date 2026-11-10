@@ -1,8 +1,21 @@
-# Operator Enablement Kit (v0)
+# Operator Enablement Kit
 
 For a sales representative getting to know SMD Services and its flagship, the Operator. Every part leads with a picture; the text underneath explains it.
 
-## Reading order
+## Start here: the product, for any business
+
+| File                                                  | What it is                                                                                                       |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [How the Operator Works](how-the-operator-works.html) | The explainer: seven views, one figure each, vertical-neutral, with one industry example at the end.             |
+| [Product model](product-model.md)                     | The source the explainer rests on: every claim cited to code, config or a decision record, with maturity marked. |
+| [Exemplar research](research-exemplars.md)            | The published explainers the views were benchmarked against, and the conventions taken from them.                |
+| [Designer brief](designer-brief/figures-brief.html)   | The brief for the figures a designer redraws, built by `designer-brief/build_brief.py`.                          |
+
+The explainer is generated: edit `figures-src/gen3.body.html` (text) or `figures-src/gen3.py` (figures), then run `python3 docs/enablement/figures-src/gen3.py docs/enablement/how-the-operator-works.html`.
+
+## Reading order for the law-firm overlay (v0)
+
+Parts 1 to 4 are the first draft, written for one industry (legal) before the product-level explainer above. Read them after it, as the example of how the general model is pitched in one vertical.
 
 > **Visual V0: The kit at a glance.** Brief in [Visual briefs](05-visual-briefs.md).
 

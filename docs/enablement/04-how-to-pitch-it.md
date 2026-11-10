@@ -6,12 +6,12 @@ Built on frameworks you already use: a value framework (Command of the Message s
 
 > **Visual V7: The message, before to after.** Brief in [Visual briefs](05-visual-briefs.md).
 
-| Element                       | What it is for us                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| **Positive business outcome** | The firm moves more cases with the people it has, and what it learns stays with the firm. |
-| **How we do it differently**  | A worker, not a tool. Built for one firm, taught by that firm, run by us.                 |
-| **Why us (the line to land)** | "It runs on your firm's expertise and gets better at your firm every week."               |
-| **Differentiators**           | Limits enforced in code. Tamper-evident record. Isolated seat per firm. Managed service.  |
+| Element                       | What it is for us                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| **Positive business outcome** | The firm moves more cases with the people it has, and what it learns stays with the firm.     |
+| **How we do it differently**  | A worker, not a tool. Built for one firm, taught by that firm, run by us.                     |
+| **Why us (the line to land)** | "It runs on your firm's expertise and gets better at your firm the longer it works with you." |
+| **Differentiators**           | Limits enforced in code. Tamper-evident record. Isolated seat per firm. Managed service.      |
 
 ## The conversation, in eight beats
 
