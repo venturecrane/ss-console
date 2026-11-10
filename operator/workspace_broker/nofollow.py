@@ -15,7 +15,7 @@ never come back "not there". Two rules, one helper each:
   file is expected raises :class:`CannotExamine`; :func:`remove_tree` unlinks a
   link inside a tree and never descends through one.
 
-The root itself is the configured path (``/opt/data`` on a seat, whose parent
+The root itself is the configured path (the data volume on a seat, whose parent
 is root's) and is opened as given.
 """
 

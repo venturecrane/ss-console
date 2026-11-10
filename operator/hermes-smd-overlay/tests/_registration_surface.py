@@ -12,7 +12,7 @@ the prompt-addition list.
 Isolation. Every run gets its own temp state directory for every path-valued
 knob the overlay reads (``contracts/consumes.yaml``), so registering for one
 seat cannot leave a file another seat's registration reads, and nothing is
-written under ``/opt/data``. The collector never starts a turn.
+written under the seat data volume. The collector never starts a turn.
 """
 
 from __future__ import annotations
