@@ -80,7 +80,6 @@ import { checkMcpConnector } from './sections-mcp-connector'
 import { checkGoogleAuth } from './sections-google-auth'
 import { checkAuthority } from './sections-authority'
 import { checkRelationship } from './sections-relationship'
-import { checkCaseManager } from './sections-case-manager'
 import { checkLogicInCode } from './sections-logic-in-code'
 import type { AuthorityPosture } from '../authority'
 import type { CredentialCustody } from '../credential-custody'
@@ -132,9 +131,6 @@ export type {
   LogLevel,
   LogShip,
   SchemaVersion,
-  CaseManager,
-  CaseManagerLevel,
-  DatePrepStep,
 } from './types'
 export {
   ACCEPTED_VERTICALS,
@@ -150,8 +146,6 @@ export {
   ACCEPTED_GOOGLE_AUTH_MODES,
   ACCEPTED_SCHEMA_VERSIONS,
   ACCEPTED_WAKE_POLICIES,
-  ACCEPTED_CASE_MANAGER_LEVELS,
-  ACCEPTED_DATE_PREP_STEPS,
   AUDIT_LOG_DAYS_MAX,
   OBSERVABILITY_DEFAULTS,
   SEMVER_PATTERN,
@@ -266,7 +260,6 @@ interface ParsedSections {
   credentialCustodyDefault: CredentialCustody
   mcpConnector: ReturnType<typeof checkMcpConnector>
   relationship: ReturnType<typeof checkRelationship>
-  caseManager: ReturnType<typeof checkCaseManager>
   logicInCode: ReturnType<typeof checkLogicInCode>
   people: ReturnType<typeof checkPeople>
   spaces: ReturnType<typeof checkSpaces>
@@ -345,7 +338,6 @@ function validateSections(
     credentialCustodyDefault: checkCredentialCustodyDefault(root, errors),
     mcpConnector,
     relationship: checkRelationship(root, errors),
-    caseManager: checkCaseManager(root, errors),
     logicInCode: checkLogicInCode(root, errors),
   }
 }
@@ -387,7 +379,6 @@ function assembleCustomerYaml(root: Record<string, unknown>, p: ParsedSections):
     credential_custody_default: p.credentialCustodyDefault,
     mcp_connector: p.mcpConnector,
     relationship: p.relationship,
-    case_manager: p.caseManager,
     ...(p.logicInCode !== null ? { logic_in_code: p.logicInCode } : {}),
     ...(p.people !== null ? { people: p.people } : {}),
     ...(p.spaces !== null ? { spaces: p.spaces } : {}),

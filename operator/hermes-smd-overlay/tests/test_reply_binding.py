@@ -450,7 +450,6 @@ def test_a_demand_wake_refuses_a_binding_by_email_id(lane) -> None:
     "tool",
     [
         "smd_send_message",
-        "casework_brief",
         "mcp_msgraph_mail_send_message",
         "mcp_agentmail_send_message",
     ],
@@ -604,7 +603,6 @@ def test_a_drafting_wake_refuses_a_binding_by_email_id(lane) -> None:
     "tool",
     [
         "smd_send_message",
-        "casework_brief",
         "mcp_msgraph_mail_send_message",
         "mcp_agentmail_send_message",
     ],
@@ -667,7 +665,6 @@ def _chronology_wake(mod, session: str = WAKE, job: str = JOB) -> None:
     "tool",
     [
         "smd_send_message",
-        "casework_brief",
         "mcp_msgraph_mail_send_message",
         "mcp_agentmail_send_message",
     ],
@@ -779,7 +776,6 @@ def _new_message_verdict(kind: str = "litigation_job", job: str = JOB) -> str:
 
 SEND_TOOLS = [
     "smd_send_message",
-    "casework_brief",
     "mcp_msgraph_mail_send_message",
     "mcp_agentmail_send_message",
 ]

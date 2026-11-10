@@ -1,10 +1,10 @@
 """Sync gate for the vendored casework_ledger.py copies.
 
 CANONICAL SOURCE is ``operator/workspace_broker/casework_ledger.py``: the broker
-validates every casework row with it. Skills that read the ledger (the task
-review, the date prep, the escalator's exclusions) carry a byte-identical copy
-beside their ``pre_run.py``, and the overlay carries one at
-``shared/casework_ledger.py`` for the reply and finish tools. All of them must
+validates every casework row with it. Skills that read the ledger (the deadline
+digest's completion raises) carry a byte-identical copy beside their
+``pre_run.py``, and the overlay carries one at
+``shared/casework_ledger.py`` for the reply tool. All of them must
 compute the same ``item_key`` and fold the same state, or a reply resolves to a
 row the broker never wrote. Edit the canonical, restamp the copies.
 
@@ -29,9 +29,9 @@ _CANONICAL_REL = "operator/workspace_broker/casework_ledger.py"
 # Copies are discovered by glob (skills/*/casework_ledger.py). The floor starts
 # at zero because the broker half lands first; the PR that vendors the first
 # skill copy raises it, and a skill dropping its copy lowers it on purpose.
-# Three copies as of 2026-09-25: task-list-keeper, deadline-miss-escalator,
-# date-prep-brief.
-_FLOOR = 3
+# One copy since 2026-11-10 (deadline-miss-escalator), when the two
+# case-manager routines that also carried one were removed.
+_FLOOR = 1
 
 
 def _pair() -> dict:

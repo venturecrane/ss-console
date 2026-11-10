@@ -171,18 +171,6 @@
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
    },
-   "casework_brief": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_finish": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_step_done": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
    "correction_capture": {
     "plugin": "hermes-smd-corrections",
     "toolset": "corrections"
@@ -608,18 +596,6 @@
    "casefile_job_submit": {
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
-   },
-   "casework_brief": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_finish": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_step_done": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
    },
    "correction_capture": {
     "plugin": "hermes-smd-corrections",
@@ -2185,18 +2161,6 @@
    ]
   ],
   "tools": {
-   "casework_brief": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_finish": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "casework_step_done": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
    "correction_capture": {
     "plugin": "hermes-smd-corrections",
     "toolset": "corrections"

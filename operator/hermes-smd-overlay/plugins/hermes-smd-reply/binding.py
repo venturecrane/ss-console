@@ -347,10 +347,10 @@ TOOL_DESCRIPTION = (
 )
 
 #: Tools a demand or drafting job's completion wake may never call: every
-#: send, and the casework brief (a message to staff by another name). The bound reply
+#: send. The bound reply
 #: (create_draft after reply_bind) is the wake's ONLY channel (2026-10-06: a
 #: refused bind was followed by an email to the responsible attorney).
-WAKE_FORBIDDEN_TOOLS = frozenset({"smd_send_message", "casework_brief"})
+WAKE_FORBIDDEN_TOOLS = frozenset({"smd_send_message"})
 
 
 def wake_send_refusal(session_id: str, tool_name: str, args: Any = None) -> str | None:

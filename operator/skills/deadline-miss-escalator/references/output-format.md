@@ -15,10 +15,8 @@ literally, in `pre_run`, and the seat dispatches the result out of turn. The
 model no longer composes this alert; every instruction below addressed to
 "the turn" describes what the RENDERER does. The consequence line's closed
 signal set and its authored phrases live in `render.py` (`consequence_line`):
-a task-priority marker the record carries, or, on a seat that authored
-`case_manager.date_prep`, a court date inside the prep window that no date-prep
-brief has gone out for ("No prep note has gone out for this yet.") - an
-unknown signal renders nothing. The line says what the item still needs, never
+a task-priority marker the record carries - an unknown signal renders
+nothing. The line says what the item still needs, never
 what kind of item it is: "a court date the firm authored" rendered under every
 court date until 2026-09-28 and asked the reader for nothing. The rich examples in the template below
 (deemed-admission, disbursement blocker, opposing-counsel held) have no
@@ -98,25 +96,6 @@ number covers all of its items; each one is listed in Smokeball.
 
 6. <number> <surname>: <k> more open item(s)
 7. ...
-
-<N> more overdue task(s) are in <Day>'s task review. [case-manager seats with task_cleanup only; omit if 0]
-
-On a seat that authored `case_manager.task_cleanup`, this line takes the
-overdue tasks out of "Also open": they are in the weekly task review
-(the task review routine), so the digest counts them instead of listing them, and
-raises none of them. `<Day>` is the weekday of the firm's own review schedule;
-with no single day it reads "the next task review". Court dates and tasks not
-yet overdue stay in "Also open". Unconfigured seats never render this line.
-
-Done since last time: <line>; <line>. [case-manager seats with quiet only; first in the body; omit if none]
-
-On a seat that authored `case_manager.quiet`, the body opens with this line
-(done, then needs you): one `done_since.py` line per task the Operator closed on
-the record's evidence or date-prep step it ran at "Handles it" that nobody has
-been told about, for this recipient's matters. The skeleton never carries it,
-and it never makes a digest of its own. The dispatch lists the items as
-`casework_mentions`; the overlay writes each `mentioned` row after a FULL send
-only. Unconfigured seats never render this line.
 
 ## Under active escalation elsewhere (<count> across <M> matter(s)) [omit section if 0]
 

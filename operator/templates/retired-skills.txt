@@ -32,3 +32,7 @@ email-reply
 intake-to-system-sync
 referral-source-acknowledgment
 shape-establishment
+# The case-manager routines (task review, date-prep brief), switched on for no
+# firm, removed 2026-11-10 with their half of the deadline escalator:
+date-prep-brief
+task-list-keeper

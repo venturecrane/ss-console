@@ -59,8 +59,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Suggests date nights from what you have loved before, keeps the history, and sends you both the invite.',
   'dates-to-remember':
     'Keeps birthdays and anniversaries on your shared calendar. Gift ideas stay private to whoever had them.',
-  'date-prep-brief':
-    'When a court date comes into view, checks the file is ready, does the prep you turned on, and asks the attorney only what needs them.',
   'deadline-and-sol-tracker':
     'Surfaces your court dates, filing deadlines, and statute-of-limitations dates by urgency. Reflects dates you entered, never computes them.',
   'deadline-miss-escalator':
@@ -170,8 +168,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles a weekly client status report from your PM tools and analytics.',
   'statute-watch':
     'Emails the person you name a monthly spreadsheet of open cases with a statute date in the next three months and nothing filed, and what changed since last month. Never computes a date.',
-  'task-list-keeper':
-    'Keeps your task list honest: each week it sorts overdue tasks and sends each attorney suggested calls to answer in plain words. Nothing changes until someone says yes.',
   travel:
     'Builds your trip from forwarded confirmations, sends calendar invites, keeps packing lists, and watches prices.',
   'trial-binder-assembler':

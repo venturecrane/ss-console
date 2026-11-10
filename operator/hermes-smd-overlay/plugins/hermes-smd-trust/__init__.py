@@ -40,7 +40,6 @@ from shared import (
 )
 from shared.broker_audit import write_decision
 from shared.casework_acts import CASEWORK_ACTS
-from shared.casework_steps import STEP_WITNESS
 from shared.outbound_recipient import extract_send_recipients
 from shared.pending_acts import PENDING_ACTS, tool_call_failed
 from shared.pending_send import PENDING_SEND, PendingSend
@@ -652,8 +651,6 @@ def on_post_tool_call(**kwargs: Any) -> None:
         _commit_confirmed_act(tool_name, resolved, kwargs)
         # A replayed casework task write records completed / write_failed.
         CASEWORK_ACTS.on_post_tool(tool_name, resolved, kwargs)
-        # A prep routine's memo: the trace a recorded date-prep step claims.
-        STEP_WITNESS.on_post_tool(tool_name, resolved, kwargs)
 
         try:
             classification = enforce.classify_tool(tool_name)

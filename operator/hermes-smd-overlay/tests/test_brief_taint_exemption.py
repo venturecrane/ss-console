@@ -1,23 +1,17 @@
-"""The date-prep brief sends on a turn that read the file, and nothing else does.
+"""The trust gate's code-fixed-recipients taint exemption, held while it has no minter.
 
-Captain decision 2026-09-28. Live evidence: pilot-smokeball, session
-cron_37494dc5603f_20260928_100543. The date-prep-brief turn read the matter's
-documents (``mcp__smokeball__read_document``), which taints it, and the
-``casework_brief`` send was refused by the taint gate. The brief's recipients
-are written by ss-console's pre_run into the tamper-fenced envelope before the
-turn starts; the model cannot supply or change them, so the attack the taint
-gate exists for (injected text redirecting mail outward) cannot happen on this
-path. Every other send on a tainted turn stays refused.
-
-These tests drive the REAL gate: ``casework_brief`` -> ``shared.send_dispatch``
--> the trust plugin's ``_dispatch_internal_message`` -> ``evaluate_tool_call``.
-Only the transport, the outbound scans and the spec floors are stubbed, so a
-refusal here is the taint gate's own.
+Captain decision 2026-09-28: the date-prep brief could send on a turn that read the
+matter's documents, because code (its pre_run's tamper-fenced envelope) fixed its
+recipients. The brief and its tool (``casework_brief``) were removed 2026-11-10;
+the exemption's plumbing in the trust plugin stays, unreachable, until it is
+removed or a new caller is decided. These tests drive the REAL gate through
+``shared.send_dispatch`` with a hand-built ``CodeFixedRecipients``, so the
+plumbing that remains is still proven to refuse everything but an exact,
+staff-only match, and a test pins that nothing in the overlay mints one.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -26,22 +20,13 @@ from shared import inbound, send_dispatch, spec_gate
 from shared.casework_acts import CASEWORK_ACTS
 from shared.inbound import SESSION_TAINT, TRUST_CLASS_UNKNOWN_EXTERNAL
 from tests.conftest import load_plugin
-from tests.test_casework import (
-    _ARGS,
-    ATTORNEY,
-    NOW,
-    PARALEGAL,
-    SESSION,
-    _brief_envelope,
-    _review_envelope,
-    _write_envelope,
-)
 
-escalation = load_plugin("hermes-smd-escalation")
-casework = escalation.casework
 trust = load_plugin("hermes-smd-trust")
 enforce = trust.enforce
 
+ATTORNEY = "atty@firm.example"
+PARALEGAL = "para@firm.example"
+SESSION = "agent:main:cron:sess-1"
 OUTSIDER = "someone@elsewhere.example"
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -52,10 +37,6 @@ def seat(monkeypatch):
     monkeypatch.setattr(inbound, "SESSION_INBOUND_ORIGIN", inbound.SessionInboundOrigin())
     SESSION_TAINT._tainted.clear()
     CASEWORK_ACTS.clear(SESSION)
-    from plugin_hermes_smd_escalation import casework_rules
-
-    for store in (casework_rules._FINISH, casework_rules._BRIEFED):
-        store.pop(SESSION)
     monkeypatch.setattr(
         enforce,
         "_resolve_persona_exposure",
@@ -93,20 +74,6 @@ def _taint() -> None:
     SESSION_TAINT.mark(SESSION, TRUST_CLASS_UNKNOWN_EXTERNAL)
 
 
-def _run_brief(tmp_path, envelope: dict | None = None) -> dict:
-    _write_envelope(tmp_path, "brief", envelope or _brief_envelope(), "date-prep-brief")
-    return json.loads(
-        casework.casework_brief(
-            _ARGS,
-            session_id=SESSION,
-            append=lambda _e: {"ok": True},
-            routine=lambda _s: ("date-prep-brief", None),
-            hermes_home=str(tmp_path),
-            now=NOW,
-        )
-    )
-
-
 def _dispatch(**kwargs) -> send_dispatch.DispatchResult:
     kwargs.setdefault("subject", "s")
     kwargs.setdefault("text", "Needs you:\n1. A question?")
@@ -119,17 +86,6 @@ def _dispatch(**kwargs) -> send_dispatch.DispatchResult:
 # ---------------------------------------------------------------------------
 # (a) the exemption
 # ---------------------------------------------------------------------------
-
-
-def test_a_tainted_brief_sends_to_the_envelope_recipients_and_says_so(tmp_path, seat):
-    _taint()
-    out = _run_brief(tmp_path)
-    assert out["status"] == "sent", out
-    [call] = seat
-    assert call["payload"]["to"] == [ATTORNEY]
-    assert call["payload"]["cc"] == [PARALEGAL]
-    assert call["audit_extra"]["taint_exempt"] == "code_fixed_recipients"
-    assert call["audit_extra"]["skill_name"] == "date-prep-brief"
 
 
 def test_the_decision_row_names_the_exemption(monkeypatch):
@@ -191,33 +147,10 @@ def test_an_out_of_turn_send_without_the_capability_is_still_refused(seat):
     assert seat == []
 
 
-def test_the_task_review_is_still_refused_on_a_tainted_turn(tmp_path, seat):
-    """casework_finish's recipients are also envelope-fixed, but the Captain's
-    decision covers the date-prep brief, whose turn MUST read documents. A task
-    review turn has no such need, so a taint there is unexplained and the send
-    stays refused until that is decided on its own."""
-    envelope = _review_envelope()
-    envelope["messages"][0]["closes"] = []
-    _write_envelope(tmp_path, "casework", envelope, "task-list-keeper")
-    _taint()
-    out = json.loads(
-        casework.casework_finish(
-            session_id=SESSION,
-            append=lambda _e: {"ok": True},
-            routine=lambda _s: ("task-list-keeper", None),
-            hermes_home=str(tmp_path),
-            now=NOW,
-        )
-    )
-    [message] = out["messages"]
-    assert message["sent"] is False
-    assert "untrusted inbound" in message["reason"]
-    assert seat == []
-
-
-def test_only_casework_brief_mints_the_capability():
+def test_nothing_mints_the_capability():
     """The capability is a code path, so the code paths that mint it are the
-    whole scope. A second minter widens the exemption and must be decided."""
+    whole scope. Its one minter was removed 2026-11-10; a new one widens the
+    exemption and must be decided."""
     minters = sorted(
         str(path.relative_to(ROOT))
         for base in ("plugins", "shared")
@@ -225,9 +158,7 @@ def test_only_casework_brief_mints_the_capability():
         if "CodeFixedRecipients(" in path.read_text(encoding="utf-8")
         and path.name != "send_dispatch.py"
     )
-    assert minters == ["plugins/hermes-smd-escalation/casework.py"]
-    source = (ROOT / "plugins/hermes-smd-escalation/casework.py").read_text(encoding="utf-8")
-    assert source.count("CodeFixedRecipients(") == 1
+    assert minters == []
 
 
 # ---------------------------------------------------------------------------
@@ -257,18 +188,6 @@ def test_a_capability_of_the_wrong_type_is_refused(seat):
     assert seat == []
 
 
-def test_an_envelope_naming_an_outsider_is_still_refused(tmp_path, seat):
-    """Code-fixed is necessary, not sufficient: the exemption covers the firm's
-    own staff only. A recipient outside the roster stays behind the taint gate."""
-    _taint()
-    envelope = _brief_envelope()
-    envelope["recipients"] = [OUTSIDER]
-    out = _run_brief(tmp_path, envelope)
-    assert out["status"] == "not_sent"
-    assert "untrusted inbound" in out["reason"]
-    assert seat == []
-
-
 def test_a_caller_cannot_pre_stamp_the_marker(seat):
     result = _dispatch(to=[ATTORNEY], audit_extra={"taint_exempt": "code_fixed_recipients"})
     assert result.sent
@@ -279,13 +198,6 @@ def test_a_caller_cannot_pre_stamp_the_marker(seat):
 # ---------------------------------------------------------------------------
 # (d) an untainted turn is unchanged
 # ---------------------------------------------------------------------------
-
-
-def test_an_untainted_brief_sends_without_the_marker(tmp_path, seat):
-    out = _run_brief(tmp_path)
-    assert out["status"] == "sent", out
-    [call] = seat
-    assert "taint_exempt" not in call["audit_extra"]
 
 
 def test_an_untainted_model_send_is_unchanged():
@@ -301,26 +213,3 @@ def test_the_gate_input_is_the_session_taint_without_the_capability():
     assert enforce._taint_gate_input(tainted, internal, False) == tainted
     assert enforce._taint_gate_input(tainted, enforce.ActionClass.EXTERNAL_SEND, True) == tainted
     assert enforce._taint_gate_input(tainted, internal, True) == enforce.TRUST_CLASS_INTERNAL
-
-
-def test_a_brief_whose_answer_was_lost_is_never_offered_a_retry(tmp_path, seat, monkeypatch):
-    """The transport lost the broker's answer, so the brief may be out. The tool
-    must not say "try again", and a second call must not send it twice. Drives
-    the real out-of-turn sender, so ``outcome_unknown`` is set where a seat
-    sets it."""
-
-    def lost(**_kw):
-        raise trust.outbound_send.AgentMailOutcomeUnknown(
-            "outcome unknown, it may have been sent: broker unreachable: timed out"
-        )
-
-    monkeypatch.setattr(trust.outbound_send, "send_message", lost)
-    out = _run_brief(tmp_path)
-    assert out["status"] == "outcome_unknown", out
-    assert "try again" not in out["note"]
-    assert "Do not send it again" in out["note"]
-    again = _run_brief(tmp_path)
-    assert again["status"] != "sent"
-    # Refused, without claiming it went: the first send's outcome is unknown.
-    assert "may already have gone out" in json.dumps(again)
-    assert "has already gone out" not in json.dumps(again)

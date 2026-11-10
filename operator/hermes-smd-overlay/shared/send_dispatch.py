@@ -80,8 +80,9 @@ class CodeFixedRecipients:
 
     This is a Python object handed to :func:`dispatch` as a keyword, never a
     payload key and never a tool argument, so nothing a model-callable tool
-    passes can carry it. Its only minter is ``casework_brief``, from the
-    envelope ``brief_state`` loaded and validated. The trust plugin's sender
+    passes can carry it. Its only minter was ``casework_brief``, removed
+    2026-11-10 with the date-prep brief: nothing mints one now, so the trust
+    plugin's honouring path below is unreachable until a caller is built. The trust plugin's sender
     honours it only when ``to`` and ``cc`` equal the payload's exactly, only to
     set aside the TAINT gate (every ceiling, scan and floor still runs), and
     only for a send whose recipients classify as the firm's own staff.

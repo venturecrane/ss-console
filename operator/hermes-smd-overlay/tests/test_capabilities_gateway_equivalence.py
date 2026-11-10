@@ -23,7 +23,7 @@ CUSTOMERS = Path(__file__).resolve().parents[2] / "customers"
 SEATS = sorted(
     p.parent.name for p in CUSTOMERS.glob("*/customer.yaml") if not p.parent.name.startswith("_")
 )
-CASEWORK = {"casework_finish", "casework_brief", "reply_verdicts", "casework_step_done"}
+CASEWORK = {"reply_verdicts"}
 NO_LANE_SEATS = {"captain-mark", "scott", "brokery", "ashton-price-marketing"}
 
 

@@ -145,19 +145,6 @@ class MatterDeadline:
     # it belongs to (``digest_items.matter_name``). None names the matter by
     # number alone.
     matter_name: str | None = None
-    # Case-manager seats with ``date_prep`` authored: a calendar date inside
-    # the prep window that no date-prep brief has gone out for
-    # (``casework_filter.py``). The digest says so in plain words.
-    prep_note_missing: bool = False
-    # A person said this task was done (a digest reply the ledger approved) and
-    # the Smokeball write never landed or failed within a day
-    # (``casework_view.stale_authorization``). The digest says so instead of
-    # silently re-listing the task as if nobody had answered.
-    write_pending_stale: bool = False
-    # The subject starts with the connector's "[Operator]" provenance stamp:
-    # the Operator created this task. Read only by casework_filter.py, and only
-    # on a seat that authored ``case_manager.own_tasks``.
-    operator_stamped: bool = False
     # The date the escalation ledger keys this item on: the raw stamp's day,
     # exactly as written (``dueDate``/``startTime``[:10]), never converted.
     # ``authored_date`` is the firm's local day (the window, the rung and the
@@ -322,8 +309,6 @@ def _load_ledger_module():
 # Label shaping + needs-you ordering, shared with dispatch_envelope.py. A
 # missing copy fails the pull loudly (blind wake + failure note), never silently.
 _DI: Any = _load_sibling_module("digest_items.py", "escalator_digest_items")
-# The case-manager filter (casework_filter.py); a no-op without case_manager.
-_CW: Any = _load_sibling_module("casework_filter.py", "escalator_casework_filter")
 
 
 def enrich_with_ledger(
@@ -443,8 +428,6 @@ def _digest_item(d: MatterDeadline, today: date, ack_code: str | None) -> dict:
         "priority_marker": d.priority_marker,
         "subject_display": d.subject_display,
         "matter_name": d.matter_name,
-        **({"prep_note_missing": True} if d.prep_note_missing else {}),
-        **({"write_pending_stale": True} if d.write_pending_stale else {}),
         # The ledger identity day, only when it differs from the printed local
         # day: the dispatch's ``fired`` row must key on it (see identity_date).
         **({"identity_date": str(d.identity_date)} if d.identity_date not in (None, d.authored_date) else {}),
@@ -895,10 +878,6 @@ async def run_once(
         raw_input_blob += json.dumps([_deadline_to_dict(d) for d in pulled], sort_keys=True).encode("utf-8")
 
     deadlines = enrich_with_ledger(deadlines, today=today, policy=fire_policy, ledger_events=ledger_events)
-    # Case-manager seats only: drop what the task review or a date brief holds
-    # (casework_filter.py). Without an authored block this returns the input.
-    casework = _CW.apply(deadlines, helpers=_H, anchor=__file__, today=today, notify_days=windows.notify_days)
-    deadlines = casework.deadlines
 
     decision = decide(deadlines, windows, raw_inputs_for_digest=raw_input_blob, today=today)
     if decision.wake:
@@ -910,7 +889,6 @@ async def run_once(
             probe_stats = _probe_stats(sources)
             digest = project_digest(deadlines, windows, ledger, today=today, probe_stats=probe_stats or None)
             decision = replace(decision, digest=digest)
-        decision = casework.annotate(decision)
         resolved, failed, degraded_reason = _degradation(deadlines, today)
         if resolved == 0 and failed > 0:
             # THE 2026-08-24 RULE: a digest in which not one matter resolved a
@@ -1268,7 +1246,6 @@ def parse_pull(raw: dict, *, now: datetime | None = None) -> tuple[list[MatterDe
                     priority_marker=_priority_marker_of(item),
                     subject_display=_DI.display_label(_subject_of(item)),
                     matter_name=_DI.matter_name(item.get("matterTitle"), number),
-                    operator_stamped=_subject_of(item).lstrip().upper().startswith(_PROVENANCE_MARK.upper()),
                 )
             )
     if total_items > 0 and not deadlines:

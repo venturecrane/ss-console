@@ -754,7 +754,7 @@ def _registered(plugin) -> list[dict]:
 
 
 _LEDGER_TOOLS = {"escalation_append", "escalation_state", "escalation_reply_ack"}
-_CASEWORK_TOOLS = {"casework_finish", "casework_brief", "reply_verdicts", "casework_step_done"}
+_CASEWORK_TOOLS = {"reply_verdicts"}
 
 
 def test_register_registers_every_tool(escalation, authors_everything):

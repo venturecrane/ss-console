@@ -440,21 +440,6 @@ skill_bindings:
       - { artifact: memo, seam: smokeball_memo, class: record }
       - { artifact: task, seam: smokeball_task, class: record }
     outbound: derived # confirmation reply enumerating acked codes
-  task-list-keeper:
-    internal:
-      - { artifact: task_review, seam: email_send, class: staff }
-      - { artifact: memo, seam: smokeball_memo, class: record }
-      - { artifact: task, seam: smokeball_task, class: record }
-      - { artifact: heartbeat_row, seam: local_file, class: record }
-    outbound: none # the review goes to firm staff only; a reply is answered by matter-inbox-router
-  # Date prep brief (case-manager spec Job 2): one brief per matter to its own
-  # staff, rendered by the overlay's casework_brief from turn-supplied
-  # done lines and at most two catalog questions. The steps it runs at
-  # "handles" write through their own routines' bindings, not this one.
-  date-prep-brief:
-    internal:
-      - { artifact: file_status, seam: session_output, class: staff }
-    outbound: derived # the brief to the matter's responsible attorney, assisting staff copied
   # Statute watch: one monthly report of open cases with a statute date in the
   # next three months and nothing filed, rendered by the pre-run and sent out
   # of turn to the one recipient the firm named in the skill's settings.

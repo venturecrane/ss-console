@@ -8,6 +8,10 @@ dispatch envelope it saw before the change. The golden file below was captured
 from ``origin/main`` BEFORE any casework edit landed (c3a1d149), so a diff here
 is a behaviour change on an unconfigured seat, never a refactor.
 
+The case-manager feature itself was removed 2026-11-10. Both goldens (the minimal
+config above and the A&P-shaped one, captured before that removal) held through
+it unchanged: the removal took out only code an unconfigured seat never ran.
+
 Regenerate ONLY for a deliberate change to the unconfigured path::
 
     UPDATE_ESCALATOR_GOLDEN=1 python3 -m pytest \\

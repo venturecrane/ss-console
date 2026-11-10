@@ -260,39 +260,6 @@ def rebalance_bands(sub: dict) -> dict:
     return sub
 
 
-def extract_task_review(sub: dict) -> dict:
-    """Collapse one recipient's overdue tasks past the top five into a count.
-
-    Only when the digest carries a ``task_review`` marker, which the pre_run
-    sets only when the firm authored ``case_manager.task_cleanup``: those tasks
-    are in the weekly task review, so the digest names the count in one line
-    instead of an "Also open" band of them (case-manager spec, Job 1). Court
-    dates and not-yet-overdue tasks past the top five stay in the band: the
-    review covers overdue tasks and nothing else, so the line must not claim
-    more. The collapsed items are not raised (no ``fired`` row): they are the
-    review's. No marker, no change."""
-    review = sub.get("task_review")
-    if not isinstance(review, dict):
-        return sub
-    band = sub.get("admin_confirms") or {}
-    items = [i for g in band.get("matters") or [] for i in g.get("items") or []]
-    overdue = [i.get("label") == "task-deadline" and int(i.get("days_out") or 0) < 0 for i in items]
-    moved = [i for i, hit in zip(items, overdue) if hit]
-    rest = [i for i, hit in zip(items, overdue) if not hit]
-    sub.pop("admin_confirms", None)
-    if rest:
-        sub["admin_confirms"] = group_by_matter(rest)
-    sub["task_review"] = {**review, "count": len(moved)}
-    return sub
-
-
-def need_you_count(digest: dict) -> int:
-    """What the subject counts: every item a person must act on by name,
-    needs-you plus blanket-ack-only. A recipient whose only items are blanket
-    ones must never read "0 need you"."""
-    return len(digest.get("needs_you") or []) + len(digest.get("blanket_ack_only") or [])
-
-
 # ---------------------------------------------------------------------------
 # The words an item is named by (2026-09-28). The Captain's read of the pilot
 # digest: "1. matter 2026-PI-105, court-date 2026-10-02 (due in 4 days) / a
@@ -435,7 +402,9 @@ def subject_line(digest: dict, today: object) -> str:
 
     "[Deadlines] Okafor: Final Status Conference Fri Oct 2", or "[Deadlines]
     2 tasks need you, Sep 28". The "[Deadlines]" prefix is what inbox routing
-    reads (matter-inbox-router). Counts are ``need_you_count`` (Law 11)."""
+    reads (matter-inbox-router). Counts are needs-you plus blanket-ack-only
+    items, so a recipient whose only items are blanket ones never reads "0 need
+    you" (Law 11)."""
     items = list(digest.get("needs_you") or []) + list(digest.get("blanket_ack_only") or [])
     today_iso = today if isinstance(today, str) else getattr(today, "isoformat", lambda: str(today))()
     if len(items) == 1:

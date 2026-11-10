@@ -13,10 +13,9 @@ QUEUE of the exact writes a person approved (or the firm's level permits), and
 the trust gate OVERWRITES the model's arguments with the queue head. The model's
 only job is to make the call; what executes is what the queue holds.
 
-* **Loaded by code only.** ``casework_finish`` loads the closes a pre_run wrote
-  into a tamper-fenced envelope; ``reply_verdicts`` loads the writes a verified
-  reply approved, from the raise rows the broker stamped. Neither takes an id
-  from the model.
+* **Loaded by code only.** ``reply_verdicts`` loads the writes a verified
+  reply approved, from the raise rows the broker stamped. It takes no id from
+  the model.
 * **Session-keyed.** A queue belongs to the turn that loaded it. A session with
   no queue is untouched: every other routine's ``update_task`` behaves exactly
   as before.

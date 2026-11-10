@@ -1,20 +1,11 @@
-"""A court date inside the date-prep window, and the draft it preps from.
-Added 2026-09-28; seeded by ``seed_staging.py`` alongside ``seed_data.py`` and
-``seed_keeper_overdue.py`` (its own module because seed_data.py sits at its
-module-size baseline).
+"""Court dates on the demo tenant, and the draft exhibit list beside one.
+Added 2026-09-28; seeded by ``seed_staging.py`` alongside ``seed_data.py`` (its
+own module because seed_data.py sits at its module-size baseline).
 
-WHY. The date-prep brief's new wording (#2963: the Done lines say what is
-ready; yes-or-no questions; no dashes or ids) could not be proven live: the
-only in-window court date on the tenant, 2026-PI-105's Final Status
-Conference, was already briefed, and a date is briefed once. This adds one
-fresh date on a DIFFERENT matter, 2026-PI-103, whose tenant record has no
-overdue task (so the task-list-keeper's review is unchanged by it: a court
-date in the window makes every task on its matter ``at_stake``).
-
-The draft exhibit list is what makes a step offerable
-(``operator/skills/date-prep-brief/catalog.py``: a witness or exhibit list on
-file only as a draft offers ``exhibit_list_finalize``). Standing synthetic seed
-data; every name here is fictional.
+WHY. Written for the date-prep brief (removed 2026-11-10, never switched on for
+a firm); kept because the court dates are ordinary calendar data the demo
+tenant shows (the deadline digest and the date tracker read them). Standing
+synthetic seed data; every name here is fictional.
 
 TIMES ARE LOCAL. Smokeball's ``startTime``/``endTime`` are the firm's wall
 clock in ``timeZone``, never UTC (vendor create-event: "date and time will
