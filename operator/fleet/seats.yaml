@@ -9,7 +9,7 @@
 seats:
   ap-staging:
     purpose: internal
-    provisioned: false
+    provisioned: true
   ashton-price:
     purpose: client
     provisioned: true
