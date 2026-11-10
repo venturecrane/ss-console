@@ -64,7 +64,7 @@ from shared.webhook_read_surface import (
     register_webhook_read_toolset,
 )
 
-from . import router, verify  # noqa: F401 - surface for tests
+from . import daily_limit, router, verify  # noqa: F401 - surface for tests
 
 logger = logging.getLogger(__name__)
 
@@ -752,6 +752,86 @@ def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
         )
 
 
+def _daily_limit_attempt(source: str, payload: Any) -> dict | None:
+    """``{"action": "skip"}`` when this email is from a listed, authenticated,
+    non-administrator sender who has had their authored day's worth
+    (``daily_limit.py``); ``None`` for every other delivery, which then flows
+    exactly as before. A seat that does not author the key returns ``None``
+    before reading anything else. Never raises: undecidable is admitted."""
+    if source != inbound_message.PROVIDER_AGENTMAIL:
+        return None
+    try:
+        cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        limit = daily_limit.authored_limit(cfg.raw)
+        if limit is None:
+            return None
+        dto = inbound_message.normalize_inbound(source, payload)
+        if dto is None or not dto.from_addr or not dto.message_id:
+            return None
+        if not cfg.sender_on_roster(dto.from_addr) or cfg.sender_is_admin(dto.from_addr):
+            return None
+        authenticated, _reason = sender_auth.sender_authenticated(dto)
+        key = sender_key(dto.from_addr)
+        if not authenticated or not key:
+            return None  # an unauthenticated From is an unknown sender, not this person
+    except Exception:  # noqa: BLE001 - undecidable is admitted, never dropped
+        logger.debug("hermes-smd-webhook-router: daily limit check skipped", exc_info=True)
+        return None
+    decision = daily_limit.decide(key, limit)
+    if decision.admit:
+        return None
+    logger.info(
+        "hermes-smd-webhook-router: %s is over the seat's daily limit (%d); not run%s",
+        dto.message_id,
+        limit,
+        ", notice sent" if decision.notify else "",
+    )
+    _record_limited(dto, payload)
+    if decision.notify:
+        try:
+            agentmail_broker.send_reply(
+                dto.message_id,
+                text=daily_limit.NOTICE,
+                anchor=send_anchor.message_anchor(dto.message_id, "agentmail"),
+            )
+        except Exception as exc:  # noqa: BLE001 - the row above is the record
+            logger.warning(
+                "hermes-smd-webhook-router: daily-limit notice not sent (%s)", type(exc).__name__
+            )
+    return {"action": "skip"}
+
+
+def _record_limited(dto: Any, payload: Any) -> None:
+    """The ledger rows the hourly work-health triage reads: the request arrived
+    from a listed person (``INBOUND_RECEIVED``, internal) and its reply is held
+    for the daily limit (``REPLY_HELD``). No request index row, so no request
+    card. Never raises."""
+    if _D1_CLIENT is None:
+        return
+    try:
+        envelope = inbound.make_envelope(
+            content=_inbound_content_for(payload),
+            source=inbound_message.PROVIDER_AGENTMAIL,
+            surface="webhook",
+            verification="verified",
+            trust_class=inbound.TRUST_CLASS_INTERNAL,
+        )
+        _emit_inbound_received(
+            client=_D1_CLIENT, customer=_CUSTOMER_SLUG or "", envelope=envelope, dto=dto
+        )
+        params = agent_event_params(
+            action_type="REPLY_HELD",
+            metadata={
+                "reason": daily_limit.REASON,
+                "recipient": dto.from_addr,
+                "message_id": dto.message_id,
+            },
+        )
+        _D1_CLIENT.execute(_INSERT_SQL, *params)
+    except Exception:  # noqa: BLE001 - a missing row costs a triage item, never the drop
+        logger.warning("hermes-smd-webhook-router: daily-limit rows not written", exc_info=True)
+
+
 def on_pre_gateway_dispatch(**kwargs: Any) -> dict | None:
     """The hook: :func:`_dispatch`, plus the outcome of an SMD re-wake.
 
@@ -921,6 +1001,12 @@ def _dispatch(**kwargs: Any) -> dict | None:
     enrollment = _enrollment_attempt(source, payload)
     if enrollment is not None:
         return enrollment
+
+    # The per-sender daily limit (sender_enrollment.daily_limit, daily_limit.py):
+    # decided here, where the sender is verified, before any model turn.
+    limited = _daily_limit_attempt(source, payload)
+    if limited is not None:
+        return limited
 
     # ADR 0027 — attach an inbound provenance envelope to the dispatched
     # content and record it for the pre_llm_call quarantine chokepoint. The

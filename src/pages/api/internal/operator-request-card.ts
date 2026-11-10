@@ -36,7 +36,11 @@ import { errorResponse, isRecord, jsonResponse } from '../../../lib/api/helpers'
 import { failedResponse } from '../../../lib/api/failures'
 import { verifyMachineRequest } from '../../../lib/auth/machine-key'
 import { markCardAttempt, parseRequestCard, recordCard } from '../../../lib/operator/request-card'
-import { sendCardEmail } from '../../../lib/operator/request-card-email'
+import {
+  seatSendsCardText,
+  sendCardEmail,
+  withholdCardText,
+} from '../../../lib/operator/request-card-email'
 import { cardIsQuiet, markCardQuiet } from '../../../lib/operator/request-card-quiet'
 
 export const POST: APIRoute = async ({ request }) => {
@@ -55,7 +59,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (!result.ok) {
     return errorResponse(400, 'invalid_body', undefined, { field: result.field })
   }
-  const card = result.card
+  const card = (await cardWordsAllowed(auth.slug, result.card))
+    ? result.card
+    : withholdCardText(result.card)
 
   const { alreadySent } = await recordCard(env.DB, auth.slug, card)
   if (alreadySent) return jsonResponse(200, { ok: true, duplicate: true })
@@ -75,4 +81,24 @@ export const POST: APIRoute = async ({ request }) => {
     return failedResponse(err, 'operator-request-card', { status: 502, code: 'upstream_failed' })
   }
   return jsonResponse(200, { ok: true })
+}
+
+/**
+ * Whether this card's words may be emailed. Not when the card says its seat
+ * withheld them, and not when the seat's projected config says it should have
+ * (`escalation.request_card_text: false`), so a seat on an older image still
+ * sends SMD no words. A projection that cannot be read keeps today's email.
+ */
+async function cardWordsAllowed(slug: string, card: { textWithheld: boolean }): Promise<boolean> {
+  if (card.textWithheld) return false
+  try {
+    const row = await env.DB.prepare(
+      'SELECT escalation_json FROM customer_configs WHERE customer_slug = ?'
+    )
+      .bind(slug)
+      .first<{ escalation_json: string | null }>()
+    return seatSendsCardText(row?.escalation_json)
+  } catch {
+    return true
+  }
 }

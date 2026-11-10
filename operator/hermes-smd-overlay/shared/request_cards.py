@@ -1031,6 +1031,53 @@ def _authored_names() -> Callable[[str], str | None] | None:
         return None
 
 
+#: The card fields that carry a person's or the Operator's words, or a matter.
+#: A seat that authors ``escalation.request_card_text: false`` posts none of
+#: them: the card says who and what happened, never what was said.
+TEXT_FIELDS: tuple[str, ...] = (
+    "request_text",
+    "request_opening",
+    "reply_opening",
+    "reply_text",
+    "matter",
+)
+#: The subject a text-withheld card carries instead of the request's own.
+WITHHELD_SUBJECT = "(words not sent by this seat)"
+#: Subjects the seat writes itself, which carry no one's words and are kept.
+_SEAT_SUBJECTS = frozenset({"(no request on record)", "(no subject)"})
+
+
+def cards_carry_text(raw_config: object) -> bool:
+    """False only when the seat authors ``escalation.request_card_text: false``.
+    Anything else, an unreadable config included, is today's behaviour."""
+    if not isinstance(raw_config, dict):
+        return True
+    block = raw_config.get("escalation")
+    return not (isinstance(block, dict) and block.get("request_card_text") is False)
+
+
+def withhold_text(card: dict) -> dict:
+    """``card`` with every word field emptied and ``text_withheld`` set. The
+    sender, the outcome, the counts and the keys stay."""
+    out = dict(card)
+    for key in TEXT_FIELDS:
+        if key in out:
+            out[key] = None
+    if out.get("subject") not in _SEAT_SUBJECTS:
+        out["subject"] = WITHHELD_SUBJECT
+    out["text_withheld"] = True
+    return out
+
+
+def _seat_carries_text() -> bool:
+    try:
+        from shared.customer_config import CustomerConfig
+
+        return cards_carry_text(CustomerConfig.from_volume().raw)
+    except Exception:  # noqa: BLE001 - unreadable keeps today's cards
+        return True
+
+
 def send_due_cards(
     *,
     slug: str,
@@ -1100,6 +1147,8 @@ def send_due_cards(
             )
         finally:
             conn.close()
+        if not _seat_carries_text():
+            cards = [withhold_text(card) for card in cards]
         started = monotonic_fn()
         sent_this_tick = 0
         for card in cards:
@@ -1147,6 +1196,10 @@ def send_due_cards(
 
 __all__ = [
     "CARD_PATH",
+    "TEXT_FIELDS",
+    "WITHHELD_SUBJECT",
+    "cards_carry_text",
+    "withhold_text",
     "CardStore",
     "MAX_CARDS_PER_TICK",
     "NO_REPLY_AFTER",

@@ -294,6 +294,8 @@ def _send_reviews(
                     for item in items
                     if (label := sent_lines.line_label(item["line"], item.get("group")))
                 },
+                # Who it went to, as digests, so a person's purge finds it.
+                recipients=[*message["recipients"], *(message.get("cc") or [])],
             )
             # What this body told a person about is not told again (Job 3).
             _write_mentions(
@@ -543,7 +545,11 @@ def casework_brief(
     # (the matter and the date), never by the question text.
     label = envelope["subject_label"]
     if sent_lines.usable(label):
-        sent_lines.record(dispatch_ref, {n: label for n in range(1, len(decisions) + 1)})
+        sent_lines.record(
+            dispatch_ref,
+            {n: label for n in range(1, len(decisions) + 1)},
+            recipients=[*to, *cc],
+        )
     told = [*(envelope.get("done_since") or []), *recorded_mentions(state)]
     _write_mentions(append, state["skill"], session_id, told)
     return json.dumps(

@@ -23,7 +23,12 @@ const REPLY_KEYS = new Set([
   'global_window_seconds',
   'backstop_max',
   'backstop_window_seconds',
+  // The end-of-turn held line and the redraft cap (the overlay's
+  // plugins/hermes-smd-reply/held_notice.py, 2026-11-10).
+  'held_notice',
+  'max_redrafts',
 ])
+const MAX_REDRAFTS_CEILING = 10
 const HELD_KEYS = new Set(['enabled', 'ttl_seconds'])
 
 const REPLY_COUNT_KEYS = ['per_sender_max', 'global_max', 'backstop_max'] as const
@@ -66,6 +71,8 @@ function checkReply(raw: unknown, errors: ValidationError[]): SendPolicyReply | 
   }
   rejectUnknownKeys(raw, REPLY_KEYS, 'send_policy.reply', errors)
   checkBool(raw['internal_exempt'], 'send_policy.reply.internal_exempt', errors)
+  checkBool(raw['held_notice'], 'send_policy.reply.held_notice', errors)
+  checkMaxRedrafts(raw['max_redrafts'], errors)
   const counts: Partial<Record<(typeof REPLY_COUNT_KEYS)[number], number | null>> = {}
   for (const key of REPLY_COUNT_KEYS) {
     counts[key] = checkCount(raw[key], `send_policy.reply.${key}`, errors)
@@ -99,6 +106,17 @@ function rejectUnknownKeys(
         message: `${path}.${key}: unknown key`,
       })
     }
+  }
+}
+
+function checkMaxRedrafts(v: unknown, errors: ValidationError[]): void {
+  if (v === undefined || v === null) return
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > MAX_REDRAFTS_CEILING) {
+    errors.push({
+      code: 'TypeMismatch',
+      path: 'send_policy.reply.max_redrafts',
+      message: `send_policy.reply.max_redrafts must be a whole number from 0 to ${MAX_REDRAFTS_CEILING}`,
+    })
   }
 }
 

@@ -47,6 +47,7 @@ import logging
 import os
 import re
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,9 @@ STORES = {
     "rep-progress": {"partition": "sender", "managed": True},
 }
 
+#: The rehearsal's daily limit per listed sender (the guide authors 30).
+DAILY_LIMIT = 3
+
 
 def seat_yaml(volume: Path) -> str:
     """The authored guide seat, with reserved addresses and the stores added."""
@@ -79,7 +83,16 @@ def seat_yaml(volume: Path) -> str:
     doc["users"] = [{"email": ADMIN, "role": "principal", "full_name": "Admin Example"}]
     doc["scope"]["inbound_allow_from"] = [ADMIN]
     doc["scope"]["admins"] = [ADMIN]
-    doc["escalation"] = {"red_flag_recipients": [ADMIN], "failure_recipients": [ADMIN]}
+    doc["escalation"] = {
+        "red_flag_recipients": [ADMIN],
+        "failure_recipients": [ADMIN],
+        # Request cards carry who and what happened, never words.
+        "request_card_text": False,
+    }
+    # A held reply ends in the fixed line; redrafts capped at the default.
+    doc["send_policy"]["reply"]["held_notice"] = True
+    # One listed sender gets DAILY_LIMIT emails a day answered.
+    doc["sender_enrollment"]["daily_limit"] = DAILY_LIMIT
     doc["connectors"]["Email"]["inbox_address"] = INBOX
     doc["record_stores"] = [
         {"name": name, "path": str(volume / "rep" / name.removeprefix("rep-")), **policy}
@@ -103,6 +116,7 @@ def _seat_env(root: Path, volume: Path) -> None:
             "SMD_HELP_STATE_DB_PATH": str(volume / "smd" / "help_state.db"),
             "SMD_SENDER_ENROLLMENT_ENROLLED": str(volume / "sender-enrollment" / "enrolled.json"),
             "SMD_D1_AUDIT_BINDING": str(volume / "audit" / "audit.db"),
+            "SMD_SENDER_DAILY_DB_PATH": str(volume / "smd" / "sender_daily.db"),
         }
     )
     paths.pop("SMD_SENT_LINES_DIR", None)  # under the persona home, as on a seat
@@ -282,6 +296,7 @@ class Rehearsal:
         *,
         sender: str | None,
         body: str = "",
+        final_text: str = "",
     ) -> dict[str, Any]:
         from tests_e2e._drive import fresh_ladder, fresh_session
         from tests_e2e._model_stub import ScriptedTurn
@@ -290,9 +305,13 @@ class Rehearsal:
         session = fresh_session(self.agent)
         marker = f"[e2e-turn {uuid.uuid4().hex}]"
         self.script.reset(marker)
-        self.script.push(ScriptedTurn(tool_calls=calls))
+        if calls:
+            self.script.push(ScriptedTurn(tool_calls=calls))
+        if final_text:
+            self.script.push(ScriptedTurn(text=f"{final_text}"))
         mark = self.dispatches.mark()
         hook_mark = self.hooks.mark()
+        broker_mark = self.broker.mark()
         verdict: Any = None
         if sender is not None:
             mid = f"<{uuid.uuid4().hex}@mail.example.test>"
@@ -303,6 +322,13 @@ class Rehearsal:
             prompt = hermes_render(_INBOUND_EMAIL_PROMPT, payload)
         else:
             prompt = f"Scheduled check of the stores. {body} {marker}"
+        if verdict == {"action": "skip"}:
+            # The router dropped it (the daily limit): a seat starts no turn.
+            self.script.reset("")
+            record = {"label": label, "sender": sender, "router_verdict": verdict}
+            record["replies"] = self._replies_since(broker_mark, wait=False)
+            self.turns.append(record)
+            return record
         result = self.agent.run_conversation(prompt)
         offered = sorted({t for r in self.script.requests for t in r.tools})
         record = {
@@ -333,10 +359,61 @@ class Rehearsal:
                 for c in self.dispatches.since(mark)
             ],
         }
+        # The reply plugin settles a turn's end on its own worker thread; the
+        # sends it makes (the text reply, or the held line) are read back here.
+        record["replies"] = self._replies_since(broker_mark, wait=sender is not None)
         for req in [*self.script.requests, *self.script.foreign]:
             self.model_log.append({"turn": label, "tools": req.tools, "body": req.body})
         self.turns.append(record)
         return record
+
+    def _replies_since(self, mark: int, *, wait: bool) -> list[str]:
+        """The texts of the replies that reached the broker since ``mark``,
+        waiting (bounded) for the end-of-turn worker when one is owed."""
+        deadline = time.monotonic() + (10.0 if wait else 0.0)
+        while True:
+            texts = [
+                str((r.get("payload") or r).get("text") or "")
+                for r in self.broker.since(mark)
+                if r.get("action") == "agentmail_reply"
+            ]
+            if texts or time.monotonic() >= deadline:
+                return texts
+            time.sleep(0.05)
+
+    def post_cards(self) -> list[dict[str, Any]]:
+        """The request cards this seat would post to SMD an hour from now, as the
+        heartbeat leg builds them, captured instead of sent."""
+        from shared import request_cards
+
+        posted: list[dict[str, Any]] = []
+
+        def capture(_url: str, _headers: dict, body: bytes, _timeout: float) -> int:
+            posted.append(json.loads(body))
+            return 200
+
+        request_cards.send_due_cards(
+            slug="smd-guide",
+            key="e2e",
+            url=request_cards.card_url("http://127.0.0.1:9/api/internal/heartbeat"),
+            audit_db_path=os.environ["SMD_D1_AUDIT_BINDING"],
+            post_fn=capture,
+            now_fn=lambda: time.time() + 3 * 3600,
+        )
+        return posted
+
+    def ledger_rows(self) -> list[dict[str, Any]]:
+        """Every audit row this run wrote, as the work-health triage reads them."""
+        import sqlite3
+
+        conn = sqlite3.connect(os.environ["SMD_D1_AUDIT_BINDING"])
+        conn.row_factory = sqlite3.Row
+        try:
+            return [
+                dict(r) for r in conn.execute("SELECT id, ts, action_type, metadata FROM audit_log")
+            ]
+        finally:
+            conn.close()
 
 
 def run(root: Path) -> dict[str, Any]:
@@ -406,8 +483,24 @@ def run(root: Path) -> dict[str, Any]:
             [("record_store_list", {"store": "rep-notes"})],
             sender=None,
         )
+        # A reply the checks hold: a figure nobody read. Code tells her, in the
+        # fixed line, that it could not answer.
+        r.turn(
+            "a-reply-is-held",
+            [],
+            sender=A,
+            body="What is the Acme deal worth?",
+            final_text="Your Acme deal is worth $95,000.",
+        )
+        # Her fourth email of the day is over the limit of three: not run, one
+        # notice. Her fifth is not run and gets nothing.
+        r.turn("a-over-the-limit", [], sender=A, body=f"One more question. {A_MARK}")
+        r.turn("a-over-again", [], sender=A, body=f"And another. {A_MARK}")
+        cards = r.post_cards()
+        rows = r.ledger_rows()
     finally:
         r.stop()
+    (root / "cards.json").write_text(json.dumps(cards, default=str), encoding="utf-8")
     (root / "model-requests.jsonl").write_text(
         "".join(json.dumps(m, default=str) + "\n" for m in r.model_log), encoding="utf-8"
     )
@@ -418,6 +511,8 @@ def run(root: Path) -> dict[str, Any]:
         "volume": str(r.volume),
         "profile": str(r.profile),
         "turns": r.turns,
+        "cards": cards,
+        "ledger_rows": rows,
         "overlay_tools": sorted(n for n, o in r.owners.items() if o == "hermes-smd-overlay"),
     }
 

@@ -69,12 +69,28 @@ export function checkEscalation(
   }
   const ack = checkAckWindow(raw['acknowledgement_window_minutes'], errors)
   const routing = checkCaseAlertRouting(raw['case_alert_routing'], errors)
+  const cardText = checkRequestCardText(raw['request_card_text'], errors)
   return {
     red_flag_recipients: reds,
     failure_recipients: fails,
     acknowledgement_window_minutes: ack,
     case_alert_routing: routing,
+    ...(cardText === null ? {} : { request_card_text: cardText }),
   }
+}
+
+/** `escalation.request_card_text`: optional boolean; null when absent or wrong. */
+function checkRequestCardText(v: unknown, errors: ValidationError[]): boolean | null {
+  if (v === undefined || v === null) return null
+  if (typeof v !== 'boolean') {
+    errors.push({
+      code: 'TypeMismatch',
+      path: 'escalation.request_card_text',
+      message: 'escalation.request_card_text must be true or false',
+    })
+    return null
+  }
+  return v
 }
 
 /**

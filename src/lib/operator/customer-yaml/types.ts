@@ -971,6 +971,13 @@ export interface Escalation {
   acknowledgement_window_minutes: number | null
   /** Absent = `central` (today's behavior, backwards compatible). */
   case_alert_routing: CaseAlertRouting | null
+  /**
+   * `false`: this seat's request cards (and the email to SMD ops built from
+   * them) carry who and what happened, never the request's or the reply's
+   * words. Absent = true, today's behaviour. Projected in `escalation_json`,
+   * where `operator-request-card.ts` reads it.
+   */
+  request_card_text?: boolean
 }
 
 /**

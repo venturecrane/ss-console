@@ -297,9 +297,33 @@ def _partition_read(store: str, policy: record_store.StorePolicy, args: dict, si
         text = record_store.read_partition(policy, person, str(args.get("name") or ""), store)
     except record_store.RecordStoreError as exc:
         raise RuntimeError(f"{exc}. {_READ_MISS_HINT}") from exc
+    # The stored text, figures and dates as written, is this turn's provenance
+    # (keyed by the session the handler was handed, never a fallback), so a
+    # reply that quotes them is not held as invented; the model reads dollar
+    # figures in words (record_store.amounts_in_words).
+    _seed_provenance(sid, text)
     return json.dumps(
-        {"store": store, "name": args.get("name"), "content": text}, ensure_ascii=False
+        {
+            "store": store,
+            "name": args.get("name"),
+            "content": record_store.amounts_in_words(text),
+        },
+        ensure_ascii=False,
     )
+
+
+def _seed_provenance(session_id: Any, text: str) -> None:
+    """Record a partitioned read's own text in the session's provenance
+    register. Best-effort: a failure leaves the register as the trust plugin's
+    post_tool_call leaves it."""
+    try:
+        from shared import provenance
+
+        if isinstance(session_id, str) and session_id:
+            provenance.record_read(session_id, text)
+            provenance.record_recurring_read(session_id, TOOL_READ, text)
+    except Exception:  # noqa: BLE001 - provenance is never worth the read
+        logger.debug("hermes-smd-record-store: provenance seed skipped", exc_info=True)
 
 
 def _partition_write(store: str, policy: record_store.StorePolicy, args: dict, sid: Any) -> str:

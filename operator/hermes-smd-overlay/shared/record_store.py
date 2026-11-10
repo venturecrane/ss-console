@@ -761,6 +761,64 @@ def write_partition(
     return receipt
 
 
+#: A dollar figure as a person writes one: ``$40,000``, ``$ 12.50``, ``$40k``,
+#: ``$1.5M``, ``$5MM``, ``$3B``, ``$2 Million``. Group 3 is the space before a
+#: word and group 4 the whole word that follows, so a scale is judged on the
+#: complete word (``bn`` and ``MM`` are never read as ``b`` or ``M`` with a tail).
+_DOLLARS_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:(\s?)([A-Za-z]+))?")
+#: Every scale word read, in any case.
+_SCALE_WORDS = {
+    "k": "thousand",
+    "thousand": "thousand",
+    "m": "million",
+    "mm": "million",
+    "million": "million",
+    "b": "billion",
+    "bn": "billion",
+    "billion": "billion",
+}
+#: Text straight after a figure that means the code did not read all of it:
+#: another digit or letter, or a separator followed by a digit (``$5,00``,
+#: ``$1.2.3``).
+_UNREAD_TAIL_RE = re.compile(r"[A-Za-z0-9]|[.,]\d")
+
+
+def amounts_in_words(text: str) -> str:
+    """``text`` with every dollar figure written as words: ``$40,000`` becomes
+    ``40,000 dollars`` and ``$40k`` becomes ``40 thousand dollars``.
+
+    WHY (ss-console #3946). A representative's lead carries their own deal
+    value, and the reply checks hold any ``$`` followed by a digit in a reply
+    (``fabrication_markers.json``, ``specific-dollar-amount``) unless the exact
+    figure was read this session. Reading the record seeds the figure (the
+    handler records the stored text, ``$`` and all, as this turn's provenance),
+    and handing the model the figure in words means a reply that repeats it
+    in its own phrasing ("about 40 thousand dollars") does not trip a marker
+    meant for invented prices. The figure itself is never changed.
+
+    A figure the code cannot read whole (``$5Mx``, ``$5,00``, ``$1.2.3``) is
+    left exactly as written, never half rewritten: the reply gate then holds a
+    reply that quotes it, and a held reply is better than a wrong number.
+    """
+
+    def words(m: re.Match) -> str:
+        number = m.group(1) + (m.group(2) or "")
+        space, word = m.group(3), m.group(4)
+        tail_at = m.end()
+        scale = _SCALE_WORDS.get(word.lower()) if word else None
+        if word and not scale:
+            if not space:
+                return m.group(0)
+            # Ordinary prose after the figure ("$40 for lunch"): keep it.
+            tail_at = m.start(3)
+        if _UNREAD_TAIL_RE.match(text, tail_at):
+            return m.group(0)
+        figure = f"{number} {scale} dollars" if scale else f"{number} dollars"
+        return figure + text[tail_at : m.end()]
+
+    return _DOLLARS_RE.sub(words, text)
+
+
 def _code_policy(store: str, config: CustomerConfig | None) -> StorePolicy:
     policies = authored_policies(config)
     if store not in policies:

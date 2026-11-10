@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -37,7 +38,7 @@ from typing import Any
 import pytest
 
 from tests_e2e._canary import Inventory, Location, classify, inventory, search
-from tests_e2e.test_guide_rehearsal_run import A_MARK, B_MARK, STORES, A, B
+from tests_e2e.test_guide_rehearsal_run import A_MARK, B_MARK, DAILY_LIMIT, STORES, A, B
 
 OVERLAY = Path(__file__).resolve().parents[1]
 BROKER_PACKAGE = OVERLAY.parent / "workspace_broker"
@@ -69,6 +70,7 @@ def purge_set(slug: str) -> list[Location]:
         Location("seat", "requests.db", "replies", why="the request index: replies to them"),
         Location("seat", "held_replies.db", "held_replies", why="a reply held for them"),
         Location("seat", "smd/help_state.db", why="help-pointer state, hashed"),
+        Location("seat", "smd/sender_daily.db", why="the per-sender daily count, hashed"),
         Location("seat", "*.smd/sent_lines/*.json", why="labels of sends they received"),
         Location("seat", "*.smd/pre_run/*.dispatch*.json", why="scheduled sends naming them"),
     ]
@@ -90,6 +92,11 @@ def surfaces(root: Path) -> dict[str, Path]:
         "model": root / "model-requests.jsonl",
         "logs": root / "captured.log",
         "broker": root / "broker-requests.json",
+        # Declared nowhere: a request card that carried a person's words to
+        # SMD would be an undeclared hit (escalation.request_card_text: false).
+        "cards": root / "cards.json",
+        # Every other state file the harness points somewhere.
+        "state": root / "state",
     }
 
 
@@ -158,6 +165,8 @@ def _results(turn: dict, tool: str) -> list[str]:
 
 def test_every_turn_ran_its_script_through_the_router_and_the_agent(rehearsal) -> None:
     for turn in rehearsal["evidence"]["turns"]:
+        if turn["router_verdict"] == {"action": "skip"}:
+            continue  # dropped by the daily limit before any turn (part 2)
         assert turn["exit"].startswith("text_response"), turn
         assert turn["pending"] == 0, f"{turn['label']}: the scripted calls were never requested"
         if turn["sender"]:
@@ -273,3 +282,88 @@ def test_the_inventory_fails_on_an_undeclared_store(tmp_path) -> None:
     assert "stray-cache/copy.txt" in undeclared, inv.report()
     assert "requests.db" in undeclared, f"a deleted row's bytes must not pass\n{inv.report()}"
     assert {h.path for h in inv.purge} == {"rep/notes/someone/n.md"}
+
+
+# ---------------------------------------------------------------------------
+# replies that arrive, or say plainly they did not (part 2, #3946)
+# ---------------------------------------------------------------------------
+
+
+def _held_line() -> str:
+    spec = importlib.util.spec_from_file_location(
+        "_e2e_held_notice", OVERLAY / "plugins" / "hermes-smd-reply" / "held_notice.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.FIXED_LINE
+
+
+def _daily_notice() -> str:
+    spec = importlib.util.spec_from_file_location(
+        "_e2e_daily_limit", OVERLAY / "plugins" / "hermes-smd-webhook-router" / "daily_limit.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.NOTICE
+
+
+def test_a_held_reply_ends_in_the_fixed_line(rehearsal) -> None:
+    held = _turn(rehearsal, "a-reply-is-held")
+    assert held["replies"] == [_held_line()], held
+    assert "95,000" not in json.dumps(held["replies"])
+    for label in ("a-keeps-a-note", "a-reads-her-own"):
+        assert _turn(rehearsal, label)["replies"] == ["Done."]
+
+
+def test_past_the_daily_limit_one_notice_then_silence(rehearsal) -> None:
+    admitted = [
+        t
+        for t in rehearsal["evidence"]["turns"]
+        if t["sender"] == A and t["router_verdict"] != {"action": "skip"}
+    ]
+    assert len(admitted) == DAILY_LIMIT
+    first = _turn(rehearsal, "a-over-the-limit")
+    second = _turn(rehearsal, "a-over-again")
+    assert first["router_verdict"] == second["router_verdict"] == {"action": "skip"}
+    assert first["replies"] == [_daily_notice()]
+    assert second["replies"] == []
+
+
+def test_request_cards_carry_no_words(rehearsal) -> None:
+    cards = rehearsal["evidence"]["cards"]
+    assert cards, "the seat posted no request cards; the check below would be empty"
+    for card in cards:
+        assert card["text_withheld"] is True
+        assert card.get("request_text") is None and card.get("reply_text") is None
+    assert all(h.surface != "cards" for h in rehearsal["before_a"].hits)
+
+
+def test_the_triage_flags_the_held_reply_and_the_limited_sender(rehearsal) -> None:
+    """The hourly work-health triage (operator/bin/work-health.py) reads the
+    seat's ledger. Fed this run's own rows, an hour past the no-reply window,
+    it raises an item for the held reply and for each limited email."""
+    from datetime import datetime, timedelta, timezone
+
+    operator = str(OVERLAY.parent)
+    if operator not in sys.path:
+        sys.path.insert(0, operator)
+    from bin.lib import work_health as wh
+
+    rows = rehearsal["evidence"]["ledger_rows"]
+    cfg = wh.load_config()
+    latest = max(wh.parse_ts(r["ts"]) for r in rows)
+    now = latest + timedelta(minutes=cfg.no_reply_for("smd-guide") + 60)
+    items = wh.request_items("smd-guide", rows, cfg, now.astimezone(timezone.utc))
+    reasons = sorted(
+        m.group(1)
+        for i in items
+        if i.kind == "reply_held" and (m := re.search(r"held \(([a-z_]+)\)", i.what))
+    )
+    assert reasons == ["sender_daily_limit", "sender_daily_limit", "trust_gate_refused"], [
+        (i.kind, i.what) for i in items
+    ]
+    assert isinstance(now, datetime)

@@ -25,7 +25,7 @@ from types import ModuleType
 
 import pytest
 
-from workspace_broker import person_purge
+from workspace_broker import person_orphans, person_purge
 from workspace_broker import sender_enrollment as se
 from workspace_broker.sender_enrollment_cli import main as cli_main
 
@@ -111,6 +111,10 @@ def _leave_traces(seat: dict, person: str, mark: str) -> None:
     store.close()
     help_state = _overlay("plugins/hermes-smd-initiation/help_state.py", "_purge_help_state")
     assert help_state.record(help_state.KIND_POINTER, person, path=data / "smd" / "help_state.db")
+    audit_contract = _overlay("shared/audit_contract.py", "_purge_audit_contract")
+    daily = _overlay("plugins/hermes-smd-webhook-router/daily_limit.py", "_purge_daily_limit")
+    key = audit_contract.sender_key(person)
+    assert daily.decide(key, 5, path=data / "smd" / "sender_daily.db").admit
     d1 = _overlay("shared/d1_client.py", "_purge_d1")
     schemas = _overlay("plugins/hermes-smd-peer-memory/schemas.py", "_purge_peer_schemas")
     client = d1.D1Client("SMD_D1_AGENT_STATE_BINDING", "guide-test", db_path=str(data / "agent-state.db"))
@@ -155,6 +159,7 @@ EVERY_LAYER = {
     "help state (help_events)",
     "sent-line labels",
     "scheduled-send envelope",
+    "per-sender daily count (sender_daily)",
 }
 
 
@@ -449,3 +454,37 @@ def test_the_purge_slug_is_the_overlays_slug() -> None:
         assert person_purge.normalize_person_address(bad) is None
     sent_lines = _overlay("shared/sent_lines.py", "_purge_sent_lines_parity")
     assert sent_lines.recipient_digest(" Rep-A@Example.Test ") == person_purge.recipient_digest(A)
+
+
+def test_orphan_partitions_are_listed_by_slug_and_count_only(seat: dict, capsys) -> None:
+    """The hourly job's question: a walled-store directory nobody listed owns.
+    Slugs and counts only, never content; the command exits 3 while any exist."""
+    _leave_traces(seat, A, A_MARK)
+    _leave_traces(seat, "gone@example.test", "CANARY-ORPHAN-1")
+    found = person_orphans.orphan_partitions(seat["targets"], [A, B]).found
+    slug = person_purge.person_slug("gone@example.test")
+    assert found == {str(seat["notes"]): [slug], str(seat["leads"]): [slug]}
+    assert person_orphans.orphan_partitions(seat["targets"], [A, B, "gone@example.test"]).clean
+    argv = ["orphans", "--data-root", str(seat["data"]), "--config", str(seat["config"])]
+    assert cli_main(argv, store=seat["store"]) == 3
+    out = capsys.readouterr().out
+    assert slug in out and "CANARY-ORPHAN-1" not in out
+    assert cli_main(["purge", "gone@example.test", *argv[1:]], store=seat["store"], isolate=False) == 0
+    capsys.readouterr()
+    assert cli_main(argv, store=seat["store"]) == 0
+
+
+def test_orphans_refuses_when_it_cannot_read_who_is_listed(seat: dict) -> None:
+    argv = ["orphans", "--data-root", str(seat["data"]), "--config", str(seat["config"].parent / "x.yaml")]
+    assert cli_main(argv, store=seat["store"]) == 2
+
+
+def test_orphans_never_reads_a_planted_link_as_a_store(seat: dict) -> None:
+    """A store root that is a link is refused (could not examine), never
+    followed and never reported as holding no orphans."""
+    seat["leads"].parent.mkdir(parents=True, exist_ok=True)
+    elsewhere = seat["data"].parent / "elsewhere"
+    elsewhere.mkdir()
+    seat["leads"].symlink_to(elsewhere, target_is_directory=True)
+    result = person_orphans.orphan_partitions(seat["targets"], [A, B])
+    assert not result.clean and result.problems

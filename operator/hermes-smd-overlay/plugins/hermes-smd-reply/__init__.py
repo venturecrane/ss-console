@@ -124,6 +124,7 @@ from shared.workspace_broker import request as _broker_request
 from . import (
     act_delivery,
     binding,
+    held_notice,
     held_store,
     job_reply,
     notice,
@@ -527,6 +528,9 @@ def _held(reason: str, origin: inbound.InboundOrigin, **extra: Any) -> None:
     # would duplicate it.
     if extra.get("held_for_release"):
         return
+    # The end-of-turn fixed line and the redraft cap (held_notice) count every
+    # hold that is not going out on its own.
+    _HOLD_COUNTS.note(origin.message_id)
     try:
         _HOLD_NOTICES.record(
             tool_call_id=getattr(_CURRENT_CALL, "tool_call_id", "") or "",
@@ -1449,6 +1453,17 @@ def _relay_draft(**kwargs: Any) -> None:
         # From here a held draft is one the agent redrafts; it is discarded with
         # the others once this reply is actually transmitted, and kept otherwise.
         _WORKING_DRAFTS.track(session_id, reply_key, draft_id)
+
+        # (a1) The redraft cap (held_notice; send_policy.reply.max_redrafts).
+        # Only on a seat that authors held_notice: past the cap, the draft is
+        # refused without relaying and the end of the turn tells the sender.
+        if held_notice.over_cap(held_notice.policy(cfg.raw), _HOLD_COUNTS.count(origin.message_id)):
+            _held(
+                held_notice.REDRAFT_LIMIT_REASON,
+                origin,
+                _detail=held_notice.REDRAFT_LIMIT_DETAIL,
+            )
+            return
 
         # (a2) Device redirect. A sender authored under ``scope.device_senders``
         # is a machine (an office scanner emailing its scans), and a reply sent
@@ -2558,6 +2573,58 @@ def _end_of_turn_text(
         _deliver_text_reply(session_id, response, origin=origin, attempted=attempted)
     except Exception as exc:  # noqa: BLE001
         logger.error("hermes-smd-reply: end-of-turn text delivery failed (%s)", exc)
+    _send_held_line(session_id, origin)
+
+
+# Holds per email (not counting ones queued for automatic release), and the
+# emails whose sender already got the fixed line (held_notice).
+_HOLD_COUNTS = held_notice.HoldCounter()
+_HELD_LINES = held_notice.Once()
+
+
+def _send_held_line(session_id: str, origin: Any) -> str:
+    """End of turn, on a seat that authors ``send_policy.reply.held_notice``:
+    when this turn's email got no reply and at least one of its replies was
+    held, CODE sends the sender :data:`held_notice.FIXED_LINE`, once. Returns
+    the outcome word for tests and logs. Never raises."""
+    try:
+        if not _INFRA_READY or origin is None:
+            return "none"
+        message_id = str(getattr(origin, "message_id", "") or "")
+        sender = str(getattr(origin, "sender_address", "") or "")
+        if not message_id or not sender:
+            return "none"
+        try:
+            cfg = CustomerConfig.from_volume(str(_YAML_PATH))
+        except (CustomerConfigError, OSError):
+            return "none"
+        if not held_notice.policy(cfg.raw).enabled:
+            return "off"
+        if _REPLIED.committed(message_id) or answered_messages.answered(message_id):
+            return "answered"
+        if _HOLD_COUNTS.count(message_id) == 0:
+            return "not_held"
+        if _email_adapter(cfg) != "agentmail":
+            # Built for the AgentMail reply transport (the seats that author
+            # this). A Graph seat keeps today's behaviour: SMD is paged.
+            return "adapter"
+        if not cfg.sender_on_roster(sender):
+            return "not_rostered"
+        if not _HELD_LINES.claim(message_id):
+            return "sent_before"
+        relay.send_reply(
+            message_id=message_id, text=held_notice.FIXED_LINE, html="", session_id=session_id
+        )
+        logger.info(
+            "hermes-smd-reply: told the sender of %s, in the fixed line, that it could not "
+            "be answered",
+            message_id,
+        )
+        return "sent"
+    except Exception as exc:  # noqa: BLE001 - the page below is the backstop
+        logger.error("hermes-smd-reply: the held line was not sent (%s)", type(exc).__name__)
+        _page_text_hold("held_line_not_sent")
+        return "failed"
 
 
 def _end_of_turn_settle(

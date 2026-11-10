@@ -349,7 +349,43 @@ function detailLines(slug: string, card: RequestCard): string[] {
  * The plain-text body. SMD ops only; this text never reaches a client or D1.
  * A card from a seat that predates the full texts falls back to the openings.
  */
+/** What a withheld card's subject reads, and what its word sections say. */
+export const WITHHELD_SUBJECT = '(words not sent by this seat)'
+const WITHHELD_WORDS = '  (this seat does not send the words of requests or replies)'
+
+/**
+ * The card with every word field emptied: who, what happened, the counts and
+ * the keys stay. Applied when the card says the seat withheld its text, or the
+ * seat's projected config says it should have (`escalation.request_card_text:
+ * false`), so a seat that posts words it should not have still sends none.
+ */
+export function withholdCardText(card: RequestCard): RequestCard {
+  return {
+    ...card,
+    subject: card.subject === '(no request on record)' ? card.subject : WITHHELD_SUBJECT,
+    requestText: null,
+    requestOpening: null,
+    replyText: null,
+    replyOpening: null,
+    matter: null,
+    textWithheld: true,
+  }
+}
+
+/** False only when a projected `escalation_json` says `request_card_text: false`. */
+export function seatSendsCardText(escalationJson: string | null | undefined): boolean {
+  if (!escalationJson) return true
+  try {
+    const block: unknown = JSON.parse(escalationJson)
+    if (typeof block !== 'object' || block === null) return true
+    return (block as Record<string, unknown>).request_card_text !== false
+  } catch {
+    return true
+  }
+}
+
 export function cardText(slug: string, card: RequestCard): string {
+  if (card.textWithheld) return withheldCardText(slug, card)
   const asked = card.requestText ?? card.requestOpening
   const answer = card.replyText ?? card.replyOpening
   const lines = [
@@ -371,6 +407,23 @@ export function cardText(slug: string, card: RequestCard): string {
   }
   lines.push('', '---', 'DETAILS, for the agent who picks this up', ...detailLines(slug, card), '')
   return lines.join('\n')
+}
+
+/** The body of a card whose seat sends no words: who, what happened, details. */
+function withheldCardText(slug: string, card: RequestCard): string {
+  return [
+    `WHO: ${askedBy(card)}, ${phoenixTime(card.receivedAt)}`,
+    `WHAT HAPPENED: ${whatHappened(card)}`,
+    `WHAT YOU NEED TO DO: ${whatToDo(card)}`,
+    '',
+    card.kind === 'held_reply' ? 'WHAT THEY WROTE' : 'WHAT THEY ASKED',
+    WITHHELD_WORDS,
+    '',
+    '---',
+    'DETAILS, for the agent who picks this up',
+    ...detailLines(slug, card),
+    '',
+  ].join('\n')
 }
 
 export interface CardMailEnv {
